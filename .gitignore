@@ -1,0 +1,40 @@
+# ── macOS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*.icloud
+
+# ── IDEs ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Go (logitrack_core) ────────────────────────────────────────────────────────
+logitrack_core/bin/
+logitrack_core/dist/
+logitrack_core/docs/
+
+# ── Node / Frontend (logitrack_web) ───────────────────────────────────────────
+logitrack_web/node_modules/
+logitrack_web/dist/
+logitrack_web/dist-ssr/
+logitrack_web/*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Env / secrets ──────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
