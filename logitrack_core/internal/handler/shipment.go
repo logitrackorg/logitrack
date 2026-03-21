@@ -37,6 +37,8 @@ func (h *ShipmentHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	req.CreatedBy = user.Username
 	shipment, err := h.svc.Create(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -51,6 +53,8 @@ func (h *ShipmentHandler) SaveDraft(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	req.CreatedBy = user.Username
 	shipment, err := h.svc.SaveDraft(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -74,12 +78,8 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 }
 
 func (h *ShipmentHandler) ConfirmDraft(c *gin.Context) {
-	type confirmRequest struct {
-		ChangedBy string `json:"changed_by"`
-	}
-	var req confirmRequest
-	_ = c.ShouldBindJSON(&req)
-	shipment, err := h.svc.ConfirmDraft(c.Param("tracking_id"), req.ChangedBy)
+	user := c.MustGet(middleware.UserKey).(model.User)
+	shipment, err := h.svc.ConfirmDraft(c.Param("tracking_id"), user.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -120,6 +120,8 @@ func (h *ShipmentHandler) EditShipment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	req.ChangedBy = user.Username
 	shipment, err := h.svc.EditShipment(c.Param("tracking_id"), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -144,6 +146,7 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
+	req.ChangedBy = user.Username
 	if user.Role == model.RoleDriver {
 		if err := h.routeSvc.ValidateDriverCanUpdateShipment(user.ID, c.Param("tracking_id"), req.Status); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})

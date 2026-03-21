@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { fmtDate } from "../utils/date";
 
 export function DriverRoute() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,6 @@ export function DriverRoute() {
     try {
       await shipmentApi.updateStatus(trackingId, {
         status: "delivered",
-        changed_by: user!.username,
         location: "",
         recipient_dni: recipientDni.trim(),
       });
@@ -57,7 +56,6 @@ export function DriverRoute() {
     try {
       await shipmentApi.updateStatus(trackingId, {
         status: "delivery_failed",
-        changed_by: user!.username,
         location: "",
         notes: failedNotes.trim(),
       });

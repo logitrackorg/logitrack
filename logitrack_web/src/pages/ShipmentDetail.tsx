@@ -148,7 +148,7 @@ export function ShipmentDetail() {
     setSavingEdit(true);
     setEditError("");
     try {
-      await shipmentApi.editShipment(trackingId, { ...editForm, changed_by: user!.username });
+      await shipmentApi.editShipment(trackingId, { ...editForm });
       setEditMode(false);
       await reload();
     } catch (err: unknown) {
@@ -167,7 +167,6 @@ export function ShipmentDetail() {
     try {
       await shipmentApi.updateStatus(trackingId, {
         status: newStatus,
-        changed_by: user!.username,
         location,
         notes,
         driver_id: newStatus === "delivering" ? selectedDriverId : undefined,

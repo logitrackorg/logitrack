@@ -128,7 +128,7 @@ export interface EditShipmentPayload {
 
 export interface UpdateStatusPayload {
   status: ShipmentStatus;
-  changed_by: string;
+  changed_by?: string;
   location: string;
   notes?: string;
   driver_id?: string;

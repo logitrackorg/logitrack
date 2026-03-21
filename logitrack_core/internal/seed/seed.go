@@ -71,7 +71,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackageBox,
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 48},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 48},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Picked up from sender", hoursAgo: 44},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "Córdoba", notes: "Arrived at Córdoba branch", hoursAgo: 20},
 			},
@@ -91,7 +91,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackagePallet,
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 72},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 72},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Package dispatched", hoursAgo: 68},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator3", location: "Mendoza", notes: "Arrived at Mendoza branch", hoursAgo: 36},
 				{from: model.StatusAtBranch, to: model.StatusDelivered, changedBy: "operator3", location: "Mendoza", notes: "Delivered to recipient", hoursAgo: 10},
@@ -112,7 +112,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			specialInstr:      "Handle with care — legal documents",
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 6},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 6},
 			},
 		},
 		{
@@ -129,7 +129,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackageBox,
 			receivingBranchID: "jujuy",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "San Salvador de Jujuy", notes: "Shipment created", hoursAgo: 30},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "San Salvador de Jujuy", notes: "Shipment created", hoursAgo: 30},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator2", location: "San Salvador de Jujuy", notes: "Picked up from sender", hoursAgo: 26},
 			},
 		},
@@ -150,7 +150,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			specialInstr:      "Fragile — glass items",
 			receivingBranchID: "cordoba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Córdoba", notes: "Shipment created", hoursAgo: 96},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Córdoba", notes: "Shipment created", hoursAgo: 96},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Córdoba", notes: "Package dispatched", hoursAgo: 90},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator4", location: "Ciudad de Buenos Aires", notes: "Arrived at CABA branch", hoursAgo: 48},
 				{from: model.StatusAtBranch, to: model.StatusDelivered, changedBy: "operator4", location: "Ciudad de Buenos Aires", notes: "Delivered successfully", hoursAgo: 24},
@@ -170,7 +170,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackageBox,
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 2},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 2},
 			},
 		},
 		// Ready for last-mile delivery — supervisor assigns driver via UI
@@ -188,7 +188,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackageBox,
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 24},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 24},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Dispatched", hoursAgo: 20},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "Ciudad de Buenos Aires", notes: "Arrived at CABA branch — ready for delivery", hoursAgo: 8},
 			},
@@ -207,7 +207,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			packageType:       model.PackageEnvelope,
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 12},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 12},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Dispatched", hoursAgo: 10},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "Ciudad de Buenos Aires", notes: "Arrived at CABA branch — ready for delivery", hoursAgo: 5},
 			},
@@ -229,7 +229,7 @@ func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRe
 			specialInstr:      "Medical equipment — handle with extreme care, keep upright",
 			receivingBranchID: "caba",
 			events: []eventSeed{
-				{from: "", to: model.StatusInProgress, changedBy: "system", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 120},
+				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Shipment created", hoursAgo: 120},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "Ciudad de Buenos Aires", notes: "Dispatched from origin warehouse", hoursAgo: 116},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "Córdoba", notes: "Arrived at Córdoba hub — transfer to northern route", hoursAgo: 96},
 				{from: model.StatusAtBranch, to: model.StatusInTransit, changedBy: "operator2", location: "Córdoba", notes: "Departed Córdoba towards Mendoza", hoursAgo: 90},

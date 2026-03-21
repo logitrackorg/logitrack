@@ -16,7 +16,7 @@ type ShipmentEvent struct {
 
 type UpdateStatusRequest struct {
 	Status       Status `json:"status"        binding:"required"`
-	ChangedBy    string `json:"changed_by"    binding:"required"`
+	ChangedBy    string `json:"changed_by"`
 	Location     string `json:"location"`
 	Notes        string `json:"notes"`
 	DriverID     string `json:"driver_id"`     // required when status = "delivering"
