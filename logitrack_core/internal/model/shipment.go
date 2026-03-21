@@ -28,8 +28,8 @@ const (
 
 type Address struct {
 	Street     string `json:"street,omitempty"`
-	City       string `json:"city"     binding:"required"`
-	Province   string `json:"province" binding:"required"`
+	City       string `json:"city"`
+	Province   string `json:"province"`
 	PostalCode string `json:"postal_code,omitempty"`
 }
 

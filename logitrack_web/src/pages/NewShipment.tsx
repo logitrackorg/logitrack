@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type Shipment } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
+import { customerApi } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
 
 const PROVINCES = [
@@ -37,6 +38,10 @@ export function NewShipment() {
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Shipment[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [senderAutofilled, setSenderAutofilled] = useState(false);
+  const [recipientAutofilled, setRecipientAutofilled] = useState(false);
+  const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,6 +53,58 @@ export function NewShipment() {
 
   const set = (field: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleSenderDNI = (dni: string) => {
+    set("sender_dni", dni);
+    setSenderAutofilled(false);
+    if (senderDNITimer.current) clearTimeout(senderDNITimer.current);
+    if (dni.length >= 7) {
+      senderDNITimer.current = setTimeout(async () => {
+        const customer = await customerApi.getByDNI(dni);
+        if (customer) {
+          setForm((prev) => ({
+            ...prev,
+            sender_name: customer.name,
+            sender_phone: customer.phone,
+            sender_email: customer.email ?? prev.sender_email,
+            origin: {
+              street: customer.address.street ?? prev.origin.street,
+              city: customer.address.city || prev.origin.city,
+              province: customer.address.province || prev.origin.province,
+              postal_code: customer.address.postal_code ?? prev.origin.postal_code,
+            },
+          }));
+          setSenderAutofilled(true);
+        }
+      }, 400);
+    }
+  };
+
+  const handleRecipientDNI = (dni: string) => {
+    set("recipient_dni", dni);
+    setRecipientAutofilled(false);
+    if (recipientDNITimer.current) clearTimeout(recipientDNITimer.current);
+    if (dni.length >= 7) {
+      recipientDNITimer.current = setTimeout(async () => {
+        const customer = await customerApi.getByDNI(dni);
+        if (customer) {
+          setForm((prev) => ({
+            ...prev,
+            recipient_name: customer.name,
+            recipient_phone: customer.phone,
+            recipient_email: customer.email ?? prev.recipient_email,
+            destination: {
+              street: customer.address.street ?? prev.destination.street,
+              city: customer.address.city || prev.destination.city,
+              province: customer.address.province || prev.destination.province,
+              postal_code: customer.address.postal_code ?? prev.destination.postal_code,
+            },
+          }));
+          setRecipientAutofilled(true);
+        }
+      }, 400);
+    }
+  };
 
   const setAddr = (side: "origin" | "destination", field: string, value: string) =>
     setForm((prev) => ({ ...prev, [side]: { ...prev[side], [field]: value } }));
@@ -129,9 +186,9 @@ export function NewShipment() {
               <input style={input} type="email" value={form.sender_email}
                 onChange={(e) => set("sender_email", e.target.value)} placeholder="optional" />
             </Field>
-            <Field label="DNI *">
+            <Field label={senderAutofilled ? "DNI * ✓ datos autocompletados" : "DNI *"}>
               <input style={input} required value={form.sender_dni}
-                onChange={(e) => set("sender_dni", e.target.value)} placeholder="Ej: 30123456" />
+                onChange={(e) => handleSenderDNI(e.target.value)} placeholder="Ej: 30123456" />
             </Field>
           </Row2>
           <Row2>
@@ -176,9 +233,9 @@ export function NewShipment() {
               <input style={input} type="email" value={form.recipient_email}
                 onChange={(e) => set("recipient_email", e.target.value)} placeholder="optional" />
             </Field>
-            <Field label="DNI *">
+            <Field label={recipientAutofilled ? "DNI * ✓ datos autocompletados" : "DNI *"}>
               <input style={input} required value={form.recipient_dni}
-                onChange={(e) => set("recipient_dni", e.target.value)} placeholder="Ej: 28456789" />
+                onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="Ej: 28456789" />
             </Field>
           </Row2>
           <Row2>

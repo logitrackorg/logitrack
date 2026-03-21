@@ -19,18 +19,20 @@ func main() {
 	authRepo := repository.NewInMemoryAuthRepository()
 	branchRepo := repository.NewInMemoryBranchRepository()
 	routeRepo := repository.NewInMemoryRouteRepository()
+	customerRepo := repository.NewInMemoryCustomerRepository()
 
 	seed.LoadBranches(branchRepo)
-	seed.Load(shipmentRepo)
+	seed.Load(shipmentRepo, customerRepo)
 
 	// Services & handlers
-	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo)
+	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
+	customerHandler := handler.NewCustomerHandler(customerRepo)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -91,6 +93,9 @@ func main() {
 	// Users — list drivers (supervisor, admin)
 	canManageRoutes := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
 	protected.GET("/users/drivers", canManageRoutes, userHandler.ListDrivers)
+
+	// Customers — autocomplete by DNI (operator+)
+	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

@@ -52,7 +52,7 @@ func LoadBranches(repo repository.BranchRepository) {
 	}
 }
 
-func Load(repo repository.ShipmentRepository) {
+func Load(repo repository.ShipmentRepository, customerRepo repository.CustomerRepository) {
 	now := time.Now().UTC()
 
 	seeds := []shipmentSeed{
@@ -282,6 +282,9 @@ func Load(repo repository.ShipmentRepository) {
 		if _, err := repo.Create(shipment); err != nil {
 			continue
 		}
+
+		customerRepo.Upsert(model.Customer{DNI: s.senderDNI, Name: s.senderName, Phone: s.senderPhone, Email: s.senderEmail, Address: s.origin})
+		customerRepo.Upsert(model.Customer{DNI: s.recipientDNI, Name: s.recipientName, Phone: s.recipientPhone, Email: s.recipientEmail, Address: s.destination})
 
 		for _, ev := range s.events {
 			event := model.ShipmentEvent{

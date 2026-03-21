@@ -11,15 +11,43 @@ import (
 )
 
 type ShipmentService struct {
-	repo       repository.ShipmentRepository
-	branchRepo repository.BranchRepository
+	repo         repository.ShipmentRepository
+	branchRepo   repository.BranchRepository
+	customerRepo repository.CustomerRepository
 }
 
-func NewShipmentService(repo repository.ShipmentRepository, branchRepo repository.BranchRepository) *ShipmentService {
-	return &ShipmentService{repo: repo, branchRepo: branchRepo}
+func NewShipmentService(repo repository.ShipmentRepository, branchRepo repository.BranchRepository, customerRepo repository.CustomerRepository) *ShipmentService {
+	return &ShipmentService{repo: repo, branchRepo: branchRepo, customerRepo: customerRepo}
+}
+
+func (s *ShipmentService) upsertParties(shipment model.Shipment) {
+	if shipment.SenderDNI != "" {
+		s.customerRepo.Upsert(model.Customer{
+			DNI:     shipment.SenderDNI,
+			Name:    shipment.SenderName,
+			Phone:   shipment.SenderPhone,
+			Email:   shipment.SenderEmail,
+			Address: shipment.Origin,
+		})
+	}
+	if shipment.RecipientDNI != "" {
+		s.customerRepo.Upsert(model.Customer{
+			DNI:     shipment.RecipientDNI,
+			Name:    shipment.RecipientName,
+			Phone:   shipment.RecipientPhone,
+			Email:   shipment.RecipientEmail,
+			Address: shipment.Destination,
+		})
+	}
 }
 
 func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipment, error) {
+	if strings.TrimSpace(req.Origin.City) == "" || strings.TrimSpace(req.Origin.Province) == "" {
+		return model.Shipment{}, fmt.Errorf("origin city and province are required")
+	}
+	if strings.TrimSpace(req.Destination.City) == "" || strings.TrimSpace(req.Destination.Province) == "" {
+		return model.Shipment{}, fmt.Errorf("destination city and province are required")
+	}
 	now := time.Now().UTC()
 	currentLocation := req.Origin.City
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
@@ -60,6 +88,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		Timestamp:  now,
 	}
 	_ = s.repo.AddEvent(event)
+	s.upsertParties(created)
 	return created, nil
 }
 
@@ -194,6 +223,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Timestamp:  now,
 	}
 	_ = s.repo.AddEvent(event)
+	s.upsertParties(confirmed)
 	return confirmed, nil
 }
 
@@ -295,6 +325,12 @@ func (s *ShipmentService) List(filter model.ShipmentFilter) ([]model.Shipment, e
 }
 
 func (s *ShipmentService) EditShipment(trackingID string, req model.EditShipmentRequest) (model.Shipment, error) {
+	if strings.TrimSpace(req.Origin.City) == "" || strings.TrimSpace(req.Origin.Province) == "" {
+		return model.Shipment{}, fmt.Errorf("origin city and province are required")
+	}
+	if strings.TrimSpace(req.Destination.City) == "" || strings.TrimSpace(req.Destination.Province) == "" {
+		return model.Shipment{}, fmt.Errorf("destination city and province are required")
+	}
 	existing, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {
 		return model.Shipment{}, err
