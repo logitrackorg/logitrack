@@ -20,7 +20,6 @@ type ShipmentRepository interface {
 	ConfirmShipment(draftID string, trackingID string, status model.Status) (model.Shipment, error)
 	UpdateDraft(shipment model.Shipment) (model.Shipment, error)
 	List(filter model.ShipmentFilter) ([]model.Shipment, error)
-	UpdateShipment(shipment model.Shipment) (model.Shipment, error)
 	Search(query string) ([]model.Shipment, error)
 	AddEvent(event model.ShipmentEvent) error
 	GetEvents(trackingID string) ([]model.ShipmentEvent, error)
@@ -146,16 +145,6 @@ func (r *inMemoryShipmentRepository) List(filter model.ShipmentFilter) ([]model.
 		return result[i].TrackingID < result[j].TrackingID
 	})
 	return result, nil
-}
-
-func (r *inMemoryShipmentRepository) UpdateShipment(shipment model.Shipment) (model.Shipment, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.shipments[shipment.TrackingID]; !ok {
-		return model.Shipment{}, fmt.Errorf("shipment not found")
-	}
-	r.shipments[shipment.TrackingID] = shipment
-	return shipment, nil
 }
 
 func (r *inMemoryShipmentRepository) Search(query string) ([]model.Shipment, error) {

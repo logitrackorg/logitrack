@@ -12,8 +12,14 @@ export function ShipmentList() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    (searchParams.get("status") as StatusFilter) ?? "active"
+    (searchParams.get("status") as StatusFilter) ??
+    (sessionStorage.getItem("shipment_status_filter") as StatusFilter) ??
+    "active"
   );
+
+  useEffect(() => {
+    sessionStorage.setItem("shipment_status_filter", statusFilter);
+  }, [statusFilter]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);

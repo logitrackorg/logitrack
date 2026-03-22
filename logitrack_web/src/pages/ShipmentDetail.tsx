@@ -6,7 +6,7 @@ import {
   type ShipmentEvent,
   type ShipmentStatus,
   type SaveDraftPayload,
-  type EditShipmentPayload,
+  type ShipmentComment,
 } from "../api/shipments";
 import { usersApi } from "../api/users";
 import type { User } from "../api/auth";
@@ -68,20 +68,20 @@ export function ShipmentDetail() {
   const [draftForm, setDraftForm] = useState<SaveDraftPayload | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [saveDraftError, setSaveDraftError] = useState("");
-  const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState<EditShipmentPayload | null>(null);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState("");
-
+  const [comments, setComments] = useState<ShipmentComment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [addingComment, setAddingComment] = useState(false);
   const reload = async () => {
     if (!trackingId) return;
     try {
-      const [s, ev] = await Promise.all([
+      const [s, ev, cmts] = await Promise.all([
         shipmentApi.get(trackingId),
         shipmentApi.getEvents(trackingId),
+        shipmentApi.getComments(trackingId),
       ]);
       setShipment(s);
       setEvents(ev);
+      setComments(cmts);
       setNewStatus("");
       if (s.status === "pending") {
         setDraftForm({
@@ -140,22 +140,6 @@ export function ShipmentDetail() {
       setConfirmError(msg ?? "No se pudo confirmar el envío.");
     } finally {
       setConfirming(false);
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!trackingId || !editForm) return;
-    setSavingEdit(true);
-    setEditError("");
-    try {
-      await shipmentApi.editShipment(trackingId, { ...editForm });
-      setEditMode(false);
-      await reload();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setEditError(msg ?? "Failed to save changes.");
-    } finally {
-      setSavingEdit(false);
     }
   };
 
@@ -223,48 +207,9 @@ export function ShipmentDetail() {
           confirmError={confirmError}
           createdAt={fmt(shipment.created_at)}
         />
-      ) : editMode && editForm ? (
-        /* ── Edit form ── */
-        <EditShipmentForm
-          form={editForm}
-          onChange={setEditForm}
-          onSave={handleSaveEdit}
-          onCancel={() => setEditMode(false)}
-          saving={savingEdit}
-          error={editError}
-          branches={branches}
-        />
       ) : (
         /* ── Read-only info grid ── */
         <>
-          {shipment.status === "in_progress" && hasRole("supervisor", "admin") && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-              <button
-                onClick={() => {
-                  setEditForm({
-                    sender_name: shipment.sender_name,
-                    sender_phone: shipment.sender_phone,
-                    sender_email: shipment.sender_email ?? "",
-                    sender_dni: shipment.sender_dni ?? "",
-                    origin: shipment.origin,
-                    recipient_name: shipment.recipient_name,
-                    recipient_phone: shipment.recipient_phone,
-                    recipient_email: shipment.recipient_email ?? "",
-                    recipient_dni: shipment.recipient_dni ?? "",
-                    destination: shipment.destination,
-                    weight_kg: shipment.weight_kg,
-                    package_type: shipment.package_type,
-                    special_instructions: shipment.special_instructions ?? "",
-                    receiving_branch_id: shipment.receiving_branch_id ?? "",
-                  });
-                  setEditMode(true);
-                }}
-                style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
-              >
-                Edit
-              </button>
-            </div>
-          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <Card title="Sender">
               <InfoRow label="Name"  value={shipment.sender_name} />
@@ -406,6 +351,55 @@ export function ShipmentDetail() {
           <p style={{ margin: 0, color: "#065f46", fontWeight: 600 }}>This shipment has been delivered.</p>
         </div>
       )}
+
+      {/* Comments */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
+        {hasRole("supervisor", "admin") && shipment.status !== "delivered" && shipment.status !== "returned" && (
+          <div style={{ marginBottom: 12 }}>
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Add a comment..."
+              rows={2}
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
+            />
+            <button
+              disabled={addingComment || !newComment.trim()}
+              onClick={async () => {
+                if (!trackingId || !newComment.trim()) return;
+                setAddingComment(true);
+                try {
+                  await shipmentApi.addComment(trackingId, newComment.trim());
+                  setNewComment("");
+                  const cmts = await shipmentApi.getComments(trackingId);
+                  setComments(cmts);
+                } finally {
+                  setAddingComment(false);
+                }
+              }}
+              style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+            >
+              {addingComment ? "Adding..." : "Add comment"}
+            </button>
+          </div>
+        )}
+        {comments.length === 0 ? (
+          <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>No comments yet.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {comments.map((c) => (
+              <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600 }}>{c.author}</span>
+                  <span style={{ color: "#9ca3af", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
+                </div>
+                <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Event history */}
       <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Event History</h2>
@@ -553,100 +547,6 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             {confirming ? "Confirmando..." : "Confirmar envío"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function EditShipmentForm({ form, onChange, onSave, onCancel, saving, error, branches }: {
-  form: EditShipmentPayload;
-  onChange: (f: EditShipmentPayload) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-  error: string;
-  branches: import("../api/branches").Branch[];
-}) {
-  const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
-  const setAddr = (side: "origin" | "destination", field: string, value: string) =>
-    onChange({ ...form, [side]: { ...form[side], [field]: value } });
-
-  return (
-    <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      {/* Sender */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Sender</legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <DField label="Name *"><input style={inp} value={form.sender_name} onChange={(e) => set("sender_name", e.target.value)} /></DField>
-          <DField label="Phone *"><input style={inp} value={form.sender_phone} onChange={(e) => set("sender_phone", e.target.value)} /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
-          <DField label="DNI *"><input style={inp} value={form.sender_dni} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
-          <DField label="Street"><input style={inp} value={form.origin.street ?? ""} onChange={(e) => setAddr("origin", "street", e.target.value)} /></DField>
-          <DField label="City *"><input style={inp} value={form.origin.city} onChange={(e) => setAddr("origin", "city", e.target.value)} /></DField>
-          <DField label="Province *">
-            <select style={inp} value={form.origin.province} onChange={(e) => setAddr("origin", "province", e.target.value)}>
-              <option value="">Select</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </DField>
-          <DField label="Postal code"><input style={inp} value={form.origin.postal_code ?? ""} onChange={(e) => setAddr("origin", "postal_code", e.target.value)} /></DField>
-        </div>
-      </fieldset>
-
-      {/* Recipient */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Recipient</legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <DField label="Name *"><input style={inp} value={form.recipient_name} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
-          <DField label="Phone *"><input style={inp} value={form.recipient_phone} onChange={(e) => set("recipient_phone", e.target.value)} /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
-          <DField label="DNI *"><input style={inp} value={form.recipient_dni} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
-          <DField label="Street"><input style={inp} value={form.destination.street ?? ""} onChange={(e) => setAddr("destination", "street", e.target.value)} /></DField>
-          <DField label="City *"><input style={inp} value={form.destination.city} onChange={(e) => setAddr("destination", "city", e.target.value)} /></DField>
-          <DField label="Province *">
-            <select style={inp} value={form.destination.province} onChange={(e) => setAddr("destination", "province", e.target.value)}>
-              <option value="">Select</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </DField>
-          <DField label="Postal code"><input style={inp} value={form.destination.postal_code ?? ""} onChange={(e) => setAddr("destination", "postal_code", e.target.value)} /></DField>
-        </div>
-      </fieldset>
-
-      {/* Package */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Package</legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <DField label="Weight (kg) *">
-            <input style={inp} type="number" step="0.1" min="0" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} />
-          </DField>
-          <DField label="Package type *">
-            <select style={inp} value={form.package_type} onChange={(e) => set("package_type", e.target.value)}>
-              {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </DField>
-          <DField label="Special instructions" style={{ gridColumn: "1 / -1" }}>
-            <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
-          </DField>
-          <DField label="Receiving branch *" style={{ gridColumn: "1 / -1" }}>
-            <select style={inp} value={form.receiving_branch_id} onChange={(e) => set("receiving_branch_id", e.target.value)}>
-              <option value="">Select branch</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </DField>
-        </div>
-      </fieldset>
-
-      {error && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{error}</p>}
-      <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={onSave} disabled={saving}
-          style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
-          {saving ? "Saving..." : "Save changes"}
-        </button>
-        <button onClick={onCancel} disabled={saving}
-          style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-          Cancel
-        </button>
       </div>
     </div>
   );

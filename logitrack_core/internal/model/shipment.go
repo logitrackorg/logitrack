@@ -92,27 +92,6 @@ type ShipmentFilter struct {
 	DateTo   *time.Time // inclusive upper bound on created_at (end of day)
 }
 
-// EditShipmentRequest updates a confirmed (in_progress) shipment's data.
-type EditShipmentRequest struct {
-	SenderName  string  `json:"sender_name"  binding:"required"`
-	SenderPhone string  `json:"sender_phone" binding:"required"`
-	SenderEmail string  `json:"sender_email"`
-	SenderDNI   string  `json:"sender_dni"   binding:"required"`
-	Origin      Address `json:"origin"       binding:"required"`
-
-	RecipientName  string  `json:"recipient_name"  binding:"required"`
-	RecipientPhone string  `json:"recipient_phone" binding:"required"`
-	RecipientEmail string  `json:"recipient_email"`
-	RecipientDNI   string  `json:"recipient_dni"   binding:"required"`
-	Destination    Address `json:"destination"     binding:"required"`
-
-	WeightKg            float64     `json:"weight_kg"           binding:"required,gt=0"`
-	PackageType         PackageType `json:"package_type"        binding:"required"`
-	SpecialInstructions string      `json:"special_instructions"`
-	ReceivingBranchID   string      `json:"receiving_branch_id" binding:"required"`
-	ChangedBy           string      `json:"changed_by"`
-}
-
 // SaveDraftRequest allows partial data — no required fields.
 type SaveDraftRequest struct {
 	SenderName  string  `json:"sender_name"`

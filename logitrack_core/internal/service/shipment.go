@@ -123,16 +123,6 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	event := model.ShipmentEvent{
-		ID:         uuid.NewString(),
-		TrackingID: created.TrackingID,
-		FromStatus: "",
-		ToStatus:   model.StatusPending,
-		ChangedBy:  req.CreatedBy,
-		Notes:      "Draft saved",
-		Timestamp:  now,
-	}
-	_ = s.repo.AddEvent(event)
 	return created, nil
 }
 
@@ -322,55 +312,6 @@ func (s *ShipmentService) GetByTrackingID(trackingID string) (model.Shipment, er
 
 func (s *ShipmentService) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	return s.repo.List(filter)
-}
-
-func (s *ShipmentService) EditShipment(trackingID string, req model.EditShipmentRequest) (model.Shipment, error) {
-	if strings.TrimSpace(req.Origin.City) == "" || strings.TrimSpace(req.Origin.Province) == "" {
-		return model.Shipment{}, fmt.Errorf("origin city and province are required")
-	}
-	if strings.TrimSpace(req.Destination.City) == "" || strings.TrimSpace(req.Destination.Province) == "" {
-		return model.Shipment{}, fmt.Errorf("destination city and province are required")
-	}
-	existing, err := s.repo.GetByTrackingID(trackingID)
-	if err != nil {
-		return model.Shipment{}, err
-	}
-	if existing.Status != model.StatusInProgress {
-		return model.Shipment{}, fmt.Errorf("only in_progress shipments can be edited")
-	}
-	existing.SenderName = req.SenderName
-	existing.SenderPhone = req.SenderPhone
-	existing.SenderEmail = req.SenderEmail
-	existing.SenderDNI = req.SenderDNI
-	existing.Origin = req.Origin
-	existing.RecipientName = req.RecipientName
-	existing.RecipientPhone = req.RecipientPhone
-	existing.RecipientEmail = req.RecipientEmail
-	existing.RecipientDNI = req.RecipientDNI
-	existing.Destination = req.Destination
-	existing.WeightKg = req.WeightKg
-	existing.PackageType = req.PackageType
-	existing.SpecialInstructions = req.SpecialInstructions
-	existing.ReceivingBranchID = req.ReceivingBranchID
-	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
-		existing.CurrentLocation = b.City
-	}
-	updated, err := s.repo.UpdateShipment(existing)
-	if err != nil {
-		return model.Shipment{}, err
-	}
-	event := model.ShipmentEvent{
-		ID:         uuid.NewString(),
-		TrackingID: trackingID,
-		EventType:  "edited",
-		FromStatus: model.StatusInProgress,
-		ToStatus:   model.StatusInProgress,
-		ChangedBy:  req.ChangedBy,
-		Notes:      "Shipment data edited",
-		Timestamp:  time.Now().UTC(),
-	}
-	_ = s.repo.AddEvent(event)
-	return updated, nil
 }
 
 func (s *ShipmentService) Search(query string) ([]model.Shipment, error) {

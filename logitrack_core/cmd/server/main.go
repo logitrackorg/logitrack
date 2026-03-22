@@ -24,10 +24,14 @@ func main() {
 	seed.LoadBranches(branchRepo)
 	seed.Load(shipmentRepo, customerRepo)
 
+	commentRepo := repository.NewInMemoryCommentRepository()
+
 	// Services & handlers
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo)
+	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc)
+	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
@@ -74,9 +78,10 @@ func main() {
 	protected.PATCH("/shipments/:tracking_id/draft", canCreate, shipmentHandler.UpdateDraft)
 	protected.POST("/shipments/:tracking_id/confirm", canCreate, shipmentHandler.ConfirmDraft)
 
-	// Edit confirmed shipment — supervisor, admin
-	canEdit := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
-	protected.PATCH("/shipments/:tracking_id", canEdit, shipmentHandler.EditShipment)
+	// Comments — read: all authenticated, write: supervisor/admin
+	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
+	canComment := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
 	canChangeStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)

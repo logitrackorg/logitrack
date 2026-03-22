@@ -108,22 +108,13 @@ export interface SaveDraftPayload {
   created_by?: string;
 }
 
-export interface EditShipmentPayload {
-  sender_name: string;
-  sender_phone: string;
-  sender_email?: string;
-  sender_dni: string;
-  origin: Address;
-  recipient_name: string;
-  recipient_phone: string;
-  recipient_email?: string;
-  recipient_dni: string;
-  destination: Address;
-  weight_kg: number;
-  package_type: PackageType;
-  special_instructions?: string;
-  receiving_branch_id: string;
-  changed_by?: string;
+export interface ShipmentComment {
+  id: string;
+  tracking_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UpdateStatusPayload {
@@ -159,7 +150,9 @@ export const shipmentApi = {
     api
       .get<ShipmentEvent[]>(`/shipments/${trackingId}/events`)
       .then((r) => r.data),
-  editShipment: (trackingId: string, payload: EditShipmentPayload) =>
-    api.patch<Shipment>(`/shipments/${trackingId}`, payload).then((r) => r.data),
+  getComments: (trackingId: string) =>
+    api.get<ShipmentComment[]>(`/shipments/${trackingId}/comments`).then((r) => r.data),
+  addComment: (trackingId: string, body: string) =>
+    api.post<ShipmentComment>(`/shipments/${trackingId}/comments`, { body }).then((r) => r.data),
   stats: () => api.get<Stats>("/stats").then((r) => r.data),
 };

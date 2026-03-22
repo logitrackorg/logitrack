@@ -114,22 +114,6 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, shipments)
 }
 
-func (h *ShipmentHandler) EditShipment(c *gin.Context) {
-	var req model.EditShipmentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	user := c.MustGet(middleware.UserKey).(model.User)
-	req.ChangedBy = user.Username
-	shipment, err := h.svc.EditShipment(c.Param("tracking_id"), req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, shipment)
-}
-
 func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	shipment, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
 	if err != nil {
