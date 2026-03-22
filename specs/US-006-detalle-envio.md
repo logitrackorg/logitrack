@@ -88,5 +88,6 @@ Cada evento muestra:
 
 **Dado** un envío en cualquier estado
 **Cuando** un usuario con rol `manager` o `driver` accede al detalle
-**Entonces** puede ver toda la información y el historial
-**Y** no ve el panel "Update Status"
+**Entonces** puede ver toda la información y no ve el panel "Update Status"
+
+> **Nota sobre el Driver**: a nivel API, el driver puede acceder a `GET /shipments/:id` y `GET /shipments/:id/events`. Sin embargo, en el frontend, `DriverShipmentDetail` (vista del driver) muestra únicamente datos del paquete y del destinatario — **no muestra el historial de eventos**. Ver US-004 CA23.

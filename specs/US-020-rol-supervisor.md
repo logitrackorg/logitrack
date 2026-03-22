@@ -20,10 +20,10 @@ El Supervisor es el rol operativo de mayor alcance sobre los envíos. Puede real
 
 | Acción                                                      | Roles habilitados                              |
 |-------------------------------------------------------------|------------------------------------------------|
-| Ver lista de envíos                                         | todos los roles autenticados                   |
+| Ver lista de envíos                                         | todos excepto driver                           |
 | Ver detalle de un envío                                     | todos los roles autenticados                   |
-| Buscar envíos                                               | todos los roles autenticados                   |
-| Ver sucursales                                              | todos los roles autenticados                   |
+| Buscar envíos                                               | todos excepto driver                           |
+| Ver sucursales                                              | todos excepto driver                           |
 | Crear envío directo (`POST /shipments`)                     | operator, supervisor, admin                    |
 | Guardar borrador (`POST /shipments/draft`)                  | operator, supervisor, admin                    |
 | Editar borrador (`PATCH /shipments/:id/draft`)              | operator, supervisor, admin                    |

@@ -16,10 +16,10 @@ El Gerente (`manager`) es un rol de solo lectura orientado a visibilidad de nego
 
 | Acción                              | Roles habilitados                              |
 |-------------------------------------|------------------------------------------------|
-| Ver lista de envíos                 | todos los roles autenticados                   |
+| Ver lista de envíos                 | todos excepto driver                           |
 | Ver detalle de un envío             | todos los roles autenticados                   |
-| Buscar envíos                       | todos los roles autenticados                   |
-| Ver sucursales                      | todos los roles autenticados                   |
+| Buscar envíos                       | todos excepto driver                           |
+| Ver sucursales                      | todos excepto driver                           |
 | Ver estadísticas / dashboard        | supervisor, manager, admin                     |
 | Crear envío (directo o borrador)    | operator, supervisor, admin — **no manager**  |
 | Confirmar borrador                  | operator, supervisor, admin — **no manager**  |

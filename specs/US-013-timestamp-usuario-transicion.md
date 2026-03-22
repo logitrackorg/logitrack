@@ -18,7 +18,7 @@ Cada vez que se ejecuta una transición de estado, el sistema registra automáti
 2. El campo `timestamp` lo genera el servidor (`time.Now().UTC()`) — el cliente no puede sobreescribirlo.
 3. Ambos campos son obligatorios en el modelo `ShipmentEvent`; si `changed_by` llega vacío se almacena la cadena vacía (el frontend muestra `"system"`).
 4. El registro ocurre **después** de que todas las validaciones pasan y el repositorio confirma el cambio.
-5. Aplica a toda transición: `UpdateStatus`, `Create`, `SaveDraft`, `ConfirmDraft` y `EditShipment`.
+5. Aplica a toda transición implementada: `UpdateStatus`, `Create`, `ConfirmDraft`. `SaveDraft` no genera evento de auditoría. `EditShipment` (US-009) no está implementado aún.
 
 ---
 

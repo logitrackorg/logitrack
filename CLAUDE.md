@@ -35,10 +35,13 @@ Standard layered architecture — requests flow: `handler → service → reposi
 ```
 cmd/server/main.go          # Entry point: wires repos, services, handlers, registers routes
 internal/
-  model/                    # Pure data structs (no logic): Shipment, ShipmentEvent, Branch, User, Stats
+  model/                    # Pure data structs (no logic): Shipment, ShipmentEvent, Branch, User, Stats,
+                            #   Route, Customer, ShipmentComment
   repository/               # In-memory stores (interface + implementation); swap to Postgres here later
-  service/                  # Business logic: status transitions, tracking ID generation, estimated delivery
-  handler/                  # Gin HTTP handlers; one file per domain
+                            #   shipment, auth, branch, route, customer, comment
+  service/                  # Business logic: shipment (status transitions, tracking ID, estimated delivery),
+                            #   route (driver route assignment/validation), comment (add/list with rules)
+  handler/                  # Gin HTTP handlers: shipment, auth, branch, driver, user, customer, comment
   middleware/               # Auth (Bearer token check) + RequireRoles (role-based access)
   seed/                     # LoadBranches() + Load() called at startup to populate in-memory data
 ```
@@ -52,6 +55,7 @@ internal/
 - `supervisor / supervisor123` → RoleSupervisor
 - `gerente / gerente123` → RoleManager
 - `admin / admin123` → RoleAdmin
+- `chofer / chofer123` → RoleDriver
 
 **Tracking ID formats**:
 - Confirmed shipments: `LT-XXXXXXXX` (generated on create or on draft confirmation)
@@ -96,10 +100,34 @@ pending (draft) ──confirm──► in_progress ──► in_transit ──�
 - `delivery_failed → at_branch`: not required — auto-derived from the last `at_branch` event
 
 **Role-based route permissions** (defined in `main.go`):
-- All roles: GET shipments, branches, search
-- Operator + Supervisor + Admin: POST /shipments
-- Supervisor + Admin: PATCH /shipments/:id/status
+- Non-driver roles (operator, supervisor, manager, admin): GET /shipments, /branches, /search, /customers
+- All roles including driver: GET /shipments/:id, /shipments/:id/events, /shipments/:id/comments
+- Operator + Supervisor + Admin: POST /shipments, /shipments/draft; PATCH /shipments/:id/draft; POST /shipments/:id/confirm
+- Supervisor + Admin: PATCH /shipments/:id/status, POST /shipments/:id/comments
+- Supervisor + Admin + Driver: PATCH /shipments/:id/status (driver further restricted in handler — see below)
 - Supervisor + Manager + Admin: GET /stats
+- Supervisor + Admin: GET /users/drivers
+- Driver only: GET /driver/route
+
+**Driver restrictions** (enforced in `RouteService.ValidateDriverCanUpdateShipment`):
+- Drivers can only update shipments assigned to their today's route.
+- Drivers can only set status to `delivered` or `delivery_failed`.
+
+**Route system** (service/route.go):
+- Routes link a driver to a list of shipments for a specific date (`YYYY-MM-DD`).
+- Route ID format: `ROUTE-XXXXXXXX`.
+- When a supervisor sets a shipment to `delivering` with a `driver_id`, the shipment is auto-added to that driver's route for today via `AddShipmentToDriverRoute`.
+- `GET /driver/route` returns today's route + full shipment details for the authenticated driver.
+
+**Comments** (service/comment.go):
+- Supervisor and admin can add comments to any non-finalized shipment.
+- Comments cannot be added to `delivered` or `returned` shipments.
+- All authenticated users can read comments.
+
+**Customer autocomplete** (handler/customer.go, repository/customer.go):
+- `GET /customers?dni=XXXXX` returns a stored customer by exact DNI match.
+- Customers are auto-upserted whenever a shipment is created (both sender and recipient).
+- Used by the frontend to auto-fill sender/recipient fields when creating a shipment.
 
 ### Adding a new endpoint
 
@@ -132,12 +160,12 @@ npm run lint
 
 ```
 src/
-  api/          # Axios clients: shipments.ts, auth.ts, branches.ts
+  api/          # Axios clients: shipments.ts, auth.ts, branches.ts, driver.ts, users.ts, customers.ts
                 # shipments.ts has request interceptor (adds Bearer token) and
                 # response interceptor (redirects to /login on 401)
   context/      # AuthContext: stores user + token in localStorage, exposes login/logout/hasRole
   components/   # ProtectedRoute (role guard), StatusBadge
-  pages/        # One file per screen
+  pages/        # One file per screen (including DriverRoute, DriverShipmentDetail)
   utils/date.ts # fmtDate / fmtDateTime — always use these for date display (DD/MM/AAAA format)
 ```
 
@@ -161,11 +189,13 @@ src/
 | Route | Component | Roles |
 |-------|-----------|-------|
 | `/login` | Login | public |
-| `/` | ShipmentList | all |
+| `/` | ShipmentList | all (non-driver) |
 | `/new` | NewShipment | operator, supervisor, admin |
-| `/shipments/:trackingId` | ShipmentDetail | all |
+| `/shipments/:trackingId` | ShipmentDetail | all (non-driver) |
 | `/dashboard` | Dashboard | supervisor, manager, admin |
 | `/track` | PublicTracking | all |
+| `/driver/route` | DriverRoute | driver |
+| `/shipments/:trackingId` | DriverShipmentDetail | driver (misma URL, componente diferente al no-driver) |
 
 ---
 
@@ -186,3 +216,70 @@ cd logitrack_web && npm run dev
 Frontend at http://localhost:5173, API at http://localhost:8080.
 
 `VITE_API_URL` env var overrides the default API base URL (`http://localhost:8080/api/v1`).
+
+---
+
+## Domain model
+
+Six core entities plus supporting value objects:
+
+| Entity | Key fields | Notes |
+|--------|-----------|-------|
+| **Shipment** | tracking_id, status, sender/recipient info, origin/destination (Address), weight_kg, package_type, receiving_branch_id, current_location, timestamps | Central aggregate. Tracking ID is `LT-XXXX` (confirmed) or `DRAFT-XXXX` (pending). |
+| **ShipmentEvent** | id, tracking_id, event_type, from_status, to_status, changed_by, location, notes, timestamp | Immutable audit log of every status change. `event_type`: `"status_change"` or `"edited"`. |
+| **ShipmentComment** | id, tracking_id, author, body, created_at | Internal notes on a shipment. Cannot be added to finalized shipments. |
+| **Branch** | id, name, city, province | Physical logistics branches. Loaded from seed data at startup. |
+| **User** | id, username, role | Auth identity. Roles: `operator`, `supervisor`, `manager`, `admin`, `driver`. |
+| **Route** | id, date, driver_id, shipment_ids[], created_by, created_at | Links a driver to shipments for a given day. ID format: `ROUTE-XXXXXXXX`. |
+| **Customer** | dni, name, phone, email, address | Auto-populated from shipment sender/recipient data. Used for DNI autocomplete. |
+
+**Value objects**: `Address` (street, city, province, postal_code), `Status` (enum), `PackageType` (enum: envelope, box, pallet, fragile), `Role` (enum).
+
+**Key relationships**:
+- Shipment 1→N ShipmentEvent (status history)
+- Shipment 1→N ShipmentComment (internal notes)
+- Shipment N→1 Branch (via receiving_branch_id)
+- Route N→N Shipment (via shipment_ids)
+- Route N→1 User/Driver (via driver_id)
+
+## Seed data
+
+On startup, `seed.Load()` populates 8 branches and 8 sample shipments in various states:
+
+**Branches** (seed/seed.go `LoadBranches`): caba, san-pedro, cordoba, mendoza, rio-gallegos, jujuy, posadas, ushuaia.
+
+**Sample shipments** cover key scenarios:
+- `LT-A1B2C3D4`: at_branch (Córdoba) — standard single-hop
+- `LT-E5F6G7H8`: delivered (Mendoza) — completed delivery
+- `LT-I9J0K1L2`: in_progress (CABA) — just created, awaiting first dispatch
+- `LT-M3N4O5P6`: in_transit (Jujuy→Posadas) — mid-route
+- `LT-Q7R8S9T0`: delivered (CABA) — completed, originated from Córdoba
+- `LT-U1V2W3X4`: in_progress (CABA) — recently created, long-distance to Río Gallegos
+- `LT-DELIVER01`, `LT-DELIVER02`: at_branch (CABA) — ready for last-mile delivery assignment
+- `LT-MULTI001`: at_branch (Jujuy) — multi-hop: CABA→Córdoba→Mendoza→Jujuy with full event history
+
+Customers from all shipments are auto-upserted into the customer repository for DNI autocomplete.
+
+## Complete API reference
+
+| Method | Path | Auth | Roles | Description |
+|--------|------|------|-------|-------------|
+| POST | /api/v1/auth/login | public | — | Login, returns token + user |
+| GET | /api/v1/auth/me | Bearer | all | Current user info |
+| GET | /api/v1/branches | Bearer | non-driver | List all branches |
+| GET | /api/v1/shipments | Bearer | non-driver | List shipments (query: `status`, `date_from`, `date_to`) |
+| GET | /api/v1/search | Bearer | non-driver | Search by tracking ID or recipient name (query: `q`) |
+| GET | /api/v1/shipments/:tracking_id | Bearer | all | Get shipment detail |
+| GET | /api/v1/shipments/:tracking_id/events | Bearer | all | Get shipment event history |
+| GET | /api/v1/shipments/:tracking_id/comments | Bearer | all | Get shipment comments |
+| POST | /api/v1/shipments | Bearer | operator, supervisor, admin | Create confirmed shipment |
+| POST | /api/v1/shipments/draft | Bearer | operator, supervisor, admin | Create draft shipment |
+| PATCH | /api/v1/shipments/:tracking_id/draft | Bearer | operator, supervisor, admin | Update draft |
+| POST | /api/v1/shipments/:tracking_id/confirm | Bearer | operator, supervisor, admin | Confirm draft → in_progress |
+| PATCH | /api/v1/shipments/:tracking_id/status | Bearer | supervisor, admin, driver | Update shipment status |
+| POST | /api/v1/shipments/:tracking_id/comments | Bearer | supervisor, admin | Add comment |
+| GET | /api/v1/stats | Bearer | supervisor, manager, admin | Dashboard stats |
+| GET | /api/v1/users/drivers | Bearer | supervisor, admin | List driver users |
+| GET | /api/v1/customers?dni=X | Bearer | non-driver | Customer lookup by DNI |
+| GET | /api/v1/driver/route | Bearer | driver | Get today's assigned route + shipments |
+| GET | /health | public | — | Health check |

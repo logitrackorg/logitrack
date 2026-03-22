@@ -13,7 +13,7 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 002b | [Validaciones del formulario de alta](./US-002-validaciones-alta.md) | Implementada |
 | 003 | [Rol Gerente](./US-003-rol-gerente.md) | Implementada |
 | 004 | [Rol Chofer](./US-004-rol-chofer.md) | Implementada |
-| 004 | [Búsqueda por tracking ID](./US-004-busqueda-tracking-id.md) | Implementada |
+| 004b | [Búsqueda por tracking ID](./US-004-busqueda-tracking-id.md) | Implementada |
 | 005 | [Búsqueda de envíos](./US-005-busqueda-envios.md) | Implementada |
 | 010 | [Envío devuelto a remitente](./US-010-devolucion-remitente.md) | Implementada |
 | 013 | [Timestamp y usuario en cada transición](./US-013-timestamp-usuario-transicion.md) | Implementada |

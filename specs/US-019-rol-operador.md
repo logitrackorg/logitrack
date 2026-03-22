@@ -23,11 +23,11 @@ El Operador es el rol de entrada de datos del sistema. Puede crear envíos (dire
 
 | Acción                                              | Roles habilitados                    |
 |-----------------------------------------------------|--------------------------------------|
-| Ver lista de envíos                                 | todos los roles autenticados         |
+| Ver lista de envíos                                 | todos excepto driver                 |
 | Ver detalle de un envío                             | todos los roles autenticados         |
 | Ver historial de eventos de un envío                | todos los roles autenticados         |
-| Buscar envíos                                       | todos los roles autenticados         |
-| Ver sucursales                                      | todos los roles autenticados         |
+| Buscar envíos                                       | todos excepto driver                 |
+| Ver sucursales                                      | todos excepto driver                 |
 | Crear envío directo (`POST /shipments`)             | operator, supervisor, admin          |
 | Guardar borrador (`POST /shipments/draft`)          | operator, supervisor, admin          |
 | Editar borrador (`PATCH /shipments/:id/draft`)      | operator, supervisor, admin          |

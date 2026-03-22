@@ -11,8 +11,7 @@
 1. Aplicar un rango de fechas muestra solo los envíos creados en ese período (inclusive en ambos extremos).
 2. Si no hay envíos en el rango, el sistema muestra un mensaje de sin resultados.
 
-> **Estado de implementación**
-> Esta funcionalidad **no está implementada**. El backend no acepta parámetros de fecha en ningún endpoint, y el frontend no tiene controles de rango de fechas. La spec define el comportamiento esperado para cuando se implemente.
+**Estado:** Implementada. El backend acepta `date_from` y `date_to` en `GET /api/v1/shipments`. El frontend tiene inputs de tipo `date` en la lista de envíos.
 
 ---
 
@@ -47,13 +46,13 @@ GET /api/v1/shipments?date_from=2026-01-01&date_to=2026-03-31
 
 ---
 
-## Comportamiento del frontend esperado
+## Comportamiento del frontend
 
-1. En la lista de envíos (`/`), agregar dos inputs de tipo `date` (desde / hasta) junto al filtro de estado.
-2. Al cambiar cualquiera de los dos campos, re-ejecutar la carga con los parámetros actualizados.
-3. Si no hay resultados, mostrar "No shipments found."
-4. Un botón "Clear" o equivalente limpia el rango y vuelve a cargar sin filtro de fecha.
-5. El filtro de fecha coexiste con el filtro de estado y la búsqueda por texto.
+1. En la lista de envíos (`/`), hay dos inputs de tipo `date` (desde / hasta) junto al filtro de estado.
+2. Al cambiar cualquiera de los dos campos, se re-ejecuta la carga con los parámetros actualizados.
+3. Si no hay resultados, se muestra "No shipments found."
+4. El filtro de fecha coexiste con el filtro de estado (client-side) y la búsqueda por texto.
+5. Cuando hay búsqueda activa, las fechas son ignoradas (la búsqueda usa `/search`, no `/shipments`).
 
 ---
 

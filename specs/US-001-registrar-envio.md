@@ -20,7 +20,7 @@
 
 | Campo                 | Tipo       | Notas                                                        |
 |-----------------------|------------|--------------------------------------------------------------|
-| `tracking_id`         | string     | Vacío en borradores. Formato `LT-{8 hex}` al confirmar.     |
+| `tracking_id`         | string     | `DRAFT-{8 hex}` en borradores. `LT-{8 hex}` al confirmar (reemplaza al DRAFT-). |
 | `sender_name`         | string     | Requerido para confirmar                                     |
 | `sender_dni`          | string     | Requerido para confirmar                                     |
 | `sender_phone`        | string     | Requerido para confirmar                                     |
@@ -34,8 +34,9 @@
 | `weight_kg`           | float      | Requerido para confirmar (> 0)                               |
 | `package_type`        | enum       | `envelope` / `box` / `pallet` / `fragile`. Requerido para confirmar |
 | `special_instructions`| string     | Opcional                                                     |
+| `receiving_branch_id` | string     | Sucursal receptora. Requerido para crear envío directo (binding). Validado en frontend al confirmar borrador. |
 | `status`              | enum       | Ver estados más abajo                                        |
-| `current_location`    | string     | Ciudad de origen al crear. Ciudad de la última sucursal luego. |
+| `current_location`    | string     | Ciudad de la sucursal receptora al crear. Ciudad de la última sucursal luego. |
 | `created_at`          | datetime   | Generado automáticamente                                     |
 | `estimated_delivery_at`| datetime  | `created_at + 7 días`                                       |
 | `delivered_at`        | datetime   | Solo presente al alcanzar `delivered`                        |

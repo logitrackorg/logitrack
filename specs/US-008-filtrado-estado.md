@@ -3,7 +3,7 @@
 **Estado:** Implementada
 
 ## Actor principal
-Todos los roles autenticados (el listado es accesible para todos).
+Todos los roles autenticados excepto driver (el listado de envíos no es accesible para drivers).
 
 ## Descripción
 El listado de envíos tiene un selector de estado que filtra los resultados mostrados. El filtro por estado se aplica en el frontend sobre los resultados ya obtenidos del backend, lo que permite combinarlo con el filtro por fecha sin una segunda llamada a la API.
