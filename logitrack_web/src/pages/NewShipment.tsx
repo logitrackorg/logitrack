@@ -139,7 +139,7 @@ export function NewShipment() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 720 }}>
+    <div style={{ padding: "24px 32px", maxWidth: 720, margin: "0 auto" }}>
       <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
       <h1 style={{ marginTop: 16, marginBottom: 24 }}>New Shipment</h1>
 

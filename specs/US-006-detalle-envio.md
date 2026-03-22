@@ -15,16 +15,21 @@ Cualquier usuario autenticado puede acceder al detalle completo de un envío. El
 ### Información del envío (todos los roles)
 | Sección | Campos |
 |---|---|
-| Encabezado | Tracking ID, StatusBadge (estado actual) |
+| Encabezado | Tracking ID, StatusBadge (estado actual), botón "✏️ Editar datos" (supervisor/admin, envíos no pendientes ni finalizados) |
 | Remitente | Nombre, teléfono, email (si existe), DNI, dirección de origen completa |
 | Destinatario | Nombre, teléfono, email (si existe), DNI, dirección de destino completa |
 | Paquete | Tipo, peso (kg), instrucciones especiales (si existen) |
 | Fechas y ubicación | Fecha de creación, fecha estimada de entrega, fecha de entrega real (si existe), ubicación actual |
 | Ruta (timeline) | Nodos de tránsito con ciudad + provincia de cada sucursal |
 
+Los campos con corrección activa (ver US-009) muestran el valor corregido con badge **"Modificado"** y el valor original tachado en gris.
+
+### Comentarios (columna derecha)
+Sección de comentarios internos ubicada en una columna a la derecha del contenido principal. Muestra todos los comentarios del envío (autor, timestamp, cuerpo). Supervisor y Admin pueden agregar comentarios en envíos no finalizados. Incluye los comentarios automáticos generados por correcciones de datos.
+
 ### Historial de eventos (todos los roles)
 Cada evento muestra:
-- Transición de estado (`from_status → to_status`)
+- Transición de estado (`from_status → to_status`), o `event_type: "edited"` para correcciones de datos
 - Timestamp (fecha y hora)
 - Usuario (`changed_by`)
 - Ubicación (si aplica)
@@ -40,6 +45,8 @@ Cada evento muestra:
 4. El panel "Update Status" solo se renderiza para supervisor y admin (cuando hay transiciones disponibles).
 5. Si el envío está en estado `pending` (borrador), se muestra el formulario de edición de borrador en lugar del detalle de solo lectura (para roles con permiso de creación).
 6. El historial se ordena del más reciente al más antiguo en el frontend.
+7. El botón "✏️ Editar datos" solo aparece para supervisor y admin, y solo en envíos que no son `pending`, `delivered` ni `returned`.
+8. Los comentarios se muestran en una columna lateral derecha, separada del contenido principal.
 
 ---
 

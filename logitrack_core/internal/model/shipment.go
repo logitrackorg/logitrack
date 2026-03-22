@@ -64,6 +64,9 @@ type Shipment struct {
 	CreatedAt           time.Time  `json:"created_at"`
 	EstimatedDeliveryAt time.Time  `json:"estimated_delivery_at"`
 	DeliveredAt         *time.Time `json:"delivered_at,omitempty"`
+
+	// Corrections: field key → corrected value; original data is never modified.
+	Corrections map[string]string `json:"corrections,omitempty"`
 }
 
 type CreateShipmentRequest struct {
@@ -90,6 +93,12 @@ type CreateShipmentRequest struct {
 type ShipmentFilter struct {
 	DateFrom *time.Time // inclusive lower bound on created_at
 	DateTo   *time.Time // inclusive upper bound on created_at (end of day)
+}
+
+// CorrectShipmentRequest carries a map of field corrections (field key → new value).
+// The original shipment data is never modified; corrections are stored separately.
+type CorrectShipmentRequest struct {
+	Corrections map[string]string `json:"corrections" binding:"required"`
 }
 
 // SaveDraftRequest allows partial data — no required fields.

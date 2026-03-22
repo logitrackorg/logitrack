@@ -30,7 +30,7 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo)
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
-	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc)
+	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
@@ -82,6 +82,9 @@ func main() {
 	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
 	canComment := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
+
+	// Correct shipment data (non-destructive) — supervisor, admin
+	protected.PATCH("/shipments/:tracking_id/correct", canComment, shipmentHandler.CorrectShipment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
 	canChangeStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)

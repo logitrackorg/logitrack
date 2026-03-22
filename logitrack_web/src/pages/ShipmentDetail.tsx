@@ -71,6 +71,10 @@ export function ShipmentDetail() {
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [correctionForm, setCorrectionForm] = useState<Record<string, string>>({});
+  const [savingCorrection, setSavingCorrection] = useState(false);
+  const [correctionError, setCorrectionError] = useState("");
   const reload = async () => {
     if (!trackingId) return;
     try {
@@ -167,6 +171,83 @@ export function ShipmentDetail() {
     }
   };
 
+  const openCorrectionModal = () => {
+    if (!shipment) return;
+    const c = shipment.corrections ?? {};
+    setCorrectionForm({
+      sender_name: c.sender_name ?? shipment.sender_name ?? "",
+      sender_phone: c.sender_phone ?? shipment.sender_phone ?? "",
+      sender_email: c.sender_email ?? shipment.sender_email ?? "",
+      sender_dni: c.sender_dni ?? shipment.sender_dni ?? "",
+      origin_street: c.origin_street ?? shipment.origin?.street ?? "",
+      origin_city: c.origin_city ?? shipment.origin?.city ?? "",
+      origin_province: c.origin_province ?? shipment.origin?.province ?? "",
+      origin_postal_code: c.origin_postal_code ?? shipment.origin?.postal_code ?? "",
+      recipient_name: c.recipient_name ?? shipment.recipient_name ?? "",
+      recipient_phone: c.recipient_phone ?? shipment.recipient_phone ?? "",
+      recipient_email: c.recipient_email ?? shipment.recipient_email ?? "",
+      recipient_dni: c.recipient_dni ?? shipment.recipient_dni ?? "",
+      destination_street: c.destination_street ?? shipment.destination?.street ?? "",
+      destination_city: c.destination_city ?? shipment.destination?.city ?? "",
+      destination_province: c.destination_province ?? shipment.destination?.province ?? "",
+      destination_postal_code: c.destination_postal_code ?? shipment.destination?.postal_code ?? "",
+      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
+      package_type: c.package_type ?? shipment.package_type ?? "",
+      special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
+    });
+    setCorrectionError("");
+    setShowCorrectionModal(true);
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!trackingId || !shipment) return;
+    // Only send fields that differ from effective current value
+    const c = shipment.corrections ?? {};
+    const effective: Record<string, string> = {
+      sender_name: c.sender_name ?? shipment.sender_name ?? "",
+      sender_phone: c.sender_phone ?? shipment.sender_phone ?? "",
+      sender_email: c.sender_email ?? shipment.sender_email ?? "",
+      sender_dni: c.sender_dni ?? shipment.sender_dni ?? "",
+      origin_street: c.origin_street ?? shipment.origin?.street ?? "",
+      origin_city: c.origin_city ?? shipment.origin?.city ?? "",
+      origin_province: c.origin_province ?? shipment.origin?.province ?? "",
+      origin_postal_code: c.origin_postal_code ?? shipment.origin?.postal_code ?? "",
+      recipient_name: c.recipient_name ?? shipment.recipient_name ?? "",
+      recipient_phone: c.recipient_phone ?? shipment.recipient_phone ?? "",
+      recipient_email: c.recipient_email ?? shipment.recipient_email ?? "",
+      recipient_dni: c.recipient_dni ?? shipment.recipient_dni ?? "",
+      destination_street: c.destination_street ?? shipment.destination?.street ?? "",
+      destination_city: c.destination_city ?? shipment.destination?.city ?? "",
+      destination_province: c.destination_province ?? shipment.destination?.province ?? "",
+      destination_postal_code: c.destination_postal_code ?? shipment.destination?.postal_code ?? "",
+      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
+      package_type: c.package_type ?? shipment.package_type ?? "",
+      special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
+    };
+    const changed: Record<string, string> = {};
+    for (const key of Object.keys(correctionForm)) {
+      if (correctionForm[key] !== effective[key]) {
+        changed[key] = correctionForm[key];
+      }
+    }
+    if (Object.keys(changed).length === 0) {
+      setShowCorrectionModal(false);
+      return;
+    }
+    setSavingCorrection(true);
+    setCorrectionError("");
+    try {
+      await shipmentApi.correctShipment(trackingId, changed);
+      setShowCorrectionModal(false);
+      await reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setCorrectionError(msg ?? "No se pudieron guardar las correcciones.");
+    } finally {
+      setSavingCorrection(false);
+    }
+  };
+
   if (error) return (
     <div style={{ padding: 24 }}>
       <p style={{ color: "#ef4444" }}>{error}</p>
@@ -185,15 +266,27 @@ export function ShipmentDetail() {
     [a.street, a.city, a.province, a.postal_code].filter(Boolean).join(", ");
 
   return (
-    <div style={{ padding: 24, maxWidth: 720 }}>
+    <div style={{ padding: "24px 32px" }}>
       <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, marginBottom: 20 }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "720px 300px", gap: 32, alignItems: "start", marginTop: 16, justifyContent: "center" }}>
+
+      {/* ── Left column ── */}
+      <div>
+      <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h1 style={{ margin: 0 }}>
           <code style={{ fontSize: 22 }}>{shipment.tracking_id}</code>
         </h1>
-        <StatusBadge status={shipment.status} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && (
+            <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
+              ✏️ Editar datos
+            </button>
+          )}
+          <StatusBadge status={shipment.status} />
+        </div>
       </div>
-
       {shipment.status === "pending" && draftForm ? (
         /* ── Draft edit form ── */
         <DraftEditForm
@@ -211,33 +304,59 @@ export function ShipmentDetail() {
         /* ── Read-only info grid ── */
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <Card title="Sender">
-              <InfoRow label="Name"  value={shipment.sender_name} />
-              <InfoRow label="Phone" value={shipment.sender_phone} />
-              {shipment.sender_email && <InfoRow label="Email" value={shipment.sender_email} />}
-              {shipment.sender_dni && <InfoRow label="DNI" value={shipment.sender_dni} />}
-              <InfoRow label="Origin" value={fmtAddr(shipment.origin)} />
-            </Card>
-            <Card title="Recipient">
-              <InfoRow label="Name"  value={shipment.recipient_name} />
-              <InfoRow label="Phone" value={shipment.recipient_phone} />
-              {shipment.recipient_email && <InfoRow label="Email" value={shipment.recipient_email} />}
-              {shipment.recipient_dni && <InfoRow label="DNI" value={shipment.recipient_dni} />}
-              <InfoRow label="Destination" value={fmtAddr(shipment.destination)} />
-            </Card>
-            <Card title="Package">
-              <InfoRow label="Type"   value={PACKAGE_LABELS[shipment.package_type]} />
-              <InfoRow label="Weight" value={`${shipment.weight_kg} kg`} />
-              {shipment.special_instructions && <InfoRow label="Instructions" value={shipment.special_instructions} />}
-            </Card>
-            <Card title="Dates & Location">
-              <InfoRow label="Created"      value={fmt(shipment.created_at)} />
-              <InfoRow label="Est. Delivery" value={fmt(shipment.estimated_delivery_at)} />
-              {shipment.delivered_at && <InfoRow label="Delivered" value={fmt(shipment.delivered_at)} />}
-              {shipment.current_location && (
-                <InfoRow label="Current location" value={`📍 ${branchLabel(shipment.current_location, branches)}`} />
-              )}
-            </Card>
+            {(() => {
+              const cor = shipment.corrections ?? {};
+              const cv = (key: string, original: string) =>
+                cor[key] ? { value: cor[key], original, corrected: true } : { value: original, original, corrected: false };
+              const originParts = [
+                cor.origin_street ?? shipment.origin?.street,
+                cor.origin_city ?? shipment.origin?.city,
+                cor.origin_province ?? shipment.origin?.province,
+                cor.origin_postal_code ?? shipment.origin?.postal_code,
+              ].filter(Boolean).join(", ");
+              const originCorrected = !!(cor.origin_street || cor.origin_city || cor.origin_province || cor.origin_postal_code);
+              const originalOrigin = fmtAddr(shipment.origin);
+              const destParts = [
+                cor.destination_street ?? shipment.destination?.street,
+                cor.destination_city ?? shipment.destination?.city,
+                cor.destination_province ?? shipment.destination?.province,
+                cor.destination_postal_code ?? shipment.destination?.postal_code,
+              ].filter(Boolean).join(", ");
+              const destCorrected = !!(cor.destination_street || cor.destination_city || cor.destination_province || cor.destination_postal_code);
+              const originalDest = fmtAddr(shipment.destination);
+              const weightVal = cv("weight_kg", `${shipment.weight_kg} kg`);
+              const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
+              const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
+              return <>
+                <Card title="Sender">
+                  <InfoRowEx {...cv("sender_name", shipment.sender_name)} label="Name" />
+                  <InfoRowEx {...cv("sender_phone", shipment.sender_phone)} label="Phone" />
+                  {(shipment.sender_email || cor.sender_email) && <InfoRowEx {...cv("sender_email", shipment.sender_email ?? "")} label="Email" />}
+                  {(shipment.sender_dni || cor.sender_dni) && <InfoRowEx {...cv("sender_dni", shipment.sender_dni ?? "")} label="DNI" />}
+                  <InfoRowEx value={originParts || originalOrigin} original={originalOrigin} corrected={originCorrected} label="Origin" />
+                </Card>
+                <Card title="Recipient">
+                  <InfoRowEx {...cv("recipient_name", shipment.recipient_name)} label="Name" />
+                  <InfoRowEx {...cv("recipient_phone", shipment.recipient_phone)} label="Phone" />
+                  {(shipment.recipient_email || cor.recipient_email) && <InfoRowEx {...cv("recipient_email", shipment.recipient_email ?? "")} label="Email" />}
+                  {(shipment.recipient_dni || cor.recipient_dni) && <InfoRowEx {...cv("recipient_dni", shipment.recipient_dni ?? "")} label="DNI" />}
+                  <InfoRowEx value={destParts || originalDest} original={originalDest} corrected={destCorrected} label="Destination" />
+                </Card>
+                <Card title="Package">
+                  <InfoRowEx {...pkgVal} label="Type" />
+                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Weight" />
+                  {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instructions" />}
+                </Card>
+                <Card title="Dates & Location">
+                  <InfoRow label="Created"       value={fmt(shipment.created_at)} />
+                  <InfoRow label="Est. Delivery"  value={fmt(shipment.estimated_delivery_at)} />
+                  {shipment.delivered_at && <InfoRow label="Delivered" value={fmt(shipment.delivered_at)} />}
+                  {shipment.current_location && (
+                    <InfoRow label="Current location" value={`📍 ${branchLabel(shipment.current_location, branches)}`} />
+                  )}
+                </Card>
+              </>;
+            })()}
           </div>
           <RouteTimeline events={events} origin={shipment.origin.city} receivingBranchId={shipment.receiving_branch_id} destination={shipment.destination.city} branches={branches} />
         </>
@@ -352,55 +471,6 @@ export function ShipmentDetail() {
         </div>
       )}
 
-      {/* Comments */}
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
-        {hasRole("supervisor", "admin") && shipment.status !== "delivered" && shipment.status !== "returned" && (
-          <div style={{ marginBottom: 12 }}>
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              rows={2}
-              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
-            />
-            <button
-              disabled={addingComment || !newComment.trim()}
-              onClick={async () => {
-                if (!trackingId || !newComment.trim()) return;
-                setAddingComment(true);
-                try {
-                  await shipmentApi.addComment(trackingId, newComment.trim());
-                  setNewComment("");
-                  const cmts = await shipmentApi.getComments(trackingId);
-                  setComments(cmts);
-                } finally {
-                  setAddingComment(false);
-                }
-              }}
-              style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
-            >
-              {addingComment ? "Adding..." : "Add comment"}
-            </button>
-          </div>
-        )}
-        {comments.length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>No comments yet.</p>
-        ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {comments.map((c) => (
-              <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>{c.author}</span>
-                  <span style={{ color: "#9ca3af", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
-                </div>
-                <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Event history */}
       <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Event History</h2>
       {events.length === 0 ? (
@@ -433,6 +503,72 @@ export function ShipmentDetail() {
             </div>
           ))}
         </div>
+      )}
+      </div>{/* end maxWidth wrapper */}
+      </div>{/* end left column */}
+
+      {/* ── Right column: Comments ── */}
+      <div style={{ position: "sticky", top: 24 }}>
+        <div style={{ ...cardStyle }}>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
+          {hasRole("supervisor", "admin") && shipment.status !== "delivered" && shipment.status !== "returned" && (
+            <div style={{ marginBottom: 12 }}>
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                rows={2}
+                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
+              />
+              <button
+                disabled={addingComment || !newComment.trim()}
+                onClick={async () => {
+                  if (!trackingId || !newComment.trim()) return;
+                  setAddingComment(true);
+                  try {
+                    await shipmentApi.addComment(trackingId, newComment.trim());
+                    setNewComment("");
+                    const cmts = await shipmentApi.getComments(trackingId);
+                    setComments(cmts);
+                  } finally {
+                    setAddingComment(false);
+                  }
+                }}
+                style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              >
+                {addingComment ? "Adding..." : "Add comment"}
+              </button>
+            </div>
+          )}
+          {comments.length === 0 ? (
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>No comments yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 8, maxHeight: 500, overflowY: "auto" }}>
+              {comments.map((c) => (
+                <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>{c.author}</span>
+                    <span style={{ color: "#9ca3af", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
+                  </div>
+                  <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      </div>{/* end two-column grid */}
+
+      {showCorrectionModal && shipment && (
+        <CorrectionModal
+          form={correctionForm}
+          onChange={setCorrectionForm}
+          onSave={handleSaveCorrection}
+          onClose={() => setShowCorrectionModal(false)}
+          saving={savingCorrection}
+          error={correctionError}
+        />
       )}
     </div>
   );
@@ -718,3 +854,115 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const cardStyle: React.CSSProperties = { background: "#f9fafb", borderRadius: 10, padding: 16 };
 const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 };
 const backBtn: React.CSSProperties = { background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
+
+// InfoRowEx: same as InfoRow but supports showing original value when corrected
+function InfoRowEx({ label, value, corrected, original }: { label: string; value: string; corrected: boolean; original: string }) {
+  return (
+    <div style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "flex-start" }}>
+      <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ fontWeight: 500 }}>{value}</span>
+          {corrected && (
+            <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" as const }}>
+              Modificado
+            </span>
+          )}
+        </div>
+        {corrected && original && (
+          <span style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through" }}>{original}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
+  form: Record<string, string>;
+  onChange: (f: Record<string, string>) => void;
+  onSave: () => void;
+  onClose: () => void;
+  saving: boolean;
+  error: string;
+}) {
+  const set = (key: string, value: string) => onChange({ ...form, [key]: value });
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Corregir datos del envío</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>✕</button>
+        </div>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+          Los datos originales no se modifican. Los cambios quedan anotados y registrados en el historial de comentarios.
+        </p>
+
+        {/* Remitente */}
+        <fieldset style={fsStyle}>
+          <legend style={legStyle}>Remitente</legend>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <DField label="Nombre"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value)} /></DField>
+            <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
+            <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
+            <DField label="Calle (origen)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
+            <DField label="Ciudad (origen)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
+            <DField label="Provincia (origen)">
+              <select style={inp} value={form.origin_province ?? ""} onChange={(e) => set("origin_province", e.target.value)}>
+                <option value="">Seleccionar</option>
+                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </DField>
+            <DField label="CP (origen)"><input style={inp} value={form.origin_postal_code ?? ""} onChange={(e) => set("origin_postal_code", e.target.value)} /></DField>
+          </div>
+        </fieldset>
+
+        {/* Destinatario */}
+        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
+          <legend style={legStyle}>Destinatario</legend>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <DField label="Nombre"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value)} /></DField>
+            <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
+            <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
+            <DField label="Calle (destino)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
+            <DField label="Ciudad (destino)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
+            <DField label="Provincia (destino)">
+              <select style={inp} value={form.destination_province ?? ""} onChange={(e) => set("destination_province", e.target.value)}>
+                <option value="">Seleccionar</option>
+                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </DField>
+            <DField label="CP (destino)"><input style={inp} value={form.destination_postal_code ?? ""} onChange={(e) => set("destination_postal_code", e.target.value)} /></DField>
+          </div>
+        </fieldset>
+
+        {/* Paquete */}
+        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
+          <legend style={legStyle}>Paquete</legend>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
+            <DField label="Tipo">
+              <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
+                {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </DField>
+            <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
+              <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
+            </DField>
+          </div>
+        </fieldset>
+
+        {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button onClick={onClose} disabled={saving} style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+            Cancelar
+          </button>
+          <button onClick={onSave} disabled={saving} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: saving ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>
+            {saving ? "Guardando..." : "Guardar correcciones"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -96,7 +96,18 @@ export function DriverRoute() {
       )}
 
       <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
-        {data.shipments.map((shipment) => (
+        {data.shipments.map((shipment) => {
+          const cor = shipment.corrections ?? {};
+          const recipientName = cor.recipient_name ?? shipment.recipient_name;
+          const recipientPhone = cor.recipient_phone ?? shipment.recipient_phone;
+          const destAddress = [
+            cor.destination_street ?? shipment.destination?.street,
+            cor.destination_city ?? shipment.destination?.city,
+            cor.destination_province ?? shipment.destination?.province,
+          ].filter(Boolean).join(", ");
+          const specialInstructions = cor.special_instructions ?? shipment.special_instructions;
+
+          return (
           <div
             key={shipment.tracking_id}
             onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
@@ -112,20 +123,16 @@ export function DriverRoute() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
               <div>
                 <code style={{ fontSize: 12, color: "#6b7280" }}>{shipment.tracking_id}</code>
-                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{shipment.recipient_name}</div>
-                <div style={{ fontSize: 13, color: "#4b5563", marginTop: 2 }}>{shipment.recipient_phone}</div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
-                  {[shipment.destination.street, shipment.destination.city, shipment.destination.province]
-                    .filter(Boolean)
-                    .join(", ")}
-                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{recipientName}</div>
+                <div style={{ fontSize: 13, color: "#4b5563", marginTop: 2 }}>{recipientPhone}</div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>{destAddress}</div>
               </div>
               <StatusBadge status={shipment.status} />
             </div>
 
-            {shipment.special_instructions && (
+            {specialInstructions && (
               <p style={{ margin: "0 0 10px", fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>
-                {shipment.special_instructions}
+                {specialInstructions}
               </p>
             )}
 
@@ -236,7 +243,7 @@ export function DriverRoute() {
               </div>
             )}
           </div>
-        ))}
+        );})}
       </div>
     </div>
   );

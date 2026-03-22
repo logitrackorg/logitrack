@@ -231,12 +231,16 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if !isValidTransition(current.Status, req.Status) {
 		return model.Shipment{}, fmt.Errorf("invalid transition: %s → %s", current.Status, req.Status)
 	}
-	// Validate returned: sender DNI must match
+	// Validate returned: sender DNI must match (corrections take precedence)
 	if req.Status == model.StatusReturned {
 		if strings.TrimSpace(req.SenderDNI) == "" {
 			return model.Shipment{}, fmt.Errorf("sender_dni is required for returned")
 		}
-		if current.SenderDNI != req.SenderDNI {
+		expectedSenderDNI := current.SenderDNI
+		if corrected, ok := current.Corrections["sender_dni"]; ok {
+			expectedSenderDNI = corrected
+		}
+		if expectedSenderDNI != req.SenderDNI {
 			return model.Shipment{}, fmt.Errorf("El DNI no coincide con el del remitente esperado")
 		}
 	}
@@ -248,12 +252,16 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 	}
-	// Validate DNI before touching the repository
+	// Validate DNI before touching the repository (corrections take precedence)
 	if req.Status == model.StatusDelivered {
 		if strings.TrimSpace(req.RecipientDNI) == "" {
 			return model.Shipment{}, fmt.Errorf("recipient_dni is required for delivery")
 		}
-		if current.RecipientDNI != req.RecipientDNI {
+		expectedRecipientDNI := current.RecipientDNI
+		if corrected, ok := current.Corrections["recipient_dni"]; ok {
+			expectedRecipientDNI = corrected
+		}
+		if expectedRecipientDNI != req.RecipientDNI {
 			return model.Shipment{}, fmt.Errorf("El DNI no coincide con el del destinatario esperado")
 		}
 	}
@@ -304,6 +312,75 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	}
 	_ = s.repo.AddEvent(event)
 	return updated, nil
+}
+
+// correctableFields maps a correction key to its human-readable label used in auto-comments.
+var correctableFields = map[string]string{
+	"sender_name":             "Nombre remitente",
+	"sender_phone":            "Teléfono remitente",
+	"sender_email":            "Email remitente",
+	"sender_dni":              "DNI remitente",
+	"origin_street":           "Dirección origen (calle)",
+	"origin_city":             "Ciudad origen",
+	"origin_province":         "Provincia origen",
+	"origin_postal_code":      "Código postal origen",
+	"recipient_name":          "Nombre destinatario",
+	"recipient_phone":         "Teléfono destinatario",
+	"recipient_email":         "Email destinatario",
+	"recipient_dni":           "DNI destinatario",
+	"destination_street":      "Dirección destino (calle)",
+	"destination_city":        "Ciudad destino",
+	"destination_province":    "Provincia destino",
+	"destination_postal_code": "Código postal destino",
+	"weight_kg":               "Peso (kg)",
+	"package_type":            "Tipo de paquete",
+	"special_instructions":    "Instrucciones especiales",
+}
+
+// CorrectShipment stores field corrections without modifying original data.
+// Returns the updated shipment and a slice of comment bodies (one per corrected field)
+// that the caller should persist via the comment service.
+func (s *ShipmentService) CorrectShipment(trackingID, username string, req model.CorrectShipmentRequest) (model.Shipment, []string, error) {
+	if len(req.Corrections) == 0 {
+		return model.Shipment{}, nil, fmt.Errorf("no corrections provided")
+	}
+	shipment, err := s.repo.GetByTrackingID(trackingID)
+	if err != nil {
+		return model.Shipment{}, nil, err
+	}
+	if shipment.Status == model.StatusPending {
+		return model.Shipment{}, nil, fmt.Errorf("los borradores se editan directamente")
+	}
+	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned {
+		return model.Shipment{}, nil, fmt.Errorf("no se pueden corregir envíos finalizados")
+	}
+	for k := range req.Corrections {
+		if _, ok := correctableFields[k]; !ok {
+			return model.Shipment{}, nil, fmt.Errorf("campo no permitido: %s", k)
+		}
+	}
+	updated, err := s.repo.ApplyCorrections(trackingID, req.Corrections)
+	if err != nil {
+		return model.Shipment{}, nil, err
+	}
+	now := time.Now().UTC()
+	event := model.ShipmentEvent{
+		ID:         uuid.NewString(),
+		TrackingID: trackingID,
+		EventType:  "edited",
+		FromStatus: shipment.Status,
+		ToStatus:   shipment.Status,
+		ChangedBy:  username,
+		Notes:      fmt.Sprintf("Corrección de datos: %d campo(s) modificado(s)", len(req.Corrections)),
+		Timestamp:  now,
+	}
+	_ = s.repo.AddEvent(event)
+	commentBodies := make([]string, 0, len(req.Corrections))
+	for k, v := range req.Corrections {
+		label := correctableFields[k]
+		commentBodies = append(commentBodies, fmt.Sprintf("[Corrección] %s. Nuevo valor: %s", label, v))
+	}
+	return updated, commentBodies, nil
 }
 
 func (s *ShipmentService) GetByTrackingID(trackingID string) (model.Shipment, error) {

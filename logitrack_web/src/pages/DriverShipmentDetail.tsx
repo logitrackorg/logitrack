@@ -29,6 +29,21 @@ export function DriverShipmentDetail() {
   if (loading) return <div style={{ padding: 24 }}>Cargando...</div>;
   if (error || !shipment) return <div style={{ padding: 24, color: "#ef4444" }}>{error || "Not found."}</div>;
 
+  const cor = shipment.corrections ?? {};
+  const cv = (key: string, fallback: string) => cor[key] ?? fallback;
+
+  const packageType = cv("package_type", shipment.package_type);
+  const weightKg = cv("weight_kg", String(shipment.weight_kg));
+  const specialInstructions = cv("special_instructions", shipment.special_instructions ?? "");
+  const recipientName = cv("recipient_name", shipment.recipient_name);
+  const recipientPhone = cv("recipient_phone", shipment.recipient_phone);
+  const destAddress = [
+    cor.destination_street ?? shipment.destination?.street,
+    cor.destination_city ?? shipment.destination?.city,
+    cor.destination_province ?? shipment.destination?.province,
+    cor.destination_postal_code ?? shipment.destination?.postal_code,
+  ].filter(Boolean).join(", ");
+
   return (
     <div style={{ padding: 24, maxWidth: 540 }}>
       <button
@@ -49,25 +64,20 @@ export function DriverShipmentDetail() {
 
       <section style={sectionStyle}>
         <h2 style={sectionTitle}>Paquete</h2>
-        <Row label="Tipo" value={PACKAGE_LABELS[shipment.package_type] ?? shipment.package_type} />
-        <Row label="Peso" value={`${shipment.weight_kg} kg`} />
-        {shipment.special_instructions && (
+        <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
+        <Row label="Peso" value={`${weightKg} kg`} />
+        {specialInstructions && (
           <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 13, color: "#92400e" }}>
-            {shipment.special_instructions}
+            {specialInstructions}
           </div>
         )}
       </section>
 
       <section style={sectionStyle}>
         <h2 style={sectionTitle}>Destinatario</h2>
-        <Row label="Nombre" value={shipment.recipient_name} />
-        <Row label="Teléfono" value={shipment.recipient_phone} />
-        <Row label="Dirección" value={[
-          shipment.destination.street,
-          shipment.destination.city,
-          shipment.destination.province,
-          shipment.destination.postal_code,
-        ].filter(Boolean).join(", ")} />
+        <Row label="Nombre" value={recipientName} />
+        <Row label="Teléfono" value={recipientPhone} />
+        <Row label="Dirección" value={destAddress} />
       </section>
     </div>
   );

@@ -19,6 +19,7 @@ type ShipmentRepository interface {
 	// ConfirmShipment promotes a draft: replaces the draft key with the real trackingID.
 	ConfirmShipment(draftID string, trackingID string, status model.Status) (model.Shipment, error)
 	UpdateDraft(shipment model.Shipment) (model.Shipment, error)
+	ApplyCorrections(trackingID string, corrections map[string]string) (model.Shipment, error)
 	List(filter model.ShipmentFilter) ([]model.Shipment, error)
 	Search(query string) ([]model.Shipment, error)
 	AddEvent(event model.ShipmentEvent) error
@@ -125,6 +126,23 @@ func (r *inMemoryShipmentRepository) ConfirmShipment(draftID string, trackingID 
 	}
 	delete(r.events, draftID)
 	r.events[trackingID] = events
+	return shipment, nil
+}
+
+func (r *inMemoryShipmentRepository) ApplyCorrections(trackingID string, corrections map[string]string) (model.Shipment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	shipment, ok := r.shipments[trackingID]
+	if !ok {
+		return model.Shipment{}, fmt.Errorf("shipment not found")
+	}
+	if shipment.Corrections == nil {
+		shipment.Corrections = make(map[string]string)
+	}
+	for k, v := range corrections {
+		shipment.Corrections[k] = v
+	}
+	r.shipments[trackingID] = shipment
 	return shipment, nil
 }
 

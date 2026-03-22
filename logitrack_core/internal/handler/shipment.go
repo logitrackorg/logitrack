@@ -13,12 +13,13 @@ import (
 var timeNow = time.Now
 
 type ShipmentHandler struct {
-	svc      *service.ShipmentService
-	routeSvc *service.RouteService
+	svc        *service.ShipmentService
+	routeSvc   *service.RouteService
+	commentSvc *service.CommentService
 }
 
-func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService) *ShipmentHandler {
-	return &ShipmentHandler{svc: svc, routeSvc: routeSvc}
+func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService, commentSvc *service.CommentService) *ShipmentHandler {
+	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc}
 }
 
 func (h *ShipmentHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -166,6 +167,25 @@ func (h *ShipmentHandler) Search(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, shipments)
+}
+
+func (h *ShipmentHandler) CorrectShipment(c *gin.Context) {
+	var req model.CorrectShipmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	trackingID := c.Param("tracking_id")
+	shipment, commentBodies, err := h.svc.CorrectShipment(trackingID, user.Username, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	for _, body := range commentBodies {
+		_, _ = h.commentSvc.AddComment(trackingID, user.Username, body)
+	}
+	c.JSON(http.StatusOK, shipment)
 }
 
 func (h *ShipmentHandler) Stats(c *gin.Context) {

@@ -53,6 +53,7 @@ export interface Shipment {
   created_at: string;
   estimated_delivery_at: string;
   delivered_at?: string;
+  corrections?: Record<string, string>;
 }
 
 export interface ShipmentEvent {
@@ -154,5 +155,7 @@ export const shipmentApi = {
     api.get<ShipmentComment[]>(`/shipments/${trackingId}/comments`).then((r) => r.data),
   addComment: (trackingId: string, body: string) =>
     api.post<ShipmentComment>(`/shipments/${trackingId}/comments`, { body }).then((r) => r.data),
+  correctShipment: (trackingId: string, corrections: Record<string, string>) =>
+    api.patch<Shipment>(`/shipments/${trackingId}/correct`, { corrections }).then((r) => r.data),
   stats: () => api.get<Stats>("/stats").then((r) => r.data),
 };
