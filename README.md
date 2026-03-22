@@ -81,7 +81,17 @@ Ambos servicios se despliegan de forma independiente. El frontend consume la API
 
 ### Levantar el entorno local
 
-**Requisitos:** Node.js, Go
+**Requisitos:** Node.js 18+ y Go 1.21+
+
+Si no los tenés instalados:
+
+- **Node.js** → https://nodejs.org (descargá la versión LTS) o con un gestor de versiones:
+  ```bash
+  # macOS/Linux con nvm
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+  nvm install --lts
+  ```
+- **Go** → https://go.dev/dl (descargá el instalador para tu sistema operativo)
 
 ```bash
 # 1. Instalar dependencias (solo la primera vez)
