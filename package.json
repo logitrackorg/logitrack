@@ -1,0 +1,10 @@
+{
+  "name": "logitrack",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --names \"backend,frontend\" --prefix-colors \"cyan,magenta\" \"cd logitrack_core && go run cmd/server/main.go\" \"cd logitrack_web && npm run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

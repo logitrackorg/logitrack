@@ -79,7 +79,24 @@ logitrack_web/     →  SPA frontend (React + Vite + TypeScript)    puerto 5173
 
 Ambos servicios se despliegan de forma independiente. El frontend consume la API a través de HTTP con autenticación por Bearer token.
 
-Para instrucciones de instalación y ejecución:
+### Levantar el entorno local
+
+**Requisitos:** Node.js, Go
+
+```bash
+# 1. Instalar dependencias (solo la primera vez)
+npm install
+
+# 2. Levantar backend y frontend en paralelo
+npm run dev
+```
+
+- Frontend → http://localhost:5173
+- API → http://localhost:8080
+
+Con `Ctrl+C` se detienen ambos servicios.
+
+Para instrucciones detalladas de cada servicio por separado:
 - [Backend (logitrack_core)](./logitrack_core/README.md)
 - [Frontend (logitrack_web)](./logitrack_web/README.md)
 
