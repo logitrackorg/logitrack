@@ -21,6 +21,7 @@ logitrack_core/dist/
 logitrack_core/docs/
 
 # ── Node / Frontend (logitrack_web) ───────────────────────────────────────────
+node_modules/
 logitrack_web/node_modules/
 logitrack_web/dist/
 logitrack_web/dist-ssr/
