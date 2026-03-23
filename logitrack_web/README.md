@@ -43,3 +43,5 @@ npm run lint
 
 - Si el backend se reinicia, los tokens de sesión quedan inválidos. El interceptor de la API detecta el 401, limpia el localStorage y redirige automáticamente al login.
 - El seguimiento público (`/track`) no requiere login.
+- Los conductores ven una vista diferente al acceder al detalle de un envío (`DriverShipmentDetail`), optimizada para actualizar el estado desde la ruta.
+- Los supervisores y admins pueden corregir campos de un envío confirmado (botón "Edit data") y cancelar envíos en estado intermedio.

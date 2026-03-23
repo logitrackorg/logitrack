@@ -36,6 +36,7 @@ type eventSeed struct {
 	location  string // branch ID
 	notes     string
 	hoursAgo  int
+	driverID  string // only for delivering events
 }
 
 func LoadBranches(repo repository.BranchRepository) {
@@ -56,7 +57,7 @@ func LoadBranches(repo repository.BranchRepository) {
 
 // Load populates the event store with seed domain events, then rebuilds the projection.
 // Seed data is appended directly to the event store to allow precise timestamp control.
-func Load(store repository.EventStore, proj *projection.ShipmentProjection, customerRepo repository.CustomerRepository) {
+func Load(store repository.EventStore, proj *projection.ShipmentProjection, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository) {
 	now := time.Now().UTC()
 
 	seeds := []shipmentSeed{
@@ -178,7 +179,7 @@ func Load(store repository.EventStore, proj *projection.ShipmentProjection, cust
 				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "caba", notes: "Shipment created", hoursAgo: 2},
 			},
 		},
-		// Ready for last-mile delivery — supervisor assigns driver via UI
+		// Out for delivery — assigned to driver chofer (ID: 5)
 		{
 			trackingID:        "LT-DELIVER01",
 			senderName:        "Tech Store SA",
@@ -195,7 +196,8 @@ func Load(store repository.EventStore, proj *projection.ShipmentProjection, cust
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "san-pedro", notes: "Shipment created", hoursAgo: 24},
 				{from: model.StatusInProgress, to: model.StatusInTransit, changedBy: "operator1", location: "san-pedro", notes: "Dispatched towards Buenos Aires", hoursAgo: 20},
-				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "caba", notes: "Arrived at CABA branch — ready for delivery", hoursAgo: 8},
+				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "caba", notes: "Arrived at CABA branch", hoursAgo: 8},
+				{from: model.StatusAtBranch, to: model.StatusDelivering, changedBy: "supervisor1", location: "", notes: "Assigned to driver for last-mile delivery", hoursAgo: 1, driverID: "5"},
 			},
 		},
 		{
@@ -297,6 +299,7 @@ func Load(store repository.EventStore, proj *projection.ShipmentProjection, cust
 					ToStatus:   ev.to,
 					Location:   ev.location,
 					Notes:      ev.notes,
+					DriverID:   ev.driverID,
 				},
 				ChangedBy: ev.changedBy,
 				Timestamp: now.Add(-time.Duration(ev.hoursAgo) * time.Hour),
@@ -312,4 +315,14 @@ func Load(store repository.EventStore, proj *projection.ShipmentProjection, cust
 	// Rebuild projection from all appended events
 	allEvents, _ := store.LoadAll()
 	proj.Rebuild(allEvents)
+
+	// Seed driver route for today — chofer (ID: 5) has LT-DELIVER01 out for delivery
+	_, _ = routeRepo.Create(model.Route{
+		ID:          "ROUTE-SEED0001",
+		Date:        model.NewDateOnly(now),
+		DriverID:    "5",
+		ShipmentIDs: []string{"LT-DELIVER01"},
+		CreatedBy:   "supervisor1",
+		CreatedAt:   now.Add(-1 * time.Hour),
+	})
 }

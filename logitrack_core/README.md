@@ -37,5 +37,9 @@ Ninguna requerida para correr localmente. El puerto es fijo en `8080`.
 ## Notas importantes
 
 - **El estado es volátil.** Al reiniciar el servidor se pierden todos los envíos y sesiones activas. Los tokens de autenticación dejan de ser válidos.
-- **Usuarios hardcodeados.** Ver el [README principal](../README.md#credenciales-de-prueba) para las credenciales.
 - **Auth.** `POST /api/v1/auth/login` devuelve un token UUID. Todas las rutas protegidas requieren el header `Authorization: Bearer <token>`.
+- **Event sourcing.** Los envíos no se modifican directamente — cada cambio genera un `DomainEvent` que se aplica a una proyección materializada en memoria.
+- **Correcciones.** Los supervisores y admins pueden editar campos de envíos confirmados de forma no destructiva (`PATCH /shipments/:id/correct`). El dato original nunca se modifica.
+- **Cancelación.** Cualquier envío en estado intermedio puede cancelarse (`POST /shipments/:id/cancel`) con un motivo obligatorio.
+- **Comentarios.** Supervisores y admins pueden agregar notas internas a envíos no finalizados (`POST /shipments/:id/comments`).
+- **Autocomplete de clientes.** Los datos de remitente y destinatario se guardan automáticamente. `GET /customers?dni=X` permite buscar clientes previos por DNI.

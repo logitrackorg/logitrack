@@ -26,7 +26,7 @@ func main() {
 	customerRepo := repository.NewInMemoryCustomerRepository()
 
 	seed.LoadBranches(branchRepo)
-	seed.Load(eventStore, shipmentProj, customerRepo)
+	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
 
 	commentRepo := repository.NewInMemoryCommentRepository()
 

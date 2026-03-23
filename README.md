@@ -45,21 +45,24 @@ Un envío sigue un ciclo de vida controlado. Cada transición queda registrada c
 
 ```
 Borrador (pending)
-    └─► Confirmado (in_progress)
-            └─► En tránsito (in_transit)
-                    └─► En sucursal (at_branch)
-                            ├─► En reparto (delivering)
+    └─► Confirmado (in_progress) ──────────────────────────────────────► Cancelado ✗
+            └─► En tránsito (in_transit) ──────────────────────────────► Cancelado ✗
+                    └─► En sucursal (at_branch) ◄──────────────────────► Cancelado ✗
+                            │        ▲
+                            ├─► En tránsito (siguiente escala) ─────────┘
+                            ├─► En reparto (delivering) ───────────────► Cancelado ✗
                             │       ├─► Entregado ✓
-                            │       └─► Entrega fallida
+                            │       └─► Entrega fallida ──────────────► Cancelado ✗
                             │               ├─► En reparto (reintento)
-                            │               └─► En sucursal (vuelta atrás)
-                            ├─► Listo para retiro en sucursal
-                            │       └─► Entregado ✓
-                            └─► Listo para devolución
+                            │               └─► En sucursal (tramo de vuelta)
+                            ├─► Listo para retiro en sucursal (ready_for_pickup) ──► Cancelado ✗
+                            │       ├─► Entregado ✓
+                            │       └─► En tránsito (traslado a otra sucursal)
+                            └─► Listo para devolución (ready_for_return) ──────────► Cancelado ✗
                                     └─► Devuelto ✓
 ```
 
-Los envíos con múltiples escalas repiten el tramo `en sucursal → en tránsito → en sucursal` tantas veces como sea necesario.
+Los envíos con múltiples escalas repiten el tramo `en sucursal → en tránsito → en sucursal` tantas veces como sea necesario. `Entregado`, `Devuelto` y `Cancelado` son estados terminales — no admiten más transiciones.
 
 
 ## Número de tracking
