@@ -20,6 +20,9 @@ func validateDNI(dni, field string) error {
 	if !reDNI.MatchString(dni) {
 		return fmt.Errorf("%s must contain only digits", field)
 	}
+	if len(dni) < 7 {
+		return fmt.Errorf("%s must be at least 7 digits", field)
+	}
 	return nil
 }
 
@@ -47,23 +50,11 @@ func NewShipmentService(
 }
 
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
-	if shipment.SenderDNI != "" {
-		s.customerRepo.Upsert(model.Customer{
-			DNI:     shipment.SenderDNI,
-			Name:    shipment.SenderName,
-			Phone:   shipment.SenderPhone,
-			Email:   shipment.SenderEmail,
-			Address: shipment.Origin,
-		})
+	if shipment.Sender.DNI != "" {
+		s.customerRepo.Upsert(shipment.Sender)
 	}
-	if shipment.RecipientDNI != "" {
-		s.customerRepo.Upsert(model.Customer{
-			DNI:     shipment.RecipientDNI,
-			Name:    shipment.RecipientName,
-			Phone:   shipment.RecipientPhone,
-			Email:   shipment.RecipientEmail,
-			Address: shipment.Destination,
-		})
+	if shipment.Recipient.DNI != "" {
+		s.customerRepo.Upsert(shipment.Recipient)
 	}
 }
 
@@ -77,45 +68,37 @@ func (s *ShipmentService) locationToBranchID(city string) string {
 }
 
 func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipment, error) {
-	if strings.TrimSpace(req.Origin.City) == "" || strings.TrimSpace(req.Origin.Province) == "" {
+	if strings.TrimSpace(req.Sender.Address.City) == "" || strings.TrimSpace(req.Sender.Address.Province) == "" {
 		return model.Shipment{}, fmt.Errorf("origin city and province are required")
 	}
-	if strings.TrimSpace(req.Destination.City) == "" || strings.TrimSpace(req.Destination.Province) == "" {
+	if strings.TrimSpace(req.Recipient.Address.City) == "" || strings.TrimSpace(req.Recipient.Address.Province) == "" {
 		return model.Shipment{}, fmt.Errorf("destination city and province are required")
 	}
-	if err := validateDNI(req.SenderDNI, "sender_dni"); err != nil {
+	if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 		return model.Shipment{}, err
 	}
-	if err := validateDNI(req.RecipientDNI, "recipient_dni"); err != nil {
+	if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 		return model.Shipment{}, err
 	}
-	if req.SenderEmail != "" {
-		if err := validateEmail(req.SenderEmail, "sender_email"); err != nil {
+	if req.Sender.Email != "" {
+		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.RecipientEmail != "" {
-		if err := validateEmail(req.RecipientEmail, "recipient_email"); err != nil {
+	if req.Recipient.Email != "" {
+		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	now := time.Now().UTC()
-	currentLocation := s.locationToBranchID(req.Origin.City)
+	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
 	}
 	shipment := model.Shipment{
 		TrackingID:          generateTrackingID(),
-		SenderName:          req.SenderName,
-		SenderPhone:         req.SenderPhone,
-		SenderEmail:         req.SenderEmail,
-		SenderDNI:           req.SenderDNI,
-		Origin:              req.Origin,
-		RecipientName:       req.RecipientName,
-		RecipientPhone:      req.RecipientPhone,
-		RecipientEmail:      req.RecipientEmail,
-		RecipientDNI:        req.RecipientDNI,
-		Destination:         req.Destination,
+		Sender:              req.Sender,
+		Recipient:           req.Recipient,
 		WeightKg:            req.WeightKg,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
@@ -140,43 +123,35 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 }
 
 func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment, error) {
-	if req.SenderDNI != "" {
-		if err := validateDNI(req.SenderDNI, "sender_dni"); err != nil {
+	if req.Sender.DNI != "" {
+		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.RecipientDNI != "" {
-		if err := validateDNI(req.RecipientDNI, "recipient_dni"); err != nil {
+	if req.Recipient.DNI != "" {
+		if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.SenderEmail != "" {
-		if err := validateEmail(req.SenderEmail, "sender_email"); err != nil {
+	if req.Sender.Email != "" {
+		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.RecipientEmail != "" {
-		if err := validateEmail(req.RecipientEmail, "recipient_email"); err != nil {
+	if req.Recipient.Email != "" {
+		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	now := time.Now().UTC()
-	currentLocation := s.locationToBranchID(req.Origin.City)
+	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
 	}
 	shipment := model.Shipment{
 		TrackingID:          generateDraftID(),
-		SenderName:          req.SenderName,
-		SenderPhone:         req.SenderPhone,
-		SenderEmail:         req.SenderEmail,
-		SenderDNI:           req.SenderDNI,
-		Origin:              req.Origin,
-		RecipientName:       req.RecipientName,
-		RecipientPhone:      req.RecipientPhone,
-		RecipientEmail:      req.RecipientEmail,
-		RecipientDNI:        req.RecipientDNI,
-		Destination:         req.Destination,
+		Sender:              req.Sender,
+		Recipient:           req.Recipient,
 		WeightKg:            req.WeightKg,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
@@ -192,23 +167,23 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 }
 
 func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest) (model.Shipment, error) {
-	if req.SenderDNI != "" {
-		if err := validateDNI(req.SenderDNI, "sender_dni"); err != nil {
+	if req.Sender.DNI != "" {
+		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.RecipientDNI != "" {
-		if err := validateDNI(req.RecipientDNI, "recipient_dni"); err != nil {
+	if req.Recipient.DNI != "" {
+		if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.SenderEmail != "" {
-		if err := validateEmail(req.SenderEmail, "sender_email"); err != nil {
+	if req.Sender.Email != "" {
+		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.RecipientEmail != "" {
-		if err := validateEmail(req.RecipientEmail, "recipient_email"); err != nil {
+	if req.Recipient.Email != "" {
+		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
@@ -219,16 +194,8 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	if existing.Status != model.StatusPending {
 		return model.Shipment{}, fmt.Errorf("only draft shipments can be updated")
 	}
-	existing.SenderName = req.SenderName
-	existing.SenderPhone = req.SenderPhone
-	existing.SenderEmail = req.SenderEmail
-	existing.SenderDNI = req.SenderDNI
-	existing.Origin = req.Origin
-	existing.RecipientName = req.RecipientName
-	existing.RecipientPhone = req.RecipientPhone
-	existing.RecipientEmail = req.RecipientEmail
-	existing.RecipientDNI = req.RecipientDNI
-	existing.Destination = req.Destination
+	existing.Sender = req.Sender
+	existing.Recipient = req.Recipient
 	existing.WeightKg = req.WeightKg
 	existing.PackageType = req.PackageType
 	existing.IsFragile = req.IsFragile
@@ -240,8 +207,8 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 			existing.CurrentLocation = b.ID
 		}
-	} else if req.Origin.City != "" {
-		existing.CurrentLocation = s.locationToBranchID(req.Origin.City)
+	} else if req.Sender.Address.City != "" {
+		existing.CurrentLocation = s.locationToBranchID(req.Sender.Address.City)
 	}
 	return s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: existing})
 }
@@ -256,22 +223,22 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	// Validate required fields
 	missing := []string{}
-	if strings.TrimSpace(draft.SenderName) == "" {
+	if strings.TrimSpace(draft.Sender.Name) == "" {
 		missing = append(missing, "sender name")
 	}
-	if strings.TrimSpace(draft.SenderPhone) == "" {
+	if strings.TrimSpace(draft.Sender.Phone) == "" {
 		missing = append(missing, "sender phone")
 	}
-	if strings.TrimSpace(draft.Origin.City) == "" || strings.TrimSpace(draft.Origin.Province) == "" {
+	if strings.TrimSpace(draft.Sender.Address.City) == "" || strings.TrimSpace(draft.Sender.Address.Province) == "" {
 		missing = append(missing, "origin city/province")
 	}
-	if strings.TrimSpace(draft.RecipientName) == "" {
+	if strings.TrimSpace(draft.Recipient.Name) == "" {
 		missing = append(missing, "recipient name")
 	}
-	if strings.TrimSpace(draft.RecipientPhone) == "" {
+	if strings.TrimSpace(draft.Recipient.Phone) == "" {
 		missing = append(missing, "recipient phone")
 	}
-	if strings.TrimSpace(draft.Destination.City) == "" || strings.TrimSpace(draft.Destination.Province) == "" {
+	if strings.TrimSpace(draft.Recipient.Address.City) == "" || strings.TrimSpace(draft.Recipient.Address.Province) == "" {
 		missing = append(missing, "destination city/province")
 	}
 	if draft.WeightKg <= 0 {
@@ -280,28 +247,28 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if strings.TrimSpace(string(draft.PackageType)) == "" {
 		missing = append(missing, "package type")
 	}
-	if strings.TrimSpace(draft.SenderDNI) == "" {
+	if strings.TrimSpace(draft.Sender.DNI) == "" {
 		missing = append(missing, "sender DNI")
 	}
-	if strings.TrimSpace(draft.RecipientDNI) == "" {
+	if strings.TrimSpace(draft.Recipient.DNI) == "" {
 		missing = append(missing, "recipient DNI")
 	}
 	if len(missing) > 0 {
 		return model.Shipment{}, fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))
 	}
-	if err := validateDNI(draft.SenderDNI, "sender_dni"); err != nil {
+	if err := validateDNI(draft.Sender.DNI, "sender_dni"); err != nil {
 		return model.Shipment{}, err
 	}
-	if err := validateDNI(draft.RecipientDNI, "recipient_dni"); err != nil {
+	if err := validateDNI(draft.Recipient.DNI, "recipient_dni"); err != nil {
 		return model.Shipment{}, err
 	}
-	if draft.SenderEmail != "" {
-		if err := validateEmail(draft.SenderEmail, "sender_email"); err != nil {
+	if draft.Sender.Email != "" {
+		if err := validateEmail(draft.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if draft.RecipientEmail != "" {
-		if err := validateEmail(draft.RecipientEmail, "recipient_email"); err != nil {
+	if draft.Recipient.Email != "" {
+		if err := validateEmail(draft.Recipient.Email, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
@@ -338,7 +305,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		if strings.TrimSpace(req.SenderDNI) == "" {
 			return model.Shipment{}, fmt.Errorf("sender_dni is required for returned")
 		}
-		expectedSenderDNI := current.SenderDNI
+		expectedSenderDNI := current.Sender.DNI
 		if current.Corrections != nil && current.Corrections.SenderDNI != nil {
 			expectedSenderDNI = *current.Corrections.SenderDNI
 		}
@@ -362,7 +329,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		if strings.TrimSpace(req.RecipientDNI) == "" {
 			return model.Shipment{}, fmt.Errorf("recipient_dni is required for delivery")
 		}
-		expectedRecipientDNI := current.RecipientDNI
+		expectedRecipientDNI := current.Recipient.DNI
 		if current.Corrections != nil && current.Corrections.RecipientDNI != nil {
 			expectedRecipientDNI = *current.Corrections.RecipientDNI
 		}

@@ -85,8 +85,8 @@ export function Dashboard() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = "")}
               >
                 <td style={td}><code>{s.tracking_id}</code></td>
-                <td style={td}>{s.recipient_name}</td>
-                <td style={td}>{s.destination.city}</td>
+                <td style={td}>{s.recipient.name}</td>
+                <td style={td}>{s.recipient.address.city}</td>
                 <td style={td}><StatusBadge status={s.status} /></td>
                 <td style={td}>{fmtDateTime(s.created_at)}</td>
               </tr>

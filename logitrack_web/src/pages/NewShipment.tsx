@@ -19,12 +19,11 @@ const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
 ];
 
 const emptyAddress = { street: "", city: "", province: "", postal_code: "" };
+const emptyCustomer = () => ({ dni: "", name: "", phone: "", email: "", address: { ...emptyAddress } });
 
 const initialForm: CreateShipmentPayload = {
-  sender_name: "", sender_phone: "", sender_email: "", sender_dni: "",
-  origin: { ...emptyAddress },
-  recipient_name: "", recipient_phone: "", recipient_email: "", recipient_dni: "",
-  destination: { ...emptyAddress },
+  sender: emptyCustomer(),
+  recipient: emptyCustomer(),
   weight_kg: 0,
   package_type: "box",
   special_instructions: "",
@@ -52,9 +51,17 @@ export function NewShipment() {
 
   const set = (field: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+  const setSender = (field: string, value: unknown) =>
+    setForm((prev) => ({ ...prev, sender: { ...prev.sender, [field]: value } }));
+  const setSenderAddr = (field: string, value: string) =>
+    setForm((prev) => ({ ...prev, sender: { ...prev.sender, address: { ...prev.sender.address, [field]: value } } }));
+  const setRecipient = (field: string, value: unknown) =>
+    setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, [field]: value } }));
+  const setRecipientAddr = (field: string, value: string) =>
+    setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, address: { ...prev.recipient.address, [field]: value } } }));
 
   const handleSenderDNI = (dni: string) => {
-    set("sender_dni", dni);
+    setSender("dni", dni);
     setSenderSuggestion(null);
     if (senderDNITimer.current) clearTimeout(senderDNITimer.current);
     if (dni.length >= 7) {
@@ -69,21 +76,24 @@ export function NewShipment() {
     if (!senderSuggestion) return;
     setForm((prev) => ({
       ...prev,
-      sender_name: senderSuggestion.name,
-      sender_phone: senderSuggestion.phone,
-      sender_email: senderSuggestion.email ?? prev.sender_email,
-      origin: {
-        street: senderSuggestion.address.street ?? prev.origin.street,
-        city: senderSuggestion.address.city || prev.origin.city,
-        province: senderSuggestion.address.province || prev.origin.province,
-        postal_code: senderSuggestion.address.postal_code ?? prev.origin.postal_code,
+      sender: {
+        ...prev.sender,
+        name: senderSuggestion.name,
+        phone: senderSuggestion.phone,
+        email: senderSuggestion.email ?? prev.sender.email,
+        address: {
+          street: senderSuggestion.address.street ?? prev.sender.address.street,
+          city: senderSuggestion.address.city || prev.sender.address.city,
+          province: senderSuggestion.address.province || prev.sender.address.province,
+          postal_code: senderSuggestion.address.postal_code ?? prev.sender.address.postal_code,
+        },
       },
     }));
     setSenderSuggestion(null);
   };
 
   const handleRecipientDNI = (dni: string) => {
-    set("recipient_dni", dni);
+    setRecipient("dni", dni);
     setRecipientSuggestion(null);
     if (recipientDNITimer.current) clearTimeout(recipientDNITimer.current);
     if (dni.length >= 7) {
@@ -98,24 +108,26 @@ export function NewShipment() {
     if (!recipientSuggestion) return;
     setForm((prev) => ({
       ...prev,
-      recipient_name: recipientSuggestion.name,
-      recipient_phone: recipientSuggestion.phone,
-      recipient_email: recipientSuggestion.email ?? prev.recipient_email,
-      destination: {
-        street: recipientSuggestion.address.street ?? prev.destination.street,
-        city: recipientSuggestion.address.city || prev.destination.city,
-        province: recipientSuggestion.address.province || prev.destination.province,
-        postal_code: recipientSuggestion.address.postal_code ?? prev.destination.postal_code,
+      recipient: {
+        ...prev.recipient,
+        name: recipientSuggestion.name,
+        phone: recipientSuggestion.phone,
+        email: recipientSuggestion.email ?? prev.recipient.email,
+        address: {
+          street: recipientSuggestion.address.street ?? prev.recipient.address.street,
+          city: recipientSuggestion.address.city || prev.recipient.address.city,
+          province: recipientSuggestion.address.province || prev.recipient.address.province,
+          postal_code: recipientSuggestion.address.postal_code ?? prev.recipient.address.postal_code,
+        },
       },
     }));
     setRecipientSuggestion(null);
   };
 
-  const setAddr = (side: "origin" | "destination", field: string, value: string) =>
-    setForm((prev) => ({ ...prev, [side]: { ...prev[side], [field]: value } }));
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.sender.dni.length < 7) { setError("Sender DNI must be at least 7 digits."); return; }
+    if (form.recipient.dni.length < 7) { setError("Recipient DNI must be at least 7 digits."); return; }
     setLoading(true);
     setError("");
     try {
@@ -130,6 +142,8 @@ export function NewShipment() {
   };
 
   const handleSaveDraft = async () => {
+    if (form.sender.dni && form.sender.dni.length < 7) { setError("Sender DNI must be at least 7 digits."); return; }
+    if (form.recipient.dni && form.recipient.dni.length < 7) { setError("Recipient DNI must be at least 7 digits."); return; }
     setLoading(true);
     setError("");
     try {
@@ -157,9 +171,9 @@ export function NewShipment() {
             {drafts.map((d) => (
               <div key={d.tracking_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", border: "1px solid #fde68a", borderRadius: 7, padding: "8px 12px" }}>
                 <div style={{ fontSize: 13 }}>
-                  <span style={{ fontWeight: 600 }}>{d.sender_name || "No name"}</span>
+                  <span style={{ fontWeight: 600 }}>{d.sender?.name || "No name"}</span>
                   <span style={{ color: "#9ca3af", margin: "0 6px" }}>→</span>
-                  <span>{d.recipient_name || "No name"}</span>
+                  <span>{d.recipient?.name || "No name"}</span>
                   <span style={{ color: "#9ca3af", fontSize: 12, marginLeft: 10 }}>{fmtDateTime(d.created_at)}</span>
                 </div>
                 <button onClick={() => navigate(`/shipments/${d.tracking_id}`)}
@@ -178,22 +192,22 @@ export function NewShipment() {
         <Section title="Sender">
           <Row2>
             <Field label="Full Name *">
-              <input style={input} required value={form.sender_name}
-                onChange={(e) => set("sender_name", e.target.value)} placeholder="e.g. Carlos Mendez" />
+              <input style={input} required value={form.sender.name}
+                onChange={(e) => setSender("name", e.target.value)} placeholder="e.g. Carlos Mendez" />
             </Field>
             <Field label="Phone *">
-              <input style={input} required value={form.sender_phone}
-                onChange={(e) => set("sender_phone", e.target.value)} placeholder="+54 9 11 1234-5678" />
+              <input style={input} required value={form.sender.phone}
+                onChange={(e) => setSender("phone", e.target.value)} placeholder="+54 9 11 1234-5678" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Email">
-              <input style={input} type="email" value={form.sender_email}
-                onChange={(e) => set("sender_email", e.target.value)} placeholder="optional" />
+              <input style={input} type="email" value={form.sender.email}
+                onChange={(e) => setSender("email", e.target.value)} placeholder="optional" />
             </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
-                <input style={input} required value={form.sender_dni}
+                <input style={input} required value={form.sender.dni}
                   onChange={(e) => handleSenderDNI(e.target.value)} placeholder="Ej: 30123456" />
                 {senderSuggestion && (
                   <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />
@@ -203,25 +217,25 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Street">
-              <input style={input} value={form.origin.street}
-                onChange={(e) => setAddr("origin", "street", e.target.value)} placeholder="Av. Corrientes 1234" />
+              <input style={input} value={form.sender.address.street}
+                onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </Field>
             <Field label="City *">
-              <input style={input} required value={form.origin.city}
-                onChange={(e) => setAddr("origin", "city", e.target.value)} placeholder="Buenos Aires" />
+              <input style={input} required value={form.sender.address.city}
+                onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Province *">
-              <select style={input} required value={form.origin.province}
-                onChange={(e) => setAddr("origin", "province", e.target.value)}>
+              <select style={input} required value={form.sender.address.province}
+                onChange={(e) => setSenderAddr("province", e.target.value)}>
                 <option value="">Select province</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
             <Field label="Postal Code">
-              <input style={input} value={form.origin.postal_code}
-                onChange={(e) => setAddr("origin", "postal_code", e.target.value)} placeholder="C1043" />
+              <input style={input} value={form.sender.address.postal_code}
+                onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" />
             </Field>
           </Row2>
         </Section>
@@ -230,22 +244,22 @@ export function NewShipment() {
         <Section title="Recipient">
           <Row2>
             <Field label="Full Name *">
-              <input style={input} required value={form.recipient_name}
-                onChange={(e) => set("recipient_name", e.target.value)} placeholder="e.g. Laura Gomez" />
+              <input style={input} required value={form.recipient.name}
+                onChange={(e) => setRecipient("name", e.target.value)} placeholder="e.g. Laura Gomez" />
             </Field>
             <Field label="Phone *">
-              <input style={input} required value={form.recipient_phone}
-                onChange={(e) => set("recipient_phone", e.target.value)} placeholder="+54 9 351 678-4321" />
+              <input style={input} required value={form.recipient.phone}
+                onChange={(e) => setRecipient("phone", e.target.value)} placeholder="+54 9 351 678-4321" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Email">
-              <input style={input} type="email" value={form.recipient_email}
-                onChange={(e) => set("recipient_email", e.target.value)} placeholder="optional" />
+              <input style={input} type="email" value={form.recipient.email}
+                onChange={(e) => setRecipient("email", e.target.value)} placeholder="optional" />
             </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
-                <input style={input} required value={form.recipient_dni}
+                <input style={input} required value={form.recipient.dni}
                   onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="Ej: 28456789" />
                 {recipientSuggestion && (
                   <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />
@@ -255,25 +269,25 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Street">
-              <input style={input} value={form.destination.street}
-                onChange={(e) => setAddr("destination", "street", e.target.value)} placeholder="San Martín 456" />
+              <input style={input} value={form.recipient.address.street}
+                onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" />
             </Field>
             <Field label="City *">
-              <input style={input} required value={form.destination.city}
-                onChange={(e) => setAddr("destination", "city", e.target.value)} placeholder="Córdoba" />
+              <input style={input} required value={form.recipient.address.city}
+                onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" />
             </Field>
           </Row2>
           <Row2>
             <Field label="Province *">
-              <select style={input} required value={form.destination.province}
-                onChange={(e) => setAddr("destination", "province", e.target.value)}>
+              <select style={input} required value={form.recipient.address.province}
+                onChange={(e) => setRecipientAddr("province", e.target.value)}>
                 <option value="">Select province</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
             <Field label="Postal Code">
-              <input style={input} value={form.destination.postal_code}
-                onChange={(e) => setAddr("destination", "postal_code", e.target.value)} placeholder="X5000" />
+              <input style={input} value={form.recipient.address.postal_code}
+                onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
         </Section>

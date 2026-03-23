@@ -34,13 +34,13 @@ export function DriverShipmentDetail() {
   const packageType = cv("package_type", shipment.package_type);
   const weightKg = cv("weight_kg", String(shipment.weight_kg));
   const specialInstructions = cv("special_instructions", shipment.special_instructions ?? "");
-  const recipientName = cv("recipient_name", shipment.recipient_name);
-  const recipientPhone = cv("recipient_phone", shipment.recipient_phone);
+  const recipientName = cv("recipient_name", shipment.recipient.name);
+  const recipientPhone = cv("recipient_phone", shipment.recipient.phone);
   const destAddress = [
-    cor.destination_street ?? shipment.destination?.street,
-    cor.destination_city ?? shipment.destination?.city,
-    cor.destination_province ?? shipment.destination?.province,
-    cor.destination_postal_code ?? shipment.destination?.postal_code,
+    cor.destination_street ?? shipment.recipient.address?.street,
+    cor.destination_city ?? shipment.recipient.address?.city,
+    cor.destination_province ?? shipment.recipient.address?.province,
+    cor.destination_postal_code ?? shipment.recipient.address?.postal_code,
   ].filter(Boolean).join(", ");
 
   return (

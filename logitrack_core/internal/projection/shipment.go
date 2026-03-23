@@ -139,10 +139,10 @@ func (p *ShipmentProjection) Search(query string) ([]model.Shipment, error) {
 	var result []model.Shipment
 	for _, s := range p.shipments {
 		if strings.Contains(strings.ToLower(s.TrackingID), q) ||
-			strings.Contains(strings.ToLower(s.RecipientName), q) ||
-			strings.Contains(strings.ToLower(s.SenderName), q) ||
-			strings.Contains(strings.ToLower(s.Destination.City), q) ||
-			strings.Contains(strings.ToLower(s.Origin.City), q) {
+			strings.Contains(strings.ToLower(s.Recipient.Name), q) ||
+			strings.Contains(strings.ToLower(s.Sender.Name), q) ||
+			strings.Contains(strings.ToLower(s.Recipient.Address.City), q) ||
+			strings.Contains(strings.ToLower(s.Sender.Address.City), q) {
 			result = append(result, s)
 		}
 	}

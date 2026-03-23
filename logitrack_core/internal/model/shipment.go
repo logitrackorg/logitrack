@@ -36,19 +36,8 @@ type Address struct {
 type Shipment struct {
 	TrackingID string `json:"tracking_id"`
 
-	// Sender
-	SenderName  string  `json:"sender_name"`
-	SenderPhone string  `json:"sender_phone"`
-	SenderEmail string  `json:"sender_email,omitempty"`
-	SenderDNI   string  `json:"sender_dni"`
-	Origin      Address `json:"origin"`
-
-	// Recipient
-	RecipientName  string  `json:"recipient_name"`
-	RecipientPhone string  `json:"recipient_phone"`
-	RecipientEmail string  `json:"recipient_email,omitempty"`
-	RecipientDNI   string  `json:"recipient_dni"`
-	Destination    Address `json:"destination"`
+	Sender    Customer `json:"sender"`
+	Recipient Customer `json:"recipient"`
 
 	// Package
 	WeightKg            float64     `json:"weight_kg"`
@@ -200,17 +189,8 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 }
 
 type CreateShipmentRequest struct {
-	SenderName  string  `json:"sender_name"  binding:"required"`
-	SenderPhone string  `json:"sender_phone" binding:"required"`
-	SenderEmail string  `json:"sender_email"`
-	SenderDNI   string  `json:"sender_dni"   binding:"required"`
-	Origin      Address `json:"origin"       binding:"required"`
-
-	RecipientName  string  `json:"recipient_name"  binding:"required"`
-	RecipientPhone string  `json:"recipient_phone" binding:"required"`
-	RecipientEmail string  `json:"recipient_email"`
-	RecipientDNI   string  `json:"recipient_dni"   binding:"required"`
-	Destination    Address `json:"destination"     binding:"required"`
+	Sender    Customer `json:"sender"    binding:"required"`
+	Recipient Customer `json:"recipient" binding:"required"`
 
 	WeightKg            float64     `json:"weight_kg"           binding:"required,gt=0"`
 	PackageType         PackageType `json:"package_type"        binding:"required"`
@@ -234,17 +214,8 @@ type CorrectShipmentRequest struct {
 
 // SaveDraftRequest allows partial data — no required fields.
 type SaveDraftRequest struct {
-	SenderName  string  `json:"sender_name"`
-	SenderPhone string  `json:"sender_phone"`
-	SenderEmail string  `json:"sender_email"`
-	SenderDNI   string  `json:"sender_dni"`
-	Origin      Address `json:"origin"`
-
-	RecipientName  string  `json:"recipient_name"`
-	RecipientPhone string  `json:"recipient_phone"`
-	RecipientEmail string  `json:"recipient_email"`
-	RecipientDNI   string  `json:"recipient_dni"`
-	Destination    Address `json:"destination"`
+	Sender    Customer `json:"sender"`
+	Recipient Customer `json:"recipient"`
 
 	WeightKg            float64     `json:"weight_kg"`
 	PackageType         PackageType `json:"package_type"`

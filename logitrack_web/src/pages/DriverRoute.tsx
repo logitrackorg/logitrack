@@ -98,12 +98,12 @@ export function DriverRoute() {
       <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
         {data.shipments.map((shipment) => {
           const cor = shipment.corrections ?? {};
-          const recipientName = cor.recipient_name ?? shipment.recipient_name;
-          const recipientPhone = cor.recipient_phone ?? shipment.recipient_phone;
+          const recipientName = cor.recipient_name ?? shipment.recipient.name;
+          const recipientPhone = cor.recipient_phone ?? shipment.recipient.phone;
           const destAddress = [
-            cor.destination_street ?? shipment.destination?.street,
-            cor.destination_city ?? shipment.destination?.city,
-            cor.destination_province ?? shipment.destination?.province,
+            cor.destination_street ?? shipment.recipient.address?.street,
+            cor.destination_city ?? shipment.recipient.address?.city,
+            cor.destination_province ?? shipment.recipient.address?.province,
           ].filter(Boolean).join(", ");
           const specialInstructions = cor.special_instructions ?? shipment.special_instructions;
 

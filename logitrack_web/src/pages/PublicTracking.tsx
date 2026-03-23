@@ -69,15 +69,15 @@ export function PublicTracking() {
               <StatusBadge status={shipment.status} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", fontSize: 14 }}>
-              <InfoRow label="From" value={`${shipment.origin.city}, ${shipment.origin.province}`} />
-              <InfoRow label="To" value={`${shipment.destination.city}, ${shipment.destination.province}`} />
-              <InfoRow label="Sender" value={shipment.sender_name} />
-              <InfoRow label="Recipient" value={shipment.recipient_name} />
+              <InfoRow label="From" value={`${shipment.sender.address.city}, ${shipment.sender.address.province}`} />
+              <InfoRow label="To" value={`${shipment.recipient.address.city}, ${shipment.recipient.address.province}`} />
+              <InfoRow label="Sender" value={shipment.sender.name} />
+              <InfoRow label="Recipient" value={shipment.recipient.name} />
             </div>
           </div>
 
           {/* Route timeline from real events */}
-          <RouteTimeline events={events} destinationCity={shipment.destination.city} destinationProvince={shipment.destination.province} branches={branches} />
+          <RouteTimeline events={events} destinationCity={shipment.recipient.address.city} destinationProvince={shipment.recipient.address.province} branches={branches} />
 
           {/* Event history */}
           {events.length > 0 && (

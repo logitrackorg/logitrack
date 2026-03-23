@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { Customer } from "./customers";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1",
@@ -34,16 +35,8 @@ export interface Address {
 
 export interface Shipment {
   tracking_id: string;
-  sender_name: string;
-  sender_phone: string;
-  sender_email?: string;
-  sender_dni?: string;
-  origin: Address;
-  recipient_name: string;
-  recipient_phone: string;
-  recipient_email?: string;
-  recipient_dni?: string;
-  destination: Address;
+  sender: Customer;
+  recipient: Customer;
   weight_kg: number;
   package_type: PackageType;
   is_fragile?: boolean;
@@ -77,16 +70,8 @@ export interface Stats {
 }
 
 export interface CreateShipmentPayload {
-  sender_name: string;
-  sender_phone: string;
-  sender_email?: string;
-  sender_dni: string;
-  origin: Address;
-  recipient_name: string;
-  recipient_phone: string;
-  recipient_email?: string;
-  recipient_dni: string;
-  destination: Address;
+  sender: Customer;
+  recipient: Customer;
   weight_kg: number;
   package_type: PackageType;
   is_fragile?: boolean;
@@ -95,18 +80,10 @@ export interface CreateShipmentPayload {
   created_by?: string;
 }
 
-// SaveDraftPayload — all fields optional, allows partial data
+// SaveDraftPayload — allows partial data; sender/recipient may contain empty strings
 export interface SaveDraftPayload {
-  sender_name?: string;
-  sender_phone?: string;
-  sender_email?: string;
-  sender_dni?: string;
-  origin?: Partial<Address>;
-  recipient_name?: string;
-  recipient_phone?: string;
-  recipient_email?: string;
-  recipient_dni?: string;
-  destination?: Partial<Address>;
+  sender: Customer;
+  recipient: Customer;
   weight_kg?: number;
   package_type?: PackageType;
   is_fragile?: boolean;
