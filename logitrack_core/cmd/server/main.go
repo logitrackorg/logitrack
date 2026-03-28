@@ -1,10 +1,23 @@
+// @title           LogiTrack API
+// @version         1.0
+// @description     REST API for the LogiTrack shipment management system.
+// @host            localhost:8080
+// @BasePath        /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
+// @description     Bearer token obtained from POST /api/v1/auth/login
+
 package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	_ "github.com/logitrack/core/docs"
+	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
@@ -12,18 +25,43 @@ import (
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
+	// PostgreSQL connection
+	database, err := db.NewDB(
+		getenv("DB_HOST", "localhost"),
+		getenv("DB_PORT", "5432"),
+		getenv("DB_USER", "logitrack"),
+		getenv("DB_PASSWORD", ""),
+		getenv("DB_NAME", "logitrack"),
+		getenv("DB_SSLMODE", "require"),
+	)
+	if err != nil {
+		log.Fatalf("cannot connect to database: %v", err)
+	}
+	if err := db.RunMigrations(database); err != nil {
+		log.Fatalf("migrations failed: %v", err)
+	}
+
 	// Event store and projection for event-sourced shipment repository
-	eventStore := repository.NewInMemoryEventStore()
-	shipmentProj := projection.NewShipmentProjection()
+	eventStore := repository.NewPostgresEventStore(database)
+	shipmentProj := projection.NewPostgresShipmentProjection(database)
 
 	// Other repositories
-	authRepo := repository.NewInMemoryAuthRepository()
+	authRepo := repository.NewPostgresAuthRepository(database)
 	branchRepo := repository.NewInMemoryBranchRepository()
-	routeRepo := repository.NewInMemoryRouteRepository()
-	customerRepo := repository.NewInMemoryCustomerRepository()
+	routeRepo := repository.NewPostgresRouteRepository(database)
+	customerRepo := repository.NewPostgresCustomerRepository(database)
 
 	seed.LoadBranches(branchRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
@@ -118,6 +156,8 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	log.Println("LogiTrack API running on :8080")
 	if err := r.Run(":8080"); err != nil {
