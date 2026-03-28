@@ -57,7 +57,7 @@ internal/
 
 **Event sourcing — shipments.** `DomainEvent` objects are the source of truth. Shipment state is never mutated directly; instead each write operation appends a domain event to the `EventStore` and applies it to the `ShipmentProjection` (materialized view). Reads (List, Search, Stats, GetByTrackingID) are served from the projection. `GetEvents` transforms `DomainEvent`s back to the `ShipmentEvent` API format.
 
-**All state is in-memory.** Restarting the server resets all data. Migrating to Postgres means implementing `EventStore` and `ShipmentProjection` against a database and swapping them in `main.go` — the service and handler layers do not change.
+**State is persisted in PostgreSQL (RDS).** `EventStore` and `ShipmentProjection` are backed by the database — the service and handler layers are unchanged from the in-memory design.
 
 **ShipmentRepository interface** uses command structs (not raw field parameters). Each command carries everything needed to build the domain event internally: `CreateShipmentCmd`, `SaveDraftCmd`, `UpdateDraftCmd`, `ConfirmDraftCmd`, `StatusUpdateCmd`, `CorrectCmd`, `CancelCmd`. The methods `UpdateLocation`, `SetDeliveredAt`, and `AddEvent` no longer exist — their effects are absorbed into the relevant commands.
 
@@ -231,6 +231,32 @@ src/
 | `/track` | PublicTracking | all |
 | `/driver/route` | DriverRoute | driver |
 | `/shipments/:trackingId` | DriverShipmentDetail | driver (misma URL, componente diferente al no-driver) |
+
+---
+
+## Git workflow
+
+Branches: `main` (production, auto-deploys to Amplify) and `develop` (integration base). All feature work branches from `develop`.
+
+```
+feature/<description>     new functionality
+fix/<description>         bug fix
+chore/<description>       maintenance (deps, config, docs)
+hotfix/<description>      urgent fix branched from main, merged back to main AND develop
+```
+
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style`, `perf`, `ci`. PRs require at least one review before merging (hotfixes excepted).
+
+---
+
+## Production infrastructure
+
+| Layer | Service | Notes |
+|-------|---------|-------|
+| Frontend | AWS Amplify | Auto-deploy on push to `main` |
+| HTTPS proxy | AWS CloudFront | Terminates TLS in front of EC2 (mixed-content fix) |
+| Backend | EC2 port 8080 | Go + Gin API |
+| Database | RDS PostgreSQL 17.4 | Persistent storage for events and projections |
 
 ---
 

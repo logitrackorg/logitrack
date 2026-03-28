@@ -84,30 +84,50 @@ Ambos servicios se despliegan de forma independiente. El frontend consume la API
 
 ### Levantar el entorno local
 
-**Requisitos:** Node.js 18+ y Go 1.21+
+Hay dos formas de correr el proyecto localmente.
 
-Si no los tenés instalados:
+#### Opción A — Docker (recomendada)
 
-- **Node.js** → https://nodejs.org (descargá la versión LTS) o con un gestor de versiones:
-  ```bash
-  # macOS/Linux con nvm
-  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
-  nvm install --lts
-  ```
-- **Go** → https://go.dev/dl (descargá el instalador para tu sistema operativo)
+**Requisito:** Docker con el plugin Compose (`docker compose version`).
 
 ```bash
-# 1. Instalar dependencias (solo la primera vez)
-npm install
+# Primera vez o después de cambiar dependencias
+docker compose up --build -d
 
-# 2. Levantar backend y frontend en paralelo
-npm run dev
+# Arranques siguientes
+docker compose up -d
+
+# Detener (los datos de la DB se conservan)
+docker compose down
+
+# Reset completo (borra la DB)
+docker compose down -v
 ```
 
 - Frontend → http://localhost:5173
 - API → http://localhost:8080
 
-Con `Ctrl+C` se detienen ambos servicios.
+#### Opción B — Manual (solo la DB en Docker)
+
+**Requisitos:** Node.js 18+, Go 1.26+ y Docker.
+
+```bash
+# Levantar solo la base de datos
+docker compose -f docker-compose.db.yml up -d
+```
+
+```bash
+# Terminal 1 — backend
+cd logitrack_core
+DB_PASSWORD=localpass DB_SSLMODE=disable go run cmd/server/main.go
+
+# Terminal 2 — frontend
+cd logitrack_web
+npm run dev
+```
+
+- Frontend → http://localhost:5173
+- API → http://localhost:8080
 
 Para instrucciones detalladas de cada servicio por separado:
 - [Backend (logitrack_core)](./logitrack_core/README.md)

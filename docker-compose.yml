@@ -1,0 +1,52 @@
+# Full stack: db + backend + frontend
+#
+# First run or after dependency changes:
+#   docker compose up --build -d
+#
+# Subsequent starts (no rebuild):
+#   docker compose up -d
+#
+# Tear down (keeps DB data):
+#   docker compose down
+#
+# Full reset (destroys DB volume):
+#   docker compose down -v
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: logitrack
+      POSTGRES_PASSWORD: localpass
+      POSTGRES_DB: logitrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - logitrack_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./logitrack_core
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: logitrack
+      DB_PASSWORD: localpass
+      DB_NAME: logitrack
+      DB_SSLMODE: disable
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./logitrack_web
+      args:
+        VITE_API_URL: http://localhost:8080/api/v1
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  logitrack_pgdata:

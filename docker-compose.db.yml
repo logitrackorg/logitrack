@@ -1,0 +1,26 @@
+# DB only — run the apps manually:
+#
+#   docker compose -f docker-compose.db.yml up -d
+#
+# Backend (terminal 1):
+#   cd logitrack_core
+#   DB_PASSWORD=localpass DB_SSLMODE=disable go run cmd/server/main.go
+#
+# Frontend (terminal 2):
+#   cd logitrack_web
+#   npm run dev
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: logitrack
+      POSTGRES_PASSWORD: localpass
+      POSTGRES_DB: logitrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - logitrack_pgdata:/var/lib/postgresql/data
+
+volumes:
+  logitrack_pgdata:

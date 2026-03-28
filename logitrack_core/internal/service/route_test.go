@@ -201,3 +201,94 @@ func TestRouteCreate_ValidRequest(t *testing.T) {
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
+
+// ─── GetTodayRoute (TC-29–TC-32) ─────────────────────────────────────────────
+
+func TestGetTodayRoute_NoRoute(t *testing.T) {
+	routeSvc, _, _ := newRouteSetup(t)
+
+	_, _, err := routeSvc.GetTodayRoute("driver-99")
+	if err == nil {
+		t.Error("expected error for driver with no route, got nil")
+	}
+}
+
+func TestGetTodayRoute_ReturnsRouteAndShipmentDetails(t *testing.T) {
+	routeSvc, ts, routeRepo := newRouteSetup(t)
+
+	ship1 := mustCreate(t, ts)
+	ship2 := mustCreate(t, ts)
+	today := model.NewDateOnly(time.Now().UTC())
+
+	routeRepo.Create(model.Route{
+		ID:          "ROUTE-TEST42",
+		Date:        today,
+		DriverID:    "driver-01",
+		ShipmentIDs: []string{ship1.TrackingID, ship2.TrackingID},
+		CreatedBy:   "supervisor",
+		CreatedAt:   time.Now().UTC(),
+	})
+
+	route, shipments, err := routeSvc.GetTodayRoute("driver-01")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if route.DriverID != "driver-01" {
+		t.Errorf("driverID = %q, want driver-01", route.DriverID)
+	}
+	if len(shipments) != 2 {
+		t.Errorf("got %d shipments, want 2", len(shipments))
+	}
+	ids := make(map[string]bool)
+	for _, s := range shipments {
+		ids[s.TrackingID] = true
+	}
+	if !ids[ship1.TrackingID] || !ids[ship2.TrackingID] {
+		t.Errorf("expected both shipments in route result, got ids: %v", ids)
+	}
+}
+
+func TestGetTodayRoute_OnlyTodaysRoute(t *testing.T) {
+	routeSvc, ts, routeRepo := newRouteSetup(t)
+
+	ship := mustCreate(t, ts)
+	yesterday := model.NewDateOnly(time.Now().UTC().AddDate(0, 0, -1))
+
+	routeRepo.Create(model.Route{
+		ID:          "ROUTE-YEST01",
+		Date:        yesterday,
+		DriverID:    "driver-01",
+		ShipmentIDs: []string{ship.TrackingID},
+		CreatedBy:   "supervisor",
+		CreatedAt:   time.Now().UTC().AddDate(0, 0, -1),
+	})
+
+	_, _, err := routeSvc.GetTodayRoute("driver-01")
+	if err == nil {
+		t.Error("expected no-route error for today when only a yesterday route exists")
+	}
+}
+
+func TestGetTodayRoute_IgnoresMissingShipments(t *testing.T) {
+	routeSvc, ts, routeRepo := newRouteSetup(t)
+
+	ship := mustCreate(t, ts)
+	today := model.NewDateOnly(time.Now().UTC())
+
+	routeRepo.Create(model.Route{
+		ID:          "ROUTE-TEST99",
+		Date:        today,
+		DriverID:    "driver-01",
+		ShipmentIDs: []string{ship.TrackingID, "LT-GHOST0001"}, // ghost ID does not exist
+		CreatedBy:   "supervisor",
+		CreatedAt:   time.Now().UTC(),
+	})
+
+	_, shipments, err := routeSvc.GetTodayRoute("driver-01")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(shipments) != 1 || shipments[0].TrackingID != ship.TrackingID {
+		t.Errorf("expected only the existing shipment, got %v", shipments)
+	}
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -1042,4 +1043,435 @@ func advanceToReadyForReturn(t *testing.T, ts testSetup, id string) {
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusReadyForReturn, ChangedBy: "supervisor",
 	})
+}
+
+// seedShipmentAt inserts a shipment directly via the repo with a specific CreatedAt,
+// allowing date-filter tests to exercise the full range without sleeping.
+func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipment {
+	t.Helper()
+	s := model.Shipment{
+		TrackingID:      generateTrackingID(),
+		Sender:          defaultSender(),
+		Recipient:       defaultRecipient(),
+		WeightKg:        1.0,
+		PackageType:     model.PackageBox,
+		Status:          model.StatusInProgress,
+		CurrentLocation: "br-caba",
+		CreatedAt:       createdAt,
+		UpdatedAt:       createdAt,
+		EstimatedDeliveryAt: createdAt.AddDate(0, 0, 7),
+	}
+	created, err := ts.shipmentRepo.Create(repository.CreateShipmentCmd{
+		Shipment:  s,
+		ChangedBy: "operator",
+		Notes:     "seeded for date-filter test",
+	})
+	if err != nil {
+		t.Fatalf("seedShipmentAt: %v", err)
+	}
+	return created
+}
+
+// ─── Search – by tracking ID (TC-09–TC-12) ───────────────────────────────────
+
+func TestSearch_ByTrackingID_ExactMatch(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+
+	results, err := ts.svc.Search(ship.TrackingID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 || results[0].TrackingID != ship.TrackingID {
+		t.Errorf("expected exactly shipment %q, got %v", ship.TrackingID, results)
+	}
+}
+
+func TestSearch_ByTrackingID_PartialMatch(t *testing.T) {
+	ts := newSetup()
+	mustCreate(t, ts) // creates an LT-XXXXXXXX shipment
+
+	results, err := ts.svc.Search("LT-")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("expected at least one result for partial tracking ID 'LT-', got none")
+	}
+	for _, r := range results {
+		if !strings.HasPrefix(r.TrackingID, "LT-") {
+			t.Errorf("unexpected non-LT result: %q", r.TrackingID)
+		}
+	}
+}
+
+func TestSearch_ByTrackingID_NoMatch(t *testing.T) {
+	ts := newSetup()
+	mustCreate(t, ts)
+
+	results, err := ts.svc.Search("LT-NOTEXIST")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-existent tracking ID, got %d", len(results))
+	}
+}
+
+func TestSearch_ByTrackingID_CaseInsensitive(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+
+	lower := strings.ToLower(ship.TrackingID)
+	results, err := ts.svc.Search(lower)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.TrackingID == ship.TrackingID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("search with lowercase ID %q did not return shipment %q", lower, ship.TrackingID)
+	}
+}
+
+// ─── Search – by recipient name (TC-13–TC-16) ────────────────────────────────
+
+func TestSearch_ByRecipientName_ExactMatch(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts) // recipient: "Bob Recipient"
+
+	results, err := ts.svc.Search(defaultRecipient().Name)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.TrackingID == ship.TrackingID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("shipment %q not found in results for exact recipient name search", ship.TrackingID)
+	}
+}
+
+func TestSearch_ByRecipientName_PartialMatch(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts) // recipient: "Bob Recipient"
+
+	results, err := ts.svc.Search("Bob")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.TrackingID == ship.TrackingID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("shipment %q not found in results for partial recipient name 'Bob'", ship.TrackingID)
+	}
+}
+
+func TestSearch_ByRecipientName_NoMatch(t *testing.T) {
+	ts := newSetup()
+	mustCreate(t, ts)
+
+	results, err := ts.svc.Search("ZZZ-NoSuchPerson")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for unknown recipient, got %d", len(results))
+	}
+}
+
+func TestSearch_ByRecipientName_CaseInsensitive(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts) // recipient: "Bob Recipient"
+
+	results, err := ts.svc.Search("bob recipient")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, r := range results {
+		if r.TrackingID == ship.TrackingID {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("case-insensitive search 'bob recipient' did not find shipment %q", ship.TrackingID)
+	}
+}
+
+// ─── GetByTrackingID – detail (TC-17–TC-20) ──────────────────────────────────
+
+func TestGetByTrackingID_ReturnsCompleteShipment(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+
+	result, err := ts.svc.GetByTrackingID(ship.TrackingID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.TrackingID != ship.TrackingID {
+		t.Errorf("tracking_id = %q, want %q", result.TrackingID, ship.TrackingID)
+	}
+	if result.Sender.Name != ship.Sender.Name {
+		t.Errorf("sender name = %q, want %q", result.Sender.Name, ship.Sender.Name)
+	}
+	if result.Recipient.DNI != ship.Recipient.DNI {
+		t.Errorf("recipient DNI = %q, want %q", result.Recipient.DNI, ship.Recipient.DNI)
+	}
+	if result.Status != model.StatusInProgress {
+		t.Errorf("status = %q, want in_progress", result.Status)
+	}
+}
+
+func TestGetByTrackingID_NotFound(t *testing.T) {
+	ts := newSetup()
+
+	_, err := ts.svc.GetByTrackingID("LT-NOTEXIST")
+	if err == nil {
+		t.Error("expected error for non-existent tracking ID, got nil")
+	}
+}
+
+func TestGetByTrackingID_ReflectsCurrentStatus(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts) // in_progress
+
+	toInTransit(t, ts, ship.TrackingID)
+
+	result, err := ts.svc.GetByTrackingID(ship.TrackingID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Status != model.StatusInTransit {
+		t.Errorf("status = %q after update, want in_transit", result.Status)
+	}
+}
+
+func TestGetByTrackingID_Draft(t *testing.T) {
+	ts := newSetup()
+	draft, _ := ts.svc.SaveDraft(model.SaveDraftRequest{WeightKg: 2.0})
+
+	result, err := ts.svc.GetByTrackingID(draft.TrackingID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Status != model.StatusPending {
+		t.Errorf("status = %q, want pending", result.Status)
+	}
+	if !strings.HasPrefix(result.TrackingID, "DRAFT-") {
+		t.Errorf("tracking_id = %q, want DRAFT- prefix", result.TrackingID)
+	}
+}
+
+// ─── List – date filtering (TC-21–TC-24) ─────────────────────────────────────
+
+func TestList_NoFilter_ReturnsAll(t *testing.T) {
+	ts := newSetup()
+	mustCreate(t, ts)
+	mustCreate(t, ts)
+	mustCreate(t, ts)
+
+	results, err := ts.svc.List(model.ShipmentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) < 3 {
+		t.Errorf("expected at least 3 results, got %d", len(results))
+	}
+}
+
+func TestList_FilterByDateFrom(t *testing.T) {
+	ts := newSetup()
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+
+	seedShipmentAt(t, ts, yesterday) // should be excluded
+	seedShipmentAt(t, ts, tomorrow)  // should be included
+
+	from := time.Now().UTC()
+	results, err := ts.svc.List(model.ShipmentFilter{DateFrom: &from})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, r := range results {
+		if r.CreatedAt.Before(from) {
+			t.Errorf("shipment %q (created %v) is before DateFrom %v", r.TrackingID, r.CreatedAt, from)
+		}
+	}
+}
+
+func TestList_FilterByDateTo(t *testing.T) {
+	ts := newSetup()
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+
+	seedShipmentAt(t, ts, yesterday) // should be included
+	seedShipmentAt(t, ts, tomorrow)  // should be excluded
+
+	to := time.Now().UTC()
+	results, err := ts.svc.List(model.ShipmentFilter{DateTo: &to})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, r := range results {
+		if r.CreatedAt.After(to) {
+			t.Errorf("shipment %q (created %v) is after DateTo %v", r.TrackingID, r.CreatedAt, to)
+		}
+	}
+}
+
+func TestList_FilterByDateRange(t *testing.T) {
+	ts := newSetup()
+	twoDaysAgo := time.Now().UTC().AddDate(0, 0, -2)
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	tomorrow := time.Now().UTC().AddDate(0, 0, 1)
+
+	old := seedShipmentAt(t, ts, twoDaysAgo)
+	inRange := seedShipmentAt(t, ts, yesterday)
+	future := seedShipmentAt(t, ts, tomorrow)
+
+	from := twoDaysAgo.Add(time.Hour) // strictly after twoDaysAgo
+	to := time.Now().UTC()            // before tomorrow
+
+	results, err := ts.svc.List(model.ShipmentFilter{DateFrom: &from, DateTo: &to})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ids := make(map[string]bool)
+	for _, r := range results {
+		ids[r.TrackingID] = true
+	}
+	if !ids[inRange.TrackingID] {
+		t.Errorf("in-range shipment %q should be included", inRange.TrackingID)
+	}
+	if ids[old.TrackingID] {
+		t.Errorf("old shipment %q should be excluded", old.TrackingID)
+	}
+	if ids[future.TrackingID] {
+		t.Errorf("future shipment %q should be excluded", future.TrackingID)
+	}
+}
+
+// ─── List – status coverage (TC-25–TC-28) ────────────────────────────────────
+// Status filtering is client-side; the backend exposes all statuses so the
+// frontend can apply whichever filter it needs. These tests verify that List
+// never silently drops shipments of any particular status.
+
+func TestList_IncludesShipmentsOfEveryStatus(t *testing.T) {
+	ts := newSetup()
+
+	mustCreate(t, ts) // in_progress
+
+	s2 := mustCreate(t, ts)
+	toInTransit(t, ts, s2.TrackingID) // in_transit
+
+	s3 := mustCreate(t, ts)
+	toInTransit(t, ts, s3.TrackingID)
+	toAtBranch(t, ts, s3.TrackingID) // at_branch
+
+	s4 := mustCreate(t, ts)
+	toInTransit(t, ts, s4.TrackingID)
+	toAtBranch(t, ts, s4.TrackingID)
+	toDelivering(t, ts, s4.TrackingID)
+	mustStatus(t, ts, s4.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusDelivered, ChangedBy: "driver",
+		RecipientDNI: defaultRecipient().DNI,
+	}) // delivered
+
+	ts.svc.SaveDraft(model.SaveDraftRequest{}) // pending
+
+	all, err := ts.svc.List(model.ShipmentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	statusSet := make(map[model.Status]bool)
+	for _, s := range all {
+		statusSet[s.Status] = true
+	}
+	for _, want := range []model.Status{
+		model.StatusInProgress, model.StatusInTransit,
+		model.StatusAtBranch, model.StatusDelivered, model.StatusPending,
+	} {
+		if !statusSet[want] {
+			t.Errorf("List is missing status %q — at least one shipment should have it", want)
+		}
+	}
+}
+
+func TestList_ReturnedShipmentIncluded(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+	advanceToReadyForReturn(t, ts, ship.TrackingID)
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusReturned, ChangedBy: "supervisor",
+		SenderDNI: defaultSender().DNI,
+	})
+
+	all, err := ts.svc.List(model.ShipmentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, s := range all {
+		if s.TrackingID == ship.TrackingID {
+			found = true
+			if s.Status != model.StatusReturned {
+				t.Errorf("status = %q, want returned", s.Status)
+			}
+		}
+	}
+	if !found {
+		t.Error("returned shipment not found in List result")
+	}
+}
+
+func TestList_CancelledShipmentIncluded(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+	ts.svc.CancelShipment(ship.TrackingID, "supervisor", "test cancellation") //nolint
+
+	all, err := ts.svc.List(model.ShipmentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, s := range all {
+		if s.TrackingID == ship.TrackingID {
+			found = true
+			if s.Status != model.StatusCancelled {
+				t.Errorf("status = %q, want cancelled", s.Status)
+			}
+		}
+	}
+	if !found {
+		t.Error("cancelled shipment not found in List result")
+	}
+}
+
+func TestList_OrderedByTrackingID(t *testing.T) {
+	ts := newSetup()
+	mustCreate(t, ts)
+	mustCreate(t, ts)
+	mustCreate(t, ts)
+
+	results, err := ts.svc.List(model.ShipmentFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for i := 1; i < len(results); i++ {
+		if results[i].TrackingID < results[i-1].TrackingID {
+			t.Errorf("List not sorted: %q comes after %q", results[i-1].TrackingID, results[i].TrackingID)
+		}
+	}
 }

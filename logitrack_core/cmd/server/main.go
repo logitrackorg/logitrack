@@ -44,6 +44,7 @@ func main() {
 		getenv("DB_USER", "logitrack"),
 		getenv("DB_PASSWORD", ""),
 		getenv("DB_NAME", "logitrack"),
+		getenv("DB_SSLMODE", "require"),
 	)
 	if err != nil {
 		log.Fatalf("cannot connect to database: %v", err)
