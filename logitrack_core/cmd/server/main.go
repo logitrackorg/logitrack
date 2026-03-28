@@ -1,3 +1,13 @@
+// @title           LogiTrack API
+// @version         1.0
+// @description     REST API for the LogiTrack shipment management system.
+// @host            localhost:8080
+// @BasePath        /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
+// @description     Bearer token obtained from POST /api/v1/auth/login
+
 package main
 
 import (
@@ -6,6 +16,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	_ "github.com/logitrack/core/docs"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
@@ -14,6 +25,8 @@ import (
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func getenv(key, fallback string) string {
@@ -142,6 +155,8 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	log.Println("LogiTrack API running on :8080")
 	if err := r.Run(":8080"); err != nil {
