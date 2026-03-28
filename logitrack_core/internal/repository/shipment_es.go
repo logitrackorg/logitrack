@@ -13,10 +13,10 @@ import (
 // Reads are served directly from the materialized projection.
 type eventSourcedShipmentRepository struct {
 	store      EventStore
-	projection *projection.ShipmentProjection
+	projection projection.Projector
 }
 
-func NewEventSourcedShipmentRepository(store EventStore, proj *projection.ShipmentProjection) ShipmentRepository {
+func NewEventSourcedShipmentRepository(store EventStore, proj projection.Projector) ShipmentRepository {
 	return &eventSourcedShipmentRepository{store: store, projection: proj}
 }
 

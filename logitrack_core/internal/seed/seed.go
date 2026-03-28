@@ -48,8 +48,13 @@ func LoadBranches(repo repository.BranchRepository) {
 }
 
 // Load populates the event store with seed domain events, then rebuilds the projection.
-// Seed data is appended directly to the event store to allow precise timestamp control.
-func Load(store repository.EventStore, proj *projection.ShipmentProjection, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository) {
+// Idempotent: if events already exist in the store, only rebuilds the projection and returns.
+func Load(store repository.EventStore, proj projection.Projector, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository) {
+	existing, _ := store.LoadAll()
+	if len(existing) > 0 {
+		proj.Rebuild(existing)
+		return
+	}
 	now := time.Now().UTC()
 
 	seeds := []shipmentSeed{
