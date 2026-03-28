@@ -236,7 +236,7 @@ src/
 
 ## Specs
 
-`specs/` contains functional specifications organized by domain (auth, roles, shipments, state machine, branches, dashboard, public tracking). Written in Given/When/Then format. New features should have a spec written first — see `specs/00-indice.md`.
+`docs/specs/` contains functional specifications organized by domain (auth, roles, shipments, state machine, branches, dashboard, public tracking). Written in Given/When/Then format. New features should have a spec written first — see `docs/specs/00-indice.md`.
 
 ## Running locally (both services)
 

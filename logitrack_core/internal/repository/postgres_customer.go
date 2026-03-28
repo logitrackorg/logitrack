@@ -37,7 +37,7 @@ func (r *postgresCustomerRepository) Upsert(customer model.Customer) {
 
 func (r *postgresCustomerRepository) GetByDNI(dni string) (model.Customer, bool) {
 	var (
-		c       model.Customer
+		c        model.Customer
 		addrJSON []byte
 	)
 	err := r.db.QueryRow(`
