@@ -2,12 +2,13 @@
 
 ## Branch strategy
 
-Base all work on `develop`. `main` is production and auto-deploys to Amplify.
+This project follows [Gitflow](https://nvie.com/posts/a-successful-git-branching-model/). `main` is production and auto-deploys to Amplify. All development is based on `develop`.
 
 ```
-feature/<description>   new functionality
-fix/<description>       bug fix
-chore/<description>     maintenance (deps, config, docs)
+feature/<description>   new functionality — branch from develop, merge back to develop
+fix/<description>       bug fix — branch from develop, merge back to develop
+chore/<description>     maintenance (deps, config, docs) — branch from develop, merge back to develop
+release/<version>       release preparation — branch from develop, merge to main AND develop
 hotfix/<description>    urgent fix — branch from main, merge back to main AND develop
 ```
 

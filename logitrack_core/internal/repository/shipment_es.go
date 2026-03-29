@@ -160,8 +160,8 @@ func (r *eventSourcedShipmentRepository) Search(query string) ([]model.Shipment,
 	return r.projection.Search(query)
 }
 
-func (r *eventSourcedShipmentRepository) Stats() (model.Stats, error) {
-	return r.projection.Stats()
+func (r *eventSourcedShipmentRepository) Stats(filter model.ShipmentFilter) (model.Stats, error) {
+	return r.projection.Stats(filter)
 }
 
 // GetEvents transforms DomainEvents from the store into ShipmentEvent (API format).

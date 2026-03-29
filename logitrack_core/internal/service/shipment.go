@@ -489,8 +489,8 @@ func (s *ShipmentService) GetEvents(trackingID string) ([]model.ShipmentEvent, e
 	return s.repo.GetEvents(trackingID)
 }
 
-func (s *ShipmentService) Stats() (model.Stats, error) {
-	return s.repo.Stats()
+func (s *ShipmentService) Stats(filter model.ShipmentFilter) (model.Stats, error) {
+	return s.repo.Stats(filter)
 }
 
 func generateTrackingID() string {

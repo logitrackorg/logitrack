@@ -218,7 +218,7 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 // UpdateStatus transitions a shipment to a new status.
 //
 // @Summary      Update shipment status
-// @Description  Transitions a shipment through the state machine. Supervisor, admin, and driver. Drivers are further restricted to shipments on their today's route and may only set delivered or delivery_failed.
+// @Description  Transitions a shipment through the state machine. Operator, supervisor, admin, and driver. Operators cannot set delivered. Drivers are further restricted to shipments on their today's route and may only set delivered or delivery_failed.
 // @Tags         shipments
 // @Accept       json
 // @Produce      json
@@ -238,6 +238,13 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
 	req.ChangedBy = user.Username
+	if user.Role == model.RoleOperator {
+		current, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
+		if err == nil && current.Status == model.StatusDelivering {
+			c.JSON(http.StatusForbidden, gin.H{"error": "operators cannot update shipments in delivering status"})
+			return
+		}
+	}
 	if user.Role == model.RoleDriver {
 		if err := h.routeSvc.ValidateDriverCanUpdateShipment(user.ID, c.Param("tracking_id"), req.Status); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -376,7 +383,25 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 // @Failure      500  {object}  map[string]string
 // @Router       /stats [get]
 func (h *ShipmentHandler) Stats(c *gin.Context) {
-	stats, err := h.svc.Stats()
+	filter := model.ShipmentFilter{}
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_from format, use YYYY-MM-DD"})
+			return
+		}
+		filter.DateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_to format, use YYYY-MM-DD"})
+			return
+		}
+		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
+		filter.DateTo = &endOfDay
+	}
+	stats, err := h.svc.Stats(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

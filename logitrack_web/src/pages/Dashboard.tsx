@@ -18,13 +18,30 @@ const statusConfig: Record<ShipmentStatus, { label: string; color: string; bg: s
   cancelled:        { label: "Cancelled",               color: "#b91c1c", bg: "#fee2e2" },
 };
 
+function toDateInput(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function defaultRange(): { from: string; to: string } {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - 29);
+  return { from: toDateInput(from), to: toDateInput(to) };
+}
+
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Shipment[]>([]);
+  const range = defaultRange();
+  const [dateFrom, setDateFrom] = useState(range.from);
+  const [dateTo, setDateTo] = useState(range.to);
   const navigate = useNavigate();
 
   useEffect(() => {
-    shipmentApi.stats().then(setStats);
+    shipmentApi.stats({ date_from: dateFrom, date_to: dateTo }).then(setStats);
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => {
     shipmentApi.list().then((all) => {
       const sorted = [...all].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -50,6 +67,39 @@ export function Dashboard() {
             onClick={() => navigate(`/?status=${s}`)}
           />
         ))}
+      </div>
+
+      {/* Shipments created vs delivered per day chart */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+          <h2 style={{ margin: 0, fontSize: "1rem" }}>Shipments Created vs Delivered per Day</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+            <label htmlFor="date-from" style={{ color: "#6b7280" }}>From</label>
+            <input
+              id="date-from"
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(e) => setDateFrom(e.target.value)}
+              style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 13 }}
+            />
+            <label htmlFor="date-to" style={{ color: "#6b7280" }}>To</label>
+            <input
+              id="date-to"
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              onChange={(e) => setDateTo(e.target.value)}
+              style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 13 }}
+            />
+          </div>
+        </div>
+        <DayChart
+          byDay={stats?.by_day ?? {}}
+          byDayDelivered={stats?.by_day_delivered ?? {}}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+        />
       </div>
 
       {/* Recent shipments */}
@@ -95,6 +145,153 @@ export function Dashboard() {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// --- DayChart ---
+
+interface DayChartProps {
+  byDay: Record<string, number>;
+  byDayDelivered: Record<string, number>;
+  dateFrom: string;
+  dateTo: string;
+}
+
+function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
+  // Build ordered list of days in the range.
+  const days: { date: string; created: number; delivered: number }[] = [];
+  if (dateFrom && dateTo) {
+    const cur = new Date(dateFrom + "T00:00:00");
+    const end = new Date(dateTo + "T00:00:00");
+    while (cur <= end) {
+      const key = cur.toISOString().slice(0, 10);
+      days.push({ date: key, created: byDay[key] ?? 0, delivered: byDayDelivered[key] ?? 0 });
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+
+  if (days.length === 0) {
+    return <p style={{ color: "#6b7280", fontSize: 14 }}>Select a date range to see the chart.</p>;
+  }
+
+  const maxCount = Math.max(...days.map((d) => Math.max(d.created, d.delivered)), 1);
+  const chartH = 160;
+  // Each day group has 2 bars + inner gap; calculate slot width for the whole day
+  const slotW = Math.max(10, Math.min(52, Math.floor(700 / days.length)));
+  const innerGap = 1;
+  const barW = Math.max(2, Math.floor((slotW - innerGap) / 2) - 1);
+  const groupGap = Math.max(2, slotW - 2 * barW - innerGap);
+  const svgW = days.length * (2 * barW + innerGap + groupGap) + 40;
+
+  // Y-axis ticks (0, max/2, max)
+  const yTicks = [0, Math.round(maxCount / 2), maxCount].filter((v, i, a) => a.indexOf(v) === i);
+
+  return (
+    <div style={{ overflowX: "auto", background: "#f9fafb", borderRadius: 10, padding: "16px 8px 8px 8px", border: "1px solid #e5e7eb" }}>
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, paddingLeft: 40, marginBottom: 8, fontSize: 11, color: "#374151" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#3b82f6" }} />
+          Created
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#10b981" }} />
+          Delivered
+        </span>
+      </div>
+      <svg width={svgW} height={chartH + 48} style={{ display: "block" }}>
+        {/* Y-axis ticks and gridlines */}
+        {yTicks.map((tick) => {
+          const y = chartH - Math.round((tick / maxCount) * chartH) + 8;
+          return (
+            <g key={tick}>
+              <line x1={34} x2={svgW} y1={y} y2={y} stroke="#e5e7eb" strokeWidth={1} />
+              <text x={30} y={y + 4} textAnchor="end" fontSize={10} fill="#9ca3af">{tick}</text>
+            </g>
+          );
+        })}
+
+        {/* Bar groups */}
+        {days.map((d, i) => {
+          const groupX = 40 + i * (2 * barW + innerGap + groupGap);
+          const centerX = groupX + barW + innerGap / 2;
+          const showLabel = days.length <= 31 || i % Math.ceil(days.length / 15) === 0;
+
+          const createdH = Math.max(d.created > 0 ? 2 : 0, Math.round((d.created / maxCount) * chartH));
+          const deliveredH = Math.max(d.delivered > 0 ? 2 : 0, Math.round((d.delivered / maxCount) * chartH));
+
+          const xCreated = groupX;
+          const xDelivered = groupX + barW + innerGap;
+
+          return (
+            <g key={d.date}>
+              {/* Created bar (blue) */}
+              <rect
+                x={xCreated}
+                y={chartH - createdH + 8}
+                width={barW}
+                height={createdH}
+                rx={2}
+                fill="#3b82f6"
+                opacity={0.85}
+              >
+                <title>{d.date} — Created: {d.created}</title>
+              </rect>
+              {d.created > 0 && createdH > 14 && (
+                <text x={xCreated + barW / 2} y={chartH - createdH + 8 + createdH - 4} textAnchor="middle" fontSize={9} fill="white" fontWeight={600}>
+                  {d.created}
+                </text>
+              )}
+              {d.created > 0 && createdH <= 14 && (
+                <text x={xCreated + barW / 2} y={chartH - createdH + 8 - 3} textAnchor="middle" fontSize={9} fill="#3b82f6" fontWeight={600}>
+                  {d.created}
+                </text>
+              )}
+
+              {/* Delivered bar (green) */}
+              <rect
+                x={xDelivered}
+                y={chartH - deliveredH + 8}
+                width={barW}
+                height={deliveredH}
+                rx={2}
+                fill="#10b981"
+                opacity={0.85}
+              >
+                <title>{d.date} — Delivered: {d.delivered}</title>
+              </rect>
+              {d.delivered > 0 && deliveredH > 14 && (
+                <text x={xDelivered + barW / 2} y={chartH - deliveredH + 8 + deliveredH - 4} textAnchor="middle" fontSize={9} fill="white" fontWeight={600}>
+                  {d.delivered}
+                </text>
+              )}
+              {d.delivered > 0 && deliveredH <= 14 && (
+                <text x={xDelivered + barW / 2} y={chartH - deliveredH + 8 - 3} textAnchor="middle" fontSize={9} fill="#10b981" fontWeight={600}>
+                  {d.delivered}
+                </text>
+              )}
+
+              {showLabel && (
+                <text
+                  x={centerX}
+                  y={chartH + 22}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="#6b7280"
+                  transform={`rotate(-40, ${centerX}, ${chartH + 22})`}
+                >
+                  {d.date.slice(5)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, paddingLeft: 40, display: "flex", gap: 16 }}>
+        <span>Created in period: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.created, 0)}</strong></span>
+        <span>Delivered in period: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.delivered, 0)}</strong></span>
+      </div>
     </div>
   );
 }

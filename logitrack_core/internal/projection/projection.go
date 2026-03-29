@@ -9,5 +9,5 @@ type Projector interface {
 	Get(trackingID string) (model.Shipment, error)
 	List(filter model.ShipmentFilter) ([]model.Shipment, error)
 	Search(query string) ([]model.Shipment, error)
-	Stats() (model.Stats, error)
+	Stats(filter model.ShipmentFilter) (model.Stats, error)
 }
