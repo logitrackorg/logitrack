@@ -122,11 +122,11 @@ func main() {
 	protected.POST("/shipments/:tracking_id/cancel", canComment, shipmentHandler.CancelShipment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
-	canChangeStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
+	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
 	// Stats / dashboard — supervisor, manager, admin
-	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	canViewStats := middleware.RequireRoles(model.RoleOperator, model.RoleManager, model.RoleAdmin)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
 
 	// Driver route — driver only
