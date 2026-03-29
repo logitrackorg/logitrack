@@ -3,11 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { shipmentApi } from "../api/shipments";
 import { StatusBadge } from "../components/StatusBadge";
-import { useAuth } from "../context/AuthContext";
 import { fmtDate } from "../utils/date";
 
 export function DriverRoute() {
-  const { } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);

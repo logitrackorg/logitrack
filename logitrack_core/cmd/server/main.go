@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
@@ -15,16 +16,39 @@ import (
 	"github.com/logitrack/core/internal/service"
 )
 
+func getenv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func main() {
+	// PostgreSQL connection
+	database, err := db.NewDB(
+		getenv("DB_HOST", "localhost"),
+		getenv("DB_PORT", "5432"),
+		getenv("DB_USER", "logitrack"),
+		getenv("DB_PASSWORD", ""),
+		getenv("DB_NAME", "logitrack"),
+		getenv("DB_SSLMODE", "require"),
+	)
+	if err != nil {
+		log.Fatalf("cannot connect to database: %v", err)
+	}
+	if err := db.RunMigrations(database); err != nil {
+		log.Fatalf("migrations failed: %v", err)
+	}
+
 	// Event store and projection for event-sourced shipment repository
-	eventStore := repository.NewInMemoryEventStore()
-	shipmentProj := projection.NewShipmentProjection()
+	eventStore := repository.NewPostgresEventStore(database)
+	shipmentProj := projection.NewPostgresShipmentProjection(database)
 
 	// Other repositories
-	authRepo := repository.NewInMemoryAuthRepository()
+	authRepo := repository.NewPostgresAuthRepository(database)
 	branchRepo := repository.NewInMemoryBranchRepository()
-	routeRepo := repository.NewInMemoryRouteRepository()
-	customerRepo := repository.NewInMemoryCustomerRepository()
+	routeRepo := repository.NewPostgresRouteRepository(database)
+	customerRepo := repository.NewPostgresCustomerRepository(database)
 
 	seed.LoadBranches(branchRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
@@ -94,17 +118,19 @@ func main() {
 
 	// Comments — read: all authenticated, write: supervisor/admin
 	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
-	canComment := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	canComment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
 
-	// Correct shipment data (non-destructive) — supervisor, admin
-	protected.PATCH("/shipments/:tracking_id/correct", canComment, shipmentHandler.CorrectShipment)
+	// Correct shipment data (non-destructive) — operator, supervisor, admin
+	canCorrect := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.PATCH("/shipments/:tracking_id/correct", canCorrect, shipmentHandler.CorrectShipment)
 
 	// Cancel shipment — supervisor, admin
-	protected.POST("/shipments/:tracking_id/cancel", canComment, shipmentHandler.CancelShipment)
+	canCancel := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/:tracking_id/cancel", canCancel, shipmentHandler.CancelShipment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
-	canChangeStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
+	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
 	// Stats / dashboard — supervisor, manager, admin

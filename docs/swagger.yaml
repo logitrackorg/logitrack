@@ -1,0 +1,1177 @@
+definitions:
+  handler.CancelRequest:
+    properties:
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
+  model.AddCommentRequest:
+    properties:
+      body:
+        type: string
+    required:
+    - body
+    type: object
+  model.Address:
+    properties:
+      city:
+        type: string
+      postal_code:
+        type: string
+      province:
+        type: string
+      street:
+        type: string
+    type: object
+  model.Branch:
+    properties:
+      city:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      province:
+        type: string
+    type: object
+  model.CorrectShipmentRequest:
+    properties:
+      corrections:
+        $ref: '#/definitions/model.ShipmentCorrections'
+    type: object
+  model.CreateShipmentRequest:
+    properties:
+      created_by:
+        type: string
+      is_fragile:
+        type: boolean
+      package_type:
+        $ref: '#/definitions/model.PackageType'
+      receiving_branch_id:
+        type: string
+      recipient:
+        $ref: '#/definitions/model.Customer'
+      sender:
+        $ref: '#/definitions/model.Customer'
+      special_instructions:
+        type: string
+      weight_kg:
+        type: number
+    required:
+    - package_type
+    - receiving_branch_id
+    - recipient
+    - sender
+    - weight_kg
+    type: object
+  model.Customer:
+    properties:
+      address:
+        $ref: '#/definitions/model.Address'
+      dni:
+        type: string
+      email:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  model.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  model.LoginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/model.User'
+    type: object
+  model.PackageType:
+    enum:
+    - envelope
+    - box
+    - pallet
+    type: string
+    x-enum-varnames:
+    - PackageEnvelope
+    - PackageBox
+    - PackagePallet
+  model.Role:
+    enum:
+    - operator
+    - supervisor
+    - manager
+    - admin
+    - driver
+    type: string
+    x-enum-varnames:
+    - RoleOperator
+    - RoleSupervisor
+    - RoleManager
+    - RoleAdmin
+    - RoleDriver
+  model.SaveDraftRequest:
+    properties:
+      created_by:
+        type: string
+      is_fragile:
+        type: boolean
+      package_type:
+        $ref: '#/definitions/model.PackageType'
+      receiving_branch_id:
+        type: string
+      recipient:
+        $ref: '#/definitions/model.Customer'
+      sender:
+        $ref: '#/definitions/model.Customer'
+      special_instructions:
+        type: string
+      weight_kg:
+        type: number
+    type: object
+  model.Shipment:
+    properties:
+      corrections:
+        allOf:
+        - $ref: '#/definitions/model.ShipmentCorrections'
+        description: 'Corrections: typed non-destructive field overrides; original
+          data is never modified.'
+      created_at:
+        type: string
+      current_location:
+        description: branch ID of current location
+        type: string
+      delivered_at:
+        type: string
+      estimated_delivery_at:
+        type: string
+      is_fragile:
+        type: boolean
+      package_type:
+        $ref: '#/definitions/model.PackageType'
+      receiving_branch_id:
+        description: Receiving branch
+        type: string
+      recipient:
+        $ref: '#/definitions/model.Customer'
+      sender:
+        $ref: '#/definitions/model.Customer'
+      special_instructions:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/model.Status'
+        description: Status & dates
+      tracking_id:
+        type: string
+      updated_at:
+        type: string
+      weight_kg:
+        description: Package
+        type: number
+    type: object
+  model.ShipmentComment:
+    properties:
+      author:
+        type: string
+      body:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      tracking_id:
+        type: string
+    type: object
+  model.ShipmentCorrections:
+    properties:
+      destination_city:
+        type: string
+      destination_postal_code:
+        type: string
+      destination_province:
+        type: string
+      destination_street:
+        type: string
+      origin_city:
+        type: string
+      origin_postal_code:
+        type: string
+      origin_province:
+        type: string
+      origin_street:
+        type: string
+      package_type:
+        $ref: '#/definitions/model.PackageType'
+      recipient_dni:
+        type: string
+      recipient_email:
+        type: string
+      recipient_name:
+        type: string
+      recipient_phone:
+        type: string
+      sender_dni:
+        type: string
+      sender_email:
+        type: string
+      sender_name:
+        type: string
+      sender_phone:
+        type: string
+      special_instructions:
+        type: string
+      weight_kg:
+        type: string
+    type: object
+  model.ShipmentEvent:
+    properties:
+      changed_by:
+        type: string
+      event_type:
+        description: '"status_change" | "edited"'
+        type: string
+      from_status:
+        allOf:
+        - $ref: '#/definitions/model.Status'
+        description: nil for initial creation events
+      id:
+        type: string
+      location:
+        type: string
+      notes:
+        type: string
+      timestamp:
+        type: string
+      to_status:
+        $ref: '#/definitions/model.Status'
+      tracking_id:
+        type: string
+    type: object
+  model.Stats:
+    properties:
+      by_branch:
+        additionalProperties:
+          type: integer
+        description: branch ID → shipment count (excludes delivered/returned)
+        type: object
+      by_status:
+        additionalProperties:
+          type: integer
+        type: object
+      total:
+        type: integer
+    type: object
+  model.Status:
+    enum:
+    - pending
+    - in_progress
+    - in_transit
+    - at_branch
+    - delivering
+    - delivered
+    - delivery_failed
+    - ready_for_pickup
+    - ready_for_return
+    - returned
+    - cancelled
+    type: string
+    x-enum-comments:
+      StatusCancelled: cancelled by supervisor/admin — terminal
+      StatusInProgress: confirmed — tracking ID assigned, awaiting transit
+      StatusPending: draft — partial data, no tracking ID yet
+      StatusReadyForPickup: recipient picks up at current branch
+      StatusReadyForReturn: sender picks up — only valid at origin branch
+      StatusReturned: sender picked up — terminal
+    x-enum-descriptions:
+    - draft — partial data, no tracking ID yet
+    - confirmed — tracking ID assigned, awaiting transit
+    - ""
+    - ""
+    - ""
+    - ""
+    - ""
+    - recipient picks up at current branch
+    - sender picks up — only valid at origin branch
+    - sender picked up — terminal
+    - cancelled by supervisor/admin — terminal
+    x-enum-varnames:
+    - StatusPending
+    - StatusInProgress
+    - StatusInTransit
+    - StatusAtBranch
+    - StatusDelivering
+    - StatusDelivered
+    - StatusDeliveryFailed
+    - StatusReadyForPickup
+    - StatusReadyForReturn
+    - StatusReturned
+    - StatusCancelled
+  model.UpdateStatusRequest:
+    properties:
+      changed_by:
+        type: string
+      driver_id:
+        description: required when status = "delivering"
+        type: string
+      location:
+        type: string
+      notes:
+        type: string
+      recipient_dni:
+        description: required when status = "delivered"
+        type: string
+      sender_dni:
+        description: required when status = "returned"
+        type: string
+      status:
+        $ref: '#/definitions/model.Status'
+    required:
+    - status
+    type: object
+  model.User:
+    properties:
+      id:
+        type: string
+      role:
+        $ref: '#/definitions/model.Role'
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with username and password. Returns a Bearer token
+        valid until server restart.
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      description: Invalidates the token sent in the Authorization header.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Returns the user associated with the current Bearer token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Current user
+      tags:
+      - auth
+  /branches:
+    get:
+      description: Returns all branches. Accessible to operator, supervisor, manager,
+        and admin roles.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Branch'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List branches
+      tags:
+      - branches
+  /customers:
+    get:
+      description: Returns a previously stored customer by exact DNI match. Used for
+        autocomplete.
+      parameters:
+      - description: Customer DNI (digits only)
+        in: query
+        name: dni
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Customer'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get customer by DNI
+      tags:
+      - customers
+  /driver/route:
+    get:
+      description: Returns today's route with full shipment details for the authenticated
+        driver. Driver role only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: route and shipments
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Driver route
+      tags:
+      - driver
+  /search:
+    get:
+      description: Searches by partial tracking ID or recipient name. Non-driver roles
+        only.
+      parameters:
+      - description: Search query (tracking ID or recipient name)
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Shipment'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Search shipments
+      tags:
+      - shipments
+  /shipments:
+    get:
+      description: Returns shipments sorted by tracking ID ascending. Supports optional
+        date range filtering on created_at. Non-driver roles only.
+      parameters:
+      - description: Start date (YYYY-MM-DD, inclusive)
+        in: query
+        name: date_from
+        type: string
+      - description: End date (YYYY-MM-DD, inclusive, end of day)
+        in: query
+        name: date_to
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Shipment'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List shipments
+      tags:
+      - shipments
+    post:
+      consumes:
+      - application/json
+      description: Creates a confirmed shipment. Assigns an LT-XXXXXXXX tracking ID.
+        Operator, supervisor, and admin only.
+      parameters:
+      - description: Shipment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateShipmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create shipment
+      tags:
+      - shipments
+  /shipments/{tracking_id}:
+    get:
+      description: Returns shipment detail including corrections. All authenticated
+        roles.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get shipment
+      tags:
+      - shipments
+  /shipments/{tracking_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Transitions a shipment to cancelled. Requires a non-empty reason.
+        Blocked on pending and terminal states. Supervisor and admin only.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      - description: Cancellation reason
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CancelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cancel shipment
+      tags:
+      - shipments
+  /shipments/{tracking_id}/comments:
+    get:
+      description: Returns internal notes for a shipment. Accessible to all authenticated
+        roles.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.ShipmentComment'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List comments
+      tags:
+      - comments
+    post:
+      consumes:
+      - application/json
+      description: Adds an internal note to a shipment. Operator, supervisor, and
+        admin. Cannot add to delivered or returned shipments.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      - description: Comment body
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.AddCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.ShipmentComment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add comment
+      tags:
+      - comments
+  /shipments/{tracking_id}/confirm:
+    post:
+      description: Transitions a pending draft to in_progress, replacing DRAFT- ID
+        with LT-XXXXXXXX. Operator, supervisor, and admin only.
+      parameters:
+      - description: Draft tracking ID (DRAFT-XXXXXXXX)
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Confirm draft
+      tags:
+      - shipments
+  /shipments/{tracking_id}/correct:
+    patch:
+      consumes:
+      - application/json
+      description: Non-destructively overrides shipment fields. Original data is preserved.
+        Each corrected field generates an auto-comment. Operator, supervisor, and admin only.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      - description: Field corrections
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CorrectShipmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Correct shipment data
+      tags:
+      - shipments
+  /shipments/{tracking_id}/draft:
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing draft shipment (status must be pending). Operator,
+        supervisor, and admin only.
+      parameters:
+      - description: Draft tracking ID (DRAFT-XXXXXXXX)
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      - description: Updated shipment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.SaveDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update draft
+      tags:
+      - shipments
+  /shipments/{tracking_id}/events:
+    get:
+      description: Returns the immutable audit log of all status changes and edits.
+        All authenticated roles.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.ShipmentEvent'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Shipment events
+      tags:
+      - shipments
+  /shipments/{tracking_id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Transitions a shipment through the state machine. Operator, supervisor,
+        admin, and driver. Operators cannot transition from delivering status. Drivers
+        are further restricted to shipments on their today's route and may only set
+        delivered or delivery_failed.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: tracking_id
+        required: true
+        type: string
+      - description: Status update payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update shipment status
+      tags:
+      - shipments
+  /shipments/draft:
+    post:
+      consumes:
+      - application/json
+      description: Creates a draft shipment with a DRAFT-XXXXXXXX tracking ID. No
+        fields are required. Operator, supervisor, and admin only.
+      parameters:
+      - description: Partial shipment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.SaveDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Shipment'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create draft shipment
+      tags:
+      - shipments
+  /stats:
+    get:
+      description: Returns total shipment count, breakdown by status, and active count
+        by branch. Supervisor, manager, and admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Stats'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Dashboard stats
+      tags:
+      - shipments
+  /users/drivers:
+    get:
+      description: Returns all driver users. Supervisor and admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: drivers
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/model.User'
+              type: array
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List drivers
+      tags:
+      - users
+swagger: "2.0"
