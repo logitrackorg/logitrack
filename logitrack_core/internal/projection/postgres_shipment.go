@@ -45,6 +45,19 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 
 	case model.EventDraftConfirmed:
 		payload := event.Payload.(model.DraftConfirmedPayload)
+		if payload.Prediction != nil {
+			factorsJSON, _ := json.Marshal(payload.Prediction.Factors)
+			_, err := p.db.Exec(`
+				UPDATE shipments
+				SET tracking_id = $1, status = $2, updated_at = $3,
+				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7
+				WHERE tracking_id = $8`,
+				payload.NewTrackingID, string(model.StatusInProgress), event.Timestamp,
+				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
+				payload.OldTrackingID,
+			)
+			return err
+		}
 		_, err := p.db.Exec(`
 			UPDATE shipments
 			SET tracking_id = $1, status = $2, updated_at = $3
@@ -101,10 +114,23 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		if err != nil {
 			return err
 		}
-		_, err = p.db.Exec(`
-			UPDATE shipments SET corrections = $1, updated_at = $2 WHERE tracking_id = $3`,
-			merged, event.Timestamp, event.TrackingID,
-		)
+		if payload.Prediction != nil {
+			factorsJSON, _ := json.Marshal(payload.Prediction.Factors)
+			_, err = p.db.Exec(`
+				UPDATE shipments
+				SET corrections = $1, updated_at = $2,
+				    priority = $3, priority_score = $4, priority_confidence = $5, priority_factors = $6
+				WHERE tracking_id = $7`,
+				merged, event.Timestamp,
+				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
+				event.TrackingID,
+			)
+		} else {
+			_, err = p.db.Exec(`
+				UPDATE shipments SET corrections = $1, updated_at = $2 WHERE tracking_id = $3`,
+				merged, event.Timestamp, event.TrackingID,
+			)
+		}
 		return err
 
 	case model.EventShipmentCancelled:
@@ -133,32 +159,50 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			return err
 		}
 	}
+	var priorityFactors []byte
+	if s.PriorityFactors != nil {
+		priorityFactors, err = json.Marshal(s.PriorityFactors)
+		if err != nil {
+			return err
+		}
+	}
 
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
 			tracking_id, status, current_location, weight_kg, package_type,
 			is_fragile, special_instructions, receiving_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
-			sender, recipient, corrections
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			sender, recipient, corrections,
+			shipment_type, time_window, cold_chain,
+			priority, priority_score, priority_confidence, priority_factors
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		ON CONFLICT (tracking_id) DO UPDATE SET
-			status               = EXCLUDED.status,
-			current_location     = EXCLUDED.current_location,
-			weight_kg            = EXCLUDED.weight_kg,
-			package_type         = EXCLUDED.package_type,
-			is_fragile           = EXCLUDED.is_fragile,
-			special_instructions = EXCLUDED.special_instructions,
-			receiving_branch_id  = EXCLUDED.receiving_branch_id,
-			updated_at           = EXCLUDED.updated_at,
+			status                = EXCLUDED.status,
+			current_location      = EXCLUDED.current_location,
+			weight_kg             = EXCLUDED.weight_kg,
+			package_type          = EXCLUDED.package_type,
+			is_fragile            = EXCLUDED.is_fragile,
+			special_instructions  = EXCLUDED.special_instructions,
+			receiving_branch_id   = EXCLUDED.receiving_branch_id,
+			updated_at            = EXCLUDED.updated_at,
 			estimated_delivery_at = EXCLUDED.estimated_delivery_at,
-			delivered_at         = EXCLUDED.delivered_at,
-			sender               = EXCLUDED.sender,
-			recipient            = EXCLUDED.recipient,
-			corrections          = EXCLUDED.corrections`,
+			delivered_at          = EXCLUDED.delivered_at,
+			sender                = EXCLUDED.sender,
+			recipient             = EXCLUDED.recipient,
+			corrections           = EXCLUDED.corrections,
+			shipment_type         = EXCLUDED.shipment_type,
+			time_window           = EXCLUDED.time_window,
+			cold_chain            = EXCLUDED.cold_chain,
+			priority              = EXCLUDED.priority,
+			priority_score        = EXCLUDED.priority_score,
+			priority_confidence   = EXCLUDED.priority_confidence,
+			priority_factors      = EXCLUDED.priority_factors`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
+		string(s.ShipmentType), string(s.TimeWindow), s.ColdChain,
+		s.Priority, s.PriorityScore, s.PriorityConfidence, nullableBytes(priorityFactors),
 	)
 	return err
 }
@@ -177,7 +221,9 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
-		       sender, recipient, corrections
+		       sender, recipient, corrections,
+		       shipment_type, time_window, cold_chain,
+		       priority, priority_score, priority_confidence, priority_factors
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -187,7 +233,9 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
-		       sender, recipient, corrections
+		       sender, recipient, corrections,
+		       shipment_type, time_window, cold_chain,
+		       priority, priority_score, priority_confidence, priority_factors
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
@@ -217,7 +265,9 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
-		       sender, recipient, corrections
+		       sender, recipient, corrections,
+		       shipment_type, time_window, cold_chain,
+		       priority, priority_score, priority_confidence, priority_factors
 		FROM shipments
 		WHERE LOWER(tracking_id) LIKE $1
 		   OR LOWER(sender->>'name') LIKE $1
@@ -317,19 +367,24 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 // scanShipment scans a single row into a Shipment.
 func scanShipment(row *sql.Row) (model.Shipment, error) {
 	var (
-		s               model.Shipment
-		status          string
-		packageType     string
-		senderJSON      []byte
-		recipientJSON   []byte
-		correctionsJSON []byte
-		estimatedAt     *time.Time
+		s                   model.Shipment
+		status              string
+		packageType         string
+		shipmentType        string
+		timeWindow          string
+		senderJSON          []byte
+		recipientJSON       []byte
+		correctionsJSON     []byte
+		priorityFactorsJSON []byte
+		estimatedAt         *time.Time
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
 		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
+		&shipmentType, &timeWindow, &s.ColdChain,
+		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -339,6 +394,8 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	}
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
+	s.ShipmentType = model.ShipmentType(shipmentType)
+	s.TimeWindow = model.TimeWindow(timeWindow)
 	if estimatedAt != nil {
 		s.EstimatedDeliveryAt = *estimatedAt
 	}
@@ -355,6 +412,13 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		}
 		s.Corrections = &c
 	}
+	if len(priorityFactorsJSON) > 0 {
+		var f map[string]model.FactorDetail
+		if err := json.Unmarshal(priorityFactorsJSON, &f); err != nil {
+			return model.Shipment{}, err
+		}
+		s.PriorityFactors = f
+	}
 	return s, nil
 }
 
@@ -362,25 +426,32 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 	var result []model.Shipment
 	for rows.Next() {
 		var (
-			s               model.Shipment
-			status          string
-			packageType     string
-			senderJSON      []byte
-			recipientJSON   []byte
-			correctionsJSON []byte
-			estimatedAt     *time.Time
+			s                   model.Shipment
+			status              string
+			packageType         string
+			shipmentType        string
+			timeWindow          string
+			senderJSON          []byte
+			recipientJSON       []byte
+			correctionsJSON     []byte
+			priorityFactorsJSON []byte
+			estimatedAt         *time.Time
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
 			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
+			&shipmentType, &timeWindow, &s.ColdChain,
+			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		)
 		if err != nil {
 			return nil, err
 		}
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
+		s.ShipmentType = model.ShipmentType(shipmentType)
+		s.TimeWindow = model.TimeWindow(timeWindow)
 		if estimatedAt != nil {
 			s.EstimatedDeliveryAt = *estimatedAt
 		}
@@ -396,6 +467,13 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 				return nil, err
 			}
 			s.Corrections = &c
+		}
+		if len(priorityFactorsJSON) > 0 {
+			var f map[string]model.FactorDetail
+			if err := json.Unmarshal(priorityFactorsJSON, &f); err != nil {
+				return nil, err
+			}
+			s.PriorityFactors = f
 		}
 		result = append(result, s)
 	}

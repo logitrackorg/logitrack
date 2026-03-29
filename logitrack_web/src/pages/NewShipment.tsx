@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { shipmentApi, type CreateShipmentPayload, type PackageType, type Shipment } from "../api/shipments";
+import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type Shipment } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
@@ -18,6 +18,17 @@ const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
   { value: "pallet",   label: "Pallet" },
 ];
 
+const SHIPMENT_TYPES: { value: ShipmentType; label: string }[] = [
+  { value: "normal",  label: "Normal" },
+  { value: "express", label: "Express" },
+];
+
+const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
+  { value: "flexible",  label: "Flexible" },
+  { value: "morning",   label: "Morning (8-12)" },
+  { value: "afternoon", label: "Afternoon (12-18)" },
+];
+
 const emptyAddress = { street: "", city: "", province: "", postal_code: "" };
 const emptyCustomer = () => ({ dni: "", name: "", phone: "", email: "", address: { ...emptyAddress } });
 
@@ -27,6 +38,9 @@ const initialForm: CreateShipmentPayload = {
   weight_kg: 0,
   package_type: "box",
   special_instructions: "",
+  shipment_type: "normal",
+  time_window: "flexible",
+  cold_chain: false,
   receiving_branch_id: "",
 };
 
@@ -320,12 +334,33 @@ export function NewShipment() {
               </select>
             </Field>
           </Row2>
+          <Row2>
+            <Field label="Shipment Type">
+              <select style={input} value={form.shipment_type ?? "normal"}
+                onChange={(e) => set("shipment_type", e.target.value as ShipmentType)}>
+                {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Time Window">
+              <select style={input} value={form.time_window ?? "flexible"}
+                onChange={(e) => set("time_window", e.target.value as TimeWindow)}>
+                {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </Field>
+          </Row2>
           <Field label="">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!form.is_fragile}
-                onChange={(e) => set("is_fragile", e.target.checked)} />
-              Fragile contents (handle with care)
-            </label>
+            <div style={{ display: "flex", gap: 20 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!form.is_fragile}
+                  onChange={(e) => set("is_fragile", e.target.checked)} />
+                Fragile contents (handle with care)
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input type="checkbox" checked={!!form.cold_chain}
+                  onChange={(e) => set("cold_chain", e.target.checked)} />
+                Cold chain (refrigerated)
+              </label>
+            </div>
           </Field>
           <Field label="Special Instructions">
             <input style={input} value={form.special_instructions}

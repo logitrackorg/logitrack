@@ -34,7 +34,7 @@ func newSetup() testSetup {
 	customerRepo := repository.NewInMemoryCustomerRepository()
 	commentRepo := repository.NewInMemoryCommentRepository()
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
-	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc)
+	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
 	return testSetup{svc, commentSvc, shipmentRepo, commentRepo}
 }
 
@@ -673,8 +673,8 @@ func TestCancelShipment_RequiresReason(t *testing.T) {
 
 func TestCancelShipment_NonCancellableStates(t *testing.T) {
 	tests := []struct {
-		name   string
-		setup  func(ts testSetup) string
+		name  string
+		setup func(ts testSetup) string
 	}{
 		{
 			name: "pending",
@@ -983,7 +983,7 @@ func TestCorrectShipment_GeneratesOneCommentPerField(t *testing.T) {
 
 	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 		Corrections: model.ShipmentCorrections{
-			SenderName:  strPtr("Alice New"),
+			SenderName:    strPtr("Alice New"),
 			RecipientName: strPtr("Bob New"),
 		},
 	})
@@ -1050,15 +1050,15 @@ func advanceToReadyForReturn(t *testing.T, ts testSetup, id string) {
 func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipment {
 	t.Helper()
 	s := model.Shipment{
-		TrackingID:      generateTrackingID(),
-		Sender:          defaultSender(),
-		Recipient:       defaultRecipient(),
-		WeightKg:        1.0,
-		PackageType:     model.PackageBox,
-		Status:          model.StatusInProgress,
-		CurrentLocation: "br-caba",
-		CreatedAt:       createdAt,
-		UpdatedAt:       createdAt,
+		TrackingID:          generateTrackingID(),
+		Sender:              defaultSender(),
+		Recipient:           defaultRecipient(),
+		WeightKg:            1.0,
+		PackageType:         model.PackageBox,
+		Status:              model.StatusInProgress,
+		CurrentLocation:     "br-caba",
+		CreatedAt:           createdAt,
+		UpdatedAt:           createdAt,
 		EstimatedDeliveryAt: createdAt.AddDate(0, 0, 7),
 	}
 	created, err := ts.shipmentRepo.Create(repository.CreateShipmentCmd{

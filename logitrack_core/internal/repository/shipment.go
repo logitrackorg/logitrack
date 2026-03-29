@@ -54,6 +54,7 @@ type ConfirmDraftCmd struct {
 	ChangedBy     string
 	Notes         string
 	Timestamp     time.Time
+	Prediction    *model.PriorityPrediction
 }
 
 type StatusUpdateCmd struct {
@@ -73,6 +74,7 @@ type CorrectCmd struct {
 	Status      model.Status // current status (unchanged)
 	Corrections model.ShipmentCorrections
 	Timestamp   time.Time
+	Prediction  *model.PriorityPrediction
 }
 
 type CancelCmd struct {

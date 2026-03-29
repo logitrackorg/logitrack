@@ -59,8 +59,14 @@ func main() {
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
 
 	// Services & handlers
+	modelPath := os.Getenv("ML_MODEL_PATH")
+	if modelPath == "" {
+		modelPath = "model.json"
+	}
+	mlClient := service.NewMLService(modelPath)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
-	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc)
+	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc)

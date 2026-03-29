@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { shipmentApi, type Shipment, type ShipmentStatus } from "../api/shipments";
 import { fmtDate } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
+import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
 
 type StatusFilter = ShipmentStatus | "active" | "";
@@ -147,6 +148,7 @@ export function ShipmentList() {
                 <th style={th}>Recipient</th>
                 <th style={th}>Origin → Destination</th>
                 <th style={th}>Weight</th>
+                <th style={th}>Priority</th>
                 <th style={th}>Status</th>
                 <th style={th}>Created</th>
                 <th style={th}>Est. Delivery</th>
@@ -163,6 +165,7 @@ export function ShipmentList() {
                   <td style={td}>{s.recipient.name}</td>
                   <td style={td}>{s.sender.address.city} → {s.recipient.address.city}</td>
                   <td style={td}>{s.weight_kg} kg</td>
+                  <td style={td}><PriorityBadge priority={s.priority} /></td>
                   <td style={td}><StatusBadge status={s.status} /></td>
                   <td style={td}>{fmtDate(s.created_at)}</td>
                   <td style={td}>{fmtDate(s.estimated_delivery_at)}</td>

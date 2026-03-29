@@ -18,22 +18,37 @@ func RunMigrations(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS events_id_idx ON events(id);
 
 		CREATE TABLE IF NOT EXISTS shipments (
-			tracking_id          TEXT PRIMARY KEY,
-			status               TEXT NOT NULL,
-			current_location     TEXT NOT NULL DEFAULT '',
-			weight_kg            DECIMAL(10,3) NOT NULL DEFAULT 0,
-			package_type         TEXT NOT NULL DEFAULT '',
-			is_fragile           BOOLEAN NOT NULL DEFAULT FALSE,
-			special_instructions TEXT NOT NULL DEFAULT '',
-			receiving_branch_id  TEXT NOT NULL DEFAULT '',
-			created_at           TIMESTAMPTZ NOT NULL,
-			updated_at           TIMESTAMPTZ NOT NULL,
+			tracking_id           TEXT PRIMARY KEY,
+			status                TEXT NOT NULL,
+			current_location      TEXT NOT NULL DEFAULT '',
+			weight_kg             DECIMAL(10,3) NOT NULL DEFAULT 0,
+			package_type          TEXT NOT NULL DEFAULT '',
+			is_fragile            BOOLEAN NOT NULL DEFAULT FALSE,
+			special_instructions  TEXT NOT NULL DEFAULT '',
+			receiving_branch_id   TEXT NOT NULL DEFAULT '',
+			created_at            TIMESTAMPTZ NOT NULL,
+			updated_at            TIMESTAMPTZ NOT NULL,
 			estimated_delivery_at TIMESTAMPTZ,
-			delivered_at         TIMESTAMPTZ,
-			sender               JSONB NOT NULL DEFAULT '{}',
-			recipient            JSONB NOT NULL DEFAULT '{}',
-			corrections          JSONB
+			delivered_at          TIMESTAMPTZ,
+			sender                JSONB NOT NULL DEFAULT '{}',
+			recipient             JSONB NOT NULL DEFAULT '{}',
+			corrections           JSONB,
+			shipment_type         TEXT NOT NULL DEFAULT 'normal',
+			time_window           TEXT NOT NULL DEFAULT 'flexible',
+			cold_chain            BOOLEAN NOT NULL DEFAULT FALSE,
+			priority              TEXT NOT NULL DEFAULT '',
+			priority_score        FLOAT NOT NULL DEFAULT 0,
+			priority_confidence   FLOAT NOT NULL DEFAULT 0,
+			priority_factors      JSONB
 		);
+
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS shipment_type        TEXT NOT NULL DEFAULT 'normal';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS time_window          TEXT NOT NULL DEFAULT 'flexible';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS cold_chain           BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority             TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_score       FLOAT NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_confidence  FLOAT NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_factors     JSONB;
 
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,

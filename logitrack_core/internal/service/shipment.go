@@ -38,6 +38,7 @@ type ShipmentService struct {
 	branchRepo   repository.BranchRepository
 	customerRepo repository.CustomerRepository
 	commentSvc   *CommentService
+	mlClient     *MLService
 }
 
 func NewShipmentService(
@@ -45,8 +46,9 @@ func NewShipmentService(
 	branchRepo repository.BranchRepository,
 	customerRepo repository.CustomerRepository,
 	commentSvc *CommentService,
+	mlClient *MLService,
 ) *ShipmentService {
-	return &ShipmentService{repo: repo, branchRepo: branchRepo, customerRepo: customerRepo, commentSvc: commentSvc}
+	return &ShipmentService{repo: repo, branchRepo: branchRepo, customerRepo: customerRepo, commentSvc: commentSvc, mlClient: mlClient}
 }
 
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
@@ -95,6 +97,22 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
 	}
+
+	// Default values for optional fields
+	shipmentType := req.ShipmentType
+	if shipmentType == "" {
+		shipmentType = model.ShipmentTypeNormal
+	}
+	timeWindow := req.TimeWindow
+	if timeWindow == "" {
+		timeWindow = model.TimeWindowFlexible
+	}
+
+	var prediction *model.PriorityPrediction
+	if s.mlClient != nil {
+		prediction = s.mlClient.PredictFromCreateRequest(req)
+	}
+
 	shipment := model.Shipment{
 		TrackingID:          generateTrackingID(),
 		Sender:              req.Sender,
@@ -103,6 +121,9 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
 		SpecialInstructions: req.SpecialInstructions,
+		ShipmentType:        shipmentType,
+		TimeWindow:          timeWindow,
+		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		Status:              model.StatusInProgress,
 		CurrentLocation:     currentLocation,
@@ -110,6 +131,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		UpdatedAt:           now,
 		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
 	}
+	setPriority(&shipment, prediction)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
 		Shipment:  shipment,
 		ChangedBy: req.CreatedBy,
@@ -148,6 +170,17 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
 	}
+
+	// Default values for optional fields
+	shipmentType := req.ShipmentType
+	if shipmentType == "" {
+		shipmentType = model.ShipmentTypeNormal
+	}
+	timeWindow := req.TimeWindow
+	if timeWindow == "" {
+		timeWindow = model.TimeWindowFlexible
+	}
+
 	shipment := model.Shipment{
 		TrackingID:          generateDraftID(),
 		Sender:              req.Sender,
@@ -156,6 +189,9 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
 		SpecialInstructions: req.SpecialInstructions,
+		ShipmentType:        shipmentType,
+		TimeWindow:          timeWindow,
+		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		Status:              model.StatusPending,
 		CurrentLocation:     currentLocation,
@@ -200,6 +236,9 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	existing.PackageType = req.PackageType
 	existing.IsFragile = req.IsFragile
 	existing.SpecialInstructions = req.SpecialInstructions
+	existing.ShipmentType = req.ShipmentType
+	existing.TimeWindow = req.TimeWindow
+	existing.ColdChain = req.ColdChain
 	existing.ReceivingBranchID = req.ReceivingBranchID
 	existing.UpdatedAt = time.Now().UTC()
 	// Prefer branch ID derived from receiving branch; fall back to origin city lookup.
@@ -272,16 +311,23 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 			return model.Shipment{}, err
 		}
 	}
+	var prediction *model.PriorityPrediction
+	if s.mlClient != nil {
+		prediction = s.mlClient.PredictFromShipment(draft)
+	}
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
 		DraftID:       draftID,
 		NewTrackingID: generateTrackingID(),
 		ChangedBy:     changedBy,
 		Notes:         "Shipment confirmed",
 		Timestamp:     time.Now().UTC(),
+		Prediction:    prediction,
 	})
 	if err != nil {
 		return model.Shipment{}, err
 	}
+	setPriority(&confirmed, prediction)
+
 	s.upsertParties(confirmed)
 	return confirmed, nil
 }
@@ -421,16 +467,68 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned || shipment.Status == model.StatusCancelled {
 		return model.Shipment{}, fmt.Errorf("cannot correct finalized shipments")
 	}
+	// Recompute priority if any ML-relevant field is being corrected.
+	var correctionPrediction *model.PriorityPrediction
+	if s.mlClient != nil {
+		c := req.Corrections
+		if c.ShipmentType != nil || c.TimeWindow != nil || c.ColdChain != nil ||
+			c.IsFragile != nil || c.OriginProvince != nil || c.DestinationProvince != nil {
+			// Build effective shipment: start from original, apply stored corrections,
+			// then layer the incoming corrections on top.
+			effective := shipment
+			if stored := shipment.Corrections; stored != nil {
+				if stored.ShipmentType != nil {
+					effective.ShipmentType = *stored.ShipmentType
+				}
+				if stored.TimeWindow != nil {
+					effective.TimeWindow = *stored.TimeWindow
+				}
+				if stored.ColdChain != nil {
+					effective.ColdChain = *stored.ColdChain == "true"
+				}
+				if stored.IsFragile != nil {
+					effective.IsFragile = *stored.IsFragile == "true"
+				}
+				if stored.OriginProvince != nil {
+					effective.Sender.Address.Province = *stored.OriginProvince
+				}
+				if stored.DestinationProvince != nil {
+					effective.Recipient.Address.Province = *stored.DestinationProvince
+				}
+			}
+			if c.ShipmentType != nil {
+				effective.ShipmentType = *c.ShipmentType
+			}
+			if c.TimeWindow != nil {
+				effective.TimeWindow = *c.TimeWindow
+			}
+			if c.ColdChain != nil {
+				effective.ColdChain = *c.ColdChain == "true"
+			}
+			if c.IsFragile != nil {
+				effective.IsFragile = *c.IsFragile == "true"
+			}
+			if c.OriginProvince != nil {
+				effective.Sender.Address.Province = *c.OriginProvince
+			}
+			if c.DestinationProvince != nil {
+				effective.Recipient.Address.Province = *c.DestinationProvince
+			}
+			correctionPrediction = s.mlClient.PredictFromShipment(effective)
+		}
+	}
 	updated, err := s.repo.ApplyCorrections(repository.CorrectCmd{
 		TrackingID:  trackingID,
 		Username:    username,
 		Status:      shipment.Status,
 		Corrections: req.Corrections,
 		Timestamp:   time.Now().UTC(),
+		Prediction:  correctionPrediction,
 	})
 	if err != nil {
 		return model.Shipment{}, err
 	}
+	setPriority(&updated, correctionPrediction)
 	for _, f := range req.Corrections.Fields() {
 		body := fmt.Sprintf("[Correction] %s. New value: %s", f.Label, f.Value)
 		_, _ = s.commentSvc.AddComment(trackingID, username, body)
