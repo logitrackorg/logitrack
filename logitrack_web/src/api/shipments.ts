@@ -66,7 +66,9 @@ export interface ShipmentEvent {
 export interface Stats {
   total: number;
   by_status: Record<ShipmentStatus, number>;
-  by_branch: Record<string, number>; // branch ID → active shipment count
+  by_branch: Record<string, number>;         // branch ID → active shipment count
+  by_day: Record<string, number>;            // YYYY-MM-DD → shipments created that day
+  by_day_delivered: Record<string, number>;  // YYYY-MM-DD → shipments delivered that day
 }
 
 export interface CreateShipmentPayload {
@@ -142,5 +144,6 @@ export const shipmentApi = {
     api.patch<Shipment>(`/shipments/${trackingId}/correct`, { corrections }).then((r) => r.data),
   cancelShipment: (trackingId: string, reason: string) =>
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
-  stats: () => api.get<Stats>("/stats").then((r) => r.data),
+  stats: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<Stats>("/stats", { params }).then((r) => r.data),
 };

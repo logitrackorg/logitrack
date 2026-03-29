@@ -794,8 +794,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Adds an internal note to a shipment. Only supervisor and admin.
-        Cannot add to delivered or returned shipments.
+      description: Adds an internal note to a shipment. Operator, supervisor, and
+        admin. Cannot add to delivered or returned shipments.
       parameters:
       - description: Shipment tracking ID
         in: path
@@ -883,7 +883,7 @@ paths:
       consumes:
       - application/json
       description: Non-destructively overrides shipment fields. Original data is preserved.
-        Each corrected field generates an auto-comment. Supervisor and admin only.
+        Each corrected field generates an auto-comment. Operator, supervisor, and admin only.
       parameters:
       - description: Shipment tracking ID
         in: path
@@ -1014,9 +1014,10 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Transitions a shipment through the state machine. Supervisor, admin,
-        and driver. Drivers are further restricted to shipments on their today's route
-        and may only set delivered or delivery_failed.
+      description: Transitions a shipment through the state machine. Operator, supervisor,
+        admin, and driver. Operators cannot transition from delivering status. Drivers
+        are further restricted to shipments on their today's route and may only set
+        delivered or delivery_failed.
       parameters:
       - description: Shipment tracking ID
         in: path

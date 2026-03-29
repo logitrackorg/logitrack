@@ -23,11 +23,17 @@ services:
       - "5432:5432"
     volumes:
       - logitrack_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U logitrack -d logitrack"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./logitrack_core
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       DB_HOST: db
       DB_PORT: 5432

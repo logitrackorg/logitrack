@@ -126,11 +126,14 @@ pending (draft) ──confirm──► in_progress ──► in_transit ──�
 - Non-driver roles (operator, supervisor, manager, admin): GET /shipments, /branches, /search, /customers
 - All roles including driver: GET /shipments/:id, /shipments/:id/events, /shipments/:id/comments
 - Operator + Supervisor + Admin: POST /shipments, /shipments/draft; PATCH /shipments/:id/draft; POST /shipments/:id/confirm
-- Supervisor + Admin: PATCH /shipments/:id/status, POST /shipments/:id/comments
-- Supervisor + Admin + Driver: PATCH /shipments/:id/status (driver further restricted in handler — see below)
+- Operator + Supervisor + Admin + Driver: PATCH /shipments/:id/status (operator and driver further restricted in handler — see below)
+- Operator + Supervisor + Admin: POST /shipments/:id/comments
 - Supervisor + Manager + Admin: GET /stats
 - Supervisor + Admin: GET /users/drivers
 - Driver only: GET /driver/route
+
+**Operator restrictions** (enforced in `handler/shipment.go UpdateStatus`):
+- Operators cannot update a shipment that is in `delivering` status — all transitions from `delivering` are reserved for supervisor, admin, and driver. Transitions to `delivered` from other states (e.g. `ready_for_pickup → delivered`) are allowed.
 
 **Driver restrictions** (enforced in `RouteService.ValidateDriverCanUpdateShipment`):
 - Drivers can only update shipments assigned to their today's route.
@@ -211,9 +214,9 @@ src/
 
 **Role-gated UI** uses `hasRole(...roles)` from `useAuth()`. Key gates:
 - `+ New Shipment` button: hidden from managers
-- Status update panel in `ShipmentDetail`: only supervisor + admin
+- Status update panel in `ShipmentDetail`: operator + supervisor + admin
 - Dashboard nav link: only supervisor + manager + admin
-- `✏️ Edit data` button in `ShipmentDetail`: only supervisor + admin, hidden on `pending`/`delivered`/`returned`/`cancelled`
+- `✏️ Edit data` button in `ShipmentDetail`: operator + supervisor + admin, hidden on `pending`/`delivered`/`returned`/`cancelled`
 - `Cancel shipment` button in `ShipmentDetail`: only supervisor + admin, hidden on `pending` and terminal states (`delivered`, `returned`, `cancelled`)
 
 **Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name).
@@ -344,10 +347,10 @@ Customers from all shipments are auto-upserted into the customer repository for 
 | POST | /api/v1/shipments/draft | Bearer | operator, supervisor, admin | Create draft shipment |
 | PATCH | /api/v1/shipments/:tracking_id/draft | Bearer | operator, supervisor, admin | Update draft |
 | POST | /api/v1/shipments/:tracking_id/confirm | Bearer | operator, supervisor, admin | Confirm draft → in_progress |
-| PATCH | /api/v1/shipments/:tracking_id/status | Bearer | supervisor, admin, driver | Update shipment status |
-| PATCH | /api/v1/shipments/:tracking_id/correct | Bearer | supervisor, admin | Apply non-destructive field corrections |
+| PATCH | /api/v1/shipments/:tracking_id/status | Bearer | operator, supervisor, admin, driver | Update shipment status |
+| PATCH | /api/v1/shipments/:tracking_id/correct | Bearer | operator, supervisor, admin | Apply non-destructive field corrections |
 | POST | /api/v1/shipments/:tracking_id/cancel | Bearer | supervisor, admin | Cancel shipment (body: `reason` required) |
-| POST | /api/v1/shipments/:tracking_id/comments | Bearer | supervisor, admin | Add comment |
+| POST | /api/v1/shipments/:tracking_id/comments | Bearer | operator, supervisor, admin | Add comment |
 | GET | /api/v1/stats | Bearer | supervisor, manager, admin | Dashboard stats |
 | GET | /api/v1/users/drivers | Bearer | supervisor, admin | List driver users |
 | GET | /api/v1/customers?dni=X | Bearer | non-driver | Customer lookup by DNI |

@@ -112,17 +112,19 @@ func main() {
 
 	// Comments — read: all authenticated, write: supervisor/admin
 	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
-	canComment := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	canComment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
 
-	// Correct shipment data (non-destructive) — supervisor, admin
-	protected.PATCH("/shipments/:tracking_id/correct", canComment, shipmentHandler.CorrectShipment)
+	// Correct shipment data (non-destructive) — operator, supervisor, admin
+	canCorrect := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.PATCH("/shipments/:tracking_id/correct", canCorrect, shipmentHandler.CorrectShipment)
 
 	// Cancel shipment — supervisor, admin
-	protected.POST("/shipments/:tracking_id/cancel", canComment, shipmentHandler.CancelShipment)
+	canCancel := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/:tracking_id/cancel", canCancel, shipmentHandler.CancelShipment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
-	canChangeStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
+	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
 	// Stats / dashboard — supervisor, manager, admin
