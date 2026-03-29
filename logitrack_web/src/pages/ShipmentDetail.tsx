@@ -112,7 +112,7 @@ export function ShipmentDetail() {
   useEffect(() => {
     reload();
     branchApi.list().then(setBranches);
-    if (hasRole("supervisor", "admin")) {
+    if (hasRole("supervisor", "admin", "operator")) {
       usersApi.listDrivers().then(setDrivers);
     }
   }, [trackingId]);
@@ -281,6 +281,8 @@ export function ShipmentDetail() {
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
   const nextStatuses = TRANSITIONS[shipment.status].filter(
     (s) => s !== "ready_for_return" || isAtOriginBranch
+  ).filter(
+    () => !hasRole("operator") || shipment.status !== "delivering"
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
@@ -300,7 +302,7 @@ export function ShipmentDetail() {
           <code style={{ fontSize: 22 }}>{shipment.tracking_id}</code>
         </h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
+          {hasRole("supervisor", "admin", "operator") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
             <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
               ✏️ Edit data
             </button>
@@ -391,7 +393,7 @@ export function ShipmentDetail() {
       )}
 
       {/* Status update — supervisor and admin only */}
-      {nextStatuses.length > 0 && hasRole("supervisor", "admin") && (
+      {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Update Status</h2>
           <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
@@ -552,7 +554,7 @@ export function ShipmentDetail() {
       <div style={{ position: "sticky", top: 24 }}>
         <div style={{ ...cardStyle }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
-          {hasRole("supervisor", "admin") && shipment.status !== "delivered" && shipment.status !== "returned" && (
+          {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && (
             <div style={{ marginBottom: 12 }}>
               <textarea
                 value={newComment}

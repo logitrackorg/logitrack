@@ -30,8 +30,8 @@ El Supervisor es el rol operativo de mayor alcance sobre los envíos. Puede real
 | Confirmar borrador (`POST /shipments/:id/confirm`)          | operator, supervisor, admin                    |
 | Cambiar estado de un envío (`PATCH /shipments/:id/status`)  | supervisor, admin (driver con restricciones)   |
 | Cancelar un envío (`POST /shipments/:id/cancel`)            | supervisor, admin                              |
-| Corregir datos de un envío (`PATCH /shipments/:id/correct`) | supervisor, admin                              |
-| Agregar comentario a un envío                               | supervisor, admin                              |
+| Corregir datos de un envío (`PATCH /shipments/:id/correct`) | operator, supervisor, admin                    |
+| Agregar comentario a un envío                               | operator, supervisor, admin                    |
 | Asignar chofer al mover a `delivering`                      | supervisor, admin                              |
 | Ver lista de choferes (`GET /users/drivers`)                | supervisor, admin                              |
 | Ver estadísticas / dashboard                                | supervisor, manager, admin                     |

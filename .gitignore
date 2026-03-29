@@ -19,6 +19,9 @@
 logitrack_core/bin/
 logitrack_core/dist/
 logitrack_core/docs/
+logitrack_core/server_linux
+logitrack_core/server_darwin
+logitrack_core/server_windows.exe
 
 # ── Node / Frontend (logitrack_web) ───────────────────────────────────────────
 node_modules/

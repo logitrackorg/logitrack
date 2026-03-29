@@ -3,11 +3,11 @@
 **Estado:** Implementada
 
 ## Actor principal
-Supervisor, Admin (vía `ShipmentDetail`).
+Operator, Supervisor, Admin (vía `ShipmentDetail`).
 Driver (vía `DriverRoute` / `DriverShipmentDetail`, con restricciones adicionales).
 
 ## Descripción
-El supervisor puede avanzar el estado de un envío a través de las transiciones válidas del proceso logístico. Cada cambio queda registrado en el historial con fecha, hora y usuario que lo realizó.
+El operador, supervisor y admin pueden avanzar el estado de un envío a través de las transiciones válidas del proceso logístico. Cada cambio queda registrado en el historial con fecha, hora y usuario que lo realizó.
 
 ---
 
@@ -68,6 +68,7 @@ pending ──[confirmar]──► in_progress ──► in_transit ──► at
 10. `→ delivered` **no** actualiza `current_location` (el paquete ya no está en ninguna sucursal).
 11. Toda validación ocurre **antes** de escribir en el repositorio — estado nunca queda corrupto.
 12. El driver solo puede cambiar estado de envíos asignados a su ruta del día (validado en handler).
+13. El operator no puede ejecutar ninguna transición desde `delivering` (validado en handler: se obtiene el estado actual y se rechaza con 403 si es `delivering`). La transición `ready_for_pickup → delivered` sí está permitida para operator.
 
 ---
 
@@ -98,8 +99,8 @@ pending ──[confirmar]──► in_progress ──► in_transit ──► at
 ### CA03 — El frontend solo muestra las transiciones válidas
 
 **Dado** un envío en estado `at_branch`
-**Y** el usuario es supervisor o admin
-**Cuando** el supervisor abre `ShipmentDetail`
+**Y** el usuario es operator, supervisor o admin
+**Cuando** el usuario abre `ShipmentDetail`
 **Entonces** el panel "Update Status" muestra exactamente los botones: `In Transit`, `Delivering`, `Ready for Pickup`, `Ready for Return`
 **Y** no hay botón para estados no permitidos (ej: `Delivered`, `Returned`)
 
@@ -136,8 +137,26 @@ pending ──[confirmar]──► in_progress ──► in_transit ──► at
 
 ---
 
-### CA07 — Operador no puede cambiar estado
+### CA07 — Operador puede cambiar estado (excepto delivered)
 
 **Dado** un usuario con rol `operator`
-**Cuando** intenta `PATCH /shipments/:id/status`
-**Entonces** el servidor responde 403 Forbidden
+**Cuando** hace `PATCH /shipments/:id/status` con una transición válida distinta de `delivered`
+**Entonces** el servidor responde `200 OK` con el envío actualizado
+**Y** se registra un `ShipmentEvent` con `changed_by` igual al usuario operator
+
+---
+
+### CA08 — Operador no puede confirmar entrega
+
+**Dado** un usuario con rol `operator` y un envío en `delivering`
+**Cuando** hace `PATCH /shipments/:id/status` con cualquier estado destino
+**Entonces** el servidor responde `403 Forbidden`
+**Y** el estado del envío no cambia
+
+---
+
+### CA09 — Operador confirma retiro en sucursal
+
+**Dado** un usuario con rol `operator` y un envío en `ready_for_pickup`
+**Cuando** hace `PATCH /shipments/:id/status` con `{ "status": "delivered", "recipient_dni": "..." }` correcto
+**Entonces** el servidor responde `200 OK` con `status: delivered`
