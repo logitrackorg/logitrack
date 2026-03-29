@@ -282,7 +282,7 @@ export function ShipmentDetail() {
   const nextStatuses = TRANSITIONS[shipment.status].filter(
     (s) => s !== "ready_for_return" || isAtOriginBranch
   ).filter(
-    (s) => !hasRole("operator") || s !== "delivered"
+    (s) => !hasRole("operator") || shipment.status !== "delivering" || s !== "delivered"
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>

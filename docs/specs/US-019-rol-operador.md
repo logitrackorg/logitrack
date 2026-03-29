@@ -8,7 +8,7 @@
 
 ## Descripción del rol
 
-El Operador es el rol operativo principal del sistema. Puede crear envíos (directos o borradores), confirmar borradores, cambiar el estado de envíos confirmados y agregar comentarios. No puede ejecutar la transición `delivering → delivered` (confirmar entrega al destinatario), cancelar envíos, corregir datos ni acceder al dashboard de estadísticas.
+El Operador es el rol operativo principal del sistema. Puede crear envíos (directos o borradores), confirmar borradores, cambiar el estado de envíos confirmados y agregar comentarios. No puede ejecutar la transición `delivering → delivered` (confirmar entrega tras intento de última milla), cancelar envíos, corregir datos ni acceder al dashboard de estadísticas. Sí puede ejecutar `ready_for_pickup → delivered` (retiro en sucursal).
 
 > **Estado de implementación**
 > El rol Operador y todas sus capacidades están completamente implementados.
@@ -30,7 +30,8 @@ El Operador es el rol operativo principal del sistema. Puede crear envíos (dire
 | Editar borrador (`PATCH /shipments/:id/draft`)      | operator, supervisor, admin          |
 | Confirmar borrador (`POST /shipments/:id/confirm`)  | operator, supervisor, admin          |
 | Cambiar estado de un envío confirmado               | operator, supervisor, admin, driver  |
-| Confirmar entrega (`delivering → delivered`)        | supervisor, admin, driver — **no operator** |
+| Confirmar entrega tras última milla (`delivering → delivered`) | supervisor, admin, driver — **no operator** |
+| Confirmar retiro en sucursal (`ready_for_pickup → delivered`)  | operator, supervisor, admin, driver         |
 | Cancelar un envío                                   | supervisor, admin — **no operator**  |
 | Corregir datos de un envío                          | supervisor, admin — **no operator**  |
 | Agregar comentario a un envío                       | operator, supervisor, admin          |
@@ -43,7 +44,7 @@ El Operador es el rol operativo principal del sistema. Puede crear envíos (dire
 ## Comportamiento del frontend
 
 1. El botón **"+ New Shipment"** es visible para el Operador.
-2. El panel de actualización de estado en `ShipmentDetail` **es visible** para el Operador, pero la opción `Delivered` **no aparece** en el selector (filtrada client-side).
+2. El panel de actualización de estado en `ShipmentDetail` **es visible** para el Operador. Cuando el envío está en `delivering`, la opción `Delivered` **no aparece** en el selector (filtrada client-side). En otros estados que permiten `→ delivered` (ej. `ready_for_pickup`), la opción sí aparece.
 3. El botón **"✏️ Edit data"** (corrección de datos) **no se muestra** para el Operador.
 4. El botón **"Cancel shipment"** **no se muestra** para el Operador.
 5. El Operador puede ver y escribir comentarios en envíos no finalizados.
@@ -132,13 +133,20 @@ POST /api/v1/shipments/DRAFT-XXXXXXXX/confirm
 - **Entonces** responde `200 OK` con el envío actualizado
 - **Y** se registra un `ShipmentEvent` con `changed_by` igual al usuario operator
 
-### CA7d — Operador intenta confirmar una entrega (delivering → delivered)
+### CA7d — Operador intenta confirmar entrega desde delivering
 
 - **Dado** que el envío está en `delivering`
 - **Cuando** el Operador hace `PATCH /api/v1/shipments/:id/status` con `{ "status": "delivered", "recipient_dni": "..." }`
 - **Entonces** responde `403 Forbidden`
 - **Y** el estado del envío no cambia
-- **Y** en el frontend la opción `Delivered` no aparece en el panel de actualización de estado
+- **Y** en el frontend la opción `Delivered` no aparece en el selector
+
+### CA7e — Operador confirma retiro en sucursal (ready_for_pickup → delivered)
+
+- **Dado** que el envío está en `ready_for_pickup`
+- **Cuando** el Operador hace `PATCH /api/v1/shipments/:id/status` con `{ "status": "delivered", "recipient_dni": "..." }` correcto
+- **Entonces** responde `200 OK` con `status: delivered`
+- **Y** en el frontend la opción `Delivered` sí aparece en el selector
 
 ### CA7b — Operador intenta cancelar un envío
 

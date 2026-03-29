@@ -68,7 +68,7 @@ pending ──[confirmar]──► in_progress ──► in_transit ──► at
 10. `→ delivered` **no** actualiza `current_location` (el paquete ya no está en ninguna sucursal).
 11. Toda validación ocurre **antes** de escribir en el repositorio — estado nunca queda corrupto.
 12. El driver solo puede cambiar estado de envíos asignados a su ruta del día (validado en handler).
-13. El operator no puede ejecutar `delivering → delivered`; esa transición es exclusiva de supervisor, admin y driver (validado en handler).
+13. El operator no puede ejecutar `delivering → delivered` (validado en handler: se obtiene el estado actual del envío y se rechaza con 403 si es `delivering`). La transición `ready_for_pickup → delivered` sí está permitida para operator.
 
 ---
 
@@ -152,3 +152,11 @@ pending ──[confirmar]──► in_progress ──► in_transit ──► at
 **Cuando** hace `PATCH /shipments/:id/status` con `{ "status": "delivered" }`
 **Entonces** el servidor responde `403 Forbidden`
 **Y** el estado del envío no cambia
+
+---
+
+### CA09 — Operador confirma retiro en sucursal
+
+**Dado** un usuario con rol `operator` y un envío en `ready_for_pickup`
+**Cuando** hace `PATCH /shipments/:id/status` con `{ "status": "delivered", "recipient_dni": "..." }` correcto
+**Entonces** el servidor responde `200 OK` con `status: delivered`
