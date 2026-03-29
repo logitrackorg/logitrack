@@ -64,6 +64,7 @@ export function Dashboard() {
             value={stats?.by_status?.[s] ?? 0}
             color={statusConfig[s].color}
             bg={statusConfig[s].bg}
+            onClick={() => navigate(`/?status=${s}`)}
           />
         ))}
       </div>
@@ -295,12 +296,36 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
   );
 }
 
-function StatCard({ label, value, color, bg }: { label: string; value: number; color: string; bg: string }) {
+function StatCard({
+  label,
+  value,
+  color,
+  bg,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  bg: string;
+  onClick?: () => void;
+}) {
   return (
-    <div style={{ background: bg, borderRadius: 10, padding: "16px 20px" }}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        background: bg,
+        borderRadius: 10,
+        padding: "16px 20px",
+        width: "100%",
+        border: "none",
+        textAlign: "left",
+        cursor: onClick ? "pointer" : "default",
+      }}
+    >
       <div style={{ fontSize: 28, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 13, color, opacity: 0.8, marginTop: 4 }}>{label}</div>
-    </div>
+    </button>
   );
 }
 
