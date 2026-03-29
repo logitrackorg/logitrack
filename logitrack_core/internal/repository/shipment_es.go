@@ -74,6 +74,7 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 		Payload: model.DraftConfirmedPayload{
 			OldTrackingID: cmd.DraftID,
 			NewTrackingID: cmd.NewTrackingID,
+			Prediction:    cmd.Prediction,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -118,6 +119,7 @@ func (r *eventSourcedShipmentRepository) ApplyCorrections(cmd CorrectCmd) (model
 		Payload: model.ShipmentCorrectedPayload{
 			Status:      cmd.Status,
 			Corrections: cmd.Corrections,
+			Prediction:  cmd.Prediction,
 		},
 		ChangedBy: cmd.Username,
 		Timestamp: cmd.Timestamp,

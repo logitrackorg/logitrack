@@ -43,6 +43,7 @@ type DraftUpdatedPayload struct {
 type DraftConfirmedPayload struct {
 	OldTrackingID string
 	NewTrackingID string
+	Prediction    *PriorityPrediction
 }
 
 type StatusChangedPayload struct {
@@ -56,6 +57,7 @@ type StatusChangedPayload struct {
 type ShipmentCorrectedPayload struct {
 	Status      Status // current status (unchanged by correction)
 	Corrections ShipmentCorrections
+	Prediction  *PriorityPrediction
 }
 
 type ShipmentCancelledPayload struct {

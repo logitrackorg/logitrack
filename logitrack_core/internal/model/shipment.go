@@ -33,6 +33,21 @@ type Address struct {
 	PostalCode string `json:"postal_code,omitempty"`
 }
 
+type ShipmentType string
+
+const (
+	ShipmentTypeNormal  ShipmentType = "normal"
+	ShipmentTypeExpress ShipmentType = "express"
+)
+
+type TimeWindow string
+
+const (
+	TimeWindowMorning   TimeWindow = "morning"
+	TimeWindowAfternoon TimeWindow = "afternoon"
+	TimeWindowFlexible  TimeWindow = "flexible"
+)
+
 type Shipment struct {
 	TrackingID string `json:"tracking_id"`
 
@@ -45,8 +60,19 @@ type Shipment struct {
 	IsFragile           bool        `json:"is_fragile,omitempty"`
 	SpecialInstructions string      `json:"special_instructions,omitempty"`
 
+	// Shipment attributes
+	ShipmentType ShipmentType `json:"shipment_type,omitempty"` // normal / express
+	TimeWindow   TimeWindow   `json:"time_window,omitempty"`   // morning / afternoon / flexible
+	ColdChain    bool         `json:"cold_chain,omitempty"`    // requires refrigeration
+
 	// Receiving branch
 	ReceivingBranchID string `json:"receiving_branch_id,omitempty"`
+
+	// Priority (set by ML service on create/confirm)
+	Priority           string                  `json:"priority,omitempty"`            // alta / media / baja
+	PriorityScore      float64                 `json:"priority_score,omitempty"`      // 0.0-1.0 weighted score
+	PriorityConfidence float64                 `json:"priority_confidence,omitempty"` // 0.0-1.0 forest vote share
+	PriorityFactors    map[string]FactorDetail `json:"priority_factors,omitempty"`    // per-factor breakdown
 
 	// Status & dates
 	Status              Status     `json:"status"`
@@ -63,25 +89,29 @@ type Shipment struct {
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
 // Only non-nil fields have been corrected; original values are always preserved in Shipment.
 type ShipmentCorrections struct {
-	SenderName            *string      `json:"sender_name,omitempty"`
-	SenderPhone           *string      `json:"sender_phone,omitempty"`
-	SenderEmail           *string      `json:"sender_email,omitempty"`
-	SenderDNI             *string      `json:"sender_dni,omitempty"`
-	OriginStreet          *string      `json:"origin_street,omitempty"`
-	OriginCity            *string      `json:"origin_city,omitempty"`
-	OriginProvince        *string      `json:"origin_province,omitempty"`
-	OriginPostalCode      *string      `json:"origin_postal_code,omitempty"`
-	RecipientName         *string      `json:"recipient_name,omitempty"`
-	RecipientPhone        *string      `json:"recipient_phone,omitempty"`
-	RecipientEmail        *string      `json:"recipient_email,omitempty"`
-	RecipientDNI          *string      `json:"recipient_dni,omitempty"`
-	DestinationStreet     *string      `json:"destination_street,omitempty"`
-	DestinationCity       *string      `json:"destination_city,omitempty"`
-	DestinationProvince   *string      `json:"destination_province,omitempty"`
-	DestinationPostalCode *string      `json:"destination_postal_code,omitempty"`
-	WeightKg              *string      `json:"weight_kg,omitempty"`
-	PackageType           *PackageType `json:"package_type,omitempty"`
-	SpecialInstructions   *string      `json:"special_instructions,omitempty"`
+	SenderName            *string       `json:"sender_name,omitempty"`
+	SenderPhone           *string       `json:"sender_phone,omitempty"`
+	SenderEmail           *string       `json:"sender_email,omitempty"`
+	SenderDNI             *string       `json:"sender_dni,omitempty"`
+	OriginStreet          *string       `json:"origin_street,omitempty"`
+	OriginCity            *string       `json:"origin_city,omitempty"`
+	OriginProvince        *string       `json:"origin_province,omitempty"`
+	OriginPostalCode      *string       `json:"origin_postal_code,omitempty"`
+	RecipientName         *string       `json:"recipient_name,omitempty"`
+	RecipientPhone        *string       `json:"recipient_phone,omitempty"`
+	RecipientEmail        *string       `json:"recipient_email,omitempty"`
+	RecipientDNI          *string       `json:"recipient_dni,omitempty"`
+	DestinationStreet     *string       `json:"destination_street,omitempty"`
+	DestinationCity       *string       `json:"destination_city,omitempty"`
+	DestinationProvince   *string       `json:"destination_province,omitempty"`
+	DestinationPostalCode *string       `json:"destination_postal_code,omitempty"`
+	WeightKg              *string       `json:"weight_kg,omitempty"`
+	PackageType           *PackageType  `json:"package_type,omitempty"`
+	SpecialInstructions   *string       `json:"special_instructions,omitempty"`
+	ShipmentType          *ShipmentType `json:"shipment_type,omitempty"`
+	TimeWindow            *TimeWindow   `json:"time_window,omitempty"`
+	ColdChain             *string       `json:"cold_chain,omitempty"` // "true" / "false"
+	IsFragile             *string       `json:"is_fragile,omitempty"` // "true" / "false"
 }
 
 // CorrectedField pairs a human-readable label with its corrected value, used for auto-comments.
@@ -119,6 +149,14 @@ func (c ShipmentCorrections) Fields() []CorrectedField {
 		fields = append(fields, CorrectedField{Label: "Package type", Value: string(*c.PackageType)})
 	}
 	str(c.SpecialInstructions, "Special instructions")
+	if c.ShipmentType != nil {
+		fields = append(fields, CorrectedField{Label: "Shipment type", Value: string(*c.ShipmentType)})
+	}
+	if c.TimeWindow != nil {
+		fields = append(fields, CorrectedField{Label: "Time window", Value: string(*c.TimeWindow)})
+	}
+	str(c.ColdChain, "Cold chain")
+	str(c.IsFragile, "Fragile")
 	return fields
 }
 
@@ -183,6 +221,18 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	if incoming.PackageType != nil {
 		base.PackageType = incoming.PackageType
 	}
+	if incoming.ShipmentType != nil {
+		base.ShipmentType = incoming.ShipmentType
+	}
+	if incoming.TimeWindow != nil {
+		base.TimeWindow = incoming.TimeWindow
+	}
+	if incoming.ColdChain != nil {
+		base.ColdChain = incoming.ColdChain
+	}
+	if incoming.IsFragile != nil {
+		base.IsFragile = incoming.IsFragile
+	}
 	if incoming.SpecialInstructions != nil {
 		base.SpecialInstructions = incoming.SpecialInstructions
 	}
@@ -192,12 +242,15 @@ type CreateShipmentRequest struct {
 	Sender    Customer `json:"sender"    binding:"required"`
 	Recipient Customer `json:"recipient" binding:"required"`
 
-	WeightKg            float64     `json:"weight_kg"           binding:"required,gt=0"`
-	PackageType         PackageType `json:"package_type"        binding:"required"`
-	IsFragile           bool        `json:"is_fragile"`
-	SpecialInstructions string      `json:"special_instructions"`
-	ReceivingBranchID   string      `json:"receiving_branch_id" binding:"required"`
-	CreatedBy           string      `json:"created_by"`
+	WeightKg            float64      `json:"weight_kg"           binding:"required,gt=0"`
+	PackageType         PackageType  `json:"package_type"        binding:"required"`
+	IsFragile           bool         `json:"is_fragile"`
+	SpecialInstructions string       `json:"special_instructions"`
+	ShipmentType        ShipmentType `json:"shipment_type"`
+	TimeWindow          TimeWindow   `json:"time_window"`
+	ColdChain           bool         `json:"cold_chain"`
+	ReceivingBranchID   string       `json:"receiving_branch_id" binding:"required"`
+	CreatedBy           string       `json:"created_by"`
 }
 
 // ShipmentFilter holds optional query filters for listing shipments.
@@ -217,10 +270,13 @@ type SaveDraftRequest struct {
 	Sender    Customer `json:"sender"`
 	Recipient Customer `json:"recipient"`
 
-	WeightKg            float64     `json:"weight_kg"`
-	PackageType         PackageType `json:"package_type"`
-	IsFragile           bool        `json:"is_fragile"`
-	SpecialInstructions string      `json:"special_instructions"`
-	ReceivingBranchID   string      `json:"receiving_branch_id"`
-	CreatedBy           string      `json:"created_by"`
+	WeightKg            float64      `json:"weight_kg"`
+	PackageType         PackageType  `json:"package_type"`
+	IsFragile           bool         `json:"is_fragile"`
+	SpecialInstructions string       `json:"special_instructions"`
+	ShipmentType        ShipmentType `json:"shipment_type"`
+	TimeWindow          TimeWindow   `json:"time_window"`
+	ColdChain           bool         `json:"cold_chain"`
+	ReceivingBranchID   string       `json:"receiving_branch_id"`
+	CreatedBy           string       `json:"created_by"`
 }

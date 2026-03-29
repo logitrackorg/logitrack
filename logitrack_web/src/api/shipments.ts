@@ -25,6 +25,16 @@ api.interceptors.response.use(
 
 export type ShipmentStatus = "pending" | "in_progress" | "in_transit" | "at_branch" | "delivering" | "delivery_failed" | "delivered" | "ready_for_pickup" | "ready_for_return" | "returned" | "cancelled";
 export type PackageType = "envelope" | "box" | "pallet";
+export type ShipmentType = "normal" | "express";
+export type TimeWindow = "morning" | "afternoon" | "flexible";
+export type Priority = "alta" | "media" | "baja";
+
+export interface PriorityFactorDetail {
+  value: string | number;
+  normalized: number;
+  weight: number;
+  contribution: number;
+}
 
 export interface Address {
   street?: string;
@@ -41,6 +51,13 @@ export interface Shipment {
   package_type: PackageType;
   is_fragile?: boolean;
   special_instructions?: string;
+  shipment_type?: ShipmentType;
+  time_window?: TimeWindow;
+  cold_chain?: boolean;
+  priority?: Priority;
+  priority_score?: number;
+  priority_confidence?: number;
+  priority_factors?: Record<string, PriorityFactorDetail>;
   receiving_branch_id?: string;
   current_location?: string; // branch ID of current location
   status: ShipmentStatus;
@@ -78,6 +95,9 @@ export interface CreateShipmentPayload {
   package_type: PackageType;
   is_fragile?: boolean;
   special_instructions?: string;
+  shipment_type?: ShipmentType;
+  time_window?: TimeWindow;
+  cold_chain?: boolean;
   receiving_branch_id: string;
   created_by?: string;
 }
@@ -90,6 +110,9 @@ export interface SaveDraftPayload {
   package_type?: PackageType;
   is_fragile?: boolean;
   special_instructions?: string;
+  shipment_type?: ShipmentType;
+  time_window?: TimeWindow;
+  cold_chain?: boolean;
   receiving_branch_id?: string;
   created_by?: string;
 }
