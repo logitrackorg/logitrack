@@ -47,7 +47,7 @@ func main() {
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
 	branchRepo := repository.NewInMemoryBranchRepository()
-	vehicleRepo := repository.NewInMemoryVehicleRepository()
+	vehicleRepo := repository.NewPostgresVehicleRepository(database)
 	routeRepo := repository.NewPostgresRouteRepository(database)
 	customerRepo := repository.NewPostgresCustomerRepository(database)
 
