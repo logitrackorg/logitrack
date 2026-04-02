@@ -47,6 +47,7 @@ func main() {
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
 	branchRepo := repository.NewInMemoryBranchRepository()
+	vehicleRepo := repository.NewInMemoryVehicleRepository()
 	routeRepo := repository.NewPostgresRouteRepository(database)
 	customerRepo := repository.NewPostgresCustomerRepository(database)
 
@@ -72,6 +73,7 @@ func main() {
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
+	vehicleHandler := handler.NewVehicleHandler(vehicleRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
@@ -99,6 +101,11 @@ func main() {
 	// Branches — non-driver roles
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
+
+	// Vehicles — list: non-driver roles, create: admin only
+	protected.GET("/vehicles", nonDriver, vehicleHandler.List)
+	canCreateVehicle := middleware.RequireRoles(model.RoleAdmin)
+	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
 
 	// Shipments list/search — non-driver roles only
 	protected.GET("/shipments", nonDriver, shipmentHandler.List)
