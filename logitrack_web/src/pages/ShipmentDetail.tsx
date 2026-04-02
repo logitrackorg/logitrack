@@ -9,6 +9,7 @@ import {
   type ShipmentComment,
 } from "../api/shipments";
 import { usersApi } from "../api/users";
+import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import type { User } from "../api/auth";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
@@ -85,6 +86,8 @@ export function ShipmentDetail() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [assignedVehicle, setAssignedVehicle] = useState<VehicleStatusResponse | null>(null);
+  const [loadingVehicle, setLoadingVehicle] = useState(false);
   const reload = async () => {
     if (!trackingId) return;
     try {
@@ -110,8 +113,22 @@ export function ShipmentDetail() {
           cold_chain: s.cold_chain ?? false,
         });
       }
+      // Load assigned vehicle
+      loadAssignedVehicle(trackingId);
     } catch {
       setError("Shipment not found.");
+    }
+  };
+
+  const loadAssignedVehicle = async (tid: string) => {
+    setLoadingVehicle(true);
+    try {
+      const v = await vehicleApi.getByShipment(tid);
+      setAssignedVehicle(v);
+    } catch {
+      setAssignedVehicle(null);
+    } finally {
+      setLoadingVehicle(false);
     }
   };
 
@@ -569,8 +586,68 @@ export function ShipmentDetail() {
       </div>{/* end maxWidth wrapper */}
       </div>{/* end left column */}
 
-      {/* ── Right column: Comments ── */}
+      {/* ── Right column: Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
+        {/* Vehicle Card */}
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo Asignado</h2>
+          {loadingVehicle ? (
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Cargando...</p>
+          ) : assignedVehicle ? (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 10,
+                  background: "#10b98120",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}>
+                  <svg style={{ width: 24, height: 24, color: "#10b981" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 }}>{assignedVehicle.license_plate}</p>
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+                    {assignedVehicle.type === "motocicleta" ? "Motocicleta" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : assignedVehicle.type === "camion" ? "Camión" : "Camión Grande"} · {assignedVehicle.capacity_kg} kg
+                  </p>
+                </div>
+                <div style={{
+                  padding: "4px 10px", borderRadius: 9999,
+                  background: "#10b98120",
+                  fontSize: 11, fontWeight: 600, color: "#10b981",
+                }}>
+                  {assignedVehicle.status_label}
+                </div>
+              </div>
+              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+                  <div>
+                    <span style={{ color: "#6b7280" }}>ID: </span>
+                    <span style={{ fontWeight: 600, color: "#374151" }}>#{assignedVehicle.id}</span>
+                  </div>
+                  {assignedVehicle.updated_by && (
+                    <div>
+                      <span style={{ color: "#6b7280" }}>Por: </span>
+                      <span style={{ fontWeight: 600, color: "#374151" }}>{assignedVehicle.updated_by}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <svg style={{ width: 32, height: 32, color: "#9ca3af", margin: "0 auto 8px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
+              </svg>
+              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Sin vehículo asignado</p>
+            </div>
+          )}
+        </div>
+
+        {/* Comments Card */}
         <div style={{ ...cardStyle }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && (

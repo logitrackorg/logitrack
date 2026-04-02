@@ -109,6 +109,7 @@ func main() {
 	canCreateVehicle := middleware.RequireRoles(model.RoleAdmin)
 	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
 	protected.GET("/vehicles/by-plate/:plate", canViewVehicleStatus, vehicleHandler.GetByPlate)
+	protected.GET("/vehicles/by-shipment/:trackingId", canViewVehicleStatus, vehicleHandler.GetByShipment)
 	protected.PATCH("/vehicles/by-plate/:plate/status", canViewVehicleStatus, vehicleHandler.UpdateStatusByPlate)
 	protected.POST("/vehicles/by-plate/:plate/assign", canViewVehicleStatus, vehicleHandler.AssignToShipment)
 

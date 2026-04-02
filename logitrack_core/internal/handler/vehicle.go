@@ -26,6 +26,7 @@ func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/vehicles", h.Create)
 	r.GET("/vehicles/available", h.ListAvailable)
 	r.GET("/vehicles/by-plate/:plate", h.GetByPlate)
+	r.GET("/vehicles/by-shipment/:trackingId", h.GetByShipment)
 	r.PATCH("/vehicles/by-plate/:plate/status", h.UpdateStatusByPlate)
 	r.POST("/vehicles/by-plate/:plate/assign", h.AssignToShipment)
 }
@@ -410,6 +411,49 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// GetByShipment returns the vehicle assigned to a specific shipment.
+//
+// @Summary      Get vehicle by shipment tracking ID
+// @Description  Returns the vehicle assigned to a shipment. Returns 404 if no vehicle is assigned.
+// @Tags         vehicles
+// @Produce      json
+// @Security     BearerAuth
+// @Param        trackingId  path      string  true  "Shipment tracking ID"
+// @Success      200         {object}  model.Vehicle
+// @Failure      401         {object}  map[string]string
+// @Failure      403         {object}  map[string]string
+// @Failure      404         {object}  map[string]string
+// @Router       /vehicles/by-shipment/{trackingId} [get]
+func (h *VehicleHandler) GetByShipment(c *gin.Context) {
+	trackingId := c.Param("trackingId")
+	if trackingId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El tracking ID es obligatorio"})
+		return
+	}
+
+	// Search through all vehicles for one assigned to this shipment
+	vehicles := h.repo.List()
+	for _, v := range vehicles {
+		if v.AssignedShipment != nil && *v.AssignedShipment == trackingId {
+			response := gin.H{
+				"id":                v.ID,
+				"license_plate":     v.LicensePlate,
+				"type":              v.Type,
+				"capacity_kg":       v.CapacityKg,
+				"status":            v.Status,
+				"status_label":      getStatusLabel(v.Status),
+				"updated_at":        v.UpdatedAt,
+				"updated_by":        v.UpdatedBy,
+				"assigned_shipment": v.AssignedShipment,
+			}
+			c.JSON(http.StatusOK, response)
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "No hay un vehículo asignado a este envío"})
 }
 
 // AssignShipmentRequest is the request body for assigning a vehicle to a shipment.

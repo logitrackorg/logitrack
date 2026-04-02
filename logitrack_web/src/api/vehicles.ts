@@ -76,4 +76,6 @@ export const vehicleApi = {
   },
   assignToShipment: (plate: string, data: AssignVehicleRequest) =>
     api.post<AssignVehicleResponse>(`/vehicles/by-plate/${plate}/assign`, data).then((r) => r.data),
+  getByShipment: (trackingId: string) =>
+    api.get<VehicleStatusResponse>(`/vehicles/by-shipment/${trackingId}`).then((r) => r.data),
 };
