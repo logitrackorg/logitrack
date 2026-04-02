@@ -13,6 +13,7 @@ import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { VehicleStatus } from "./pages/VehicleStatus";
 import { AvailableVehicles } from "./pages/AvailableVehicles";
+import { VehicleAssignment } from "./pages/VehicleAssignment";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operator",
@@ -47,6 +48,7 @@ function Nav() {
           <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
           <NavLink to="/vehicle-status" style={navStyle}>Consulta Vehículo</NavLink>
           <NavLink to="/available-vehicles" style={navStyle}>Disponibles</NavLink>
+          <NavLink to="/vehicle-assignment" style={navStyle}>Asignar</NavLink>
         </>
       )}
 
@@ -186,6 +188,12 @@ function AppRoutes() {
           <Route path="/available-vehicles" element={
             <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
               <AvailableVehicles />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/vehicle-assignment" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <VehicleAssignment />
             </ProtectedRoute>
           } />
 

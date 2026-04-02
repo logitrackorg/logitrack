@@ -13,11 +13,12 @@ import (
 )
 
 type VehicleHandler struct {
-	repo repository.VehicleRepository
+	repo         repository.VehicleRepository
+	shipmentRepo repository.ShipmentRepository
 }
 
-func NewVehicleHandler(repo repository.VehicleRepository) *VehicleHandler {
-	return &VehicleHandler{repo: repo}
+func NewVehicleHandler(repo repository.VehicleRepository, shipmentRepo repository.ShipmentRepository) *VehicleHandler {
+	return &VehicleHandler{repo: repo, shipmentRepo: shipmentRepo}
 }
 
 func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -26,6 +27,7 @@ func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/vehicles/available", h.ListAvailable)
 	r.GET("/vehicles/by-plate/:plate", h.GetByPlate)
 	r.PATCH("/vehicles/by-plate/:plate/status", h.UpdateStatusByPlate)
+	r.POST("/vehicles/by-plate/:plate/assign", h.AssignToShipment)
 }
 
 // List returns all vehicles in the fleet.
@@ -298,10 +300,119 @@ func validateStatusTransition(from, to model.VehicleStatus, hasAssignedShipment 
 		return errors.New("No se puede cambiar de 'En Ruta' a 'En Reparación' mientras tenga un envío asignado. Finalice o reasigne el envío primero.")
 	}
 
-	// Cannot change from "En Ruta" to "Inactivo" if there's an assigned shipment
+	// Cannot change from "En Ruta" a "Inactivo" if there's an assigned shipment
 	if from == model.VehicleStatusInTransit && to == model.VehicleStatusInactive && hasAssignedShipment {
 		return errors.New("No se puede cambiar de 'En Ruta' a 'Inactivo' mientras tenga un envío asignado. Finalice o reasigne el envío primero.")
 	}
 
 	return nil
+}
+
+// AssignToShipment assigns a vehicle to a specific shipment.
+//
+// @Summary      Assign vehicle to shipment
+// @Description  Assigns a vehicle to a shipment. Validates that the vehicle is available and the shipment exists. Updates vehicle status to 'en_transito'. Supervisor and admin only.
+// @Tags         vehicles
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        plate  path      string  true  "License plate (patente)"
+// @Param        body  body      AssignShipmentRequest  true  "Shipment tracking ID"
+// @Success      200   {object}  model.Vehicle
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Failure      409   {object}  map[string]string  "Vehicle already assigned"
+// @Router       /vehicles/by-plate/{plate}/assign [post]
+func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
+	plate := c.Param("plate")
+	if plate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "La patente es obligatoria"})
+		return
+	}
+
+	var req AssignShipmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.TrackingID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El tracking ID del envío es obligatorio"})
+		return
+	}
+
+	// Get vehicle
+	vehicle, found := h.repo.GetByLicensePlate(plate)
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
+		return
+	}
+
+	// Check if vehicle is already assigned
+	if vehicle.AssignedShipment != nil && *vehicle.AssignedShipment != "" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":             "El vehículo ya está asignado a un envío",
+			"assigned_shipment": *vehicle.AssignedShipment,
+			"current_status":    getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	// Check if vehicle is available
+	if vehicle.Status != model.VehicleStatusAvailable {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "El vehículo no está disponible para asignación",
+			"current_status": getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	// Validate that the shipment exists
+	_, err := h.shipmentRepo.GetByTrackingID(req.TrackingID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "El envío con tracking ID '" + req.TrackingID + "' no existe"})
+		return
+	}
+
+	// Get user from context
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	// Assign shipment to vehicle
+	trackingID := req.TrackingID
+	if err := h.repo.AssignShipment(vehicle.ID, &trackingID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el vehículo"})
+		return
+	}
+
+	// Update vehicle status to "en_transito"
+	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusInTransit, user.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
+		return
+	}
+
+	// Get updated vehicle
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+
+	// Build response
+	response := gin.H{
+		"id":                updatedVehicle.ID,
+		"license_plate":     updatedVehicle.LicensePlate,
+		"type":              updatedVehicle.Type,
+		"capacity_kg":       updatedVehicle.CapacityKg,
+		"status":            updatedVehicle.Status,
+		"status_label":      getStatusLabel(updatedVehicle.Status),
+		"updated_at":        updatedVehicle.UpdatedAt,
+		"updated_by":        updatedVehicle.UpdatedBy,
+		"assigned_shipment": updatedVehicle.AssignedShipment,
+		"message":           "Vehículo asignado exitosamente al envío",
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// AssignShipmentRequest is the request body for assigning a vehicle to a shipment.
+type AssignShipmentRequest struct {
+	TrackingID string `json:"tracking_id" binding:"required"`
 }

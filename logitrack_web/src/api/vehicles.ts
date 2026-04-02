@@ -52,6 +52,14 @@ export interface AvailableVehiclesFilters {
   min_capacity?: number;
 }
 
+export interface AssignVehicleRequest {
+  tracking_id: string;
+}
+
+export interface AssignVehicleResponse extends VehicleStatusResponse {
+  message: string;
+}
+
 export const vehicleApi = {
   list: () => api.get<Vehicle[]>("/vehicles").then((r) => r.data),
   create: (data: CreateVehicleRequest) =>
@@ -66,4 +74,6 @@ export const vehicleApi = {
     if (filters?.min_capacity) params.append("min_capacity", filters.min_capacity.toString());
     return api.get<Vehicle[]>(`/vehicles/available?${params.toString()}`).then((r) => r.data);
   },
+  assignToShipment: (plate: string, data: AssignVehicleRequest) =>
+    api.post<AssignVehicleResponse>(`/vehicles/by-plate/${plate}/assign`, data).then((r) => r.data),
 };

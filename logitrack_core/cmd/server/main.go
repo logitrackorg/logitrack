@@ -73,7 +73,7 @@ func main() {
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
-	vehicleHandler := handler.NewVehicleHandler(vehicleRepo)
+	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
@@ -102,7 +102,7 @@ func main() {
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
 
-	// Vehicles — list: non-driver roles, create: admin only, available: supervisor+, by-plate: supervisor+, update status: supervisor+
+	// Vehicles — list: non-driver roles, create: admin only, available: supervisor+, by-plate: supervisor+, update status: supervisor+, assign: supervisor+
 	protected.GET("/vehicles", nonDriver, vehicleHandler.List)
 	canViewVehicleStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/vehicles/available", canViewVehicleStatus, vehicleHandler.ListAvailable)
@@ -110,6 +110,7 @@ func main() {
 	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
 	protected.GET("/vehicles/by-plate/:plate", canViewVehicleStatus, vehicleHandler.GetByPlate)
 	protected.PATCH("/vehicles/by-plate/:plate/status", canViewVehicleStatus, vehicleHandler.UpdateStatusByPlate)
+	protected.POST("/vehicles/by-plate/:plate/assign", canViewVehicleStatus, vehicleHandler.AssignToShipment)
 
 	// Shipments list/search — non-driver roles only
 	protected.GET("/shipments", nonDriver, shipmentHandler.List)
