@@ -17,6 +17,7 @@ type VehicleRepository interface {
 	GetByID(id string) (model.Vehicle, bool)
 	GetByLicensePlate(licensePlate string) (model.Vehicle, bool)
 	UpdateStatus(id string, status model.VehicleStatus) error
+	UpdateStatusByUser(id string, status model.VehicleStatus, username string) error
 	AssignShipment(id string, trackingID *string) error
 }
 
@@ -85,6 +86,20 @@ func (r *inMemoryVehicleRepository) UpdateStatus(id string, status model.Vehicle
 		if v.ID == id {
 			r.vehicles[i].Status = status
 			r.vehicles[i].UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return errors.New("vehicle not found")
+}
+
+func (r *inMemoryVehicleRepository) UpdateStatusByUser(id string, status model.VehicleStatus, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, v := range r.vehicles {
+		if v.ID == id {
+			r.vehicles[i].Status = status
+			r.vehicles[i].UpdatedAt = time.Now()
+			r.vehicles[i].UpdatedBy = username
 			return nil
 		}
 	}

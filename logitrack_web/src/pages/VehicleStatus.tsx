@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { vehicleApi, type VehicleStatusResponse, type VehicleStatus, type VehicleType } from "../api/vehicles";
+import { vehicleApi, type VehicleStatusResponse, type VehicleStatus, type VehicleType, type UpdateVehicleStatusRequest } from "../api/vehicles";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
 
@@ -36,6 +36,13 @@ const formatDate = (dateString: string): string => {
   });
 };
 
+const statusOptions: { value: VehicleStatus; label: string }[] = [
+  { value: "disponible", label: "Disponible" },
+  { value: "en_transito", label: "En Ruta" },
+  { value: "mantenimiento", label: "En Reparación" },
+  { value: "inactivo", label: "Inactivo" },
+];
+
 export function VehicleStatus() {
   const { hasRole } = useAuth();
   const [plate, setPlate] = useState("");
@@ -43,6 +50,15 @@ export function VehicleStatus() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [notFound, setNotFound] = useState(false);
+  const [success, setSuccess] = useState<string>("");
+
+  // State change modal
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [newStatus, setNewStatus] = useState<VehicleStatus>("disponible");
+  const [notes, setNotes] = useState("");
+  const [changingStatus, setChangingStatus] = useState(false);
+  const [transitionError, setTransitionError] = useState<string>("");
+  const [showForceConfirm, setShowForceConfirm] = useState(false);
 
   // Solo supervisor, manager y admin pueden consultar
   if (!hasRole("supervisor") && !hasRole("manager") && !hasRole("admin")) {
@@ -60,6 +76,8 @@ export function VehicleStatus() {
     setError("");
     setVehicle(null);
     setNotFound(false);
+    setSuccess("");
+    setTransitionError("");
 
     try {
       const data = await vehicleApi.getByPlate(plate.toUpperCase().trim());
@@ -82,6 +100,53 @@ export function VehicleStatus() {
     setVehicle(null);
     setError("");
     setNotFound(false);
+    setSuccess("");
+    setTransitionError("");
+    setShowStatusModal(false);
+    setNewStatus("disponible");
+    setNotes("");
+  };
+
+  const openStatusModal = () => {
+    setNewStatus(vehicle?.status || "disponible");
+    setNotes("");
+    setTransitionError("");
+    setShowForceConfirm(false);
+    setShowStatusModal(true);
+  };
+
+  const handleStatusChange = async () => {
+    if (!vehicle) return;
+
+    setChangingStatus(true);
+    setTransitionError("");
+
+    try {
+      const data: UpdateVehicleStatusRequest = {
+        status: newStatus,
+        notes: notes || undefined,
+        force: showForceConfirm,
+      };
+
+      const updated = await vehicleApi.updateStatus(vehicle.license_plate, data);
+      setVehicle(updated);
+      setSuccess(`Estado actualizado a "${updated.status_label}"`);
+      setShowStatusModal(false);
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        const errorData = err.response?.data;
+        setTransitionError(errorData?.error || "Transición inválida");
+        if (errorData?.requires_force) {
+          setShowForceConfirm(true);
+        }
+      } else if (err.response?.status === 400) {
+        setTransitionError(err.response?.data?.error || "Error en los datos");
+      } else {
+        setTransitionError("Error al actualizar el estado");
+      }
+    } finally {
+      setChangingStatus(false);
+    }
   };
 
   return (
@@ -197,6 +262,23 @@ export function VehicleStatus() {
         </div>
       )}
 
+      {/* Mensaje de éxito */}
+      {success && (
+        <div
+          style={{
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            color: "#16a34a",
+            padding: "12px 16px",
+            borderRadius: 6,
+            marginBottom: 20,
+            fontSize: 14,
+          }}
+        >
+          {success}
+        </div>
+      )}
+
       {/* Resultado de la consulta */}
       {vehicle && (
         <div
@@ -225,34 +307,51 @@ export function VehicleStatus() {
                   {vehicle.license_plate}
                 </h2>
               </div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "8px 16px",
-                  borderRadius: 9999,
-                  background: `${getStatusColor(vehicle.status)}20`,
-                }}
-              >
-                <span
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <div
                   style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: getStatusColor(vehicle.status),
-                    animation: "pulse 2s infinite",
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: getStatusColor(vehicle.status),
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 16px",
+                    borderRadius: 9999,
+                    background: `${getStatusColor(vehicle.status)}20`,
                   }}
                 >
-                  {vehicle.status_label}
-                </span>
+                  <span
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: getStatusColor(vehicle.status),
+                      animation: "pulse 2s infinite",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: getStatusColor(vehicle.status),
+                    }}
+                  >
+                    {vehicle.status_label}
+                  </span>
+                </div>
+                <button
+                  onClick={openStatusModal}
+                  style={{
+                    background: "#1e3a5f",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "8px 16px",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                    fontSize: 14,
+                  }}
+                >
+                  Cambiar Estado
+                </button>
               </div>
             </div>
           </div>
@@ -297,6 +396,17 @@ export function VehicleStatus() {
                   </svg>
                 }
               />
+              {vehicle.updated_by && (
+                <InfoCard
+                  label="Actualizado Por"
+                  value={vehicle.updated_by}
+                  icon={
+                    <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  }
+                />
+              )}
               <InfoCard
                 label="ID Vehículo"
                 value={`#${vehicle.id}`}
@@ -353,6 +463,141 @@ export function VehicleStatus() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cambio de estado */}
+      {showStatusModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => !changingStatus && setShowStatusModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 450,
+              width: "90%",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 20px", color: "#111827" }}>
+              Cambiar Estado del Vehículo
+            </h2>
+
+            {transitionError && (
+              <div
+                style={{
+                  background: showForceConfirm ? "#fffbeb" : "#fef2f2",
+                  border: `1px solid ${showForceConfirm ? "#fde68a" : "#fecaca"}`,
+                  color: showForceConfirm ? "#92400e" : "#dc2626",
+                  padding: "12px 16px",
+                  borderRadius: 6,
+                  marginBottom: 16,
+                  fontSize: 14,
+                }}
+              >
+                {transitionError}
+                {showForceConfirm && (
+                  <p style={{ margin: "8px 0 0", fontSize: 13 }}>
+                    ¿Desea forzar el cambio de estado de todas formas?
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
+                Nuevo Estado *
+              </label>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value as VehicleStatus)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #d1d5db",
+                  fontSize: 14,
+                  background: "#fff",
+                }}
+              >
+                {statusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
+                Notas (opcional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Motivo del cambio de estado..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #d1d5db",
+                  fontSize: 14,
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowStatusModal(false)}
+                disabled={changingStatus}
+                style={{
+                  background: "#e5e7eb",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 16px",
+                  cursor: changingStatus ? "not-allowed" : "pointer",
+                  fontWeight: 500,
+                  opacity: changingStatus ? 0.7 : 1,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleStatusChange}
+                disabled={changingStatus}
+                style={{
+                  background: "#1e3a5f",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "8px 20px",
+                  cursor: changingStatus ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  opacity: changingStatus ? 0.7 : 1,
+                }}
+              >
+                {changingStatus ? "Guardando..." : (showForceConfirm ? "Forzar Cambio" : "Guardar")}
+              </button>
+            </div>
           </div>
         </div>
       )}

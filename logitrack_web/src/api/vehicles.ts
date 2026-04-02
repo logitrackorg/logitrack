@@ -35,8 +35,17 @@ export interface VehicleStatusResponse {
   status: VehicleStatus;
   status_label: string;
   updated_at: string;
+  updated_by?: string;
   assigned_shipment: string | null;
 }
+
+export interface UpdateVehicleStatusRequest {
+  status: VehicleStatus;
+  notes?: string;
+  force?: boolean;
+}
+
+export interface UpdateVehicleStatusResponse extends VehicleStatusResponse {}
 
 export const vehicleApi = {
   list: () => api.get<Vehicle[]>("/vehicles").then((r) => r.data),
@@ -44,4 +53,6 @@ export const vehicleApi = {
     api.post<Vehicle>("/vehicles", data).then((r) => r.data),
   getByPlate: (plate: string) =>
     api.get<VehicleStatusResponse>(`/vehicles/by-plate/${plate}`).then((r) => r.data),
+  updateStatus: (plate: string, data: UpdateVehicleStatusRequest) =>
+    api.patch<UpdateVehicleStatusResponse>(`/vehicles/by-plate/${plate}/status`, data).then((r) => r.data),
 };
