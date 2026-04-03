@@ -5,8 +5,9 @@
 | Estado | Descripción                                         |
 |--------|-----------------------------------------------------|
 | `pending` | Borrador — no confirmado aún. Editable.             |
-| `in_progress` | Confirmado, esperando primer despacho.              |
-| `in_transit` | En movimiento entre sucursales.                     |
+| `in_progress` | Confirmado, esperando asignación de vehículo.       |
+| `pre_transit` | Vehículo asignado, en proceso de carga. El envío aún no partió. |
+| `in_transit` | En movimiento entre sucursales (viaje iniciado).    |
 | `at_branch` | Llegó a una sucursal intermedia o de destino.       |
 | `delivering` | En camino para entrega a domicilio al destinatario. |
 | `delivered` | Entregado exitosamente. Estado final.               |

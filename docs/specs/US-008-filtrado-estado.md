@@ -18,6 +18,7 @@ El listado de envíos tiene un selector de estado que filtra los resultados most
 | `` (vacío) | All | Muestra todos los envíos sin filtrar por estado. |
 | `pending` | Draft | Solo borradores |
 | `in_progress` | In Progress | |
+| `pre_transit` | Pre-Transit | Vehículo asignado, en carga |
 | `in_transit` | In Transit | |
 | `at_branch` | At Branch | |
 | `delivering` | Delivering | |
@@ -66,7 +67,7 @@ El listado de envíos tiene un selector de estado que filtra los resultados most
 
 **Dado** que el filtro activo es "Active" (por defecto)
 **Entonces** no se muestran envíos en estado `pending`, `delivered`, `returned` ni `cancelled`
-**Y** sí se muestran envíos en cualquier estado intermedio (`in_progress`, `in_transit`, `at_branch`, `delivering`, `delivery_failed`, `ready_for_pickup`, `ready_for_return`)
+**Y** sí se muestran envíos en cualquier estado intermedio (`in_progress`, `pre_transit`, `in_transit`, `at_branch`, `delivering`, `delivery_failed`, `ready_for_pickup`, `ready_for_return`)
 
 ---
 

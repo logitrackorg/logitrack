@@ -13,7 +13,7 @@
 1. Solo Supervisor y Admin pueden cancelar envíos.
 2. La cancelación requiere un motivo obligatorio.
 3. No se puede cancelar un envío en estado `pending` (borrador) ni en estados terminales (`delivered`, `returned`, `cancelled`).
-4. Cualquier estado intermedio es cancelable (`in_progress`, `in_transit`, `at_branch`, `delivering`, `delivery_failed`, `ready_for_pickup`, `ready_for_return`).
+4. Cualquier estado intermedio es cancelable (`in_progress`, `pre_transit`, `in_transit`, `at_branch`, `delivering`, `delivery_failed`, `ready_for_pickup`, `ready_for_return`).
 5. Al cancelar se registra un `ShipmentEvent` con `to_status: "cancelled"` y el usuario responsable.
 6. Al cancelar se agrega automáticamente un comentario con el motivo: `[Cancelación] <motivo>`.
 7. `cancelled` es un estado terminal — no admite más transiciones.
