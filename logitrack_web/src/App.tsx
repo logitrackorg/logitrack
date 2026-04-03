@@ -40,8 +40,8 @@ function Nav() {
       )}
       <NavLink to="/" end style={navStyle}>Shipments</NavLink>
       <NavLink to="/track" style={navStyle}>Track</NavLink>
-      {hasRole("supervisor", "admin") && (
-        <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
+      {hasRole("supervisor", "manager", "admin") && (
+        <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
@@ -166,7 +166,7 @@ function AppRoutes() {
           } />
 
           <Route path="/vehicles" element={
-            <ProtectedRoute roles={["supervisor", "admin"]}>
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
               <VehicleList />
             </ProtectedRoute>
           } />

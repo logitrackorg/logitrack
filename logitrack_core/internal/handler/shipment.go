@@ -238,30 +238,50 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
 	req.ChangedBy = user.Username
+	trackingID := c.Param("tracking_id")
+
+	// Read current shipment to get fromStatus (used for operator check and route management).
+	current, _ := h.svc.GetByTrackingID(trackingID)
+	fromStatus := current.Status
+
 	if user.Role == model.RoleOperator {
-		current, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
-		if err == nil && current.Status == model.StatusDelivering {
+		if fromStatus == model.StatusDelivering {
 			c.JSON(http.StatusForbidden, gin.H{"error": "operators cannot update shipments in delivering status"})
 			return
 		}
 	}
 	if user.Role == model.RoleDriver {
-		if err := h.routeSvc.ValidateDriverCanUpdateShipment(user.ID, c.Param("tracking_id"), req.Status); err != nil {
+		if err := h.routeSvc.ValidateDriverCanUpdateShipment(user.ID, trackingID, req.Status); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 	}
-	trackingID := c.Param("tracking_id")
+
 	shipment, err := h.svc.UpdateStatus(trackingID, req)
-	if err == nil && req.Status == model.StatusDelivering && req.DriverID != "" {
+	if err == nil {
 		today := model.NewDateOnly(timeNow())
-		_ = h.routeSvc.AddShipmentToDriverRoute(req.DriverID, trackingID, today)
+		if req.Status == model.StatusDelivering && req.DriverID != "" {
+			// Remove from any existing driver route (handles retry with same or different driver),
+			// then assign to the (new) driver.
+			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
+			_ = h.routeSvc.AddShipmentToDriverRoute(req.DriverID, trackingID, today)
+		} else if req.Status == model.StatusAtBranch && fromStatus == model.StatusDeliveryFailed {
+			// Shipment returned to branch — remove from driver route.
+			// Delivered shipments are NOT removed: they stay in the route and are visible
+			// to the driver for the rest of the day via isVisibleForDriver.
+			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
+		}
 	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, shipment)
+}
+
+// isDriverActiveStatus returns true for statuses where a shipment is actively assigned to a driver.
+func isDriverActiveStatus(s model.Status) bool {
+	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
 }
 
 // GetEvents returns the full event history for a shipment.

@@ -16,108 +16,63 @@ import (
 type VehicleHandler struct {
 	repo        repository.VehicleRepository
 	shipmentSvc *service.ShipmentService
+	branchRepo  repository.BranchRepository
 }
 
-func NewVehicleHandler(repo repository.VehicleRepository, shipmentSvc *service.ShipmentService) *VehicleHandler {
-	return &VehicleHandler{repo: repo, shipmentSvc: shipmentSvc}
+// effectiveWeight returns the shipment's weight after applying any weight correction.
+func effectiveWeight(s model.Shipment) float64 {
+	if s.Corrections != nil && s.Corrections.WeightKg != nil {
+		if v, err := strconv.ParseFloat(*s.Corrections.WeightKg, 64); err == nil {
+			return v
+		}
+	}
+	return s.WeightKg
 }
 
-func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
-	r.GET("/vehicles", h.List)
-	r.POST("/vehicles", h.Create)
-	r.GET("/vehicles/available", h.ListAvailable)
-	r.GET("/vehicles/by-plate/:plate", h.GetByPlate)
-	r.GET("/vehicles/by-shipment/:trackingId", h.GetByShipment)
-	r.PATCH("/vehicles/by-plate/:plate/status", h.UpdateStatusByPlate)
-	r.POST("/vehicles/by-plate/:plate/assign", h.AssignToShipment)
-	r.POST("/vehicles/by-plate/:plate/assign-branch", h.AssignBranch)
-	r.POST("/vehicles/by-plate/:plate/end-trip", h.EndTrip)
+func NewVehicleHandler(repo repository.VehicleRepository, shipmentSvc *service.ShipmentService, branchRepo repository.BranchRepository) *VehicleHandler {
+	return &VehicleHandler{repo: repo, shipmentSvc: shipmentSvc, branchRepo: branchRepo}
 }
 
 // List returns all vehicles in the fleet.
-//
-// @Summary      List vehicles
-// @Description  Returns all vehicles. Accessible to supervisor, manager, and admin roles.
-// @Tags         vehicles
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {array}   model.Vehicle
-// @Failure      401  {object}  map[string]string
-// @Failure      403  {object}  map[string]string
-// @Router       /vehicles [get]
 func (h *VehicleHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, h.repo.List())
 }
 
-// ListAvailable returns only vehicles with status 'disponible', optionally filtered by type and min capacity.
-//
-// @Summary      List available vehicles
-// @Description  Returns only available vehicles. Supports filtering by type and minimum capacity. Accessible to supervisor, manager, and admin roles.
-// @Tags         vehicles
-// @Produce      json
-// @Security     BearerAuth
-// @Param        type     query     string  false  "Filter by vehicle type (motocicleta, furgoneta, camion, camion_grande)"
-// @Param        min_capacity  query  float64 false  "Minimum capacity in kg"
-// @Success      200      {array}   model.Vehicle
-// @Failure      401      {object}  map[string]string
-// @Failure      403      {object}  map[string]string
-// @Router       /vehicles/available [get]
+// ListAvailable returns available vehicles, optionally filtered by type, min_capacity, and branch_id.
 func (h *VehicleHandler) ListAvailable(c *gin.Context) {
 	vehicles := h.repo.List()
 	result := make([]model.Vehicle, 0)
 
-	// Get filter parameters
 	vehicleType := c.Query("type")
-	minCapacityStr := c.Query("min_capacity")
+	branchFilter := c.Query("branch_id")
 
 	var minCapacity float64 = 0
-	if minCapacityStr != "" {
-		if val, err := parseFloat(minCapacityStr); err == nil {
+	if minCapacityStr := c.Query("min_capacity"); minCapacityStr != "" {
+		if val, err := strconv.ParseFloat(minCapacityStr, 64); err == nil {
 			minCapacity = val
 		}
 	}
 
 	for _, v := range vehicles {
-		// Filter only available vehicles
-		if v.Status != model.VehicleStatusAvailable {
+		if v.Status != model.VehicleStatusAvailable && v.Status != model.VehicleStatusLoading {
 			continue
 		}
-
-		// Filter by type
 		if vehicleType != "" && string(v.Type) != vehicleType {
 			continue
 		}
-
-		// Filter by minimum capacity
 		if minCapacity > 0 && v.CapacityKg < minCapacity {
 			continue
 		}
-
+		if branchFilter != "" && (v.AssignedBranch == nil || *v.AssignedBranch != branchFilter) {
+			continue
+		}
 		result = append(result, v)
 	}
 
 	c.JSON(http.StatusOK, result)
 }
 
-func parseFloat(s string) (float64, error) {
-	return strconv.ParseFloat(s, 64)
-}
-
-// Create adds a new vehicle to the fleet.
-//
-// @Summary      Create vehicle
-// @Description  Adds a new vehicle to the fleet with status 'disponible'. Accessible to admin role only.
-// @Tags         vehicles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        request  body      model.CreateVehicleRequest  true  "Vehicle data"
-// @Success      201      {object}  model.Vehicle
-// @Failure      400      {object}  map[string]string
-// @Failure      401      {object}  map[string]string
-// @Failure      403      {object}  map[string]string
-// @Failure      409      {object}  map[string]string  "Duplicate license plate"
-// @Router       /vehicles [post]
+// Create adds a new vehicle to the fleet. Branch is required.
 func (h *VehicleHandler) Create(c *gin.Context) {
 	var req model.CreateVehicleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -125,12 +80,21 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Validate branch exists
+	_, found := h.branchRepo.GetByID(req.BranchID)
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Branch not found: " + req.BranchID})
+		return
+	}
+
+	branchID := req.BranchID
 	vehicle := model.Vehicle{
-		LicensePlate: req.LicensePlate,
-		Type:         req.Type,
-		CapacityKg:   req.CapacityKg,
-		Status:       model.VehicleStatusAvailable,
-		UpdatedAt:    time.Now(),
+		LicensePlate:  req.LicensePlate,
+		Type:          req.Type,
+		CapacityKg:    req.CapacityKg,
+		Status:        model.VehicleStatusAvailable,
+		AssignedBranch: &branchID,
+		UpdatedAt:     time.Now(),
 	}
 
 	if err := h.repo.Add(vehicle); err != nil {
@@ -145,19 +109,7 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, vehicle)
 }
 
-// GetByPlate returns a vehicle by its license plate with its current status and assigned shipment info.
-//
-// @Summary      Get vehicle by plate
-// @Description  Returns vehicle status and info by license plate. Shows assigned shipment if any. Accessible to supervisor, manager, and admin roles.
-// @Tags         vehicles
-// @Produce      json
-// @Security     BearerAuth
-// @Param        plate  path      string  true  "License plate (patente)"
-// @Success      200    {object}  model.Vehicle
-// @Failure      401    {object}  map[string]string
-// @Failure      403    {object}  map[string]string
-// @Failure      404    {object}  map[string]string
-// @Router       /vehicles/by-plate/{plate} [get]
+// GetByPlate returns a vehicle by license plate with status info.
 func (h *VehicleHandler) GetByPlate(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -171,20 +123,7 @@ func (h *VehicleHandler) GetByPlate(c *gin.Context) {
 		return
 	}
 
-	// Build response with status labels
-	response := gin.H{
-		"id":                vehicle.ID,
-		"license_plate":     vehicle.LicensePlate,
-		"type":              vehicle.Type,
-		"capacity_kg":       vehicle.CapacityKg,
-		"status":            vehicle.Status,
-		"status_label":      getStatusLabel(vehicle.Status),
-		"updated_at":        vehicle.UpdatedAt,
-		"assigned_shipment": vehicle.AssignedShipment,
-		"assigned_branch":   vehicle.AssignedBranch,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, buildVehicleResponse(vehicle))
 }
 
 func getStatusLabel(status model.VehicleStatus) string {
@@ -204,23 +143,24 @@ func getStatusLabel(status model.VehicleStatus) string {
 	}
 }
 
-// UpdateStatusByPlate updates a vehicle's status by its license plate.
-//
-// @Summary      Update vehicle status by plate
-// @Description  Updates a vehicle's status by license plate. Records the user who made the change. Validates incompatible transitions. Supervisor and admin only.
-// @Tags         vehicles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        plate  path      string                      true  "License plate (patente)"
-// @Param        body  body      model.UpdateVehicleStatusRequest  true  "New status and optional notes"
-// @Success      200   {object}  model.Vehicle
-// @Failure      400   {object}  map[string]string
-// @Failure      401   {object}  map[string]string
-// @Failure      403   {object}  map[string]string
-// @Failure      404   {object}  map[string]string
-// @Failure      409   {object}  map[string]string  "Incompatible transition"
-// @Router       /vehicles/by-plate/{plate}/status [patch]
+// buildVehicleResponse constructs the standard vehicle response map.
+func buildVehicleResponse(v model.Vehicle) gin.H {
+	return gin.H{
+		"id":                 v.ID,
+		"license_plate":      v.LicensePlate,
+		"type":               v.Type,
+		"capacity_kg":        v.CapacityKg,
+		"status":             v.Status,
+		"status_label":       getStatusLabel(v.Status),
+		"updated_at":         v.UpdatedAt,
+		"updated_by":         v.UpdatedBy,
+		"assigned_shipments": v.AssignedShipments,
+		"assigned_branch":    v.AssignedBranch,
+		"destination_branch": v.DestinationBranch,
+	}
+}
+
+// UpdateStatusByPlate updates a vehicle's status by license plate (pure status update, no cascade).
 func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -234,7 +174,6 @@ func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 		return
 	}
 
-	// Validate status
 	validStatuses := map[model.VehicleStatus]bool{
 		model.VehicleStatusAvailable:     true,
 		model.VehicleStatusLoading:       true,
@@ -247,16 +186,14 @@ func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 		return
 	}
 
-	// Get current vehicle
 	vehicle, found := h.repo.GetByLicensePlate(plate)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
 		return
 	}
 
-	// Check for incompatible transitions
 	if !req.Force {
-		if err := validateStatusTransition(vehicle.Status, req.Status, vehicle.AssignedShipment != nil); err != nil {
+		if err := validateStatusTransition(vehicle.Status, req.Status, len(vehicle.AssignedShipments) > 0); err != nil {
 			c.JSON(http.StatusConflict, gin.H{
 				"error":          err.Error(),
 				"current_status": getStatusLabel(vehicle.Status),
@@ -267,84 +204,33 @@ func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 		}
 	}
 
-	// Get user from context
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	// Update status
 	if err := h.repo.UpdateStatusByUser(vehicle.ID, req.Status, user.Username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado"})
 		return
 	}
 
-	// If vehicle is now in transit and has an assigned shipment, update shipment status to in_transit
-	if req.Status == model.VehicleStatusInTransit && vehicle.AssignedShipment != nil {
-		shipmentUpdateReq := model.UpdateStatusRequest{
-			Status:    model.StatusInTransit,
-			ChangedBy: user.Username,
-			Notes:     "Vehículo en ruta: " + vehicle.LicensePlate,
-		}
-		if _, err := h.shipmentSvc.UpdateStatus(*vehicle.AssignedShipment, shipmentUpdateReq); err != nil {
-			// Log warning but don't fail - vehicle status was updated successfully
-		}
-	}
-
-	// Get updated vehicle
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
-
-	// Build response
-	response := gin.H{
-		"id":                updatedVehicle.ID,
-		"license_plate":     updatedVehicle.LicensePlate,
-		"type":              updatedVehicle.Type,
-		"capacity_kg":       updatedVehicle.CapacityKg,
-		"status":            updatedVehicle.Status,
-		"status_label":      getStatusLabel(updatedVehicle.Status),
-		"updated_at":        updatedVehicle.UpdatedAt,
-		"updated_by":        updatedVehicle.UpdatedBy,
-		"assigned_shipment": updatedVehicle.AssignedShipment,
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, buildVehicleResponse(updatedVehicle))
 }
 
-// validateStatusTransition checks if a status transition is valid.
-// Returns an error if the transition is incompatible.
-func validateStatusTransition(from, to model.VehicleStatus, hasAssignedShipment bool) error {
-	// Cannot change from "En Ruta" to "Disponible" if there's an assigned shipment
-	if from == model.VehicleStatusInTransit && to == model.VehicleStatusAvailable && hasAssignedShipment {
-		return errors.New("No se puede cambiar de 'En Ruta' a 'Disponible' mientras tenga un envío asignado. Finalice o reasigne el envío primero.")
+// validateStatusTransition checks if a vehicle status transition is valid.
+func validateStatusTransition(from, to model.VehicleStatus, hasShipments bool) error {
+	if hasShipments && from == model.VehicleStatusInTransit && to != model.VehicleStatusInTransit {
+		return errors.New("No se puede cambiar el estado mientras el vehículo esté en ruta con envíos asignados. Finalice el viaje primero.")
 	}
-
-	// Cannot change from "En Ruta" to "En Reparación" if there's an assigned shipment
-	if from == model.VehicleStatusInTransit && to == model.VehicleStatusInMaintenance && hasAssignedShipment {
-		return errors.New("No se puede cambiar de 'En Ruta' a 'En Reparación' mientras tenga un envío asignado. Finalice o reasigne el envío primero.")
-	}
-
-	// Cannot change from "En Ruta" a "Inactivo" if there's an assigned shipment
-	if from == model.VehicleStatusInTransit && to == model.VehicleStatusInactive && hasAssignedShipment {
-		return errors.New("No se puede cambiar de 'En Ruta' a 'Inactivo' mientras tenga un envío asignado. Finalice o reasigne el envío primero.")
-	}
-
 	return nil
 }
 
-// AssignToShipment assigns a vehicle to a specific shipment.
-//
-// @Summary      Assign vehicle to shipment
-// @Description  Assigns a vehicle to a shipment. Validates that the vehicle is available and the shipment exists. Updates vehicle status to 'en_transito'. Supervisor and admin only.
-// @Tags         vehicles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        plate  path      string  true  "License plate (patente)"
-// @Param        body  body      AssignShipmentRequest  true  "Shipment tracking ID"
-// @Success      200   {object}  model.Vehicle
-// @Failure      400   {object}  map[string]string
-// @Failure      401   {object}  map[string]string
-// @Failure      403   {object}  map[string]string
-// @Failure      404   {object}  map[string]string
-// @Failure      409   {object}  map[string]string  "Vehicle already assigned"
-// @Router       /vehicles/by-plate/{plate}/assign [post]
+// AssignShipmentRequest is the request body for assigning a vehicle to a shipment.
+type AssignShipmentRequest struct {
+	TrackingID string `json:"tracking_id" binding:"required"`
+}
+
+// AssignToShipment assigns a shipment to a vehicle from ShipmentDetail.
+// Supports multiple shipments per vehicle with weight validation.
+// Shipment must be at the same branch as the vehicle.
 func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -358,30 +244,14 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	if req.TrackingID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "El tracking ID del envío es obligatorio"})
-		return
-	}
-
-	// Get vehicle
 	vehicle, found := h.repo.GetByLicensePlate(plate)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
 		return
 	}
 
-	// Check if vehicle is already assigned
-	if vehicle.AssignedShipment != nil && *vehicle.AssignedShipment != "" {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":             "El vehículo ya está asignado a un envío",
-			"assigned_shipment": *vehicle.AssignedShipment,
-			"current_status":    getStatusLabel(vehicle.Status),
-		})
-		return
-	}
-
-	// Check if vehicle is available
-	if vehicle.Status != model.VehicleStatusAvailable {
+	// Vehicle must be disponible (first shipment) or en_carga (adding more)
+	if vehicle.Status != model.VehicleStatusAvailable && vehicle.Status != model.VehicleStatusLoading {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":          "El vehículo no está disponible para asignación",
 			"current_status": getStatusLabel(vehicle.Status),
@@ -389,89 +259,102 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// Check if vehicle has an assigned branch
+	// Vehicle must have an assigned branch
 	if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch == "" {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "El vehículo debe tener un branch asignado antes de asignarle un envío",
-		})
+		c.JSON(http.StatusConflict, gin.H{"error": "El vehículo debe tener un branch asignado"})
 		return
 	}
 
-	// Validate that the shipment exists and check its status
+	// Check shipment exists and status allows pre_transit assignment
 	shipment, err := h.shipmentSvc.GetByTrackingID(req.TrackingID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "El envío con tracking ID '" + req.TrackingID + "' no existe"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "El envío '" + req.TrackingID + "' no existe"})
 		return
 	}
 
-	// Only allow assignment if shipment is in_progress (not yet pre_transit or in_transit)
-	if shipment.Status != model.StatusInProgress {
+	allowedStatuses := map[model.Status]bool{
+		model.StatusInProgress:     true,
+		model.StatusAtBranch:       true,
+		model.StatusReadyForPickup: true,
+	}
+	if !allowedStatuses[shipment.Status] {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "El envío no está en estado 'In Progress'. Estado actual: " + string(shipment.Status),
+			"error": "El envío no puede asignarse a un vehículo en su estado actual: " + string(shipment.Status),
 		})
 		return
 	}
 
-	// Get user from context
+	// Branch match: shipment must be at the same branch as the vehicle
+	shipmentBranch := shipment.ReceivingBranchID
+	if shipment.Status == model.StatusAtBranch || shipment.Status == model.StatusReadyForPickup {
+		shipmentBranch = shipment.CurrentLocation
+	}
+	if shipmentBranch != *vehicle.AssignedBranch {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "El envío no está en el mismo branch que el vehículo",
+		})
+		return
+	}
+
+	// Check shipment is not already assigned to this vehicle
+	for _, s := range vehicle.AssignedShipments {
+		if s == req.TrackingID {
+			c.JSON(http.StatusConflict, gin.H{"error": "El envío ya está asignado a este vehículo"})
+			return
+		}
+	}
+
+	// Capacity check: sum current assigned shipments + new shipment weight (respecting corrections)
+	var totalWeight float64 = effectiveWeight(shipment)
+	for _, tid := range vehicle.AssignedShipments {
+		existing, err := h.shipmentSvc.GetByTrackingID(tid)
+		if err == nil {
+			totalWeight += effectiveWeight(existing)
+		}
+	}
+	if totalWeight > vehicle.CapacityKg {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "El peso total de los envíos supera la capacidad del vehículo",
+			"capacity_kg":    vehicle.CapacityKg,
+			"total_weight_kg": totalWeight,
+		})
+		return
+	}
+
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	// Assign shipment to vehicle
-	trackingID := req.TrackingID
-	if err := h.repo.AssignShipment(vehicle.ID, &trackingID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el vehículo"})
+	// Add shipment to vehicle
+	if err := h.repo.AddShipment(vehicle.ID, req.TrackingID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el envío al vehículo"})
 		return
 	}
 
-	// Update shipment status to "pre_transit" automatically
-	shipmentUpdateReq := model.UpdateStatusRequest{
+	// Transition shipment to pre_transit
+	statusReq := model.UpdateStatusRequest{
 		Status:    model.StatusPreTransit,
 		ChangedBy: user.Username,
-		Notes:     "Vehículo asignado: " + vehicle.LicensePlate,
+		Notes:     "Vehicle assigned: " + vehicle.LicensePlate,
 	}
-	if _, err := h.shipmentSvc.UpdateStatus(trackingID, shipmentUpdateReq); err != nil {
-		// Log warning but don't fail - vehicle assignment was successful
-		// The shipment status can be updated manually if needed
-	}
-
-	// Update vehicle status to "en_carga" (loading)
-	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusLoading, user.Username); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
-		return
+	if _, err := h.shipmentSvc.UpdateStatus(req.TrackingID, statusReq); err != nil {
+		// Log but don't fail — assignment succeeded
+		_ = err
 	}
 
-	// Get updated vehicle
+	// If vehicle was disponible, move it to en_carga
+	if vehicle.Status == model.VehicleStatusAvailable {
+		if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusLoading, user.Username); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
+			return
+		}
+	}
+
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
-
-	// Build response
-	response := gin.H{
-		"id":                updatedVehicle.ID,
-		"license_plate":     updatedVehicle.LicensePlate,
-		"type":              updatedVehicle.Type,
-		"capacity_kg":       updatedVehicle.CapacityKg,
-		"status":            updatedVehicle.Status,
-		"status_label":      getStatusLabel(updatedVehicle.Status),
-		"updated_at":        updatedVehicle.UpdatedAt,
-		"updated_by":        updatedVehicle.UpdatedBy,
-		"assigned_shipment": updatedVehicle.AssignedShipment,
-		"message":           "Vehículo asignado exitosamente al envío",
-	}
-
-	c.JSON(http.StatusOK, response)
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Envío asignado exitosamente al vehículo"
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetByShipment returns the vehicle assigned to a specific shipment.
-//
-// @Summary      Get vehicle by shipment tracking ID
-// @Description  Returns the vehicle assigned to a shipment. Returns 404 if no vehicle is assigned.
-// @Tags         vehicles
-// @Produce      json
-// @Security     BearerAuth
-// @Param        trackingId  path      string  true  "Shipment tracking ID"
-// @Success      200         {object}  model.Vehicle
-// @Failure      401         {object}  map[string]string
-// @Failure      403         {object}  map[string]string
-// @Failure      404         {object}  map[string]string
-// @Router       /vehicles/by-shipment/{trackingId} [get]
 func (h *VehicleHandler) GetByShipment(c *gin.Context) {
 	trackingId := c.Param("trackingId")
 	if trackingId == "" {
@@ -479,32 +362,103 @@ func (h *VehicleHandler) GetByShipment(c *gin.Context) {
 		return
 	}
 
-	// Search through all vehicles for one assigned to this shipment
-	vehicles := h.repo.List()
-	for _, v := range vehicles {
-		if v.AssignedShipment != nil && *v.AssignedShipment == trackingId {
-			response := gin.H{
-				"id":                v.ID,
-				"license_plate":     v.LicensePlate,
-				"type":              v.Type,
-				"capacity_kg":       v.CapacityKg,
-				"status":            v.Status,
-				"status_label":      getStatusLabel(v.Status),
-				"updated_at":        v.UpdatedAt,
-				"updated_by":        v.UpdatedBy,
-				"assigned_shipment": v.AssignedShipment,
+	for _, v := range h.repo.List() {
+		for _, s := range v.AssignedShipments {
+			if s == trackingId {
+				c.JSON(http.StatusOK, buildVehicleResponse(v))
+				return
 			}
-			c.JSON(http.StatusOK, response)
-			return
 		}
 	}
 
 	c.JSON(http.StatusNotFound, gin.H{"error": "No hay un vehículo asignado a este envío"})
 }
 
-// AssignShipmentRequest is the request body for assigning a vehicle to a shipment.
-type AssignShipmentRequest struct {
-	TrackingID string `json:"tracking_id" binding:"required"`
+// StartTripRequest is the request body for starting a trip.
+type StartTripRequest struct {
+	DestinationBranch string `json:"destination_branch" binding:"required"`
+}
+
+// StartTrip initiates a trip: sets destination branch, transitions vehicle to en_transito,
+// and moves all assigned shipments to in_transit.
+func (h *VehicleHandler) StartTrip(c *gin.Context) {
+	plate := c.Param("plate")
+	if plate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "La patente es obligatoria"})
+		return
+	}
+
+	var req StartTripRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	vehicle, found := h.repo.GetByLicensePlate(plate)
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
+		return
+	}
+
+	if vehicle.Status != model.VehicleStatusLoading {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "Solo se puede iniciar el viaje de vehículos en estado 'En Carga'",
+			"current_status": getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	if len(vehicle.AssignedShipments) == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "El vehículo no tiene envíos asignados para iniciar un viaje"})
+		return
+	}
+
+	// Validate destination branch is different from current branch
+	if vehicle.AssignedBranch != nil && *vehicle.AssignedBranch == req.DestinationBranch {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El branch de destino debe ser diferente al branch actual"})
+		return
+	}
+
+	// Validate destination branch exists and get its city for shipment location
+	destBranch, found := h.branchRepo.GetByID(req.DestinationBranch)
+	if !found {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Branch de destino no encontrado: " + req.DestinationBranch})
+		return
+	}
+
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	// Set destination branch
+	destID := req.DestinationBranch
+	if err := h.repo.SetDestinationBranch(vehicle.ID, &destID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al establecer el branch de destino"})
+		return
+	}
+
+	// Update vehicle status to en_transito
+	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusInTransit, user.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
+		return
+	}
+
+	// Transition all assigned shipments to in_transit
+	for _, tid := range vehicle.AssignedShipments {
+		statusReq := model.UpdateStatusRequest{
+			Status:    model.StatusInTransit,
+			ChangedBy: user.Username,
+			Location:  destBranch.City,
+			Notes:     "Trip started. Vehicle: " + vehicle.LicensePlate,
+		}
+		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
+			// Log but continue for other shipments
+			_ = err
+		}
+	}
+
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Viaje iniciado. Todos los envíos están en tránsito."
+	c.JSON(http.StatusOK, resp)
 }
 
 // AssignBranchRequest is the request body for assigning a vehicle to a branch.
@@ -517,23 +471,7 @@ type EndTripRequest struct {
 	Notes string `json:"notes,omitempty"`
 }
 
-// AssignBranch assigns a vehicle to a specific branch.
-//
-// @Summary      Assign vehicle to branch
-// @Description  Assigns a vehicle to a branch. Only available vehicles can be assigned. Admin only.
-// @Tags         vehicles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        plate  path      string  true  "License plate (patente)"
-// @Param        body  body      AssignBranchRequest  true  "Branch ID"
-// @Success      200   {object}  model.Vehicle
-// @Failure      400   {object}  map[string]string
-// @Failure      401   {object}  map[string]string
-// @Failure      403   {object}  map[string]string
-// @Failure      404   {object}  map[string]string
-// @Failure      409   {object}  map[string]string
-// @Router       /vehicles/by-plate/{plate}/assign-branch [post]
+// AssignBranch assigns a vehicle to a branch (kept for compatibility; only available vehicles).
 func (h *VehicleHandler) AssignBranch(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -547,19 +485,12 @@ func (h *VehicleHandler) AssignBranch(c *gin.Context) {
 		return
 	}
 
-	if req.BranchID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "El branch ID es obligatorio"})
-		return
-	}
-
-	// Get vehicle by license plate
 	vehicle, found := h.repo.GetByLicensePlate(plate)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
 		return
 	}
 
-	// Only allow assignment if vehicle is available
 	if vehicle.Status != model.VehicleStatusAvailable {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":          "Solo se puede asignar branch a vehículos disponibles",
@@ -568,56 +499,99 @@ func (h *VehicleHandler) AssignBranch(c *gin.Context) {
 		return
 	}
 
-	// Assign branch to vehicle
 	branchID := req.BranchID
 	if err := h.repo.AssignBranch(vehicle.ID, &branchID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el branch: " + err.Error()})
 		return
 	}
 
-	// Get updated vehicle
-	updatedVehicle, found := h.repo.GetByID(vehicle.ID)
-	if !found {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al obtener el vehículo actualizado"})
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Vehículo asignado exitosamente al branch"
+	c.JSON(http.StatusOK, resp)
+}
+
+// UnassignShipment removes one shipment from a vehicle and returns it to at_branch.
+func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
+	plate := c.Param("plate")
+	trackingID := c.Param("trackingId")
+	if plate == "" || trackingID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plate and trackingId are required"})
 		return
 	}
 
-	// Build response
-	response := gin.H{
-		"id":                updatedVehicle.ID,
-		"license_plate":     updatedVehicle.LicensePlate,
-		"type":              updatedVehicle.Type,
-		"capacity_kg":       updatedVehicle.CapacityKg,
-		"status":            updatedVehicle.Status,
-		"status_label":      getStatusLabel(updatedVehicle.Status),
-		"updated_at":        updatedVehicle.UpdatedAt,
-		"updated_by":        updatedVehicle.UpdatedBy,
-		"assigned_shipment": updatedVehicle.AssignedShipment,
-		"assigned_branch":   updatedVehicle.AssignedBranch,
-		"message":           "Vehículo asignado exitosamente al branch",
+	vehicle, found := h.repo.GetByLicensePlate(plate)
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "vehicle not found"})
+		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// Vehicle must be en_carga to allow unassignment
+	if vehicle.Status != model.VehicleStatusLoading {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "shipments can only be removed while the vehicle is loading",
+			"current_status": getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	// Verify shipment is actually assigned to this vehicle
+	found = false
+	for _, s := range vehicle.AssignedShipments {
+		if s == trackingID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not assigned to this vehicle"})
+		return
+	}
+
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	// Determine current branch city for location
+	var branchCity string
+	if vehicle.AssignedBranch != nil {
+		branch, ok := h.branchRepo.GetByID(*vehicle.AssignedBranch)
+		if ok {
+			branchCity = branch.City
+		}
+	}
+
+	statusReq := model.UpdateStatusRequest{
+		Status:    model.StatusAtBranch,
+		ChangedBy: user.Username,
+		Notes:     "Unassigned from vehicle: " + vehicle.LicensePlate,
+		Location:  branchCity,
+	}
+	if _, err := h.shipmentSvc.UpdateStatus(trackingID, statusReq); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error transitioning shipment: " + err.Error()})
+		return
+	}
+
+	// Remove from vehicle
+	if err := h.repo.RemoveShipment(vehicle.ID, trackingID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error removing shipment from vehicle: " + err.Error()})
+		return
+	}
+
+	// If no shipments remain, set vehicle back to disponible
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+	if len(updatedVehicle.AssignedShipments) == 0 {
+		if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
+			_ = err
+		}
+		updatedVehicle, _ = h.repo.GetByID(vehicle.ID)
+	}
+
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Shipment unassigned successfully"
+	c.JSON(http.StatusOK, resp)
 }
 
-// EndTrip ends a trip for a vehicle that is in transit.
-// It clears the assigned shipment, destination_branch, and changes status to available.
-//
-// @Summary      End vehicle trip
-// @Description  Ends a trip for a vehicle. Clears assigned shipment and destination_branch, changes status to 'disponible'. Supervisor and admin only.
-// @Tags         vehicles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        plate  path      string  true  "License plate (patente)"
-// @Param        body  body      EndTripRequest  true  "Optional notes"
-// @Success      200   {object}  model.Vehicle
-// @Failure      400   {object}  map[string]string
-// @Failure      401   {object}  map[string]string
-// @Failure      403   {object}  map[string]string
-// @Failure      404   {object}  map[string]string
-// @Failure      409   {object}  map[string]string
-// @Router       /vehicles/by-plate/{plate}/end-trip [post]
+// EndTrip ends a trip: vehicle moves to the destination branch, becomes disponible,
+// all assigned shipments transition to at_branch.
 func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -625,14 +599,12 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		return
 	}
 
-	// Get vehicle by license plate
 	vehicle, found := h.repo.GetByLicensePlate(plate)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
 		return
 	}
 
-	// Only allow ending trip if vehicle is in transit
 	if vehicle.Status != model.VehicleStatusInTransit {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":          "Solo se puede finalizar el viaje de vehículos en tránsito",
@@ -641,61 +613,57 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		return
 	}
 
-	// Get user from context
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	// Clear assigned shipment and destination_branch
-	if err := h.repo.AssignShipment(vehicle.ID, nil); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al liberar el envío: " + err.Error()})
-		return
+	// Determine destination city for shipment location
+	var destCity string
+	if vehicle.DestinationBranch != nil {
+		destBranch, found := h.branchRepo.GetByID(*vehicle.DestinationBranch)
+		if found {
+			destCity = destBranch.City
+		}
 	}
 
-	// Clear destination_branch
+	// Transition all assigned shipments to at_branch
+	for _, tid := range vehicle.AssignedShipments {
+		statusReq := model.UpdateStatusRequest{
+			Status:    model.StatusAtBranch,
+			ChangedBy: user.Username,
+			Notes:     "Trip ended. Vehicle: " + vehicle.LicensePlate,
+		}
+		if destCity != "" {
+			statusReq.Location = destCity
+		}
+		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
+			_ = err
+		}
+	}
+
+	// Vehicle arrives at destination — set assigned_branch = destination_branch
+	if vehicle.DestinationBranch != nil {
+		destID := *vehicle.DestinationBranch
+		if err := h.repo.AssignBranch(vehicle.ID, &destID); err != nil {
+			_ = err
+		}
+	}
+
+	// Clear shipments and destination
+	if err := h.repo.ClearShipments(vehicle.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al liberar los envíos: " + err.Error()})
+		return
+	}
 	if err := h.repo.SetDestinationBranch(vehicle.ID, nil); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al limpiar el branch de destino: " + err.Error()})
-		return
+		_ = err
 	}
 
-	// Update vehicle status to "disponible"
+	// Set vehicle to disponible
 	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
 		return
 	}
 
-	// Update shipment status to "at_branch" if there was an assigned shipment
-	if vehicle.AssignedShipment != nil {
-		shipmentUpdateReq := model.UpdateStatusRequest{
-			Status:    model.StatusAtBranch,
-			ChangedBy: user.Username,
-			Notes:     "Viaje finalizado. Envío en sucursal.",
-		}
-		if _, err := h.shipmentSvc.UpdateStatus(*vehicle.AssignedShipment, shipmentUpdateReq); err != nil {
-			// Log warning but don't fail - vehicle status was updated successfully
-		}
-	}
-
-	// Get updated vehicle
-	updatedVehicle, found := h.repo.GetByID(vehicle.ID)
-	if !found {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al obtener el vehículo actualizado"})
-		return
-	}
-
-	// Build response
-	response := gin.H{
-		"id":                 updatedVehicle.ID,
-		"license_plate":      updatedVehicle.LicensePlate,
-		"type":               updatedVehicle.Type,
-		"capacity_kg":        updatedVehicle.CapacityKg,
-		"status":             updatedVehicle.Status,
-		"status_label":       getStatusLabel(updatedVehicle.Status),
-		"updated_at":         updatedVehicle.UpdatedAt,
-		"updated_by":         updatedVehicle.UpdatedBy,
-		"assigned_shipment":  updatedVehicle.AssignedShipment,
-		"assigned_branch":    updatedVehicle.AssignedBranch,
-		"destination_branch": updatedVehicle.DestinationBranch,
-		"message":            "Viaje finalizado exitosamente. El vehículo está disponible nuevamente.",
-	}
-
-	c.JSON(http.StatusOK, response)
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Viaje finalizado. El vehículo está disponible en el branch de destino."
+	c.JSON(http.StatusOK, resp)
 }

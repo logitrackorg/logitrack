@@ -10,6 +10,7 @@ import {
 } from "../api/shipments";
 import { usersApi } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
+import { VehicleDetailModal } from "./VehicleList";
 import type { User } from "../api/auth";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
@@ -22,13 +23,13 @@ import { useIsMobile } from "../hooks/useIsMobile";
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending:           [],
   in_progress:       ["pre_transit"],
-  pre_transit:       ["in_transit"],
-  in_transit:        ["at_branch"],
-  at_branch:         ["in_transit", "delivering", "ready_for_pickup", "ready_for_return"],
+  pre_transit:       [],          // locked — driven by fleet (Start Trip)
+  in_transit:        [],          // locked — driven by fleet (End Trip)
+  at_branch:         ["pre_transit", "delivering", "ready_for_pickup", "ready_for_return"],
   delivering:        ["delivered", "delivery_failed"],
   delivery_failed:   ["delivering", "at_branch"],
   delivered:         [],
-  ready_for_pickup:  ["delivered", "in_transit"],
+  ready_for_pickup:  ["delivered", "pre_transit"],
   ready_for_return:  ["returned"],
   returned:          [],
   cancelled:         [],
@@ -90,6 +91,14 @@ export function ShipmentDetail() {
   const [cancelError, setCancelError] = useState("");
   const [assignedVehicle, setAssignedVehicle] = useState<VehicleStatusResponse | null>(null);
   const [loadingVehicle, setLoadingVehicle] = useState(false);
+  const [showVehicleDetail, setShowVehicleDetail] = useState(false);
+  // Vehicle picker for pre_transit
+  const [showVehiclePicker, setShowVehiclePicker] = useState(false);
+  const [availableVehicles, setAvailableVehicles] = useState<import("../api/vehicles").Vehicle[]>([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [selectedVehiclePlate, setSelectedVehiclePlate] = useState("");
+  const [assigningVehicle, setAssigningVehicle] = useState(false);
+  const [vehiclePickerError, setVehiclePickerError] = useState("");
   const reload = async () => {
     if (!trackingId) return;
     try {
@@ -104,8 +113,8 @@ export function ShipmentDetail() {
       setNewStatus("");
       if (s.status === "pending") {
         setDraftForm({
-          sender: { ...s.sender },
-          recipient: { ...s.recipient },
+          sender: { ...s.sender, phone: (s.sender.phone ?? "").replace(/\D/g, "") },
+          recipient: { ...s.recipient, phone: (s.recipient.phone ?? "").replace(/\D/g, "") },
           weight_kg: s.weight_kg ?? 0,
           package_type: s.package_type ?? "box",
           is_fragile: s.is_fragile ?? false,
@@ -134,6 +143,56 @@ export function ShipmentDetail() {
     }
   };
 
+  const effectiveWeightKg = (s: Shipment): number => {
+    const corrected = s.corrections?.weight_kg;
+    if (corrected !== undefined) {
+      const parsed = parseFloat(corrected);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return s.weight_kg ?? 0;
+  };
+
+  const openVehiclePicker = async (s: Shipment) => {
+    setVehiclePickerError("");
+    setSelectedVehiclePlate("");
+    setShowVehiclePicker(true);
+    setLoadingVehicles(true);
+    try {
+      // Determine which branch the shipment is currently at
+      const branchId = (s.status === "at_branch" || s.status === "ready_for_pickup")
+        ? s.current_location
+        : s.receiving_branch_id;
+      const vehicles = await vehicleApi.listAvailable({ branch_id: branchId ?? undefined });
+      // Filter by available remaining capacity
+      const eligible = vehicles.filter(v => {
+        const usedKg = (v.assigned_shipments ?? []).reduce((acc: number) => acc, 0);
+        return v.capacity_kg - usedKg >= effectiveWeightKg(s);
+      });
+      setAvailableVehicles(eligible);
+    } catch {
+      setVehiclePickerError("Failed to load available vehicles.");
+    } finally {
+      setLoadingVehicles(false);
+    }
+  };
+
+  const handleAssignVehicle = async () => {
+    if (!selectedVehiclePlate || !trackingId) return;
+    setAssigningVehicle(true);
+    setVehiclePickerError("");
+    try {
+      await vehicleApi.assignToShipment(selectedVehiclePlate, { tracking_id: trackingId });
+      setShowVehiclePicker(false);
+      setNewStatus("");
+      await reload();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setVehiclePickerError(msg ?? "Failed to assign vehicle.");
+    } finally {
+      setAssigningVehicle(false);
+    }
+  };
+
   useEffect(() => {
     reload();
     branchApi.list().then(setBranches);
@@ -144,8 +203,8 @@ export function ShipmentDetail() {
 
   const handleSaveDraftChanges = async () => {
     if (!trackingId || !draftForm) return;
-    if (draftForm.sender.dni && draftForm.sender.dni.length < 7) { setSaveDraftError("Sender DNI must be at least 7 digits."); return; }
-    if (draftForm.recipient.dni && draftForm.recipient.dni.length < 7) { setSaveDraftError("Recipient DNI must be at least 7 digits."); return; }
+    if (!draftForm.sender.name) { setSaveDraftError("Sender name is required."); return; }
+    if (!draftForm.recipient.name) { setSaveDraftError("Recipient name is required."); return; }
     setSavingDraft(true);
     setSaveDraftError("");
     try {
@@ -160,10 +219,30 @@ export function ShipmentDetail() {
   };
 
   const handleConfirmDraft = async () => {
-    if (!trackingId) return;
+    if (!trackingId || !draftForm) return;
+    if (!draftForm.sender.name) { setConfirmError("Sender name is required."); return; }
+    if (!draftForm.sender.phone) { setConfirmError("Sender phone is required."); return; }
+    if (!draftForm.sender.dni || draftForm.sender.dni.length < 7) { setConfirmError("Sender DNI must be at least 7 digits."); return; }
+    if (!draftForm.sender.address.street) { setConfirmError("Sender street is required."); return; }
+    if (!draftForm.sender.address.city) { setConfirmError("Sender city is required."); return; }
+    if (/^\d+$/.test(draftForm.sender.address.city)) { setConfirmError("Sender city cannot contain numbers only."); return; }
+    if (!draftForm.sender.address.province) { setConfirmError("Sender province is required."); return; }
+    if (!draftForm.sender.address.postal_code) { setConfirmError("Sender postal code is required."); return; }
+    if (/^[a-zA-Z]+$/.test(draftForm.sender.address.postal_code)) { setConfirmError("Sender postal code must contain at least one digit."); return; }
+    if (!draftForm.recipient.name) { setConfirmError("Recipient name is required."); return; }
+    if (!draftForm.recipient.phone) { setConfirmError("Recipient phone is required."); return; }
+    if (!draftForm.recipient.dni || draftForm.recipient.dni.length < 7) { setConfirmError("Recipient DNI must be at least 7 digits."); return; }
+    if (!draftForm.recipient.address.street) { setConfirmError("Recipient street is required."); return; }
+    if (!draftForm.recipient.address.city) { setConfirmError("Recipient city is required."); return; }
+    if (/^\d+$/.test(draftForm.recipient.address.city)) { setConfirmError("Recipient city cannot contain numbers only."); return; }
+    if (!draftForm.recipient.address.province) { setConfirmError("Recipient province is required."); return; }
+    if (!draftForm.recipient.address.postal_code) { setConfirmError("Recipient postal code is required."); return; }
+    if (/^[a-zA-Z]+$/.test(draftForm.recipient.address.postal_code)) { setConfirmError("Recipient postal code must contain at least one digit."); return; }
+    if (!draftForm.weight_kg || draftForm.weight_kg <= 0) { setConfirmError("Weight must be greater than 0."); return; }
     setConfirming(true);
     setConfirmError("");
     try {
+      await shipmentApi.updateDraft(trackingId, draftForm);
       const confirmed = await shipmentApi.confirmDraft(trackingId, user!.username);
       navigate(`/shipments/${confirmed.tracking_id}`, { replace: true });
     } catch (err: unknown) {
@@ -269,6 +348,26 @@ export function ShipmentDetail() {
       setShowCorrectionModal(false);
       return;
     }
+    const required: Array<[string, string]> = [
+      ["sender_name", "Sender name"],
+      ["sender_phone", "Sender phone"],
+      ["sender_dni", "Sender DNI"],
+      ["origin_street", "Sender street"],
+      ["origin_city", "Sender city"],
+      ["origin_province", "Sender province"],
+      ["origin_postal_code", "Sender postal code"],
+      ["recipient_name", "Recipient name"],
+      ["recipient_phone", "Recipient phone"],
+      ["recipient_dni", "Recipient DNI"],
+      ["destination_street", "Recipient street"],
+      ["destination_city", "Recipient city"],
+      ["destination_province", "Recipient province"],
+      ["destination_postal_code", "Recipient postal code"],
+    ];
+    for (const [key, label] of required) {
+      if (!correctionForm[key]?.trim()) { setCorrectionError(`${label} is required.`); return; }
+    }
+    if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("Weight must be greater than 0."); return; }
     if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("Sender DNI must be at least 7 digits."); return; }
     if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("Recipient DNI must be at least 7 digits."); return; }
     setSavingCorrection(true);
@@ -431,13 +530,29 @@ export function ShipmentDetail() {
       )}
 
       {/* Status update — supervisor and admin only */}
+      {(shipment.status === "pre_transit" || shipment.status === "in_transit") && hasRole("supervisor", "admin", "operator") && (
+        <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
+            {shipment.status === "pre_transit"
+              ? "This shipment is loaded on a vehicle and waiting for the trip to start. Status is controlled from the Fleet page."
+              : "This shipment is in transit. Status will update automatically when the vehicle completes the trip."}
+          </p>
+        </div>
+      )}
+
       {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Update Status</h2>
           <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {nextStatuses.map((s) => (
-                <button key={s} type="button" onClick={() => setNewStatus(s)}
+                <button key={s} type="button" onClick={() => {
+                  if (s === "pre_transit") {
+                    openVehiclePicker(shipment);
+                  } else {
+                    setNewStatus(s);
+                  }
+                }}
                   style={{
                     padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
                     border: newStatus === s ? "2px solid #1e3a5f" : "2px solid #e5e7eb",
@@ -448,23 +563,6 @@ export function ShipmentDetail() {
                 </button>
               ))}
             </div>
-            {newStatus === "in_transit" && (
-              <select value={location} onChange={(e) => setLocation(e.target.value)}
-                required style={inputStyle}>
-                <option value="">Select destination branch (required)</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.city}>{b.name}</option>
-                ))}
-              </select>
-            )}
-            {newStatus === "at_branch" && shipment.status === "in_transit" && (() => {
-              const arrivalLocation = [...events].reverse().find(ev => ev.to_status === "in_transit")?.location;
-              return arrivalLocation ? (
-                <p style={{ margin: 0, fontSize: 13, color: "#4b5563" }}>
-                  Arriving at: <strong>{branchLabel(arrivalLocation, branches)}</strong>
-                </p>
-              ) : null;
-            })()}
             {newStatus === "delivering" && (
               <select
                 value={selectedDriverId}
@@ -610,7 +708,12 @@ export function ShipmentDetail() {
                   </svg>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 }}>{assignedVehicle.license_plate}</p>
+                  <p
+                    onClick={() => setShowVehicleDetail(true)}
+                    style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
+                  >
+                    {assignedVehicle.license_plate}
+                  </p>
                   <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
                     {assignedVehicle.type === "motocicleta" ? "Motocicleta" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : assignedVehicle.type === "camion" ? "Camión" : "Camión Grande"} · {assignedVehicle.capacity_kg} kg
                   </p>
@@ -709,6 +812,93 @@ export function ShipmentDetail() {
           onClose={() => setShowCorrectionModal(false)}
           saving={savingCorrection}
           error={correctionError}
+        />
+      )}
+
+      {/* Vehicle picker modal for pre_transit */}
+      {showVehiclePicker && shipment && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setShowVehiclePicker(false)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Assign Vehicle — Pre-Transit</h2>
+              <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+            </div>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+              Select an available vehicle at this branch. Shipment weight: <strong>{effectiveWeightKg(shipment)} kg</strong>.
+            </p>
+            {vehiclePickerError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+                {vehiclePickerError}
+              </div>
+            )}
+            {loadingVehicles ? (
+              <p style={{ color: "#6b7280", fontSize: 13 }}>Loading available vehicles...</p>
+            ) : availableVehicles.length === 0 ? (
+              <p style={{ color: "#6b7280", fontSize: 13 }}>No available vehicles at this branch with enough capacity.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                {availableVehicles.map((v) => {
+                  const usedKg = (v.assigned_shipments ?? []).length > 0
+                    ? v.capacity_kg - v.capacity_kg // we don't have weights here, show raw capacity
+                    : 0;
+                  const remainingKg = v.capacity_kg - usedKg;
+                  const isSelected = selectedVehiclePlate === v.license_plate;
+                  return (
+                    <div
+                      key={v.license_plate}
+                      onClick={() => setSelectedVehiclePlate(v.license_plate)}
+                      style={{
+                        border: isSelected ? "2px solid #1e3a5f" : "1px solid #e5e7eb",
+                        borderRadius: 8, padding: "12px 14px", cursor: "pointer",
+                        background: isSelected ? "#e0eaff" : "#fff",
+                        display: "flex", alignItems: "center", gap: 12,
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
+                          {v.type === "motocicleta" ? "Motocicleta" : v.type === "furgoneta" ? "Furgoneta" : v.type === "camion" ? "Camión" : "Camión Grande"}
+                          {" · "}Capacity: {remainingKg.toFixed(0)} kg available
+                          {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} shipment(s) loaded`}
+                        </p>
+                      </div>
+                      {isSelected && <span style={{ color: "#1e3a5f", fontWeight: 700 }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignVehicle}
+                disabled={!selectedVehiclePlate || assigningVehicle}
+                style={{
+                  padding: "8px 16px", borderRadius: 6, border: "none", fontWeight: 600, cursor: !selectedVehiclePlate || assigningVehicle ? "default" : "pointer",
+                  background: !selectedVehiclePlate || assigningVehicle ? "#e5e7eb" : "#1e3a5f",
+                  color: !selectedVehiclePlate || assigningVehicle ? "#9ca3af" : "#fff",
+                }}
+              >
+                {assigningVehicle ? "Assigning..." : "Assign & Move to Pre-Transit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showVehicleDetail && assignedVehicle && (
+        <VehicleDetailModal
+          vehicle={assignedVehicle}
+          onClose={() => setShowVehicleDetail(false)}
+          onRefresh={() => loadAssignedVehicle(trackingId!)}
         />
       )}
 
@@ -847,7 +1037,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       sender: {
         ...form.sender,
         name: senderSuggestion.name,
-        phone: senderSuggestion.phone,
+        phone: (senderSuggestion.phone ?? "").replace(/\D/g, ""),
         email: senderSuggestion.email ?? form.sender.email,
         address: {
           street: senderSuggestion.address.street ?? form.sender.address.street,
@@ -879,7 +1069,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       recipient: {
         ...form.recipient,
         name: recipientSuggestion.name,
-        phone: recipientSuggestion.phone,
+        phone: (recipientSuggestion.phone ?? "").replace(/\D/g, ""),
         email: recipientSuggestion.email ?? form.recipient.email,
         address: {
           street: recipientSuggestion.address.street ?? form.recipient.address.street,
@@ -900,22 +1090,22 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Sender</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Name"><input style={inp} value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
-          <DField label="Phone"><input style={inp} value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value)} placeholder="+54 9 11 1234-5678" /></DField>
+          <DField label="Name *"><input style={inp} required value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
+          <DField label="Phone *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="optional" /></DField>
-          <DField label="DNI">
-            <input style={inp} value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="e.g. 30123456" />
+          <DField label="DNI *">
+            <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="e.g. 30123456" />
             {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
           </DField>
-          <DField label="Street"><input style={inp} value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
-          <DField label="City *"><input style={inp} value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
+          <DField label="Street *"><input style={inp} required value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
+          <DField label="City *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
           <DField label="Province *">
-            <select style={inp} value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
+            <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
               <option value="">Select</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Postal code"><input style={inp} value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
+          <DField label="Postal code *"><input style={inp} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
         </div>
       </fieldset>
 
@@ -923,22 +1113,22 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Recipient</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Name"><input style={inp} value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
-          <DField label="Phone"><input style={inp} value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value)} placeholder="+54 9 351 678-4321" /></DField>
+          <DField label="Name *"><input style={inp} required value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
+          <DField label="Phone *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="optional" /></DField>
-          <DField label="DNI">
-            <input style={inp} value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="e.g. 28456789" />
+          <DField label="DNI *">
+            <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="e.g. 28456789" />
             {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
           </DField>
-          <DField label="Street"><input style={inp} value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
-          <DField label="City *"><input style={inp} value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
+          <DField label="Street *"><input style={inp} required value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
+          <DField label="City *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
           <DField label="Province *">
-            <select style={inp} value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
+            <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
               <option value="">Select</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Postal code"><input style={inp} value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
+          <DField label="Postal code *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
         </div>
       </fieldset>
 
@@ -947,7 +1137,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
         <legend style={legStyle}>Package</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
           <DField label="Weight (kg) *">
-            <input style={inp} type="number" step="0.1" min="0" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
+            <input style={inp} type="number" step="0.1" min="0.1" required value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
           </DField>
           <DField label="Package type *">
             <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>

@@ -18,7 +18,12 @@ type VehicleRepository interface {
 	GetByLicensePlate(licensePlate string) (model.Vehicle, bool)
 	UpdateStatus(id string, status model.VehicleStatus) error
 	UpdateStatusByUser(id string, status model.VehicleStatus, username string) error
-	AssignShipment(id string, trackingID *string) error
+	// AddShipment appends a tracking ID to the vehicle's assigned shipments list.
+	AddShipment(id string, trackingID string) error
+	// RemoveShipment removes a tracking ID from the vehicle's assigned shipments list.
+	RemoveShipment(id string, trackingID string) error
+	// ClearShipments clears all assigned shipments from a vehicle.
+	ClearShipments(id string) error
 	AssignBranch(id string, branchID *string) error
 	SetDestinationBranch(id string, branchID *string) error
 }
@@ -47,12 +52,12 @@ func (r *inMemoryVehicleRepository) Add(vehicle model.Vehicle) error {
 
 	// Check for duplicate license plate
 	for _, v := range r.vehicles {
-		if v.LicensePlate == vehicle.LicensePlate {
+		if strings.ToUpper(v.LicensePlate) == strings.ToUpper(vehicle.LicensePlate) {
 			return ErrDuplicateLicensePlate
 		}
 	}
 
-	vehicle.ID = string(r.nextID)
+	vehicle.ID = string(rune('0' + r.nextID))
 	r.nextID++
 	r.vehicles = append(r.vehicles, vehicle)
 	return nil
@@ -108,12 +113,50 @@ func (r *inMemoryVehicleRepository) UpdateStatusByUser(id string, status model.V
 	return errors.New("vehicle not found")
 }
 
-func (r *inMemoryVehicleRepository) AssignShipment(id string, trackingID *string) error {
+func (r *inMemoryVehicleRepository) AddShipment(id string, trackingID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i, v := range r.vehicles {
 		if v.ID == id {
-			r.vehicles[i].AssignedShipment = trackingID
+			// Avoid duplicates
+			for _, s := range v.AssignedShipments {
+				if s == trackingID {
+					return nil
+				}
+			}
+			r.vehicles[i].AssignedShipments = append(r.vehicles[i].AssignedShipments, trackingID)
+			r.vehicles[i].UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return errors.New("vehicle not found")
+}
+
+func (r *inMemoryVehicleRepository) RemoveShipment(id string, trackingID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, v := range r.vehicles {
+		if v.ID == id {
+			filtered := make([]string, 0, len(v.AssignedShipments))
+			for _, s := range v.AssignedShipments {
+				if s != trackingID {
+					filtered = append(filtered, s)
+				}
+			}
+			r.vehicles[i].AssignedShipments = filtered
+			r.vehicles[i].UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return errors.New("vehicle not found")
+}
+
+func (r *inMemoryVehicleRepository) ClearShipments(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, v := range r.vehicles {
+		if v.ID == id {
+			r.vehicles[i].AssignedShipments = nil
 			r.vehicles[i].UpdatedAt = time.Now()
 			return nil
 		}

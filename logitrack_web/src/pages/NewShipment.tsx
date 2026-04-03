@@ -95,7 +95,7 @@ export function NewShipment() {
       sender: {
         ...prev.sender,
         name: senderSuggestion.name,
-        phone: senderSuggestion.phone,
+        phone: (senderSuggestion.phone ?? "").replace(/\D/g, ""),
         email: senderSuggestion.email ?? prev.sender.email,
         address: {
           street: senderSuggestion.address.street ?? prev.sender.address.street,
@@ -127,7 +127,7 @@ export function NewShipment() {
       recipient: {
         ...prev.recipient,
         name: recipientSuggestion.name,
-        phone: recipientSuggestion.phone,
+        phone: (recipientSuggestion.phone ?? "").replace(/\D/g, ""),
         email: recipientSuggestion.email ?? prev.recipient.email,
         address: {
           street: recipientSuggestion.address.street ?? prev.recipient.address.street,
@@ -142,8 +142,19 @@ export function NewShipment() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.sender.phone) { setError("Sender phone is required."); return; }
+    if (!form.recipient.phone) { setError("Recipient phone is required."); return; }
     if (form.sender.dni.length < 7) { setError("Sender DNI must be at least 7 digits."); return; }
     if (form.recipient.dni.length < 7) { setError("Recipient DNI must be at least 7 digits."); return; }
+    if (!form.weight_kg || form.weight_kg <= 0) { setError("Weight must be greater than 0."); return; }
+    if (!form.sender.address.street) { setError("Sender street is required."); return; }
+    if (!form.recipient.address.street) { setError("Recipient street is required."); return; }
+    if (/^\d+$/.test(form.sender.address.city)) { setError("Sender city cannot contain numbers only."); return; }
+    if (/^\d+$/.test(form.recipient.address.city)) { setError("Recipient city cannot contain numbers only."); return; }
+    if (!form.sender.address.postal_code) { setError("Sender postal code is required."); return; }
+    if (/^[a-zA-Z]+$/.test(form.sender.address.postal_code)) { setError("Sender postal code must contain at least one digit."); return; }
+    if (!form.recipient.address.postal_code) { setError("Recipient postal code is required."); return; }
+    if (/^[a-zA-Z]+$/.test(form.recipient.address.postal_code)) { setError("Recipient postal code must contain at least one digit."); return; }
     setLoading(true);
     setError("");
     try {
@@ -158,8 +169,8 @@ export function NewShipment() {
   };
 
   const handleSaveDraft = async () => {
-    if (form.sender.dni && form.sender.dni.length < 7) { setError("Sender DNI must be at least 7 digits."); return; }
-    if (form.recipient.dni && form.recipient.dni.length < 7) { setError("Recipient DNI must be at least 7 digits."); return; }
+    if (!form.sender.name) { setError("Sender name is required to save a draft."); return; }
+    if (!form.recipient.name) { setError("Recipient name is required to save a draft."); return; }
     setLoading(true);
     setError("");
     try {
@@ -213,7 +224,7 @@ export function NewShipment() {
             </Field>
             <Field label="Phone *">
               <input style={input} required value={form.sender.phone}
-                onChange={(e) => setSender("phone", e.target.value)} placeholder="+54 9 11 1234-5678" />
+                onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" />
             </Field>
           </Row2>
           <Row2>
@@ -232,8 +243,8 @@ export function NewShipment() {
             </Field>
           </Row2>
           <Row2>
-            <Field label="Street">
-              <input style={input} value={form.sender.address.street}
+            <Field label="Street *">
+              <input style={input} required value={form.sender.address.street}
                 onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </Field>
             <Field label="City *">
@@ -249,8 +260,8 @@ export function NewShipment() {
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Postal Code">
-              <input style={input} value={form.sender.address.postal_code}
+            <Field label="Postal Code *">
+              <input style={input} required value={form.sender.address.postal_code}
                 onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" />
             </Field>
           </Row2>
@@ -265,7 +276,7 @@ export function NewShipment() {
             </Field>
             <Field label="Phone *">
               <input style={input} required value={form.recipient.phone}
-                onChange={(e) => setRecipient("phone", e.target.value)} placeholder="+54 9 351 678-4321" />
+                onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" />
             </Field>
           </Row2>
           <Row2>
@@ -284,8 +295,8 @@ export function NewShipment() {
             </Field>
           </Row2>
           <Row2>
-            <Field label="Street">
-              <input style={input} value={form.recipient.address.street}
+            <Field label="Street *">
+              <input style={input} required value={form.recipient.address.street}
                 onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" />
             </Field>
             <Field label="City *">
@@ -301,8 +312,8 @@ export function NewShipment() {
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Postal Code">
-              <input style={input} value={form.recipient.address.postal_code}
+            <Field label="Postal Code *">
+              <input style={input} required value={form.recipient.address.postal_code}
                 onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
