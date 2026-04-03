@@ -6,6 +6,12 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
 
+// Returns the corrected value if one exists, otherwise the original.
+function corr(s: Shipment, key: string, fallback: string | number): string {
+  const v = s.corrections?.[key];
+  return v !== undefined ? v : String(fallback);
+}
+
 type StatusFilter = ShipmentStatus | "active" | "";
 
 export function ShipmentList() {
@@ -163,10 +169,10 @@ export function ShipmentList() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
                   <td style={td}><code>{s.status === "pending" ? <span style={{ color: "#9ca3af" }}>—</span> : s.tracking_id}</code></td>
-                  <td style={td}>{s.sender.name}</td>
-                  <td style={td}>{s.recipient.name}</td>
-                  <td style={td}>{s.sender.address.city} → {s.recipient.address.city}</td>
-                  <td style={td}>{s.weight_kg} kg</td>
+                  <td style={td}>{corr(s, "sender_name", s.sender.name)}</td>
+                  <td style={td}>{corr(s, "recipient_name", s.recipient.name)}</td>
+                  <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>
+                  <td style={td}>{corr(s, "weight_kg", s.weight_kg)} kg</td>
                   <td style={td}><PriorityBadge priority={s.priority} /></td>
                   <td style={td}><StatusBadge status={s.status} /></td>
                   <td style={td}>{fmtDate(s.created_at)}</td>

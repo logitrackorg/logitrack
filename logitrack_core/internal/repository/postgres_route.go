@@ -66,6 +66,50 @@ func (r *postgresRouteRepository) GetByID(id string) (model.Route, error) {
 	return scanRoute(row)
 }
 
+func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date model.DateOnly) error {
+	rows, err := r.db.Query(`
+		SELECT id, date, driver_id, shipment_ids, created_by, created_at
+		FROM routes WHERE date = $1 AND shipment_ids @> jsonb_build_array($2::text)`,
+		date.String(), trackingID,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var toUpdate []model.Route
+	for rows.Next() {
+		var (
+			route   model.Route
+			dateStr string
+			idsJSON []byte
+			ts      time.Time
+		)
+		if err := rows.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts); err != nil {
+			continue
+		}
+		route.CreatedAt = ts
+		if err := json.Unmarshal(idsJSON, &route.ShipmentIDs); err != nil {
+			continue
+		}
+		filtered := route.ShipmentIDs[:0]
+		for _, id := range route.ShipmentIDs {
+			if id != trackingID {
+				filtered = append(filtered, id)
+			}
+		}
+		route.ShipmentIDs = filtered
+		toUpdate = append(toUpdate, route)
+	}
+
+	for _, route := range toUpdate {
+		if err := r.Update(route); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func scanRoute(row *sql.Row) (model.Route, error) {
 	var (
 		route   model.Route

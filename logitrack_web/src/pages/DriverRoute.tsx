@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { shipmentApi } from "../api/shipments";
 import { StatusBadge } from "../components/StatusBadge";
-import { fmtDate } from "../utils/date";
 
 export function DriverRoute() {
   const navigate = useNavigate();
@@ -78,7 +77,8 @@ export function DriverRoute() {
     );
   }
 
-  const today = fmtDate(data.route.date + "T00:00:00Z");
+  const [ry, rm, rd] = data.route.date.split("-");
+  const today = `${rd}/${rm}/${ry}`;
   const pending = data.shipments.filter((s) => s.status === "delivering").length;
   const done = data.shipments.filter((s) => s.status === "delivered" || s.status === "delivery_failed").length;
 

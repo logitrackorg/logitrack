@@ -4,16 +4,16 @@ import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
 
 const vehicleTypeLabels: Record<string, string> = {
-  motocicleta: "Motocicleta",
-  furgoneta: "Furgoneta",
-  camion: "Camión",
-  camion_grande: "Camión Grande",
+  motocicleta: "Motorcycle",
+  furgoneta: "Van",
+  camion: "Truck",
+  camion_grande: "Large Truck",
 };
 
 export function VehicleAssignment() {
   const { hasRole } = useAuth();
 
-  // Solo supervisor y admin pueden asignar vehículos
+  // Only supervisor and admin can assign vehicles
   if (!hasRole("supervisor") && !hasRole("admin")) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -55,14 +55,14 @@ export function VehicleAssignment() {
       const data = await vehicleApi.getByPlate(plate);
       setVehicle(data);
 
-      if (data.assigned_shipment) {
+      if (data.assigned_shipments && data.assigned_shipments.length > 0) {
         setAlreadyAssigned({
-          shipment: data.assigned_shipment,
+          shipment: data.assigned_shipments[0],
           status: data.status_label,
         });
       }
     } catch (err: any) {
-      setError("Error al cargar el vehículo");
+      setError("Error loading vehicle");
     }
   };
 
@@ -74,17 +74,17 @@ export function VehicleAssignment() {
 
   const handleAssign = async () => {
     if (!vehicle) {
-      setError("Debe seleccionar un vehículo");
+      setError("You must select a vehicle");
       return;
     }
 
     if (!trackingId.trim()) {
-      setError("El tracking ID del envío es obligatorio");
+      setError("Shipment tracking ID is required");
       return;
     }
 
     if (!validateTrackingId(trackingId.trim())) {
-      setError("El tracking ID debe tener el formato LT-XXXXXXXX (ej: LT-AB123456)");
+      setError("Tracking ID must follow the format LT-XXXXXXXX (e.g. LT-AB123456)");
       return;
     }
 
@@ -95,7 +95,7 @@ export function VehicleAssignment() {
     try {
       const result = await vehicleApi.assignToShipment(vehicle.license_plate, { tracking_id: trackingId.trim() });
       setVehicle(result);
-      setSuccess(result.message || "Vehículo asignado exitosamente");
+      setSuccess(result.message || "Vehicle assigned successfully");
       setTrackingId("");
       setSelectedPlate("");
       setAlreadyAssigned(null);
@@ -104,21 +104,21 @@ export function VehicleAssignment() {
     } catch (err: any) {
       if (err.response?.status === 409) {
         const errorData = err.response?.data;
-        if (errorData.assigned_shipment) {
+        if (errorData.assigned_shipments && errorData.assigned_shipments.length > 0) {
           setAlreadyAssigned({
-            shipment: errorData.assigned_shipment,
+            shipment: errorData.assigned_shipments[0],
             status: errorData.current_status,
           });
-          setError(`El vehículo ya está asignado al envío ${errorData.assigned_shipment}`);
+          setError(`Vehicle is already assigned to shipment ${errorData.assigned_shipments[0]}`);
         } else {
-          setError(errorData.error || "No se puede asignar el vehículo");
+          setError(errorData.error || "Cannot assign vehicle");
         }
       } else if (err.response?.status === 404) {
-        setError("El envío con ese tracking ID no existe");
+        setError("No shipment found with that tracking ID");
       } else if (err.response?.status === 400) {
-        setError(err.response?.data?.error || "Error en los datos");
+        setError(err.response?.data?.error || "Invalid data");
       } else {
-        setError("Error al asignar el vehículo");
+        setError("Error assigning vehicle");
       }
     } finally {
       setAssigning(false);
@@ -136,16 +136,16 @@ export function VehicleAssignment() {
 
   return (
     <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Asignar Vehículo a Envío</h1>
+      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Assign Vehicle to Shipment</h1>
 
-      {/* Lista de vehículos disponibles */}
+      {/* Available vehicles list */}
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "#111827" }}>
-          Vehículos Disponibles
+          Available Vehicles
         </h2>
 
         {loading && availableVehicles.length === 0 ? (
-          <p style={{ color: "#6b7280" }}>Cargando vehículos...</p>
+          <p style={{ color: "#6b7280" }}>Loading vehicles...</p>
         ) : availableVehicles.length === 0 ? (
           <div
             style={{
@@ -157,7 +157,7 @@ export function VehicleAssignment() {
               color: "#6b7280",
             }}
           >
-            No hay vehículos disponibles para asignar
+            No vehicles available for assignment
           </div>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
@@ -220,7 +220,7 @@ export function VehicleAssignment() {
                     color: "#10b981",
                   }}
                 >
-                  Disponible
+                  Available
                 </div>
                 {selectedPlate === v.license_plate && (
                   <svg style={{ width: 24, height: 24, color: "#2563eb" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -253,7 +253,7 @@ export function VehicleAssignment() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Vehículo Seleccionado</p>
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Selected Vehicle</p>
                 <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
                   {vehicle.license_plate}
                 </h2>
@@ -286,27 +286,27 @@ export function VehicleAssignment() {
           <div style={{ padding: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Type</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacity</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicle.capacity_kg} kg</p>
               </div>
               <div>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>ID</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>#{vehicle.id}</p>
               </div>
-              {vehicle.assigned_shipment && (
+              {vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Envío Asignado</p>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipment}</p>
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Assigned Shipments</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
                 </div>
               )}
             </div>
 
-            {/* Formulario de asignación - solo si está disponible */}
-            {vehicle.status === "disponible" && !vehicle.assigned_shipment && (
+            {/* Assignment form — only when available */}
+            {vehicle.status === "disponible" && !(vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0) && (
               <div
                 style={{
                   background: "#f9fafb",
@@ -316,18 +316,18 @@ export function VehicleAssignment() {
                 }}
               >
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 16px" }}>
-                  Asignar a Envío
+                  Assign to Shipment
                 </h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
-                      Tracking ID del Envío *
+                      Shipment Tracking ID *
                     </label>
                     <input
                       type="text"
                       value={trackingId}
                       onChange={(e) => setTrackingId(e.target.value.toUpperCase())}
-                      placeholder="Ej: LT-AB123456"
+                      placeholder="E.g.: LT-AB123456"
                       style={{
                         width: "100%",
                         padding: "10px 14px",
@@ -338,7 +338,7 @@ export function VehicleAssignment() {
                       }}
                     />
                     <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>
-                      Formato: LT-XXXXXXXX (8 caracteres alfanuméricos)
+                      Format: LT-XXXXXXXX (8 alphanumeric characters)
                     </p>
                   </div>
                   <button
@@ -357,13 +357,13 @@ export function VehicleAssignment() {
                       height: 42,
                     }}
                   >
-                    {assigning ? "Asignando..." : "Asignar"}
+                    {assigning ? "Assigning..." : "Assign"}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Vehículo ya asignado */}
+            {/* Vehicle already assigned */}
             {alreadyAssigned && (
               <div
                 style={{
@@ -388,16 +388,16 @@ export function VehicleAssignment() {
                     />
                   </svg>
                   <h3 style={{ fontSize: 16, fontWeight: 600, color: "#92400e", margin: 0 }}>
-                    Vehículo Ya Asignado
+                    Vehicle Already Assigned
                   </h3>
                 </div>
                 <p style={{ fontSize: 14, color: "#78350f", margin: 0 }}>
-                  Este vehículo ya está asignado al envío{" "}
+                  This vehicle is already assigned to shipment{" "}
                   <strong style={{ color: "#1e3a5f" }}>{alreadyAssigned.shipment}</strong>
-                  {" "}y su estado actual es <strong>"{alreadyAssigned.status}"</strong>.
+                  {" "}and its current status is <strong>"{alreadyAssigned.status}"</strong>.
                 </p>
                 <p style={{ fontSize: 13, color: "#92400e", margin: "8px 0 0" }}>
-                  Para asignar este vehículo a otro envío, primero debe finalizar o reasignar el envío actual.
+                  To assign this vehicle to another shipment, the current shipment must be completed or reassigned first.
                 </p>
               </div>
             )}
@@ -405,7 +405,7 @@ export function VehicleAssignment() {
         </div>
       )}
 
-      {/* Mensaje de error */}
+      {/* Error message */}
       {error && (
         <div
           style={{
@@ -422,7 +422,7 @@ export function VehicleAssignment() {
         </div>
       )}
 
-      {/* Mensaje de éxito */}
+      {/* Success message */}
       {success && (
         <div
           style={{
@@ -439,7 +439,7 @@ export function VehicleAssignment() {
         </div>
       )}
 
-      {/* Pie de página */}
+      {/* Footer vehicle card */}
       {vehicle && (
         <div
           style={{
@@ -460,7 +460,7 @@ export function VehicleAssignment() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Patente</p>
+                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>License Plate</p>
                 <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
                   {vehicle.license_plate}
                 </h2>
@@ -493,27 +493,27 @@ export function VehicleAssignment() {
           <div style={{ padding: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Type</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacity</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicle.capacity_kg} kg</p>
               </div>
               <div>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>ID</p>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>#{vehicle.id}</p>
               </div>
-              {vehicle.assigned_shipment && (
+              {vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Envío Asignado</p>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipment}</p>
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Assigned Shipments</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
                 </div>
               )}
             </div>
 
-            {/* Formulario de asignación - solo si está disponible */}
-            {vehicle.status === "disponible" && !vehicle.assigned_shipment && (
+            {/* Assignment form — only when available */}
+            {vehicle.status === "disponible" && !(vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0) && (
               <div
                 style={{
                   background: "#f9fafb",
@@ -523,18 +523,18 @@ export function VehicleAssignment() {
                 }}
               >
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 16px" }}>
-                  Asignar a Envío
+                  Assign to Shipment
                 </h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
-                      Tracking ID del Envío *
+                      Shipment Tracking ID *
                     </label>
                     <input
                       type="text"
                       value={trackingId}
                       onChange={(e) => setTrackingId(e.target.value.toUpperCase())}
-                      placeholder="Ej: LT-XXXXXXXX"
+                      placeholder="E.g.: LT-XXXXXXXX"
                       style={{
                         width: "100%",
                         padding: "10px 14px",
@@ -561,13 +561,13 @@ export function VehicleAssignment() {
                       height: 42,
                     }}
                   >
-                    {assigning ? "Asignando..." : "Asignar"}
+                    {assigning ? "Assigning..." : "Assign"}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Vehículo ya asignado */}
+            {/* Vehicle already assigned */}
             {alreadyAssigned && (
               <div
                 style={{
@@ -592,16 +592,16 @@ export function VehicleAssignment() {
                     />
                   </svg>
                   <h3 style={{ fontSize: 16, fontWeight: 600, color: "#92400e", margin: 0 }}>
-                    Vehículo Ya Asignado
+                    Vehicle Already Assigned
                   </h3>
                 </div>
                 <p style={{ fontSize: 14, color: "#78350f", margin: 0 }}>
-                  Este vehículo ya está asignado al envío{" "}
+                  This vehicle is already assigned to shipment{" "}
                   <strong style={{ color: "#1e3a5f" }}>{alreadyAssigned.shipment}</strong>
-                  {" "}y su estado actual es <strong>"{alreadyAssigned.status}"</strong>.
+                  {" "}and its current status is <strong>"{alreadyAssigned.status}"</strong>.
                 </p>
                 <p style={{ fontSize: 13, color: "#92400e", margin: "8px 0 0" }}>
-                  Para asignar este vehículo a otro envío, primero debe finalizar o reasignar el envío actual.
+                  To assign this vehicle to another shipment, the current shipment must be completed or reassigned first.
                 </p>
               </div>
             )}
@@ -609,7 +609,7 @@ export function VehicleAssignment() {
         </div>
       )}
 
-      {/* Pie de página */}
+      {/* Page footer */}
       <div style={{ marginTop: 24, textAlign: "center" }}>
         <button
           onClick={handleClear}
@@ -622,7 +622,7 @@ export function VehicleAssignment() {
             textDecoration: "underline",
           }}
         >
-          Limpiar selección
+          Clear selection
         </button>
       </div>
     </div>
