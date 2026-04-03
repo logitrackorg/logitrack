@@ -124,8 +124,6 @@ export function ShipmentDetail() {
           cold_chain: s.cold_chain ?? false,
         });
       }
-      // Load assigned vehicle
-      loadAssignedVehicle(trackingId);
     } catch {
       setError("Shipment not found.");
     }
@@ -196,6 +194,7 @@ export function ShipmentDetail() {
 
   useEffect(() => {
     reload();
+    if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
     if (hasRole("supervisor", "admin", "operator")) {
       usersApi.listDrivers().then(setDrivers);
