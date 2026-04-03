@@ -51,7 +51,7 @@ export interface UpdateVehicleStatusRequest {
   force?: boolean;
 }
 
-export interface UpdateVehicleStatusResponse extends VehicleStatusResponse {}
+export type UpdateVehicleStatusResponse = VehicleStatusResponse;
 
 export interface AvailableVehiclesFilters {
   type?: VehicleType;

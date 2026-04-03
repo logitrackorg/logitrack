@@ -89,12 +89,12 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 
 	branchID := req.BranchID
 	vehicle := model.Vehicle{
-		LicensePlate:  req.LicensePlate,
-		Type:          req.Type,
-		CapacityKg:    req.CapacityKg,
-		Status:        model.VehicleStatusAvailable,
+		LicensePlate:   req.LicensePlate,
+		Type:           req.Type,
+		CapacityKg:     req.CapacityKg,
+		Status:         model.VehicleStatusAvailable,
 		AssignedBranch: &branchID,
-		UpdatedAt:     time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	if err := h.repo.Add(vehicle); err != nil {
@@ -314,8 +314,8 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 	}
 	if totalWeight > vehicle.CapacityKg {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "El peso total de los envíos supera la capacidad del vehículo",
-			"capacity_kg":    vehicle.CapacityKg,
+			"error":           "El peso total de los envíos supera la capacidad del vehículo",
+			"capacity_kg":     vehicle.CapacityKg,
 			"total_weight_kg": totalWeight,
 		})
 		return

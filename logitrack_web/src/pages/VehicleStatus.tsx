@@ -82,11 +82,12 @@ export function VehicleStatus() {
     try {
       const data = await vehicleApi.getByPlate(plate.toUpperCase().trim());
       setVehicle(data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string } } };
+      if (e.response?.status === 404) {
         setNotFound(true);
-      } else if (err.response?.status === 400) {
-        setError(err.response?.data?.error || "Search error");
+      } else if (e.response?.status === 400) {
+        setError(e.response?.data?.error || "Search error");
       } else {
         setError("Error looking up vehicle");
       }
@@ -141,17 +142,18 @@ export function VehicleStatus() {
         setSuccess(`Status updated to "${updated.status_label}"`);
         setShowStatusModal(false);
       }
-    } catch (err: any) {
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data;
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string; requires_force?: boolean } } };
+      if (e.response?.status === 409) {
+        const errorData = e.response?.data;
         setTransitionError(errorData?.error || "Invalid transition");
         if (errorData?.requires_force) {
           setShowForceConfirm(true);
         }
-      } else if (err.response?.status === 400) {
-        setTransitionError(err.response?.data?.error || "Invalid data");
+      } else if (e.response?.status === 400) {
+        setTransitionError(e.response?.data?.error || "Invalid data");
       } else {
-        setTransitionError(err.response?.data?.error || "Error updating status");
+        setTransitionError(e.response?.data?.error || "Error updating status");
       }
     } finally {
       setChangingStatus(false);

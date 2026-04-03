@@ -31,10 +31,10 @@ type Vehicle struct {
 	CapacityKg        float64       `json:"capacity_kg"`   // capacidad en kg
 	Status            VehicleStatus `json:"status"`
 	UpdatedAt         time.Time     `json:"updated_at"`
-	UpdatedBy         string        `json:"updated_by,omitempty"`          // usuario que realizó el último cambio de estado
-	AssignedShipments []string      `json:"assigned_shipments,omitempty"`  // tracking_ids de los envíos asignados
-	AssignedBranch    *string       `json:"assigned_branch,omitempty"`     // branch_id asignado (branch actual)
-	DestinationBranch *string       `json:"destination_branch,omitempty"`  // branch_id de destino (si existe)
+	UpdatedBy         string        `json:"updated_by,omitempty"`         // usuario que realizó el último cambio de estado
+	AssignedShipments []string      `json:"assigned_shipments,omitempty"` // tracking_ids de los envíos asignados
+	AssignedBranch    *string       `json:"assigned_branch,omitempty"`    // branch_id asignado (branch actual)
+	DestinationBranch *string       `json:"destination_branch,omitempty"` // branch_id de destino (si existe)
 }
 
 // CreateVehicleRequest is the request body for creating a new vehicle.

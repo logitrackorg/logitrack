@@ -116,7 +116,6 @@ func (r *postgresVehicleRepository) Add(vehicle model.Vehicle) error {
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`, vehicle.LicensePlate, vehicle.Type, vehicle.CapacityKg, vehicle.Status, assignedBranch, time.Now()).Scan(&id)
-
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return ErrDuplicateLicensePlate

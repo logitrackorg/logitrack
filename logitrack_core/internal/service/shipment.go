@@ -545,12 +545,10 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return model.Shipment{}, err
 	}
 	nonCancellable := map[model.Status]bool{
-		model.StatusPending:    true,
-		model.StatusPreTransit: true,
-		model.StatusInTransit:  true,
-		model.StatusDelivered:  true,
-		model.StatusReturned:   true,
-		model.StatusCancelled:  true,
+		model.StatusPending:   true,
+		model.StatusDelivered: true,
+		model.StatusReturned:  true,
+		model.StatusCancelled: true,
 	}
 	if nonCancellable[shipment.Status] {
 		return model.Shipment{}, fmt.Errorf("cannot cancel a shipment with status '%s'", shipment.Status)
@@ -605,8 +603,8 @@ func generateDraftID() string {
 
 func isValidTransition(from, to model.Status) bool {
 	allowed := map[model.Status][]model.Status{
-		model.StatusPending:        {},                       // drafts transition via ConfirmDraft, not UpdateStatus
-		model.StatusInProgress:     {model.StatusPreTransit}, // confirmed → pre-transit (vehicle assigned, ready to depart)
+		model.StatusPending:        {},                                                                    // drafts transition via ConfirmDraft, not UpdateStatus
+		model.StatusInProgress:     {model.StatusPreTransit},                                              // confirmed → pre-transit (vehicle assigned, ready to depart)
 		model.StatusPreTransit:     {model.StatusInTransit, model.StatusInProgress, model.StatusAtBranch}, // pre-transit → start transit or unassigned back
 		model.StatusInTransit:      {model.StatusAtBranch},
 		model.StatusAtBranch:       {model.StatusPreTransit, model.StatusDelivering, model.StatusReadyForPickup, model.StatusReadyForReturn},

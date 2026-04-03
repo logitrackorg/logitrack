@@ -13,11 +13,6 @@ const vehicleTypeLabels: Record<string, string> = {
 export function VehicleAssignment() {
   const { hasRole } = useAuth();
 
-  // Only supervisor and admin can assign vehicles
-  if (!hasRole("supervisor") && !hasRole("admin")) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const [availableVehicles, setAvailableVehicles] = useState<Vehicle[]>([]);
   const [selectedPlate, setSelectedPlate] = useState("");
   const [vehicle, setVehicle] = useState<VehicleStatusResponse | null>(null);
@@ -32,6 +27,11 @@ export function VehicleAssignment() {
   useEffect(() => {
     loadAvailableVehicles();
   }, []);
+
+  // Only supervisor and admin can assign vehicles
+  if (!hasRole("supervisor") && !hasRole("admin")) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const loadAvailableVehicles = async () => {
     setLoading(true);
@@ -61,7 +61,7 @@ export function VehicleAssignment() {
           status: data.status_label,
         });
       }
-    } catch (err: any) {
+    } catch {
       setError("Error loading vehicle");
     }
   };
@@ -101,22 +101,23 @@ export function VehicleAssignment() {
       setAlreadyAssigned(null);
       // Reload available vehicles
       loadAvailableVehicles();
-    } catch (err: any) {
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data;
-        if (errorData.assigned_shipments && errorData.assigned_shipments.length > 0) {
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string; assigned_shipments?: string[]; current_status?: string; requires_force?: boolean } } };
+      if (e.response?.status === 409) {
+        const errorData = e.response?.data;
+        if (errorData?.assigned_shipments && errorData.assigned_shipments.length > 0) {
           setAlreadyAssigned({
             shipment: errorData.assigned_shipments[0],
-            status: errorData.current_status,
+            status: errorData.current_status ?? "",
           });
           setError(`Vehicle is already assigned to shipment ${errorData.assigned_shipments[0]}`);
         } else {
-          setError(errorData.error || "Cannot assign vehicle");
+          setError(errorData?.error || "Cannot assign vehicle");
         }
-      } else if (err.response?.status === 404) {
+      } else if (e.response?.status === 404) {
         setError("No shipment found with that tracking ID");
-      } else if (err.response?.status === 400) {
-        setError(err.response?.data?.error || "Invalid data");
+      } else if (e.response?.status === 400) {
+        setError(e.response?.data?.error || "Invalid data");
       } else {
         setError("Error assigning vehicle");
       }

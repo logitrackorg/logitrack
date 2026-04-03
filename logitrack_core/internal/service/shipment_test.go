@@ -81,9 +81,12 @@ func mustStatus(t *testing.T, ts testSetup, id string, req model.UpdateStatusReq
 	return ship
 }
 
-// advance in_progress → in_transit (to Córdoba / br-cordoba)
+// advance in_progress → pre_transit → in_transit (to Córdoba / br-cordoba)
 func toInTransit(t *testing.T, ts testSetup, id string) model.Shipment {
 	t.Helper()
+	mustStatus(t, ts, id, model.UpdateStatusRequest{
+		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+	})
 	return mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusInTransit, Location: "Córdoba", ChangedBy: "supervisor",
 	})
@@ -114,9 +117,12 @@ func TestIsValidTransition(t *testing.T) {
 		want bool
 	}{
 		// valid transitions
-		{model.StatusInProgress, model.StatusInTransit, true},
+		{model.StatusInProgress, model.StatusPreTransit, true},
+		{model.StatusPreTransit, model.StatusInTransit, true},
+		{model.StatusPreTransit, model.StatusInProgress, true},
+		{model.StatusPreTransit, model.StatusAtBranch, true},
 		{model.StatusInTransit, model.StatusAtBranch, true},
-		{model.StatusAtBranch, model.StatusInTransit, true},
+		{model.StatusAtBranch, model.StatusPreTransit, true},
 		{model.StatusAtBranch, model.StatusDelivering, true},
 		{model.StatusAtBranch, model.StatusReadyForPickup, true},
 		{model.StatusAtBranch, model.StatusReadyForReturn, true},
@@ -125,16 +131,19 @@ func TestIsValidTransition(t *testing.T) {
 		{model.StatusDeliveryFailed, model.StatusDelivering, true},
 		{model.StatusDeliveryFailed, model.StatusAtBranch, true},
 		{model.StatusReadyForPickup, model.StatusDelivered, true},
-		{model.StatusReadyForPickup, model.StatusInTransit, true},
+		{model.StatusReadyForPickup, model.StatusPreTransit, true},
 		{model.StatusReadyForReturn, model.StatusReturned, true},
 
 		// invalid: pending can only be confirmed, not updated via UpdateStatus
 		{model.StatusPending, model.StatusInProgress, false},
 		{model.StatusPending, model.StatusInTransit, false},
 
-		// invalid: cannot skip steps
+		// invalid: cannot skip steps (pre_transit is now required before in_transit)
+		{model.StatusInProgress, model.StatusInTransit, false},
 		{model.StatusInProgress, model.StatusDelivered, false},
 		{model.StatusInProgress, model.StatusAtBranch, false},
+		{model.StatusAtBranch, model.StatusInTransit, false},
+		{model.StatusReadyForPickup, model.StatusInTransit, false},
 		{model.StatusInTransit, model.StatusDelivered, false},
 		{model.StatusInTransit, model.StatusDelivering, false},
 		{model.StatusAtBranch, model.StatusDelivered, false},
@@ -434,7 +443,9 @@ func TestUpdateStatus_InvalidTransition(t *testing.T) {
 func TestUpdateStatus_InTransit_SameDestinationRejected(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts) // CurrentLocation = br-caba
-
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+	})
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status:    model.StatusInTransit,
 		Location:  "Buenos Aires", // resolves to br-caba — same as current
@@ -448,6 +459,9 @@ func TestUpdateStatus_InTransit_SameDestinationRejected(t *testing.T) {
 func TestUpdateStatus_InTransit_DifferentDestinationAllowed(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+	})
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status:    model.StatusInTransit,
 		Location:  "Córdoba", // resolves to br-cordoba ≠ br-caba
@@ -1033,7 +1047,10 @@ func advanceToReadyForReturn(t *testing.T, ts testSetup, id string) {
 	toInTransit(t, ts, id)
 	// in_transit → at_branch (at br-cordoba)
 	toAtBranch(t, ts, id)
-	// at_branch → in_transit (back to Buenos Aires / br-caba)
+	// at_branch → pre_transit → in_transit (back to Buenos Aires / br-caba)
+	mustStatus(t, ts, id, model.UpdateStatusRequest{
+		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+	})
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusInTransit, Location: "Buenos Aires", ChangedBy: "supervisor",
 	})

@@ -36,11 +36,13 @@ func (s *RouteService) GetTodayRoute(driverID string) (model.Route, []model.Ship
 }
 
 // isVisibleForDriver returns true for shipments the driver should see on their route:
-// - actively in delivering or delivery_failed
+// - any active (non-terminal, non-pending) status
 // - delivered on the same day as the route (visible until the day rolls over)
 func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 	switch sh.Status {
-	case model.StatusDelivering, model.StatusDeliveryFailed:
+	case model.StatusInProgress, model.StatusPreTransit, model.StatusInTransit,
+		model.StatusAtBranch, model.StatusDelivering, model.StatusDeliveryFailed,
+		model.StatusReadyForPickup, model.StatusReadyForReturn:
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(*sh.DeliveredAt).Equal(routeDate)

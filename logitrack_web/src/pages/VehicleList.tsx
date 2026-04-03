@@ -131,11 +131,12 @@ export function VehicleList() {
       setShowForm(false);
       setFormData({ license_plate: "", type: "furgoneta", capacity_kg: 0, branch_id: "" });
       loadVehicles();
-    } catch (err: any) {
-      if (err.response?.status === 409) {
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string } } };
+      if (e.response?.status === 409) {
         setError("A vehicle with that license plate already exists");
-      } else if (err.response?.data?.error) {
-        setError(err.response.data.error);
+      } else if (e.response?.data?.error) {
+        setError(e.response.data.error);
       } else {
         setError("Error registering vehicle");
       }
@@ -183,8 +184,9 @@ export function VehicleList() {
       setShowStartTripModal(false);
       setSelectedForAssign("");
       loadVehicles();
-    } catch (err: any) {
-      setError(err.response?.data?.error ?? "Error starting trip");
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setError(e.response?.data?.error ?? "Error starting trip");
     } finally {
       setStartingTrip(false);
     }
@@ -203,9 +205,10 @@ export function VehicleList() {
       setSuccess("Trip ended. Vehicle is now available.");
       setSelectedForAssign("");
       loadVehicles();
-    } catch (err: any) {
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      if (e.response?.data?.error) {
+        setError(e.response.data.error);
       } else {
         setError("Error ending trip");
       }
@@ -718,8 +721,9 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
       setBranchSuccess("Branch assigned successfully");
       setSelectedBranch("");
       onRefresh?.();
-    } catch (err: any) {
-      setBranchError(err.response?.data?.error || "Error assigning branch");
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setBranchError(e.response?.data?.error || "Error assigning branch");
     } finally {
       setAssigningBranch(false);
     }
@@ -732,8 +736,9 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
       await vehicleApi.unassignShipment(vehicle.license_plate, trackingId);
       setCurrentShipments(prev => prev.filter(t => t !== trackingId));
       onRefresh?.();
-    } catch (err: any) {
-      setUnassignError(err.response?.data?.error || "Error unassigning shipment");
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setUnassignError(e.response?.data?.error || "Error unassigning shipment");
     } finally {
       setUnassigning(null);
     }

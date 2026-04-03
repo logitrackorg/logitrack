@@ -19,11 +19,6 @@ export function AvailableVehicles() {
   const [filterType, setFilterType] = useState<VehicleType | "">("");
   const [filterCapacity, setFilterCapacity] = useState<string>("");
 
-  // Solo supervisor y admin pueden ver vehículos disponibles
-  if (!hasRole("supervisor") && !hasRole("admin")) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const loadAvailableVehicles = async () => {
     setLoading(true);
     try {
@@ -44,6 +39,10 @@ export function AvailableVehicles() {
   useEffect(() => {
     loadAvailableVehicles();
   }, [filterType, filterCapacity]);
+
+  if (!hasRole("supervisor") && !hasRole("admin")) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleClearFilters = () => {
     setFilterType("");
