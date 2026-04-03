@@ -3,6 +3,7 @@ import type { ShipmentStatus } from "../api/shipments";
 const config: Record<ShipmentStatus, { label: string; color: string }> = {
   pending:          { label: "Draft",           color: "#9ca3af" },
   in_progress:      { label: "In Progress",    color: "#f59e0b" },
+  pre_transit:      { label: "Pre-Transit",    color: "#06b6d4" },
   in_transit:       { label: "In Transit",     color: "#3b82f6" },
   at_branch:        { label: "At Branch",      color: "#8b5cf6" },
   delivering:       { label: "Delivering",     color: "#f97316" },

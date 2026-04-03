@@ -12,6 +12,7 @@ type RouteRepository interface {
 	Update(route model.Route) error
 	GetByDriverAndDate(driverID string, date model.DateOnly) (model.Route, error)
 	GetByID(id string) (model.Route, error)
+	RemoveShipmentFromDate(trackingID string, date model.DateOnly) error
 }
 
 type inMemoryRouteRepository struct {
@@ -62,4 +63,21 @@ func (r *inMemoryRouteRepository) GetByID(id string) (model.Route, error) {
 		}
 	}
 	return model.Route{}, fmt.Errorf("route not found")
+}
+
+func (r *inMemoryRouteRepository) RemoveShipmentFromDate(trackingID string, date model.DateOnly) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, route := range r.routes {
+		if !route.Date.Equal(date) {
+			continue
+		}
+		for j, id := range route.ShipmentIDs {
+			if id == trackingID {
+				r.routes[i].ShipmentIDs = append(route.ShipmentIDs[:j], route.ShipmentIDs[j+1:]...)
+				break
+			}
+		}
+	}
+	return nil
 }

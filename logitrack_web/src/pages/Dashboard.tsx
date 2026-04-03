@@ -7,6 +7,7 @@ import { StatusBadge } from "../components/StatusBadge";
 const statusConfig: Record<ShipmentStatus, { label: string; color: string; bg: string }> = {
   pending:     { label: "Draft",       color: "#374151", bg: "#f3f4f6" },
   in_progress: { label: "In Progress", color: "#92400e", bg: "#fef3c7" },
+  pre_transit: { label: "Pre-Transit", color: "#0e7490", bg: "#cffafe" },
   in_transit:  { label: "In Transit", color: "#1e40af", bg: "#dbeafe" },
   at_branch:   { label: "At Branch",  color: "#5b21b6", bg: "#ede9fe" },
   delivering:       { label: "Delivering",     color: "#9a3412", bg: "#ffedd5" },

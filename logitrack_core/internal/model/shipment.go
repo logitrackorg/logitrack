@@ -7,6 +7,7 @@ type Status string
 const (
 	StatusPending        Status = "pending"     // draft — partial data, no tracking ID yet
 	StatusInProgress     Status = "in_progress" // confirmed — tracking ID assigned, awaiting transit
+	StatusPreTransit     Status = "pre_transit" // pre-transit — vehicle assigned, ready to depart
 	StatusInTransit      Status = "in_transit"
 	StatusAtBranch       Status = "at_branch"
 	StatusDelivering     Status = "delivering"

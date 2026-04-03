@@ -23,7 +23,7 @@ api.interceptors.response.use(
   }
 );
 
-export type ShipmentStatus = "pending" | "in_progress" | "in_transit" | "at_branch" | "delivering" | "delivery_failed" | "delivered" | "ready_for_pickup" | "ready_for_return" | "returned" | "cancelled";
+export type ShipmentStatus = "pending" | "in_progress" | "pre_transit" | "in_transit" | "at_branch" | "delivering" | "delivery_failed" | "delivered" | "ready_for_pickup" | "ready_for_return" | "returned" | "cancelled";
 export type PackageType = "envelope" | "box" | "pallet";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";

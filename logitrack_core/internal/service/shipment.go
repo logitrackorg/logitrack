@@ -447,12 +447,12 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 			return model.Shipment{}, err
 		}
 	}
-	if req.Corrections.SenderEmail != nil {
+	if req.Corrections.SenderEmail != nil && *req.Corrections.SenderEmail != "" {
 		if err := validateEmail(*req.Corrections.SenderEmail, "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
-	if req.Corrections.RecipientEmail != nil {
+	if req.Corrections.RecipientEmail != nil && *req.Corrections.RecipientEmail != "" {
 		if err := validateEmail(*req.Corrections.RecipientEmail, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
@@ -603,14 +603,15 @@ func generateDraftID() string {
 
 func isValidTransition(from, to model.Status) bool {
 	allowed := map[model.Status][]model.Status{
-		model.StatusPending:        {},                      // drafts transition via ConfirmDraft, not UpdateStatus
-		model.StatusInProgress:     {model.StatusInTransit}, // confirmed → start transit
+		model.StatusPending:        {},                                                                    // drafts transition via ConfirmDraft, not UpdateStatus
+		model.StatusInProgress:     {model.StatusPreTransit},                                              // confirmed → pre-transit (vehicle assigned, ready to depart)
+		model.StatusPreTransit:     {model.StatusInTransit, model.StatusInProgress, model.StatusAtBranch}, // pre-transit → start transit or unassigned back
 		model.StatusInTransit:      {model.StatusAtBranch},
-		model.StatusAtBranch:       {model.StatusInTransit, model.StatusDelivering, model.StatusReadyForPickup, model.StatusReadyForReturn},
+		model.StatusAtBranch:       {model.StatusPreTransit, model.StatusDelivering, model.StatusReadyForPickup, model.StatusReadyForReturn},
 		model.StatusDelivering:     {model.StatusDelivered, model.StatusDeliveryFailed},
 		model.StatusDeliveryFailed: {model.StatusDelivering, model.StatusAtBranch},
 		model.StatusDelivered:      {},
-		model.StatusReadyForPickup: {model.StatusDelivered, model.StatusInTransit},
+		model.StatusReadyForPickup: {model.StatusDelivered, model.StatusPreTransit},
 		model.StatusReadyForReturn: {model.StatusReturned},
 		model.StatusReturned:       {},
 		model.StatusCancelled:      {},

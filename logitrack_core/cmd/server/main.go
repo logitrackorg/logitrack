@@ -47,10 +47,12 @@ func main() {
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
 	branchRepo := repository.NewInMemoryBranchRepository()
+	vehicleRepo := repository.NewPostgresVehicleRepository(database)
 	routeRepo := repository.NewPostgresRouteRepository(database)
 	customerRepo := repository.NewPostgresCustomerRepository(database)
 
 	seed.LoadBranches(branchRepo)
+	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
 
 	commentRepo := repository.NewInMemoryCommentRepository()
@@ -72,6 +74,7 @@ func main() {
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
+	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
@@ -100,12 +103,28 @@ func main() {
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
 
+	// Shipment detail/events — all authenticated roles including driver
+	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
+
+	// Vehicles — list: non-driver roles, create: admin only, read detail: supervisor+manager+admin, write: supervisor+admin
+	protected.GET("/vehicles", nonDriver, vehicleHandler.List)
+	canViewVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	protected.GET("/vehicles/available", canViewVehicle, vehicleHandler.ListAvailable)
+	canCreateVehicle := middleware.RequireRoles(model.RoleAdmin)
+	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
+	protected.GET("/vehicles/by-plate/:plate", canViewVehicle, vehicleHandler.GetByPlate)
+	protected.GET("/vehicles/by-shipment/:trackingId", allRoles, vehicleHandler.GetByShipment)
+	canWriteVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	protected.PATCH("/vehicles/by-plate/:plate/status", canWriteVehicle, vehicleHandler.UpdateStatusByPlate)
+	protected.POST("/vehicles/by-plate/:plate/assign", canWriteVehicle, vehicleHandler.AssignToShipment)
+	protected.POST("/vehicles/by-plate/:plate/assign-branch", canWriteVehicle, vehicleHandler.AssignBranch)
+	protected.POST("/vehicles/by-plate/:plate/start-trip", canWriteVehicle, vehicleHandler.StartTrip)
+	protected.POST("/vehicles/by-plate/:plate/end-trip", canWriteVehicle, vehicleHandler.EndTrip)
+	protected.DELETE("/vehicles/by-plate/:plate/shipments/:trackingId", canWriteVehicle, vehicleHandler.UnassignShipment)
+
 	// Shipments list/search — non-driver roles only
 	protected.GET("/shipments", nonDriver, shipmentHandler.List)
 	protected.GET("/search", nonDriver, shipmentHandler.Search)
-
-	// Shipment detail/events — all roles including driver
-	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
 	protected.GET("/shipments/:tracking_id", allRoles, shipmentHandler.GetByTrackingID)
 	protected.GET("/shipments/:tracking_id/events", allRoles, shipmentHandler.GetEvents)
 
