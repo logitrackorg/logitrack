@@ -10,15 +10,16 @@ import (
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/service"
 )
 
 type VehicleHandler struct {
-	repo         repository.VehicleRepository
-	shipmentRepo repository.ShipmentRepository
+	repo        repository.VehicleRepository
+	shipmentSvc *service.ShipmentService
 }
 
-func NewVehicleHandler(repo repository.VehicleRepository, shipmentRepo repository.ShipmentRepository) *VehicleHandler {
-	return &VehicleHandler{repo: repo, shipmentRepo: shipmentRepo}
+func NewVehicleHandler(repo repository.VehicleRepository, shipmentSvc *service.ShipmentService) *VehicleHandler {
+	return &VehicleHandler{repo: repo, shipmentSvc: shipmentSvc}
 }
 
 func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -370,10 +371,18 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// Validate that the shipment exists
-	_, err := h.shipmentRepo.GetByTrackingID(req.TrackingID)
+	// Validate that the shipment exists and check its status
+	shipment, err := h.shipmentSvc.GetByTrackingID(req.TrackingID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "El envío con tracking ID '" + req.TrackingID + "' no existe"})
+		return
+	}
+
+	// Only allow assignment if shipment is in_progress (not yet pre_transit or in_transit)
+	if shipment.Status != model.StatusInProgress {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "El envío no está en estado 'In Progress'. Estado actual: " + string(shipment.Status),
+		})
 		return
 	}
 
@@ -385,6 +394,17 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 	if err := h.repo.AssignShipment(vehicle.ID, &trackingID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el vehículo"})
 		return
+	}
+
+	// Update shipment status to "pre_transit" automatically
+	shipmentUpdateReq := model.UpdateStatusRequest{
+		Status:    model.StatusPreTransit,
+		ChangedBy: user.Username,
+		Notes:     "Vehículo asignado: " + vehicle.LicensePlate,
+	}
+	if _, err := h.shipmentSvc.UpdateStatus(trackingID, shipmentUpdateReq); err != nil {
+		// Log warning but don't fail - vehicle assignment was successful
+		// The shipment status can be updated manually if needed
 	}
 
 	// Update vehicle status to "en_transito"

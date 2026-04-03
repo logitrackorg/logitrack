@@ -73,7 +73,7 @@ func main() {
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchHandler := handler.NewBranchHandler(branchRepo)
-	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentRepo)
+	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
