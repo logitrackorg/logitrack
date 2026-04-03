@@ -36,29 +36,39 @@ El Supervisor es el rol operativo de mayor alcance sobre los envíos. Puede real
 | Ver lista de choferes (`GET /users/drivers`)                | supervisor, admin                              |
 | Ver estadísticas / dashboard                                | supervisor, manager, admin                     |
 | Ver historial de eventos de un envío (auditoría)            | todos los roles autenticados                   |
+| Ver lista de vehículos (`GET /vehicles`)                    | todos excepto driver                           |
+| Ver vehículos disponibles / detalle por patente             | supervisor, manager, admin                     |
+| Asignar vehículo a envío / branch / StartTrip / EndTrip     | supervisor, admin                              |
+| Desasignar envío de vehículo                                | supervisor, admin                              |
+| Cambiar estado de vehículo                                  | supervisor, admin                              |
+| Crear vehículo                                              | admin — **no supervisor**                      |
 | Crear usuarios Supervisor                                   | admin — **no implementado aún**                |
 
 ---
 
 ## Transiciones de estado habilitadas
 
-El Supervisor puede ejecutar **cualquier transición válida** de la máquina de estados, sin excepción:
+El Supervisor puede ejecutar **cualquier transición válida** de la máquina de estados, sin excepción.
 
-| Transición                                      | Requisito adicional                          |
-|-------------------------------------------------|----------------------------------------------|
-| `in_progress → in_transit`                      | `location` requerido (ciudad destino)        |
-| `in_transit → at_branch`                        | auto-derivado                                |
-| `at_branch → in_transit`                        | `location` requerido (próxima ciudad)        |
-| `at_branch → delivering`                        | `driver_id` requerido                        |
-| `at_branch → ready_for_pickup`                  | —                                            |
-| `at_branch → ready_for_return`                  | envío debe estar en sucursal de origen       |
-| `delivering → delivered`                        | `recipient_dni` requerido y debe coincidir   |
-| `delivering → delivery_failed`                  | `notes` requerido                            |
-| `delivery_failed → delivering`                  | `driver_id` requerido                        |
-| `delivery_failed → at_branch`                   | auto-derivado                                |
-| `ready_for_pickup → delivered`                  | `recipient_dni` requerido y debe coincidir   |
-| `ready_for_pickup → in_transit`                 | `location` requerido                         |
-| `ready_for_return → returned`                   | `sender_dni` requerido y debe coincidir      |
+Las transiciones `→ pre_transit` y `pre_transit → in_transit` son gestionadas automáticamente por el sistema de flota (asignación de vehículo y `StartTrip`). Las demás transiciones se ejecutan vía `PATCH /shipments/:id/status`:
+
+| Transición                                      | Cómo se activa                               | Requisito adicional                          |
+|-------------------------------------------------|----------------------------------------------|----------------------------------------------|
+| `in_progress → pre_transit`                     | Auto — asignar vehículo al envío             | Vehículo disponible en mismo branch          |
+| `pre_transit → in_transit`                      | Auto — `StartTrip` en el vehículo            | `destination_branch` requerido               |
+| `pre_transit → in_progress`                     | Auto — desasignar envío del vehículo         | —                                            |
+| `in_transit → at_branch`                        | `PATCH /status` — auto-derivado              | —                                            |
+| `at_branch → pre_transit`                       | Auto — asignar vehículo al envío             | Vehículo disponible en mismo branch          |
+| `at_branch → delivering`                        | `PATCH /status`                              | `driver_id` requerido                        |
+| `at_branch → ready_for_pickup`                  | `PATCH /status`                              | —                                            |
+| `at_branch → ready_for_return`                  | `PATCH /status`                              | Envío debe estar en sucursal de origen       |
+| `delivering → delivered`                        | `PATCH /status`                              | `recipient_dni` requerido y debe coincidir   |
+| `delivering → delivery_failed`                  | `PATCH /status`                              | `notes` requerido                            |
+| `delivery_failed → delivering`                  | `PATCH /status`                              | `driver_id` requerido                        |
+| `delivery_failed → at_branch`                   | `PATCH /status` — auto-derivado              | —                                            |
+| `ready_for_pickup → delivered`                  | `PATCH /status`                              | `recipient_dni` requerido y debe coincidir   |
+| `ready_for_pickup → pre_transit`                | Auto — asignar vehículo al envío             | Vehículo disponible en mismo branch          |
+| `ready_for_return → returned`                   | `PATCH /status`                              | `sender_dni` requerido y debe coincidir      |
 
 ---
 

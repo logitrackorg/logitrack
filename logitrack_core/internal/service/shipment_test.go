@@ -724,6 +724,14 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 			},
 		},
 		{
+			name: "in_transit",
+			setup: func(ts testSetup) string {
+				ship := mustCreate(t, ts)
+				toInTransit(t, ts, ship.TrackingID)
+				return ship.TrackingID
+			},
+		},
+		{
 			name: "already cancelled",
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
@@ -754,14 +762,6 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 			name: "in_progress",
 			setup: func(ts testSetup) string {
 				return mustCreate(t, ts).TrackingID
-			},
-		},
-		{
-			name: "in_transit",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				toInTransit(t, ts, ship.TrackingID)
-				return ship.TrackingID
 			},
 		},
 		{

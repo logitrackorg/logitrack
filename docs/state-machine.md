@@ -5,8 +5,9 @@
 | Estado | Descripción                                         |
 |--------|-----------------------------------------------------|
 | `pending` | Borrador — no confirmado aún. Editable.             |
-| `in_progress` | Confirmado, esperando primer despacho.              |
-| `in_transit` | En movimiento entre sucursales.                     |
+| `in_progress` | Confirmado, esperando asignación de vehículo.       |
+| `pre_transit` | Vehículo asignado, en proceso de carga. El envío aún no partió. **Auto-activado** por `POST /vehicles/by-plate/:plate/assign` — no se envía manualmente vía `PATCH /status`. |
+| `in_transit` | En movimiento entre sucursales (viaje iniciado). **Auto-activado** por `POST /vehicles/by-plate/:plate/start-trip` — no se envía manualmente vía `PATCH /status`. |
 | `at_branch` | Llegó a una sucursal intermedia o de destino.       |
 | `delivering` | En camino para entrega a domicilio al destinatario. |
 | `delivered` | Entregado exitosamente. Estado final.               |

@@ -275,6 +275,7 @@ definitions:
     enum:
     - pending
     - in_progress
+    - pre_transit
     - in_transit
     - at_branch
     - delivering
@@ -287,14 +288,16 @@ definitions:
     type: string
     x-enum-comments:
       StatusCancelled: cancelled by supervisor/admin — terminal
-      StatusInProgress: confirmed — tracking ID assigned, awaiting transit
+      StatusInProgress: confirmed — awaiting vehicle assignment
+      StatusPreTransit: vehicle assigned and loading — not yet departed
       StatusPending: draft — partial data, no tracking ID yet
       StatusReadyForPickup: recipient picks up at current branch
       StatusReadyForReturn: sender picks up — only valid at origin branch
       StatusReturned: sender picked up — terminal
     x-enum-descriptions:
     - draft — partial data, no tracking ID yet
-    - confirmed — tracking ID assigned, awaiting transit
+    - confirmed — awaiting vehicle assignment
+    - vehicle assigned and loading — not yet departed
     - ""
     - ""
     - ""
@@ -307,6 +310,7 @@ definitions:
     x-enum-varnames:
     - StatusPending
     - StatusInProgress
+    - StatusPreTransit
     - StatusInTransit
     - StatusAtBranch
     - StatusDelivering
@@ -316,6 +320,95 @@ definitions:
     - StatusReadyForReturn
     - StatusReturned
     - StatusCancelled
+  model.CreateVehicleRequest:
+    properties:
+      branch_id:
+        type: string
+      capacity_kg:
+        type: number
+      license_plate:
+        type: string
+      type:
+        $ref: '#/definitions/model.VehicleType'
+    required:
+    - branch_id
+    - capacity_kg
+    - license_plate
+    - type
+    type: object
+  model.StartTripRequest:
+    properties:
+      destination_branch:
+        type: string
+    required:
+    - destination_branch
+    type: object
+  model.UpdateVehicleStatusRequest:
+    properties:
+      force:
+        description: force transition even if shipments are assigned
+        type: boolean
+      notes:
+        type: string
+      status:
+        $ref: '#/definitions/model.VehicleStatus'
+    required:
+    - status
+    type: object
+  model.Vehicle:
+    properties:
+      assigned_branch:
+        description: current branch ID
+        type: string
+      assigned_shipments:
+        description: tracking IDs currently loaded
+        items:
+          type: string
+        type: array
+      capacity_kg:
+        type: number
+      destination_branch:
+        description: destination branch ID (set during a trip)
+        type: string
+      id:
+        type: string
+      license_plate:
+        type: string
+      status:
+        $ref: '#/definitions/model.VehicleStatus'
+      type:
+        $ref: '#/definitions/model.VehicleType'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  model.VehicleStatus:
+    enum:
+    - disponible
+    - en_carga
+    - mantenimiento
+    - en_transito
+    - inactivo
+    type: string
+    x-enum-varnames:
+    - VehicleStatusAvailable
+    - VehicleStatusLoading
+    - VehicleStatusInMaintenance
+    - VehicleStatusInTransit
+    - VehicleStatusInactive
+  model.VehicleType:
+    enum:
+    - motocicleta
+    - furgoneta
+    - camion
+    - camion_grande
+    type: string
+    x-enum-varnames:
+    - VehicleTypeMotorcycle
+    - VehicleTypeVan
+    - VehicleTypeTruck
+    - VehicleTypeLargeTruck
   model.UpdateStatusRequest:
     properties:
       changed_by:
@@ -1143,6 +1236,551 @@ paths:
       summary: Dashboard stats
       tags:
       - shipments
+  /vehicles:
+    get:
+      description: Returns all fleet vehicles. Non-driver roles only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Vehicle'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List vehicles
+      tags:
+      - vehicles
+    post:
+      consumes:
+      - application/json
+      description: Creates a new fleet vehicle. Admin only. License plate must be unique.
+      parameters:
+      - description: Vehicle data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateVehicleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — license plate already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create vehicle
+      tags:
+      - vehicles
+  /vehicles/available:
+    get:
+      description: Returns vehicles with status disponible or en_carga. Operator,
+        supervisor, manager, and admin only. Optional filters — type, min_capacity, branch_id.
+      parameters:
+      - description: Vehicle type filter
+        in: query
+        name: type
+        type: string
+      - description: Minimum capacity in kg
+        in: query
+        name: min_capacity
+        type: number
+      - description: Branch ID filter
+        in: query
+        name: branch_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Vehicle'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List available vehicles
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}:
+    get:
+      description: Returns vehicle status and details by license plate. Supervisor,
+        manager, and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get vehicle by plate
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/assign:
+    post:
+      consumes:
+      - application/json
+      description: Assigns a shipment to a vehicle. The shipment must be at the same
+        branch as the vehicle. Transitions the shipment to pre_transit and the vehicle
+        to en_carga. Operator, supervisor, and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      - description: Shipment to assign
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            tracking_id:
+              type: string
+          required:
+          - tracking_id
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — branch mismatch, capacity exceeded, or invalid status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign shipment to vehicle
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/assign-branch:
+    post:
+      consumes:
+      - application/json
+      description: Assigns a vehicle to a branch. Vehicle must be in disponible status.
+        Supervisor and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      - description: Branch to assign
+        in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            branch_id:
+              type: string
+          required:
+          - branch_id
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — vehicle not in disponible status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign vehicle to branch
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/end-trip:
+    post:
+      description: Ends a trip. Vehicle must be in en_transito. All assigned shipments
+        transition to at_branch at the destination city. Vehicle moves to disponible
+        at the destination branch. Supervisor and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — vehicle not in en_transito status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: End trip
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/shipments/{trackingId}:
+    delete:
+      description: Removes one shipment from a vehicle while it is en_carga. Shipment
+        reverts to at_branch. Vehicle returns to disponible if no shipments remain.
+        Supervisor and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      - description: Shipment tracking ID
+        in: path
+        name: trackingId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — vehicle not in en_carga status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Unassign shipment from vehicle
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/start-trip:
+    post:
+      consumes:
+      - application/json
+      description: Starts a trip. Vehicle must be en_carga with at least one shipment.
+        Destination branch must differ from current branch. All assigned shipments
+        transition to in_transit. Vehicle moves to en_transito. Supervisor and admin
+        only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      - description: Trip destination
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.StartTripRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — vehicle not en_carga or no shipments assigned
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Start trip
+      tags:
+      - vehicles
+  /vehicles/by-plate/{plate}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Updates vehicle status. Transitions with assigned shipments require
+        force=true. Supervisor and admin only.
+      parameters:
+      - description: License plate
+        in: path
+        name: plate
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateVehicleStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict — requires force=true
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update vehicle status
+      tags:
+      - vehicles
+  /vehicles/by-shipment/{trackingId}:
+    get:
+      description: Returns the vehicle (if any) currently assigned to the given shipment.
+        All authenticated roles.
+      parameters:
+      - description: Shipment tracking ID
+        in: path
+        name: trackingId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Vehicle'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found — no vehicle assigned to this shipment
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get vehicle by shipment
+      tags:
+      - vehicles
   /users/drivers:
     get:
       description: Returns all driver users. Supervisor and admin only.

@@ -545,10 +545,12 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return model.Shipment{}, err
 	}
 	nonCancellable := map[model.Status]bool{
-		model.StatusPending:   true,
-		model.StatusDelivered: true,
-		model.StatusReturned:  true,
-		model.StatusCancelled: true,
+		model.StatusPending:    true,
+		model.StatusPreTransit: true,
+		model.StatusInTransit:  true,
+		model.StatusDelivered:  true,
+		model.StatusReturned:   true,
+		model.StatusCancelled:  true,
 	}
 	if nonCancellable[shipment.Status] {
 		return model.Shipment{}, fmt.Errorf("cannot cancel a shipment with status '%s'", shipment.Status)

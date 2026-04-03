@@ -41,16 +41,16 @@ El operador, supervisor y admin pueden avanzar el estado de un envío a través 
 ## Máquina de estados
 
 ```
-pending ──[confirmar]──► in_progress ──► in_transit ──► at_branch ──► in_transit (siguiente tramo)
-                                                                    ├─► delivering ──► delivered
-                                                                    │              └─► delivery_failed ──► delivering (reintento)
-                                                                    │                                  └─► at_branch (retorno)
-                                                                    ├─► ready_for_pickup ──► delivered
-                                                                    │                    └─► in_transit
-                                                                    └─► ready_for_return ──► returned
+pending ──[confirmar]──► in_progress ──[vehículo asignado]──► pre_transit ──[StartTrip]──► in_transit ──► at_branch ──► in_transit (siguiente tramo)
+                                                                                                                      ├─► delivering ──► delivered
+                                                                                                                      │              └─► delivery_failed ──► delivering (reintento)
+                                                                                                                      │                                  └─► at_branch (retorno)
+                                                                                                                      ├─► ready_for_pickup ──► delivered
+                                                                                                                      │                    └─► pre_transit (vía asignación de vehículo)
+                                                                                                                      └─► ready_for_return ──► returned
 ```
 
-`pending` no transiciona vía `UpdateStatus`; usa `ConfirmDraft`. `delivered` y `returned` son terminales.
+`pending` no transiciona vía `UpdateStatus`; usa `ConfirmDraft`. `pre_transit` se activa automáticamente al asignar un vehículo al envío — no se envía manualmente vía `PATCH /status`. `in_transit` se activa con `StartTrip` en el vehículo. `delivered` y `returned` son terminales.
 
 ---
 

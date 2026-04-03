@@ -28,6 +28,12 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 018 | [Registro de acceso (login/logout)](./US-018-login-logout.md) | Implementada |
 | 019 | [Rol Operador](./US-019-rol-operador.md) | Parcialmente implementada |
 | 020 | [Rol Supervisor](./US-020-rol-supervisor.md) | Parcialmente implementada |
+| 057 | Gestión de flota — alta y estado de vehículos | Implementada (sin spec) |
+| 060 | Consulta de estado de vehículo por patente | Implementada (sin spec) |
+| 061 | Cambio de estado de vehículo | Implementada (sin spec) |
+| 062 | Consulta de vehículos disponibles | Implementada (sin spec) |
+| 063 | Asignación de vehículo a envío / sucursal | Implementada (sin spec) |
+| 012b | Inicio y fin de viaje de vehículo (pre_transit → in_transit → at_branch) | Implementada (sin spec) |
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
 

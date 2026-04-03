@@ -181,7 +181,8 @@ export function ShipmentDetail() {
     setAssigningVehicle(true);
     setVehiclePickerError("");
     try {
-      await vehicleApi.assignToShipment(selectedVehiclePlate, { tracking_id: trackingId });
+      const vehicle = await vehicleApi.assignToShipment(selectedVehiclePlate, { tracking_id: trackingId });
+      setAssignedVehicle(vehicle);
       setShowVehiclePicker(false);
       setNewStatus("");
       await reload();
@@ -440,7 +441,7 @@ export function ShipmentDetail() {
               ✏️ Edit data
             </button>
           )}
-          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
+          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
             <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
               Cancel shipment

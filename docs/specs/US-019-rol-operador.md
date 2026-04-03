@@ -128,10 +128,12 @@ POST /api/v1/shipments/DRAFT-XXXXXXXX/confirm
 
 ### CA7 — Operador cambia el estado de un envío
 
-- **Dado** que el Operador tiene un token válido y el envío está en `in_progress`
-- **Cuando** hace `PATCH /api/v1/shipments/:id/status` con `{ "status": "in_transit", "location": "Córdoba" }`
+- **Dado** que el Operador tiene un token válido y el envío está en `at_branch`
+- **Cuando** hace `PATCH /api/v1/shipments/:id/status` con `{ "status": "ready_for_pickup" }`
 - **Entonces** responde `200 OK` con el envío actualizado
 - **Y** se registra un `ShipmentEvent` con `changed_by` igual al usuario operator
+
+> Nota: la transición `in_progress → pre_transit` ya no se realiza manualmente vía `PATCH /status` — ocurre automáticamente al asignar un vehículo al envío.
 
 ### CA7d — Operador intenta modificar un envío en delivering
 

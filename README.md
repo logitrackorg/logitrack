@@ -31,6 +31,7 @@ Las empresas de logística operan con múltiples sucursales, distintos perfiles 
 - Actualizar el estado de los envíos a medida que avanzan por la red (en tránsito, en sucursal, en reparto, entregado…).
 - Gestionar situaciones excepcionales: entregas fallidas, devoluciones, retiros en sucursal.
 - Validar identidad del destinatario o remitente mediante DNI antes de registrar entregas o devoluciones.
+- **Gestión de flota**: asignar vehículos a envíos, iniciar y finalizar viajes, cambiar estados de vehículos.
 
 ### Para los conductores
 
@@ -45,24 +46,25 @@ Un envío sigue un ciclo de vida controlado. Cada transición queda registrada c
 
 ```
 Borrador (pending)
-    └─► Confirmado (in_progress) ──────────────────────────────────────► Cancelado ✗
-            └─► En tránsito (in_transit) ──────────────────────────────► Cancelado ✗
-                    └─► En sucursal (at_branch) ◄──────────────────────► Cancelado ✗
-                            │        ▲
-                            ├─► En tránsito (siguiente escala) ─────────┘
-                            ├─► En reparto (delivering) ───────────────► Cancelado ✗
-                            │       ├─► Entregado ✓
-                            │       └─► Entrega fallida ──────────────► Cancelado ✗
-                            │               ├─► En reparto (reintento)
-                            │               └─► En sucursal (tramo de vuelta)
-                            ├─► Listo para retiro en sucursal (ready_for_pickup) ──► Cancelado ✗
-                            │       ├─► Entregado ✓
-                            │       └─► En tránsito (traslado a otra sucursal)
-                            └─► Listo para devolución (ready_for_return) ──────────► Cancelado ✗
-                                    └─► Devuelto ✓
+    └─► Confirmado (in_progress) ─────────────────────────────────────────────────────► Cancelado ✗
+            └─► [vehículo asignado] Pre-tránsito (pre_transit)
+                    └─► [viaje iniciado] En tránsito (in_transit)
+                                └─► En sucursal (at_branch) ◄────────────────────────► Cancelado ✗
+                                        │        ▲
+                                        ├─► [vehículo asignado] Pre-tránsito ─────────┘
+                                        ├─► En reparto (delivering) ─────────────────► Cancelado ✗
+                                        │       ├─► Entregado ✓
+                                        │       └─► Entrega fallida ─────────────────► Cancelado ✗
+                                        │               ├─► En reparto (reintento)
+                                        │               └─► En sucursal (tramo de vuelta)
+                                        ├─► Listo para retiro en sucursal (ready_for_pickup) ──► Cancelado ✗
+                                        │       ├─► Entregado ✓
+                                        │       └─► [vehículo asignado] Pre-tránsito (traslado)
+                                        └─► Listo para devolución (ready_for_return) ──────────► Cancelado ✗
+                                                └─► Devuelto ✓
 ```
 
-Los envíos con múltiples escalas repiten el tramo `en sucursal → en tránsito → en sucursal` tantas veces como sea necesario. `Entregado`, `Devuelto` y `Cancelado` son estados terminales — no admiten más transiciones.
+Los envíos con múltiples escalas repiten el tramo `en sucursal → pre-tránsito → en tránsito → en sucursal` tantas veces como sea necesario. `Entregado`, `Devuelto` y `Cancelado` son estados terminales — no admiten más transiciones.
 
 
 ## Número de tracking
