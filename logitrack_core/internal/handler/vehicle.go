@@ -276,6 +276,18 @@ func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 		return
 	}
 
+	// If vehicle is now in transit and has an assigned shipment, update shipment status to in_transit
+	if req.Status == model.VehicleStatusInTransit && vehicle.AssignedShipment != nil {
+		shipmentUpdateReq := model.UpdateStatusRequest{
+			Status:    model.StatusInTransit,
+			ChangedBy: user.Username,
+			Notes:     "Vehículo en ruta: " + vehicle.LicensePlate,
+		}
+		if _, err := h.shipmentSvc.UpdateStatus(*vehicle.AssignedShipment, shipmentUpdateReq); err != nil {
+			// Log warning but don't fail - vehicle status was updated successfully
+		}
+	}
+
 	// Get updated vehicle
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
 
@@ -648,6 +660,18 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
 		return
+	}
+
+	// Update shipment status to "at_branch" if there was an assigned shipment
+	if vehicle.AssignedShipment != nil {
+		shipmentUpdateReq := model.UpdateStatusRequest{
+			Status:    model.StatusAtBranch,
+			ChangedBy: user.Username,
+			Notes:     "Viaje finalizado. Envío en sucursal.",
+		}
+		if _, err := h.shipmentSvc.UpdateStatus(*vehicle.AssignedShipment, shipmentUpdateReq); err != nil {
+			// Log warning but don't fail - vehicle status was updated successfully
+		}
 	}
 
 	// Get updated vehicle
