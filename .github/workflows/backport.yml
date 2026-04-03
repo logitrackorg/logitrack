@@ -1,0 +1,75 @@
+name: Backport to develop
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  backport:
+    name: Create backport PR to develop
+    runs-on: ubuntu-latest
+    # Only run when the push comes from a release/* or hotfix/* branch merge
+    if: |
+      github.event_name == 'push' &&
+      (startsWith(github.event.head_commit.message, 'Merge pull request') ||
+       startsWith(github.event.head_commit.message, 'Merge branch'))
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create backport branch and PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BACKPORT_BRANCH="backport/main-to-develop-$(date +%Y%m%d%H%M%S)"
+
+          # Create backport branch from develop
+          git fetch origin develop
+          git checkout -b "$BACKPORT_BRANCH" origin/develop
+
+          # Merge main into the backport branch
+          if git merge origin/main --no-edit; then
+            git push origin "$BACKPORT_BRANCH"
+
+            # Open a PR
+            gh pr create \
+              --title "chore: backport main → develop" \
+              --body "$(cat <<'EOF'
+Automatic backport of changes merged into \`main\` back into \`develop\`.
+
+Triggered by commit: ${{ github.sha }}
+
+> Resolve any conflicts directly in this branch before merging.
+EOF
+)" \
+              --base develop \
+              --head "$BACKPORT_BRANCH" \
+              --label "backport" || true
+          else
+            echo "Merge conflict detected. Opening a draft PR for manual resolution."
+            git merge --abort || true
+            git push origin "$BACKPORT_BRANCH"
+
+            gh pr create \
+              --title "chore: backport main → develop (conflicts)" \
+              --body "$(cat <<'EOF'
+Automatic backport failed due to merge conflicts. Please resolve them manually.
+
+Triggered by commit: ${{ github.sha }}
+EOF
+)" \
+              --base develop \
+              --head "$BACKPORT_BRANCH" \
+              --label "backport" \
+              --draft || true
+          fi
