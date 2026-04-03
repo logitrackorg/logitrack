@@ -181,7 +181,8 @@ export function ShipmentDetail() {
     setAssigningVehicle(true);
     setVehiclePickerError("");
     try {
-      await vehicleApi.assignToShipment(selectedVehiclePlate, { tracking_id: trackingId });
+      const vehicle = await vehicleApi.assignToShipment(selectedVehiclePlate, { tracking_id: trackingId });
+      setAssignedVehicle(vehicle);
       setShowVehiclePicker(false);
       setNewStatus("");
       await reload();
