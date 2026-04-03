@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { shipmentApi } from "../api/shipments";
+import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
@@ -35,6 +36,7 @@ const getStatusColor = (status: VehicleStatus): string => {
 
 export function VehicleList() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [shipmentWeights, setShipmentWeights] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -104,7 +106,11 @@ export function VehicleList() {
     }
   };
 
-  useEffect(() => { loadVehicles(); }, []);
+  useEffect(() => {
+    loadVehicles();
+    // Load branches for display in the list
+    branchApi.list().then(data => setBranches(data)).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,6 +513,7 @@ export function VehicleList() {
                   <th style={thStyle}>Seleccionar</th>
                   <th style={thStyle}>Patente</th>
                   <th style={thStyle}>Tipo</th>
+                  <th style={thStyle}>Branch</th>
                   <th style={thStyle}>Capacidad (kg)</th>
                   <th style={thStyle}>Cap. Disponible (kg)</th>
                   <th style={thStyle}>Estado</th>
@@ -533,6 +540,19 @@ export function VehicleList() {
                       <code style={{ fontWeight: 600, fontSize: 15 }}>{v.license_plate}</code>
                     </td>
                     <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>{vehicleTypeLabels[v.type]}</td>
+                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
+                      {(() => {
+                        const branch = v.assigned_branch ? branches.find(b => b.id === v.assigned_branch) : null;
+                        if (branch) {
+                          return (
+                            <span style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 500 }}>
+                              {branch.name}
+                            </span>
+                          );
+                        }
+                        return <span style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>Sin branch</span>;
+                      })()}
+                    </td>
                     <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>{v.capacity_kg} kg</td>
                     <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
                       {(() => {
@@ -590,6 +610,7 @@ export function VehicleList() {
         <VehicleDetailModal
           vehicle={selectedVehicle}
           onClose={closeVehicleDetail}
+          onRefresh={loadVehicles}
         />
       )}
 
@@ -736,7 +757,54 @@ export function VehicleList() {
 }
 
 // Vehicle Detail Modal Component
-function VehicleDetailModal({ vehicle, onClose }: { vehicle: VehicleStatusResponse; onClose: () => void }) {
+function VehicleDetailModal({ vehicle, onClose, onRefresh }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void }) {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState(vehicle.assigned_branch || "");
+  const [assigningBranch, setAssigningBranch] = useState(false);
+  const [branchError, setBranchError] = useState("");
+  const [branchSuccess, setBranchSuccess] = useState("");
+
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        const data = await branchApi.list();
+        setBranches(data);
+      } catch (err) {
+        console.error("Failed to load branches:", err);
+      }
+    };
+    loadBranches();
+  }, []);
+
+  const handleAssignBranch = async () => {
+    if (!selectedBranch) {
+      setBranchError("Debe seleccionar un branch");
+      return;
+    }
+
+    setAssigningBranch(true);
+    setBranchError("");
+    setBranchSuccess("");
+
+    try {
+      await vehicleApi.assignBranch(vehicle.license_plate, { branch_id: selectedBranch });
+      setBranchSuccess("Branch asignado exitosamente");
+      onRefresh?.();
+    } catch (err: any) {
+      setBranchError(err.response?.data?.error || "Error al asignar el branch");
+    } finally {
+      setAssigningBranch(false);
+    }
+  };
+
+  const currentBranch = branches.find(b => b.id === vehicle.assigned_branch);
+
+  // Group branches by province
+  const branchesByProvince = branches.reduce((acc, branch) => {
+    if (!acc[branch.province]) acc[branch.province] = [];
+    acc[branch.province].push(branch);
+    return acc;
+  }, {} as Record<string, Branch[]>);
   return (
     <div
       style={{
@@ -859,6 +927,121 @@ function VehicleDetailModal({ vehicle, onClose }: { vehicle: VehicleStatusRespon
               </div>
             )}
           </div>
+        </div>
+
+          {/* Branch asignado */}
+        <div
+          style={{
+            background: "#f9fafb",
+            border: "1px solid #e5e7eb",
+            borderRadius: 8,
+            padding: 16,
+            marginBottom: 16,
+          }}
+        >
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Branch Asignado</h3>
+          
+          {branchError && (
+            <div style={{
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#dc2626",
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 12,
+              fontSize: 13,
+            }}>
+              {branchError}
+            </div>
+          )}
+          
+          {branchSuccess && (
+            <div style={{
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              color: "#16a34a",
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 12,
+              fontSize: 13,
+            }}>
+              {branchSuccess}
+            </div>
+          )}
+
+          {currentBranch ? (
+            <div style={{
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 8,
+              padding: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}>
+              <div>
+                <p style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0 }}>
+                  {currentBranch.name}
+                </p>
+                <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+                  {currentBranch.city}, {currentBranch.province}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+              Este vehículo no tiene un branch asignado
+            </p>
+          )}
+
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 13 }}>
+              Asignar branch:
+            </label>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: 6,
+                border: "1px solid #d1d5db",
+                fontSize: 14,
+                background: "#fff",
+                marginBottom: 8,
+              }}
+            >
+              <option value="">Seleccione un branch...</option>
+              {Object.entries(branchesByProvince).map(([province, provinceBranches]) => (
+                <optgroup key={province} label={province}>
+                  {provinceBranches.map(branch => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name} - {branch.city}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={handleAssignBranch}
+            disabled={assigningBranch || !selectedBranch}
+            style={{
+              background: assigningBranch || !selectedBranch ? "#9ca3af" : "#1e3a5f",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "8px 16px",
+              cursor: assigningBranch || !selectedBranch ? "not-allowed" : "pointer",
+              fontWeight: 600,
+              opacity: assigningBranch ? 0.7 : 1,
+              width: "100%",
+            }}
+          >
+            {assigningBranch ? "Asignando..." : "Asignar Branch"}
+          </button>
         </div>
 
         {/* Envíos asignados */}

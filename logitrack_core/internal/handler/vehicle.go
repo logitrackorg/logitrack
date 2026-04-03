@@ -30,6 +30,7 @@ func (h *VehicleHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/vehicles/by-shipment/:trackingId", h.GetByShipment)
 	r.PATCH("/vehicles/by-plate/:plate/status", h.UpdateStatusByPlate)
 	r.POST("/vehicles/by-plate/:plate/assign", h.AssignToShipment)
+	r.POST("/vehicles/by-plate/:plate/assign-branch", h.AssignBranch)
 }
 
 // List returns all vehicles in the fleet.
@@ -179,6 +180,7 @@ func (h *VehicleHandler) GetByPlate(c *gin.Context) {
 		"status_label":      getStatusLabel(vehicle.Status),
 		"updated_at":        vehicle.UpdatedAt,
 		"assigned_shipment": vehicle.AssignedShipment,
+		"assigned_branch":   vehicle.AssignedBranch,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -479,4 +481,92 @@ func (h *VehicleHandler) GetByShipment(c *gin.Context) {
 // AssignShipmentRequest is the request body for assigning a vehicle to a shipment.
 type AssignShipmentRequest struct {
 	TrackingID string `json:"tracking_id" binding:"required"`
+}
+
+// AssignBranchRequest is the request body for assigning a vehicle to a branch.
+type AssignBranchRequest struct {
+	BranchID string `json:"branch_id" binding:"required"`
+}
+
+// AssignBranch assigns a vehicle to a specific branch.
+//
+// @Summary      Assign vehicle to branch
+// @Description  Assigns a vehicle to a branch. Only available vehicles can be assigned. Admin only.
+// @Tags         vehicles
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        plate  path      string  true  "License plate (patente)"
+// @Param        body  body      AssignBranchRequest  true  "Branch ID"
+// @Success      200   {object}  model.Vehicle
+// @Failure      400   {object}  map[string]string
+// @Failure      401   {object}  map[string]string
+// @Failure      403   {object}  map[string]string
+// @Failure      404   {object}  map[string]string
+// @Failure      409   {object}  map[string]string
+// @Router       /vehicles/by-plate/{plate}/assign-branch [post]
+func (h *VehicleHandler) AssignBranch(c *gin.Context) {
+	plate := c.Param("plate")
+	if plate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "La patente es obligatoria"})
+		return
+	}
+
+	var req AssignBranchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.BranchID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El branch ID es obligatorio"})
+		return
+	}
+
+	// Get vehicle by license plate
+	vehicle, found := h.repo.GetByLicensePlate(plate)
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
+		return
+	}
+
+	// Only allow assignment if vehicle is available
+	if vehicle.Status != model.VehicleStatusAvailable {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "Solo se puede asignar branch a vehículos disponibles",
+			"current_status": getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	// Assign branch to vehicle
+	branchID := req.BranchID
+	if err := h.repo.AssignBranch(vehicle.ID, &branchID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el branch: " + err.Error()})
+		return
+	}
+
+	// Get updated vehicle
+	updatedVehicle, found := h.repo.GetByID(vehicle.ID)
+	if !found {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al obtener el vehículo actualizado"})
+		return
+	}
+
+	// Build response
+	response := gin.H{
+		"id":                updatedVehicle.ID,
+		"license_plate":     updatedVehicle.LicensePlate,
+		"type":              updatedVehicle.Type,
+		"capacity_kg":       updatedVehicle.CapacityKg,
+		"status":            updatedVehicle.Status,
+		"status_label":      getStatusLabel(updatedVehicle.Status),
+		"updated_at":        updatedVehicle.UpdatedAt,
+		"updated_by":        updatedVehicle.UpdatedBy,
+		"assigned_shipment": updatedVehicle.AssignedShipment,
+		"assigned_branch":   updatedVehicle.AssignedBranch,
+		"message":           "Vehículo asignado exitosamente al branch",
+	}
+
+	c.JSON(http.StatusOK, response)
 }

@@ -19,6 +19,7 @@ type VehicleRepository interface {
 	UpdateStatus(id string, status model.VehicleStatus) error
 	UpdateStatusByUser(id string, status model.VehicleStatus, username string) error
 	AssignShipment(id string, trackingID *string) error
+	AssignBranch(id string, branchID *string) error
 }
 
 type inMemoryVehicleRepository struct {
@@ -112,6 +113,19 @@ func (r *inMemoryVehicleRepository) AssignShipment(id string, trackingID *string
 	for i, v := range r.vehicles {
 		if v.ID == id {
 			r.vehicles[i].AssignedShipment = trackingID
+			r.vehicles[i].UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return errors.New("vehicle not found")
+}
+
+func (r *inMemoryVehicleRepository) AssignBranch(id string, branchID *string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, v := range r.vehicles {
+		if v.ID == id {
+			r.vehicles[i].AssignedBranch = branchID
 			r.vehicles[i].UpdatedAt = time.Now()
 			return nil
 		}

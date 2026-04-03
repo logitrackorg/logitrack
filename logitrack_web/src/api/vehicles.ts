@@ -20,6 +20,7 @@ export interface Vehicle {
   capacity_kg: number;
   status: VehicleStatus;
   assigned_shipment?: string | null;
+  assigned_branch?: string | null;
 }
 
 export interface CreateVehicleRequest {
@@ -38,6 +39,7 @@ export interface VehicleStatusResponse {
   updated_at: string;
   updated_by?: string;
   assigned_shipment: string | null;
+  assigned_branch?: string | null;
 }
 
 export interface UpdateVehicleStatusRequest {
@@ -61,6 +63,10 @@ export interface AssignVehicleResponse extends VehicleStatusResponse {
   message: string;
 }
 
+export interface AssignBranchRequest {
+  branch_id: string;
+}
+
 export const vehicleApi = {
   list: () => api.get<Vehicle[]>("/vehicles").then((r) => r.data),
   create: (data: CreateVehicleRequest) =>
@@ -77,6 +83,8 @@ export const vehicleApi = {
   },
   assignToShipment: (plate: string, data: AssignVehicleRequest) =>
     api.post<AssignVehicleResponse>(`/vehicles/by-plate/${plate}/assign`, data).then((r) => r.data),
+  assignBranch: (plate: string, data: AssignBranchRequest) =>
+    api.post<AssignVehicleResponse>(`/vehicles/by-plate/${plate}/assign-branch`, data).then((r) => r.data),
   getByShipment: (trackingId: string) =>
     api.get<VehicleStatusResponse>(`/vehicles/by-shipment/${trackingId}`).then((r) => r.data),
 };

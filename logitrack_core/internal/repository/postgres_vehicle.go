@@ -32,12 +32,20 @@ func NewPostgresVehicleRepository(db *sql.DB) VehicleRepository {
 		panic("failed to create vehicles table: " + err.Error())
 	}
 
+	// Add assigned_branch column if it doesn't exist (migration for existing tables)
+	_, err = db.Exec(`
+		ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS assigned_branch VARCHAR(50)
+	`)
+	if err != nil {
+		panic("failed to add assigned_branch column: " + err.Error())
+	}
+
 	return &postgresVehicleRepository{db: db}
 }
 
 func (r *postgresVehicleRepository) List() []model.Vehicle {
 	rows, err := r.db.Query(`
-		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, updated_at, updated_by
+		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, assigned_branch, updated_at, updated_by
 		FROM vehicles ORDER BY id
 	`)
 	if err != nil {
@@ -52,8 +60,9 @@ func (r *postgresVehicleRepository) List() []model.Vehicle {
 		var updatedAt sql.NullTime
 		var updatedBy sql.NullString
 		var assignedShipment sql.NullString
+		var assignedBranch sql.NullString
 
-		err := rows.Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &updatedAt, &updatedBy)
+		err := rows.Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &assignedBranch, &updatedAt, &updatedBy)
 		if err != nil {
 			continue
 		}
@@ -61,6 +70,9 @@ func (r *postgresVehicleRepository) List() []model.Vehicle {
 		v.CapacityKg = capacityKg
 		if assignedShipment.Valid {
 			v.AssignedShipment = &assignedShipment.String
+		}
+		if assignedBranch.Valid {
+			v.AssignedBranch = &assignedBranch.String
 		}
 		if updatedAt.Valid {
 			v.UpdatedAt = updatedAt.Time
@@ -100,11 +112,12 @@ func (r *postgresVehicleRepository) GetByID(id string) (model.Vehicle, bool) {
 	var updatedAt sql.NullTime
 	var updatedBy sql.NullString
 	var assignedShipment sql.NullString
+	var assignedBranch sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, updated_at, updated_by
+		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, assigned_branch, updated_at, updated_by
 		FROM vehicles WHERE id = $1
-	`, id).Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &updatedAt, &updatedBy)
+	`, id).Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &assignedBranch, &updatedAt, &updatedBy)
 
 	if err == sql.ErrNoRows {
 		return model.Vehicle{}, false
@@ -116,6 +129,9 @@ func (r *postgresVehicleRepository) GetByID(id string) (model.Vehicle, bool) {
 	v.CapacityKg = capacityKg
 	if assignedShipment.Valid {
 		v.AssignedShipment = &assignedShipment.String
+	}
+	if assignedBranch.Valid {
+		v.AssignedBranch = &assignedBranch.String
 	}
 	if updatedAt.Valid {
 		v.UpdatedAt = updatedAt.Time
@@ -133,11 +149,12 @@ func (r *postgresVehicleRepository) GetByLicensePlate(licensePlate string) (mode
 	var updatedAt sql.NullTime
 	var updatedBy sql.NullString
 	var assignedShipment sql.NullString
+	var assignedBranch sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, updated_at, updated_by
+		SELECT id, license_plate, type, capacity_kg, status, assigned_shipment, assigned_branch, updated_at, updated_by
 		FROM vehicles WHERE UPPER(license_plate) = UPPER($1)
-	`, licensePlate).Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &updatedAt, &updatedBy)
+	`, licensePlate).Scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status, &assignedShipment, &assignedBranch, &updatedAt, &updatedBy)
 
 	if err == sql.ErrNoRows {
 		return model.Vehicle{}, false
@@ -149,6 +166,9 @@ func (r *postgresVehicleRepository) GetByLicensePlate(licensePlate string) (mode
 	v.CapacityKg = capacityKg
 	if assignedShipment.Valid {
 		v.AssignedShipment = &assignedShipment.String
+	}
+	if assignedBranch.Valid {
+		v.AssignedBranch = &assignedBranch.String
 	}
 	if updatedAt.Valid {
 		v.UpdatedAt = updatedAt.Time
@@ -197,5 +217,19 @@ func (r *postgresVehicleRepository) AssignShipment(id string, trackingID *string
 	_, err = r.db.Exec(`
 		UPDATE vehicles SET assigned_shipment = $1, updated_at = $2 WHERE id = $3
 	`, *trackingID, time.Now(), id)
+	return err
+}
+
+func (r *postgresVehicleRepository) AssignBranch(id string, branchID *string) error {
+	if branchID == nil {
+		_, err := r.db.Exec(`
+			UPDATE vehicles SET assigned_branch = NULL, updated_at = $1 WHERE id = $2
+		`, time.Now(), id)
+		return err
+	}
+
+	_, err := r.db.Exec(`
+		UPDATE vehicles SET assigned_branch = $1, updated_at = $2 WHERE id = $3
+	`, *branchID, time.Now(), id)
 	return err
 }

@@ -32,6 +32,7 @@ type Vehicle struct {
 	UpdatedAt        time.Time     `json:"updated_at"`
 	UpdatedBy        string        `json:"updated_by,omitempty"`        // usuario que realizó el último cambio de estado
 	AssignedShipment *string       `json:"assigned_shipment,omitempty"` // tracking_id del envío asignado (si existe)
+	AssignedBranch   *string       `json:"assigned_branch,omitempty"`   // branch_id asignado (si existe)
 }
 
 // CreateVehicleRequest is the request body for creating a new vehicle.

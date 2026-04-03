@@ -313,10 +313,25 @@ export function NewShipment() {
           <Field label="Branch *">
             <select style={input} required value={form.receiving_branch_id}
               onChange={(e) => set("receiving_branch_id", e.target.value)}>
-              <option value="">Select branch</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
+              <option value="">Select branch...</option>
+              {(() => {
+                // Group branches by province
+                const branchesByProvince = branches.reduce((acc, branch) => {
+                  if (!acc[branch.province]) acc[branch.province] = [];
+                  acc[branch.province].push(branch);
+                  return acc;
+                }, {} as Record<string, Branch[]>);
+                
+                return Object.entries(branchesByProvince).map(([province, provinceBranches]) => (
+                  <optgroup key={province} label={province}>
+                    {provinceBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name} - {branch.city}
+                      </option>
+                    ))}
+                  </optgroup>
+                ));
+              })()}
             </select>
           </Field>
         </Section>
