@@ -28,11 +28,30 @@ func (s *RouteService) GetTodayRoute(driverID string) (model.Route, []model.Ship
 	shipments := make([]model.Shipment, 0, len(route.ShipmentIDs))
 	for _, id := range route.ShipmentIDs {
 		sh, err := s.shipmentRepo.GetByTrackingID(id)
-		if err == nil {
+		if err == nil && isVisibleForDriver(sh, today) {
 			shipments = append(shipments, sh)
 		}
 	}
 	return route, shipments, nil
+}
+
+// isVisibleForDriver returns true for shipments the driver should see on their route:
+// - any active (non-terminal, non-pending) status
+// - delivered on the same day as the route (visible until the day rolls over)
+func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
+	switch sh.Status {
+	case model.StatusInProgress, model.StatusPreTransit, model.StatusInTransit,
+		model.StatusAtBranch, model.StatusDelivering, model.StatusDeliveryFailed,
+		model.StatusReadyForPickup, model.StatusReadyForReturn:
+		return true
+	case model.StatusDelivered:
+		return sh.DeliveredAt != nil && model.NewDateOnly(*sh.DeliveredAt).Equal(routeDate)
+	}
+	return false
+}
+
+func isDriverActiveStatus(s model.Status) bool {
+	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
 }
 
 func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (model.Route, error) {
@@ -71,6 +90,11 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 	}
 	route.ShipmentIDs = append(route.ShipmentIDs, trackingID)
 	return s.repo.Update(route)
+}
+
+func (s *RouteService) RemoveShipmentFromTodayRoute(trackingID string) error {
+	today := model.NewDateOnly(time.Now().UTC())
+	return s.repo.RemoveShipmentFromDate(trackingID, today)
 }
 
 func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID string, status model.Status) error {
