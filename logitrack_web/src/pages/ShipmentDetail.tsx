@@ -370,6 +370,10 @@ export function ShipmentDetail() {
     if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("Weight must be greater than 0."); return; }
     if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("Sender DNI must be at least 7 digits."); return; }
     if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("Recipient DNI must be at least 7 digits."); return; }
+    if (/^\d+$/.test(correctionForm.origin_city ?? "")) { setCorrectionError("Sender city cannot contain numbers only."); return; }
+    if (/^\d+$/.test(correctionForm.destination_city ?? "")) { setCorrectionError("Recipient city cannot contain numbers only."); return; }
+    if (/^[a-zA-Z]+$/.test(correctionForm.origin_postal_code ?? "")) { setCorrectionError("Sender postal code must contain at least one digit."); return; }
+    if (/^[a-zA-Z]+$/.test(correctionForm.destination_postal_code ?? "")) { setCorrectionError("Recipient postal code must contain at least one digit."); return; }
     setSavingCorrection(true);
     setCorrectionError("");
     try {
@@ -1408,7 +1412,7 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
           <legend style={legStyle}>Sender</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
             <DField label="Name"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
-            <DField label="Phone"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value)} /></DField>
+            <DField label="Phone"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
             <DField label="Street (origin)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
@@ -1428,7 +1432,7 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
           <legend style={legStyle}>Recipient</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
             <DField label="Name"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
-            <DField label="Phone"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value)} /></DField>
+            <DField label="Phone"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
             <DField label="Street (destination)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
