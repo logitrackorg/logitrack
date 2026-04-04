@@ -288,6 +288,7 @@ src/
 - Fleet nav link (`Fleet`): all non-driver roles
 - Vehicle assignment panel in `ShipmentDetail`: operator + supervisor + admin, shown when shipment is `in_progress`, `at_branch`, or `ready_for_pickup`
 - ML Config nav link: admin only
+- `Export CSV` button in `ShipmentList`: only admin + manager; exports the currently filtered shipments (state, branch, date range, search text all applied)
 
 **Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name). Use `branchApi.listActive()` for dropdowns that should only offer operational branches (e.g. receiving branch on new shipment). The `Branch` interface exposes `address` (street, city, province, postal_code), `status`, `created_at`, `updated_at`, `updated_by`. Helpers `statusLabel()` and `statusColor()` are in `api/branches.ts`.
 
@@ -300,6 +301,8 @@ src/
 **ShipmentList filter**: the `status` query param pre-selects the filter on load (e.g. `/?status=pending`). Default filter is `active` (excludes `delivered`, `pending`, `returned`, and `cancelled`). Date filtering is applied client-side using local timezone — the backend `date_from`/`date_to` params are not used, to avoid UTC/local timezone mismatches in displayed dates.
 
 **Shipment list ordering**: the backend returns shipments sorted by tracking ID ascending (`List()` and `Search()` both apply `sort.Slice`).
+
+**CSV export**: admin and manager can download the currently filtered shipment list as a CSV file via the "Export CSV" button. The export is client-side (no extra API call) and reflects all active filters. Corrected field values take precedence over originals. File name format: `shipments_YYYY-MM-DD.csv`. Sender/recipient names are intentionally excluded (personal data — Ley 25.326); no DNI, email, phone, or full address is exported. See spec US-074.
 
 ### Screen → route map
 

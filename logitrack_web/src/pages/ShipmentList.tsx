@@ -13,6 +13,53 @@ function corr(s: Shipment, key: string, fallback: string | number): string {
   return v !== undefined ? v : String(fallback);
 }
 
+function csvEscape(value: string): string {
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function exportToCSV(shipments: Shipment[], branches: Branch[]) {
+  const branchName = (id?: string) => {
+    if (!id) return "";
+    const b = branches.find((b) => b.id === id);
+    return b ? `${b.name} — ${b.address.city}` : id;
+  };
+
+  const headers = [
+    "Tracking ID", "Status", "Priority",
+    "Origin City", "Origin Province", "Destination City", "Destination Province",
+    "Receiving Branch", "Shipment Type", "Weight (kg)", "Current Location",
+    "Created", "Est. Delivery",
+  ];
+
+  const rows = shipments.map((s) => [
+    s.status === "pending" ? "" : s.tracking_id,
+    s.status,
+    s.priority ?? "",
+    corr(s, "origin_city", s.sender.address.city),
+    s.sender.address.province,
+    corr(s, "destination_city", s.recipient.address.city),
+    s.recipient.address.province,
+    branchName(s.receiving_branch_id),
+    s.shipment_type ?? "",
+    corr(s, "weight_kg", s.weight_kg),
+    s.current_location ?? "",
+    fmtDate(s.created_at),
+    fmtDate(s.estimated_delivery_at),
+  ].map(csvEscape).join(","));
+
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `shipments_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 type StatusFilter = ShipmentStatus | "active" | "";
 
 export function ShipmentList() {
@@ -173,7 +220,16 @@ export function ShipmentList() {
         <p style={{ color: "#6b7280" }}>No shipments found.</p>
       ) : (
         <>
-          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{filtered.length} shipment{filtered.length !== 1 ? "s" : ""}</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{filtered.length} shipment{filtered.length !== 1 ? "s" : ""}</p>
+            {hasRole("admin", "manager") && (
+              <button
+                onClick={() => exportToCSV(filtered, branches)}
+                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                Export CSV
+              </button>
+            )}
+          </div>
           <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 800 }}>
             <thead>

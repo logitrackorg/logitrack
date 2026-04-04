@@ -39,6 +39,7 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 072 | Cambiar estado de sucursal (supervisor / admin) | Implementada (sin spec) |
 | 073 | Buscar sucursal por nombre, ID o ciudad | Implementada (sin spec) |
 | 008b | Filtrar listado de envíos por sucursal | Implementada (sin spec) |
+| 074 | [Exportar listado de envíos a CSV](./US-074-exportar-csv.md) | Implementada |
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
 
