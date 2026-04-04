@@ -1,11 +1,19 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+)
+
+var (
+	ErrBranchNotFound      = errors.New("branch not found")
+	ErrBranchDuplicateName = errors.New("duplicate branch name")
+	ErrBranchNotActive     = errors.New("branch is not active")
 )
 
 type BranchService struct {
@@ -47,11 +55,14 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 	if strings.TrimSpace(req.PostalCode) == "" {
 		return model.Branch{}, fmt.Errorf("postal code is required")
 	}
-	if req.CapacityKg <= 0 {
-		return model.Branch{}, fmt.Errorf("capacity must be greater than 0")
+
+	id := strings.TrimSpace(req.ID)
+	if id == "" {
+		id = uuid.New().String()
 	}
 
 	branch := model.Branch{
+		ID:   id,
 		Name: req.Name,
 		Address: model.Address{
 			Street:     req.Street,
@@ -59,33 +70,29 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province:   req.Province,
-		CapacityKg: req.CapacityKg,
-		Status:     model.BranchStatusActive,
+		Province: req.Province,
+		Status:   model.BranchStatusActive,
 	}
 
 	if err := s.repo.Create(branch); err != nil {
 		if err == repository.ErrDuplicateBranchName {
-			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists", req.Name)
+			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists: %w", req.Name, ErrBranchDuplicateName)
 		}
 		return model.Branch{}, fmt.Errorf("failed to create branch: %w", err)
 	}
 
-	created := s.repo.GetByNameOrID(req.Name)
-	if len(created) > 0 {
-		return created[0], nil
-	}
-	return branch, nil
+	created, _ := s.repo.GetByID(branch.ID)
+	return created, nil
 }
 
 func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.Branch, error) {
 	branch, found := s.repo.GetByID(id)
 	if !found {
-		return model.Branch{}, fmt.Errorf("branch not found")
+		return model.Branch{}, ErrBranchNotFound
 	}
 
 	if branch.Status != model.BranchStatusActive {
-		return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active (current status: %s)", branch.Status)
+		return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active (current status: %s): %w", branch.Status, ErrBranchNotActive)
 	}
 
 	if strings.TrimSpace(req.Name) == "" {
@@ -103,9 +110,6 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 	if strings.TrimSpace(req.PostalCode) == "" {
 		return model.Branch{}, fmt.Errorf("postal code is required")
 	}
-	if req.CapacityKg <= 0 {
-		return model.Branch{}, fmt.Errorf("capacity must be greater than 0")
-	}
 
 	update := model.Branch{
 		Name: req.Name,
@@ -115,16 +119,15 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province:   req.Province,
-		CapacityKg: req.CapacityKg,
+		Province: req.Province,
 	}
 
 	if err := s.repo.Update(id, update); err != nil {
 		if err == repository.ErrDuplicateBranchName {
-			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists", req.Name)
+			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists: %w", req.Name, ErrBranchDuplicateName)
 		}
 		if repository.IsNotUpdatable(err) {
-			return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active")
+			return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active: %w", ErrBranchNotActive)
 		}
 		return model.Branch{}, fmt.Errorf("failed to update branch: %w", err)
 	}
@@ -136,7 +139,7 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequest, username string) (model.Branch, error) {
 	_, found := s.repo.GetByID(id)
 	if !found {
-		return model.Branch{}, fmt.Errorf("branch not found")
+		return model.Branch{}, ErrBranchNotFound
 	}
 
 	validStatuses := map[model.BranchStatus]bool{

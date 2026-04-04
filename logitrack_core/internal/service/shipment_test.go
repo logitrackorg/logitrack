@@ -15,9 +15,9 @@ func strPtr(s string) *string { return &s }
 
 func testBranchRepo() repository.BranchRepository {
 	r := repository.NewInMemoryBranchRepository()
-	r.Add(model.Branch{ID: "br-caba", Name: "CDBA-01", Address: model.Address{City: "Buenos Aires", Province: "CABA"}, Province: "CABA", CapacityKg: 5000, Status: model.BranchStatusActive})
-	r.Add(model.Branch{ID: "br-cordoba", Name: "CORD-01", Address: model.Address{City: "Córdoba", Province: "Córdoba"}, Province: "Córdoba", CapacityKg: 3000, Status: model.BranchStatusActive})
-	r.Add(model.Branch{ID: "br-mendoza", Name: "MEND-01", Address: model.Address{City: "Mendoza", Province: "Mendoza"}, Province: "Mendoza", CapacityKg: 4000, Status: model.BranchStatusActive})
+	r.Add(model.Branch{ID: "br-caba", Name: "CDBA-01", Address: model.Address{City: "Buenos Aires", Province: "CABA"}, Province: "CABA", Status: model.BranchStatusActive})
+	r.Add(model.Branch{ID: "br-cordoba", Name: "CORD-01", Address: model.Address{City: "Córdoba", Province: "Córdoba"}, Province: "Córdoba", Status: model.BranchStatusActive})
+	r.Add(model.Branch{ID: "br-mendoza", Name: "MEND-01", Address: model.Address{City: "Mendoza", Province: "Mendoza"}, Province: "Mendoza", Status: model.BranchStatusActive})
 	return r
 }
 

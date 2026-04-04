@@ -331,16 +331,20 @@ export function NewShipment() {
                   acc[branch.province].push(branch);
                   return acc;
                 }, {} as Record<string, Branch[]>);
-                
-                return Object.entries(branchesByProvince).map(([province, provinceBranches]) => (
-                  <optgroup key={province} label={province}>
-                    {provinceBranches.map(branch => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name} - {branch.address.city}
-                      </option>
-                    ))}
-                  </optgroup>
-                ));
+
+                return Object.entries(branchesByProvince)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([province, provinceBranches]) => (
+                    <optgroup key={province} label={province}>
+                      {[...provinceBranches]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(branch => (
+                          <option key={branch.id} value={branch.id}>
+                            {branch.name} - {branch.address.city}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ));
               })()}
             </select>
             {form.receiving_branch_id && (() => {
@@ -350,7 +354,6 @@ export function NewShipment() {
                 <div style={{ marginTop: 8, padding: "8px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13 }}>
                   <div style={{ fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
                   <div style={{ color: "#6b7280" }}>{selected.address.street}, {selected.address.city}</div>
-                  <div style={{ color: "#9ca3af", fontSize: 12 }}>Capacity: {selected.capacity_kg.toLocaleString()} kg</div>
                 </div>
               );
             })()}

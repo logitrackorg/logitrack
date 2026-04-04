@@ -22,8 +22,7 @@ func NewPostgresBranchRepository(db *sql.DB) BranchRepository {
 			city VARCHAR(100),
 			province VARCHAR(100),
 			postal_code VARCHAR(20),
-			capacity_kg NUMERIC(10,2) NOT NULL DEFAULT 0,
-			status VARCHAR(30) NOT NULL DEFAULT 'activo',
+				status VARCHAR(30) NOT NULL DEFAULT 'activo',
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 			updated_by VARCHAR(100)
@@ -38,13 +37,12 @@ func NewPostgresBranchRepository(db *sql.DB) BranchRepository {
 
 func scanBranch(scan func(...any) error) (model.Branch, error) {
 	var b model.Branch
-	var capacityKg float64
 	var street, city, province, postalCode, updatedBy sql.NullString
 	var createdAt, updatedAt sql.NullTime
 	var status string
 
 	err := scan(&b.ID, &b.Name, &street, &city, &province, &postalCode,
-		&capacityKg, &status, &createdAt, &updatedAt, &updatedBy)
+		&status, &createdAt, &updatedAt, &updatedBy)
 	if err != nil {
 		return model.Branch{}, err
 	}
@@ -63,7 +61,6 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	if postalCode.Valid {
 		b.Address.PostalCode = postalCode.String
 	}
-	b.CapacityKg = capacityKg
 	b.Status = model.BranchStatus(status)
 	if createdAt.Valid {
 		b.CreatedAt = createdAt.Time
@@ -77,7 +74,7 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	return b, nil
 }
 
-const branchSelectCols = `id, name, street, city, province, postal_code, capacity_kg, status, created_at, updated_at, updated_by`
+const branchSelectCols = `id, name, street, city, province, postal_code, status, created_at, updated_at, updated_by`
 
 func (r *postgresBranchRepository) List() []model.Branch {
 	rows, err := r.db.Query(`SELECT ` + branchSelectCols + ` FROM branches ORDER BY name`)
@@ -128,10 +125,10 @@ func (r *postgresBranchRepository) Create(branch model.Branch) error {
 
 	now := time.Now()
 	_, err = r.db.Exec(`
-		INSERT INTO branches (id, name, street, city, province, postal_code, capacity_kg, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO branches (id, name, street, city, province, postal_code, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`, branch.ID, branch.Name, branch.Address.Street, branch.Address.City,
-		branch.Address.Province, branch.Address.PostalCode, branch.CapacityKg,
+		branch.Address.Province, branch.Address.PostalCode,
 		branch.Status, now, now)
 	return err
 }
@@ -162,17 +159,24 @@ func (r *postgresBranchRepository) Update(id string, branch model.Branch) error 
 
 	_, err = r.db.Exec(`
 		UPDATE branches SET name = $1, street = $2, city = $3, province = $4,
-			postal_code = $5, capacity_kg = $6, updated_at = $7
-		WHERE id = $8
+			postal_code = $5, updated_at = $6
+		WHERE id = $7
 	`, branch.Name, branch.Address.Street, branch.Address.City, branch.Address.Province,
-		branch.Address.PostalCode, branch.CapacityKg, time.Now(), id)
+		branch.Address.PostalCode, time.Now(), id)
 	return err
 }
 
 func (r *postgresBranchRepository) UpdateStatus(id string, status model.BranchStatus, username string) error {
-	_, err := r.db.Exec(`UPDATE branches SET status = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
+	res, err := r.db.Exec(`UPDATE branches SET status = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
 		status, time.Now(), username, id)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return errNotFound
+	}
+	return nil
 }
 
 func (r *postgresBranchRepository) Add(branch model.Branch) {
@@ -225,8 +229,10 @@ func (r *postgresBranchRepository) GetByNameOrID(query string) []model.Branch {
 	return branches
 }
 
-var errNotFound = sql.ErrNoRows
-var errNotUpdatable = &notUpdatableError{}
+var (
+	errNotFound     = sql.ErrNoRows
+	errNotUpdatable = &notUpdatableError{}
+)
 
 type notUpdatableError struct{}
 

@@ -15,7 +15,6 @@ export interface Branch {
   name: string;
   address: { street: string; city: string; province: string; postal_code: string };
   province: string;
-  capacity_kg: number;
   status: "activo" | "inactivo" | "fuera_de_servicio";
   created_at: string;
   updated_at: string;
@@ -28,7 +27,6 @@ export interface CreateBranchPayload {
   city: string;
   province: string;
   postal_code: string;
-  capacity_kg: number;
 }
 
 export interface UpdateBranchPayload {
@@ -37,7 +35,6 @@ export interface UpdateBranchPayload {
   city: string;
   province: string;
   postal_code: string;
-  capacity_kg: number;
 }
 
 export const branchApi = {

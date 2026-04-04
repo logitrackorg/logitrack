@@ -654,9 +654,24 @@ export function VehicleList() {
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
               >
                 <option value="">Select destination branch...</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                ))}
+                {(() => {
+                  const byProvince = branches.reduce((acc, b) => {
+                    if (!acc[b.province]) acc[b.province] = [];
+                    acc[b.province].push(b);
+                    return acc;
+                  }, {} as Record<string, typeof branches>);
+                  return Object.entries(byProvince)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([province, pBranches]) => (
+                      <optgroup key={province} label={province}>
+                        {[...pBranches]
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(b => (
+                            <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                          ))}
+                      </optgroup>
+                    ));
+                })()}
               </select>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

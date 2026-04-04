@@ -63,7 +63,8 @@ internal/
   projection/               # Read-model projectors built from DomainEvents
                             #   shipment.go       — ShipmentProjection (write-through materialized view)
   service/                  # Business logic: shipment (status transitions, tracking ID, estimated delivery),
-                            #   branch (CRUD, status management, active-only listing),
+                            #   branch (CRUD, status management, active-only listing, search by name/ID/city;
+                            #           sentinel errors: ErrBranchNotFound, ErrBranchDuplicateName, ErrBranchNotActive),
                             #   route (driver route assignment/validation), comment (add/list with rules),
                             #   ml_config (train, save, activate, recalculate active shipment priorities)
   handler/                  # Gin HTTP handlers: shipment, auth, branch, driver, user, customer, comment, vehicle, ml_config
@@ -288,7 +289,11 @@ src/
 - Vehicle assignment panel in `ShipmentDetail`: operator + supervisor + admin, shown when shipment is `in_progress`, `at_branch`, or `ready_for_pickup`
 - ML Config nav link: admin only
 
-**Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name).
+**Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name). Use `branchApi.listActive()` for dropdowns that should only offer operational branches (e.g. receiving branch on new shipment). The `Branch` interface exposes `address` (street, city, province, postal_code), `status`, `created_at`, `updated_at`, `updated_by`. Helpers `statusLabel()` and `statusColor()` are in `api/branches.ts`.
+
+**Branch dropdowns** (receiving branch in NewShipment, destination branch in VehicleList start-trip) group options by province with `<optgroup>` and sort both provinces and branches within each group alphabetically via `localeCompare`.
+
+**ShipmentList filter**: the `status` query param pre-selects the filter on load (e.g. `/?status=pending`). Default filter is `active` (excludes `delivered`, `pending`, `returned`, and `cancelled`). A **branch filter** by `receiving_branch_id` and a **date range filter** are also applied client-side. Date filtering uses local timezone to avoid UTC/local mismatches; the backend `date_from`/`date_to` params are not used. The branch filter dropdown uses the same province-grouped, alphabetically sorted select pattern.
 
 **Draft workflow**: drafts (`pending`) are created via `POST /shipments/draft` and edited via `PATCH /shipments/:id/draft`. After saving changes in `ShipmentDetail`, the UI redirects to `/?status=pending` (shipment list pre-filtered to Draft). Confirming a draft via `POST /shipments/:id/confirm` generates a real `LT-` tracking ID and moves the shipment to `in_progress`.
 
@@ -372,7 +377,7 @@ Seven core entities plus supporting value objects:
 | **Shipment** | tracking_id, status, sender/recipient info, origin/destination (Address), weight_kg, package_type, shipment_type, time_window, cold_chain, is_fragile, receiving_branch_id, current_location, timestamps, priority, priority_score, priority_confidence, priority_factors, corrections | Central aggregate. Tracking ID is `LT-XXXX` (confirmed) or `DRAFT-XXXX` (pending). `corrections` is a typed `ShipmentCorrections` struct of non-destructive field overrides. Priority fields are set by the ML service on create/confirm/correct. |
 | **ShipmentEvent** | id, tracking_id, event_type, from_status, to_status, changed_by, location, notes, timestamp | Immutable audit log of every status change. `event_type`: `"status_change"` or `"edited"`. |
 | **ShipmentComment** | id, tracking_id, author, body, created_at | Internal notes on a shipment. Cannot be added to finalized shipments. |
-| **Branch** | id, name, address (street, city, province, postal_code), province, capacity_kg, status, created_at, updated_at, updated_by | Logistics warehouses/branches. Persistent in PostgreSQL. Statuses: activo, inactivo, fuera_de_servicio. CRUD via service/branch.go. |
+| **Branch** | id, name, address (street, city, province, postal_code), province, status, created_at, updated_at, updated_by | Logistics warehouses/branches. Persistent in PostgreSQL. Statuses: activo, inactivo, fuera_de_servicio. CRUD via service/branch.go. |
 | **User** | id, username, role | Auth identity. Roles: `operator`, `supervisor`, `manager`, `admin`, `driver`. |
 | **Route** | id, date, driver_id, shipment_ids[], created_by, created_at | Links a driver to shipments for a given day. ID format: `ROUTE-XXXXXXXX`. |
 | **Customer** | dni, name, phone, email, address | Auto-populated from shipment sender/recipient data. Used for DNI autocomplete. |
@@ -394,7 +399,7 @@ Seven core entities plus supporting value objects:
 
 On startup, `seed.Load()` populates 36 branches, 8 sample shipments, and 3 sample vehicles:
 
-**Branches** (seed/branch_seed.go `LoadBranches`): 36 branches across all Argentine provinces, persisted in PostgreSQL. Each has a full address (street, city, province, postal_code), capacity_kg, and status `activo`. Seeded via `Create` with duplicate-name protection — idempotent on restart.
+**Branches** (seed/branch_seed.go `LoadBranches`): 36 branches across all Argentine provinces, persisted in PostgreSQL. Each has a full address (street, city, province, postal_code) and status `activo`. Seeded via `Create` with duplicate-name protection — idempotent on restart.
 
 Branch `name` follows the format `XXXX-NN` — 4-letter code derived from the city name + 2-digit counter per city (e.g. `CDBA-01` for Ciudad de Buenos Aires, `CORD-01` for Córdoba). Increment the counter (`-02`, `-03`) if a second branch exists in the same city.
 

@@ -17,7 +17,7 @@ const STATUS_OPTIONS: { value: Branch["status"]; label: string }[] = [
   { value: "fuera_de_servicio", label: "Out of Service" },
 ];
 
-type SortKey = "name" | "city" | "province" | "status" | "capacity_kg" | "updated_at";
+type SortKey = "name" | "city" | "province" | "status" | "updated_at";
 
 export function BranchList() {
   const isMobile = useIsMobile();
@@ -70,7 +70,6 @@ export function BranchList() {
         case "city": cmp = a.address.city.localeCompare(b.address.city); break;
         case "province": cmp = (a.province || "").localeCompare(b.province || ""); break;
         case "status": cmp = a.status.localeCompare(b.status); break;
-        case "capacity_kg": cmp = a.capacity_kg - b.capacity_kg; break;
         case "updated_at": cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(); break;
       }
       return sortAsc ? cmp : -cmp;
@@ -132,7 +131,6 @@ export function BranchList() {
                 <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Name{sortIcon("name")}</button></th>
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Location{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Address</th>
-                <th style={thStyle}><button onClick={() => handleSort("capacity_kg")} style={sortBtn}>Capacity{sortIcon("capacity_kg")}</button></th>
                 <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Status{sortIcon("status")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Updated{sortIcon("updated_at")}</button></th>
                 <th style={thStyle}>Actions</th>
@@ -147,7 +145,6 @@ export function BranchList() {
                   </td>
                   <td style={tdStyle}>{b.address.city}, {b.province}</td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>{b.capacity_kg.toLocaleString()} kg</td>
                   <td style={tdStyle}>
                     <span style={{
                       display: "inline-block", padding: "2px 10px", borderRadius: 12,
@@ -248,18 +245,19 @@ function BranchFormModal({
   onSubmit: (data: CreateBranchPayload | UpdateBranchPayload) => Promise<void>;
   error: string;
 }) {
+  const isEdit = !!initial;
   const [form, setForm] = useState({
+    id: initial?.id ?? "",
     name: initial?.name ?? "",
     street: initial?.address.street ?? "",
     city: initial?.address.city ?? "",
     province: initial?.province ?? initial?.address.province ?? "",
     postal_code: initial?.address.postal_code ?? "",
-    capacity_kg: initial?.capacity_kg ?? 0,
   });
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
 
-  const set = (field: string, value: string | number) =>
+  const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -269,7 +267,6 @@ function BranchFormModal({
     if (!form.city.trim()) { setLocalError("City is required."); return; }
     if (!form.province) { setLocalError("Province is required."); return; }
     if (!form.postal_code.trim()) { setLocalError("Postal code is required."); return; }
-    if (!form.capacity_kg || form.capacity_kg <= 0) { setLocalError("Capacity must be greater than 0."); return; }
 
     setSubmitting(true);
     setLocalError("");
@@ -287,6 +284,11 @@ function BranchFormModal({
     <Modal onClose={onClose}>
       <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>{title}</h2>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+        {!isEdit && (
+          <Field label="ID (optional — auto-generated if empty)">
+            <input style={inputStyle} value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="e.g. caba-02" />
+          </Field>
+        )}
         <Field label="Name *">
           <input style={inputStyle} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. CDBA-02" />
         </Field>
@@ -304,15 +306,9 @@ function BranchFormModal({
             </select>
           </Field>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Postal Code *">
-            <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
-          </Field>
-          <Field label="Capacity (kg) *">
-            <input style={inputStyle} type="number" step="1" min="1" required value={form.capacity_kg === 0 ? "" : form.capacity_kg}
-              onChange={(e) => set("capacity_kg", parseFloat(e.target.value) || 0)} placeholder="5000" />
-          </Field>
-        </div>
+        <Field label="Postal Code *">
+          <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
+        </Field>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancel</button>

@@ -34,7 +34,7 @@ src/
 
 **API clients**: Each Axios instance in `api/` reads the token from `localStorage` directly via a request interceptor (not from context). The shipments client also has a 401 response interceptor that clears storage and redirects to `/login`.
 
-**Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name). The `Branch` interface includes `address` (street, city, province, postal_code), `capacity_kg`, `status` (activo/inactivo/fuera_de_servicio), `created_at`, `updated_at`, and `updated_by`. Use `branchApi.listActive()` to get only active branches for dropdowns. Helpers `statusLabel()` and `statusColor()` are available in `api/branches.ts`.
+**Branches** are fetched from `GET /api/v1/branches` at runtime — never hardcoded in the frontend. The `branchLabel(city, branches)` helper in `api/branches.ts` maps a city string to a display name. In `RouteTimeline`, nodes show city + province directly from the branches array (not the display name). The `Branch` interface includes `address` (street, city, province, postal_code), `status` (activo/inactivo/fuera_de_servicio), `created_at`, `updated_at`, and `updated_by`. Use `branchApi.listActive()` to get only active branches for dropdowns. Helpers `statusLabel()` and `statusColor()` are available in `api/branches.ts`.
 
 **Role gates** (key examples):
 - `+ New Shipment` button: hidden from managers

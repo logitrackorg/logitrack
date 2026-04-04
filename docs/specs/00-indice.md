@@ -34,6 +34,11 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 062 | Consulta de vehículos disponibles | Implementada (sin spec) |
 | 063 | Asignación de vehículo a envío / sucursal | Implementada (sin spec) |
 | 012b | Inicio y fin de viaje de vehículo (pre_transit → in_transit → at_branch) | Implementada (sin spec) |
+| 070 | Crear sucursal (admin) | Implementada (sin spec) |
+| 071 | Editar datos de sucursal (admin, solo activas) | Implementada (sin spec) |
+| 072 | Cambiar estado de sucursal (supervisor / admin) | Implementada (sin spec) |
+| 073 | Buscar sucursal por nombre, ID o ciudad | Implementada (sin spec) |
+| 008b | Filtrar listado de envíos por sucursal | Implementada (sin spec) |
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
 

@@ -26,14 +26,47 @@ definitions:
     type: object
   model.Branch:
     properties:
-      city:
-        type: string
       id:
         type: string
       name:
         type: string
+      address:
+        $ref: '#/definitions/model.Address'
       province:
         type: string
+      status:
+        type: string
+        enum: [activo, inactivo, fuera_de_servicio]
+      created_at:
+        type: string
+        format: date-time
+      updated_at:
+        type: string
+        format: date-time
+      updated_by:
+        type: string
+    type: object
+  model.CreateBranchRequest:
+    properties:
+      id:
+        type: string
+        description: Optional. If omitted, a UUID is auto-generated.
+      name:
+        type: string
+      street:
+        type: string
+      city:
+        type: string
+      province:
+        type: string
+      postal_code:
+        type: string
+    required:
+    - name
+    - street
+    - city
+    - province
+    - postal_code
     type: object
   model.CorrectShipmentRequest:
     properties:
@@ -343,6 +376,33 @@ definitions:
     required:
     - destination_branch
     type: object
+  model.UpdateBranchRequest:
+    properties:
+      name:
+        type: string
+      street:
+        type: string
+      city:
+        type: string
+      province:
+        type: string
+      postal_code:
+        type: string
+    required:
+    - name
+    - street
+    - city
+    - province
+    - postal_code
+    type: object
+  model.UpdateBranchStatusRequest:
+    properties:
+      status:
+        type: string
+        enum: [activo, inactivo, fuera_de_servicio]
+    required:
+    - status
+    type: object
   model.UpdateVehicleStatusRequest:
     properties:
       force:
@@ -518,8 +578,13 @@ paths:
       - auth
   /branches:
     get:
-      description: Returns all branches. Accessible to operator, supervisor, manager,
-        and admin roles.
+      description: Returns all branches, optionally filtered by status. Accessible
+        to operator, supervisor, manager, and admin roles.
+      parameters:
+      - description: Filter by status (activo, inactivo, fuera_de_servicio)
+        in: query
+        name: status
+        type: string
       produces:
       - application/json
       responses:
@@ -544,6 +609,203 @@ paths:
       security:
       - BearerAuth: []
       summary: List branches
+      tags:
+      - branches
+    post:
+      consumes:
+      - application/json
+      description: Creates a new branch/warehouse. Admin only. If `id` is omitted
+        a UUID is auto-generated.
+      parameters:
+      - description: Branch data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateBranchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Duplicate branch name
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create branch
+      tags:
+      - branches
+  /branches/search:
+    get:
+      description: Returns branches whose name, ID, or city contains the query string
+        (case-insensitive). Returns all branches when q is empty.
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Branch'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Search branches
+      tags:
+      - branches
+  /branches/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Edits branch data. Only allowed when branch status is activo. Admin
+        only.
+      parameters:
+      - description: Branch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated branch data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateBranchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Branch not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Duplicate name or branch not active
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Edit branch data
+      tags:
+      - branches
+  /branches/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Changes the operational status of a branch. Supervisor and admin
+        only.
+      parameters:
+      - description: Branch ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateBranchStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Branch'
+        "400":
+          description: Invalid status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Branch not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change branch status
       tags:
       - branches
   /customers:

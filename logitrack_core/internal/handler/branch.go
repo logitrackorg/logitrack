@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +61,7 @@ func (h *BranchHandler) Create(c *gin.Context) {
 
 	branch, err := h.svc.Create(req)
 	if err != nil {
-		if err.Error()[:1] == "a" { // duplicate name
+		if errors.Is(err, service.ErrBranchDuplicateName) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
@@ -87,16 +88,16 @@ func (h *BranchHandler) Update(c *gin.Context) {
 
 	branch, err := h.svc.Update(id, req)
 	if err != nil {
-		if err.Error()[:1] == "a" { // duplicate name
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		if err.Error()[:6] == "cannot" { // not active
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		if err.Error() == "branch not found" {
+		if errors.Is(err, service.ErrBranchNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrBranchDuplicateName) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrBranchNotActive) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -124,7 +125,7 @@ func (h *BranchHandler) UpdateStatus(c *gin.Context) {
 
 	branch, err := h.svc.UpdateStatus(id, req, user.Username)
 	if err != nil {
-		if err.Error() == "branch not found" {
+		if errors.Is(err, service.ErrBranchNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
