@@ -46,7 +46,7 @@ func main() {
 
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
-	branchRepo := repository.NewInMemoryBranchRepository()
+	branchRepo := repository.NewPostgresBranchRepository(database)
 	vehicleRepo := repository.NewPostgresVehicleRepository(database)
 	routeRepo := repository.NewPostgresRouteRepository(database)
 	customerRepo := repository.NewPostgresCustomerRepository(database)
@@ -79,7 +79,8 @@ func main() {
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
-	branchHandler := handler.NewBranchHandler(branchRepo)
+	branchSvc := service.NewBranchService(branchRepo)
+	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
@@ -105,9 +106,15 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	// Branches — non-driver roles
+	// Branches — list/search: non-driver roles, create/update: admin only, status: supervisor+admin
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
+	canChangeBranchStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
+	protected.GET("/branches/search", nonDriver, branchHandler.Search)
+	protected.POST("/branches", canManageBranch, branchHandler.Create)
+	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
+	protected.PATCH("/branches/:id/status", canChangeBranchStatus, branchHandler.UpdateStatus)
 
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)

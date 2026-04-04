@@ -108,7 +108,7 @@ export function VehicleList() {
   useEffect(() => {
     loadVehicles();
     // Load branches for display in the list
-    branchApi.list().then(data => setBranches(data)).catch(() => {});
+    branchApi.listActive().then(data => setBranches(data)).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -332,7 +332,7 @@ export function VehicleList() {
                 >
                   <option value="">Select a branch...</option>
                   {branches.map(b => (
-                    <option key={b.id} value={b.id}>{b.name} — {b.city}</option>
+                    <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
                   ))}
                 </select>
               </div>
@@ -654,9 +654,24 @@ export function VehicleList() {
                 style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
               >
                 <option value="">Select destination branch...</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name} — {b.city}</option>
-                ))}
+                {(() => {
+                  const byProvince = branches.reduce((acc, b) => {
+                    if (!acc[b.province]) acc[b.province] = [];
+                    acc[b.province].push(b);
+                    return acc;
+                  }, {} as Record<string, typeof branches>);
+                  return Object.entries(byProvince)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([province, pBranches]) => (
+                      <optgroup key={province} label={province}>
+                        {[...pBranches]
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(b => (
+                            <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                          ))}
+                      </optgroup>
+                    ));
+                })()}
               </select>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -699,7 +714,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
   useEffect(() => {
     const loadBranches = async () => {
       try {
-        const data = await branchApi.list();
+        const data = await branchApi.listActive();
         setBranches(data);
       } catch (err) {
         console.error("Failed to load branches:", err);
@@ -892,7 +907,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
                 {currentBranch.name}
               </p>
               <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-                {currentBranch.city}, {currentBranch.province}
+                {currentBranch.address.city}, {currentBranch.province}
               </p>
             </div>
           ) : (
@@ -918,7 +933,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
               >
                 <option value="">Change branch...</option>
                 {branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.name} — {b.city}</option>
+                  <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
                 ))}
               </select>
               <button

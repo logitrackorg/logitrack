@@ -145,10 +145,10 @@ function RouteTimeline({ events, destinationCity, destinationProvince, branches 
                 </div>
                 <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
                   {(() => {
-                    const b = branches.find((x) => x.city === stop.location);
+                    const b = branches.find((x) => x.address.city === stop.location);
                     return (
                       <>
-                        <div style={{ fontSize: 11, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? "#1e3a5f" : "#6b7280", whiteSpace: "nowrap" as const }}>{b?.city ?? stop.location}</div>
+                        <div style={{ fontSize: 11, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? "#1e3a5f" : "#6b7280", whiteSpace: "nowrap" as const }}>{b?.address.city ?? stop.location}</div>
                         {b?.province && <div style={{ fontSize: 10, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b.province}</div>}
                       </>
                     );

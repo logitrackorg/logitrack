@@ -677,7 +677,7 @@ export function ShipmentDetail() {
                   {ev.location && (() => {
                     const b = branches.find(x => x.id === ev.location);
                     return (
-                      <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+                      <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
                     );
                   })()}
                 </div>

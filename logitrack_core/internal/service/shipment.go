@@ -76,6 +76,11 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	if strings.TrimSpace(req.Recipient.Address.City) == "" || strings.TrimSpace(req.Recipient.Address.Province) == "" {
 		return model.Shipment{}, fmt.Errorf("destination city and province are required")
 	}
+	if req.ReceivingBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok && b.Status == model.BranchStatusOutOfService {
+			return model.Shipment{}, fmt.Errorf("branch '%s' is out of service and cannot receive shipments", b.Name)
+		}
+	}
 	if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 		return model.Shipment{}, err
 	}
@@ -311,6 +316,11 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 			return model.Shipment{}, err
 		}
 	}
+	if draft.ReceivingBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(draft.ReceivingBranchID); ok && b.Status == model.BranchStatusOutOfService {
+			return model.Shipment{}, fmt.Errorf("branch '%s' is out of service and cannot receive shipments", b.Name)
+		}
+	}
 	var prediction *model.PriorityPrediction
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
@@ -364,7 +374,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		if current.CurrentLocation != current.ReceivingBranchID {
 			if b, ok := s.branchRepo.GetByID(current.ReceivingBranchID); ok {
 				return model.Shipment{}, fmt.Errorf(
-					"shipment is not at its origin branch (%s) — return by sender does not apply at this branch", b.City,
+					"shipment is not at its origin branch (%s) — return by sender does not apply at this branch", b.Address.City,
 				)
 			}
 			return model.Shipment{}, fmt.Errorf("shipment is not at its origin branch")

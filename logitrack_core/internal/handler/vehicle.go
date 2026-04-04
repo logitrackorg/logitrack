@@ -446,7 +446,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 		statusReq := model.UpdateStatusRequest{
 			Status:    model.StatusInTransit,
 			ChangedBy: user.Username,
-			Location:  destBranch.City,
+			Location:  destBranch.Address.City,
 			Notes:     "Trip started. Vehicle: " + vehicle.LicensePlate,
 		}
 		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
@@ -555,7 +555,7 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 	if vehicle.AssignedBranch != nil {
 		branch, ok := h.branchRepo.GetByID(*vehicle.AssignedBranch)
 		if ok {
-			branchCity = branch.City
+			branchCity = branch.Address.City
 		}
 	}
 
@@ -620,7 +620,7 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	if vehicle.DestinationBranch != nil {
 		destBranch, found := h.branchRepo.GetByID(*vehicle.DestinationBranch)
 		if found {
-			destCity = destBranch.City
+			destCity = destBranch.Address.City
 		}
 	}
 

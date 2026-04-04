@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { vehicleApi, type VehicleStatusResponse, type VehicleStatus, type VehicleType, type UpdateVehicleStatusRequest } from "../api/vehicles";
+import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
 
@@ -51,6 +52,11 @@ export function VehicleStatus() {
   const [error, setError] = useState<string>("");
   const [notFound, setNotFound] = useState(false);
   const [success, setSuccess] = useState<string>("");
+  const [branches, setBranches] = useState<Branch[]>([]);
+
+  useEffect(() => {
+    branchApi.list().then(setBranches).catch(() => {});
+  }, []);
 
   // State change modal
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -427,6 +433,35 @@ export function VehicleStatus() {
                   </svg>
                 }
               />
+              {vehicle.assigned_branch && (() => {
+                const branch = branches.find(b => b.id === vehicle.assigned_branch);
+                return (
+                  <InfoCard
+                    label="Assigned Branch"
+                    value={branch ? `${branch.name} — ${branch.address.city}` : vehicle.assigned_branch}
+                    icon={
+                      <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    }
+                  />
+                );
+              })()}
+              {vehicle.destination_branch && (() => {
+                const branch = branches.find(b => b.id === vehicle.destination_branch);
+                return (
+                  <InfoCard
+                    label="Destination Branch"
+                    value={branch ? `${branch.name} — ${branch.address.city}` : vehicle.destination_branch}
+                    icon={
+                      <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    }
+                  />
+                );
+              })()}
             </div>
 
             {/* Assigned shipments */}
