@@ -69,11 +69,17 @@ export function Login() {
         <div style={{ marginTop: 24, padding: 14, background: "#f8fafc", borderRadius: 8, fontSize: 12, color: "#6b7280" }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Demo accounts</div>
           {[
-            { u: "operator",   p: "operator123",   r: "Operator" },
-            { u: "supervisor", p: "supervisor123",  r: "Supervisor" },
-            { u: "gerente",    p: "gerente123",     r: "Manager" },
-            { u: "admin",      p: "admin123",       r: "Admin" },
-            { u: "chofer",     p: "chofer123",      r: "Driver" },
+            { u: "op_caba",      p: "op_caba123",      r: "Operator · CABA" },
+            { u: "sup_caba",     p: "sup_caba123",      r: "Supervisor · CABA" },
+            { u: "op_cordoba",   p: "op_cordoba123",    r: "Operator · Córdoba" },
+            { u: "sup_cordoba",  p: "sup_cordoba123",   r: "Supervisor · Córdoba" },
+            { u: "op_mendoza",   p: "op_mendoza123",    r: "Operator · Mendoza" },
+            { u: "sup_mendoza",  p: "sup_mendoza123",   r: "Supervisor · Mendoza" },
+            { u: "gerente",      p: "gerente123",       r: "Manager" },
+            { u: "admin",        p: "admin123",         r: "Admin" },
+            { u: "chofer_caba",    p: "chofer_caba123",    r: "Driver · CABA" },
+            { u: "chofer_cordoba", p: "chofer_cordoba123", r: "Driver · Córdoba" },
+            { u: "chofer_mendoza", p: "chofer_mendoza123", r: "Driver · Mendoza" },
           ].map(({ u, p, r }) => (
             <div key={u} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", cursor: "pointer" }}
               onClick={() => { setUsername(u); setPassword(p); }}>

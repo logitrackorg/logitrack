@@ -256,8 +256,9 @@ type CreateShipmentRequest struct {
 
 // ShipmentFilter holds optional query filters for listing shipments.
 type ShipmentFilter struct {
-	DateFrom *time.Time // inclusive lower bound on created_at
-	DateTo   *time.Time // inclusive upper bound on created_at (end of day)
+	DateFrom         *time.Time // inclusive lower bound on created_at
+	DateTo           *time.Time // inclusive upper bound on created_at (end of day)
+	ReceivingBranchID string    // if non-empty, only shipments with this branch
 }
 
 // CorrectShipmentRequest carries typed field corrections.

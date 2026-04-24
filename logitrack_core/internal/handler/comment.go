@@ -10,11 +10,12 @@ import (
 )
 
 type CommentHandler struct {
-	svc *service.CommentService
+	svc         *service.CommentService
+	shipmentSvc *service.ShipmentService
 }
 
-func NewCommentHandler(svc *service.CommentService) *CommentHandler {
-	return &CommentHandler{svc: svc}
+func NewCommentHandler(svc *service.CommentService, shipmentSvc *service.ShipmentService) *CommentHandler {
+	return &CommentHandler{svc: svc, shipmentSvc: shipmentSvc}
 }
 
 // GetComments returns all internal comments for a shipment.
@@ -60,7 +61,13 @@ func (h *CommentHandler) AddComment(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	comment, err := h.svc.AddComment(c.Param("tracking_id"), user.Username, req.Body)
+	trackingID := c.Param("tracking_id")
+	if existing, err := h.shipmentSvc.GetByTrackingID(trackingID); err == nil {
+		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
+	comment, err := h.svc.AddComment(trackingID, user.Username, req.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

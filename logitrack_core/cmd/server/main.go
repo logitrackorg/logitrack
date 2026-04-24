@@ -55,7 +55,7 @@ func main() {
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
 
-	commentRepo := repository.NewInMemoryCommentRepository()
+	commentRepo := repository.NewPostgresCommentRepository(database)
 
 	// Event-sourced shipment repository
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
@@ -77,13 +77,14 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
-	commentHandler := handler.NewCommentHandler(commentSvc)
+	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	authHandler := handler.NewAuthHandler(authRepo)
 	branchSvc := service.NewBranchService(branchRepo)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
 	userHandler := handler.NewUserHandler(authRepo)
+	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
 
 	r := gin.Default()
@@ -175,15 +176,18 @@ func main() {
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 
-	// Users — list drivers (supervisor, admin)
-	canManageRoutes := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
-	protected.GET("/users/drivers", canManageRoutes, userHandler.ListDrivers)
+	// Users — list drivers (operator, supervisor, admin)
+	canListDrivers := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.GET("/users/drivers", canListDrivers, userHandler.ListDrivers)
 
 	// Customers — autocomplete by DNI (operator+)
 	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)
 
 	// ML config — admin only
 	adminOnly := middleware.RequireRoles(model.RoleAdmin)
+	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
+	protected.POST("/admin/users", adminOnly, adminHandler.CreateUser)
+	protected.PATCH("/admin/users/:id", adminOnly, adminHandler.UpdateUser)
 	protected.GET("/ml/config", adminOnly, mlConfigHandler.GetActive)
 	protected.GET("/ml/config/history", adminOnly, mlConfigHandler.ListHistory)
 	protected.POST("/ml/config/regenerate", adminOnly, mlConfigHandler.Regenerate)

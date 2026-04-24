@@ -12,6 +12,8 @@ api.interceptors.request.use((config) => {
 });
 
 export const usersApi = {
-  listDrivers: () =>
-    api.get<{ drivers: User[] }>("/users/drivers").then((r) => r.data.drivers ?? []),
+  listDrivers: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api.get<{ drivers: User[] }>("/users/drivers", { params }).then((r) => r.data.drivers ?? []);
+  },
 };

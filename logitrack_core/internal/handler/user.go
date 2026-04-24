@@ -28,6 +28,6 @@ func NewUserHandler(authRepo repository.AuthRepository) *UserHandler {
 // @Failure      403  {object}  map[string]string
 // @Router       /users/drivers [get]
 func (h *UserHandler) ListDrivers(c *gin.Context) {
-	drivers := h.authRepo.ListByRole(model.RoleDriver)
+	drivers := h.authRepo.ListByRole(model.RoleDriver, c.Query("branch_id"))
 	c.JSON(http.StatusOK, gin.H{"drivers": drivers})
 }

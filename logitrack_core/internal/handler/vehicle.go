@@ -272,6 +272,15 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if operatorBranchForbidden(c, user, shipment.ReceivingBranchID) {
+		return
+	}
+	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only assign shipments from your branch"})
+		return
+	}
+
 	allowedStatuses := map[model.Status]bool{
 		model.StatusInProgress:     true,
 		model.StatusAtBranch:       true,
@@ -320,8 +329,6 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		})
 		return
 	}
-
-	user := c.MustGet(middleware.UserKey).(model.User)
 
 	// Add shipment to vehicle
 	if err := h.repo.AddShipment(vehicle.ID, req.TrackingID); err != nil {

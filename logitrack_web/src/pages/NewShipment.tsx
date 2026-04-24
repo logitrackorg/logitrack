@@ -5,6 +5,7 @@ import { branchApi, type Branch } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useAuth } from "../context/AuthContext";
 
 const PROVINCES = [
   "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
@@ -47,7 +48,12 @@ const initialForm: CreateShipmentPayload = {
 
 export function NewShipment() {
   const isMobile = useIsMobile();
-  const [form, setForm] = useState<CreateShipmentPayload>(initialForm);
+  const { user } = useAuth();
+  const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
+  const [form, setForm] = useState<CreateShipmentPayload>({
+    ...initialForm,
+    receiving_branch_id: branchLocked ? (user?.branch_id ?? "") : "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState<Shipment[]>([]);
@@ -322,41 +328,54 @@ export function NewShipment() {
         {/* Receiving Branch */}
         <Section title="Receiving Branch">
           <Field label="Branch *">
-            <select style={input} required value={form.receiving_branch_id}
-              onChange={(e) => set("receiving_branch_id", e.target.value)}>
-              <option value="">Select branch...</option>
-              {(() => {
-                const branchesByProvince = branches.reduce((acc, branch) => {
-                  if (!acc[branch.province]) acc[branch.province] = [];
-                  acc[branch.province].push(branch);
-                  return acc;
-                }, {} as Record<string, Branch[]>);
-
-                return Object.entries(branchesByProvince)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([province, provinceBranches]) => (
-                    <optgroup key={province} label={province}>
-                      {[...provinceBranches]
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(branch => (
-                          <option key={branch.id} value={branch.id}>
-                            {branch.name} - {branch.address.city}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ));
-              })()}
-            </select>
-            {form.receiving_branch_id && (() => {
+            {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
-              if (!selected) return null;
               return (
-                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13 }}>
-                  <div style={{ fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
-                  <div style={{ color: "#6b7280" }}>{selected.address.street}, {selected.address.city}</div>
+                <div style={{ padding: "8px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, color: "#1e3a5f" }}>{selected?.name ?? form.receiving_branch_id}</div>
+                  {selected && <div style={{ color: "#6b7280" }}>{selected.address.street}, {selected.address.city}</div>}
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>Assigned to your branch — cannot be changed.</div>
                 </div>
               );
-            })()}
+            })() : (
+              <>
+                <select style={input} required value={form.receiving_branch_id}
+                  onChange={(e) => set("receiving_branch_id", e.target.value)}>
+                  <option value="">Select branch...</option>
+                  {(() => {
+                    const branchesByProvince = branches.reduce((acc, branch) => {
+                      if (!acc[branch.province]) acc[branch.province] = [];
+                      acc[branch.province].push(branch);
+                      return acc;
+                    }, {} as Record<string, Branch[]>);
+
+                    return Object.entries(branchesByProvince)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([province, provinceBranches]) => (
+                        <optgroup key={province} label={province}>
+                          {[...provinceBranches]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(branch => (
+                              <option key={branch.id} value={branch.id}>
+                                {branch.name} - {branch.address.city}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ));
+                  })()}
+                </select>
+                {form.receiving_branch_id && (() => {
+                  const selected = branches.find(b => b.id === form.receiving_branch_id);
+                  if (!selected) return null;
+                  return (
+                    <div style={{ marginTop: 8, padding: "8px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13 }}>
+                      <div style={{ fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
+                      <div style={{ color: "#6b7280" }}>{selected.address.street}, {selected.address.city}</div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
           </Field>
         </Section>
 

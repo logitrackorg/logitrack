@@ -196,9 +196,6 @@ export function ShipmentDetail() {
     reload();
     if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
-    if (hasRole("supervisor", "admin", "operator")) {
-      usersApi.listDrivers().then(setDrivers);
-    }
   }, [trackingId]);
 
   const handleSaveDraftChanges = async () => {
@@ -424,6 +421,8 @@ export function ShipmentDetail() {
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
     [a.street, a.city, a.province, a.postal_code].filter(Boolean).join(", ");
 
+  const operatorOutOfBranch = user?.role === "operator" && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
+
   return (
     <div style={{ padding: isMobile ? 16 : "24px 32px" }}>
       <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
@@ -439,12 +438,12 @@ export function ShipmentDetail() {
         </h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <PriorityBadge priority={shipment.priority} />
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
+          {hasRole("supervisor", "admin", "operator") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
               ✏️ Edit data
             </button>
           )}
-          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && (
+          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
               Cancel shipment
@@ -534,7 +533,7 @@ export function ShipmentDetail() {
       )}
 
       {/* Status update — supervisor and admin only */}
-      {(shipment.status === "pre_transit" || shipment.status === "in_transit") && hasRole("supervisor", "admin", "operator") && (
+      {(shipment.status === "pre_transit" || shipment.status === "in_transit") && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
           <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
             {shipment.status === "pre_transit"
@@ -544,7 +543,7 @@ export function ShipmentDetail() {
         </div>
       )}
 
-      {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && (
+      {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Update Status</h2>
           <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
@@ -555,6 +554,9 @@ export function ShipmentDetail() {
                     openVehiclePicker(shipment);
                   } else {
                     setNewStatus(s);
+                    if (s === "delivering") {
+                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id).then(setDrivers);
+                    }
                   }
                 }}
                   style={{
@@ -759,7 +761,7 @@ export function ShipmentDetail() {
         {/* Comments Card */}
         <div style={{ ...cardStyle }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && (
+          {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && !operatorOutOfBranch && (
             <div style={{ marginBottom: 12 }}>
               <textarea
                 value={newComment}

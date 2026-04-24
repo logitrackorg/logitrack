@@ -78,6 +78,15 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			return err
 		}
 		if payload.Location != "" {
+			if payload.ToStatus == model.StatusAtBranch {
+				_, err := p.db.Exec(`
+					UPDATE shipments
+					SET status = $1, current_location = $2, receiving_branch_id = $2, updated_at = $3
+					WHERE tracking_id = $4`,
+					string(payload.ToStatus), payload.Location, event.Timestamp, event.TrackingID,
+				)
+				return err
+			}
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET status = $1, current_location = $2, updated_at = $3

@@ -64,6 +64,9 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if payload.Location != "" && payload.ToStatus != model.StatusDelivered {
 			shipment.CurrentLocation = payload.Location
 		}
+		if payload.ToStatus == model.StatusAtBranch && payload.Location != "" {
+			shipment.ReceivingBranchID = payload.Location
+		}
 		if payload.ToStatus == model.StatusDelivered {
 			t := event.Timestamp
 			shipment.DeliveredAt = &t
@@ -123,6 +126,9 @@ func (p *ShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment
 			continue
 		}
 		if filter.DateTo != nil && s.CreatedAt.After(*filter.DateTo) {
+			continue
+		}
+		if filter.ReceivingBranchID != "" && s.ReceivingBranchID != filter.ReceivingBranchID {
 			continue
 		}
 		result = append(result, s)

@@ -77,11 +77,13 @@ export function ShipmentList() {
   }, [statusFilter]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [branchFilter, setBranchFilter] = useState("");
+  const { hasRole, user } = useAuth();
+  const isOperator = user?.role === "operator";
+  const hasBranchDefault = isOperator || user?.role === "supervisor";
+  const [branchFilter, setBranchFilter] = useState(hasBranchDefault ? (user?.branch_id ?? "") : "");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
 
   const dateRangeInvalid = !!(dateFrom && dateTo && dateTo < dateFrom);
 
@@ -96,7 +98,7 @@ export function ShipmentList() {
   };
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { branchApi.list().then(setBranches).catch(() => {}); }, []);
+  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,27 +192,33 @@ export function ShipmentList() {
           <option value="returned">Returned</option>
         </select>
 
-        <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={selectStyle}>
-          <option value="">All branches</option>
-          {(() => {
-            const byProvince = branches.reduce((acc, b) => {
-              if (!acc[b.province]) acc[b.province] = [];
-              acc[b.province].push(b);
-              return acc;
-            }, {} as Record<string, Branch[]>);
-            return Object.entries(byProvince)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([province, pBranches]) => (
-                <optgroup key={province} label={province}>
-                  {[...pBranches]
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(b => (
-                      <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                    ))}
-                </optgroup>
-              ));
-          })()}
-        </select>
+        {isOperator ? (
+          <span style={{ ...selectStyle, display: "inline-flex", alignItems: "center", background: "#f0f9ff", border: "1px solid #bfdbfe", color: "#1e3a5f", fontWeight: 500 }}>
+            {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
+          </span>
+        ) : (
+          <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={selectStyle}>
+            <option value="">All branches</option>
+            {(() => {
+              const byProvince = branches.reduce((acc, b) => {
+                if (!acc[b.province]) acc[b.province] = [];
+                acc[b.province].push(b);
+                return acc;
+              }, {} as Record<string, Branch[]>);
+              return Object.entries(byProvince)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([province, pBranches]) => (
+                  <optgroup key={province} label={province}>
+                    {[...pBranches]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map(b => (
+                        <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                      ))}
+                  </optgroup>
+                ));
+            })()}
+          </select>
+        )}
 
       </div>
 

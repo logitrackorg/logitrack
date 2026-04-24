@@ -15,6 +15,7 @@ export function DriverRoute() {
   const [recipientDni, setRecipientDni] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [search, setSearch] = useState("");
 
   const load = () =>
     driverApi
@@ -82,19 +83,40 @@ export function DriverRoute() {
   const pending = data.shipments.filter((s) => s.status === "delivering").length;
   const done = data.shipments.filter((s) => s.status === "delivered" || s.status === "delivery_failed").length;
 
+  const filteredShipments = data.shipments.filter((s) => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return (
+      s.tracking_id.toLowerCase().includes(q) ||
+      s.recipient.name.toLowerCase().includes(q) ||
+      (s.corrections?.recipient_name ?? "").toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div style={{ padding: 24, maxWidth: 600 }}>
       <h1 style={{ margin: "0 0 4px" }}>My route</h1>
-      <p style={{ color: "#6b7280", margin: "0 0 6px", fontSize: 14 }}>
+      <p style={{ color: "#6b7280", margin: "0 0 12px", fontSize: 14 }}>
         {today} · {data.shipments.length} shipments · {pending} pending · {done} completed
       </p>
+
+      <input
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Search by tracking ID or recipient..."
+        style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", marginBottom: 16 }}
+      />
 
       {actionError && (
         <p style={{ color: "#ef4444", margin: "0 0 16px", fontSize: 14 }}>{actionError}</p>
       )}
 
-      <div style={{ display: "grid", gap: 14, marginTop: 20 }}>
-        {data.shipments.map((shipment) => {
+      {filteredShipments.length === 0 && (
+        <p style={{ color: "#6b7280", fontSize: 14 }}>No shipments match your search.</p>
+      )}
+
+      <div style={{ display: "grid", gap: 14 }}>
+        {filteredShipments.map((shipment) => {
           const cor = shipment.corrections ?? {};
           const recipientName = cor.recipient_name ?? shipment.recipient.name;
           const recipientPhone = cor.recipient_phone ?? shipment.recipient.phone;

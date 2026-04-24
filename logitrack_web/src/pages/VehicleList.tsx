@@ -55,11 +55,19 @@ export function VehicleList() {
   const [showStartTripModal, setShowStartTripModal] = useState(false);
   const [startTripDestBranch, setStartTripDestBranch] = useState("");
   const [startingTrip, setStartingTrip] = useState(false);
-  const { hasRole } = useAuth();
+  // Load shipments modal
+  const [loadModalVehicle, setLoadModalVehicle] = useState<Vehicle | null>(null);
+  const [loadInput, setLoadInput] = useState("");
+  const [loadAdded, setLoadAdded] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState("");
+  const [loadBusy, setLoadBusy] = useState(false);
+  const { hasRole, user } = useAuth();
 
   const isAdmin = hasRole("admin");
-  // Supervisors and admins can perform write actions; managers get read-only access
   const canWrite = hasRole("admin") || hasRole("supervisor");
+  const isOperator = user?.role === "operator";
+  const hasBranchDefault = isOperator || user?.role === "supervisor";
+  const [branchFilter, setBranchFilter] = useState(hasBranchDefault ? (user?.branch_id ?? "") : "");
 
   const [formData, setFormData] = useState({
     license_plate: "",
@@ -229,8 +237,39 @@ export function VehicleList() {
     return vehicle?.status === "en_transito";
   };
 
+  const openLoadModal = (v: Vehicle) => {
+    setLoadModalVehicle(v);
+    setLoadAdded(v.assigned_shipments ?? []);
+    setLoadInput("");
+    setLoadError("");
+  };
+
+  const closeLoadModal = () => {
+    setLoadModalVehicle(null);
+    loadVehicles();
+  };
+
+  const handleAddShipment = async () => {
+    if (!loadModalVehicle || !loadInput.trim()) return;
+    const trackingId = `LT-${loadInput.trim().toUpperCase()}`;
+    setLoadBusy(true);
+    setLoadError("");
+    try {
+      const updated = await vehicleApi.assignToShipment(loadModalVehicle.license_plate, { tracking_id: trackingId });
+      setLoadAdded(updated.assigned_shipments ?? []);
+      setLoadModalVehicle(prev => prev ? { ...prev, assigned_shipments: updated.assigned_shipments, status: updated.status } : prev);
+      setLoadInput("");
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setLoadError(msg ?? "Failed to add shipment.");
+    } finally {
+      setLoadBusy(false);
+    }
+  };
+
   // Filtrar vehículos
   const filteredVehicles = vehicles.filter((v) => {
+    if (branchFilter && v.assigned_branch !== branchFilter) return false;
     if (statusFilter && v.status !== statusFilter) return false;
     if (showOnlyAvailable && v.status !== "disponible") return false;
     if (plateSearch && !v.license_plate.toUpperCase().includes(plateSearch.toUpperCase())) return false;
@@ -390,6 +429,23 @@ export function VehicleList() {
         >
           {showOnlyAvailable ? "✓ Available" : "Available"}
         </button>
+        {/* Branch filter */}
+        {isOperator ? (
+          <span style={{ padding: "6px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 14, color: "#1e3a5f", fontWeight: 500 }}>
+            {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
+          </span>
+        ) : (
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
+          >
+            <option value="">All branches</option>
+            {[...branches].sort((a, b) => a.name.localeCompare(b.name)).map(b => (
+              <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+            ))}
+          </select>
+        )}
         <span style={{ fontSize: 14, fontWeight: 500, color: "#374151" }}>Filter by status:</span>
         <select
           value={statusFilter}
@@ -409,9 +465,9 @@ export function VehicleList() {
           <option value="mantenimiento">Maintenance</option>
           <option value="inactivo">Inactive</option>
         </select>
-        {(statusFilter || showOnlyAvailable || plateSearch) && (
+        {(statusFilter || showOnlyAvailable || plateSearch || (!isOperator && branchFilter)) && (
           <button
-            onClick={() => { setStatusFilter(""); setShowOnlyAvailable(false); setPlateSearch(""); }}
+            onClick={() => { setStatusFilter(""); setShowOnlyAvailable(false); setPlateSearch(""); if (!isOperator) setBranchFilter(hasBranchDefault ? (user?.branch_id ?? "") : ""); }}
             style={{
               background: "none",
               border: "none",
@@ -519,6 +575,7 @@ export function VehicleList() {
                   <th style={thStyle}>Capacity (kg)</th>
                   <th style={thStyle}>Available Cap. (kg)</th>
                   <th style={thStyle}>Status</th>
+                  <th style={thStyle}></th>
                 </tr>
               </thead>
               <tbody>
@@ -611,6 +668,16 @@ export function VehicleList() {
                         {vehicleStatusLabels[v.status]}
                       </span>
                     </td>
+                    <td style={tdStyle}>
+                      {hasRole("operator", "supervisor", "admin") && (v.status === "disponible" || v.status === "en_carga") && (
+                        <button
+                          onClick={() => openLoadModal(v)}
+                          style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
+                        >
+                          Load Shipments
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -627,6 +694,75 @@ export function VehicleList() {
           onRefresh={loadVehicles}
           readOnly={!canWrite}
         />
+      )}
+
+      {/* Load Shipments modal */}
+      {loadModalVehicle && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={closeLoadModal}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 480, maxWidth: "95vw", maxHeight: "85vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Load Shipments</h2>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
+                  <code style={{ fontWeight: 700 }}>{loadModalVehicle.license_plate}</code>
+                  {" · "}{vehicleTypeLabels[loadModalVehicle.type]}
+                  {" · "}{loadModalVehicle.capacity_kg} kg capacity
+                </p>
+              </div>
+              <button onClick={closeLoadModal} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+            </div>
+
+            {/* Already loaded */}
+            {loadAdded.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>
+                  Loaded shipments ({loadAdded.length}):
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {loadAdded.map(tid => (
+                    <span key={tid} style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "3px 10px", fontSize: 13, fontWeight: 600, color: "#166534" }}>
+                      {tid}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input */}
+            <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>Add shipment:</p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>LT-</span>
+              <input
+                autoFocus
+                value={loadInput}
+                onChange={e => { setLoadInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); setLoadError(""); }}
+                onKeyDown={e => { if (e.key === "Enter") handleAddShipment(); }}
+                placeholder="A1B2C3D4"
+                maxLength={20}
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}
+              />
+              <button
+                onClick={handleAddShipment}
+                disabled={loadBusy || !loadInput.trim()}
+                style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: loadBusy || !loadInput.trim() ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, opacity: loadBusy || !loadInput.trim() ? 0.6 : 1 }}
+              >
+                {loadBusy ? "Adding…" : "Add"}
+              </button>
+            </div>
+            {loadError && (
+              <p style={{ margin: "8px 0 0", fontSize: 13, color: "#dc2626" }}>{loadError}</p>
+            )}
+
+            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={closeLoadModal}
+                style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Start Trip modal — asks for destination branch */}

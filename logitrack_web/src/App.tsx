@@ -13,6 +13,7 @@ import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
+import { AdminUsers } from "./pages/AdminUsers";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operator",
@@ -42,14 +43,17 @@ function Nav() {
       )}
       <NavLink to="/" end style={navStyle}>Shipments</NavLink>
       <NavLink to="/track" style={navStyle}>Track</NavLink>
-      {hasRole("supervisor", "manager", "admin") && (
+      {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
       )}
-      {hasRole("operator", "supervisor", "manager", "admin") && (
+      {hasRole("supervisor", "manager", "admin") && (
         <NavLink to="/branches" style={navStyle}>Branches</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/ml-config" style={navStyle}>ML Config</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/admin/users" style={navStyle}>Users</NavLink>
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
@@ -174,13 +178,13 @@ function AppRoutes() {
           } />
 
           <Route path="/vehicles" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
               <VehicleList />
             </ProtectedRoute>
           } />
 
           <Route path="/branches" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
               <BranchList />
             </ProtectedRoute>
           } />
@@ -188,6 +192,12 @@ function AppRoutes() {
           <Route path="/ml-config" element={
             <ProtectedRoute roles={["admin"]}>
               <MLConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/users" element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminUsers />
             </ProtectedRoute>
           } />
 

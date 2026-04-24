@@ -12,6 +12,19 @@ import (
 
 var timeNow = time.Now
 
+// operatorBranchForbidden returns true (and writes 403) when the user is an operator
+// whose assigned branch does not match the shipment's receiving branch.
+func operatorBranchForbidden(c *gin.Context, user model.User, shipmentBranchID string) bool {
+	if user.Role != model.RoleOperator || user.BranchID == "" {
+		return false
+	}
+	if shipmentBranchID != user.BranchID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only modify shipments assigned to your branch"})
+		return true
+	}
+	return false
+}
+
 // CancelRequest is the body for cancelling a shipment.
 type CancelRequest struct {
 	Reason string `json:"reason" binding:"required"`
@@ -60,6 +73,9 @@ func (h *ShipmentHandler) Create(c *gin.Context) {
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
 	req.CreatedBy = user.Username
+	if (user.Role == model.RoleOperator || user.Role == model.RoleSupervisor) && user.BranchID != "" {
+		req.ReceivingBranchID = user.BranchID
+	}
 	shipment, err := h.svc.Create(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -91,6 +107,9 @@ func (h *ShipmentHandler) SaveDraft(c *gin.Context) {
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
 	req.CreatedBy = user.Username
+	if (user.Role == model.RoleOperator || user.Role == model.RoleSupervisor) && user.BranchID != "" {
+		req.ReceivingBranchID = user.BranchID
+	}
 	shipment, err := h.svc.SaveDraft(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -120,7 +139,14 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	shipment, err := h.svc.UpdateDraft(c.Param("tracking_id"), req)
+	user := c.MustGet(middleware.UserKey).(model.User)
+	trackingID := c.Param("tracking_id")
+	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
+		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
+	shipment, err := h.svc.UpdateDraft(trackingID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -143,7 +169,13 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 // @Router       /shipments/{tracking_id}/confirm [post]
 func (h *ShipmentHandler) ConfirmDraft(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
-	shipment, err := h.svc.ConfirmDraft(c.Param("tracking_id"), user.Username)
+	trackingID := c.Param("tracking_id")
+	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
+		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
+	shipment, err := h.svc.ConfirmDraft(trackingID, user.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -168,6 +200,7 @@ func (h *ShipmentHandler) ConfirmDraft(c *gin.Context) {
 // @Failure      500        {object}  map[string]string
 // @Router       /shipments [get]
 func (h *ShipmentHandler) List(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
 	filter := model.ShipmentFilter{}
 	if raw := c.Query("date_from"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
@@ -185,6 +218,10 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 		}
 		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
 		filter.DateTo = &endOfDay
+	}
+	// Operators are restricted to their own branch regardless of query params.
+	if user.Role == model.RoleOperator && user.BranchID != "" {
+		filter.ReceivingBranchID = user.BranchID
 	}
 	shipments, err := h.svc.List(filter)
 	if err != nil {
@@ -240,10 +277,13 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	req.ChangedBy = user.Username
 	trackingID := c.Param("tracking_id")
 
-	// Read current shipment to get fromStatus (used for operator check and route management).
+	// Read current shipment for branch check, operator restriction, and route management.
 	current, _ := h.svc.GetByTrackingID(trackingID)
 	fromStatus := current.Status
 
+	if operatorBranchForbidden(c, user, current.ReceivingBranchID) {
+		return
+	}
 	if user.Role == model.RoleOperator {
 		if fromStatus == model.StatusDelivering {
 			c.JSON(http.StatusForbidden, gin.H{"error": "operators cannot update shipments in delivering status"})
@@ -350,6 +390,11 @@ func (h *ShipmentHandler) CorrectShipment(c *gin.Context) {
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
+	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
+		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
 	shipment, err := h.svc.CorrectShipment(trackingID, user.Username, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -382,7 +427,13 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	shipment, err := h.svc.CancelShipment(c.Param("tracking_id"), user.Username, body.Reason)
+	trackingID := c.Param("tracking_id")
+	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
+		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
+	shipment, err := h.svc.CancelShipment(trackingID, user.Username, body.Reason)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
