@@ -421,7 +421,7 @@ export function ShipmentDetail() {
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
     [a.street, a.city, a.province, a.postal_code].filter(Boolean).join(", ");
 
-  const operatorOutOfBranch = user?.role === "operator" && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
+  const operatorOutOfBranch = (user?.role === "operator" || user?.role === "supervisor") && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
 
   return (
     <div style={{ padding: isMobile ? 16 : "24px 32px" }}>
