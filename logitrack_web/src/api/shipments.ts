@@ -59,6 +59,7 @@ export interface Shipment {
   priority_confidence?: number;
   priority_factors?: Record<string, PriorityFactorDetail>;
   receiving_branch_id?: string;
+  origin_branch_id?: string;
   current_location?: string; // branch ID of current location
   status: ShipmentStatus;
   created_at: string;

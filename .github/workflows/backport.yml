@@ -42,16 +42,10 @@ jobs:
             git push origin "$BACKPORT_BRANCH"
 
             # Open a PR
+            PR_BODY="Automatic backport of changes merged into \`main\` back into \`develop\`."$'\n\n'"Triggered by commit: ${{ github.sha }}"$'\n\n'"> Resolve any conflicts directly in this branch before merging."
             gh pr create \
               --title "chore: backport main → develop" \
-              --body "$(cat <<'EOF'
-Automatic backport of changes merged into \`main\` back into \`develop\`.
-
-Triggered by commit: ${{ github.sha }}
-
-> Resolve any conflicts directly in this branch before merging.
-EOF
-)" \
+              --body "$PR_BODY" \
               --base develop \
               --head "$BACKPORT_BRANCH" \
               --label "backport" || true
@@ -60,14 +54,10 @@ EOF
             git merge --abort || true
             git push origin "$BACKPORT_BRANCH"
 
+            CONFLICT_BODY="Automatic backport failed due to merge conflicts. Please resolve them manually."$'\n\n'"Triggered by commit: ${{ github.sha }}"
             gh pr create \
               --title "chore: backport main → develop (conflicts)" \
-              --body "$(cat <<'EOF'
-Automatic backport failed due to merge conflicts. Please resolve them manually.
-
-Triggered by commit: ${{ github.sha }}
-EOF
-)" \
+              --body "$CONFLICT_BODY" \
               --base develop \
               --head "$BACKPORT_BRANCH" \
               --label "backport" \

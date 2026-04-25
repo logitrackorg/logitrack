@@ -179,12 +179,12 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
 			tracking_id, status, current_location, weight_kg, package_type,
-			is_fragile, special_instructions, receiving_branch_id,
+			is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
 			sender, recipient, corrections,
 			shipment_type, time_window, cold_chain,
 			priority, priority_score, priority_confidence, priority_factors
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -207,7 +207,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			priority_confidence   = EXCLUDED.priority_confidence,
 			priority_factors      = EXCLUDED.priority_factors`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
-		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID,
+		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
 		string(s.ShipmentType), string(s.TimeWindow), s.ColdChain,
@@ -228,7 +228,7 @@ func (p *PostgresShipmentProjection) Rebuild(events []model.DomainEvent) {
 func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, error) {
 	row := p.db.QueryRow(`
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -240,7 +240,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	query := `
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -272,7 +272,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := p.db.Query(`
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -389,7 +389,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
-		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
+		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
 		&shipmentType, &timeWindow, &s.ColdChain,
@@ -448,7 +448,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
-			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
+			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
 			&shipmentType, &timeWindow, &s.ColdChain,

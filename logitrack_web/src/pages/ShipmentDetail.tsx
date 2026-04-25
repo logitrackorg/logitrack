@@ -528,7 +528,7 @@ export function ShipmentDetail() {
               </>;
             })()}
           </div>
-          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.receiving_branch_id} destination={shipment.recipient.address.city} branches={branches} />
+          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} destination={shipment.recipient.address.city} branches={branches} />
         </>
       )}
 

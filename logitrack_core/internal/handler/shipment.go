@@ -249,10 +249,12 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
 		return
 	}
-	user := c.MustGet(middleware.UserKey).(model.User)
-	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
-		return
+	if userVal, exists := c.Get(middleware.UserKey); exists {
+		user := userVal.(model.User)
+		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			return
+		}
 	}
 	c.JSON(http.StatusOK, shipment)
 }
@@ -348,10 +350,12 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
 		return
 	}
-	user := c.MustGet(middleware.UserKey).(model.User)
-	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
-		return
+	if userVal, exists := c.Get(middleware.UserKey); exists {
+		user := userVal.(model.User)
+		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			return
+		}
 	}
 	events, err := h.svc.GetEvents(trackingID)
 	if err != nil {

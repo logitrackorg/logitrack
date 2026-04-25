@@ -11,7 +11,7 @@ npm run lint      # ESLint on all .ts/.tsx files
 npm run preview   # Preview production build
 ```
 
-No test framework is installed.
+No test framework is installed. **`npm run build` is the required validation step before marking any frontend change as done** — it runs `tsc -b` (type-check) + Vite build and will catch type errors and broken imports.
 
 `VITE_API_URL` overrides the default API base (`http://localhost:8080/api/v1`).
 

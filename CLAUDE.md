@@ -38,7 +38,21 @@ rm ../docs/docs.go ../docs/swagger.json
 # Output: docs/swagger.yaml at the repo root. Only the YAML is kept.
 ```
 
-No test suite yet. `go build ./...` is the primary validation step.
+Test suite lives in `internal/service/` and `internal/handler/`. Run with `go test ./...`.
+
+**Running tests is a required step when building any feature.** Before marking work as done:
+- Backend: run `go test ./...` — all tests must pass. `go build ./...` alone is not sufficient.
+- Frontend: run `npm run build` (in `logitrack_web/`) — no test framework is installed, so the TypeScript build is the validation step.
+
+**Adding a field to `model.Shipment` requires changes in four places — all four, every time:**
+1. `internal/model/shipment.go` — the struct field
+2. `internal/db/migrate.go` — `CREATE TABLE` column + `ALTER TABLE ADD COLUMN IF NOT EXISTS` for existing DBs
+3. `internal/projection/postgres_shipment.go` — `upsertShipment` INSERT/UPDATE, all SELECT queries (`Get`, `List`, `Search`), and both `Scan` calls (`scanShipment`, `scanShipments`)
+4. `internal/seed/seed.go` — set the field in `initialShipment` if it has a meaningful value at creation time
+
+Skipping any of these means the field silently disappears at the DB boundary.
+
+**In-memory repositories for tests** are in `internal/repository/inmemory.go`. They implement every repository interface (Branch, Vehicle, Route, Customer, Comment) plus a helper `NewInMemoryShipmentRepository()` that wires the event-sourced repo with an in-memory `EventStore` and `ShipmentProjection`. Production code uses only the PostgreSQL implementations; `inmemory.go` exists solely to support unit tests without a real database connection.
 
 ### Architecture
 

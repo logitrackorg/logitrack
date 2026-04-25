@@ -376,9 +376,6 @@ export function BulkUpload() {
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Step 1 — Download template</div>
               <div style={{ fontSize: 13, color: "#64748b" }}>
                 Fill in the CSV template and re-upload it. Do not change the column headers.
-                {branchLocked && (
-                  <span style={{ color: "#0369a1" }}> The <code>receiving_branch_id</code> column will be ignored — your branch is applied automatically.</span>
-                )}
               </div>
             </div>
             <button

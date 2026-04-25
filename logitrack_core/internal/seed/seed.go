@@ -392,6 +392,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			TimeWindow:          s.timeWindow,
 			ColdChain:           s.coldChain,
 			ReceivingBranchID:   s.receivingBranchID,
+			OriginBranchID:      s.receivingBranchID,
 			Priority:            s.priority,
 			PriorityScore:       s.priorityScore,
 			PriorityConfidence:  s.priorityConfidence,
