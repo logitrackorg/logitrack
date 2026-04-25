@@ -217,6 +217,8 @@ On `POST /ml/config/regenerate`: saves config, retrains, saves blob, hot-swaps m
 4. Add handler method, register route in `handler/`
 5. Apply role middleware in `main.go`
 
+There are no in-memory repository implementations — all persistence is PostgreSQL.
+
 ---
 
 ## Frontend (`logitrack_web/`)
