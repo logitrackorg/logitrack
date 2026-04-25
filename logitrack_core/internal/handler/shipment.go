@@ -12,10 +12,10 @@ import (
 
 var timeNow = time.Now
 
-// operatorBranchForbidden returns true (and writes 403) when the user is an operator
+// branchForbidden returns true (and writes 403) when the user is an operator or supervisor
 // whose assigned branch does not match the shipment's receiving branch.
-func operatorBranchForbidden(c *gin.Context, user model.User, shipmentBranchID string) bool {
-	if user.Role != model.RoleOperator || user.BranchID == "" {
+func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) bool {
+	if (user.Role != model.RoleOperator && user.Role != model.RoleSupervisor) || user.BranchID == "" {
 		return false
 	}
 	if shipmentBranchID != user.BranchID {
@@ -142,7 +142,7 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
 	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
-		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
 			return
 		}
 	}
@@ -171,7 +171,7 @@ func (h *ShipmentHandler) ConfirmDraft(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
 	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
-		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
 			return
 		}
 	}
@@ -249,6 +249,11 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
 		return
 	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+		return
+	}
 	c.JSON(http.StatusOK, shipment)
 }
 
@@ -281,7 +286,7 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	current, _ := h.svc.GetByTrackingID(trackingID)
 	fromStatus := current.Status
 
-	if operatorBranchForbidden(c, user, current.ReceivingBranchID) {
+	if branchForbidden(c, user, current.ReceivingBranchID) {
 		return
 	}
 	if user.Role == model.RoleOperator {
@@ -337,7 +342,18 @@ func isDriverActiveStatus(s model.Status) bool {
 // @Failure      404          {object}  map[string]string
 // @Router       /shipments/{tracking_id}/events [get]
 func (h *ShipmentHandler) GetEvents(c *gin.Context) {
-	events, err := h.svc.GetEvents(c.Param("tracking_id"))
+	trackingID := c.Param("tracking_id")
+	shipment, err := h.svc.GetByTrackingID(trackingID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+		return
+	}
+	events, err := h.svc.GetEvents(trackingID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
 		return
@@ -391,7 +407,7 @@ func (h *ShipmentHandler) CorrectShipment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
 	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
-		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
 			return
 		}
 	}
@@ -429,7 +445,7 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
 	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
-		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
 			return
 		}
 	}

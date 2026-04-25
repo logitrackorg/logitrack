@@ -39,14 +39,15 @@ function Nav() {
     }}>
       <span style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: 1 }}>LogiTrack</span>
 
-      {hasRole("supervisor", "manager", "admin") && (
+      {hasRole("supervisor", "manager") && (
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
-      <NavLink to="/" end style={navStyle}>Shipments</NavLink>
-      {hasRole("operator", "supervisor", "admin") && (
+      {!hasRole("admin") && (
+        <NavLink to="/" end style={navStyle}>Shipments</NavLink>
+      )}
+      {hasRole("operator", "supervisor") && (
         <NavLink to="/bulk-upload" style={navStyle}>Bulk Import</NavLink>
       )}
-      <NavLink to="/track" style={navStyle}>Track</NavLink>
       {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
       )}
@@ -149,16 +150,16 @@ function AppRoutes() {
       <Nav />
       <main>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace /> : <Login />} />
 
           <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["supervisor", "manager"]}>
               <Dashboard />
             </ProtectedRoute>
           } />
 
           <Route path="/" element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentList />
             </ProtectedRoute>
           } />
@@ -172,12 +173,6 @@ function AppRoutes() {
           <Route path="/new" element={
             <ProtectedRoute roles={["operator", "supervisor", "admin"]}>
               <NewShipment />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/track" element={
-            <ProtectedRoute>
-              <PublicTracking />
             </ProtectedRoute>
           } />
 
@@ -206,12 +201,12 @@ function AppRoutes() {
           } />
 
           <Route path="/bulk-upload" element={
-            <ProtectedRoute roles={["operator", "supervisor", "admin"]}>
+            <ProtectedRoute roles={["operator", "supervisor"]}>
               <BulkUpload />
             </ProtectedRoute>
           } />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to={user?.role === "admin" ? "/admin/users" : "/"} replace />} />
         </Routes>
       </main>
     </>
@@ -222,7 +217,10 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <Routes>
+          <Route path="/track" element={<PublicTracking />} />
+          <Route path="*" element={<AppRoutes />} />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
