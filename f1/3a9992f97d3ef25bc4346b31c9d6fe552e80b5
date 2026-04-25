@@ -1,0 +1,23 @@
+CLAUDE.md
+  4542d198a96fb3b4 135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f13a9992f97d3ef25bc4346b31c9d6fe552e80b5",
+  "prompts": {
+    "4542d198a96fb3b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cca2ad77-6a90-48cf-8aec-bd1e163951b5",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
