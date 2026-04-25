@@ -18,9 +18,9 @@ type VehicleType string
 
 const (
 	VehicleTypeMotorcycle VehicleType = "motocicleta"
+	VehicleTypeCar        VehicleType = "auto"
 	VehicleTypeVan        VehicleType = "furgoneta"
 	VehicleTypeTruck      VehicleType = "camion"
-	VehicleTypeLargeTruck VehicleType = "camion_grande"
 )
 
 // Vehicle represents a fleet vehicle.

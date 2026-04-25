@@ -7,9 +7,9 @@ import { useAuth } from "../context/AuthContext";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
+  auto: "Auto",
   furgoneta: "Furgoneta",
   camion: "Camión",
-  camion_grande: "Camión grande",
 };
 
 const vehicleStatusLabels: Record<VehicleStatus, string> = {
