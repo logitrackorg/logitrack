@@ -46,4 +46,5 @@ type UpdateBranchRequest struct {
 // UpdateBranchStatusRequest is the request body for updating branch status.
 type UpdateBranchStatusRequest struct {
 	Status BranchStatus `json:"status" binding:"required"`
+	Force  bool         `json:"force,omitempty"`
 }

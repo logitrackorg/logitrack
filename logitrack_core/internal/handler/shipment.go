@@ -19,7 +19,7 @@ func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) b
 		return false
 	}
 	if shipmentBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only modify shipments assigned to your branch"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "solo podés modificar envíos asignados a tu sucursal"})
 		return true
 	}
 	return false
@@ -255,7 +255,7 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
 		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
 			return
 		}
 	}
@@ -356,7 +356,7 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
 		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
 			return
 		}
 	}

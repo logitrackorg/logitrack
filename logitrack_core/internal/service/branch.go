@@ -11,17 +11,24 @@ import (
 )
 
 var (
-	ErrBranchNotFound      = errors.New("branch not found")
-	ErrBranchDuplicateName = errors.New("duplicate branch name")
-	ErrBranchNotActive     = errors.New("branch is not active")
+	ErrBranchNotFound            = errors.New("branch not found")
+	ErrBranchDuplicateName       = errors.New("duplicate branch name")
+	ErrBranchNotActive           = errors.New("branch is not active")
+	ErrBranchHasActiveShipments  = errors.New("branch has active shipments")
 )
 
-type BranchService struct {
-	repo repository.BranchRepository
+// ActiveShipmentCounter counts non-terminal shipments assigned to a branch.
+type ActiveShipmentCounter interface {
+	CountActiveByBranch(branchID string) int
 }
 
-func NewBranchService(repo repository.BranchRepository) *BranchService {
-	return &BranchService{repo: repo}
+type BranchService struct {
+	repo    repository.BranchRepository
+	counter ActiveShipmentCounter
+}
+
+func NewBranchService(repo repository.BranchRepository, counter ActiveShipmentCounter) *BranchService {
+	return &BranchService{repo: repo, counter: counter}
 }
 
 func (s *BranchService) List() []model.Branch {
@@ -149,6 +156,12 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 	}
 	if !validStatuses[req.Status] {
 		return model.Branch{}, fmt.Errorf("invalid status: %s", req.Status)
+	}
+
+	if req.Status != model.BranchStatusActive && !req.Force && s.counter != nil {
+		if n := s.counter.CountActiveByBranch(id); n > 0 {
+			return model.Branch{}, fmt.Errorf("%w: %d pedido(s) activo(s) asignados", ErrBranchHasActiveShipments, n)
+		}
 	}
 
 	if err := s.repo.UpdateStatus(id, req.Status, username); err != nil {

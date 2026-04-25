@@ -406,6 +406,17 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	return stats, nil
 }
 
+// CountActiveByBranch returns the number of non-terminal shipments assigned to a branch.
+func (p *PostgresShipmentProjection) CountActiveByBranch(branchID string) int {
+	var count int
+	p.db.QueryRow(`
+		SELECT COUNT(*) FROM shipments
+		WHERE receiving_branch_id = $1
+		  AND status NOT IN ('delivered', 'returned', 'cancelled', 'pending')`,
+		branchID).Scan(&count)
+	return count
+}
+
 // scanShipment scans a single row into a Shipment.
 func scanShipment(row *sql.Row) (model.Shipment, error) {
 	var (

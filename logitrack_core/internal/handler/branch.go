@@ -129,6 +129,13 @@ func (h *BranchHandler) UpdateStatus(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
+		if errors.Is(err, service.ErrBranchHasActiveShipments) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":          err.Error(),
+				"requires_force": true,
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

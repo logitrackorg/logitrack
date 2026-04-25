@@ -58,13 +58,9 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
     return { icon: "🚛", title: "Cargado y listo para despachar", subtitle: cityLine };
   }
 
-  // Departed
+  // Departed — location is the origin branch, not destination; don't show it as "en camino a"
   if (to === "in_transit") {
-    const dest = cityLine ?? loc;
-    return {
-      icon: "🚀",
-      title: dest ? `Despachado — en camino a ${dest}` : "Despachado — en tránsito",
-    };
+    return { icon: "🚀", title: "Despachado — en tránsito" };
   }
 
   // Arrived at a logistics center

@@ -10,9 +10,18 @@ import (
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+type stubCounter struct{ n int }
+
+func (s *stubCounter) CountActiveByBranch(string) int { return s.n }
+
 func newBranchSvc() (*BranchService, repository.BranchRepository) {
 	repo := repository.NewInMemoryBranchRepository()
-	return NewBranchService(repo), repo
+	return NewBranchService(repo, &stubCounter{0}), repo
+}
+
+func newBranchSvcWithActiveShipments(n int) (*BranchService, repository.BranchRepository) {
+	repo := repository.NewInMemoryBranchRepository()
+	return NewBranchService(repo, &stubCounter{n}), repo
 }
 
 func defaultCreateBranchReq() model.CreateBranchRequest {
@@ -226,6 +235,42 @@ func TestBranchUpdateStatus_InvalidStatus(t *testing.T) {
 	_, err := svc.UpdateStatus("b1", req, "admin1")
 	if err == nil {
 		t.Error("expected error for invalid status, got nil")
+	}
+}
+
+func TestBranchUpdateStatus_BlockedByActiveShipments(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(3)
+	mustAddBranch(t, repo, "b1", model.BranchStatusActive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusOutOfService}
+	_, err := svc.UpdateStatus("b1", req, "admin1")
+	if !errors.Is(err, ErrBranchHasActiveShipments) {
+		t.Errorf("expected ErrBranchHasActiveShipments, got: %v", err)
+	}
+}
+
+func TestBranchUpdateStatus_ForceOverridesActiveShipments(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(3)
+	mustAddBranch(t, repo, "b1", model.BranchStatusActive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusOutOfService, Force: true}
+	b, err := svc.UpdateStatus("b1", req, "admin1")
+	if err != nil {
+		t.Fatalf("unexpected error with force=true: %v", err)
+	}
+	if b.Status != model.BranchStatusOutOfService {
+		t.Errorf("status: got %q, want %q", b.Status, model.BranchStatusOutOfService)
+	}
+}
+
+func TestBranchUpdateStatus_ActiveToActiveNotBlocked(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(5)
+	mustAddBranch(t, repo, "b1", model.BranchStatusInactive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusActive}
+	_, err := svc.UpdateStatus("b1", req, "admin1")
+	if err != nil {
+		t.Fatalf("reactivation should not be blocked: %v", err)
 	}
 }
 
