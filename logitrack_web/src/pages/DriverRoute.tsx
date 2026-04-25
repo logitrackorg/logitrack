@@ -69,7 +69,7 @@ export function DriverRoute() {
 
   if (loading) return <div style={{ padding: 24 }}>Loading...</div>;
 
-  if (noRoute || !data) {
+  if (noRoute || !data || data.shipments.length === 0) {
     return (
       <div style={{ padding: 24, maxWidth: 560 }}>
         <h1 style={{ margin: "0 0 8px" }}>My route</h1>
