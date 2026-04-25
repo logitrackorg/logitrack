@@ -48,3 +48,19 @@ type UpdateBranchStatusRequest struct {
 	Status BranchStatus `json:"status" binding:"required"`
 	Force  bool         `json:"force,omitempty"`
 }
+
+// BranchRecommendation is a branch with its distance to the shipment recipient.
+type BranchRecommendation struct {
+	Branch     Branch  `json:"branch"`
+	DistanceKm float64 `json:"distance_km"`
+	IsNearest  bool    `json:"is_nearest"`
+}
+
+// RouteRecommendation is the response for GET /shipments/:id/route-recommendation.
+type RouteRecommendation struct {
+	TrackingID        string                 `json:"tracking_id"`
+	RecipientCity     string                 `json:"recipient_city"`
+	RecipientProvince string                 `json:"recipient_province"`
+	HasCoordinates    bool                   `json:"has_coordinates"`
+	Branches          []BranchRecommendation `json:"branches"`
+}

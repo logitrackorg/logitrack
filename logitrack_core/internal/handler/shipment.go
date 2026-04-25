@@ -509,3 +509,13 @@ func (h *ShipmentHandler) Stats(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, stats)
 }
+
+func (h *ShipmentHandler) RouteRecommendation(c *gin.Context) {
+	trackingID := c.Param("tracking_id")
+	rec, err := h.svc.RecommendRoute(trackingID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, rec)
+}

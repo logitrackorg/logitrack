@@ -41,6 +41,29 @@ export interface Address {
   city: string;
   province: string;
   postal_code?: string;
+  lat?: number;
+  lng?: number;
+  geo_confidence?: string;
+}
+
+export interface BranchRecommendation {
+  branch: {
+    id: string;
+    name: string;
+    address: Address;
+    province: string;
+    status: string;
+  };
+  distance_km: number;
+  is_nearest: boolean;
+}
+
+export interface RouteRecommendation {
+  tracking_id: string;
+  recipient_city: string;
+  recipient_province: string;
+  has_coordinates: boolean;
+  branches: BranchRecommendation[];
 }
 
 export interface Shipment {
@@ -170,4 +193,6 @@ export const shipmentApi = {
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
   stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
+  routeRecommendation: (trackingId: string) =>
+    api.get<RouteRecommendation>(`/shipments/${trackingId}/route-recommendation`).then((r) => r.data),
 };

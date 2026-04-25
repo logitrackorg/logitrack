@@ -3,10 +3,13 @@ package service
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/geo"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -49,6 +52,19 @@ func NewShipmentService(
 	mlClient *MLService,
 ) *ShipmentService {
 	return &ShipmentService{repo: repo, branchRepo: branchRepo, customerRepo: customerRepo, commentSvc: commentSvc, mlClient: mlClient}
+}
+
+// geocodeCustomer fills Lat/Lng/GeoConfidence on a customer's address if not already set.
+func geocodeCustomer(c *model.Customer) {
+	if c.Address.GeoConfidence == geo.ConfidenceManual {
+		return
+	}
+	lat, lng, confidence := geo.GeocodeShipmentAddress(c.Address.Street, c.Address.City, c.Address.Province)
+	if confidence != "" {
+		c.Address.Lat = lat
+		c.Address.Lng = lng
+		c.Address.GeoConfidence = confidence
+	}
 }
 
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
@@ -97,6 +113,9 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 			return model.Shipment{}, err
 		}
 	}
+	geocodeCustomer(&req.Sender)
+	geocodeCustomer(&req.Recipient)
+
 	now := time.Now().UTC()
 	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
@@ -171,6 +190,13 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 			return model.Shipment{}, err
 		}
 	}
+	if req.Sender.Address.City != "" {
+		geocodeCustomer(&req.Sender)
+	}
+	if req.Recipient.Address.City != "" {
+		geocodeCustomer(&req.Recipient)
+	}
+
 	now := time.Now().UTC()
 	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
@@ -608,6 +634,63 @@ func (s *ShipmentService) GetEvents(trackingID string) ([]model.ShipmentEvent, e
 
 func (s *ShipmentService) Stats(filter model.ShipmentFilter) (model.Stats, error) {
 	return s.repo.Stats(filter)
+}
+
+// RecommendRoute returns active branches sorted by distance to the shipment recipient.
+func (s *ShipmentService) RecommendRoute(trackingID string) (model.RouteRecommendation, error) {
+	shipment, err := s.repo.GetByTrackingID(trackingID)
+	if err != nil {
+		return model.RouteRecommendation{}, err
+	}
+
+	rec := model.RouteRecommendation{
+		TrackingID:        shipment.TrackingID,
+		RecipientCity:     shipment.Recipient.Address.City,
+		RecipientProvince: shipment.Recipient.Address.Province,
+	}
+
+	branches := s.branchRepo.ListActive()
+
+	recipientLat := shipment.Recipient.Address.Lat
+	recipientLng := shipment.Recipient.Address.Lng
+	hasCoords := recipientLat != 0 || recipientLng != 0
+
+	if !hasCoords {
+		// Fall back to province centroid
+		if coords, ok := ml.ProvinceCoords[shipment.Recipient.Address.Province]; ok {
+			recipientLat = coords[0]
+			recipientLng = coords[1]
+			hasCoords = true
+		}
+	}
+	rec.HasCoordinates = hasCoords
+
+	items := make([]model.BranchRecommendation, 0, len(branches))
+	for _, b := range branches {
+		branchLat := b.Address.Lat
+		branchLng := b.Address.Lng
+		if branchLat == 0 && branchLng == 0 {
+			if coords, ok := ml.ProvinceCoords[b.Province]; ok {
+				branchLat = coords[0]
+				branchLng = coords[1]
+			}
+		}
+		var distKm float64
+		if hasCoords {
+			distKm = ml.HaversineKm(recipientLat, recipientLng, branchLat, branchLng)
+		}
+		items = append(items, model.BranchRecommendation{Branch: b, DistanceKm: distKm})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].DistanceKm < items[j].DistanceKm
+	})
+	if len(items) > 0 {
+		items[0].IsNearest = true
+	}
+
+	rec.Branches = items
+	return rec, nil
 }
 
 func generateTrackingID() string {

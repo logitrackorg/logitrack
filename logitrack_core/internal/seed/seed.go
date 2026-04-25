@@ -97,7 +97,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "caba", notes: "Shipment created", hoursAgo: 48},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "operator1", location: "caba", notes: "Loaded onto vehicle AB123CD", hoursAgo: 46},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "operator1", location: "caba", notes: "Vehicle departed", hoursAgo: 44},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "operator1", location: "cordoba", notes: "Vehicle departed", hoursAgo: 44},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator2", location: "cordoba", notes: "Arrived at Córdoba branch", hoursAgo: 20},
 			},
 		},
@@ -116,7 +116,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "operator1", location: "caba", notes: "Shipment created", hoursAgo: 72},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "operator1", location: "caba", notes: "Loaded onto vehicle EF456GH", hoursAgo: 70},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "operator1", location: "caba", notes: "Vehicle departed", hoursAgo: 68},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "operator1", location: "mendoza", notes: "Vehicle departed", hoursAgo: 68},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "operator3", location: "mendoza", notes: "Arrived at Mendoza branch", hoursAgo: 36},
 				{from: model.StatusAtBranch, to: model.StatusDelivered, changedBy: "operator3", location: "mendoza", notes: "Delivered to recipient", hoursAgo: 10},
 			},
@@ -153,7 +153,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_cordoba", location: "cordoba", notes: "Shipment created", hoursAgo: 30},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_cordoba", location: "cordoba", notes: "Loaded onto vehicle EF456GH", hoursAgo: 28},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "cordoba", notes: "Vehicle departed towards Mendoza", hoursAgo: 26},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "mendoza", notes: "Vehicle departed towards Mendoza", hoursAgo: 26},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_mendoza", location: "mendoza", notes: "Arrived at Mendoza branch", hoursAgo: 6},
 			},
 		},
@@ -174,7 +174,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_cordoba", location: "cordoba", notes: "Shipment created", hoursAgo: 96},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_cordoba", location: "cordoba", notes: "Loaded onto vehicle EF456GH", hoursAgo: 94},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "cordoba", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 90},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "caba", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 90},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_caba", location: "caba", notes: "Arrived at CABA branch", hoursAgo: 48},
 				{from: model.StatusAtBranch, to: model.StatusDelivered, changedBy: "op_caba", location: "caba", notes: "Delivered successfully", hoursAgo: 24},
 			},
@@ -231,7 +231,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_cordoba", location: "cordoba", notes: "Shipment created", hoursAgo: 12},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_cordoba", location: "cordoba", notes: "Loaded onto vehicle EF456GH", hoursAgo: 11},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "cordoba", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 10},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "caba", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 10},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_caba", location: "caba", notes: "Arrived at CABA branch — ready for delivery", hoursAgo: 5},
 			},
 		},
@@ -267,7 +267,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_caba", location: "caba", notes: "Shipment registered at CABA branch", hoursAgo: 30},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_caba", location: "caba", notes: "Loaded onto vehicle AB123CD", hoursAgo: 28},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_caba", location: "caba", notes: "Vehicle departed towards Córdoba", hoursAgo: 26},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_caba", location: "cordoba", notes: "Vehicle departed towards Córdoba", hoursAgo: 26},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_cordoba", location: "cordoba", notes: "Arrived at Córdoba branch", hoursAgo: 4},
 			},
 		},
@@ -324,7 +324,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_mendoza", location: "mendoza", notes: "Shipment registered at Mendoza branch", hoursAgo: 22},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_mendoza", location: "mendoza", notes: "Loaded onto vehicle EF456GH", hoursAgo: 20},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_mendoza", location: "mendoza", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 18},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_mendoza", location: "caba", notes: "Vehicle departed towards Buenos Aires", hoursAgo: 18},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_caba", location: "caba", notes: "Arrived at CABA branch", hoursAgo: 2},
 			},
 		},
@@ -366,7 +366,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			events: []eventSeed{
 				{from: "", to: model.StatusInProgress, changedBy: "op_caba", location: "caba", notes: "Shipment created", hoursAgo: 120},
 				{from: model.StatusInProgress, to: model.StatusPreTransit, changedBy: "op_caba", location: "caba", notes: "Loaded onto vehicle AB123CD", hoursAgo: 118},
-				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_caba", location: "caba", notes: "Vehicle departed from CABA", hoursAgo: 116},
+				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_caba", location: "cordoba", notes: "Vehicle departed from CABA", hoursAgo: 116},
 				{from: model.StatusInTransit, to: model.StatusAtBranch, changedBy: "op_cordoba", location: "cordoba", notes: "Arrived at Córdoba hub — transfer to western route", hoursAgo: 96},
 				{from: model.StatusAtBranch, to: model.StatusPreTransit, changedBy: "op_cordoba", location: "cordoba", notes: "Loaded onto vehicle EF456GH for Mendoza leg", hoursAgo: 93},
 				{from: model.StatusPreTransit, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "mendoza", notes: "Vehicle departed Córdoba towards Mendoza", hoursAgo: 90},

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -68,14 +69,18 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		id = uuid.New().String()
 	}
 
+	lat, lng, confidence := geo.GeocodeBranch(req.City, req.Province)
 	branch := model.Branch{
 		ID:   id,
 		Name: req.Name,
 		Address: model.Address{
-			Street:     req.Street,
-			City:       req.City,
-			Province:   req.Province,
-			PostalCode: req.PostalCode,
+			Street:        req.Street,
+			City:          req.City,
+			Province:      req.Province,
+			PostalCode:    req.PostalCode,
+			Lat:           lat,
+			Lng:           lng,
+			GeoConfidence: confidence,
 		},
 		Province: req.Province,
 		Status:   model.BranchStatusActive,
@@ -118,13 +123,17 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 		return model.Branch{}, fmt.Errorf("postal code is required")
 	}
 
+	lat, lng, confidence := geo.GeocodeBranch(req.City, req.Province)
 	update := model.Branch{
 		Name: req.Name,
 		Address: model.Address{
-			Street:     req.Street,
-			City:       req.City,
-			Province:   req.Province,
-			PostalCode: req.PostalCode,
+			Street:        req.Street,
+			City:          req.City,
+			Province:      req.Province,
+			PostalCode:    req.PostalCode,
+			Lat:           lat,
+			Lng:           lng,
+			GeoConfidence: confidence,
 		},
 		Province: req.Province,
 	}

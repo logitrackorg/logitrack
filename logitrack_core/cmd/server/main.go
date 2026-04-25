@@ -121,6 +121,9 @@ func main() {
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
 
+	// Route recommendation — non-driver roles
+	protected.GET("/shipments/:tracking_id/route-recommendation", nonDriver, shipmentHandler.RouteRecommendation)
+
 	// Admin only middleware (reused across vehicles, ML config, admin routes)
 	adminOnly := middleware.RequireRoles(model.RoleAdmin)
 

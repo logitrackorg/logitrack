@@ -28,10 +28,13 @@ const (
 )
 
 type Address struct {
-	Street     string `json:"street,omitempty"`
-	City       string `json:"city"`
-	Province   string `json:"province"`
-	PostalCode string `json:"postal_code,omitempty"`
+	Street        string  `json:"street,omitempty"`
+	City          string  `json:"city"`
+	Province      string  `json:"province"`
+	PostalCode    string  `json:"postal_code,omitempty"`
+	Lat           float64 `json:"lat,omitempty"`
+	Lng           float64 `json:"lng,omitempty"`
+	GeoConfidence string  `json:"geo_confidence,omitempty"` // "street" | "city" | "province" | "manual"
 }
 
 type ShipmentType string
