@@ -1,0 +1,70 @@
+logitrack_core/internal/seed/branch_seed.go
+  8e4b00cf9c037fa2 6,12-14,16-43
+logitrack_core/internal/handler/shipment.go
+  01318901b80eaec1 512-521
+logitrack_core/internal/repository/postgres_branch.go
+  8e4b00cf9c037fa2 25,28-35,46,49,52,57,71-73,87,138-139,142-143,173-174,176-177
+logitrack_core/internal/seed/seed.go
+  bb6cd6b4e2819967 100,119,156,177,234,270,327,369
+logitrack_core/internal/model/shipment.go
+  8e4b00cf9c037fa2 31-37
+logitrack_web/src/pages/ShipmentDetail.tsx
+  01318901b80eaec1 10,93-94,204-217,563-610
+logitrack_core/internal/service/shipment.go
+  8e4b00cf9c037fa2 11,57-69,116-118,193-199
+  01318901b80eaec1 6,12,639-695
+logitrack_core/cmd/server/main.go
+  01318901b80eaec1 124-126
+logitrack_core/internal/model/branch.go
+  01318901b80eaec1 51-66
+logitrack_web/src/api/shipments.ts
+  01318901b80eaec1 44-66,196-197
+logitrack_core/internal/service/branch.go
+  8e4b00cf9c037fa2 9,72,77-83,126,130-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "ef183da0af370fcabe95dc0e3efe4ec01d2a978e",
+  "prompts": {
+    "01318901b80eaec1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31de12fe-3e67-4851-a52c-cf3dd421a4cf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1943,
+      "overriden_lines": 0
+    },
+    "8e4b00cf9c037fa2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c0d28e1-5eaf-4c2c-b272-28666faf1d3a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 342,
+      "overriden_lines": 0
+    },
+    "bb6cd6b4e2819967": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9b5388a-1911-402e-98c7-03abef933150",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 462,
+      "overriden_lines": 0
+    }
+  }
+}
