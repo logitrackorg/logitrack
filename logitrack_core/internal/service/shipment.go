@@ -130,6 +130,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		TimeWindow:          timeWindow,
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
+		OriginBranchID:      req.ReceivingBranchID,
 		Status:              model.StatusInProgress,
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
@@ -370,9 +371,15 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 	// Validate ready_for_return: only allowed when shipment is back at its origin branch.
+	// OriginBranchID is set at creation and never changes; ReceivingBranchID is updated
+	// on every at_branch transition so it cannot be used as the origin reference.
 	if req.Status == model.StatusReadyForReturn {
-		if current.CurrentLocation != current.ReceivingBranchID {
-			if b, ok := s.branchRepo.GetByID(current.ReceivingBranchID); ok {
+		originID := current.OriginBranchID
+		if originID == "" {
+			originID = current.ReceivingBranchID // fallback for pre-existing data without OriginBranchID
+		}
+		if current.CurrentLocation != originID {
+			if b, ok := s.branchRepo.GetByID(originID); ok {
 				return model.Shipment{}, fmt.Errorf(
 					"shipment is not at its origin branch (%s) — return by sender does not apply at this branch", b.Address.City,
 				)

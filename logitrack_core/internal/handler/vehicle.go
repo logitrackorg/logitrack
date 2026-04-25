@@ -272,6 +272,15 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if branchForbidden(c, user, shipment.ReceivingBranchID) {
+		return
+	}
+	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only assign shipments from your branch"})
+		return
+	}
+
 	allowedStatuses := map[model.Status]bool{
 		model.StatusInProgress:     true,
 		model.StatusAtBranch:       true,
@@ -320,8 +329,6 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		})
 		return
 	}
-
-	user := c.MustGet(middleware.UserKey).(model.User)
 
 	// Add shipment to vehicle
 	if err := h.repo.AddShipment(vehicle.ID, req.TrackingID); err != nil {
@@ -400,6 +407,14 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 		return
 	}
 
+	startUser := c.MustGet(middleware.UserKey).(model.User)
+	if startUser.Role == model.RoleSupervisor && startUser.BranchID != "" {
+		if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != startUser.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only start trips for vehicles at your branch"})
+			return
+		}
+	}
+
 	if vehicle.Status != model.VehicleStatusLoading {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":          "Solo se puede iniciar el viaje de vehículos en estado 'En Carga'",
@@ -426,8 +441,6 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 		return
 	}
 
-	user := c.MustGet(middleware.UserKey).(model.User)
-
 	// Set destination branch
 	destID := req.DestinationBranch
 	if err := h.repo.SetDestinationBranch(vehicle.ID, &destID); err != nil {
@@ -436,7 +449,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	}
 
 	// Update vehicle status to en_transito
-	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusInTransit, user.Username); err != nil {
+	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusInTransit, startUser.Username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
 		return
 	}
@@ -445,7 +458,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	for _, tid := range vehicle.AssignedShipments {
 		statusReq := model.UpdateStatusRequest{
 			Status:    model.StatusInTransit,
-			ChangedBy: user.Username,
+			ChangedBy: startUser.Username,
 			Location:  destBranch.Address.City,
 			Notes:     "Trip started. Vehicle: " + vehicle.LicensePlate,
 		}
@@ -614,6 +627,12 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	}
 
 	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only end trips for vehicles arriving at your branch"})
+			return
+		}
+	}
 
 	// Determine destination city for shipment location
 	var destCity string

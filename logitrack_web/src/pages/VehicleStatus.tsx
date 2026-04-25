@@ -5,10 +5,10 @@ import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
-  motocicleta: "Motorcycle",
-  furgoneta: "Van",
-  camion: "Truck",
-  camion_grande: "Large Truck",
+  motocicleta: "Motocicleta",
+  furgoneta: "Furgoneta",
+  camion: "Camión",
+  camion_grande: "Camión grande",
 };
 
 const getStatusColor = (status: VehicleStatus): string => {
@@ -38,10 +38,10 @@ const formatDate = (dateString: string): string => {
 };
 
 const statusOptions: { value: VehicleStatus; label: string }[] = [
-  { value: "disponible", label: "Available" },
-  { value: "en_transito", label: "In Transit" },
-  { value: "mantenimiento", label: "Under Repair" },
-  { value: "inactivo", label: "Inactive" },
+  { value: "disponible", label: "Disponible" },
+  { value: "en_transito", label: "En tránsito" },
+  { value: "mantenimiento", label: "En mantenimiento" },
+  { value: "inactivo", label: "Inactivo" },
 ];
 
 export function VehicleStatus() {
@@ -74,7 +74,7 @@ export function VehicleStatus() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!plate.trim()) {
-      setError("License plate is required");
+      setError("La patente es obligatoria");
       return;
     }
 
@@ -93,9 +93,9 @@ export function VehicleStatus() {
       if (e.response?.status === 404) {
         setNotFound(true);
       } else if (e.response?.status === 400) {
-        setError(e.response?.data?.error || "Search error");
+        setError(e.response?.data?.error || "Error en la búsqueda");
       } else {
-        setError("Error looking up vehicle");
+        setError("Error al buscar el vehículo");
       }
     } finally {
       setLoading(false);
@@ -134,7 +134,7 @@ export function VehicleStatus() {
       if (vehicle.status === "en_transito" && newStatus === "disponible") {
         const updated = await vehicleApi.endTrip(vehicle.license_plate);
         setVehicle(updated);
-        setSuccess(`Trip ended. Vehicle is now available.`);
+        setSuccess(`Viaje finalizado. El vehículo está disponible.`);
         setShowStatusModal(false);
       } else {
         const data: UpdateVehicleStatusRequest = {
@@ -145,21 +145,21 @@ export function VehicleStatus() {
 
         const updated = await vehicleApi.updateStatus(vehicle.license_plate, data);
         setVehicle(updated);
-        setSuccess(`Status updated to "${updated.status_label}"`);
+        setSuccess(`Estado actualizado a "${updated.status_label}"`);
         setShowStatusModal(false);
       }
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { error?: string; requires_force?: boolean } } };
       if (e.response?.status === 409) {
         const errorData = e.response?.data;
-        setTransitionError(errorData?.error || "Invalid transition");
+        setTransitionError(errorData?.error || "Transición inválida");
         if (errorData?.requires_force) {
           setShowForceConfirm(true);
         }
       } else if (e.response?.status === 400) {
-        setTransitionError(e.response?.data?.error || "Invalid data");
+        setTransitionError(e.response?.data?.error || "Datos inválidos");
       } else {
-        setTransitionError(e.response?.data?.error || "Error updating status");
+        setTransitionError(e.response?.data?.error || "Error al actualizar el estado");
       }
     } finally {
       setChangingStatus(false);
@@ -168,20 +168,20 @@ export function VehicleStatus() {
 
   return (
     <div style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Vehicle Status Lookup</h1>
+      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Consulta de estado de vehículo</h1>
 
       {/* Search form */}
       <form onSubmit={handleSearch} style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
-              License Plate *
+              Patente *
             </label>
             <input
               type="text"
               value={plate}
               onChange={(e) => setPlate(e.target.value.toUpperCase())}
-              placeholder="E.g.: AB123CD"
+              placeholder="Ej.: AB123CD"
               style={{
                 width: "100%",
                 padding: "10px 14px",
@@ -208,7 +208,7 @@ export function VehicleStatus() {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? "Looking up..." : "Look Up"}
+            {loading ? "Buscando..." : "Buscar"}
           </button>
           <button
             type="button"
@@ -224,7 +224,7 @@ export function VehicleStatus() {
               fontSize: 14,
             }}
           >
-            Clear
+            Limpiar
           </button>
         </div>
       </form>
@@ -272,9 +272,9 @@ export function VehicleStatus() {
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
             />
           </svg>
-          <p style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Vehicle not found</p>
+          <p style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Vehículo no encontrado</p>
           <p style={{ fontSize: 14, margin: "4px 0 0", opacity: 0.8 }}>
-            No vehicle with license plate <strong>{plate.toUpperCase()}</strong> was found in the system.
+            No se encontró ningún vehículo con la patente <strong>{plate.toUpperCase()}</strong> en el sistema.
           </p>
         </div>
       )}
@@ -318,7 +318,7 @@ export function VehicleStatus() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
                 <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  License Plate
+                  Patente
                 </p>
                 <h2 style={{ fontSize: 28, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
                   {vehicle.license_plate}
@@ -367,7 +367,7 @@ export function VehicleStatus() {
                     fontSize: 14,
                   }}
                 >
-                  Change Status
+                  Cambiar estado
                 </button>
               </div>
             </div>
@@ -376,7 +376,7 @@ export function VehicleStatus() {
           {/* Vehicle information */}
           <div style={{ padding: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: "#6b7280", margin: "0 0 16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Vehicle Information
+              Información del vehículo
             </h3>
             <div
               style={{
@@ -386,7 +386,7 @@ export function VehicleStatus() {
               }}
             >
               <InfoCard
-                label="Type"
+                label="Tipo"
                 value={vehicleTypeLabels[vehicle.type] || vehicle.type}
                 icon={
                   <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -396,7 +396,7 @@ export function VehicleStatus() {
                 }
               />
               <InfoCard
-                label="Capacity"
+                label="Capacidad"
                 value={`${vehicle.capacity_kg} kg`}
                 icon={
                   <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -405,7 +405,7 @@ export function VehicleStatus() {
                 }
               />
               <InfoCard
-                label="Last Update"
+                label="Última actualización"
                 value={formatDate(vehicle.updated_at)}
                 icon={
                   <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -415,7 +415,7 @@ export function VehicleStatus() {
               />
               {vehicle.updated_by && (
                 <InfoCard
-                  label="Updated By"
+                  label="Actualizado por"
                   value={vehicle.updated_by}
                   icon={
                     <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -425,7 +425,7 @@ export function VehicleStatus() {
                 />
               )}
               <InfoCard
-                label="Vehicle ID"
+                label="ID de vehículo"
                 value={`#${vehicle.id}`}
                 icon={
                   <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -437,7 +437,7 @@ export function VehicleStatus() {
                 const branch = branches.find(b => b.id === vehicle.assigned_branch);
                 return (
                   <InfoCard
-                    label="Assigned Branch"
+                    label="Sucursal asignada"
                     value={branch ? `${branch.name} — ${branch.address.city}` : vehicle.assigned_branch}
                     icon={
                       <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -451,7 +451,7 @@ export function VehicleStatus() {
                 const branch = branches.find(b => b.id === vehicle.destination_branch);
                 return (
                   <InfoCard
-                    label="Destination Branch"
+                    label="Sucursal destino"
                     value={branch ? `${branch.name} — ${branch.address.city}` : vehicle.destination_branch}
                     icon={
                       <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -479,13 +479,13 @@ export function VehicleStatus() {
                   <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Assigned Shipments
+                  Envíos asignados
                 </h3>
                 <p style={{ fontSize: 16, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>
                   {vehicle.assigned_shipments.join(", ")}
                 </p>
                 <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 0" }}>
-                  This vehicle has active shipments loaded.
+                  Este vehículo tiene envíos cargados activos.
                 </p>
               </div>
             )}
@@ -505,7 +505,7 @@ export function VehicleStatus() {
                   <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Vehicle available for assignment
+                  Vehículo disponible para asignación
                 </p>
               </div>
             )}
@@ -542,7 +542,7 @@ export function VehicleStatus() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 20px", color: "#111827" }}>
-              Change Vehicle Status
+              Cambiar estado del vehículo
             </h2>
 
             {transitionError && (
@@ -560,7 +560,7 @@ export function VehicleStatus() {
                 {transitionError}
                 {showForceConfirm && (
                   <p style={{ margin: "8px 0 0", fontSize: 13 }}>
-                    Do you want to force the status change anyway?
+                    ¿Querés forzar el cambio de estado de todas formas?
                   </p>
                 )}
               </div>
@@ -568,7 +568,7 @@ export function VehicleStatus() {
 
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
-                New Status *
+                Nuevo estado *
               </label>
               <select
                 value={newStatus}
@@ -590,12 +590,12 @@ export function VehicleStatus() {
 
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>
-                Notes (optional)
+                Notas (opcional)
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Reason for status change..."
+                placeholder="Motivo del cambio de estado..."
                 rows={3}
                 style={{
                   width: "100%",
@@ -624,7 +624,7 @@ export function VehicleStatus() {
                   opacity: changingStatus ? 0.7 : 1,
                 }}
               >
-                Cancel
+                Cancelar
               </button>
               <button
                 type="button"
@@ -641,7 +641,7 @@ export function VehicleStatus() {
                   opacity: changingStatus ? 0.7 : 1,
                 }}
               >
-                {changingStatus ? "Saving..." : (showForceConfirm ? "Force Change" : "Save")}
+                {changingStatus ? "Guardando..." : (showForceConfirm ? "Forzar cambio" : "Guardar")}
               </button>
             </div>
           </div>
@@ -677,7 +677,7 @@ export function VehicleStatus() {
             />
           </svg>
           <p style={{ fontSize: 16, margin: 0 }}>
-            Enter the vehicle license plate to look up its current status
+            Ingresá la patente del vehículo para consultar su estado actual
           </p>
         </div>
       )}

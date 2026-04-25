@@ -13,12 +13,15 @@ import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
+import { AdminUsers } from "./pages/AdminUsers";
+import { BulkUpload } from "./pages/BulkUpload";
+import { AccessLog } from "./pages/AccessLog";
 
 const ROLE_LABELS: Record<string, string> = {
-  operator: "Operator",
+  operator: "Operador",
   supervisor: "Supervisor",
-  manager: "Manager",
-  admin: "Admin",
+  manager: "Gerente",
+  admin: "Administrador",
   driver: "Chofer",
 };
 
@@ -37,19 +40,29 @@ function Nav() {
     }}>
       <span style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: 1 }}>LogiTrack</span>
 
-      {hasRole("supervisor", "manager", "admin") && (
+      {hasRole("supervisor", "manager") && (
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
-      <NavLink to="/" end style={navStyle}>Shipments</NavLink>
-      <NavLink to="/track" style={navStyle}>Track</NavLink>
-      {hasRole("supervisor", "manager", "admin") && (
-        <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
+      {!hasRole("admin") && (
+        <NavLink to="/" end style={navStyle}>Envíos</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
-        <NavLink to="/branches" style={navStyle}>Branches</NavLink>
+        <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
+      )}
+      {hasRole("supervisor", "manager", "admin") && (
+        <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
+      )}
+      {hasRole("operator", "supervisor") && (
+        <NavLink to="/bulk-upload" style={navStyle}>Importar CSV</NavLink>
       )}
       {hasRole("admin") && (
-        <NavLink to="/ml-config" style={navStyle}>ML Config</NavLink>
+        <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/admin/users" style={navStyle}>Usuarios</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/admin/access-logs" style={navStyle}>Log de accesos</NavLink>
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
@@ -66,7 +79,7 @@ function Nav() {
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
-          {isMobile ? "✕" : "Sign out"}
+          {isMobile ? "✕" : "Cerrar sesión"}
         </button>
       </div>
     </nav>
@@ -103,7 +116,7 @@ function DriverNav() {
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
-          {isMobile ? "✕" : "Sign out"}
+          {isMobile ? "✕" : "Cerrar sesión"}
         </button>
       </div>
     </nav>
@@ -141,16 +154,16 @@ function AppRoutes() {
       <Nav />
       <main>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace /> : <Login />} />
 
           <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["supervisor", "manager"]}>
               <Dashboard />
             </ProtectedRoute>
           } />
 
           <Route path="/" element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentList />
             </ProtectedRoute>
           } />
@@ -167,20 +180,14 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
 
-          <Route path="/track" element={
-            <ProtectedRoute>
-              <PublicTracking />
-            </ProtectedRoute>
-          } />
-
           <Route path="/vehicles" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
               <VehicleList />
             </ProtectedRoute>
           } />
 
           <Route path="/branches" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
               <BranchList />
             </ProtectedRoute>
           } />
@@ -191,7 +198,25 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/admin/users" element={
+            <ProtectedRoute roles={["admin"]}>
+              <AdminUsers />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/bulk-upload" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <BulkUpload />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/access-logs" element={
+            <ProtectedRoute roles={["admin"]}>
+              <AccessLog />
+            </ProtectedRoute>
+          } />
+
+          <Route path="*" element={<Navigate to={user?.role === "admin" ? "/admin/users" : "/"} replace />} />
         </Routes>
       </main>
     </>
@@ -202,7 +227,10 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <Routes>
+          <Route path="/track" element={<PublicTracking />} />
+          <Route path="*" element={<AppRoutes />} />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   );

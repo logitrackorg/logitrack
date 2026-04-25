@@ -10,6 +10,7 @@ export interface User {
   id: string;
   username: string;
   role: Role;
+  branch_id?: string;
 }
 
 export interface LoginResponse {

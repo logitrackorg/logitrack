@@ -10,11 +10,12 @@ import (
 )
 
 type CommentHandler struct {
-	svc *service.CommentService
+	svc         *service.CommentService
+	shipmentSvc *service.ShipmentService
 }
 
-func NewCommentHandler(svc *service.CommentService) *CommentHandler {
-	return &CommentHandler{svc: svc}
+func NewCommentHandler(svc *service.CommentService, shipmentSvc *service.ShipmentService) *CommentHandler {
+	return &CommentHandler{svc: svc, shipmentSvc: shipmentSvc}
 }
 
 // GetComments returns all internal comments for a shipment.
@@ -30,7 +31,15 @@ func NewCommentHandler(svc *service.CommentService) *CommentHandler {
 // @Failure      404          {object}  map[string]string
 // @Router       /shipments/{tracking_id}/comments [get]
 func (h *CommentHandler) GetComments(c *gin.Context) {
-	comments, err := h.svc.GetComments(c.Param("tracking_id"))
+	trackingID := c.Param("tracking_id")
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.Role == model.RoleOperator && user.BranchID != "" {
+		if shipment, err := h.shipmentSvc.GetByTrackingID(trackingID); err != nil || shipment.ReceivingBranchID != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			return
+		}
+	}
+	comments, err := h.svc.GetComments(trackingID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -60,7 +69,13 @@ func (h *CommentHandler) AddComment(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	comment, err := h.svc.AddComment(c.Param("tracking_id"), user.Username, req.Body)
+	trackingID := c.Param("tracking_id")
+	if existing, err := h.shipmentSvc.GetByTrackingID(trackingID); err == nil {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
+			return
+		}
+	}
+	comment, err := h.svc.AddComment(trackingID, user.Username, req.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

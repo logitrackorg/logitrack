@@ -14,6 +14,7 @@ type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 	Role     Role   `json:"role"`
+	BranchID string `json:"branch_id,omitempty"`
 }
 
 type LoginRequest struct {

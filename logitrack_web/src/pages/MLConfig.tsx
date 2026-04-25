@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { mlConfigApi, type MLConfig, type MLFactors } from "../api/mlConfig";
 
 const FACTOR_LABELS: Record<keyof MLFactors, { label: string; description: string }> = {
-  shipment_type:    { label: "Shipment Type",    description: "Express vs. standard — express deliveries get higher priority" },
-  distance_km:      { label: "Distance",          description: "Longer routes carry more delay risk" },
-  restrictions:     { label: "Restrictions",      description: "Fragile or cold-chain shipments require special handling" },
-  time_window:      { label: "Time Window",       description: "Morning deadlines are tighter than flexible windows" },
-  volume_score:     { label: "Volume / Weight",   description: "Larger packages add complexity to logistics" },
-  route_saturation: { label: "Route Saturation",  description: "Busy routes face more congestion risk" },
+  shipment_type:    { label: "Tipo de envío",        description: "Express vs. estándar — los envíos express reciben mayor prioridad" },
+  distance_km:      { label: "Distancia",             description: "Las rutas más largas tienen mayor riesgo de demora" },
+  restrictions:     { label: "Restricciones",         description: "Los envíos frágiles o con cadena de frío requieren manejo especial" },
+  time_window:      { label: "Ventana horaria",       description: "Los plazos de mañana son más ajustados que las ventanas flexibles" },
+  volume_score:     { label: "Volumen / Peso",        description: "Los paquetes más grandes agregan complejidad logística" },
+  route_saturation: { label: "Saturación de ruta",   description: "Las rutas con mayor demanda enfrentan más riesgo de congestión" },
 };
 
 const FACTOR_ORDER: (keyof MLFactors)[] = [
@@ -20,7 +20,7 @@ const FACTOR_ORDER: (keyof MLFactors)[] = [
 ];
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("es-AR", {
     year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit",
   });
@@ -64,7 +64,7 @@ export function MLConfig() {
       setAltaThreshold(cfg.alta_threshold);
       setMediaThreshold(cfg.media_threshold);
     } catch {
-      setError("Failed to load ML configuration.");
+      setError("No se pudo cargar la configuración de ML.");
     } finally {
       setLoading(false);
     }
@@ -82,13 +82,13 @@ export function MLConfig() {
         notes: notes.trim(),
       });
       setSuccess(
-        `Model regenerated successfully. ${result.recalculated_count} active shipment(s) recalculated.`
+        `Modelo regenerado correctamente. Se recalcularon ${result.recalculated_count} envío(s) activo(s).`
       );
       setNotes("");
       await loadData();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "Failed to regenerate model.");
+      setError(msg ?? "No se pudo regenerar el modelo.");
     } finally {
       setSaving(false);
     }
@@ -101,12 +101,12 @@ export function MLConfig() {
     try {
       const result = await mlConfigApi.activate(id);
       setSuccess(
-        `Config #${id} activated. ${result.recalculated_count} active shipment(s) recalculated.`
+        `Configuración #${id} activada. Se recalcularon ${result.recalculated_count} envío(s) activo(s).`
       );
       await loadData();
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "Failed to activate config.");
+      setError(msg ?? "No se pudo activar la configuración.");
     } finally {
       setActivating(null);
     }
@@ -165,23 +165,23 @@ export function MLConfig() {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <p style={{ color: "#6b7280" }}>Loading configuration...</p>
+        <p style={{ color: "#6b7280" }}>Cargando configuración…</p>
       </div>
     );
   }
 
   return (
     <div style={containerStyle}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>ML Priority Configuration</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Configuración de prioridad ML</h1>
       <p style={{ color: "#6b7280", marginBottom: 24, fontSize: 14 }}>
-        Adjust the factor weights used to compute shipment priority scores. After saving, the model
-        will be retrained and all active shipments will be recalculated.
+        Ajustá los pesos de cada factor para calcular el puntaje de prioridad de los envíos. Al guardar,
+        el modelo se reentrenará y se recalcularán todos los envíos activos.
       </p>
 
       {activeConfig && activeConfig.id > 0 && (
         <div style={{ marginBottom: 16, fontSize: 13, color: "#374151" }}>
-          Active config: <strong>#{activeConfig.id}</strong> — created by{" "}
-          <strong>{activeConfig.created_by}</strong> on{" "}
+          Configuración activa: <strong>#{activeConfig.id}</strong> — creada por{" "}
+          <strong>{activeConfig.created_by}</strong> el{" "}
           {formatDate(activeConfig.created_at)}
           {activeConfig.notes && ` — "${activeConfig.notes}"`}
         </div>
@@ -200,7 +200,7 @@ export function MLConfig() {
 
       {/* Factor weights */}
       <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Factor Weights (1.0 – 5.0)</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Pesos de los factores (1,0 – 5,0)</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" }}>
           {FACTOR_ORDER.map((key) => (
             <div key={key}>
@@ -236,11 +236,11 @@ export function MLConfig() {
 
       {/* Thresholds */}
       <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Classification Thresholds (0.0 – 1.0)</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Umbrales de clasificación (0,0 – 1,0)</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" }}>
           <div>
-            <label style={labelStyle}>High Priority Threshold (alta)</label>
-            <p style={descStyle}>Scores above this value are classified as high priority.</p>
+            <label style={labelStyle}>Umbral de prioridad alta (alta)</label>
+            <p style={descStyle}>Los puntajes por encima de este valor se clasifican como prioridad alta.</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
                 type="range"
@@ -263,8 +263,8 @@ export function MLConfig() {
             </div>
           </div>
           <div>
-            <label style={labelStyle}>Medium Priority Threshold (media)</label>
-            <p style={descStyle}>Scores above this value (and below high) are medium priority.</p>
+            <label style={labelStyle}>Umbral de prioridad media (media)</label>
+            <p style={descStyle}>Los puntajes por encima de este valor (y por debajo del alto) son prioridad media.</p>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
                 type="range"
@@ -288,20 +288,20 @@ export function MLConfig() {
           </div>
         </div>
         <div style={{ marginTop: 12, padding: "8px 12px", background: "#f9fafb", borderRadius: 6, fontSize: 13, color: "#374151" }}>
-          Score &gt; <strong>{altaThreshold.toFixed(2)}</strong> → <span style={{ color: "#dc2626", fontWeight: 600 }}>High</span>
-          {"  |  "}Score &gt; <strong>{mediaThreshold.toFixed(2)}</strong> → <span style={{ color: "#d97706", fontWeight: 600 }}>Medium</span>
-          {"  |  "}Otherwise → <span style={{ color: "#6b7280", fontWeight: 600 }}>Low</span>
+          Puntaje &gt; <strong>{altaThreshold.toFixed(2)}</strong> → <span style={{ color: "#dc2626", fontWeight: 600 }}>Alta</span>
+          {"  |  "}Puntaje &gt; <strong>{mediaThreshold.toFixed(2)}</strong> → <span style={{ color: "#d97706", fontWeight: 600 }}>Media</span>
+          {"  |  "}De lo contrario → <span style={{ color: "#6b7280", fontWeight: 600 }}>Baja</span>
         </div>
       </div>
 
       {/* Notes + submit */}
       <div style={cardStyle}>
-        <label style={labelStyle}>Notes (optional)</label>
-        <p style={descStyle}>Describe why you are changing the configuration — saved with the history entry.</p>
+        <label style={labelStyle}>Notas (opcional)</label>
+        <p style={descStyle}>Describí por qué cambiás la configuración — se guarda junto al historial.</p>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="e.g. Increased shipment_type weight to prioritize express deliveries"
+          placeholder="ej. Se aumentó el peso de tipo de envío para priorizar los envíos express"
           rows={3}
           style={{ ...inputStyle, resize: "vertical", marginBottom: 16 }}
         />
@@ -310,30 +310,30 @@ export function MLConfig() {
           disabled={saving}
           style={btnPrimaryStyle}
         >
-          {saving ? "Regenerating model..." : "Regenerate Model"}
+          {saving ? "Regenerando modelo..." : "Regenerar modelo"}
         </button>
         {saving && (
           <p style={{ marginTop: 8, fontSize: 13, color: "#6b7280" }}>
-            Training the RandomForest model — this may take a few seconds.
+            Entrenando el modelo RandomForest — esto puede tardar unos segundos.
           </p>
         )}
       </div>
 
       {/* History */}
       <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Configuration History</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Historial de configuraciones</h2>
         {(history ?? []).length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: 14 }}>No configuration history yet.</p>
+          <p style={{ color: "#6b7280", fontSize: 14 }}>Todavía no hay historial de configuraciones.</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
                 <th style={thStyle}>ID</th>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Created By</th>
-                <th style={thStyle}>Notes</th>
-                <th style={thStyle}>Factors</th>
-                <th style={thStyle}>Status</th>
+                <th style={thStyle}>Fecha</th>
+                <th style={thStyle}>Creada por</th>
+                <th style={thStyle}>Notas</th>
+                <th style={thStyle}>Factores</th>
+                <th style={thStyle}>Estado</th>
                 <th style={thStyle}></th>
               </tr>
             </thead>
@@ -358,11 +358,11 @@ export function MLConfig() {
                   <td style={tdStyle}>
                     {cfg.is_active ? (
                       <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
-                        Active
+                        Activa
                       </span>
                     ) : (
                       <span style={{ background: "#f3f4f6", color: "#6b7280", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>
-                        Inactive
+                        Inactiva
                       </span>
                     )}
                   </td>
@@ -381,7 +381,7 @@ export function MLConfig() {
                           color: "#374151",
                         }}
                       >
-                        {activating === cfg.id ? "Activating..." : "Activate"}
+                        {activating === cfg.id ? "Activando..." : "Activar"}
                       </button>
                     )}
                   </td>
