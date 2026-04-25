@@ -84,8 +84,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 	seeds := []shipmentSeed{
 		{
 			trackingID:         "LT-A1B2C3D4",
-			sender:             model.Customer{DNI: "27845123", Name: "Carlos Mendez", Phone: "541145237890", Email: "carlos.mendez@email.com", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}},
-			recipient:          model.Customer{DNI: "31204567", Name: "Laura Gomez", Phone: "543516784321", Address: model.Address{Street: "San Martín 456", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
+			sender:             model.Customer{DNI: "27845123", Name: "Carlos Mendez", Phone: "541145237890", Email: "carlos.mendez@email.com", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043", Lat: -34.604462, Lng: -58.395836, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "31204567", Name: "Laura Gomez", Phone: "543516784321", Address: model.Address{Street: "San Martín 456", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.410771, Lng: -64.181685, GeoConfidence: "street"}},
 			weightKg:           3.5,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -103,8 +103,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-E5F6G7H8",
-			sender:             model.Customer{DNI: "29371084", Name: "Martina López", Phone: "541192345678", Address: model.Address{Street: "Av. del Libertador 500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1001"}},
-			recipient:          model.Customer{DNI: "25618930", Name: "Diego Fernández", Phone: "542619876543", Email: "dfernandez@empresa.com", Address: model.Address{Street: "Belgrano 321", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
+			sender:             model.Customer{DNI: "29371084", Name: "Martina López", Phone: "541192345678", Address: model.Address{Street: "Av. del Libertador 500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1001", Lat: -34.589496, Lng: -58.380844, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "25618930", Name: "Diego Fernández", Phone: "542619876543", Email: "dfernandez@empresa.com", Address: model.Address{Street: "Belgrano 321", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -33.082166, Lng: -68.467064, GeoConfidence: "street"}},
 			weightKg:           12.0,
 			packageType:        model.PackagePallet,
 			shipmentType:       model.ShipmentTypeExpress,
@@ -123,8 +123,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-I9J0K1L2",
-			sender:             model.Customer{DNI: "33092715", Name: "Santiago Ruiz", Phone: "541194567890", Address: model.Address{Street: "Reconquista 720", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1003"}},
-			recipient:          model.Customer{DNI: "36451820", Name: "Valentina Torres", Phone: "541199887766", Address: model.Address{Street: "Av. Santa Fe 2100", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1123"}},
+			sender:             model.Customer{DNI: "33092715", Name: "Santiago Ruiz", Phone: "541194567890", Address: model.Address{Street: "Reconquista 720", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1003", Lat: -34.599411, Lng: -58.372786, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "36451820", Name: "Valentina Torres", Phone: "541199887766", Address: model.Address{Street: "Av. Santa Fe 2100", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1123", Lat: -34.595686, Lng: -58.397273, GeoConfidence: "street"}},
 			weightKg:           0.3,
 			packageType:        model.PackageEnvelope,
 			specialInstr:       "Handle with care — legal documents",
@@ -140,8 +140,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-M3N4O5P6",
-			sender:             model.Customer{DNI: "24783601", Name: "Ana Perez", Phone: "543881112233", Address: model.Address{Street: "Av. Colón 320", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
-			recipient:          model.Customer{DNI: "28934075", Name: "Juan Castro", Phone: "542614334455", Address: model.Address{Street: "Belgrano 980", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
+			sender:             model.Customer{DNI: "24783601", Name: "Ana Perez", Phone: "543881112233", Address: model.Address{Street: "Av. Colón 320", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.412274, Lng: -64.187459, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "28934075", Name: "Juan Castro", Phone: "542614334455", Address: model.Address{Street: "Belgrano 980", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -32.889930, Lng: -68.850251, GeoConfidence: "street"}},
 			weightKg:           5.2,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -159,8 +159,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-Q7R8S9T0",
-			sender:             model.Customer{DNI: "20567412", Name: "Roberto Silva", Phone: "543513334455", Email: "rsilva@distribuidora.com", Address: model.Address{Street: "Colón 1010", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
-			recipient:          model.Customer{DNI: "34128956", Name: "Camila Rodríguez", Phone: "541166778899", Email: "camila.r@gmail.com", Address: model.Address{Street: "Av. Cabildo 3456", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1429"}},
+			sender:             model.Customer{DNI: "20567412", Name: "Roberto Silva", Phone: "543513334455", Email: "rsilva@distribuidora.com", Address: model.Address{Street: "Colón 1010", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.420100, Lng: -64.188800, GeoConfidence: "city"}},
+			recipient:          model.Customer{DNI: "34128956", Name: "Camila Rodríguez", Phone: "541166778899", Email: "camila.r@gmail.com", Address: model.Address{Street: "Av. Cabildo 3456", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1429", Lat: -34.551300, Lng: -58.466557, GeoConfidence: "street"}},
 			weightKg:           8.0,
 			packageType:        model.PackageBox,
 			isFragile:          true,
@@ -181,8 +181,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-U1V2W3X4",
-			sender:             model.Customer{DNI: "31760294", Name: "Florencia Díaz", Phone: "541122334455", Address: model.Address{Street: "Pueyrredón 678", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1032"}},
-			recipient:          model.Customer{DNI: "26843019", Name: "Nicolás Herrera", Phone: "542945567788", Address: model.Address{Street: "San Martín 200", City: "Río Gallegos", Province: "Santa Cruz", PostalCode: "Z9400"}},
+			sender:             model.Customer{DNI: "31760294", Name: "Florencia Díaz", Phone: "541122334455", Address: model.Address{Street: "Pueyrredón 678", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1032", Lat: -34.612242, Lng: -58.442177, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "26843019", Name: "Nicolás Herrera", Phone: "542945567788", Address: model.Address{Street: "San Martín 200", City: "Río Gallegos", Province: "Santa Cruz", PostalCode: "Z9400", Lat: -51.641931, Lng: -69.225573, GeoConfidence: "street"}},
 			weightKg:           2.1,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -198,8 +198,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		// Out for delivery — assigned to driver chofer (ID: 5)
 		{
 			trackingID:         "LT-DELIVER01",
-			sender:             model.Customer{DNI: "20111222", Name: "Tech Store SA", Phone: "5433295500112", Address: model.Address{Street: "Av. San Martín 150", City: "San Pedro", Province: "Buenos Aires", PostalCode: "B2930"}},
-			recipient:          model.Customer{DNI: "30123456", Name: "Marcela Suárez", Phone: "541144332211", Address: model.Address{Street: "Larrea 1450", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1117"}},
+			sender:             model.Customer{DNI: "20111222", Name: "Tech Store SA", Phone: "5433295500112", Address: model.Address{Street: "Av. San Martín 150", City: "San Pedro", Province: "Buenos Aires", PostalCode: "B2930", Lat: -33.658631, Lng: -59.868299, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "30123456", Name: "Marcela Suárez", Phone: "541144332211", Address: model.Address{Street: "Larrea 1450", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1117", Lat: -34.590378, Lng: -58.399011, GeoConfidence: "street"}},
 			weightKg:           1.2,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -218,8 +218,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-DELIVER02",
-			sender:             model.Customer{DNI: "20333444", Name: "Librería El Quijote", Phone: "543517788990", Address: model.Address{Street: "Obispo Trejo 145", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
-			recipient:          model.Customer{DNI: "28456789", Name: "Tomás Villanueva", Phone: "541166554433", Address: model.Address{Street: "Av. Santa Fe 4500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1425"}},
+			sender:             model.Customer{DNI: "20333444", Name: "Librería El Quijote", Phone: "543517788990", Address: model.Address{Street: "Obispo Trejo 145", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.417272, Lng: -64.185968, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "28456789", Name: "Tomás Villanueva", Phone: "541166554433", Address: model.Address{Street: "Av. Santa Fe 4500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1425", Lat: -34.579494, Lng: -58.424418, GeoConfidence: "street"}},
 			weightKg:           0.8,
 			packageType:        model.PackageEnvelope,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -238,8 +238,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		// CABA branch shipments
 		{
 			trackingID:         "LT-CABA0001",
-			sender:             model.Customer{DNI: "32111222", Name: "Agustina Peralta", Phone: "541155667788", Address: model.Address{Street: "Thames 1200", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1414"}},
-			recipient:          model.Customer{DNI: "29887766", Name: "Ricardo Montes", Phone: "543513221100", Address: model.Address{Street: "Bv. San Juan 750", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
+			sender:             model.Customer{DNI: "32111222", Name: "Agustina Peralta", Phone: "541155667788", Address: model.Address{Street: "Thames 1200", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1414", Lat: -34.590511, Lng: -58.434823, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "29887766", Name: "Ricardo Montes", Phone: "543513221100", Address: model.Address{Street: "Bv. San Juan 750", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.419674, Lng: -64.191046, GeoConfidence: "street"}},
 			weightKg:           4.0,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -254,8 +254,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-CABA0002",
-			sender:             model.Customer{DNI: "27334455", Name: "Luciana Benítez", Phone: "541133445566", Address: model.Address{Street: "Av. Rivadavia 4500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1424"}},
-			recipient:          model.Customer{DNI: "31667788", Name: "Pablo Acosta", Phone: "543513221199", Address: model.Address{Street: "Bv. San Juan 400", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
+			sender:             model.Customer{DNI: "27334455", Name: "Luciana Benítez", Phone: "541133445566", Address: model.Address{Street: "Av. Rivadavia 4500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1424", Lat: -34.614846, Lng: -58.428388, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "31667788", Name: "Pablo Acosta", Phone: "543513221199", Address: model.Address{Street: "Bv. San Juan 400", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Lat: -31.419674, Lng: -64.191046, GeoConfidence: "street"}},
 			weightKg:           1.5,
 			packageType:        model.PackageEnvelope,
 			shipmentType:       model.ShipmentTypeExpress,
@@ -273,8 +273,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-CABA0003",
-			sender:             model.Customer{DNI: "25990011", Name: "Fernando Ibáñez", Phone: "541177889900", Address: model.Address{Street: "Corrientes 3400", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1193"}},
-			recipient:          model.Customer{DNI: "33445566", Name: "Natalia Ponce", Phone: "541188990011", Address: model.Address{Street: "Mitre 890", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1036"}},
+			sender:             model.Customer{DNI: "25990011", Name: "Fernando Ibáñez", Phone: "541177889900", Address: model.Address{Street: "Corrientes 3400", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1193", Lat: -34.604262, Lng: -58.413098, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "33445566", Name: "Natalia Ponce", Phone: "541188990011", Address: model.Address{Street: "Mitre 890", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1036", Lat: -34.631430, Lng: -58.441663, GeoConfidence: "street"}},
 			weightKg:           2.8,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -294,8 +294,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		// Mendoza branch shipments
 		{
 			trackingID:         "LT-MEND0001",
-			sender:             model.Customer{DNI: "28223344", Name: "Daniela Vargas", Phone: "542614443322", Address: model.Address{Street: "Av. San Martín 980", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
-			recipient:          model.Customer{DNI: "30556677", Name: "Sebastián Ortiz", Phone: "541199001122", Address: model.Address{Street: "Av. Callao 1200", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1023"}},
+			sender:             model.Customer{DNI: "28223344", Name: "Daniela Vargas", Phone: "542614443322", Address: model.Address{Street: "Av. San Martín 980", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -32.914625, Lng: -68.845815, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "30556677", Name: "Sebastián Ortiz", Phone: "541199001122", Address: model.Address{Street: "Av. Callao 1200", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1023", Lat: -34.606810, Lng: -58.392123, GeoConfidence: "street"}},
 			weightKg:           7.5,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
@@ -310,8 +310,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-MEND0002",
-			sender:             model.Customer{DNI: "26778899", Name: "Cecilia Romero", Phone: "542614556677", Address: model.Address{Street: "Belgrano 450", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
-			recipient:          model.Customer{DNI: "34112233", Name: "Gustavo Medina", Phone: "541155443322", Address: model.Address{Street: "Av. Corrientes 800", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}},
+			sender:             model.Customer{DNI: "26778899", Name: "Cecilia Romero", Phone: "542614556677", Address: model.Address{Street: "Belgrano 450", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -33.082540, Lng: -68.465230, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "34112233", Name: "Gustavo Medina", Phone: "541155443322", Address: model.Address{Street: "Av. Corrientes 800", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043", Lat: -34.603817, Lng: -58.377745, GeoConfidence: "street"}},
 			weightKg:           11.0,
 			packageType:        model.PackagePallet,
 			isFragile:          true,
@@ -330,8 +330,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		},
 		{
 			trackingID:         "LT-MEND0003",
-			sender:             model.Customer{DNI: "21334455", Name: "Horacio Blanco", Phone: "542614112233", Address: model.Address{Street: "Las Heras 600", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
-			recipient:          model.Customer{DNI: "29001122", Name: "Inés Carrizo", Phone: "542646334455", Address: model.Address{Street: "Av. Libertador 300", City: "San Juan", Province: "San Juan", PostalCode: "J5400"}},
+			sender:             model.Customer{DNI: "21334455", Name: "Horacio Blanco", Phone: "542614112233", Address: model.Address{Street: "Las Heras 600", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -32.885015, Lng: -68.846153, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "29001122", Name: "Inés Carrizo", Phone: "542646334455", Address: model.Address{Street: "Av. Libertador 300", City: "San Juan", Province: "San Juan", PostalCode: "J5400", Lat: -31.533535, Lng: -68.516437, GeoConfidence: "street"}},
 			weightKg:           3.2,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeExpress,
@@ -351,8 +351,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		// Multi-hop shipment: Ciudad de Buenos Aires → Córdoba → Mendoza
 		{
 			trackingID:         "LT-MULTI001",
-			sender:             model.Customer{DNI: "30500112", Name: "Empresa Distribuidora SA", Phone: "541150001234", Email: "despachos@distribuidora.com", Address: model.Address{Street: "Av. del Libertador 1000", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1001"}},
-			recipient:          model.Customer{DNI: "22917463", Name: "Clínica Regional Cuyo", Phone: "542614220000", Address: model.Address{Street: "Av. San Martín 1500", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
+			sender:             model.Customer{DNI: "30500112", Name: "Empresa Distribuidora SA", Phone: "541150001234", Email: "despachos@distribuidora.com", Address: model.Address{Street: "Av. del Libertador 1000", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1001", Lat: -34.543079, Lng: -58.461568, GeoConfidence: "street"}},
+			recipient:          model.Customer{DNI: "22917463", Name: "Clínica Regional Cuyo", Phone: "542614220000", Address: model.Address{Street: "Av. San Martín 1500", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Lat: -33.133808, Lng: -68.890263, GeoConfidence: "street"}},
 			weightKg:           18.5,
 			packageType:        model.PackageBox,
 			isFragile:          true,

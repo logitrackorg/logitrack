@@ -202,7 +202,7 @@ export function ShipmentDetail() {
   }, [trackingId]);
 
   useEffect(() => {
-    if (!shipment || shipment.status !== "at_branch" || !trackingId) {
+    if (!shipment || !["at_branch", "in_progress"].includes(shipment.status) || !trackingId) {
       setRouteRec(null);
       return;
     }
@@ -560,48 +560,67 @@ export function ShipmentDetail() {
         </div>
       )}
 
-      {shipment.status === "at_branch" && hasRole("operator", "supervisor", "admin") && (
+      {["at_branch", "in_progress"].includes(shipment.status) && hasRole("operator", "supervisor", "admin") && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Sucursales recomendadas para el próximo tramo</h2>
           {loadingRouteRec && (
             <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Calculando recomendaciones...</p>
           )}
-          {!loadingRouteRec && routeRec && (
-            <>
-              {!routeRec.has_coordinates && (
-                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9ca3af" }}>
-                  Sin coordenadas exactas del destinatario — distancias estimadas por provincia.
-                </p>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {routeRec.branches.map((item) => (
-                  <div key={item.branch.id} style={{
-                    display: "flex", alignItems: "center", gap: 12,
-                    padding: "10px 14px", borderRadius: 8,
-                    border: item.is_nearest ? "2px solid #16a34a" : "1px solid #e5e7eb",
-                    background: item.is_nearest ? "#f0fdf4" : "#fafafa",
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: item.is_nearest ? "#15803d" : "#111827" }}>
-                        {item.branch.name}
-                        {item.is_nearest && (
-                          <span style={{ marginLeft: 8, fontSize: 11, background: "#16a34a", color: "#fff", borderRadius: 4, padding: "2px 7px" }}>
-                            Más cercana
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
-                        {item.branch.address.city}, {item.branch.address.province}
-                      </div>
+          {!loadingRouteRec && routeRec && (() => {
+            const nearest = routeRec.branches.find(b => b.is_nearest);
+            const nearestIsHere = nearest?.branch.id === shipment.current_location;
+            return (
+              <>
+                {nearestIsHere && (
+                  <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "#1d4ed8" }}>
+                      Esta sucursal es la más cercana al destinatario
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>
-                      {item.distance_km > 0 ? `${Math.round(item.distance_km)} km` : "—"}
+                    <div style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }}>
+                      Se recomienda iniciar la entrega de última milla desde aquí.
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
+                )}
+                {!routeRec.has_coordinates && (
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9ca3af" }}>
+                    Sin coordenadas exactas del destinatario — distancias estimadas por provincia.
+                  </p>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {routeRec.branches.map((item) => (
+                    <div key={item.branch.id} style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "10px 14px", borderRadius: 8,
+                      border: item.is_nearest ? "2px solid #16a34a" : "1px solid #e5e7eb",
+                      background: item.is_nearest ? "#f0fdf4" : "#fafafa",
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: item.is_nearest ? "#15803d" : "#111827" }}>
+                          {item.branch.name}
+                          {item.is_nearest && (
+                            <span style={{ marginLeft: 8, fontSize: 11, background: "#16a34a", color: "#fff", borderRadius: 4, padding: "2px 7px" }}>
+                              Más cercana
+                            </span>
+                          )}
+                          {item.branch.id === shipment.current_location && (
+                            <span style={{ marginLeft: 8, fontSize: 11, background: "#6b7280", color: "#fff", borderRadius: 4, padding: "2px 7px" }}>
+                              Ubicación actual
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+                          {item.branch.address.city}, {item.branch.address.province}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>
+                        {item.distance_km > 0 ? (item.distance_km < 10 ? `${item.distance_km.toFixed(1)} km` : `${Math.round(item.distance_km)} km`) : "—"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
           {!loadingRouteRec && !routeRec && (
             <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>No se pudieron calcular recomendaciones.</p>
           )}

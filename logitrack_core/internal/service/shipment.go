@@ -656,8 +656,12 @@ func (s *ShipmentService) RecommendRoute(trackingID string) (model.RouteRecommen
 	hasCoords := recipientLat != 0 || recipientLng != 0
 
 	if !hasCoords {
-		// Fall back to province centroid
-		if coords, ok := ml.ProvinceCoords[shipment.Recipient.Address.Province]; ok {
+		// Try city first (handles "Ciudad de Buenos Aires" inside province "Buenos Aires")
+		if coords, ok := ml.ProvinceCoords[shipment.Recipient.Address.City]; ok {
+			recipientLat = coords[0]
+			recipientLng = coords[1]
+			hasCoords = true
+		} else if coords, ok := ml.ProvinceCoords[shipment.Recipient.Address.Province]; ok {
 			recipientLat = coords[0]
 			recipientLng = coords[1]
 			hasCoords = true

@@ -11,7 +11,7 @@ import (
 func LoadBranches(repo repository.BranchRepository) {
 	type branchDef struct {
 		id, name, street, city, province, postalCode string
-		status                                        model.BranchStatus
+		status                                       model.BranchStatus
 	}
 	defs := []branchDef{
 		{"caba", "CDBA-01", "Av. Corrientes 1234", "Ciudad de Buenos Aires", "Buenos Aires", "C1043", model.BranchStatusActive},

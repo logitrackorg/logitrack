@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	ErrBranchNotFound            = errors.New("branch not found")
-	ErrBranchDuplicateName       = errors.New("duplicate branch name")
-	ErrBranchNotActive           = errors.New("branch is not active")
-	ErrBranchHasActiveShipments  = errors.New("branch has active shipments")
+	ErrBranchNotFound           = errors.New("branch not found")
+	ErrBranchDuplicateName      = errors.New("duplicate branch name")
+	ErrBranchNotActive          = errors.New("branch is not active")
+	ErrBranchHasActiveShipments = errors.New("branch has active shipments")
 )
 
 // ActiveShipmentCounter counts non-terminal shipments assigned to a branch.
