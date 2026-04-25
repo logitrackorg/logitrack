@@ -1,0 +1,65 @@
+logitrack_core/internal/handler/access_log.go
+  bcae0fac2984ddab 1-36
+logitrack_web/src/pages/Dashboard.tsx
+  d717185c36f2002f 4-5,36,39-40,46-57,59-65,68-70,76-99,103-135
+logitrack_web/src/pages/AccessLog.tsx
+  bcae0fac2984ddab 1-134
+logitrack_core/internal/handler/auth.go
+  bcae0fac2984ddab 6,16-17,20-21,29-38,59,65,81-85
+logitrack_core/internal/repository/postgres_access_log.go
+  bcae0fac2984ddab 1-50
+logitrack_core/internal/handler/shipment.go
+  d717185c36f2002f 223,226-227,480,499-503
+logitrack_core/internal/db/migrate.go
+  bcae0fac2984ddab 108-116
+logitrack_core/internal/projection/postgres_shipment.go
+  d717185c36f2002f 301-316,341-354,371-384
+logitrack_core/internal/repository/access_log.go
+  bcae0fac2984ddab 1-8
+logitrack_web/src/pages/VehicleList.tsx
+  bcae0fac2984ddab 705,855,1162
+logitrack_web/src/api/accessLog.ts
+  bcae0fac2984ddab 1-38
+logitrack_web/src/api/shipments.ts
+  d717185c36f2002f 141,171
+logitrack_web/src/App.tsx
+  bcae0fac2984ddab 18,64-66,213-218
+  d717185c36f2002f 55-56
+logitrack_core/internal/model/access_log.go
+  bcae0fac2984ddab 1-19
+logitrack_core/cmd/server/main.go
+  bcae0fac2984ddab 59,82-83,124-126,140,198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "545b1f1318ecf4c1f44397f6eac227f3ac75f6dd",
+  "prompts": {
+    "bcae0fac2984ddab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e665e89f-433b-4573-986f-2a8a805c7244",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2178,
+      "total_deletions": 20,
+      "accepted_lines": 341,
+      "overriden_lines": 0
+    },
+    "d717185c36f2002f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0e1d3a6-cf3d-4b37-8217-5fa0406795ef",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1269,
+      "total_deletions": 29,
+      "accepted_lines": 143,
+      "overriden_lines": 0
+    }
+  }
+}
