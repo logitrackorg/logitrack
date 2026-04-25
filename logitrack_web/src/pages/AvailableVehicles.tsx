@@ -7,7 +7,7 @@ const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
   furgoneta: "Furgoneta",
   camion: "Camión",
-  camion_grande: "Camión Grande",
+  camion_grande: "Camión grande",
 };
 
 const statusColor = "#10b981";

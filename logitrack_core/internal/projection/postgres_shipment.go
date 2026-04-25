@@ -78,6 +78,15 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			return err
 		}
 		if payload.Location != "" {
+			if payload.ToStatus == model.StatusAtBranch {
+				_, err := p.db.Exec(`
+					UPDATE shipments
+					SET status = $1, current_location = $2, receiving_branch_id = $2, updated_at = $3
+					WHERE tracking_id = $4`,
+					string(payload.ToStatus), payload.Location, event.Timestamp, event.TrackingID,
+				)
+				return err
+			}
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET status = $1, current_location = $2, updated_at = $3
@@ -170,12 +179,12 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
 			tracking_id, status, current_location, weight_kg, package_type,
-			is_fragile, special_instructions, receiving_branch_id,
+			is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
 			sender, recipient, corrections,
 			shipment_type, time_window, cold_chain,
 			priority, priority_score, priority_confidence, priority_factors
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -198,7 +207,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			priority_confidence   = EXCLUDED.priority_confidence,
 			priority_factors      = EXCLUDED.priority_factors`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
-		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID,
+		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
 		string(s.ShipmentType), string(s.TimeWindow), s.ColdChain,
@@ -219,7 +228,7 @@ func (p *PostgresShipmentProjection) Rebuild(events []model.DomainEvent) {
 func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, error) {
 	row := p.db.QueryRow(`
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -231,7 +240,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	query := `
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -239,6 +248,11 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
+	if filter.ReceivingBranchID != "" {
+		query += fmt.Sprintf(" AND receiving_branch_id = $%d", i)
+		args = append(args, filter.ReceivingBranchID)
+		i++
+	}
 	if filter.DateFrom != nil {
 		query += fmt.Sprintf(" AND created_at >= $%d", i)
 		args = append(args, *filter.DateFrom)
@@ -263,7 +277,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := p.db.Query(`
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
-		       is_fragile, special_instructions, receiving_branch_id,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
 		       shipment_type, time_window, cold_chain,
@@ -283,18 +297,28 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 }
 
 func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, error) {
-	rows, err := p.db.Query(`SELECT status, current_location FROM shipments`)
-	if err != nil {
-		return model.Stats{}, err
-	}
-	defer rows.Close()
-
 	stats := model.Stats{
 		ByStatus:       map[model.Status]int{},
 		ByBranch:       map[string]int{},
 		ByDay:          map[string]int{},
 		ByDayDelivered: map[string]int{},
 	}
+
+	branchFilter := filter.ReceivingBranchID
+
+	// Main totals query.
+	var rows *sql.Rows
+	var err error
+	if branchFilter != "" {
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE receiving_branch_id = $1`, branchFilter)
+	} else {
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments`)
+	}
+	if err != nil {
+		return model.Stats{}, err
+	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var status, location string
 		if err := rows.Scan(&status, &location); err != nil {
@@ -319,11 +343,20 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 			stats.ByDayDelivered[key] = 0
 		}
 
-		dayRows, err := p.db.Query(`
-			SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
-			FROM shipments
-			WHERE created_at >= $1 AND created_at <= $2
-			GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo)
+		var dayRows *sql.Rows
+		if branchFilter != "" {
+			dayRows, err = p.db.Query(`
+				SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE created_at >= $1 AND created_at <= $2 AND receiving_branch_id = $3
+				GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo, branchFilter)
+		} else {
+			dayRows, err = p.db.Query(`
+				SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE created_at >= $1 AND created_at <= $2
+				GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo)
+		}
 		if err != nil {
 			return model.Stats{}, err
 		}
@@ -340,11 +373,20 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 			return model.Stats{}, err
 		}
 
-		deliveredRows, err := p.db.Query(`
-			SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
-			FROM shipments
-			WHERE delivered_at >= $1 AND delivered_at <= $2
-			GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo)
+		var deliveredRows *sql.Rows
+		if branchFilter != "" {
+			deliveredRows, err = p.db.Query(`
+				SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE delivered_at >= $1 AND delivered_at <= $2 AND receiving_branch_id = $3
+				GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo, branchFilter)
+		} else {
+			deliveredRows, err = p.db.Query(`
+				SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE delivered_at >= $1 AND delivered_at <= $2
+				GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo)
+		}
 		if err != nil {
 			return model.Stats{}, err
 		}
@@ -380,7 +422,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
-		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
+		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
 		&shipmentType, &timeWindow, &s.ColdChain,
@@ -439,7 +481,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
-			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID,
+			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
 			&shipmentType, &timeWindow, &s.ColdChain,

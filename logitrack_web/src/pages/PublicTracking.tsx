@@ -1,187 +1,342 @@
-import { useState } from "react";
-import { shipmentApi, type Shipment, type ShipmentEvent, type ShipmentStatus } from "../api/shipments";
-import { branchApi, type Branch } from "../api/branches";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { publicTrackingApi } from "../api/publicTracking";
+import type { Shipment, ShipmentEvent, ShipmentStatus } from "../api/shipments";
+import type { Branch } from "../api/branches";
 import { StatusBadge } from "../components/StatusBadge";
-import { fmtDate, fmtDateTime } from "../utils/date";
+import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
+
+// User-facing status labels (no internal domain language)
+const STATUS_LABELS: Record<ShipmentStatus, string> = {
+  pending: "Borrador",
+  in_progress: "En proceso",
+  pre_transit: "Preparando despacho",
+  in_transit: "En tránsito",
+  at_branch: "En centro logístico",
+  delivering: "En camino a domicilio",
+  delivery_failed: "Intento de entrega fallido",
+  delivered: "Entregado",
+  ready_for_pickup: "Listo para retiro",
+  ready_for_return: "Listo para devolución",
+  returned: "Devuelto",
+  cancelled: "Cancelado",
+};
+
+interface EventDescription {
+  icon: string;
+  title: string;
+  subtitle?: string; // city + province line
+}
+
+function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription {
+  const loc = ev.location;
+  const branch = loc
+    ? (branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc))
+    : undefined;
+  const cityLine = branch
+    ? `${branch.address.city}, ${branch.province}`
+    : loc ?? undefined;
+
+  const { from_status: from, to_status: to } = ev;
+
+  // Creation
+  if (!from && to === "in_progress") {
+    return { icon: "📦", title: "Envío registrado", subtitle: cityLine };
+  }
+  if (!from && to === "pending") {
+    return { icon: "📋", title: "Borrador creado" };
+  }
+
+  // Confirmation / ready to dispatch
+  if (from === "pending" && to === "in_progress") {
+    return { icon: "✅", title: "Envío confirmado", subtitle: cityLine };
+  }
+
+  // Loaded onto vehicle
+  if (to === "pre_transit") {
+    return { icon: "🚛", title: "Cargado y listo para despachar", subtitle: cityLine };
+  }
+
+  // Departed
+  if (to === "in_transit") {
+    const dest = cityLine ?? loc;
+    return {
+      icon: "🚀",
+      title: dest ? `Despachado — en camino a ${dest}` : "Despachado — en tránsito",
+    };
+  }
+
+  // Arrived at a logistics center
+  if (to === "at_branch") {
+    return { icon: "🏭", title: "Llegó al centro logístico", subtitle: cityLine };
+  }
+
+  // Out for delivery
+  if (to === "delivering") {
+    return { icon: "🛵", title: "En camino a domicilio", subtitle: cityLine };
+  }
+
+  // Delivered
+  if (to === "delivered") {
+    return { icon: "🎉", title: "Envío entregado" };
+  }
+
+  // Delivery failed
+  if (to === "delivery_failed") {
+    return { icon: "⚠️", title: "El intento de entrega no fue exitoso" };
+  }
+
+  // Ready for pickup at branch
+  if (to === "ready_for_pickup") {
+    return { icon: "📬", title: "Disponible para retiro en el centro logístico", subtitle: cityLine };
+  }
+
+  // Ready for return to sender
+  if (to === "ready_for_return") {
+    return { icon: "↩️", title: "En espera de devolución al remitente", subtitle: cityLine };
+  }
+
+  // Returned
+  if (to === "returned") {
+    return { icon: "📤", title: "Devuelto al remitente" };
+  }
+
+  // Cancelled
+  if (to === "cancelled") {
+    return { icon: "🚫", title: "Envío cancelado" };
+  }
+
+  // Fallback — should never reach here for known statuses
+  return { icon: "•", title: STATUS_LABELS[to] ?? to, subtitle: cityLine };
+}
 
 export function PublicTracking() {
   const isMobile = useIsMobile();
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("id") ?? "");
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [events, setEvents] = useState<ShipmentEvent[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useState(() => { branchApi.list().then(setBranches); });
+  useEffect(() => {
+    publicTrackingApi.getBranches().then(setBranches).catch(() => {});
+  }, []);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  useEffect(() => {
+    const id = searchParams.get("id");
+    if (id) runSearch(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const runSearch = async (trackingId: string) => {
     setLoading(true);
     setError("");
     setShipment(null);
     setEvents([]);
     try {
       const [s, ev] = await Promise.all([
-        shipmentApi.get(query.trim().toUpperCase()),
-        shipmentApi.getEvents(query.trim().toUpperCase()),
+        publicTrackingApi.getShipment(trackingId.trim().toUpperCase()),
+        publicTrackingApi.getEvents(trackingId.trim().toUpperCase()),
       ]);
       setShipment(s);
-      setEvents(ev);
+      setEvents(ev.filter((e) => e.event_type !== "edited"));
     } catch {
-      setError("Shipment not found. Please check the tracking ID.");
+      setError("Envío no encontrado. Verificá el número de seguimiento e intentá de nuevo.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div style={{ maxWidth: 640, margin: isMobile ? "24px auto" : "48px auto", padding: "0 16px" }}>
-      <h1 style={{ textAlign: "center", marginBottom: 8 }}>Track your shipment</h1>
-      <p style={{ textAlign: "center", color: "#6b7280", marginBottom: 32 }}>
-        Enter your tracking ID to see the current status
-      </p>
-
-      <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, marginBottom: 32 }}>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="e.g. LT-90CCE50E"
-          style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 15 }}
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer", fontWeight: 600 }}
-        >
-          {loading ? "..." : "Track"}
-        </button>
-      </form>
-
-      {error && <p style={{ color: "#ef4444", textAlign: "center" }}>{error}</p>}
-
-      {shipment && (
-        <>
-          {/* Shipment info */}
-          <div style={{ background: "#f9fafb", borderRadius: 10, padding: 20, marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <code style={{ fontSize: 18, fontWeight: 700 }}>{shipment.tracking_id}</code>
-              <StatusBadge status={shipment.status} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px 16px", fontSize: 14 }}>
-              <InfoRow label="From" value={`${shipment.sender.address.city}, ${shipment.sender.address.province}`} />
-              <InfoRow label="To" value={`${shipment.recipient.address.city}, ${shipment.recipient.address.province}`} />
-              <InfoRow label="Sender" value={shipment.sender.name} />
-              <InfoRow label="Recipient" value={shipment.recipient.name} />
-            </div>
-          </div>
-
-          {/* Route timeline from real events */}
-          <RouteTimeline events={events} destinationCity={shipment.recipient.address.city} destinationProvince={shipment.recipient.address.province} branches={branches} />
-
-          {/* Event history */}
-          {events.length > 0 && (
-            <>
-              <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Event History</h2>
-              <div style={{ display: "grid", gap: 8 }}>
-                {[...events].reverse().map((ev) => (
-                  <div key={ev.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {ev.from_status ? `${ev.from_status} → ${ev.to_status}` : ev.to_status}
-                      </span>
-                      <span style={{ color: "#6b7280" }}>{fmtDateTime(ev.timestamp)}</span>
-                    </div>
-                    {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
-                    <p style={{ margin: "4px 0 0", color: "#9ca3af" }}>by {ev.changed_by || "system"}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function RouteTimeline({ events, destinationCity, destinationProvince, branches }: { events: ShipmentEvent[]; destinationCity: string; destinationProvince: string; branches: Branch[] }) {
-  const stops: { location: string; status: ShipmentStatus; timestamp: string }[] = [];
-  const seen = new Set<string>();
-  for (const ev of events) {
-    const loc = ev.location || ev.to_status;
-    if (loc && !seen.has(loc)) {
-      seen.add(loc);
-      stops.push({ location: loc, status: ev.to_status, timestamp: ev.timestamp });
-    }
-  }
-  if (stops.length === 0) return null;
-
-  const statusColors: Record<ShipmentStatus, string> = {
-    pending: "#9ca3af", in_progress: "#f59e0b", pre_transit: "#06b6d4", in_transit: "#3b82f6", at_branch: "#8b5cf6", delivering: "#f97316", delivery_failed: "#ef4444", delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed", returned: "#6b7280", cancelled: "#b91c1c",
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setSearchParams({ id: query.trim().toUpperCase() });
+    runSearch(query.trim());
   };
-  const isDelivered = stops[stops.length - 1].status === "delivered";
+
+  const chronological = [...events].reverse();
 
   return (
-    <div style={{ marginBottom: 28 }}>
-      <h2 style={{ fontSize: "0.95rem", marginBottom: 14 }}>Route</h2>
-      <div style={{ display: "flex", alignItems: "center", overflowX: "auto", paddingBottom: 4 }}>
-        {stops.map((stop, i) => {
-          const isCurrent = i === stops.length - 1;
-          return (
-            <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-              <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: isCurrent ? statusColors[stop.status] : "#e5e7eb",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: isCurrent ? `0 0 0 3px ${statusColors[stop.status]}33` : "none",
-                }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: isCurrent ? "#fff" : "#9ca3af" }}>
-                    {stop.status === "delivered" ? "✓" : i + 1}
-                  </span>
-                </div>
-                <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                  {(() => {
-                    const b = branches.find((x) => x.address.city === stop.location);
-                    return (
-                      <>
-                        <div style={{ fontSize: 11, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? "#1e3a5f" : "#6b7280", whiteSpace: "nowrap" as const }}>{b?.address.city ?? stop.location}</div>
-                        {b?.province && <div style={{ fontSize: 10, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b.province}</div>}
-                      </>
-                    );
-                  })()}
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(stop.timestamp)}</div>
-                </div>
-              </div>
-              {i < stops.length - 1 && <div style={{ width: 36, height: 2, background: "#d1d5db", flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />}
-            </div>
-          );
-        })}
-        {!isDelivered && (
+    <div style={{ minHeight: "100vh", background: "#f0f4f8", fontFamily: "system-ui, sans-serif" }}>
+      {/* Header */}
+      <header style={{
+        background: "#1e3a5f", color: "#fff",
+        padding: isMobile ? "16px 20px" : "18px 40px",
+        display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <span style={{ fontWeight: 900, fontSize: isMobile ? 18 : 22, letterSpacing: 1 }}>LogiTrack</span>
+        <span style={{ color: "#93c5fd", fontSize: isMobile ? 13 : 15, fontWeight: 400 }}>· Seguimiento de envíos</span>
+      </header>
+
+      {/* Hero search */}
+      <div style={{
+        background: "linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)",
+        padding: isMobile ? "32px 20px" : "52px 40px",
+        textAlign: "center",
+      }}>
+        <h1 style={{ color: "#fff", margin: "0 0 8px", fontSize: isMobile ? 22 : 30, fontWeight: 800 }}>
+          ¿Dónde está mi envío?
+        </h1>
+        <p style={{ color: "#bfdbfe", margin: "0 0 28px", fontSize: isMobile ? 14 : 16 }}>
+          Ingresá tu número de seguimiento para ver el estado actual
+        </p>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, maxWidth: 560, margin: "0 auto" }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ej. LT-A1B2C3D4"
+            style={{
+              flex: 1, padding: isMobile ? "12px 14px" : "14px 18px",
+              borderRadius: 10, border: "none", fontSize: isMobile ? 15 : 16,
+              outline: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              background: "#f59e0b", color: "#1e3a5f", border: "none", borderRadius: 10,
+              padding: isMobile ? "12px 18px" : "14px 28px",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: 700, fontSize: isMobile ? 14 : 16,
+              whiteSpace: "nowrap", opacity: loading ? 0.7 : 1,
+            }}
+          >
+            {loading ? "Buscando..." : "Rastrear"}
+          </button>
+        </form>
+      </div>
+
+      {/* Results */}
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: isMobile ? "24px 16px" : "40px 20px" }}>
+        {error && (
+          <div style={{
+            background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10,
+            padding: "16px 20px", color: "#b91c1c", textAlign: "center", fontSize: 15,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {shipment && (
           <>
-            <div style={{ width: 36, height: 2, background: "#e5e7eb", flexShrink: 0, margin: "0 4px", marginBottom: 24, borderStyle: "dashed" }} />
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 14, color: "#d1d5db" }}>🏁</span>
+            {/* Status summary card */}
+            <div style={{
+              background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+              padding: isMobile ? 20 : 28, marginBottom: 20,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                    Número de seguimiento
+                  </div>
+                  <code style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#1e3a5f" }}>
+                    {shipment.tracking_id}
+                  </code>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <StatusBadge status={shipment.status} />
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{STATUS_LABELS[shipment.status]}</span>
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{destinationCity}</div>
-              <div style={{ fontSize: 10, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{destinationProvince}</div>
+              <div style={{ marginTop: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Origen</div>
+                  <div style={{ fontWeight: 600, color: "#111827", marginTop: 2 }}>
+                    {shipment.sender.address.city}, {shipment.sender.address.province}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Destino</div>
+                  <div style={{ fontWeight: 600, color: "#111827", marginTop: 2 }}>
+                    {shipment.recipient.address.city}, {shipment.recipient.address.province}
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Event history — vertical timeline */}
+            {chronological.length > 0 && (
+              <div style={{
+                background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+                padding: isMobile ? "20px 16px" : "28px 28px",
+              }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e3a5f", marginTop: 0, marginBottom: 24 }}>
+                  Historial del envío
+                </h2>
+                <div style={{ position: "relative" }}>
+                  {/* Vertical line */}
+                  <div style={{
+                    position: "absolute", left: 19, top: 0, bottom: 0,
+                    width: 2, background: "#e5e7eb", zIndex: 0,
+                  }} />
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {chronological.map((ev, i) => {
+                      const isFirst = i === 0;
+                      const desc = describeEvent(ev, branches);
+                      return (
+                        <div key={ev.id} style={{ display: "flex", gap: 16, position: "relative", paddingBottom: i < chronological.length - 1 ? 24 : 0 }}>
+                          {/* Circle */}
+                          <div style={{ flexShrink: 0, zIndex: 1 }}>
+                            <div style={{
+                              width: 40, height: 40, borderRadius: "50%",
+                              background: isFirst ? "#1e3a5f" : "#f3f4f6",
+                              border: isFirst ? "none" : "2px solid #e5e7eb",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 18,
+                              boxShadow: isFirst ? "0 0 0 4px #dbeafe" : "none",
+                            }}>
+                              {desc.icon}
+                            </div>
+                          </div>
+
+                          {/* Content */}
+                          <div style={{ paddingTop: 8 }}>
+                            <div style={{
+                              fontWeight: isFirst ? 700 : 500,
+                              fontSize: 14,
+                              color: isFirst ? "#111827" : "#374151",
+                              lineHeight: 1.3,
+                            }}>
+                              {desc.title}
+                            </div>
+                            {desc.subtitle && (
+                              <div style={{ fontSize: 13, color: "#6b7280", marginTop: 3 }}>
+                                📍 {desc.subtitle}
+                              </div>
+                            )}
+                            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
+                              {fmtDateTime(ev.timestamp)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
-      </div>
-    </div>
-  );
-}
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span style={{ color: "#9ca3af", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</span>
-      <div style={{ fontWeight: 500 }}>{value}</div>
+        {!shipment && !error && !loading && (
+          <div style={{ textAlign: "center", color: "#9ca3af", marginTop: 32, fontSize: 15 }}>
+            Ingresá un número de seguimiento para comenzar.
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <footer style={{
+        textAlign: "center", padding: "24px 20px", color: "#9ca3af", fontSize: 13,
+        borderTop: "1px solid #e5e7eb", marginTop: 40,
+      }}>
+        © {new Date().getFullYear()} LogiTrack · Seguimiento de envíos
+      </footer>
     </div>
   );
 }

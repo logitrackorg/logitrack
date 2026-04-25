@@ -68,6 +68,10 @@ type Shipment struct {
 
 	// Receiving branch
 	ReceivingBranchID string `json:"receiving_branch_id,omitempty"`
+	// OriginBranchID is the branch where the shipment was first registered. Unlike
+	// ReceivingBranchID (which tracks the current hosting branch), this never changes
+	// and is used to enforce ready_for_return semantics.
+	OriginBranchID string `json:"origin_branch_id,omitempty"`
 
 	// Priority (set by ML service on create/confirm)
 	Priority           string                  `json:"priority,omitempty"`            // alta / media / baja
@@ -256,8 +260,9 @@ type CreateShipmentRequest struct {
 
 // ShipmentFilter holds optional query filters for listing shipments.
 type ShipmentFilter struct {
-	DateFrom *time.Time // inclusive lower bound on created_at
-	DateTo   *time.Time // inclusive upper bound on created_at (end of day)
+	DateFrom          *time.Time // inclusive lower bound on created_at
+	DateTo            *time.Time // inclusive upper bound on created_at (end of day)
+	ReceivingBranchID string     // if non-empty, only shipments with this branch
 }
 
 // CorrectShipmentRequest carries typed field corrections.

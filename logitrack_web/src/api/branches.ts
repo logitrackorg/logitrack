@@ -63,9 +63,9 @@ export const branchLabelById = (id: string, branches: Branch[]): string => {
 
 export const statusLabel = (status: Branch["status"]): string => {
   switch (status) {
-    case "activo": return "Active";
-    case "inactivo": return "Inactive";
-    case "fuera_de_servicio": return "Out of Service";
+    case "activo": return "Activa";
+    case "inactivo": return "Inactiva";
+    case "fuera_de_servicio": return "Fuera de servicio";
     default: return status;
   }
 };

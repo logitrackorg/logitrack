@@ -26,6 +26,7 @@ func RunMigrations(db *sql.DB) error {
 			is_fragile            BOOLEAN NOT NULL DEFAULT FALSE,
 			special_instructions  TEXT NOT NULL DEFAULT '',
 			receiving_branch_id   TEXT NOT NULL DEFAULT '',
+			origin_branch_id      TEXT NOT NULL DEFAULT '',
 			created_at            TIMESTAMPTZ NOT NULL,
 			updated_at            TIMESTAMPTZ NOT NULL,
 			estimated_delivery_at TIMESTAMPTZ,
@@ -49,6 +50,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_score       FLOAT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_confidence  FLOAT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_factors     JSONB;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS origin_branch_id     TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
@@ -103,6 +105,15 @@ func RunMigrations(db *sql.DB) error {
 			size_bytes  INTEGER NOT NULL,
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+
+		CREATE TABLE IF NOT EXISTS access_logs (
+			id         TEXT PRIMARY KEY,
+			username   TEXT NOT NULL,
+			user_id    TEXT NOT NULL DEFAULT '',
+			event_type TEXT NOT NULL,
+			timestamp  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS access_logs_timestamp_idx ON access_logs(timestamp DESC);
 	`)
 	return err
 }
