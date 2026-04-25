@@ -220,8 +220,11 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 		filter.DateTo = &endOfDay
 	}
 	// Operators are restricted to their own branch regardless of query params.
+	// Supervisors and managers may optionally filter by branch via query param.
 	if user.Role == model.RoleOperator && user.BranchID != "" {
 		filter.ReceivingBranchID = user.BranchID
+	} else if branchID := c.Query("branch_id"); branchID != "" {
+		filter.ReceivingBranchID = branchID
 	}
 	shipments, err := h.svc.List(filter)
 	if err != nil {
@@ -474,6 +477,7 @@ func (h *ShipmentHandler) CancelShipment(c *gin.Context) {
 // @Failure      500  {object}  map[string]string
 // @Router       /stats [get]
 func (h *ShipmentHandler) Stats(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
 	filter := model.ShipmentFilter{}
 	if raw := c.Query("date_from"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
@@ -491,6 +495,12 @@ func (h *ShipmentHandler) Stats(c *gin.Context) {
 		}
 		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
 		filter.DateTo = &endOfDay
+	}
+	// Supervisors are restricted to their own branch regardless of query params.
+	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+		filter.ReceivingBranchID = user.BranchID
+	} else if branchID := c.Query("branch_id"); branchID != "" {
+		filter.ReceivingBranchID = branchID
 	}
 	stats, err := h.svc.Stats(filter)
 	if err != nil {

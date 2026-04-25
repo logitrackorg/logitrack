@@ -105,6 +105,15 @@ func RunMigrations(db *sql.DB) error {
 			size_bytes  INTEGER NOT NULL,
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
+
+		CREATE TABLE IF NOT EXISTS access_logs (
+			id         TEXT PRIMARY KEY,
+			username   TEXT NOT NULL,
+			user_id    TEXT NOT NULL DEFAULT '',
+			event_type TEXT NOT NULL,
+			timestamp  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS access_logs_timestamp_idx ON access_logs(timestamp DESC);
 	`)
 	return err
 }

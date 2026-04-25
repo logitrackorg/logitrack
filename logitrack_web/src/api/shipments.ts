@@ -138,7 +138,7 @@ export interface UpdateStatusPayload {
 }
 
 export const shipmentApi = {
-  list: (params?: { date_from?: string; date_to?: string }) =>
+  list: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Shipment[]>("/shipments", { params }).then((r) => r.data),
   get: (trackingId: string) =>
     api.get<Shipment>(`/shipments/${trackingId}`).then((r) => r.data),
@@ -168,6 +168,6 @@ export const shipmentApi = {
     api.patch<Shipment>(`/shipments/${trackingId}/correct`, { corrections }).then((r) => r.data),
   cancelShipment: (trackingId: string, reason: string) =>
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
-  stats: (params?: { date_from?: string; date_to?: string }) =>
+  stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
 };

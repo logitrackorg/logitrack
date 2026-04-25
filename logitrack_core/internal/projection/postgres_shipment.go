@@ -292,18 +292,28 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 }
 
 func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, error) {
-	rows, err := p.db.Query(`SELECT status, current_location FROM shipments`)
-	if err != nil {
-		return model.Stats{}, err
-	}
-	defer rows.Close()
-
 	stats := model.Stats{
 		ByStatus:       map[model.Status]int{},
 		ByBranch:       map[string]int{},
 		ByDay:          map[string]int{},
 		ByDayDelivered: map[string]int{},
 	}
+
+	branchFilter := filter.ReceivingBranchID
+
+	// Main totals query.
+	var rows *sql.Rows
+	var err error
+	if branchFilter != "" {
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE receiving_branch_id = $1`, branchFilter)
+	} else {
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments`)
+	}
+	if err != nil {
+		return model.Stats{}, err
+	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var status, location string
 		if err := rows.Scan(&status, &location); err != nil {
@@ -328,11 +338,20 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 			stats.ByDayDelivered[key] = 0
 		}
 
-		dayRows, err := p.db.Query(`
-			SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
-			FROM shipments
-			WHERE created_at >= $1 AND created_at <= $2
-			GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo)
+		var dayRows *sql.Rows
+		if branchFilter != "" {
+			dayRows, err = p.db.Query(`
+				SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE created_at >= $1 AND created_at <= $2 AND receiving_branch_id = $3
+				GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo, branchFilter)
+		} else {
+			dayRows, err = p.db.Query(`
+				SELECT DATE(created_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE created_at >= $1 AND created_at <= $2
+				GROUP BY DATE(created_at)`, *filter.DateFrom, *filter.DateTo)
+		}
 		if err != nil {
 			return model.Stats{}, err
 		}
@@ -349,11 +368,20 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 			return model.Stats{}, err
 		}
 
-		deliveredRows, err := p.db.Query(`
-			SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
-			FROM shipments
-			WHERE delivered_at >= $1 AND delivered_at <= $2
-			GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo)
+		var deliveredRows *sql.Rows
+		if branchFilter != "" {
+			deliveredRows, err = p.db.Query(`
+				SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE delivered_at >= $1 AND delivered_at <= $2 AND receiving_branch_id = $3
+				GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo, branchFilter)
+		} else {
+			deliveredRows, err = p.db.Query(`
+				SELECT DATE(delivered_at)::text AS day, COUNT(*) AS cnt
+				FROM shipments
+				WHERE delivered_at >= $1 AND delivered_at <= $2
+				GROUP BY DATE(delivered_at)`, *filter.DateFrom, *filter.DateTo)
+		}
 		if err != nil {
 			return model.Stats{}, err
 		}

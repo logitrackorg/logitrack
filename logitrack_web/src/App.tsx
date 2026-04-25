@@ -15,6 +15,7 @@ import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
+import { AccessLog } from "./pages/AccessLog";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operator",
@@ -45,20 +46,23 @@ function Nav() {
       {!hasRole("admin") && (
         <NavLink to="/" end style={navStyle}>Shipments</NavLink>
       )}
-      {hasRole("operator", "supervisor") && (
-        <NavLink to="/bulk-upload" style={navStyle}>Bulk Import</NavLink>
-      )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
       )}
       {hasRole("supervisor", "manager", "admin") && (
         <NavLink to="/branches" style={navStyle}>Branches</NavLink>
       )}
+      {hasRole("operator", "supervisor") && (
+        <NavLink to="/bulk-upload" style={navStyle}>Bulk Import</NavLink>
+      )}
       {hasRole("admin") && (
         <NavLink to="/ml-config" style={navStyle}>ML Config</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/admin/users" style={navStyle}>Users</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/admin/access-logs" style={navStyle}>Access Log</NavLink>
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
@@ -203,6 +207,12 @@ function AppRoutes() {
           <Route path="/bulk-upload" element={
             <ProtectedRoute roles={["operator", "supervisor"]}>
               <BulkUpload />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/access-logs" element={
+            <ProtectedRoute roles={["admin"]}>
+              <AccessLog />
             </ProtectedRoute>
           } />
 

@@ -702,6 +702,7 @@ export function VehicleList() {
           onClose={closeVehicleDetail}
           onRefresh={loadVehicles}
           readOnly={!canWrite}
+          canAssignBranch={isAdmin}
           hideShipments={isAdmin}
         />
       )}
@@ -851,7 +852,7 @@ const MANUAL_STATUSES: { value: VehicleStatus; label: string }[] = [
   { value: "inactivo", label: "Inactive" },
 ];
 
-export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, hideShipments }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; hideShipments?: boolean }) {
+export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canAssignBranch, hideShipments }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; canAssignBranch?: boolean; hideShipments?: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [assigningBranch, setAssigningBranch] = useState(false);
@@ -1158,7 +1159,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, hide
             <p style={{ fontSize: 13, color: "#6b7280", margin: hasShipments ? 0 : "0 0 12px" }}>No branch assigned</p>
           )}
 
-          {!hasShipments && !readOnly && (
+          {!hasShipments && canAssignBranch && (
             <>
               {branchError && (
                 <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
