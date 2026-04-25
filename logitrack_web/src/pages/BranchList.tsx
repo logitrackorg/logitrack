@@ -12,9 +12,9 @@ const PROVINCES = [
 ];
 
 const STATUS_OPTIONS: { value: Branch["status"]; label: string }[] = [
-  { value: "activo", label: "Active" },
-  { value: "inactivo", label: "Inactive" },
-  { value: "fuera_de_servicio", label: "Out of Service" },
+  { value: "activo", label: "Activo" },
+  { value: "inactivo", label: "Inactivo" },
+  { value: "fuera_de_servicio", label: "Fuera de servicio" },
 ];
 
 type SortKey = "name" | "city" | "province" | "status" | "updated_at";
@@ -42,7 +42,7 @@ export function BranchList() {
       const data = await branchApi.list();
       setBranches(data);
     } catch {
-      setError("Failed to load branches.");
+      setError("No se pudieron cargar las sucursales.");
     } finally {
       setLoading(false);
     }
@@ -84,11 +84,11 @@ export function BranchList() {
   return (
     <div style={{ padding: isMobile ? 16 : "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>Branches</h1>
+        <h1 style={{ margin: 0 }}>Sucursales</h1>
         {isAdmin && (
           <button onClick={() => { setShowCreate(true); setError(""); }}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            + New Branch
+            + Nueva sucursal
           </button>
         )}
       </div>
@@ -97,7 +97,7 @@ export function BranchList() {
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <input
           style={{ flex: "1 1 200px", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }}
-          placeholder="Search by name, ID, city or address..."
+          placeholder="Buscar por nombre, ID, ciudad o dirección..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -106,7 +106,7 @@ export function BranchList() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="">All statuses</option>
+          <option value="">Todos los estados</option>
           {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
@@ -114,12 +114,12 @@ export function BranchList() {
       {error && <p style={{ color: "#ef4444", marginBottom: 12 }}>{error}</p>}
 
       {loading ? (
-        <p style={{ color: "#6b7280" }}>Loading...</p>
+        <p style={{ color: "#6b7280" }}>Cargando...</p>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>No branches found</p>
+          <p style={{ fontSize: 18, fontWeight: 600 }}>No se encontraron sucursales</p>
           <p style={{ fontSize: 14 }}>
-            {branches.length === 0 ? "There are no branches registered in the system." : "Try adjusting your search or filters."}
+            {branches.length === 0 ? "No hay sucursales registradas en el sistema." : "Intentá ajustar la búsqueda o los filtros."}
           </p>
         </div>
       ) : (
@@ -127,12 +127,12 @@ export function BranchList() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-                <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Name{sortIcon("name")}</button></th>
-                <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Location{sortIcon("city")}</button></th>
-                <th style={isMobile ? { display: "none" } : thStyle}>Address</th>
-                <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Status{sortIcon("status")}</button></th>
-                <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Updated{sortIcon("updated_at")}</button></th>
-                <th style={thStyle}>Actions</th>
+                <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Nombre{sortIcon("name")}</button></th>
+                <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
+                <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
+                <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
+                <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
+                {isAdmin && <th style={thStyle}>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -154,29 +154,27 @@ export function BranchList() {
                   </td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>
                     <div style={{ fontSize: 12 }}>{fmtDateTime(b.updated_at)}</div>
-                    {b.updated_by && <div style={{ fontSize: 11, color: "#9ca3af" }}>by {b.updated_by}</div>}
+                    {b.updated_by && <div style={{ fontSize: 11, color: "#9ca3af" }}>por {b.updated_by}</div>}
                   </td>
-                  <td style={tdStyle}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {isAdmin && (
+                  {isAdmin && (
+                    <td style={tdStyle}>
+                      <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => { setEditing(b); setError(""); }}
                           disabled={b.status !== "activo"}
                           style={{
                             ...actionBtn, opacity: b.status !== "activo" ? 0.4 : 1,
                           }}
-                          title={b.status !== "activo" ? "Cannot edit inactive branch" : "Edit data"}
+                          title={b.status !== "activo" ? "No se puede editar una sucursal inactiva" : "Editar datos"}
                         >
-                          Edit
+                          Editar
                         </button>
-                      )}
-                      {isAdmin && (
                         <button onClick={() => { setStatusModal(b); setError(""); }}
                           style={actionBtn}>
-                          Status
+                          Estado
                         </button>
-                      )}
-                    </div>
-                  </td>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -187,8 +185,8 @@ export function BranchList() {
       {/* Create Modal */}
       {showCreate && (
         <BranchFormModal
-          title="New Branch"
-          submitLabel="Create"
+          title="Nueva sucursal"
+          submitLabel="Crear"
           onClose={() => setShowCreate(false)}
           onSubmit={async (data) => {
             await branchApi.create(data);
@@ -202,8 +200,8 @@ export function BranchList() {
       {/* Edit Modal */}
       {editing && (
         <BranchFormModal
-          title="Edit Branch"
-          submitLabel="Save"
+          title="Editar sucursal"
+          submitLabel="Guardar"
           initial={editing}
           onClose={() => setEditing(null)}
           onSubmit={async (data) => {
@@ -261,11 +259,11 @@ function BranchFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { setLocalError("Name is required."); return; }
-    if (!form.street.trim()) { setLocalError("Street is required."); return; }
-    if (!form.city.trim()) { setLocalError("City is required."); return; }
-    if (!form.province) { setLocalError("Province is required."); return; }
-    if (!form.postal_code.trim()) { setLocalError("Postal code is required."); return; }
+    if (!form.name.trim()) { setLocalError("El nombre es obligatorio."); return; }
+    if (!form.street.trim()) { setLocalError("La calle es obligatoria."); return; }
+    if (!form.city.trim()) { setLocalError("La ciudad es obligatoria."); return; }
+    if (!form.province) { setLocalError("La provincia es obligatoria."); return; }
+    if (!form.postal_code.trim()) { setLocalError("El código postal es obligatorio."); return; }
 
     setSubmitting(true);
     setLocalError("");
@@ -273,7 +271,7 @@ function BranchFormModal({
       await onSubmit(form);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setLocalError(msg ?? "Operation failed. Please try again.");
+      setLocalError(msg ?? "La operación falló. Intentá de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -284,35 +282,35 @@ function BranchFormModal({
       <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>{title}</h2>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
         {!isEdit && (
-          <Field label="ID (optional — auto-generated if empty)">
-            <input style={inputStyle} value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="e.g. caba-02" />
+          <Field label="ID (opcional — se genera automáticamente si se deja vacío)">
+            <input style={inputStyle} value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="ej. caba-02" />
           </Field>
         )}
-        <Field label="Name *">
-          <input style={inputStyle} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. CDBA-02" />
+        <Field label="Nombre *">
+          <input style={inputStyle} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="ej. CDBA-02" />
         </Field>
-        <Field label="Street *">
+        <Field label="Calle *">
           <input style={inputStyle} required value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="Av. Corrientes 1234" />
         </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="City *">
+          <Field label="Ciudad *">
             <input style={inputStyle} required value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="Buenos Aires" />
           </Field>
-          <Field label="Province *">
+          <Field label="Provincia *">
             <select style={inputStyle} required value={form.province} onChange={(e) => set("province", e.target.value)}>
-              <option value="">Select...</option>
+              <option value="">Seleccioná...</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </Field>
         </div>
-        <Field label="Postal Code *">
+        <Field label="Código postal *">
           <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
         </Field>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancel</button>
+          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
           <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "Saving..." : submitLabel}
+            {submitting ? "Guardando..." : submitLabel}
           </button>
         </div>
       </form>
@@ -342,7 +340,7 @@ function StatusModal({
       await onSubmit(status);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setLocalError(msg ?? "Failed to update status.");
+      setLocalError(msg ?? "No se pudo actualizar el estado.");
     } finally {
       setSubmitting(false);
     }
@@ -350,24 +348,24 @@ function StatusModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Change Status</h2>
+      <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Cambiar estado</h2>
       <div style={{ marginBottom: 16, padding: 12, background: "#f9fafb", borderRadius: 8 }}>
         <strong>{branch.name}</strong> <span style={{ color: "#9ca3af" }}>— {branch.address.city}</span>
         <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
-          Current: <span style={{ color: statusColor(branch.status), fontWeight: 600 }}>{statusLabel(branch.status)}</span>
+          Estado actual: <span style={{ color: statusColor(branch.status), fontWeight: 600 }}>{statusLabel(branch.status)}</span>
         </div>
       </div>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
-        <Field label="New Status">
+        <Field label="Nuevo estado">
           <select style={inputStyle} value={status} onChange={(e) => setStatus(e.target.value as Branch["status"])}>
             {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </Field>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancel</button>
+          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
           <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "Saving..." : "Update"}
+            {submitting ? "Guardando..." : "Actualizar"}
           </button>
         </div>
       </form>

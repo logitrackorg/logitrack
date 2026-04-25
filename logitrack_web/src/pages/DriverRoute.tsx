@@ -41,7 +41,7 @@ export function DriverRoute() {
       load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setActionError(msg ?? "Error al registrar la entrega.");
+      setActionError(msg ?? "No se pudo registrar la entrega.");
     } finally {
       setSubmitting(false);
     }
@@ -61,19 +61,19 @@ export function DriverRoute() {
       setFailedNotes("");
       load();
     } catch {
-      setActionError("Error al registrar el intento fallido.");
+      setActionError("No se pudo registrar el intento fallido.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div style={{ padding: 24 }}>Loading...</div>;
+  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
 
   if (noRoute || !data || data.shipments.length === 0) {
     return (
       <div style={{ padding: 24, maxWidth: 560 }}>
-        <h1 style={{ margin: "0 0 8px" }}>My route</h1>
-        <p style={{ color: "#6b7280", margin: 0 }}>No route assigned for today.</p>
+        <h1 style={{ margin: "0 0 8px" }}>Mi ruta</h1>
+        <p style={{ color: "#6b7280", margin: 0 }}>No tenés ninguna ruta asignada para hoy.</p>
       </div>
     );
   }
@@ -95,15 +95,15 @@ export function DriverRoute() {
 
   return (
     <div style={{ padding: 24, maxWidth: 600 }}>
-      <h1 style={{ margin: "0 0 4px" }}>My route</h1>
+      <h1 style={{ margin: "0 0 4px" }}>Mi ruta</h1>
       <p style={{ color: "#6b7280", margin: "0 0 12px", fontSize: 14 }}>
-        {today} · {data.shipments.length} shipments · {pending} pending · {done} completed
+        {today} · {data.shipments.length} envíos · {pending} pendientes · {done} completados
       </p>
 
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Search by tracking ID or recipient..."
+        placeholder="Buscar por ID de seguimiento o destinatario..."
         style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", marginBottom: 16 }}
       />
 
@@ -112,7 +112,7 @@ export function DriverRoute() {
       )}
 
       {filteredShipments.length === 0 && (
-        <p style={{ color: "#6b7280", fontSize: 14 }}>No shipments match your search.</p>
+        <p style={{ color: "#6b7280", fontSize: 14 }}>No hay envíos que coincidan con la búsqueda.</p>
       )}
 
       <div style={{ display: "grid", gap: 14 }}>
@@ -167,7 +167,7 @@ export function DriverRoute() {
                     fontWeight: 700, fontSize: 14,
                   }}
                 >
-                  Deliver
+                  Entregar
                 </button>
                 <button
                   onClick={() => { setFailedShipmentId(shipment.tracking_id); setFailedNotes(""); }}
@@ -178,7 +178,7 @@ export function DriverRoute() {
                     fontWeight: 600, fontSize: 14,
                   }}
                 >
-                  Failed attempt
+                  Intento fallido
                 </button>
               </div>
             )}
@@ -186,7 +186,7 @@ export function DriverRoute() {
             {shipment.status === "delivering" && deliverShipmentId === shipment.tracking_id && (
               <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                  Recipient DNI
+                  DNI del destinatario
                 </label>
                 <input
                   value={recipientDni}
@@ -209,7 +209,7 @@ export function DriverRoute() {
                       fontWeight: 700, fontSize: 14,
                     }}
                   >
-                    {submitting ? "Saving..." : "Confirm delivery"}
+                    {submitting ? "Guardando…" : "Confirmar entrega"}
                   </button>
                   <button
                     onClick={() => setDeliverShipmentId(null)}
@@ -218,7 +218,7 @@ export function DriverRoute() {
                       borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
                     }}
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </div>
@@ -229,7 +229,7 @@ export function DriverRoute() {
                 <textarea
                   value={failedNotes}
                   onChange={(e) => setFailedNotes(e.target.value)}
-                  placeholder="Reason for failed attempt (required)"
+                  placeholder="Motivo del intento fallido (obligatorio)"
                   rows={2}
                   style={{
                     padding: "8px 12px", borderRadius: 6, border: "1px solid #fca5a5",
@@ -248,7 +248,7 @@ export function DriverRoute() {
                       fontWeight: 700, fontSize: 14,
                     }}
                   >
-                    {submitting ? "Saving..." : "Confirm"}
+                    {submitting ? "Guardando…" : "Confirmar"}
                   </button>
                   <button
                     onClick={() => setFailedShipmentId(null)}
@@ -257,7 +257,7 @@ export function DriverRoute() {
                       borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
                     }}
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </div>

@@ -9,18 +9,18 @@ import { useIsMobile } from "../hooks/useIsMobile";
 
 // User-facing status labels (no internal domain language)
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  pending: "Pending",
-  in_progress: "In Progress",
-  pre_transit: "Preparing Dispatch",
-  in_transit: "In Transit",
-  at_branch: "At Logistics Center",
-  delivering: "Out for Delivery",
-  delivery_failed: "Delivery Attempt Failed",
-  delivered: "Delivered",
-  ready_for_pickup: "Ready for Pickup",
-  ready_for_return: "Ready for Return",
-  returned: "Returned",
-  cancelled: "Cancelled",
+  pending: "Borrador",
+  in_progress: "En proceso",
+  pre_transit: "Preparando despacho",
+  in_transit: "En tránsito",
+  at_branch: "En centro logístico",
+  delivering: "En camino a domicilio",
+  delivery_failed: "Intento de entrega fallido",
+  delivered: "Entregado",
+  ready_for_pickup: "Listo para retiro",
+  ready_for_return: "Listo para devolución",
+  returned: "Devuelto",
+  cancelled: "Cancelado",
 };
 
 interface EventDescription {
@@ -42,20 +42,20 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
 
   // Creation
   if (!from && to === "in_progress") {
-    return { icon: "📦", title: "Shipment registered", subtitle: cityLine };
+    return { icon: "📦", title: "Envío registrado", subtitle: cityLine };
   }
   if (!from && to === "pending") {
-    return { icon: "📋", title: "Draft created" };
+    return { icon: "📋", title: "Borrador creado" };
   }
 
   // Confirmation / ready to dispatch
   if (from === "pending" && to === "in_progress") {
-    return { icon: "✅", title: "Shipment confirmed", subtitle: cityLine };
+    return { icon: "✅", title: "Envío confirmado", subtitle: cityLine };
   }
 
   // Loaded onto vehicle
   if (to === "pre_transit") {
-    return { icon: "🚛", title: "Loaded and ready for dispatch", subtitle: cityLine };
+    return { icon: "🚛", title: "Cargado y listo para despachar", subtitle: cityLine };
   }
 
   // Departed
@@ -63,48 +63,48 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
     const dest = cityLine ?? loc;
     return {
       icon: "🚀",
-      title: dest ? `Departed — heading to ${dest}` : "Departed — in transit",
+      title: dest ? `Despachado — en camino a ${dest}` : "Despachado — en tránsito",
     };
   }
 
   // Arrived at a logistics center
   if (to === "at_branch") {
-    return { icon: "🏭", title: "Arrived at logistics center", subtitle: cityLine };
+    return { icon: "🏭", title: "Llegó al centro logístico", subtitle: cityLine };
   }
 
   // Out for delivery
   if (to === "delivering") {
-    return { icon: "🛵", title: "Out for last-mile delivery", subtitle: cityLine };
+    return { icon: "🛵", title: "En camino a domicilio", subtitle: cityLine };
   }
 
   // Delivered
   if (to === "delivered") {
-    return { icon: "🎉", title: "Shipment delivered" };
+    return { icon: "🎉", title: "Envío entregado" };
   }
 
   // Delivery failed
   if (to === "delivery_failed") {
-    return { icon: "⚠️", title: "Delivery attempt was unsuccessful" };
+    return { icon: "⚠️", title: "El intento de entrega no fue exitoso" };
   }
 
   // Ready for pickup at branch
   if (to === "ready_for_pickup") {
-    return { icon: "📬", title: "Available for pickup at logistics center", subtitle: cityLine };
+    return { icon: "📬", title: "Disponible para retiro en el centro logístico", subtitle: cityLine };
   }
 
   // Ready for return to sender
   if (to === "ready_for_return") {
-    return { icon: "↩️", title: "Awaiting return to sender", subtitle: cityLine };
+    return { icon: "↩️", title: "En espera de devolución al remitente", subtitle: cityLine };
   }
 
   // Returned
   if (to === "returned") {
-    return { icon: "📤", title: "Returned to sender" };
+    return { icon: "📤", title: "Devuelto al remitente" };
   }
 
   // Cancelled
   if (to === "cancelled") {
-    return { icon: "🚫", title: "Shipment cancelled" };
+    return { icon: "🚫", title: "Envío cancelado" };
   }
 
   // Fallback — should never reach here for known statuses
@@ -144,7 +144,7 @@ export function PublicTracking() {
       setShipment(s);
       setEvents(ev.filter((e) => e.event_type !== "edited"));
     } catch {
-      setError("Shipment not found. Please check the tracking ID and try again.");
+      setError("Envío no encontrado. Verificá el número de seguimiento e intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -168,7 +168,7 @@ export function PublicTracking() {
         display: "flex", alignItems: "center", gap: 10,
       }}>
         <span style={{ fontWeight: 900, fontSize: isMobile ? 18 : 22, letterSpacing: 1 }}>LogiTrack</span>
-        <span style={{ color: "#93c5fd", fontSize: isMobile ? 13 : 15, fontWeight: 400 }}>· Shipment Tracking</span>
+        <span style={{ color: "#93c5fd", fontSize: isMobile ? 13 : 15, fontWeight: 400 }}>· Seguimiento de envíos</span>
       </header>
 
       {/* Hero search */}
@@ -178,16 +178,16 @@ export function PublicTracking() {
         textAlign: "center",
       }}>
         <h1 style={{ color: "#fff", margin: "0 0 8px", fontSize: isMobile ? 22 : 30, fontWeight: 800 }}>
-          Where is my shipment?
+          ¿Dónde está mi envío?
         </h1>
         <p style={{ color: "#bfdbfe", margin: "0 0 28px", fontSize: isMobile ? 14 : 16 }}>
-          Enter your tracking number to see its current status
+          Ingresá tu número de seguimiento para ver el estado actual
         </p>
         <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, maxWidth: 560, margin: "0 auto" }}>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. LT-A1B2C3D4"
+            placeholder="ej. LT-A1B2C3D4"
             style={{
               flex: 1, padding: isMobile ? "12px 14px" : "14px 18px",
               borderRadius: 10, border: "none", fontSize: isMobile ? 15 : 16,
@@ -205,7 +205,7 @@ export function PublicTracking() {
               whiteSpace: "nowrap", opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? "Searching..." : "Track"}
+            {loading ? "Buscando..." : "Rastrear"}
           </button>
         </form>
       </div>
@@ -231,7 +231,7 @@ export function PublicTracking() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
-                    Tracking number
+                    Número de seguimiento
                   </div>
                   <code style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#1e3a5f" }}>
                     {shipment.tracking_id}
@@ -244,13 +244,13 @@ export function PublicTracking() {
               </div>
               <div style={{ marginTop: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>From</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Origen</div>
                   <div style={{ fontWeight: 600, color: "#111827", marginTop: 2 }}>
                     {shipment.sender.address.city}, {shipment.sender.address.province}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>To</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>Destino</div>
                   <div style={{ fontWeight: 600, color: "#111827", marginTop: 2 }}>
                     {shipment.recipient.address.city}, {shipment.recipient.address.province}
                   </div>
@@ -265,7 +265,7 @@ export function PublicTracking() {
                 padding: isMobile ? "20px 16px" : "28px 28px",
               }}>
                 <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e3a5f", marginTop: 0, marginBottom: 24 }}>
-                  Shipment history
+                  Historial del envío
                 </h2>
                 <div style={{ position: "relative" }}>
                   {/* Vertical line */}
@@ -325,7 +325,7 @@ export function PublicTracking() {
 
         {!shipment && !error && !loading && (
           <div style={{ textAlign: "center", color: "#9ca3af", marginTop: 32, fontSize: 15 }}>
-            Enter a tracking number above to get started.
+            Ingresá un número de seguimiento para comenzar.
           </div>
         )}
       </div>
@@ -335,7 +335,7 @@ export function PublicTracking() {
         textAlign: "center", padding: "24px 20px", color: "#9ca3af", fontSize: 13,
         borderTop: "1px solid #e5e7eb", marginTop: 40,
       }}>
-        © {new Date().getFullYear()} LogiTrack · Shipment tracking
+        © {new Date().getFullYear()} LogiTrack · Seguimiento de envíos
       </footer>
     </div>
   );

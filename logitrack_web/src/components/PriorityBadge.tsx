@@ -5,9 +5,9 @@ interface PriorityBadgeProps {
 }
 
 const PRIORITY_CONFIG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  alta:  { label: "High",  bg: "#fef2f2", color: "#dc2626", border: "#fca5a5" },
-  media: { label: "Medium", bg: "#fffbeb", color: "#d97706", border: "#fde68a" },
-  baja:  { label: "Low",   bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
+  alta:  { label: "Alta",  bg: "#fef2f2", color: "#dc2626", border: "#fca5a5" },
+  media: { label: "Media", bg: "#fffbeb", color: "#d97706", border: "#fde68a" },
+  baja:  { label: "Baja",  bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
 };
 
 export function PriorityBadge({ priority }: PriorityBadgeProps) {

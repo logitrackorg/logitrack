@@ -18,7 +18,7 @@ export function Login() {
       await login(username, password);
       navigate("/");
     } catch {
-      setError("Invalid username or password.");
+      setError("Usuario o contraseña incorrectos.");
     } finally {
       setLoading(false);
     }
@@ -32,22 +32,22 @@ export function Login() {
       <div style={{ maxWidth: 360, width: "90%", background: "#fff", borderRadius: 12, padding: 36, boxShadow: "0 4px 24px rgba(0,0,0,0.08)" }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#1e3a5f", letterSpacing: 1 }}>LogiTrack</div>
-          <div style={{ color: "#6b7280", fontSize: 14, marginTop: 4 }}>Sign in to continue</div>
+          <div style={{ color: "#6b7280", fontSize: 14, marginTop: 4 }}>Ingresá para continuar</div>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 4 }}>
-            <label style={labelStyle}>Username</label>
+            <label style={labelStyle}>Usuario</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required autoFocus
               style={inputStyle}
-              placeholder="e.g. operator"
+              placeholder="ej. operador"
             />
           </div>
           <div style={{ display: "grid", gap: 4 }}>
-            <label style={labelStyle}>Password</label>
+            <label style={labelStyle}>Contraseña</label>
             <input
               type="password"
               value={password}
@@ -62,24 +62,24 @@ export function Login() {
 
           <button type="submit" disabled={loading}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: 15, marginTop: 4 }}>
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
 
         <div style={{ marginTop: 24, padding: 14, background: "#f8fafc", borderRadius: 8, fontSize: 12, color: "#6b7280" }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Demo accounts</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Cuentas de prueba</div>
           {[
-            { u: "op_caba",      p: "op_caba123",      r: "Operator · CABA" },
+            { u: "op_caba",      p: "op_caba123",      r: "Operador · CABA" },
             { u: "sup_caba",     p: "sup_caba123",      r: "Supervisor · CABA" },
-            { u: "op_cordoba",   p: "op_cordoba123",    r: "Operator · Córdoba" },
+            { u: "op_cordoba",   p: "op_cordoba123",    r: "Operador · Córdoba" },
             { u: "sup_cordoba",  p: "sup_cordoba123",   r: "Supervisor · Córdoba" },
-            { u: "op_mendoza",   p: "op_mendoza123",    r: "Operator · Mendoza" },
+            { u: "op_mendoza",   p: "op_mendoza123",    r: "Operador · Mendoza" },
             { u: "sup_mendoza",  p: "sup_mendoza123",   r: "Supervisor · Mendoza" },
-            { u: "gerente",      p: "gerente123",       r: "Manager" },
-            { u: "admin",        p: "admin123",         r: "Admin" },
-            { u: "chofer_caba",    p: "chofer_caba123",    r: "Driver · CABA" },
-            { u: "chofer_cordoba", p: "chofer_cordoba123", r: "Driver · Córdoba" },
-            { u: "chofer_mendoza", p: "chofer_mendoza123", r: "Driver · Mendoza" },
+            { u: "gerente",      p: "gerente123",       r: "Gerente" },
+            { u: "admin",        p: "admin123",         r: "Administrador" },
+            { u: "chofer_caba",    p: "chofer_caba123",    r: "Chofer · CABA" },
+            { u: "chofer_cordoba", p: "chofer_cordoba123", r: "Chofer · Córdoba" },
+            { u: "chofer_mendoza", p: "chofer_mendoza123", r: "Chofer · Mendoza" },
           ].map(({ u, p, r }) => (
             <div key={u} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", cursor: "pointer" }}
               onClick={() => { setUsername(u); setPassword(p); }}>

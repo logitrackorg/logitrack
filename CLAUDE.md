@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Language
 
-All UI text (labels, error messages, placeholders, buttons, tooltips) must be in **English**. No Spanish strings in the frontend.
+All UI text (labels, error messages, placeholders, buttons, tooltips) must be in **Spanish (Argentina)**. No English strings in the frontend UI.
 
 ## Repository layout
 

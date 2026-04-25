@@ -15,8 +15,8 @@ const PROVINCES = [
 ];
 
 const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
-  { value: "envelope", label: "Envelope" },
-  { value: "box",      label: "Box" },
+  { value: "envelope", label: "Sobre" },
+  { value: "box",      label: "Caja" },
   { value: "pallet",   label: "Pallet" },
 ];
 
@@ -27,8 +27,8 @@ const SHIPMENT_TYPES: { value: ShipmentType; label: string }[] = [
 
 const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
   { value: "flexible",  label: "Flexible" },
-  { value: "morning",   label: "Morning (8-12)" },
-  { value: "afternoon", label: "Afternoon (12-18)" },
+  { value: "morning",   label: "Mañana (8-12)" },
+  { value: "afternoon", label: "Tarde (12-18)" },
 ];
 
 const emptyAddress = { street: "", city: "", province: "", postal_code: "" };
@@ -148,19 +148,19 @@ export function NewShipment() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.sender.phone) { setError("Sender phone is required."); return; }
-    if (!form.recipient.phone) { setError("Recipient phone is required."); return; }
-    if (form.sender.dni.length < 7) { setError("Sender DNI must be at least 7 digits."); return; }
-    if (form.recipient.dni.length < 7) { setError("Recipient DNI must be at least 7 digits."); return; }
-    if (!form.weight_kg || form.weight_kg <= 0) { setError("Weight must be greater than 0."); return; }
-    if (!form.sender.address.street) { setError("Sender street is required."); return; }
-    if (!form.recipient.address.street) { setError("Recipient street is required."); return; }
-    if (/^\d+$/.test(form.sender.address.city)) { setError("Sender city cannot contain numbers only."); return; }
-    if (/^\d+$/.test(form.recipient.address.city)) { setError("Recipient city cannot contain numbers only."); return; }
-    if (!form.sender.address.postal_code) { setError("Sender postal code is required."); return; }
-    if (/^[a-zA-Z]+$/.test(form.sender.address.postal_code)) { setError("Sender postal code must contain at least one digit."); return; }
-    if (!form.recipient.address.postal_code) { setError("Recipient postal code is required."); return; }
-    if (/^[a-zA-Z]+$/.test(form.recipient.address.postal_code)) { setError("Recipient postal code must contain at least one digit."); return; }
+    if (!form.sender.phone) { setError("El teléfono del remitente es obligatorio."); return; }
+    if (!form.recipient.phone) { setError("El teléfono del destinatario es obligatorio."); return; }
+    if (form.sender.dni.length < 7) { setError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
+    if (form.recipient.dni.length < 7) { setError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
+    if (!form.weight_kg || form.weight_kg <= 0) { setError("El peso debe ser mayor a 0."); return; }
+    if (!form.sender.address.street) { setError("La calle del remitente es obligatoria."); return; }
+    if (!form.recipient.address.street) { setError("La calle del destinatario es obligatoria."); return; }
+    if (/^\d+$/.test(form.sender.address.city)) { setError("La ciudad del remitente no puede contener solo números."); return; }
+    if (/^\d+$/.test(form.recipient.address.city)) { setError("La ciudad del destinatario no puede contener solo números."); return; }
+    if (!form.sender.address.postal_code) { setError("El código postal del remitente es obligatorio."); return; }
+    if (/^[a-zA-Z]+$/.test(form.sender.address.postal_code)) { setError("El código postal del remitente debe contener al menos un dígito."); return; }
+    if (!form.recipient.address.postal_code) { setError("El código postal del destinatario es obligatorio."); return; }
+    if (/^[a-zA-Z]+$/.test(form.recipient.address.postal_code)) { setError("El código postal del destinatario debe contener al menos un dígito."); return; }
     setLoading(true);
     setError("");
     try {
@@ -168,15 +168,15 @@ export function NewShipment() {
       navigate(`/shipments/${shipment.tracking_id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "Failed to create shipment. Please try again.");
+      setError(msg ?? "No se pudo crear el envío. Por favor, intentá de nuevo.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSaveDraft = async () => {
-    if (!form.sender.name) { setError("Sender name is required to save a draft."); return; }
-    if (!form.recipient.name) { setError("Recipient name is required to save a draft."); return; }
+    if (!form.sender.name) { setError("El nombre del remitente es obligatorio para guardar un borrador."); return; }
+    if (!form.recipient.name) { setError("El nombre del destinatario es obligatorio para guardar un borrador."); return; }
     setLoading(true);
     setError("");
     try {
@@ -184,7 +184,7 @@ export function NewShipment() {
       navigate(`/shipments/${shipment.tracking_id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "Failed to save draft. Please try again.");
+      setError(msg ?? "No se pudo guardar el borrador. Por favor, intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -192,26 +192,26 @@ export function NewShipment() {
 
   return (
     <div style={{ padding: isMobile ? 16 : "24px 32px", maxWidth: 720, margin: "0 auto" }}>
-      <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
-      <h1 style={{ marginTop: 16, marginBottom: 24 }}>New Shipment</h1>
+      <button onClick={() => navigate("/")} style={backBtn}>← Volver al listado</button>
+      <h1 style={{ marginTop: 16, marginBottom: 24 }}>Nuevo envío</h1>
 
       {drafts.length > 0 && (
         <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px", marginBottom: 24 }}>
           <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 14, color: "#92400e" }}>
-            Saved drafts ({drafts.length})
+            Borradores guardados ({drafts.length})
           </p>
           <div style={{ display: "grid", gap: 8 }}>
             {drafts.map((d) => (
               <div key={d.tracking_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", border: "1px solid #fde68a", borderRadius: 7, padding: "8px 12px" }}>
                 <div style={{ fontSize: 13 }}>
-                  <span style={{ fontWeight: 600 }}>{d.sender?.name || "No name"}</span>
+                  <span style={{ fontWeight: 600 }}>{d.sender?.name || "Sin nombre"}</span>
                   <span style={{ color: "#9ca3af", margin: "0 6px" }}>→</span>
-                  <span>{d.recipient?.name || "No name"}</span>
+                  <span>{d.recipient?.name || "Sin nombre"}</span>
                   <span style={{ color: "#9ca3af", fontSize: 12, marginLeft: 10 }}>{fmtDateTime(d.created_at)}</span>
                 </div>
                 <button onClick={() => navigate(`/shipments/${d.tracking_id}`)}
                   style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
-                  Resume
+                  Retomar
                 </button>
               </div>
             ))}
@@ -221,14 +221,14 @@ export function NewShipment() {
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 24 }}>
 
-        {/* Sender */}
-        <Section title="Sender">
+        {/* Remitente */}
+        <Section title="Remitente">
           <Row2>
-            <Field label="Full Name *">
+            <Field label="Nombre completo *">
               <input style={input} required value={form.sender.name}
-                onChange={(e) => setSender("name", e.target.value)} placeholder="e.g. Carlos Mendez" />
+                onChange={(e) => setSender("name", e.target.value)} placeholder="ej: Carlos Mendez" />
             </Field>
-            <Field label="Phone *">
+            <Field label="Teléfono *">
               <input style={input} required value={form.sender.phone}
                 onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" />
             </Field>
@@ -236,7 +236,7 @@ export function NewShipment() {
           <Row2>
             <Field label="Email">
               <input style={input} type="email" value={form.sender.email}
-                onChange={(e) => setSender("email", e.target.value)} placeholder="optional" />
+                onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" />
             </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
@@ -249,38 +249,38 @@ export function NewShipment() {
             </Field>
           </Row2>
           <Row2>
-            <Field label="Street *">
+            <Field label="Calle *">
               <input style={input} required value={form.sender.address.street}
                 onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </Field>
-            <Field label="City *">
+            <Field label="Ciudad *">
               <input style={input} required value={form.sender.address.city}
                 onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" />
             </Field>
           </Row2>
           <Row2>
-            <Field label="Province *">
+            <Field label="Provincia *">
               <select style={input} required value={form.sender.address.province}
                 onChange={(e) => setSenderAddr("province", e.target.value)}>
-                <option value="">Select province</option>
+                <option value="">Seleccioná una provincia</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Postal Code *">
+            <Field label="Código postal *">
               <input style={input} required value={form.sender.address.postal_code}
                 onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" />
             </Field>
           </Row2>
         </Section>
 
-        {/* Recipient */}
-        <Section title="Recipient">
+        {/* Destinatario */}
+        <Section title="Destinatario">
           <Row2>
-            <Field label="Full Name *">
+            <Field label="Nombre completo *">
               <input style={input} required value={form.recipient.name}
-                onChange={(e) => setRecipient("name", e.target.value)} placeholder="e.g. Laura Gomez" />
+                onChange={(e) => setRecipient("name", e.target.value)} placeholder="ej: Laura Gomez" />
             </Field>
-            <Field label="Phone *">
+            <Field label="Teléfono *">
               <input style={input} required value={form.recipient.phone}
                 onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" />
             </Field>
@@ -288,7 +288,7 @@ export function NewShipment() {
           <Row2>
             <Field label="Email">
               <input style={input} type="email" value={form.recipient.email}
-                onChange={(e) => setRecipient("email", e.target.value)} placeholder="optional" />
+                onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" />
             </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
@@ -301,47 +301,47 @@ export function NewShipment() {
             </Field>
           </Row2>
           <Row2>
-            <Field label="Street *">
+            <Field label="Calle *">
               <input style={input} required value={form.recipient.address.street}
                 onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" />
             </Field>
-            <Field label="City *">
+            <Field label="Ciudad *">
               <input style={input} required value={form.recipient.address.city}
                 onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" />
             </Field>
           </Row2>
           <Row2>
-            <Field label="Province *">
+            <Field label="Provincia *">
               <select style={input} required value={form.recipient.address.province}
                 onChange={(e) => setRecipientAddr("province", e.target.value)}>
-                <option value="">Select province</option>
+                <option value="">Seleccioná una provincia</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Postal Code *">
+            <Field label="Código postal *">
               <input style={input} required value={form.recipient.address.postal_code}
                 onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
         </Section>
 
-        {/* Receiving Branch */}
-        <Section title="Receiving Branch">
-          <Field label="Branch *">
+        {/* Sucursal receptora */}
+        <Section title="Sucursal receptora">
+          <Field label="Sucursal *">
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
                 <div style={{ padding: "8px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13 }}>
                   <div style={{ fontWeight: 600, color: "#1e3a5f" }}>{selected?.name ?? form.receiving_branch_id}</div>
                   {selected && <div style={{ color: "#6b7280" }}>{selected.address.street}, {selected.address.city}</div>}
-                  <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>Assigned to your branch — cannot be changed.</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280" }}>Asignada a tu sucursal — no se puede cambiar.</div>
                 </div>
               );
             })() : (
               <>
                 <select style={input} required value={form.receiving_branch_id}
                   onChange={(e) => set("receiving_branch_id", e.target.value)}>
-                  <option value="">Select branch...</option>
+                  <option value="">Seleccioná una sucursal...</option>
                   {(() => {
                     const branchesByProvince = branches.reduce((acc, branch) => {
                       if (!acc[branch.province]) acc[branch.province] = [];
@@ -379,15 +379,15 @@ export function NewShipment() {
           </Field>
         </Section>
 
-        {/* Package */}
-        <Section title="Package">
+        {/* Paquete */}
+        <Section title="Paquete">
           <Row2>
-            <Field label="Weight (kg) *">
+            <Field label="Peso (kg) *">
               <input style={input} type="number" step="0.1" min="0.1" required
                 value={form.weight_kg === 0 ? "" : form.weight_kg}
                 onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
             </Field>
-            <Field label="Package Type *">
+            <Field label="Tipo de paquete *">
               <select style={input} required value={form.package_type}
                 onChange={(e) => set("package_type", e.target.value as PackageType)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -395,13 +395,13 @@ export function NewShipment() {
             </Field>
           </Row2>
           <Row2>
-            <Field label="Shipment Type">
+            <Field label="Tipo de envío">
               <select style={input} value={form.shipment_type ?? "normal"}
                 onChange={(e) => set("shipment_type", e.target.value as ShipmentType)}>
                 {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </Field>
-            <Field label="Time Window">
+            <Field label="Ventana horaria">
               <select style={input} value={form.time_window ?? "flexible"}
                 onChange={(e) => set("time_window", e.target.value as TimeWindow)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -413,19 +413,19 @@ export function NewShipment() {
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={!!form.is_fragile}
                   onChange={(e) => set("is_fragile", e.target.checked)} />
-                Fragile contents (handle with care)
+                Contenido frágil (manipular con cuidado)
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={!!form.cold_chain}
                   onChange={(e) => set("cold_chain", e.target.checked)} />
-                Cold chain (refrigerated)
+                Cadena de frío (refrigerado)
               </label>
             </div>
           </Field>
-          <Field label="Special Instructions">
+          <Field label="Instrucciones especiales">
             <input style={input} value={form.special_instructions}
               onChange={(e) => set("special_instructions", e.target.value)}
-              placeholder='e.g. "Keep upright"' />
+              placeholder='ej: "Mantener vertical"' />
           </Field>
         </Section>
 
@@ -434,11 +434,11 @@ export function NewShipment() {
         <div style={{ display: "flex", gap: 12 }}>
           <button type="button" disabled={loading} onClick={handleSaveDraft}
             style={{ flex: 1, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "12px", cursor: "pointer", fontWeight: 600, fontSize: 15 }}>
-            {loading ? "Saving..." : "Save draft"}
+            {loading ? "Guardando..." : "Guardar borrador"}
           </button>
           <button type="submit" disabled={loading}
             style={{ flex: 1, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: 15 }}>
-            {loading ? "Creating..." : "Create shipment"}
+            {loading ? "Creando..." : "Crear envío"}
           </button>
         </div>
       </form>

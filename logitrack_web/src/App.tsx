@@ -18,10 +18,10 @@ import { BulkUpload } from "./pages/BulkUpload";
 import { AccessLog } from "./pages/AccessLog";
 
 const ROLE_LABELS: Record<string, string> = {
-  operator: "Operator",
+  operator: "Operador",
   supervisor: "Supervisor",
-  manager: "Manager",
-  admin: "Admin",
+  manager: "Gerente",
+  admin: "Administrador",
   driver: "Chofer",
 };
 
@@ -44,25 +44,25 @@ function Nav() {
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
       {!hasRole("admin") && (
-        <NavLink to="/" end style={navStyle}>Shipments</NavLink>
+        <NavLink to="/" end style={navStyle}>Envíos</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
-        <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
+        <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
       )}
       {hasRole("supervisor", "manager", "admin") && (
-        <NavLink to="/branches" style={navStyle}>Branches</NavLink>
+        <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
       )}
       {hasRole("operator", "supervisor") && (
-        <NavLink to="/bulk-upload" style={navStyle}>Bulk Import</NavLink>
+        <NavLink to="/bulk-upload" style={navStyle}>Importar CSV</NavLink>
       )}
       {hasRole("admin") && (
-        <NavLink to="/ml-config" style={navStyle}>ML Config</NavLink>
+        <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
       )}
       {hasRole("admin") && (
-        <NavLink to="/admin/users" style={navStyle}>Users</NavLink>
+        <NavLink to="/admin/users" style={navStyle}>Usuarios</NavLink>
       )}
       {hasRole("admin") && (
-        <NavLink to="/admin/access-logs" style={navStyle}>Access Log</NavLink>
+        <NavLink to="/admin/access-logs" style={navStyle}>Log de accesos</NavLink>
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
@@ -79,7 +79,7 @@ function Nav() {
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
-          {isMobile ? "✕" : "Sign out"}
+          {isMobile ? "✕" : "Cerrar sesión"}
         </button>
       </div>
     </nav>
@@ -116,7 +116,7 @@ function DriverNav() {
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
-          {isMobile ? "✕" : "Sign out"}
+          {isMobile ? "✕" : "Cerrar sesión"}
         </button>
       </div>
     </nav>

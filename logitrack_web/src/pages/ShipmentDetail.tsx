@@ -36,22 +36,22 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  pending:           "Draft",
-  in_progress:       "In Progress",
-  pre_transit:       "Pre-Transit",
-  in_transit:        "In Transit",
-  at_branch:         "At Branch",
-  delivering:        "Delivering",
-  delivery_failed:   "Delivery Failed",
-  delivered:         "Delivered",
-  ready_for_pickup:  "Ready for pickup",
-  ready_for_return:  "Ready for return",
-  returned:          "Returned",
-  cancelled:         "Cancelled",
+  pending:           "Borrador",
+  in_progress:       "En proceso",
+  pre_transit:       "Pre-tránsito",
+  in_transit:        "En tránsito",
+  at_branch:         "En sucursal",
+  delivering:        "En reparto",
+  delivery_failed:   "Entrega fallida",
+  delivered:         "Entregado",
+  ready_for_pickup:  "Listo para retiro",
+  ready_for_return:  "Listo para devolución",
+  returned:          "Devuelto",
+  cancelled:         "Cancelado",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Envelope", box: "Box", pallet: "Pallet",
+  envelope: "Sobre", box: "Caja", pallet: "Pallet",
 };
 
 export function ShipmentDetail() {
@@ -125,7 +125,7 @@ export function ShipmentDetail() {
         });
       }
     } catch {
-      setError("Shipment not found.");
+      setError("Envío no encontrado.");
     }
   };
 
@@ -168,7 +168,7 @@ export function ShipmentDetail() {
       });
       setAvailableVehicles(eligible);
     } catch {
-      setVehiclePickerError("Failed to load available vehicles.");
+      setVehiclePickerError("No se pudieron cargar los vehículos disponibles.");
     } finally {
       setLoadingVehicles(false);
     }
@@ -186,7 +186,7 @@ export function ShipmentDetail() {
       await reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setVehiclePickerError(msg ?? "Failed to assign vehicle.");
+      setVehiclePickerError(msg ?? "No se pudo asignar el vehículo.");
     } finally {
       setAssigningVehicle(false);
     }
@@ -200,8 +200,8 @@ export function ShipmentDetail() {
 
   const handleSaveDraftChanges = async () => {
     if (!trackingId || !draftForm) return;
-    if (!draftForm.sender.name) { setSaveDraftError("Sender name is required."); return; }
-    if (!draftForm.recipient.name) { setSaveDraftError("Recipient name is required."); return; }
+    if (!draftForm.sender.name) { setSaveDraftError("El nombre del remitente es obligatorio."); return; }
+    if (!draftForm.recipient.name) { setSaveDraftError("El nombre del destinatario es obligatorio."); return; }
     setSavingDraft(true);
     setSaveDraftError("");
     try {
@@ -209,7 +209,7 @@ export function ShipmentDetail() {
       navigate("/?status=pending");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setSaveDraftError(msg ?? "Failed to save changes.");
+      setSaveDraftError(msg ?? "No se pudieron guardar los cambios.");
     } finally {
       setSavingDraft(false);
     }
@@ -217,25 +217,25 @@ export function ShipmentDetail() {
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
-    if (!draftForm.sender.name) { setConfirmError("Sender name is required."); return; }
-    if (!draftForm.sender.phone) { setConfirmError("Sender phone is required."); return; }
-    if (!draftForm.sender.dni || draftForm.sender.dni.length < 7) { setConfirmError("Sender DNI must be at least 7 digits."); return; }
-    if (!draftForm.sender.address.street) { setConfirmError("Sender street is required."); return; }
-    if (!draftForm.sender.address.city) { setConfirmError("Sender city is required."); return; }
-    if (/^\d+$/.test(draftForm.sender.address.city)) { setConfirmError("Sender city cannot contain numbers only."); return; }
-    if (!draftForm.sender.address.province) { setConfirmError("Sender province is required."); return; }
-    if (!draftForm.sender.address.postal_code) { setConfirmError("Sender postal code is required."); return; }
-    if (/^[a-zA-Z]+$/.test(draftForm.sender.address.postal_code)) { setConfirmError("Sender postal code must contain at least one digit."); return; }
-    if (!draftForm.recipient.name) { setConfirmError("Recipient name is required."); return; }
-    if (!draftForm.recipient.phone) { setConfirmError("Recipient phone is required."); return; }
-    if (!draftForm.recipient.dni || draftForm.recipient.dni.length < 7) { setConfirmError("Recipient DNI must be at least 7 digits."); return; }
-    if (!draftForm.recipient.address.street) { setConfirmError("Recipient street is required."); return; }
-    if (!draftForm.recipient.address.city) { setConfirmError("Recipient city is required."); return; }
-    if (/^\d+$/.test(draftForm.recipient.address.city)) { setConfirmError("Recipient city cannot contain numbers only."); return; }
-    if (!draftForm.recipient.address.province) { setConfirmError("Recipient province is required."); return; }
-    if (!draftForm.recipient.address.postal_code) { setConfirmError("Recipient postal code is required."); return; }
-    if (/^[a-zA-Z]+$/.test(draftForm.recipient.address.postal_code)) { setConfirmError("Recipient postal code must contain at least one digit."); return; }
-    if (!draftForm.weight_kg || draftForm.weight_kg <= 0) { setConfirmError("Weight must be greater than 0."); return; }
+    if (!draftForm.sender.name) { setConfirmError("El nombre del remitente es obligatorio."); return; }
+    if (!draftForm.sender.phone) { setConfirmError("El teléfono del remitente es obligatorio."); return; }
+    if (!draftForm.sender.dni || draftForm.sender.dni.length < 7) { setConfirmError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
+    if (!draftForm.sender.address.street) { setConfirmError("La calle del remitente es obligatoria."); return; }
+    if (!draftForm.sender.address.city) { setConfirmError("La ciudad del remitente es obligatoria."); return; }
+    if (/^\d+$/.test(draftForm.sender.address.city)) { setConfirmError("La ciudad del remitente no puede contener solo números."); return; }
+    if (!draftForm.sender.address.province) { setConfirmError("La provincia del remitente es obligatoria."); return; }
+    if (!draftForm.sender.address.postal_code) { setConfirmError("El código postal del remitente es obligatorio."); return; }
+    if (/^[a-zA-Z]+$/.test(draftForm.sender.address.postal_code)) { setConfirmError("El código postal del remitente debe contener al menos un dígito."); return; }
+    if (!draftForm.recipient.name) { setConfirmError("El nombre del destinatario es obligatorio."); return; }
+    if (!draftForm.recipient.phone) { setConfirmError("El teléfono del destinatario es obligatorio."); return; }
+    if (!draftForm.recipient.dni || draftForm.recipient.dni.length < 7) { setConfirmError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
+    if (!draftForm.recipient.address.street) { setConfirmError("La calle del destinatario es obligatoria."); return; }
+    if (!draftForm.recipient.address.city) { setConfirmError("La ciudad del destinatario es obligatoria."); return; }
+    if (/^\d+$/.test(draftForm.recipient.address.city)) { setConfirmError("La ciudad del destinatario no puede contener solo números."); return; }
+    if (!draftForm.recipient.address.province) { setConfirmError("La provincia del destinatario es obligatoria."); return; }
+    if (!draftForm.recipient.address.postal_code) { setConfirmError("El código postal del destinatario es obligatorio."); return; }
+    if (/^[a-zA-Z]+$/.test(draftForm.recipient.address.postal_code)) { setConfirmError("El código postal del destinatario debe contener al menos un dígito."); return; }
+    if (!draftForm.weight_kg || draftForm.weight_kg <= 0) { setConfirmError("El peso debe ser mayor a 0."); return; }
     setConfirming(true);
     setConfirmError("");
     try {
@@ -244,7 +244,7 @@ export function ShipmentDetail() {
       navigate(`/shipments/${confirmed.tracking_id}`, { replace: true });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setConfirmError(msg ?? "Failed to confirm shipment.");
+      setConfirmError(msg ?? "No se pudo confirmar el envío.");
     } finally {
       setConfirming(false);
     }
@@ -268,7 +268,7 @@ export function ShipmentDetail() {
       await reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setUpdateError(msg ?? "Failed to update status.");
+      setUpdateError(msg ?? "No se pudo actualizar el estado.");
     } finally {
       setUpdating(false);
     }
@@ -346,31 +346,31 @@ export function ShipmentDetail() {
       return;
     }
     const required: Array<[string, string]> = [
-      ["sender_name", "Sender name"],
-      ["sender_phone", "Sender phone"],
-      ["sender_dni", "Sender DNI"],
-      ["origin_street", "Sender street"],
-      ["origin_city", "Sender city"],
-      ["origin_province", "Sender province"],
-      ["origin_postal_code", "Sender postal code"],
-      ["recipient_name", "Recipient name"],
-      ["recipient_phone", "Recipient phone"],
-      ["recipient_dni", "Recipient DNI"],
-      ["destination_street", "Recipient street"],
-      ["destination_city", "Recipient city"],
-      ["destination_province", "Recipient province"],
-      ["destination_postal_code", "Recipient postal code"],
+      ["sender_name", "Nombre del remitente"],
+      ["sender_phone", "Teléfono del remitente"],
+      ["sender_dni", "DNI del remitente"],
+      ["origin_street", "Calle del remitente"],
+      ["origin_city", "Ciudad del remitente"],
+      ["origin_province", "Provincia del remitente"],
+      ["origin_postal_code", "Código postal del remitente"],
+      ["recipient_name", "Nombre del destinatario"],
+      ["recipient_phone", "Teléfono del destinatario"],
+      ["recipient_dni", "DNI del destinatario"],
+      ["destination_street", "Calle del destinatario"],
+      ["destination_city", "Ciudad del destinatario"],
+      ["destination_province", "Provincia del destinatario"],
+      ["destination_postal_code", "Código postal del destinatario"],
     ];
     for (const [key, label] of required) {
-      if (!correctionForm[key]?.trim()) { setCorrectionError(`${label} is required.`); return; }
+      if (!correctionForm[key]?.trim()) { setCorrectionError(`${label} es obligatorio.`); return; }
     }
-    if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("Weight must be greater than 0."); return; }
-    if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("Sender DNI must be at least 7 digits."); return; }
-    if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("Recipient DNI must be at least 7 digits."); return; }
-    if (/^\d+$/.test(correctionForm.origin_city ?? "")) { setCorrectionError("Sender city cannot contain numbers only."); return; }
-    if (/^\d+$/.test(correctionForm.destination_city ?? "")) { setCorrectionError("Recipient city cannot contain numbers only."); return; }
-    if (/^[a-zA-Z]+$/.test(correctionForm.origin_postal_code ?? "")) { setCorrectionError("Sender postal code must contain at least one digit."); return; }
-    if (/^[a-zA-Z]+$/.test(correctionForm.destination_postal_code ?? "")) { setCorrectionError("Recipient postal code must contain at least one digit."); return; }
+    if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("El peso debe ser mayor a 0."); return; }
+    if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
+    if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
+    if (/^\d+$/.test(correctionForm.origin_city ?? "")) { setCorrectionError("La ciudad del remitente no puede contener solo números."); return; }
+    if (/^\d+$/.test(correctionForm.destination_city ?? "")) { setCorrectionError("La ciudad del destinatario no puede contener solo números."); return; }
+    if (/^[a-zA-Z]+$/.test(correctionForm.origin_postal_code ?? "")) { setCorrectionError("El código postal del remitente debe contener al menos un dígito."); return; }
+    if (/^[a-zA-Z]+$/.test(correctionForm.destination_postal_code ?? "")) { setCorrectionError("El código postal del destinatario debe contener al menos un dígito."); return; }
     setSavingCorrection(true);
     setCorrectionError("");
     try {
@@ -379,7 +379,7 @@ export function ShipmentDetail() {
       await reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setCorrectionError(msg ?? "Failed to save corrections.");
+      setCorrectionError(msg ?? "No se pudieron guardar las correcciones.");
     } finally {
       setSavingCorrection(false);
     }
@@ -396,7 +396,7 @@ export function ShipmentDetail() {
       await reload();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setCancelError(msg ?? "Failed to cancel shipment.");
+      setCancelError(msg ?? "No se pudo cancelar el envío.");
     } finally {
       setCancelling(false);
     }
@@ -409,7 +409,7 @@ export function ShipmentDetail() {
     </div>
   );
 
-  if (!shipment) return <div style={{ padding: 24 }}>Loading...</div>;
+  if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
   const nextStatuses = TRANSITIONS[shipment.status].filter(
@@ -425,7 +425,7 @@ export function ShipmentDetail() {
 
   return (
     <div style={{ padding: isMobile ? 16 : "24px 32px" }}>
-      <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
+      <button onClick={() => navigate("/")} style={backBtn}>← Volver al listado</button>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start", marginTop: 16 }}>
 
@@ -440,13 +440,13 @@ export function ShipmentDetail() {
           <PriorityBadge priority={shipment.priority} />
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-              ✏️ Edit data
+              ✏️ Editar datos
             </button>
           )}
           {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
-              Cancel shipment
+              Cancelar envío
             </button>
           )}
           <StatusBadge status={shipment.status} />
@@ -493,36 +493,36 @@ export function ShipmentDetail() {
               const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
               const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
               return <>
-                <Card title="Sender">
-                  <InfoRowEx {...cv("sender_name", shipment.sender.name)} label="Name" />
-                  <InfoRowEx {...cv("sender_phone", shipment.sender.phone)} label="Phone" />
+                <Card title="Remitente">
+                  <InfoRowEx {...cv("sender_name", shipment.sender.name)} label="Nombre" />
+                  <InfoRowEx {...cv("sender_phone", shipment.sender.phone)} label="Teléfono" />
                   {(shipment.sender.email || cor.sender_email) && <InfoRowEx {...cv("sender_email", shipment.sender.email ?? "")} label="Email" />}
                   {(shipment.sender.dni || cor.sender_dni) && <InfoRowEx {...cv("sender_dni", shipment.sender.dni ?? "")} label="DNI" />}
-                  <InfoRowEx value={originParts || originalOrigin} original={originalOrigin} corrected={originCorrected} label="Origin" />
+                  <InfoRowEx value={originParts || originalOrigin} original={originalOrigin} corrected={originCorrected} label="Origen" />
                 </Card>
-                <Card title="Recipient">
-                  <InfoRowEx {...cv("recipient_name", shipment.recipient.name)} label="Name" />
-                  <InfoRowEx {...cv("recipient_phone", shipment.recipient.phone)} label="Phone" />
+                <Card title="Destinatario">
+                  <InfoRowEx {...cv("recipient_name", shipment.recipient.name)} label="Nombre" />
+                  <InfoRowEx {...cv("recipient_phone", shipment.recipient.phone)} label="Teléfono" />
                   {(shipment.recipient.email || cor.recipient_email) && <InfoRowEx {...cv("recipient_email", shipment.recipient.email ?? "")} label="Email" />}
                   {(shipment.recipient.dni || cor.recipient_dni) && <InfoRowEx {...cv("recipient_dni", shipment.recipient.dni ?? "")} label="DNI" />}
-                  <InfoRowEx value={destParts || originalDest} original={originalDest} corrected={destCorrected} label="Destination" />
+                  <InfoRowEx value={destParts || originalDest} original={originalDest} corrected={destCorrected} label="Destino" />
                 </Card>
-                <Card title="Package">
-                  <InfoRowEx {...pkgVal} label="Type" />
-                  {shipment.is_fragile && <InfoRow label="Fragile" value="Yes" />}
-                  {shipment.cold_chain && <InfoRow label="Cold Chain" value="Yes" />}
-                  {shipment.shipment_type && <InfoRow label="Shipment Type" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
-                  {shipment.time_window && <InfoRow label="Time Window" value={shipment.time_window === "morning" ? "Morning" : shipment.time_window === "afternoon" ? "Afternoon" : "Flexible"} />}
-                  {shipment.priority && <InfoRow label="Priority" value={<PriorityBadge priority={shipment.priority} />} />}
-                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Weight" />
-                  {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instructions" />}
+                <Card title="Paquete">
+                  <InfoRowEx {...pkgVal} label="Tipo" />
+                  {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
+                  {shipment.cold_chain && <InfoRow label="Cadena de frío" value="Sí" />}
+                  {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
+                  {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
+                  {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
+                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Peso" />
+                  {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
                 </Card>
-                <Card title="Dates & Location">
-                  <InfoRow label="Created"       value={fmt(shipment.created_at)} />
-                  <InfoRow label="Est. Delivery"  value={fmt(shipment.estimated_delivery_at)} />
-                  {shipment.delivered_at && <InfoRow label="Delivered" value={fmt(shipment.delivered_at)} />}
+                <Card title="Fechas y ubicación">
+                  <InfoRow label="Creado"          value={fmt(shipment.created_at)} />
+                  <InfoRow label="Entrega est."    value={fmt(shipment.estimated_delivery_at)} />
+                  {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
-                    <InfoRow label="Current location" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
+                    <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
                   )}
                 </Card>
               </>;
@@ -537,15 +537,15 @@ export function ShipmentDetail() {
         <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
           <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
             {shipment.status === "pre_transit"
-              ? "This shipment is loaded on a vehicle and waiting for the trip to start. Status is controlled from the Fleet page."
-              : "This shipment is in transit. Status will update automatically when the vehicle completes the trip."}
+              ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
+              : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
           </p>
         </div>
       )}
 
       {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Update Status</h2>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Actualizar estado</h2>
           <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {nextStatuses.map((s) => (
@@ -576,7 +576,7 @@ export function ShipmentDetail() {
                 required
                 style={inputStyle}
               >
-                <option value="">Select driver (required)</option>
+                <option value="">Seleccioná un chofer (obligatorio)</option>
                 {drivers.map((d) => (
                   <option key={d.id} value={d.id}>{d.username}</option>
                 ))}
@@ -586,7 +586,7 @@ export function ShipmentDetail() {
               <input
                 value={recipientDni}
                 onChange={(e) => setRecipientDni(e.target.value)}
-                placeholder="Recipient DNI (required)"
+                placeholder="DNI del destinatario (obligatorio)"
                 required
                 style={inputStyle}
               />
@@ -595,7 +595,7 @@ export function ShipmentDetail() {
               <input
                 value={senderDni}
                 onChange={(e) => setSenderDni(e.target.value)}
-                placeholder="Sender DNI (required)"
+                placeholder="DNI del remitente (obligatorio)"
                 required
                 style={inputStyle}
               />
@@ -604,22 +604,22 @@ export function ShipmentDetail() {
               const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_branch")?.location;
               return returnLocation ? (
                 <p style={{ margin: 0, fontSize: 13, color: "#4b5563" }}>
-                  Returning to: <strong>{branchLabel(returnLocation, branches)}</strong>
+                  Devolviendo a: <strong>{branchLabel(returnLocation, branches)}</strong>
                 </p>
               ) : null;
             })()}
             <input value={notes} onChange={(e) => setNotes(e.target.value)}
-              placeholder={newStatus === "delivery_failed" ? "Reason required (e.g. Recipient not home)" : "Notes (optional)"}
+              placeholder={newStatus === "delivery_failed" ? "Motivo obligatorio (ej: destinatario ausente)" : "Notas (opcional)"}
               required={newStatus === "delivery_failed"}
               style={inputStyle} />
             {newStatus === "delivery_failed" && !notes.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>A reason is required for a failed delivery attempt.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El motivo es obligatorio para registrar un intento fallido.</p>
             )}
             {newStatus === "delivered" && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>Recipient DNI is required to mark as delivered.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
             )}
             {newStatus === "returned" && !senderDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>Sender DNI is required to register the return.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
             )}
             {updateError && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{updateError}</p>}
             <button type="submit"
@@ -637,7 +637,7 @@ export function ShipmentDetail() {
                 cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "delivering" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
                 fontWeight: 600, alignSelf: "start",
               }}>
-              {updating ? "Updating..." : "Confirm Update"}
+              {updating ? "Actualizando..." : "Confirmar cambio"}
             </button>
           </form>
         </div>
@@ -645,14 +645,14 @@ export function ShipmentDetail() {
 
       {shipment.status === "delivered" && (
         <div style={{ ...cardStyle, marginBottom: 16, background: "#d1fae5", border: "1px solid #6ee7b7" }}>
-          <p style={{ margin: 0, color: "#065f46", fontWeight: 600 }}>This shipment has been delivered.</p>
+          <p style={{ margin: 0, color: "#065f46", fontWeight: 600 }}>Este envío fue entregado.</p>
         </div>
       )}
 
       {/* Event history */}
-      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Event History</h2>
+      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>
       {events.length === 0 ? (
-        <p style={{ color: "#6b7280", fontSize: 14 }}>No events recorded.</p>
+        <p style={{ color: "#6b7280", fontSize: 14 }}>Sin eventos registrados.</p>
       ) : (
         <div style={{ position: "relative", paddingLeft: 24 }}>
           <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "#e5e7eb" }} />
@@ -696,7 +696,7 @@ export function ShipmentDetail() {
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
         {/* Vehicle Card */}
         <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo Asignado</h2>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
           {loadingVehicle ? (
             <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Cargando...</p>
           ) : assignedVehicle ? (
@@ -760,13 +760,13 @@ export function ShipmentDetail() {
 
         {/* Comments Card */}
         <div style={{ ...cardStyle }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comments</h2>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comentarios</h2>
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && !operatorOutOfBranch && (
             <div style={{ marginBottom: 12 }}>
               <textarea
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Add a comment..."
+                placeholder="Agregar un comentario..."
                 rows={2}
                 style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
               />
@@ -786,12 +786,12 @@ export function ShipmentDetail() {
                 }}
                 style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
               >
-                {addingComment ? "Adding..." : "Add comment"}
+                {addingComment ? "Agregando..." : "Agregar comentario"}
               </button>
             </div>
           )}
           {comments.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>No comments yet.</p>
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin comentarios todavía.</p>
           ) : (
             <div style={{ display: "grid", gap: 8, maxHeight: 500, overflowY: "auto" }}>
               {comments.map((c) => (
@@ -832,11 +832,11 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Assign Vehicle — Pre-Transit</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Pre-tránsito</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
-              Select an available vehicle at this branch. Shipment weight: <strong>{effectiveWeightKg(shipment)} kg</strong>.
+              Seleccioná un vehículo disponible en esta sucursal. Peso del envío: <strong>{effectiveWeightKg(shipment)} kg</strong>.
             </p>
             {vehiclePickerError && (
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
@@ -844,9 +844,9 @@ export function ShipmentDetail() {
               </div>
             )}
             {loadingVehicles ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>Loading available vehicles...</p>
+              <p style={{ color: "#6b7280", fontSize: 13 }}>Cargando vehículos disponibles...</p>
             ) : availableVehicles.length === 0 ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>No available vehicles at this branch with enough capacity.</p>
+              <p style={{ color: "#6b7280", fontSize: 13 }}>No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 {availableVehicles.map((v) => {
@@ -870,8 +870,8 @@ export function ShipmentDetail() {
                         <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
                         <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
                           {v.type === "motocicleta" ? "Motocicleta" : v.type === "furgoneta" ? "Furgoneta" : v.type === "camion" ? "Camión" : "Camión Grande"}
-                          {" · "}Capacity: {remainingKg.toFixed(0)} kg available
-                          {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} shipment(s) loaded`}
+                          {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
+                          {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>
                       </div>
                       {isSelected && <span style={{ color: "#1e3a5f", fontWeight: 700 }}>✓</span>}
@@ -882,7 +882,7 @@ export function ShipmentDetail() {
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
-                Cancel
+                Cancelar
               </button>
               <button
                 onClick={handleAssignVehicle}
@@ -893,7 +893,7 @@ export function ShipmentDetail() {
                   color: !selectedVehiclePlate || assigningVehicle ? "#9ca3af" : "#fff",
                 }}
               >
-                {assigningVehicle ? "Assigning..." : "Assign & Move to Pre-Transit"}
+                {assigningVehicle ? "Asignando..." : "Asignar y pasar a Pre-tránsito"}
               </button>
             </div>
           </div>
@@ -911,17 +911,17 @@ export function ShipmentDetail() {
       {showCancelModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 440, width: "calc(100vw - 32px)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c" }}>Cancel shipment</h2>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c" }}>Cancelar envío</h2>
             <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>
-              This action is irreversible. The shipment will move to <strong>Cancelled</strong> and cannot continue transit.
+              Esta acción es irreversible. El envío pasará a <strong>Cancelado</strong> y no podrá continuar en tránsito.
             </p>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
-              Cancellation reason *
+              Motivo de cancelación *
             </label>
             <textarea
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Describe the reason for cancellation..."
+              placeholder="Describí el motivo de la cancelación..."
               rows={4}
               style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", resize: "vertical" }}
             />
@@ -929,11 +929,11 @@ export function ShipmentDetail() {
             <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
               <button type="button" onClick={() => setShowCancelModal(false)} disabled={cancelling}
                 style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#374151" }}>
-                Back
+                Volver
               </button>
               <button type="button" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}
                 style={{ background: cancelReason.trim() ? "#b91c1c" : "#fca5a5", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: cancelReason.trim() ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 700 }}>
-                {cancelling ? "Cancelling..." : "Confirm cancellation"}
+                {cancelling ? "Cancelando..." : "Confirmar cancelación"}
               </button>
             </div>
           </div>
@@ -950,8 +950,8 @@ const PROVINCES = [
   "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán",
 ];
 const PACKAGE_TYPES = [
-  { value: "envelope", label: "Envelope" },
-  { value: "box",      label: "Box" },
+  { value: "envelope", label: "Sobre" },
+  { value: "box",      label: "Caja" },
   { value: "pallet",   label: "Pallet" },
 ];
 const SHIPMENT_TYPES = [
@@ -960,8 +960,8 @@ const SHIPMENT_TYPES = [
 ];
 const TIME_WINDOWS = [
   { value: "flexible",  label: "Flexible" },
-  { value: "morning",   label: "Morning (8-12)" },
-  { value: "afternoon", label: "Afternoon (12-18)" },
+  { value: "morning",   label: "Mañana (8-12)" },
+  { value: "afternoon", label: "Tarde (12-18)" },
 ];
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
@@ -1090,72 +1090,72 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
 
   return (
     <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Created: {createdAt}</p>
+      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Creado: {createdAt}</p>
 
-      {/* Sender */}
+      {/* Remitente */}
       <fieldset style={fsStyle}>
-        <legend style={legStyle}>Sender</legend>
+        <legend style={legStyle}>Remitente</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Name *"><input style={inp} required value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
-          <DField label="Phone *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="optional" /></DField>
+          <DField label="Nombre *"><input style={inp} required value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
+          <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
+          <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
-            <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="e.g. 30123456" />
+            <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
             {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
           </DField>
-          <DField label="Street *"><input style={inp} required value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
-          <DField label="City *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
-          <DField label="Province *">
+          <DField label="Calle *"><input style={inp} required value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
+          <DField label="Ciudad *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
+          <DField label="Provincia *">
             <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
-              <option value="">Select</option>
+              <option value="">Seleccionar</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Postal code *"><input style={inp} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
+          <DField label="Código postal *"><input style={inp} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
         </div>
       </fieldset>
 
-      {/* Recipient */}
+      {/* Destinatario */}
       <fieldset style={fsStyle}>
-        <legend style={legStyle}>Recipient</legend>
+        <legend style={legStyle}>Destinatario</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Name *"><input style={inp} required value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
-          <DField label="Phone *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="optional" /></DField>
+          <DField label="Nombre *"><input style={inp} required value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
+          <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
+          <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
-            <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="e.g. 28456789" />
+            <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
             {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
           </DField>
-          <DField label="Street *"><input style={inp} required value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
-          <DField label="City *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
-          <DField label="Province *">
+          <DField label="Calle *"><input style={inp} required value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
+          <DField label="Ciudad *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
+          <DField label="Provincia *">
             <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
-              <option value="">Select</option>
+              <option value="">Seleccionar</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Postal code *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
+          <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
         </div>
       </fieldset>
 
-      {/* Package */}
+      {/* Paquete */}
       <fieldset style={fsStyle}>
-        <legend style={legStyle}>Package</legend>
+        <legend style={legStyle}>Paquete</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Weight (kg) *">
+          <DField label="Peso (kg) *">
             <input style={inp} type="number" step="0.1" min="0.1" required value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
           </DField>
-          <DField label="Package type *">
+          <DField label="Tipo de paquete *">
             <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
               {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </DField>
-          <DField label="Shipment type">
+          <DField label="Tipo de envío">
             <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
               {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </DField>
-          <DField label="Time window">
+          <DField label="Ventana horaria">
             <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
               {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
@@ -1164,36 +1164,36 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             <div style={{ display: "flex", gap: 20 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
                 <input type="checkbox" checked={!!form.is_fragile} onChange={(e) => set("is_fragile", e.target.checked)} />
-                Fragile contents (handle with care)
+                Contenido frágil (manipular con cuidado)
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
                 <input type="checkbox" checked={!!form.cold_chain} onChange={(e) => set("cold_chain", e.target.checked)} />
-                Cold chain (refrigerated)
+                Cadena de frío (refrigerado)
               </label>
             </div>
           </DField>
-          <DField label="Special instructions" style={{ gridColumn: "1 / -1" }}>
-            <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='e.g. "Keep upright"' />
+          <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
+            <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='ej: "Mantener vertical"' />
           </DField>
         </div>
       </fieldset>
 
-      {/* Actions */}
+      {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Draft — pending confirmation</h2>
+        <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          Save changes before confirming. On confirmation a tracking ID will be assigned and the shipment will enter the logistics system.
+          Guardá los cambios antes de confirmar. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
         </p>
         {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onSave} disabled={saving || confirming}
             style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            {saving ? "Saving..." : "Save changes"}
+            {saving ? "Guardando..." : "Guardar cambios"}
           </button>
           <button onClick={onConfirm} disabled={saving || confirming}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
-            {confirming ? "Confirming..." : "Confirm shipment"}
+            {confirming ? "Confirmando..." : "Confirmar envío"}
           </button>
         </div>
       </div>
@@ -1296,7 +1296,7 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #f97316", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: 14, color: "#f97316" }}>🚚</span>
               </div>
-              <div style={{ fontSize: 11, color: "#f97316", fontWeight: 600, whiteSpace: "nowrap" as const }}>Recipient</div>
+              <div style={{ fontSize: 11, color: "#f97316", fontWeight: 600, whiteSpace: "nowrap" as const }}>Destinatario</div>
             </div>
           </>
         )}
@@ -1336,7 +1336,7 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
                 {isDelivered ? "✓" : "🏁"}
               </span>
             </div>
-            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "#065f46" : "#9ca3af", whiteSpace: "nowrap" as const }}>Recipient</div>
+            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "#065f46" : "#9ca3af", whiteSpace: "nowrap" as const }}>Destinatario</div>
           </div>
         </>
       </div>
@@ -1402,86 +1402,86 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Correct shipment data</h2>
+          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Corregir datos del envío</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>✕</button>
         </div>
         <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
-          Original data is not modified. Changes are noted and recorded in the comment history.
+          Los datos originales no se modifican. Los cambios quedan registrados en el historial de comentarios.
         </p>
 
-        {/* Sender */}
+        {/* Remitente */}
         <fieldset style={fsStyle}>
-          <legend style={legStyle}>Sender</legend>
+          <legend style={legStyle}>Remitente</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Name"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
-            <DField label="Phone"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Nombre"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
-            <DField label="Street (origin)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
-            <DField label="City (origin)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
-            <DField label="Province (origin)">
+            <DField label="Calle (origen)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
+            <DField label="Ciudad (origen)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
+            <DField label="Provincia (origen)">
               <select style={inp} value={form.origin_province ?? ""} onChange={(e) => set("origin_province", e.target.value)}>
-                <option value="">Select</option>
+                <option value="">Seleccionar</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </DField>
-            <DField label="Postal code (origin)"><input style={inp} value={form.origin_postal_code ?? ""} onChange={(e) => set("origin_postal_code", e.target.value)} /></DField>
+            <DField label="Código postal (origen)"><input style={inp} value={form.origin_postal_code ?? ""} onChange={(e) => set("origin_postal_code", e.target.value)} /></DField>
           </div>
         </fieldset>
 
-        {/* Recipient */}
+        {/* Destinatario */}
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Recipient</legend>
+          <legend style={legStyle}>Destinatario</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Name"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
-            <DField label="Phone"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Nombre"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
-            <DField label="Street (destination)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
-            <DField label="City (destination)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
-            <DField label="Province (destination)">
+            <DField label="Calle (destino)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
+            <DField label="Ciudad (destino)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
+            <DField label="Provincia (destino)">
               <select style={inp} value={form.destination_province ?? ""} onChange={(e) => set("destination_province", e.target.value)}>
-                <option value="">Select</option>
+                <option value="">Seleccionar</option>
                 {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </DField>
-            <DField label="Postal code (destination)"><input style={inp} value={form.destination_postal_code ?? ""} onChange={(e) => set("destination_postal_code", e.target.value)} /></DField>
+            <DField label="Código postal (destino)"><input style={inp} value={form.destination_postal_code ?? ""} onChange={(e) => set("destination_postal_code", e.target.value)} /></DField>
           </div>
         </fieldset>
 
-        {/* Package */}
+        {/* Paquete */}
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Package</legend>
+          <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Weight (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
-            <DField label="Type">
+            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
+            <DField label="Tipo">
               <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </DField>
-            <DField label="Shipment type">
+            <DField label="Tipo de envío">
               <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
                 {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </DField>
-            <DField label="Time window">
+            <DField label="Ventana horaria">
               <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </DField>
-            <DField label="Cold chain">
+            <DField label="Cadena de frío">
               <select style={inp} value={form.cold_chain ?? "false"} onChange={(e) => set("cold_chain", e.target.value)}>
                 <option value="false">No</option>
-                <option value="true">Yes (refrigerated)</option>
+                <option value="true">Sí (refrigerado)</option>
               </select>
             </DField>
-            <DField label="Fragile contents">
+            <DField label="Contenido frágil">
               <select style={inp} value={form.is_fragile ?? "false"} onChange={(e) => set("is_fragile", e.target.value)}>
                 <option value="false">No</option>
-                <option value="true">Yes (handle with care)</option>
+                <option value="true">Sí (manipular con cuidado)</option>
               </select>
             </DField>
-            <DField label="Special instructions" style={{ gridColumn: "1 / -1" }}>
+            <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
               <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
@@ -1490,10 +1490,10 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
           <button onClick={onClose} disabled={saving} style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            Cancel
+            Cancelar
           </button>
           <button onClick={onSave} disabled={saving} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: saving ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>
-            {saving ? "Saving..." : "Save corrections"}
+            {saving ? "Guardando..." : "Guardar correcciones"}
           </button>
         </div>
       </div>

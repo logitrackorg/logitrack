@@ -7,18 +7,18 @@ import { fmtDateTime } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 
 const statusConfig: Record<ShipmentStatus, { label: string; color: string; bg: string }> = {
-  pending:     { label: "Draft",       color: "#374151", bg: "#f3f4f6" },
-  in_progress: { label: "In Progress", color: "#92400e", bg: "#fef3c7" },
-  pre_transit: { label: "Pre-Transit", color: "#0e7490", bg: "#cffafe" },
-  in_transit:  { label: "In Transit", color: "#1e40af", bg: "#dbeafe" },
-  at_branch:   { label: "At Branch",  color: "#5b21b6", bg: "#ede9fe" },
-  delivering:       { label: "Delivering",     color: "#9a3412", bg: "#ffedd5" },
-  delivery_failed:  { label: "Delivery Failed",   color: "#991b1b", bg: "#fee2e2" },
-  delivered:        { label: "Delivered",          color: "#065f46", bg: "#d1fae5" },
-  ready_for_pickup: { label: "Ready for pickup",      color: "#0e7490", bg: "#cffafe" },
-  ready_for_return: { label: "Ready for return",      color: "#5b21b6", bg: "#ede9fe" },
-  returned:         { label: "Returned",               color: "#374151", bg: "#f3f4f6" },
-  cancelled:        { label: "Cancelled",               color: "#b91c1c", bg: "#fee2e2" },
+  pending:     { label: "Borrador",        color: "#374151", bg: "#f3f4f6" },
+  in_progress: { label: "En proceso",      color: "#92400e", bg: "#fef3c7" },
+  pre_transit: { label: "Pre tránsito",    color: "#0e7490", bg: "#cffafe" },
+  in_transit:  { label: "En tránsito",     color: "#1e40af", bg: "#dbeafe" },
+  at_branch:   { label: "En sucursal",     color: "#5b21b6", bg: "#ede9fe" },
+  delivering:       { label: "En reparto",         color: "#9a3412", bg: "#ffedd5" },
+  delivery_failed:  { label: "Entrega fallida",    color: "#991b1b", bg: "#fee2e2" },
+  delivered:        { label: "Entregado",           color: "#065f46", bg: "#d1fae5" },
+  ready_for_pickup: { label: "Listo para retiro",  color: "#0e7490", bg: "#cffafe" },
+  ready_for_return: { label: "Listo para devolución", color: "#5b21b6", bg: "#ede9fe" },
+  returned:         { label: "Devuelto",            color: "#374151", bg: "#f3f4f6" },
+  cancelled:        { label: "Cancelado",           color: "#b91c1c", bg: "#fee2e2" },
 };
 
 function toDateInput(d: Date): string {
@@ -91,9 +91,9 @@ export function Dashboard() {
   const branchLabel = (() => {
     if (isSupervisor) {
       const b = branches.find((br) => br.id === supervisorBranch);
-      return b ? b.name : supervisorBranch || "Your branch";
+      return b ? b.name : supervisorBranch || "Tu sucursal";
     }
-    if (!effectiveBranch) return "All branches";
+    if (!effectiveBranch) return "Todas las sucursales";
     const b = branches.find((br) => br.id === effectiveBranch);
     return b ? b.name : effectiveBranch;
   })();
@@ -122,7 +122,7 @@ export function Dashboard() {
               fontSize: 13, background: "#fff", color: "#374151", cursor: "pointer",
             }}
           >
-            <option value="">All branches</option>
+            <option value="">Todas las sucursales</option>
             {sortedProvinces.map((prov) => (
               <optgroup key={prov} label={prov}>
                 {branchesByProvince[prov].map((b) => (
@@ -136,7 +136,7 @@ export function Dashboard() {
 
       {/* Stats cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 32 }}>
-        <StatCard label="Total Shipments" value={stats?.total ?? 0} color="#1e3a5f" bg="#e0eaff" />
+        <StatCard label="Total de envíos" value={stats?.total ?? 0} color="#1e3a5f" bg="#e0eaff" />
         {(Object.keys(statusConfig) as ShipmentStatus[]).map((s) => (
           <StatCard
             key={s}
@@ -152,9 +152,9 @@ export function Dashboard() {
       {/* Shipments created vs delivered per day chart */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1rem" }}>Shipments Created vs Delivered per Day</h2>
+          <h2 style={{ margin: 0, fontSize: "1rem" }}>Envíos creados vs entregados por día</h2>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <label htmlFor="date-from" style={{ color: "#6b7280" }}>From</label>
+            <label htmlFor="date-from" style={{ color: "#6b7280" }}>Desde</label>
             <input
               id="date-from"
               type="date"
@@ -163,7 +163,7 @@ export function Dashboard() {
               onChange={(e) => setDateFrom(e.target.value)}
               style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 13 }}
             />
-            <label htmlFor="date-to" style={{ color: "#6b7280" }}>To</label>
+            <label htmlFor="date-to" style={{ color: "#6b7280" }}>Hasta</label>
             <input
               id="date-to"
               type="date"
@@ -184,27 +184,27 @@ export function Dashboard() {
 
       {/* Recent shipments */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: "1rem" }}>Recent Shipments</h2>
+        <h2 style={{ margin: 0, fontSize: "1rem" }}>Envíos recientes</h2>
         <button
           onClick={() => navigate("/")}
           style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 14 }}
         >
-          View all →
+          Ver todos →
         </button>
       </div>
 
       {recent.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No shipments yet.</p>
+        <p style={{ color: "#6b7280" }}>Todavía no hay envíos.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 500 }}>
           <thead>
             <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-              <th style={th}>Tracking ID</th>
-              <th style={th}>Recipient</th>
-              <th style={th}>Destination</th>
-              <th style={th}>Status</th>
-              <th style={th}>Created At</th>
+              <th style={th}>ID de seguimiento</th>
+              <th style={th}>Destinatario</th>
+              <th style={th}>Destino</th>
+              <th style={th}>Estado</th>
+              <th style={th}>Fecha de creación</th>
             </tr>
           </thead>
           <tbody>
@@ -254,7 +254,7 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
   }
 
   if (days.length === 0) {
-    return <p style={{ color: "#6b7280", fontSize: 14 }}>Select a date range to see the chart.</p>;
+    return <p style={{ color: "#6b7280", fontSize: 14 }}>Seleccioná un rango de fechas para ver el gráfico.</p>;
   }
 
   const maxCount = Math.max(...days.map((d) => Math.max(d.created, d.delivered)), 1);
@@ -275,11 +275,11 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
       <div style={{ display: "flex", gap: 16, paddingLeft: 40, marginBottom: 8, fontSize: 11, color: "#374151" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#3b82f6" }} />
-          Created
+          Creados
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#10b981" }} />
-          Delivered
+          Entregados
         </span>
       </div>
       <svg width={svgW} height={chartH + 48} style={{ display: "block" }}>
@@ -318,7 +318,7 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
                 fill="#3b82f6"
                 opacity={0.85}
               >
-                <title>{d.date} — Created: {d.created}</title>
+                <title>{d.date} — Creados: {d.created}</title>
               </rect>
               {d.created > 0 && createdH > 14 && (
                 <text x={xCreated + barW / 2} y={chartH - createdH + 8 + createdH - 4} textAnchor="middle" fontSize={9} fill="white" fontWeight={600}>
@@ -341,7 +341,7 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
                 fill="#10b981"
                 opacity={0.85}
               >
-                <title>{d.date} — Delivered: {d.delivered}</title>
+                <title>{d.date} — Entregados: {d.delivered}</title>
               </rect>
               {d.delivered > 0 && deliveredH > 14 && (
                 <text x={xDelivered + barW / 2} y={chartH - deliveredH + 8 + deliveredH - 4} textAnchor="middle" fontSize={9} fill="white" fontWeight={600}>
@@ -371,8 +371,8 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
         })}
       </svg>
       <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, paddingLeft: 40, display: "flex", gap: 16 }}>
-        <span>Created in period: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.created, 0)}</strong></span>
-        <span>Delivered in period: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.delivered, 0)}</strong></span>
+        <span>Creados en el período: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.created, 0)}</strong></span>
+        <span>Entregados en el período: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.delivered, 0)}</strong></span>
       </div>
     </div>
   );

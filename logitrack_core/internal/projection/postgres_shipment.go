@@ -248,6 +248,11 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
+	if filter.ReceivingBranchID != "" {
+		query += fmt.Sprintf(" AND receiving_branch_id = $%d", i)
+		args = append(args, filter.ReceivingBranchID)
+		i++
+	}
 	if filter.DateFrom != nil {
 		query += fmt.Sprintf(" AND created_at >= $%d", i)
 		args = append(args, *filter.DateFrom)

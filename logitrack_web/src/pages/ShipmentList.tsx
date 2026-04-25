@@ -28,10 +28,10 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
   };
 
   const headers = [
-    "Tracking ID", "Status", "Priority",
-    "Origin City", "Origin Province", "Destination City", "Destination Province",
-    "Receiving Branch", "Shipment Type", "Weight (kg)", "Current Location",
-    "Created", "Est. Delivery",
+    "ID de seguimiento", "Estado", "Prioridad",
+    "Ciudad de origen", "Provincia de origen", "Ciudad de destino", "Provincia de destino",
+    "Sucursal receptora", "Tipo de envío", "Peso (kg)", "Ubicación actual",
+    "Creado", "Entrega estimada",
   ];
 
   const rows = shipments.map((s) => [
@@ -126,11 +126,11 @@ export function ShipmentList() {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>Shipments</h1>
+        <h1 style={{ margin: 0 }}>Envíos</h1>
         {hasRole("operator", "supervisor", "admin") && (
           <button onClick={() => navigate("/new")}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
-            + New Shipment
+            + Nuevo envío
           </button>
         )}
       </div>
@@ -139,57 +139,57 @@ export function ShipmentList() {
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, flex: 1, minWidth: 240 }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by tracking ID, sender, recipient or city..."
+            placeholder="Buscar por ID de seguimiento, remitente, destinatario o ciudad..."
             style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }} />
           <button type="submit"
             style={{ background: "#4b5563", color: "#fff", border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}>
-            Search
+            Buscar
           </button>
           {query && (
             <button type="button" onClick={() => { setQuery(""); load(); }}
               style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>
-              Clear
+              Limpiar
             </button>
           )}
         </form>
 
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          From
+          Desde
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={selectStyle} />
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          To
+          Hasta
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
             style={{ ...selectStyle, borderColor: dateRangeInvalid ? "#ef4444" : "#d1d5db" }} />
         </label>
         {dateRangeInvalid && (
           <span style={{ fontSize: 13, color: "#ef4444", alignSelf: "center" }}>
-            "To" date must be after "From"
+            La fecha "Hasta" debe ser posterior a "Desde"
           </span>
         )}
         {(dateFrom || dateTo) && (
           <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); }}
             style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14 }}>
-            Clear dates
+            Limpiar fechas
           </button>
         )}
 
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
           style={selectStyle}>
-          <option value="active">Active</option>
-          <option value="">All</option>
-          <option value="at_branch">At Branch</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="delivered">Delivered</option>
-          <option value="delivery_failed">Delivery Failed</option>
-          <option value="delivering">Delivering</option>
-          <option value="pending">Draft</option>
-          <option value="in_progress">In Progress</option>
-          <option value="pre_transit">Pre-Transit</option>
-          <option value="in_transit">In Transit</option>
-          <option value="ready_for_pickup">Ready for Pickup</option>
-          <option value="ready_for_return">Ready for Return</option>
-          <option value="returned">Returned</option>
+          <option value="active">Activos</option>
+          <option value="">Todos</option>
+          <option value="at_branch">En sucursal</option>
+          <option value="cancelled">Cancelados</option>
+          <option value="delivered">Entregados</option>
+          <option value="delivery_failed">Entrega fallida</option>
+          <option value="delivering">En reparto</option>
+          <option value="pending">Borrador</option>
+          <option value="in_progress">En proceso</option>
+          <option value="pre_transit">Pre tránsito</option>
+          <option value="in_transit">En tránsito</option>
+          <option value="ready_for_pickup">Listo para retiro</option>
+          <option value="ready_for_return">Listo para devolución</option>
+          <option value="returned">Devueltos</option>
         </select>
 
         {isOperator ? (
@@ -198,7 +198,7 @@ export function ShipmentList() {
           </span>
         ) : (
           <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={selectStyle}>
-            <option value="">All branches</option>
+            <option value="">Todas las sucursales</option>
             {(() => {
               const byProvince = branches.reduce((acc, b) => {
                 if (!acc[b.province]) acc[b.province] = [];
@@ -223,18 +223,18 @@ export function ShipmentList() {
       </div>
 
       {loading ? (
-        <p>Loading...</p>
+        <p>Cargando...</p>
       ) : filtered.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No shipments found.</p>
+        <p style={{ color: "#6b7280" }}>No se encontraron envíos.</p>
       ) : (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{filtered.length} shipment{filtered.length !== 1 ? "s" : ""}</p>
+            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}</p>
             {hasRole("admin", "manager") && (
               <button
                 onClick={() => exportToCSV(filtered, branches)}
                 style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-                Export CSV
+                Exportar CSV
               </button>
             )}
           </div>
@@ -242,15 +242,15 @@ export function ShipmentList() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 800 }}>
             <thead>
               <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                <th style={th}>Tracking ID</th>
-                <th style={th}>Sender</th>
-                <th style={th}>Recipient</th>
-                <th style={th}>Origin → Destination</th>
-                <th style={th}>Weight</th>
-                <th style={th}>Priority</th>
-                <th style={th}>Status</th>
-                <th style={th}>Created</th>
-                <th style={th}>Est. Delivery</th>
+                <th style={th}>ID de seguimiento</th>
+                <th style={th}>Remitente</th>
+                <th style={th}>Destinatario</th>
+                <th style={th}>Origen → Destino</th>
+                <th style={th}>Peso</th>
+                <th style={th}>Prioridad</th>
+                <th style={th}>Estado</th>
+                <th style={th}>Creado</th>
+                <th style={th}>Entrega estimada</th>
               </tr>
             </thead>
             <tbody>

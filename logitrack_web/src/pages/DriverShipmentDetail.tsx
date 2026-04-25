@@ -4,9 +4,9 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { StatusBadge } from "../components/StatusBadge";
 
 const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Envelope",
-  box: "Box",
-  pallet: "Pallet",
+  envelope: "Sobre",
+  box: "Caja",
+  pallet: "Palet",
 };
 
 export function DriverShipmentDetail() {
@@ -21,12 +21,12 @@ export function DriverShipmentDetail() {
     shipmentApi
       .get(trackingId)
       .then(setShipment)
-      .catch(() => setError("Shipment not found."))
+      .catch(() => setError("Envío no encontrado."))
       .finally(() => setLoading(false));
   }, [trackingId]);
 
-  if (loading) return <div style={{ padding: 24 }}>Loading...</div>;
-  if (error || !shipment) return <div style={{ padding: 24, color: "#ef4444" }}>{error || "Not found."}</div>;
+  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+  if (error || !shipment) return <div style={{ padding: 24, color: "#ef4444" }}>{error || "No encontrado."}</div>;
 
   const cor = shipment.corrections ?? {};
   const cv = (key: string, fallback: string) => cor[key] ?? fallback;
@@ -49,7 +49,7 @@ export function DriverShipmentDetail() {
         onClick={() => navigate("/driver/route")}
         style={{ background: "none", border: "none", color: "#1e3a5f", cursor: "pointer", fontSize: 14, padding: 0, marginBottom: 20, fontWeight: 600 }}
       >
-        ← My route
+        ← Mi ruta
       </button>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
@@ -62,10 +62,10 @@ export function DriverShipmentDetail() {
       </div>
 
       <section style={sectionStyle}>
-        <h2 style={sectionTitle}>Package</h2>
-        <Row label="Type" value={PACKAGE_LABELS[packageType] ?? packageType} />
-        {shipment.is_fragile && <Row label="Fragile" value="⚠️ Yes" />}
-        <Row label="Weight" value={`${weightKg} kg`} />
+        <h2 style={sectionTitle}>Paquete</h2>
+        <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
+        {shipment.is_fragile && <Row label="Frágil" value="⚠️ Sí" />}
+        <Row label="Peso" value={`${weightKg} kg`} />
         {specialInstructions && (
           <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 13, color: "#92400e" }}>
             {specialInstructions}
@@ -74,10 +74,10 @@ export function DriverShipmentDetail() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={sectionTitle}>Recipient</h2>
-        <Row label="Name" value={recipientName} />
-        <Row label="Phone" value={recipientPhone} />
-        <Row label="Address" value={destAddress} />
+        <h2 style={sectionTitle}>Destinatario</h2>
+        <Row label="Nombre" value={recipientName} />
+        <Row label="Teléfono" value={recipientPhone} />
+        <Row label="Dirección" value={destAddress} />
       </section>
     </div>
   );

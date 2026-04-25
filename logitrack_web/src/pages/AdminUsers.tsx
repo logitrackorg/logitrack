@@ -7,10 +7,10 @@ const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
 const ROLES_WITH_BRANCH: Role[] = ["operator", "supervisor", "driver"];
 
 const roleLabel: Record<Role, string> = {
-  operator: "Operator",
+  operator: "Operador",
   supervisor: "Supervisor",
-  driver: "Driver",
-  manager: "Manager",
+  driver: "Chofer",
+  manager: "Gerente",
   admin: "Admin",
 };
 
@@ -62,7 +62,7 @@ export function AdminUsers() {
   const handleSave = async () => {
     if (!editingUser) return;
     if (ROLES_WITH_BRANCH.includes(editState.role) && !editState.branch_id) {
-      setSaveError("Branch is required for this role.");
+      setSaveError("La sucursal es obligatoria para este rol.");
       return;
     }
     setSaving(true); setSaveError("");
@@ -76,13 +76,13 @@ export function AdminUsers() {
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
       closeEdit();
     } catch (e: unknown) {
-      setSaveError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to save.");
+      setSaveError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo guardar.");
     } finally { setSaving(false); }
   };
 
   const handleCreate = async () => {
     if (ROLES_WITH_BRANCH.includes(createForm.role!) && !createForm.branch_id) {
-      setCreateError("Branch is required for this role.");
+      setCreateError("La sucursal es obligatoria para este rol.");
       return;
     }
     setCreating(true); setCreateError("");
@@ -94,7 +94,7 @@ export function AdminUsers() {
       setShowCreate(false);
       setCreateForm({ username: "", password: "", role: "operator", branch_id: "" });
     } catch (e: unknown) {
-      setCreateError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Failed to create user.");
+      setCreateError((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo crear el usuario.");
     } finally { setCreating(false); }
   };
 
@@ -111,36 +111,36 @@ export function AdminUsers() {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: "1.4rem", color: "#1e3a5f" }}>User Management</h1>
+        <h1 style={{ margin: 0, fontSize: "1.4rem", color: "#1e3a5f" }}>Gestión de usuarios</h1>
         <button onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm({ username: "", password: "", role: "operator", branch_id: "" }); }}
           style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-          + New User
+          + Nuevo usuario
         </button>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by username..."
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre de usuario..."
           style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, width: 220 }} />
         <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as Role | "")}
           style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}>
-          <option value="">All roles</option>
+          <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
         </select>
         {(search || roleFilter) && (
           <button onClick={() => { setSearch(""); setRoleFilter(""); }}
             style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, textDecoration: "underline" }}>
-            Clear
+            Limpiar
           </button>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280" }}>{filtered.length} user{filtered.length !== 1 ? "s" : ""}</span>
+        <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280" }}>{filtered.length} usuario{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
-      {loading ? <p style={{ color: "#6b7280" }}>Loading...</p> : (
+      {loading ? <p style={{ color: "#6b7280" }}>Cargando...</p> : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 600 }}>
             <thead>
               <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                {["ID", "Username", "Role", "Branch", ""].map(h => (
+                {["ID", "Usuario", "Rol", "Sucursal", ""].map(h => (
                   <th key={h} style={{ padding: "10px 14px", borderBottom: "2px solid #e5e7eb", fontWeight: 600, color: "#374151", fontSize: 13 }}>{h}</th>
                 ))}
               </tr>
@@ -165,7 +165,7 @@ export function AdminUsers() {
                   <td style={{ padding: "10px 14px", textAlign: "right" }}>
                     <button onClick={() => openEdit(u)}
                       style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 13, color: "#374151", fontWeight: 500 }}>
-                      Edit
+                      Editar
                     </button>
                   </td>
                 </tr>
@@ -180,16 +180,16 @@ export function AdminUsers() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={closeEdit}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 440, maxWidth: "95vw" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>Edit User</h2>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>Editar usuario</h2>
               <button onClick={closeEdit} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <div style={{ display: "grid", gap: 14 }}>
               <label style={labelStyle}>
-                Username
+                Nombre de usuario
                 <input value={editState.username} onChange={e => setEditState(s => ({ ...s, username: e.target.value }))} style={inputStyle} />
               </label>
               <label style={labelStyle}>
-                Role
+                Rol
                 <select value={editState.role}
                   onChange={e => setEditState(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
                   style={inputStyle}>
@@ -198,9 +198,9 @@ export function AdminUsers() {
               </label>
               {ROLES_WITH_BRANCH.includes(editState.role) && (
                 <label style={labelStyle}>
-                  Assigned Branch *
+                  Sucursal asignada *
                   <select value={editState.branch_id} onChange={e => setEditState(s => ({ ...s, branch_id: e.target.value }))} style={inputStyle}>
-                    <option value="">— Select branch —</option>
+                    <option value="">— Seleccionar sucursal —</option>
                     {sortedBranches.map(b => <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>)}
                   </select>
                 </label>
@@ -208,10 +208,10 @@ export function AdminUsers() {
             </div>
             {saveError && <p style={{ margin: "12px 0 0", fontSize: 13, color: "#dc2626" }}>{saveError}</p>}
             <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={closeEdit} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancel</button>
+              <button onClick={closeEdit} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleSave} disabled={saving}
                 style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? "Guardando…" : "Guardar cambios"}
               </button>
             </div>
           </div>
@@ -223,20 +223,20 @@ export function AdminUsers() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowCreate(false)}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 440, maxWidth: "95vw" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>New User</h2>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>Nuevo usuario</h2>
               <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <div style={{ display: "grid", gap: 14 }}>
               <label style={labelStyle}>
-                Username *
-                <input value={createForm.username} onChange={e => setCreateForm(s => ({ ...s, username: e.target.value }))} placeholder="e.g. op_rosario" style={inputStyle} />
+                Nombre de usuario *
+                <input value={createForm.username} onChange={e => setCreateForm(s => ({ ...s, username: e.target.value }))} placeholder="ej. op_rosario" style={inputStyle} />
               </label>
               <label style={labelStyle}>
-                Password *
+                Contraseña *
                 <input type="password" value={createForm.password} onChange={e => setCreateForm(s => ({ ...s, password: e.target.value }))} placeholder="••••••••" style={inputStyle} />
               </label>
               <label style={labelStyle}>
-                Role *
+                Rol *
                 <select value={createForm.role}
                   onChange={e => setCreateForm(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
                   style={inputStyle}>
@@ -245,9 +245,9 @@ export function AdminUsers() {
               </label>
               {ROLES_WITH_BRANCH.includes(createForm.role!) && (
                 <label style={labelStyle}>
-                  Assigned Branch *
+                  Sucursal asignada *
                   <select value={createForm.branch_id ?? ""} onChange={e => setCreateForm(s => ({ ...s, branch_id: e.target.value }))} style={inputStyle}>
-                    <option value="">— Select branch —</option>
+                    <option value="">— Seleccionar sucursal —</option>
                     {sortedBranches.map(b => <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>)}
                   </select>
                 </label>
@@ -255,10 +255,10 @@ export function AdminUsers() {
             </div>
             {createError && <p style={{ margin: "12px 0 0", fontSize: 13, color: "#dc2626" }}>{createError}</p>}
             <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowCreate(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancel</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleCreate} disabled={creating || !createForm.username || !createForm.password}
                 style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: creating ? "not-allowed" : "pointer", fontWeight: 600, opacity: creating || !createForm.username || !createForm.password ? 0.6 : 1 }}>
-                {creating ? "Creating…" : "Create user"}
+                {creating ? "Creando…" : "Crear usuario"}
               </button>
             </div>
           </div>
