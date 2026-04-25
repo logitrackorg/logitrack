@@ -1,0 +1,73 @@
+logitrack_core/internal/handler/vehicle.go
+  e5f9bed55b1fc070 276,410-417,452,461,630-635
+logitrack_core/cmd/server/main.go
+  4cabc42ded2a42f7 195-200
+  e5f9bed55b1fc070 110,117
+logitrack_web/src/api/publicTracking.ts
+  4cabc42ded2a42f7 1-16
+logitrack_web/src/pages/BranchList.tsx
+  e5f9bed55b1fc070 172
+CLAUDE.md
+  4cabc42ded2a42f7 302-303,346-349,361,483-485
+  e5f9bed55b1fc070 120-121,123,198,200,207-211,260-261,316-317,327,329-330
+logitrack_core/internal/handler/comment.go
+  e5f9bed55b1fc070 34-42,74
+logitrack_web/src/App.tsx
+  4cabc42ded2a42f7 220-223
+  0582807efd1d7b6d 42,45-48,153,156,162,204,209
+logitrack_core/internal/handler/shipment.go
+  e5f9bed55b1fc070 15,17-18,145,174,252-256,289,345-356,410,448
+logitrack_web/src/pages/PublicTracking.tsx
+  4cabc42ded2a42f7 1-5,7,10-113,116-117,124-126,128-134,141-142,145,147,153-161,163-220,222,224-234,236-243,245-250,252-256,260-320,322,325-330,333-339
+logitrack_web/src/pages/ShipmentDetail.tsx
+  e5f9bed55b1fc070 424
+logitrack_web/src/pages/VehicleList.tsx
+  0582807efd1d7b6d 68,535,579,598,681,705,848-854,863-868,920-943,1069-1130,1200,1297
+  e5f9bed55b1fc070 227,231-235,238,242-246,281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "677d1a4db04b7cb20bdbd4d569a7faaef732d804",
+  "prompts": {
+    "0582807efd1d7b6d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6b5661b0-72ad-4e2c-9dce-1093ee655ebf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 119,
+      "total_deletions": 17,
+      "accepted_lines": 117,
+      "overriden_lines": 0
+    },
+    "4cabc42ded2a42f7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3914321a-dc4b-497e-aaa3-e9f7e127329b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1235,
+      "total_deletions": 491,
+      "accepted_lines": 346,
+      "overriden_lines": 0
+    },
+    "e5f9bed55b1fc070": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "12f4b50a-cc29-4a43-830f-6766ce6eadd7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2056,
+      "total_deletions": 52,
+      "accepted_lines": 86,
+      "overriden_lines": 0
+    }
+  }
+}
