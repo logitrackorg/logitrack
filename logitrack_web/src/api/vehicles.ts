@@ -10,7 +10,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export type VehicleType = "motocicleta" | "furgoneta" | "camion" | "camion_grande";
+export type VehicleType = "motocicleta" | "auto" | "furgoneta" | "camion";
 export type VehicleStatus = "disponible" | "en_carga" | "mantenimiento" | "en_transito" | "inactivo";
 
 export interface Vehicle {

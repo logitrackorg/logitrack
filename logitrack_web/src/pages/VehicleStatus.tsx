@@ -6,9 +6,9 @@ import { Navigate } from "react-router-dom";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
+  auto: "Auto",
   furgoneta: "Furgoneta",
   camion: "Camión",
-  camion_grande: "Camión grande",
 };
 
 const getStatusColor = (status: VehicleStatus): string => {

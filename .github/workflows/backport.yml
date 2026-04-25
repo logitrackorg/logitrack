@@ -9,6 +9,9 @@ jobs:
   backport:
     name: Create backport PR to develop
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     # Only run when the push comes from a release/* or hotfix/* branch merge
     if: |
       github.event_name == 'push' &&

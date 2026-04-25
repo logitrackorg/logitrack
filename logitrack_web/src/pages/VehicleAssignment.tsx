@@ -5,9 +5,9 @@ import { Navigate } from "react-router-dom";
 
 const vehicleTypeLabels: Record<string, string> = {
   motocicleta: "Motocicleta",
+  auto: "Auto",
   furgoneta: "Furgoneta",
   camion: "Camión",
-  camion_grande: "Camión grande",
 };
 
 export function VehicleAssignment() {
