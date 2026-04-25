@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi, type Stats, type Shipment, type ShipmentStatus } from "../api/shipments";
+import { branchApi, type Branch } from "../api/branches";
+import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -31,29 +33,106 @@ function defaultRange(): { from: string; to: string } {
 }
 
 export function Dashboard() {
+  const { user, hasRole } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [recent, setRecent] = useState<Shipment[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const range = defaultRange();
   const [dateFrom, setDateFrom] = useState(range.from);
   const [dateTo, setDateTo] = useState(range.to);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    shipmentApi.stats({ date_from: dateFrom, date_to: dateTo }).then(setStats);
-  }, [dateFrom, dateTo]);
+  const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
+  const supervisorBranch = isSupervisor ? (user?.branch_id ?? "") : "";
+
+  // For supervisors the branch is always their own; for managers it's selectable.
+  const effectiveBranch = isSupervisor ? supervisorBranch : selectedBranch;
 
   useEffect(() => {
-    shipmentApi.list().then((all) => {
+    if (!isSupervisor) {
+      branchApi.list("activo").then(setBranches);
+    }
+  }, [isSupervisor]);
+
+  useEffect(() => {
+    const params: { date_from: string; date_to: string; branch_id?: string } = {
+      date_from: dateFrom,
+      date_to: dateTo,
+    };
+    if (effectiveBranch) params.branch_id = effectiveBranch;
+    shipmentApi.stats(params).then(setStats);
+  }, [dateFrom, dateTo, effectiveBranch]);
+
+  useEffect(() => {
+    const params: { branch_id?: string } = {};
+    if (effectiveBranch) params.branch_id = effectiveBranch;
+    shipmentApi.list(params).then((all) => {
       const sorted = [...all].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       setRecent(sorted.slice(0, 5));
     });
-  }, []);
+  }, [effectiveBranch]);
+
+  // Group branches by province for the dropdown.
+  const branchesByProvince = branches.reduce<Record<string, Branch[]>>((acc, b) => {
+    const prov = b.address.province;
+    if (!acc[prov]) acc[prov] = [];
+    acc[prov].push(b);
+    return acc;
+  }, {});
+  const sortedProvinces = Object.keys(branchesByProvince).sort((a, b) => a.localeCompare(b));
+  for (const prov of sortedProvinces) {
+    branchesByProvince[prov].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Label shown next to "Dashboard" heading.
+  const branchLabel = (() => {
+    if (isSupervisor) {
+      const b = branches.find((br) => br.id === supervisorBranch);
+      return b ? b.name : supervisorBranch || "Your branch";
+    }
+    if (!effectiveBranch) return "All branches";
+    const b = branches.find((br) => br.id === effectiveBranch);
+    return b ? b.name : effectiveBranch;
+  })();
 
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ marginBottom: 24 }}>Dashboard</h1>
+      {/* Header with branch filter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+        <h1 style={{ margin: 0 }}>Dashboard</h1>
+
+        {isSupervisor ? (
+          // Supervisor: locked badge showing their branch
+          <span style={{
+            background: "#dbeafe", color: "#1e40af", borderRadius: 8,
+            padding: "4px 12px", fontSize: 13, fontWeight: 600,
+          }}>
+            {branchLabel}
+          </span>
+        ) : (
+          // Manager / admin: branch selector
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            style={{
+              border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 10px",
+              fontSize: 13, background: "#fff", color: "#374151", cursor: "pointer",
+            }}
+          >
+            <option value="">All branches</option>
+            {sortedProvinces.map((prov) => (
+              <optgroup key={prov} label={prov}>
+                {branchesByProvince[prov].map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
+      </div>
 
       {/* Stats cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 32 }}>

@@ -56,6 +56,7 @@ func main() {
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
+	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
@@ -78,7 +79,8 @@ func main() {
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
-	authHandler := handler.NewAuthHandler(authRepo)
+	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
+	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	branchSvc := service.NewBranchService(branchRepo)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
@@ -119,6 +121,9 @@ func main() {
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
 
+	// Admin only middleware (reused across vehicles, ML config, admin routes)
+	adminOnly := middleware.RequireRoles(model.RoleAdmin)
+
 	// Vehicles — list: non-driver roles, create: admin only, read detail: supervisor+manager+admin, write: supervisor+admin
 	protected.GET("/vehicles", nonDriver, vehicleHandler.List)
 	canViewVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
@@ -132,7 +137,7 @@ func main() {
 	canAssignShipment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.PATCH("/vehicles/by-plate/:plate/status", canWriteVehicle, vehicleHandler.UpdateStatusByPlate)
 	protected.POST("/vehicles/by-plate/:plate/assign", canAssignShipment, vehicleHandler.AssignToShipment)
-	protected.POST("/vehicles/by-plate/:plate/assign-branch", canWriteVehicle, vehicleHandler.AssignBranch)
+	protected.POST("/vehicles/by-plate/:plate/assign-branch", adminOnly, vehicleHandler.AssignBranch)
 	protected.POST("/vehicles/by-plate/:plate/start-trip", canWriteVehicle, vehicleHandler.StartTrip)
 	protected.POST("/vehicles/by-plate/:plate/end-trip", canWriteVehicle, vehicleHandler.EndTrip)
 	protected.DELETE("/vehicles/by-plate/:plate/shipments/:trackingId", canWriteVehicle, vehicleHandler.UnassignShipment)
@@ -183,7 +188,6 @@ func main() {
 	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)
 
 	// ML config — admin only
-	adminOnly := middleware.RequireRoles(model.RoleAdmin)
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
 	protected.POST("/admin/users", adminOnly, adminHandler.CreateUser)
 	protected.PATCH("/admin/users/:id", adminOnly, adminHandler.UpdateUser)
@@ -191,6 +195,7 @@ func main() {
 	protected.GET("/ml/config/history", adminOnly, mlConfigHandler.ListHistory)
 	protected.POST("/ml/config/regenerate", adminOnly, mlConfigHandler.Regenerate)
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
+	protected.GET("/admin/access-logs", adminOnly, accessLogHandler.List)
 
 	// Public tracking — no auth required
 	publicAPI := api.Group("/public")

@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -12,16 +13,27 @@ import (
 )
 
 type AuthHandler struct {
-	repo repository.AuthRepository
+	repo      repository.AuthRepository
+	accessLog repository.AccessLogRepository
 }
 
-func NewAuthHandler(repo repository.AuthRepository) *AuthHandler {
-	return &AuthHandler{repo: repo}
+func NewAuthHandler(repo repository.AuthRepository, accessLog repository.AccessLogRepository) *AuthHandler {
+	return &AuthHandler{repo: repo, accessLog: accessLog}
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/auth/login", h.Login)
 	r.POST("/auth/logout", h.Logout)
+}
+
+func (h *AuthHandler) log(username, userID string, event model.AccessEventType) {
+	_ = h.accessLog.Log(model.AccessLog{
+		ID:        uuid.NewString(),
+		Username:  username,
+		UserID:    userID,
+		EventType: event,
+		Timestamp: time.Now(),
+	})
 }
 
 // Login authenticates a user and returns a Bearer token.
@@ -44,11 +56,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
+		h.log(req.Username, "", model.AccessEventLoginFailure)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 		return
 	}
 	token := uuid.NewString()
 	h.repo.SaveToken(token, user)
+	h.log(user.Username, user.ID, model.AccessEventLoginSuccess)
 	c.JSON(http.StatusOK, model.LoginResponse{Token: token, User: user})
 }
 
@@ -64,7 +78,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	header := c.GetHeader("Authorization")
 	if strings.HasPrefix(header, "Bearer ") {
-		h.repo.DeleteToken(strings.TrimPrefix(header, "Bearer "))
+		token := strings.TrimPrefix(header, "Bearer ")
+		if user, err := h.repo.GetUserByToken(token); err == nil {
+			h.log(user.Username, user.ID, model.AccessEventLogout)
+		}
+		h.repo.DeleteToken(token)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
