@@ -14,6 +14,7 @@ import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { AdminUsers } from "./pages/AdminUsers";
+import { BulkUpload } from "./pages/BulkUpload";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operator",
@@ -42,6 +43,9 @@ function Nav() {
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
       <NavLink to="/" end style={navStyle}>Shipments</NavLink>
+      {hasRole("operator", "supervisor", "admin") && (
+        <NavLink to="/bulk-upload" style={navStyle}>Bulk Import</NavLink>
+      )}
       <NavLink to="/track" style={navStyle}>Track</NavLink>
       {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Fleet</NavLink>
@@ -198,6 +202,12 @@ function AppRoutes() {
           <Route path="/admin/users" element={
             <ProtectedRoute roles={["admin"]}>
               <AdminUsers />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/bulk-upload" element={
+            <ProtectedRoute roles={["operator", "supervisor", "admin"]}>
+              <BulkUpload />
             </ProtectedRoute>
           } />
 
