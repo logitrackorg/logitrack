@@ -1,0 +1,27 @@
+logitrack_web/src/pages/ShipmentDetail.tsx
+  f2cab9f34c5b0de6 205,563,569-577,579-580,583-623
+logitrack_core/internal/service/shipment.go
+  f2cab9f34c5b0de6 659-664
+logitrack_core/internal/seed/seed.go
+  f2cab9f34c5b0de6 87-88,106-107,126-127,143-144,162-163,184-185,201-202,221-222,241-242,257-258,276-277,297-298,313-314,333-334,354-355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "6f38677260ca5ffb6b0dbb7bd2939ce58dbdc7d1",
+  "prompts": {
+    "f2cab9f34c5b0de6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4151d2bb-1ba0-4006-84df-3d83ca298ca4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2955,
+      "total_deletions": 114,
+      "accepted_lines": 536,
+      "overriden_lines": 0
+    }
+  }
+}
