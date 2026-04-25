@@ -132,7 +132,7 @@ Province coordinates for distance (all 24 Argentine provinces + CABA) are define
 
 **Branch assignment**: operators, supervisors, and drivers have a `branch_id` assigned. This controls:
 - **Operators**: `GET /shipments` is server-side filtered to their branch; `GET /shipments/:id`, `/events`, `/comments` return 403 for shipments outside their branch; they can only modify shipments in their branch (enforced in handler via `branchForbidden`). When creating shipments, `receiving_branch_id` is forced to their branch.
-- **Supervisors**: can see all shipments; can only modify shipments in their branch (same `branchForbidden` guard as operators). When creating, `receiving_branch_id` is forced to their branch. For fleet operations: can only **start trips** for vehicles whose `assigned_branch` matches their branch; can only **end trips** for vehicles whose `destination_branch` matches their branch.
+- **Supervisors**: `GET /shipments` is server-side filtered to their branch when `branch_id` is passed (the UI always sends it); can access any shipment via `GET /shipments/:id`; can only modify shipments in their branch (same `branchForbidden` guard as operators). When creating, `receiving_branch_id` is forced to their branch. For fleet operations: can only **start trips** for vehicles whose `assigned_branch` matches their branch; can only **end trips** for vehicles whose `destination_branch` matches their branch.
 - **Drivers**: `GET /users/drivers?branch_id=X` matches their `branch_id`; used when assigning drivers to delivering status.
 - Manager and admin have no branch assignment and no fleet restrictions.
 
