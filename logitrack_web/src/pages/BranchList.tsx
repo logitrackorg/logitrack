@@ -34,7 +34,6 @@ export function BranchList() {
   const [error, setError] = useState("");
 
   const isAdmin = hasRole("admin");
-  const isSupervisorOrAdmin = hasRole("supervisor", "admin");
 
   useEffect(() => { loadBranches(); }, []);
 
@@ -170,7 +169,7 @@ export function BranchList() {
                           Edit
                         </button>
                       )}
-                      {isSupervisorOrAdmin && (
+                      {isAdmin && (
                         <button onClick={() => { setStatusModal(b); setError(""); }}
                           style={actionBtn}>
                           Status

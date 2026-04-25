@@ -31,7 +31,15 @@ func NewCommentHandler(svc *service.CommentService, shipmentSvc *service.Shipmen
 // @Failure      404          {object}  map[string]string
 // @Router       /shipments/{tracking_id}/comments [get]
 func (h *CommentHandler) GetComments(c *gin.Context) {
-	comments, err := h.svc.GetComments(c.Param("tracking_id"))
+	trackingID := c.Param("tracking_id")
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.Role == model.RoleOperator && user.BranchID != "" {
+		if shipment, err := h.shipmentSvc.GetByTrackingID(trackingID); err != nil || shipment.ReceivingBranchID != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			return
+		}
+	}
+	comments, err := h.svc.GetComments(trackingID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -63,7 +71,7 @@ func (h *CommentHandler) AddComment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
 	if existing, err := h.shipmentSvc.GetByTrackingID(trackingID); err == nil {
-		if operatorBranchForbidden(c, user, existing.ReceivingBranchID) {
+		if branchForbidden(c, user, existing.ReceivingBranchID) {
 			return
 		}
 	}

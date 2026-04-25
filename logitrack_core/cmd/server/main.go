@@ -107,15 +107,14 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	// Branches — list/search: non-driver roles, create/update: admin only, status: supervisor+admin
+	// Branches — list/search: non-driver roles, create/update/status: admin only
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
-	canChangeBranchStatus := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
 	protected.GET("/branches/search", nonDriver, branchHandler.Search)
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
-	protected.PATCH("/branches/:id/status", canChangeBranchStatus, branchHandler.UpdateStatus)
+	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
 
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
@@ -192,6 +191,12 @@ func main() {
 	protected.GET("/ml/config/history", adminOnly, mlConfigHandler.ListHistory)
 	protected.POST("/ml/config/regenerate", adminOnly, mlConfigHandler.Regenerate)
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
+
+	// Public tracking — no auth required
+	publicAPI := api.Group("/public")
+	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetByTrackingID)
+	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetEvents)
+	publicAPI.GET("/branches", branchHandler.List)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

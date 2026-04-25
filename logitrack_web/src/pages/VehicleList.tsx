@@ -65,6 +65,7 @@ export function VehicleList() {
 
   const isAdmin = hasRole("admin");
   const canWrite = hasRole("admin") || hasRole("supervisor");
+  const canManageTrips = hasRole("supervisor");
   const isOperator = user?.role === "operator";
   const hasBranchDefault = isOperator || user?.role === "supervisor";
   const [branchFilter, setBranchFilter] = useState(hasBranchDefault ? (user?.branch_id ?? "") : "");
@@ -223,18 +224,26 @@ export function VehicleList() {
     }
   };
 
-  // Check if the selected vehicle can start trip (status is "en_carga")
+  // Check if the selected vehicle can start trip (status is "en_carga" and supervisor matches current branch)
   const canStartTrip = () => {
     if (!selectedForAssign) return false;
     const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
-    return vehicle?.status === "en_carga";
+    if (!vehicle || vehicle.status !== "en_carga") return false;
+    if (user?.role === "supervisor" && user.branch_id) {
+      return vehicle.assigned_branch === user.branch_id;
+    }
+    return true;
   };
 
-  // Check if the selected vehicle can end trip (status is "en_transito")
+  // Check if the selected vehicle can end trip (status is "en_transito" and supervisor matches destination branch)
   const canEndTrip = () => {
     if (!selectedForAssign) return false;
     const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
-    return vehicle?.status === "en_transito";
+    if (!vehicle || vehicle.status !== "en_transito") return false;
+    if (user?.role === "supervisor" && user.branch_id) {
+      return vehicle.destination_branch === user.branch_id;
+    }
+    return true;
   };
 
   const openLoadModal = (v: Vehicle) => {
@@ -269,7 +278,7 @@ export function VehicleList() {
 
   // Filtrar vehículos
   const filteredVehicles = vehicles.filter((v) => {
-    if (branchFilter && v.assigned_branch !== branchFilter) return false;
+    if (branchFilter && v.assigned_branch !== branchFilter && v.destination_branch !== branchFilter) return false;
     if (statusFilter && v.status !== statusFilter) return false;
     if (showOnlyAvailable && v.status !== "disponible") return false;
     if (plateSearch && !v.license_plate.toUpperCase().includes(plateSearch.toUpperCase())) return false;
@@ -523,7 +532,7 @@ export function VehicleList() {
               {filteredVehicles.length} vehicle{filteredVehicles.length !== 1 ? "s" : ""} {showOnlyAvailable ? "available" : "in the fleet"}
             </p>
           </div>
-          {canWrite && (
+          {canManageTrips && (
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
@@ -567,7 +576,7 @@ export function VehicleList() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 500 }}>
               <thead>
                 <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                  {canWrite && <th style={thStyle}>Select</th>}
+                  {canManageTrips && <th style={thStyle}>Select</th>}
                   <th style={thStyle}>License Plate</th>
                   <th style={thStyle}>Type</th>
                   <th style={thStyle}>Current Branch</th>
@@ -586,7 +595,7 @@ export function VehicleList() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                   >
-                    {canWrite && (
+                    {canManageTrips && (
                       <td style={tdStyle}>
                         <input
                           type="radio"
@@ -669,7 +678,7 @@ export function VehicleList() {
                       </span>
                     </td>
                     <td style={tdStyle}>
-                      {hasRole("operator", "supervisor", "admin") && (v.status === "disponible" || v.status === "en_carga") && (
+                      {hasRole("operator", "supervisor") && (v.status === "disponible" || v.status === "en_carga") && (
                         <button
                           onClick={() => openLoadModal(v)}
                           style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
@@ -693,6 +702,7 @@ export function VehicleList() {
           onClose={closeVehicleDetail}
           onRefresh={loadVehicles}
           readOnly={!canWrite}
+          hideShipments={isAdmin}
         />
       )}
 
@@ -835,7 +845,13 @@ export function VehicleList() {
 }
 
 // Vehicle Detail Modal Component
-export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean }) {
+const MANUAL_STATUSES: { value: VehicleStatus; label: string }[] = [
+  { value: "disponible", label: "Available" },
+  { value: "mantenimiento", label: "Maintenance" },
+  { value: "inactivo", label: "Inactive" },
+];
+
+export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, hideShipments }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; hideShipments?: boolean }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [assigningBranch, setAssigningBranch] = useState(false);
@@ -844,6 +860,12 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
   const [unassigning, setUnassigning] = useState<string | null>(null);
   const [unassignError, setUnassignError] = useState("");
   const [currentShipments, setCurrentShipments] = useState<string[]>(vehicle.assigned_shipments ?? []);
+  const [currentStatus, setCurrentStatus] = useState<VehicleStatus>(vehicle.status);
+  const [selectedStatus, setSelectedStatus] = useState<VehicleStatus | "">("");
+  const [statusNotes, setStatusNotes] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [statusSuccess, setStatusSuccess] = useState("");
 
   const hasShipments = currentShipments.length > 0;
 
@@ -892,6 +914,30 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
       setUnassignError(e.response?.data?.error || "Error unassigning shipment");
     } finally {
       setUnassigning(null);
+    }
+  };
+
+  const handleStatusChange = async () => {
+    if (!selectedStatus) return;
+    setStatusBusy(true);
+    setStatusError("");
+    setStatusSuccess("");
+    try {
+      const updated = await vehicleApi.updateStatus(vehicle.license_plate, {
+        status: selectedStatus,
+        notes: statusNotes.trim() || undefined,
+        force: currentShipments.length > 0,
+      });
+      setCurrentStatus(updated.status);
+      setSelectedStatus("");
+      setStatusNotes("");
+      setStatusSuccess(`Status updated to ${vehicleStatusLabels[updated.status]}`);
+      onRefresh?.();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setStatusError(e.response?.data?.error ?? "Error updating status");
+    } finally {
+      setStatusBusy(false);
     }
   };
 
@@ -1020,6 +1066,68 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
           </div>
         </div>
 
+        {/* Cambio de estado — solo admin */}
+        {!readOnly && hideShipments && (
+          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Change Status</h3>
+
+            {["en_carga", "en_transito"].includes(currentStatus) && (
+              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "#92400e" }}>
+                Status <strong>{vehicleStatusLabels[currentStatus]}</strong> is managed automatically by trip operations and cannot be changed manually.
+              </div>
+            )}
+
+            {!["en_carga", "en_transito"].includes(currentStatus) && (
+              <>
+                {currentShipments.length > 0 && (
+                  <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "#92400e" }}>
+                    This vehicle has {currentShipments.length} assigned shipment{currentShipments.length !== 1 ? "s" : ""}. The status change will be forced.
+                  </div>
+                )}
+                {statusError && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                    {statusError}
+                  </div>
+                )}
+                {statusSuccess && (
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                    {statusSuccess}
+                  </div>
+                )}
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => { setSelectedStatus(e.target.value as VehicleStatus | ""); setStatusError(""); setStatusSuccess(""); }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", marginBottom: 8 }}
+                >
+                  <option value="">Select new status…</option>
+                  {MANUAL_STATUSES.filter(s => s.value !== currentStatus).map(s => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={statusNotes}
+                  onChange={(e) => setStatusNotes(e.target.value)}
+                  placeholder="Notes (optional)"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, marginBottom: 8, boxSizing: "border-box" }}
+                />
+                <button
+                  onClick={handleStatusChange}
+                  disabled={!selectedStatus || statusBusy}
+                  style={{
+                    background: !selectedStatus || statusBusy ? "#9ca3af" : "#1e3a5f",
+                    color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px",
+                    cursor: !selectedStatus || statusBusy ? "not-allowed" : "pointer",
+                    fontWeight: 600, width: "100%", opacity: statusBusy ? 0.7 : 1,
+                  }}
+                >
+                  {statusBusy ? "Updating…" : "Update Status"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
           {/* Branch asignado */}
         <div
           style={{
@@ -1089,7 +1197,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
         </div>
 
         {/* Envíos asignados */}
-        <div
+        {!hideShipments && <div
           style={{
             background: "#f9fafb",
             border: "1px solid #e5e7eb",
@@ -1186,7 +1294,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly }: { 
               <p style={{ fontSize: 12, margin: "4px 0 0" }}>This vehicle has no shipments loaded</p>
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );
