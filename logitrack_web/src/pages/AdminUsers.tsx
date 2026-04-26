@@ -59,8 +59,8 @@ const emptyCreate = (): CreateState => ({
 });
 
 const reEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const reName = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s'\-]+$/;
-const reUsername = /^[a-zA-Z0-9_\-]+$/;
+const reName = /^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s'-]+$/;
+const reUsername = /^[a-zA-Z0-9_-]+$/;
 const rePostal = /^[A-Z0-9]{4,10}$/i;
 
 function validatePersonalFields(s: { first_name: string; last_name: string; email: string; address: UserAddress }): string {
