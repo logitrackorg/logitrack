@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -38,9 +38,9 @@ export function BranchList() {
 
   const [capacities, setCapacities] = useState<Record<string, BranchCapacity>>({});
 
-  useEffect(() => { loadBranches(); }, []);
+  useEffect(() => { loadBranches(); }, [loadBranches]);
 
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       const data = await branchApi.list();
       setBranches(data);
@@ -57,7 +57,7 @@ export function BranchList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewCapacity]);
 
   const filtered = branches
     .filter((b) => {

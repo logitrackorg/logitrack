@@ -23,8 +23,8 @@ export function UserProfile() {
       try {
         const data = await usersApi.getMe();
         setProfile(data);
-      } catch (error: any) {
-        setProfileError(error.response?.data?.error || "Error al cargar el perfil");
+      } catch (error: unknown) {
+        setProfileError((error as { response?: { data?: { error?: string } } })?.response?.data?.error || "Error al cargar el perfil");
       } finally {
         setLoadingProfile(false);
       }
@@ -48,8 +48,8 @@ export function UserProfile() {
       await usersApi.changePassword(form);
       toast.success("Contraseña cambiada exitosamente");
       setForm({ current_password: "", new_password: "", confirm_password: "" });
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || "Error al cambiar la contraseña");
+    } catch (error: unknown) {
+      toast.error((error as { response?: { data?: { error?: string } } })?.response?.data?.error || "Error al cambiar la contraseña");
     } finally {
       setPasswordLoading(false);
     }
