@@ -172,7 +172,7 @@ func (r *eventSourcedShipmentRepository) Stats(filter model.ShipmentFilter) (mod
 func (r *eventSourcedShipmentRepository) GetEvents(trackingID string) ([]model.ShipmentEvent, error) {
 	domainEvents, err := r.store.LoadStream(trackingID)
 	if err != nil {
-		return nil, fmt.Errorf("shipment not found")
+		return nil, fmt.Errorf("envío no encontrado")
 	}
 
 	result := make([]model.ShipmentEvent, 0)

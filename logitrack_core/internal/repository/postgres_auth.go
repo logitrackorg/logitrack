@@ -273,7 +273,7 @@ func (r *postgresAuthRepository) GetUserByID(id string) (model.User, error) {
 	row := r.db.QueryRow(`SELECT `+userSelectCols+` FROM users WHERE id = $1`, id)
 	u, err := scanUser(row.Scan)
 	if err == sql.ErrNoRows {
-		return model.User{}, fmt.Errorf("user not found")
+		return model.User{}, fmt.Errorf("usuario no encontrado")
 	}
 	return u, err
 }
@@ -308,7 +308,7 @@ func (r *postgresAuthRepository) CreateUser(cmd UserCreate) (model.User, error) 
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "users_email_key") || (strings.Contains(err.Error(), "unique") && strings.Contains(err.Error(), "email")) {
-			return model.User{}, fmt.Errorf("email already in use")
+			return model.User{}, fmt.Errorf("el email ya está en uso")
 		}
 		if strings.Contains(err.Error(), "unique") {
 			return model.User{}, fmt.Errorf("username already exists")
@@ -387,7 +387,7 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 	query := `UPDATE users SET ` + strings.Join(setClauses, ", ") + fmt.Sprintf(` WHERE id = $%d`, argIdx)
 	if _, err := r.db.Exec(query, args...); err != nil {
 		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "unique") && strings.Contains(err.Error(), "email") {
-			return model.User{}, fmt.Errorf("email already in use")
+			return model.User{}, fmt.Errorf("el email ya está en uso")
 		}
 		return model.User{}, err
 	}
@@ -405,14 +405,14 @@ func (r *postgresAuthRepository) ChangePassword(ctx context.Context, userID, cur
 	err := r.db.QueryRowContext(ctx, `SELECT password FROM users WHERE id = $1`, userID).Scan(&storedHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("user not found")
+			return fmt.Errorf("usuario no encontrado")
 		}
 		return err
 	}
 
 	// Compare the provided current password with the stored hash
 	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(currentPassword)); err != nil {
-		return fmt.Errorf("current password is incorrect")
+		return fmt.Errorf("la contraseña actual es incorrecta")
 	}
 
 	// Update to the new password
