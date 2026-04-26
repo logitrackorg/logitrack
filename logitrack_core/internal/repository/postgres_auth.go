@@ -91,6 +91,8 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		addrJSON, _ := json.Marshal(map[string]string{
 			"street": u.street, "city": u.city, "province": u.province, "postal_code": u.postalCode,
 		})
+		// Hash the password using bcrypt
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
 		db.Exec(`
 			INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)
@@ -102,7 +104,7 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 				    last_name  = EXCLUDED.last_name,
 				    email      = EXCLUDED.email,
 				    address    = EXCLUDED.address`,
-			u.id, u.username, u.password, u.role, u.branchID,
+			u.id, u.username, string(hashedPassword), u.role, u.branchID,
 			u.firstName, u.lastName, u.email, addrJSON,
 		)
 	}
@@ -157,17 +159,48 @@ const (
 var ErrAccountInactive = fmt.Errorf("account_inactive")
 
 func (r *postgresAuthRepository) FindUser(username, password string) (model.User, error) {
+	// First, get the user and their password hash
+	var id, role, status, firstName, lastName, email, branchID, addressJSON, updatedBy, passwordHash string
+	var updatedAt sql.NullTime
 	row := r.db.QueryRow(
-		`SELECT `+userSelectCols+` FROM users WHERE username = $1 AND password = $2`,
-		username, password,
+		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, password FROM users WHERE username = $1`,
+		username,
 	)
-	u, err := scanUser(row.Scan)
+	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &passwordHash)
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
 	if err != nil {
-		return model.User{}, err
+		return model.User{}, fmt.Errorf("invalid credentials")
 	}
+
+	// Verify the password using bcrypt
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
+		return model.User{}, fmt.Errorf("invalid credentials")
+	}
+
+	// Parse the user data
+	u := model.User{
+		ID:        id,
+		Username:  username,
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     email,
+		Role:      model.Role(role),
+		Status:    model.UserStatus(status),
+		BranchID:  branchID,
+		UpdatedBy: updatedBy,
+	}
+	if updatedAt.Valid {
+		u.UpdatedAt = &updatedAt.Time
+	}
+	if len(addressJSON) > 0 {
+		var addr model.Address
+		if err := json.Unmarshal([]byte(addressJSON), &addr); err == nil {
+			u.Address = &addr
+		}
+	}
+
 	if u.Status == model.UserStatusInactive {
 		return model.User{}, ErrAccountInactive
 	}
