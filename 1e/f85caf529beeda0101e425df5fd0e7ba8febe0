@@ -1,0 +1,70 @@
+logitrack_core/internal/service/branch.go
+  44051c76077bef87 14-17,51,54,57,60,63,92,94,108,112,115,118,121,124,146,149,151,170,180
+logitrack_core/internal/service/shipment.go
+  44051c76077bef87 21,24,31,74,77,81,237,267,302,322,348,351,363,370,384,387,393,400,408,455
+logitrack_web/src/pages/UserProfile.tsx
+  44051c76077bef87 4
+logitrack_core/internal/handler/auth.go
+  44051c76077bef87 91,107
+logitrack_core/internal/handler/shipment.go
+  44051c76077bef87 208,216,252,299,407,419,539,547
+logitrack_core/internal/handler/customer.go
+  44051c76077bef87 35,40
+logitrack_core/internal/handler/driver.go
+  44051c76077bef87 36
+logitrack_core/internal/handler/vehicle.go
+  44051c76077bef87 86,105,532,538,545,560,582,588
+logitrack_core/internal/middleware/auth.go
+  44051c76077bef87 18,24,40,45
+logitrack_core/internal/handler/ml_config.go
+  44051c76077bef87 89,132
+logitrack_web/src/components/Toast.tsx
+  44051c76077bef87 1-65
+logitrack_core/internal/service/user.go
+  44051c76077bef87 24,30,40
+logitrack_web/src/App.tsx
+  44051c76077bef87 2,230
+logitrack_core/internal/service/route.go
+  44051c76077bef87 60,104,107,110
+logitrack_core/internal/handler/branch.go
+  44051c76077bef87 80,115,136
+logitrack_web/package.json
+  44051c76077bef87 16
+logitrack_core/internal/handler/user.go
+  44051c76077bef87 51,57,79,95
+logitrack_core/internal/service/comment.go
+  44051c76077bef87 25,28,31,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "1ef85caf529beeda0101e425df5fd0e7ba8febe0",
+  "prompts": {
+    "44051c76077bef87": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2208643-1692-4c02-a5cb-d778075a4f1b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 3406,
+      "total_deletions": 93,
+      "accepted_lines": 156,
+      "overriden_lines": 0
+    },
+    "b785b79679ccf174": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03e1eaca-0165-460f-ad38-56d5e5329821",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 16,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
