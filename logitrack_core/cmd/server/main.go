@@ -172,6 +172,10 @@ func main() {
 	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
+	// Bulk status update — operator, supervisor, admin (not driver)
+	canBulkStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/bulk-status", canBulkStatus, shipmentHandler.BulkUpdateStatus)
+
 	// Stats / dashboard — supervisor, manager, admin
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)

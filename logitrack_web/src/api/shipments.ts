@@ -170,4 +170,6 @@ export const shipmentApi = {
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
   stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
+  bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>
+    api.post<{ updated: number; skipped: { tracking_id: string; reason: string }[] }>("/shipments/bulk-status", payload).then((r) => r.data),
 };
