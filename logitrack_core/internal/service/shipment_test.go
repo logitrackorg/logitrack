@@ -183,52 +183,52 @@ func TestCreate_Validation(t *testing.T) {
 		{
 			name:    "missing origin city",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Sender.Address.City = "" },
-			wantErr: "origin city and province are required",
+			wantErr: "la ciudad y provincia de origen son obligatorias",
 		},
 		{
 			name:    "missing origin province",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Sender.Address.Province = "" },
-			wantErr: "origin city and province are required",
+			wantErr: "la ciudad y provincia de origen son obligatorias",
 		},
 		{
 			name:    "missing destination city",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Recipient.Address.City = "" },
-			wantErr: "destination city and province are required",
+			wantErr: "la ciudad y provincia de destino son obligatorias",
 		},
 		{
 			name:    "missing destination province",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Recipient.Address.Province = "" },
-			wantErr: "destination city and province are required",
+			wantErr: "la ciudad y provincia de destino son obligatorias",
 		},
 		{
 			name:    "sender DNI too short",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Sender.DNI = "123" },
-			wantErr: "sender_dni must be at least 7 digits",
+			wantErr: "sender_dni debe tener al menos 7 dígitos",
 		},
 		{
 			name:    "sender DNI with letters",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Sender.DNI = "1234abc" },
-			wantErr: "sender_dni must contain only digits",
+			wantErr: "sender_dni debe contener solo dígitos",
 		},
 		{
 			name:    "recipient DNI too short",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Recipient.DNI = "99" },
-			wantErr: "recipient_dni must be at least 7 digits",
+			wantErr: "recipient_dni debe tener al menos 7 dígitos",
 		},
 		{
 			name:    "recipient DNI with letters",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Recipient.DNI = "abc1234" },
-			wantErr: "recipient_dni must contain only digits",
+			wantErr: "recipient_dni debe contener solo dígitos",
 		},
 		{
 			name:    "invalid sender email",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Sender.Email = "notanemail" },
-			wantErr: "sender_email is not a valid email address",
+			wantErr: "sender_email no es una dirección de email válida",
 		},
 		{
 			name:    "invalid recipient email",
 			mutate:  func(r *model.CreateShipmentRequest) { r.Recipient.Email = "bad@" },
-			wantErr: "recipient_email is not a valid email address",
+			wantErr: "recipient_email no es una dirección de email válida",
 		},
 	}
 	for _, tc := range tests {
@@ -294,7 +294,7 @@ func TestSaveDraft_ValidatesDNIWhenProvided(t *testing.T) {
 		Sender: model.Customer{DNI: "abc"},
 	}
 	_, err := ts.svc.SaveDraft(req)
-	if err == nil || !strings.Contains(err.Error(), "sender_dni must contain only digits") {
+	if err == nil || !strings.Contains(err.Error(), "sender_dni debe contener solo dígitos") {
 		t.Errorf("expected DNI validation error, got: %v", err)
 	}
 }
@@ -305,7 +305,7 @@ func TestSaveDraft_ValidatesEmailWhenProvided(t *testing.T) {
 		Recipient: model.Customer{Email: "notvalid"},
 	}
 	_, err := ts.svc.SaveDraft(req)
-	if err == nil || !strings.Contains(err.Error(), "recipient_email is not a valid email address") {
+	if err == nil || !strings.Contains(err.Error(), "recipient_email no es una dirección de email válida") {
 		t.Errorf("expected email validation error, got: %v", err)
 	}
 }
@@ -316,7 +316,7 @@ func TestUpdateDraft_RejectsNonDraft(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts) // status: in_progress, not pending
 	_, err := ts.svc.UpdateDraft(ship.TrackingID, model.SaveDraftRequest{})
-	if err == nil || !strings.Contains(err.Error(), "only draft shipments can be updated") {
+	if err == nil || !strings.Contains(err.Error(), "solo se pueden actualizar envíos en borrador") {
 		t.Errorf("expected non-draft error, got: %v", err)
 	}
 }
@@ -327,7 +327,7 @@ func TestUpdateDraft_ValidatesDNIWhenProvided(t *testing.T) {
 	// "short" contains only digits but is < 7 chars
 	req := model.SaveDraftRequest{Sender: model.Customer{DNI: "123"}}
 	_, err := ts.svc.UpdateDraft(draft.TrackingID, req)
-	if err == nil || !strings.Contains(err.Error(), "sender_dni must be at least 7 digits") {
+	if err == nil || !strings.Contains(err.Error(), "sender_dni debe tener al menos 7 dígitos") {
 		t.Errorf("expected DNI error, got: %v", err)
 	}
 }
@@ -338,7 +338,7 @@ func TestConfirmDraft_RejectsNonDraft(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	_, err := ts.svc.ConfirmDraft(ship.TrackingID, "operator")
-	if err == nil || !strings.Contains(err.Error(), "only draft shipments can be confirmed") {
+	if err == nil || !strings.Contains(err.Error(), "solo se pueden confirmar envíos en borrador") {
 		t.Errorf("expected non-draft error, got: %v", err)
 	}
 }
@@ -348,7 +348,7 @@ func TestConfirmDraft_RejectsMissingFields(t *testing.T) {
 	// draft with no data at all
 	draft, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
 	_, err := ts.svc.ConfirmDraft(draft.TrackingID, "operator")
-	if err == nil || !strings.Contains(err.Error(), "missing required fields") {
+	if err == nil || !strings.Contains(err.Error(), "faltan campos obligatorios") {
 		t.Errorf("expected missing fields error, got: %v", err)
 	}
 }
@@ -373,7 +373,7 @@ func TestConfirmDraft_RejectsShortDNI(t *testing.T) {
 		// If somehow it slipped through, ConfirmDraft must catch it
 		_, err = ts.svc.ConfirmDraft(draft.TrackingID, "operator")
 	}
-	if err == nil || !strings.Contains(err.Error(), "sender_dni must be at least 7 digits") {
+	if err == nil || !strings.Contains(err.Error(), "sender_dni debe tener al menos 7 dígitos") {
 		t.Errorf("expected short-DNI error at save or confirm, got: %v", err)
 	}
 }
@@ -413,7 +413,7 @@ func TestUpdateStatus_DeliveryFailed_RequiresNotes(t *testing.T) {
 		Status: model.StatusDeliveryFailed, ChangedBy: "driver",
 		// Notes intentionally empty
 	})
-	if err == nil || !strings.Contains(err.Error(), "notes are required for delivery_failed") {
+	if err == nil || !strings.Contains(err.Error(), "las notas son obligatorias para fallo de entrega") {
 		t.Errorf("expected notes-required error, got: %v", err)
 	}
 }
@@ -428,7 +428,7 @@ func TestUpdateStatus_Delivering_RequiresDriverID(t *testing.T) {
 		Status: model.StatusDelivering, ChangedBy: "supervisor",
 		// DriverID intentionally empty
 	})
-	if err == nil || !strings.Contains(err.Error(), "driver_id is required when moving to delivering") {
+	if err == nil || !strings.Contains(err.Error(), "el driver_id es obligatorio al pasar a estado de entrega") {
 		t.Errorf("expected driver_id-required error, got: %v", err)
 	}
 }
@@ -455,7 +455,7 @@ func TestUpdateStatus_InTransit_SameDestinationRejected(t *testing.T) {
 		Location:  "Buenos Aires", // resolves to br-caba — same as current
 		ChangedBy: "supervisor",
 	})
-	if err == nil || !strings.Contains(err.Error(), "destination branch must be different from current branch") {
+	if err == nil || !strings.Contains(err.Error(), "la sucursal de destino debe ser diferente a la sucursal actual") {
 		t.Errorf("expected same-destination error, got: %v", err)
 	}
 }
@@ -488,7 +488,7 @@ func TestUpdateStatus_Delivered_RequiresRecipientDNI(t *testing.T) {
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver",
 	})
-	if err == nil || !strings.Contains(err.Error(), "recipient_dni is required for delivery") {
+	if err == nil || !strings.Contains(err.Error(), "el DNI del destinatario es obligatorio para la entrega") {
 		t.Errorf("expected recipient_dni required error, got: %v", err)
 	}
 }
@@ -503,7 +503,7 @@ func TestUpdateStatus_Delivered_WrongDNIRejected(t *testing.T) {
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver", RecipientDNI: "00000000",
 	})
-	if err == nil || !strings.Contains(err.Error(), "DNI does not match") {
+	if err == nil || !strings.Contains(err.Error(), "el DNI no coincide") {
 		t.Errorf("expected DNI mismatch error, got: %v", err)
 	}
 }
@@ -577,7 +577,7 @@ func TestUpdateStatus_Returned_RequiresSenderDNI(t *testing.T) {
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusReturned, ChangedBy: "supervisor",
 	})
-	if err == nil || !strings.Contains(err.Error(), "sender_dni is required for returned") {
+	if err == nil || !strings.Contains(err.Error(), "el DNI del remitente es obligatorio para la devolución") {
 		t.Errorf("expected sender_dni required error, got: %v", err)
 	}
 }
@@ -590,7 +590,7 @@ func TestUpdateStatus_Returned_WrongSenderDNIRejected(t *testing.T) {
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusReturned, ChangedBy: "supervisor", SenderDNI: "00000000",
 	})
-	if err == nil || !strings.Contains(err.Error(), "DNI does not match") {
+	if err == nil || !strings.Contains(err.Error(), "el DNI no coincide") {
 		t.Errorf("expected DNI mismatch error, got: %v", err)
 	}
 }
@@ -623,7 +623,7 @@ func TestUpdateStatus_ReadyForReturn_NotAtOriginRejected(t *testing.T) {
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusReadyForReturn, ChangedBy: "supervisor",
 	})
-	if err == nil || !strings.Contains(err.Error(), "not at its origin branch") {
+	if err == nil || !strings.Contains(err.Error(), "no está en su sucursal de origen") {
 		t.Errorf("expected origin-branch error, got: %v", err)
 	}
 }
@@ -684,7 +684,7 @@ func TestCancelShipment_RequiresReason(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	_, err := ts.svc.CancelShipment(ship.TrackingID, "supervisor", "")
-	if err == nil || !strings.Contains(err.Error(), "cancellation reason is required") {
+	if err == nil || !strings.Contains(err.Error(), "el motivo de cancelación es obligatorio") {
 		t.Errorf("expected reason-required error, got: %v", err)
 	}
 }
@@ -866,7 +866,7 @@ func TestCorrectShipment_EmptyCorrections(t *testing.T) {
 	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 		Corrections: model.ShipmentCorrections{}, // all nil
 	})
-	if err == nil || !strings.Contains(err.Error(), "no corrections provided") {
+	if err == nil || !strings.Contains(err.Error(), "no se proporcionaron correcciones") {
 		t.Errorf("expected no-corrections error, got: %v", err)
 	}
 }
@@ -877,7 +877,7 @@ func TestCorrectShipment_InvalidSenderDNI(t *testing.T) {
 	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 		Corrections: model.ShipmentCorrections{SenderDNI: strPtr("abc")},
 	})
-	if err == nil || !strings.Contains(err.Error(), "sender_dni must contain only digits") {
+	if err == nil || !strings.Contains(err.Error(), "sender_dni debe contener solo dígitos") {
 		t.Errorf("expected DNI validation error, got: %v", err)
 	}
 }
@@ -888,7 +888,7 @@ func TestCorrectShipment_InvalidRecipientDNI(t *testing.T) {
 	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 		Corrections: model.ShipmentCorrections{RecipientDNI: strPtr("1234")}, // too short
 	})
-	if err == nil || !strings.Contains(err.Error(), "recipient_dni must be at least 7 digits") {
+	if err == nil || !strings.Contains(err.Error(), "recipient_dni debe tener al menos 7 dígitos") {
 		t.Errorf("expected short-DNI error, got: %v", err)
 	}
 }
@@ -899,7 +899,7 @@ func TestCorrectShipment_InvalidEmail(t *testing.T) {
 	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 		Corrections: model.ShipmentCorrections{SenderEmail: strPtr("bad-email")},
 	})
-	if err == nil || !strings.Contains(err.Error(), "sender_email is not a valid email address") {
+	if err == nil || !strings.Contains(err.Error(), "sender_email no es una dirección de email válida") {
 		t.Errorf("expected email error, got: %v", err)
 	}
 }
@@ -916,7 +916,7 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
 				return d.TrackingID
 			},
-			wantErr: "drafts must be edited directly",
+			wantErr: "los borradores deben editarse directamente",
 		},
 		{
 			name: "delivered",
@@ -931,7 +931,7 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 				})
 				return ship.TrackingID
 			},
-			wantErr: "cannot correct finalized shipments",
+			wantErr: "no se pueden corregir envíos finalizados",
 		},
 		{
 			name: "returned",
@@ -944,7 +944,7 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 				})
 				return ship.TrackingID
 			},
-			wantErr: "cannot correct finalized shipments",
+			wantErr: "no se pueden corregir envíos finalizados",
 		},
 		{
 			name: "cancelled",
@@ -953,7 +953,7 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 				ts.svc.CancelShipment(ship.TrackingID, "supervisor", "test")
 				return ship.TrackingID
 			},
-			wantErr: "cannot correct finalized shipments",
+			wantErr: "no se pueden corregir envíos finalizados",
 		},
 	}
 

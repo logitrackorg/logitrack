@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
-import { toast } from "react-toastify";
+import { toast } from "../utils/toast";
 
 export function UserProfile() {
   const navigate = useNavigate();

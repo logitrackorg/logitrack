@@ -11,8 +11,8 @@ import (
 )
 
 type UserHandler struct {
-	authRepo   repository.AuthRepository
-	userSvc    *service.UserService
+	authRepo repository.AuthRepository
+	userSvc  *service.UserService
 }
 
 func NewUserHandler(authRepo repository.AuthRepository, userSvc *service.UserService) *UserHandler {
@@ -48,13 +48,13 @@ func (h *UserHandler) ListDrivers(c *gin.Context) {
 func (h *UserHandler) GetMe(c *gin.Context) {
 	user, exists := c.Get(middleware.UserKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no autorizado"})
 		return
 	}
 	u := user.(model.User)
 	profile, err := h.userSvc.GetProfile(c.Request.Context(), u.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user profile"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener el perfil"})
 		return
 	}
 	c.JSON(http.StatusOK, profile)
@@ -76,7 +76,7 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no autorizado"})
 		return
 	}
 	u := user.(model.User)
@@ -92,5 +92,5 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "password changed successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "contraseña cambiada exitosamente"})
 }

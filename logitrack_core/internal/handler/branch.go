@@ -77,7 +77,7 @@ func (h *BranchHandler) Create(c *gin.Context) {
 func (h *BranchHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "branch ID is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el ID de sucursal es obligatorio"})
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *BranchHandler) Update(c *gin.Context) {
 func (h *BranchHandler) GetCapacity(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "branch ID is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el ID de sucursal es obligatorio"})
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *BranchHandler) GetCapacity(c *gin.Context) {
 func (h *BranchHandler) UpdateStatus(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "branch ID is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el ID de sucursal es obligatorio"})
 		return
 	}
 

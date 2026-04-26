@@ -205,7 +205,7 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	if raw := c.Query("date_from"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_from format, use YYYY-MM-DD"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
 			return
 		}
 		filter.DateFrom = &t
@@ -213,7 +213,7 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	if raw := c.Query("date_to"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_to format, use YYYY-MM-DD"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
 			return
 		}
 		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
@@ -249,7 +249,7 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	shipment, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
 		return
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
@@ -296,7 +296,7 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	}
 	if user.Role == model.RoleOperator {
 		if fromStatus == model.StatusDelivering {
-			c.JSON(http.StatusForbidden, gin.H{"error": "operators cannot update shipments in delivering status"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "los operadores no pueden modificar envíos en estado de entrega"})
 			return
 		}
 	}
@@ -404,7 +404,7 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 	trackingID := c.Param("tracking_id")
 	shipment, err := h.svc.GetByTrackingID(trackingID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
 		return
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
@@ -416,7 +416,7 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 	}
 	events, err := h.svc.GetEvents(trackingID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
 		return
 	}
 	c.JSON(http.StatusOK, events)
@@ -536,7 +536,7 @@ func (h *ShipmentHandler) Stats(c *gin.Context) {
 	if raw := c.Query("date_from"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_from format, use YYYY-MM-DD"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
 			return
 		}
 		filter.DateFrom = &t
@@ -544,7 +544,7 @@ func (h *ShipmentHandler) Stats(c *gin.Context) {
 	if raw := c.Query("date_to"); raw != "" {
 		t, err := time.Parse("2006-01-02", raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_to format, use YYYY-MM-DD"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
 			return
 		}
 		endOfDay := t.Add(24*time.Hour - time.Nanosecond)
