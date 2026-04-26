@@ -80,6 +80,7 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
+	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
@@ -154,6 +155,10 @@ func main() {
 	protected.GET("/shipments/:tracking_id", allRoles, shipmentHandler.GetByTrackingID)
 	protected.GET("/shipments/:tracking_id/events", allRoles, shipmentHandler.GetEvents)
 
+	// QR generation — all authenticated roles
+	protected.GET("/shipments/:tracking_id/qr", allRoles, qrHandler.GenerateShipmentQR)
+	protected.GET("/shipments/:tracking_id/qr/download", allRoles, qrHandler.DownloadShipmentQR)
+
 	// Create / draft shipment — operator, supervisor, admin
 	canCreate := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments", canCreate, shipmentHandler.Create)
@@ -219,6 +224,8 @@ func main() {
 	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetByTrackingID)
 	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetEvents)
 	publicAPI.GET("/branches", branchHandler.List)
+
+	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

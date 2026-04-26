@@ -247,6 +247,12 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	}
 }
 
+// CanGenerateQR returns true if the shipment can generate a QR code. AGREGADO
+// QR codes can only be generated for confirmed shipments (not drafts).
+func (s *Shipment) CanGenerateQR() bool {
+	return s.TrackingID != "" && s.Status != StatusPending
+}
+
 type CreateShipmentRequest struct {
 	Sender    Customer `json:"sender"    binding:"required"`
 	Recipient Customer `json:"recipient" binding:"required"`

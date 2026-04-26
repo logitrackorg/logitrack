@@ -21,6 +21,8 @@ import { branchApi, branchLabel, branchLabelById, type Branch } from "../api/bra
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
+import ShipmentQRModal from '../components/ShipmentQRModal';
+import { qrService, type QRResponse } from '../api/qrService';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending:           [],
@@ -107,6 +109,13 @@ export function ShipmentDetail() {
   const [selectedVehiclePlate, setSelectedVehiclePlate] = useState("");
   const [assigningVehicle, setAssigningVehicle] = useState(false);
   const [vehiclePickerError, setVehiclePickerError] = useState("");
+
+  //  Estados para QR
+  const [qrData, setQRData] = useState<QRResponse | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrError, setQRError] = useState<string>('');
+  const [generatingQR, setGeneratingQR] = useState(false);
+
   const reload = useCallback(async () => {
     if (!trackingId) return;
     try {
@@ -199,6 +208,24 @@ export function ShipmentDetail() {
       setVehiclePickerError(msg ?? "No se pudo asignar el vehículo.");
     } finally {
       setAssigningVehicle(false);
+    }
+  };
+
+    // Función para generar QR
+  const handleGenerateQR = async () => {
+    if (!trackingId) return;
+
+    try {
+      setQRError('');
+      setGeneratingQR(true);
+      const data = await qrService.generateQR(trackingId);
+      setQRData(data);
+      setShowQRModal(true);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar código QR';
+      setQRError(message);
+    } finally {
+      setGeneratingQR(false);
     }
   };
 
@@ -548,6 +575,28 @@ export function ShipmentDetail() {
           <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} destination={shipment.recipient.address.city} branches={branches} />
         </>
       )}
+
+ {/*  BOTÓN GENERAR QR */}
+{shipment.status !== "pending" && (
+  <button
+    onClick={handleGenerateQR}
+    disabled={!shipment.tracking_id || generatingQR}
+    title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
+    style={{
+      background: "#fff",
+      border: "1px solid #d1d5db",
+      borderRadius: 6,
+      padding: "6px 12px",
+      cursor: (!shipment.tracking_id || generatingQR) ? "not-allowed" : "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+      color: "#374151",
+      opacity: (!shipment.tracking_id || generatingQR) ? 0.5 : 1,
+    }}
+  >
+    {generatingQR ? "Generando..." : "📱 Generar QR"}
+  </button>
+)}
 
       {/* Status update — supervisor and admin only */}
       {(shipment.status === "pre_transit" || shipment.status === "in_transit") && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
@@ -1055,8 +1104,36 @@ export function ShipmentDetail() {
             </div>
           </div>
         </div>
+      )})
+      {/* 🆕 AGREGAR AQUÍ - MODAL DE QR */}
+      {qrData && (
+        <ShipmentQRModal
+          isOpen={showQRModal}
+          onClose={() => setShowQRModal(false)}
+          trackingId={qrData.tracking_id}
+          qrCodeBase64={qrData.qr_code_base64}
+          trackingUrl={qrData.tracking_url}
+        />
       )}
-    </div>
+
+      {qrError && (
+        <div style={{ 
+          position: "fixed", 
+          bottom: 24, 
+          right: 24, 
+          background: "#fef2f2", 
+          border: "1px solid #fecaca", 
+          color: "#dc2626", 
+          padding: "12px 16px", 
+          borderRadius: 8, 
+          fontSize: 13,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          zIndex: 1001,
+        }}>
+          {qrError}
+        </div>
+      )}
+    </div> 
   );
 }
 

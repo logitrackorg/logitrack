@@ -41,6 +41,7 @@ services:
       DB_PASSWORD: localpass
       DB_NAME: logitrack
       DB_SSLMODE: disable
+      FRONTEND_URL: http://localhost:5173  
     ports:
       - "8080:8080"
 
