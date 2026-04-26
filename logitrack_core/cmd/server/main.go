@@ -112,14 +112,16 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	// Branches — list/search: non-driver roles, create/update/status: admin only
+	// Branches — list/search: non-driver roles, create/update/status: admin only, capacity: supervisor+manager+admin
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
+	canViewCapacity := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
 	protected.GET("/branches/search", nonDriver, branchHandler.Search)
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
 	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
+	protected.GET("/branches/:id/capacity", canViewCapacity, branchHandler.GetCapacity)
 
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)

@@ -24,6 +24,7 @@ func (h *BranchHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/branches/search", h.Search)
 	r.PATCH("/branches/:id", h.Update)
 	r.PATCH("/branches/:id/status", h.UpdateStatus)
+	r.GET("/branches/:id/capacity", h.GetCapacity)
 }
 
 // List returns all branches, optionally filtered by status.
@@ -105,6 +106,27 @@ func (h *BranchHandler) Update(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, branch)
+}
+
+// GetCapacity returns current occupancy vs max capacity for a branch.
+func (h *BranchHandler) GetCapacity(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "branch ID is required"})
+		return
+	}
+
+	cap, err := h.svc.GetCapacity(id)
+	if err != nil {
+		if errors.Is(err, service.ErrBranchNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, cap)
 }
 
 // UpdateStatus changes branch operational status.

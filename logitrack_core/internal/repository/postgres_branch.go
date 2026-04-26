@@ -22,11 +22,13 @@ func NewPostgresBranchRepository(db *sql.DB) BranchRepository {
 			city VARCHAR(100),
 			province VARCHAR(100),
 			postal_code VARCHAR(20),
-				status VARCHAR(30) NOT NULL DEFAULT 'activo',
+			status VARCHAR(30) NOT NULL DEFAULT 'activo',
 			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			updated_by VARCHAR(100)
-		)
+			updated_by VARCHAR(100),
+			max_capacity INT NOT NULL DEFAULT 50
+		);
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS max_capacity INT NOT NULL DEFAULT 50;
 	`)
 	if err != nil {
 		panic("failed to create branches table: " + err.Error())
@@ -42,7 +44,7 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	var status string
 
 	err := scan(&b.ID, &b.Name, &street, &city, &province, &postalCode,
-		&status, &createdAt, &updatedAt, &updatedBy)
+		&status, &createdAt, &updatedAt, &updatedBy, &b.MaxCapacity)
 	if err != nil {
 		return model.Branch{}, err
 	}
@@ -74,7 +76,7 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	return b, nil
 }
 
-const branchSelectCols = `id, name, street, city, province, postal_code, status, created_at, updated_at, updated_by`
+const branchSelectCols = `id, name, street, city, province, postal_code, status, created_at, updated_at, updated_by, max_capacity`
 
 func (r *postgresBranchRepository) List() []model.Branch {
 	rows, err := r.db.Query(`SELECT ` + branchSelectCols + ` FROM branches ORDER BY name`)
@@ -125,11 +127,11 @@ func (r *postgresBranchRepository) Create(branch model.Branch) error {
 
 	now := time.Now()
 	_, err = r.db.Exec(`
-		INSERT INTO branches (id, name, street, city, province, postal_code, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO branches (id, name, street, city, province, postal_code, status, created_at, updated_at, max_capacity)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`, branch.ID, branch.Name, branch.Address.Street, branch.Address.City,
 		branch.Address.Province, branch.Address.PostalCode,
-		branch.Status, now, now)
+		branch.Status, now, now, branch.MaxCapacity)
 	return err
 }
 
@@ -159,10 +161,10 @@ func (r *postgresBranchRepository) Update(id string, branch model.Branch) error 
 
 	_, err = r.db.Exec(`
 		UPDATE branches SET name = $1, street = $2, city = $3, province = $4,
-			postal_code = $5, updated_at = $6
-		WHERE id = $7
+			postal_code = $5, max_capacity = $6, updated_at = $7
+		WHERE id = $8
 	`, branch.Name, branch.Address.Street, branch.Address.City, branch.Address.Province,
-		branch.Address.PostalCode, time.Now(), id)
+		branch.Address.PostalCode, branch.MaxCapacity, time.Now(), id)
 	return err
 }
 
