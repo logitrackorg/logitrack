@@ -1,0 +1,23 @@
+logitrack_web/src/pages/ShipmentDetail.tsx
+  46ea31e34b70fc31 224-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c1f145875438a6055e02dfe19580e671e060684b",
+  "prompts": {
+    "46ea31e34b70fc31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be92380b-ae98-4f14-b1bd-e3f38f0a0468",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 1698,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
