@@ -1,0 +1,39 @@
+docs/adr/README.md
+  b785b79679ccf174 1-35
+docs/adr/ADR-005-arquitectura-capas-backend.md
+  b785b79679ccf174 1-105
+docs/adr/ADR-006-autenticacion-bearer-token.md
+  b785b79679ccf174 1-122
+docs/adr/ADR-002-postgresql-base-de-datos.md
+  b785b79679ccf174 1-119
+docs/adr/ADR-003-randomforest-prediccion-prioridad.md
+  b785b79679ccf174 1-144
+docs/adr/ADR-004-gin-framework-backend.md
+  b785b79679ccf174 1-118
+docs/adr/ADR-007-react-vite-typescript-frontend.md
+  b785b79679ccf174 1-124
+docs/adr/ADR-001-event-sourcing-shipments.md
+  b785b79679ccf174 1-110
+docs/adr/ADR-000-plantilla.md
+  b785b79679ccf174 1-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8a2a84d7e740960e40e2e4bb8582fea4c06b6941",
+  "prompts": {
+    "b785b79679ccf174": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03e1eaca-0165-460f-ad38-56d5e5329821",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 938,
+      "total_deletions": 0,
+      "accepted_lines": 938,
+      "overriden_lines": 0
+    }
+  }
+}
