@@ -159,8 +159,8 @@ const (
 var ErrAccountInactive = fmt.Errorf("account_inactive")
 
 func (r *postgresAuthRepository) FindUser(username, password string) (model.User, error) {
-	// First, get the user and their password hash
-	var id, role, status, firstName, lastName, email, branchID, addressJSON, updatedBy, passwordHash string
+	var id, role, status, firstName, lastName, passwordHash string
+	var email, addressJSON, branchID, updatedBy sql.NullString
 	var updatedAt sql.NullTime
 	row := r.db.QueryRow(
 		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, password FROM users WHERE username = $1`,
@@ -174,29 +174,33 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
 
-	// Verify the password using bcrypt
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
 
-	// Parse the user data
 	u := model.User{
 		ID:        id,
 		Username:  username,
 		FirstName: firstName,
 		LastName:  lastName,
-		Email:     email,
 		Role:      model.Role(role),
 		Status:    model.UserStatus(status),
-		BranchID:  branchID,
-		UpdatedBy: updatedBy,
+	}
+	if branchID.Valid {
+		u.BranchID = branchID.String
+	}
+	if email.Valid {
+		u.Email = email.String
+	}
+	if updatedBy.Valid {
+		u.UpdatedBy = updatedBy.String
 	}
 	if updatedAt.Valid {
 		u.UpdatedAt = &updatedAt.Time
 	}
-	if len(addressJSON) > 0 {
+	if addressJSON.Valid && len(addressJSON.String) > 0 {
 		var addr model.Address
-		if err := json.Unmarshal([]byte(addressJSON), &addr); err == nil {
+		if err := json.Unmarshal([]byte(addressJSON.String), &addr); err == nil {
 			u.Address = &addr
 		}
 	}
