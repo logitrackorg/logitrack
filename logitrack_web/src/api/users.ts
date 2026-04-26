@@ -11,9 +11,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}
+
 export const usersApi = {
   listDrivers: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
     return api.get<{ drivers: User[] }>("/users/drivers", { params }).then((r) => r.data.drivers ?? []);
+  },
+  changePassword: (data: ChangePasswordRequest) => {
+    return api.post<{ message: string }>("/users/me/password", data).then((r) => r.data);
   },
 };

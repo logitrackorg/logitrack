@@ -1,6 +1,10 @@
 package repository
 
-import "github.com/logitrack/core/internal/model"
+import (
+	"context"
+
+	"github.com/logitrack/core/internal/model"
+)
 
 type UserCreate struct {
 	Username  string
@@ -41,4 +45,5 @@ type AuthRepository interface {
 	GetUserByID(id string) (model.User, error)
 	UpdateUser(id string, update UserUpdate) (model.User, error)
 	CreateUser(cmd UserCreate) (model.User, error)
+	ChangePassword(ctx context.Context, userID, currentPassword, newHashedPassword string) error
 }

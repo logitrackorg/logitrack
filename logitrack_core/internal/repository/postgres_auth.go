@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/logitrack/core/internal/model"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type postgresAuthRepository struct {
@@ -358,4 +360,25 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 	}
 
 	return r.GetUserByID(id)
+}
+
+func (r *postgresAuthRepository) ChangePassword(ctx context.Context, userID, currentPassword, newHashedPassword string) error {
+	// First, verify the current password
+	var storedHash string
+	err := r.db.QueryRowContext(ctx, `SELECT password FROM users WHERE id = $1`, userID).Scan(&storedHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("user not found")
+		}
+		return err
+	}
+
+	// Compare the provided current password with the stored hash
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(currentPassword)); err != nil {
+		return fmt.Errorf("current password is incorrect")
+	}
+
+	// Update to the new password
+	_, err = r.db.ExecContext(ctx, `UPDATE users SET password = $1 WHERE id = $2`, newHashedPassword, userID)
+	return err
 }
