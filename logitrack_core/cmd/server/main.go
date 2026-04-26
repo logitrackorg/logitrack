@@ -56,6 +56,7 @@ func main() {
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
+	incidentRepo := repository.NewPostgresIncidentRepository(database)
 	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
@@ -75,18 +76,21 @@ func main() {
 	mlConfigHandler := handler.NewMLConfigHandler(mlConfigSvc)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
+	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
+	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
-	branchSvc := service.NewBranchService(branchRepo)
+	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
-	userHandler := handler.NewUserHandler(authRepo)
+	userSvc := service.NewUserService(authRepo, branchRepo)
+	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
 
@@ -110,14 +114,16 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	// Branches — list/search: non-driver roles, create/update/status: admin only
+	// Branches — list/search: non-driver roles, create/update/status: admin only, capacity: supervisor+manager+admin
 	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
+	canViewCapacity := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/branches", nonDriver, branchHandler.List)
 	protected.GET("/branches/search", nonDriver, branchHandler.Search)
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
 	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
+	protected.GET("/branches/:id/capacity", canViewCapacity, branchHandler.GetCapacity)
 
 	// Shipment detail/events — all authenticated roles including driver
 	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
@@ -160,10 +166,15 @@ func main() {
 	protected.PATCH("/shipments/:tracking_id/draft", canCreate, shipmentHandler.UpdateDraft)
 	protected.POST("/shipments/:tracking_id/confirm", canCreate, shipmentHandler.ConfirmDraft)
 
-	// Comments — read: all authenticated, write: supervisor/admin
+	// Comments — read: all authenticated, write: operator/supervisor/admin
 	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
 	canComment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
+
+	// Incidents — read: all authenticated, write: operator/supervisor/admin
+	protected.GET("/shipments/:tracking_id/incidents", allRoles, incidentHandler.GetIncidents)
+	canReportIncident := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/:tracking_id/incidents", canReportIncident, incidentHandler.ReportIncident)
 
 	// Correct shipment data (non-destructive) — operator, supervisor, admin
 	canCorrect := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
@@ -177,6 +188,10 @@ func main() {
 	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
+	// Bulk status update — operator, supervisor, admin (not driver)
+	canBulkStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	protected.POST("/shipments/bulk-status", canBulkStatus, shipmentHandler.BulkUpdateStatus)
+
 	// Stats / dashboard — supervisor, manager, admin
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
@@ -188,6 +203,8 @@ func main() {
 	// Users — list drivers (operator, supervisor, admin)
 	canListDrivers := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.GET("/users/drivers", canListDrivers, userHandler.ListDrivers)
+	protected.GET("/users/me", allRoles, userHandler.GetMe)
+	protected.POST("/users/me/password", allRoles, userHandler.ChangePassword)
 
 	// Customers — autocomplete by DNI (operator+)
 	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)

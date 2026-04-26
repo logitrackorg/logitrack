@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { branchApi, type Branch, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
+import { useCallback, useEffect, useState } from "react";
+import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { fmtDateTime } from "../utils/date";
@@ -34,19 +34,30 @@ export function BranchList() {
   const [error, setError] = useState("");
 
   const isAdmin = hasRole("admin");
+  const canViewCapacity = hasRole("supervisor", "manager", "admin");
 
-  useEffect(() => { loadBranches(); }, []);
+  const [capacities, setCapacities] = useState<Record<string, BranchCapacity>>({});
 
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       const data = await branchApi.list();
       setBranches(data);
+      if (canViewCapacity) {
+        const caps = await Promise.all(
+          data.map((b) => branchApi.getCapacity(b.id).catch(() => null))
+        );
+        const map: Record<string, BranchCapacity> = {};
+        caps.forEach((c) => { if (c) map[c.branch_id] = c; });
+        setCapacities(map);
+      }
     } catch {
       setError("No se pudieron cargar las sucursales.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewCapacity]);
+
+  useEffect(() => { loadBranches(); }, [loadBranches]);
 
   const filtered = branches
     .filter((b) => {
@@ -131,6 +142,7 @@ export function BranchList() {
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
                 <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
+                {canViewCapacity && <th style={isMobile ? { display: "none" } : thStyle}>Capacidad</th>}
                 <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
                 {isAdmin && <th style={thStyle}>Acciones</th>}
               </tr>
@@ -152,6 +164,11 @@ export function BranchList() {
                       {statusLabel(b.status)}
                     </span>
                   </td>
+                  {canViewCapacity && (
+                    <td style={isMobile ? { display: "none" } : tdStyle}>
+                      <CapacityIndicator cap={capacities[b.id]} />
+                    </td>
+                  )}
                   <td style={isMobile ? { display: "none" } : tdStyle}>
                     <div style={{ fontSize: 12 }}>{fmtDateTime(b.updated_at)}</div>
                     {b.updated_by && <div style={{ fontSize: 11, color: "#9ca3af" }}>por {b.updated_by}</div>}
@@ -226,6 +243,40 @@ export function BranchList() {
           error={error}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Capacity Indicator ───────────────────────────────────────────────────────
+
+function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
+  if (!cap) {
+    return <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>;
+  }
+
+  const pct = Math.min(cap.percentage, 100);
+  const barColor = cap.alert ? "#dc2626" : pct >= 60 ? "#ca8a04" : "#16a34a";
+  const textColor = cap.alert ? "#dc2626" : "#374151";
+
+  return (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: textColor }}>
+          {cap.current} / {cap.max_capacity} bultos
+        </span>
+        {cap.alert && (
+          <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 700, marginLeft: 4 }}>⚠</span>
+        )}
+      </div>
+      <div style={{ background: "#e5e7eb", borderRadius: 4, height: 6, overflow: "hidden" }}>
+        <div style={{
+          width: `${pct}%`, height: "100%", borderRadius: 4,
+          background: barColor, transition: "width 0.3s",
+        }} />
+      </div>
+      <div style={{ fontSize: 11, color: cap.alert ? "#dc2626" : "#6b7280", marginTop: 2 }}>
+        {Math.round(pct)}% ocupado
+      </div>
     </div>
   );
 }

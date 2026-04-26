@@ -16,9 +16,18 @@ export interface Branch {
   address: { street: string; city: string; province: string; postal_code: string };
   province: string;
   status: "activo" | "inactivo" | "fuera_de_servicio";
+  max_capacity: number;
   created_at: string;
   updated_at: string;
   updated_by?: string;
+}
+
+export interface BranchCapacity {
+  branch_id: string;
+  current: number;
+  max_capacity: number;
+  percentage: number;
+  alert: boolean;
 }
 
 export interface CreateBranchPayload {
@@ -27,6 +36,7 @@ export interface CreateBranchPayload {
   city: string;
   province: string;
   postal_code: string;
+  max_capacity?: number;
 }
 
 export interface UpdateBranchPayload {
@@ -35,6 +45,7 @@ export interface UpdateBranchPayload {
   city: string;
   province: string;
   postal_code: string;
+  max_capacity?: number;
 }
 
 export const branchApi = {
@@ -47,6 +58,7 @@ export const branchApi = {
   create: (data: CreateBranchPayload) => api.post<Branch>("/branches", data).then((r) => r.data),
   update: (id: string, data: UpdateBranchPayload) => api.patch<Branch>(`/branches/${id}`, data).then((r) => r.data),
   updateStatus: (id: string, status: string) => api.patch<Branch>(`/branches/${id}/status`, { status }).then((r) => r.data),
+  getCapacity: (id: string) => api.get<BranchCapacity>(`/branches/${id}/capacity`).then((r) => r.data),
 };
 
 // branchLabel looks up a branch by city string (used for event locations).

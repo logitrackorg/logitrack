@@ -18,17 +18,17 @@ var (
 
 func validateDNI(dni, field string) error {
 	if !reDNI.MatchString(dni) {
-		return fmt.Errorf("%s must contain only digits", field)
+		return fmt.Errorf("%s debe contener solo dígitos", field)
 	}
 	if len(dni) < 7 {
-		return fmt.Errorf("%s must be at least 7 digits", field)
+		return fmt.Errorf("%s debe tener al menos 7 dígitos", field)
 	}
 	return nil
 }
 
 func validateEmail(email, field string) error {
 	if !reEmail.MatchString(email) {
-		return fmt.Errorf("%s is not a valid email address", field)
+		return fmt.Errorf("%s no es una dirección de email válida", field)
 	}
 	return nil
 }
@@ -71,14 +71,14 @@ func (s *ShipmentService) locationToBranchID(city string) string {
 
 func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipment, error) {
 	if strings.TrimSpace(req.Sender.Address.City) == "" || strings.TrimSpace(req.Sender.Address.Province) == "" {
-		return model.Shipment{}, fmt.Errorf("origin city and province are required")
+		return model.Shipment{}, fmt.Errorf("la ciudad y provincia de origen son obligatorias")
 	}
 	if strings.TrimSpace(req.Recipient.Address.City) == "" || strings.TrimSpace(req.Recipient.Address.Province) == "" {
-		return model.Shipment{}, fmt.Errorf("destination city and province are required")
+		return model.Shipment{}, fmt.Errorf("la ciudad y provincia de destino son obligatorias")
 	}
 	if req.ReceivingBranchID != "" {
 		if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok && b.Status == model.BranchStatusOutOfService {
-			return model.Shipment{}, fmt.Errorf("branch '%s' is out of service and cannot receive shipments", b.Name)
+			return model.Shipment{}, fmt.Errorf("la sucursal '%s' está fuera de servicio y no puede recibir envíos", b.Name)
 		}
 	}
 	if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
@@ -234,7 +234,7 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		return model.Shipment{}, err
 	}
 	if existing.Status != model.StatusPending {
-		return model.Shipment{}, fmt.Errorf("only draft shipments can be updated")
+		return model.Shipment{}, fmt.Errorf("solo se pueden actualizar envíos en borrador")
 	}
 	existing.Sender = req.Sender
 	existing.Recipient = req.Recipient
@@ -264,7 +264,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		return model.Shipment{}, err
 	}
 	if draft.Status != model.StatusPending {
-		return model.Shipment{}, fmt.Errorf("only draft shipments can be confirmed")
+		return model.Shipment{}, fmt.Errorf("solo se pueden confirmar envíos en borrador")
 	}
 	// Validate required fields
 	missing := []string{}
@@ -299,7 +299,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		missing = append(missing, "recipient DNI")
 	}
 	if len(missing) > 0 {
-		return model.Shipment{}, fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))
+		return model.Shipment{}, fmt.Errorf("faltan campos obligatorios: %s", strings.Join(missing, ", "))
 	}
 	if err := validateDNI(draft.Sender.DNI, "sender_dni"); err != nil {
 		return model.Shipment{}, err
@@ -319,7 +319,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	if draft.ReceivingBranchID != "" {
 		if b, ok := s.branchRepo.GetByID(draft.ReceivingBranchID); ok && b.Status == model.BranchStatusOutOfService {
-			return model.Shipment{}, fmt.Errorf("branch '%s' is out of service and cannot receive shipments", b.Name)
+			return model.Shipment{}, fmt.Errorf("la sucursal '%s' está fuera de servicio y no puede recibir envíos", b.Name)
 		}
 	}
 	var prediction *model.PriorityPrediction
@@ -345,10 +345,10 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 
 func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatusRequest) (model.Shipment, error) {
 	if req.Status == model.StatusDeliveryFailed && strings.TrimSpace(req.Notes) == "" {
-		return model.Shipment{}, fmt.Errorf("notes are required for delivery_failed")
+		return model.Shipment{}, fmt.Errorf("las notas son obligatorias para fallo de entrega")
 	}
 	if req.Status == model.StatusDelivering && strings.TrimSpace(req.DriverID) == "" {
-		return model.Shipment{}, fmt.Errorf("driver_id is required when moving to delivering")
+		return model.Shipment{}, fmt.Errorf("el driver_id es obligatorio al pasar a estado de entrega")
 	}
 	current, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {
@@ -360,14 +360,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	// Validate returned: sender DNI must match (corrections take precedence)
 	if req.Status == model.StatusReturned {
 		if strings.TrimSpace(req.SenderDNI) == "" {
-			return model.Shipment{}, fmt.Errorf("sender_dni is required for returned")
+			return model.Shipment{}, fmt.Errorf("el DNI del remitente es obligatorio para la devolución")
 		}
 		expectedSenderDNI := current.Sender.DNI
 		if current.Corrections != nil && current.Corrections.SenderDNI != nil {
 			expectedSenderDNI = *current.Corrections.SenderDNI
 		}
 		if expectedSenderDNI != req.SenderDNI {
-			return model.Shipment{}, fmt.Errorf("DNI does not match the expected sender DNI")
+			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del remitente")
 		}
 	}
 	// Validate ready_for_return: only allowed when shipment is back at its origin branch.
@@ -381,23 +381,23 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		if current.CurrentLocation != originID {
 			if b, ok := s.branchRepo.GetByID(originID); ok {
 				return model.Shipment{}, fmt.Errorf(
-					"shipment is not at its origin branch (%s) — return by sender does not apply at this branch", b.Address.City,
+					"el envío no está en su sucursal de origen (%s) — la devolución por remitente no aplica en esta sucursal", b.Address.City,
 				)
 			}
-			return model.Shipment{}, fmt.Errorf("shipment is not at its origin branch")
+			return model.Shipment{}, fmt.Errorf("el envío no está en su sucursal de origen")
 		}
 	}
 	// Validate DNI before touching the repository (corrections take precedence)
 	if req.Status == model.StatusDelivered {
 		if strings.TrimSpace(req.RecipientDNI) == "" {
-			return model.Shipment{}, fmt.Errorf("recipient_dni is required for delivery")
+			return model.Shipment{}, fmt.Errorf("el DNI del destinatario es obligatorio para la entrega")
 		}
 		expectedRecipientDNI := current.Recipient.DNI
 		if current.Corrections != nil && current.Corrections.RecipientDNI != nil {
 			expectedRecipientDNI = *current.Corrections.RecipientDNI
 		}
 		if expectedRecipientDNI != req.RecipientDNI {
-			return model.Shipment{}, fmt.Errorf("DNI does not match the expected recipient DNI")
+			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del destinatario")
 		}
 	}
 
@@ -405,7 +405,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if req.Status == model.StatusInTransit {
 		destID := s.locationToBranchID(req.Location)
 		if destID == current.CurrentLocation {
-			return model.Shipment{}, fmt.Errorf("destination branch must be different from current branch")
+			return model.Shipment{}, fmt.Errorf("la sucursal de destino debe ser diferente a la sucursal actual")
 		}
 	}
 
@@ -452,7 +452,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 // auto-persists one comment per corrected field.
 func (s *ShipmentService) CorrectShipment(trackingID, username string, req model.CorrectShipmentRequest) (model.Shipment, error) {
 	if req.Corrections.IsEmpty() {
-		return model.Shipment{}, fmt.Errorf("no corrections provided")
+		return model.Shipment{}, fmt.Errorf("no se proporcionaron correcciones")
 	}
 	if req.Corrections.SenderDNI != nil {
 		if err := validateDNI(*req.Corrections.SenderDNI, "sender_dni"); err != nil {
@@ -479,10 +479,10 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 		return model.Shipment{}, err
 	}
 	if shipment.Status == model.StatusPending {
-		return model.Shipment{}, fmt.Errorf("drafts must be edited directly")
+		return model.Shipment{}, fmt.Errorf("los borradores deben editarse directamente")
 	}
 	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned || shipment.Status == model.StatusCancelled {
-		return model.Shipment{}, fmt.Errorf("cannot correct finalized shipments")
+		return model.Shipment{}, fmt.Errorf("no se pueden corregir envíos finalizados")
 	}
 	// Recompute priority if any ML-relevant field is being corrected.
 	var correctionPrediction *model.PriorityPrediction
@@ -555,7 +555,7 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 
 func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (model.Shipment, error) {
 	if strings.TrimSpace(reason) == "" {
-		return model.Shipment{}, fmt.Errorf("cancellation reason is required")
+		return model.Shipment{}, fmt.Errorf("el motivo de cancelación es obligatorio")
 	}
 	shipment, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {

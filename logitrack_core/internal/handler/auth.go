@@ -57,7 +57,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
 		h.log(req.Username, "", model.AccessEventLoginFailure)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		if err == repository.ErrAccountInactive {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "account_inactive"})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
 	token := uuid.NewString()
@@ -84,7 +88,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 		h.repo.DeleteToken(token)
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+	c.JSON(http.StatusOK, gin.H{"message": "sesión cerrada"})
 }
 
 // Me returns the currently authenticated user.
@@ -100,7 +104,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	user, exists := c.Get(middleware.UserKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no autorizado"})
 		return
 	}
 	c.JSON(http.StatusOK, user.(model.User))

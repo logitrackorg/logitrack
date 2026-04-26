@@ -34,7 +34,7 @@ func TestValidateDriver_NoRoute(t *testing.T) {
 	ts := newSetup()
 	routeSvc := NewRouteService(routeRepo, ts.shipmentRepo)
 	err := routeSvc.ValidateDriverCanUpdateShipment("driver-01", "LT-XXXXXXX1", model.StatusDelivered)
-	if err == nil || err.Error() != "no route assigned for today" {
+	if err == nil || err.Error() != "no tenés una ruta asignada para hoy" {
 		t.Errorf("expected no-route error, got: %v", err)
 	}
 }
@@ -49,7 +49,7 @@ func TestValidateDriver_ShipmentNotInRoute(t *testing.T) {
 	routeRepo.Create(todayRoute("driver-01", []string{"LT-OTHER000"}))
 
 	err := routeSvc2.ValidateDriverCanUpdateShipment("driver-01", ship.TrackingID, model.StatusDelivered)
-	if err == nil || err.Error() != "shipment not in your route" {
+	if err == nil || err.Error() != "el envío no está en tu ruta" {
 		t.Errorf("expected shipment-not-in-route error, got: %v", err)
 	}
 }
@@ -70,7 +70,7 @@ func TestValidateDriver_InvalidStatus(t *testing.T) {
 	}
 	for _, status := range invalidStatuses {
 		err := routeSvc.ValidateDriverCanUpdateShipment("driver-01", ship.TrackingID, status)
-		if err == nil || err.Error() != "drivers can only mark shipments as delivered or delivery_failed" {
+		if err == nil || err.Error() != "los choferes solo pueden marcar envíos como entregado o fallo de entrega" {
 			t.Errorf("status %s: expected invalid-status error, got: %v", status, err)
 		}
 	}
@@ -175,7 +175,7 @@ func TestRouteCreate_InvalidDateFormat(t *testing.T) {
 		DriverID:    "driver-01",
 		ShipmentIDs: []string{},
 	}, "supervisor")
-	if err == nil || err.Error() != "invalid date format, use YYYY-MM-DD" {
+	if err == nil || err.Error() != "formato de fecha inválido, usá AAAA-MM-DD" {
 		t.Errorf("expected date format error, got: %v", err)
 	}
 }

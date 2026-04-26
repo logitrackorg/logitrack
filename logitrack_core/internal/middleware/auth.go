@@ -15,13 +15,13 @@ func Auth(authRepo repository.AuthRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "encabezado de autorización ausente o inválido"})
 			return
 		}
 		token := strings.TrimPrefix(header, "Bearer ")
 		user, err := authRepo.GetUserByToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token inválido o expirado"})
 			return
 		}
 		c.Set(UserKey, user)
@@ -37,12 +37,12 @@ func RequireRoles(roles ...model.Role) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get(UserKey)
 		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "no autorizado"})
 			return
 		}
 		u := user.(model.User)
 		if !allowed[u.Role] {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "permisos insuficientes"})
 			return
 		}
 		c.Next()

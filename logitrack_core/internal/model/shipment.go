@@ -89,6 +89,10 @@ type Shipment struct {
 
 	// Corrections: typed non-destructive field overrides; original data is never modified.
 	Corrections *ShipmentCorrections `json:"corrections,omitempty"`
+
+	// HasIncident is set when at least one incident has been reported on the shipment.
+	HasIncident  bool         `json:"has_incident,omitempty"`
+	IncidentType IncidentType `json:"incident_type,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.

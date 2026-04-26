@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -16,6 +17,7 @@ import { MLConfig } from "./pages/MLConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
 import { AccessLog } from "./pages/AccessLog";
+import { UserProfile } from "./pages/UserProfile";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -67,15 +69,15 @@ function Nav() {
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
         {isMobile ? (
-          <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          <NavLink to="/profile" style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600, textDecoration: "none" }}>{user.username}</NavLink>
         ) : (
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>
+          <NavLink to="/profile" style={{ fontSize: 13, color: "#94a3b8", textDecoration: "none" }}>
             <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
             {" · "}
             <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
               {ROLE_LABELS[user.role]}
             </span>
-          </span>
+          </NavLink>
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
@@ -216,9 +218,16 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
 
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <UserProfile />
+            </ProtectedRoute>
+          } />
+
           <Route path="*" element={<Navigate to={user?.role === "admin" ? "/admin/users" : "/"} replace />} />
         </Routes>
       </main>
+      <ToastContainer />
     </>
   );
 }

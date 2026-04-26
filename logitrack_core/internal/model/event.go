@@ -23,3 +23,19 @@ type UpdateStatusRequest struct {
 	RecipientDNI string `json:"recipient_dni"` // required when status = "delivered"
 	SenderDNI    string `json:"sender_dni"`    // required when status = "returned"
 }
+
+type BulkStatusRequest struct {
+	TrackingIDs []string `json:"tracking_ids" binding:"required,min=1"`
+	Status      Status   `json:"status"       binding:"required"`
+	DriverID    string   `json:"driver_id"`
+}
+
+type BulkSkipped struct {
+	TrackingID string `json:"tracking_id"`
+	Reason     string `json:"reason"`
+}
+
+type BulkStatusResult struct {
+	Updated int           `json:"updated"`
+	Skipped []BulkSkipped `json:"skipped"`
+}

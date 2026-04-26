@@ -172,7 +172,7 @@ func (r *eventSourcedShipmentRepository) Stats(filter model.ShipmentFilter) (mod
 func (r *eventSourcedShipmentRepository) GetEvents(trackingID string) ([]model.ShipmentEvent, error) {
 	domainEvents, err := r.store.LoadStream(trackingID)
 	if err != nil {
-		return nil, fmt.Errorf("shipment not found")
+		return nil, fmt.Errorf("envío no encontrado")
 	}
 
 	result := make([]model.ShipmentEvent, 0)
@@ -250,6 +250,17 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			ToStatus:   model.StatusCancelled,
 			ChangedBy:  de.ChangedBy,
 			Notes:      payload.Reason,
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventIncidentReported:
+		payload := de.Payload.(model.IncidentReportedPayload)
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			EventType:  model.EventIncidentReported,
+			ChangedBy:  de.ChangedBy,
+			Notes:      payload.Description,
 			Timestamp:  de.Timestamp,
 		}, true
 
