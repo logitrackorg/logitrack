@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
+import { setAddToast } from "../utils/toast";
 
 type ToastType = "success" | "error";
 
@@ -8,30 +9,20 @@ interface ToastMessage {
   message: string;
 }
 
-let addToastFn: ((type: ToastType, message: string) => void) | null = null;
-
-export function toast(type: ToastType, message: string) {
-  addToastFn?.(type, message);
-}
-toast.success = (message: string) => toast("success", message);
-toast.error = (message: string) => toast("error", message);
-
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  let counter = 0;
-
-  const add = useCallback((type: ToastType, message: string) => {
-    const id = ++counter;
-    setToasts((prev) => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 5000);
-  }, []);
+  const counter = useRef(0);
 
   useEffect(() => {
-    addToastFn = add;
-    return () => { addToastFn = null; };
-  }, [add]);
+    setAddToast((type, message) => {
+      const id = ++counter.current;
+      setToasts((prev) => [...prev, { id, type, message }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 5000);
+    });
+    return () => setAddToast(null);
+  }, []);
 
   if (toasts.length === 0) return null;
 
