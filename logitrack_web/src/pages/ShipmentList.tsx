@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { shipmentApi, type Shipment, type ShipmentStatus } from "../api/shipments";
+import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi } from "../api/users";
 import type { User } from "../api/auth";
@@ -400,7 +400,18 @@ export function ShipmentList() {
                     <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>
                     <td style={td}>{corr(s, "weight_kg", s.weight_kg)} kg</td>
                     <td style={td}><PriorityBadge priority={s.priority} /></td>
-                    <td style={td}><StatusBadge status={s.status} /></td>
+                    <td style={td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <StatusBadge status={s.status} />
+                        {s.has_incident && (
+                          <span
+                            title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
+                            style={{ display: "inline-flex", alignItems: "center", background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 5px", fontSize: 12 }}>
+                            ⚠
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={td}>{fmtDate(s.created_at)}</td>
                     <td style={td}>{fmtDate(s.estimated_delivery_at)}</td>
                   </tr>

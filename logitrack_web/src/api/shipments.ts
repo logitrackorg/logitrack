@@ -67,6 +67,8 @@ export interface Shipment {
   estimated_delivery_at: string;
   delivered_at?: string;
   corrections?: Record<string, string>;
+  has_incident?: boolean;
+  incident_type?: IncidentType;
 }
 
 export interface ShipmentEvent {
@@ -127,6 +129,25 @@ export interface ShipmentComment {
   updated_at: string;
 }
 
+export type IncidentType = "daño" | "perdida" | "demora" | "paquete_abierto" | "otro";
+
+export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  "daño": "Daño en el paquete",
+  "perdida": "Pérdida del paquete",
+  "demora": "Demora significativa",
+  "paquete_abierto": "Paquete abierto/violado",
+  "otro": "Otro",
+};
+
+export interface ShipmentIncident {
+  id: string;
+  tracking_id: string;
+  incident_type: IncidentType;
+  description: string;
+  reported_by: string;
+  created_at: string;
+}
+
 export interface UpdateStatusPayload {
   status: ShipmentStatus;
   changed_by?: string;
@@ -172,4 +193,8 @@ export const shipmentApi = {
     api.get<Stats>("/stats", { params }).then((r) => r.data),
   bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>
     api.post<{ updated: number; skipped: { tracking_id: string; reason: string }[] }>("/shipments/bulk-status", payload).then((r) => r.data),
+  getIncidents: (trackingId: string) =>
+    api.get<ShipmentIncident[]>(`/shipments/${trackingId}/incidents`).then((r) => r.data),
+  reportIncident: (trackingId: string, incidentType: IncidentType, description: string) =>
+    api.post<ShipmentIncident>(`/shipments/${trackingId}/incidents`, { incident_type: incidentType, description }).then((r) => r.data),
 };

@@ -94,6 +94,17 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.Status = model.StatusCancelled
 		shipment.UpdatedAt = event.Timestamp
 		p.shipments[event.TrackingID] = shipment
+
+	case model.EventIncidentReported:
+		payload := event.Payload.(model.IncidentReportedPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		shipment.HasIncident = true
+		shipment.IncidentType = payload.IncidentType
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
 	}
 }
 

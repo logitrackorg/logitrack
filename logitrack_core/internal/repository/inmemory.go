@@ -57,6 +57,15 @@ func NewInMemoryShipmentRepository() ShipmentRepository {
 	return NewEventSourcedShipmentRepository(store, proj)
 }
 
+// NewInMemoryShipmentRepositoryWithDeps returns the underlying EventStore and
+// Projector alongside the ShipmentRepository, for tests that need to wire
+// additional services (e.g. IncidentService) against the same in-memory store.
+func NewInMemoryShipmentRepositoryWithDeps() (ShipmentRepository, EventStore, projection.Projector) {
+	store := newInMemoryEventStore()
+	proj := projection.NewShipmentProjection()
+	return NewEventSourcedShipmentRepository(store, proj), store, proj
+}
+
 // ── InMemory BranchRepository ─────────────────────────────────────────────────
 
 type inMemoryBranchRepository struct {
@@ -436,6 +445,39 @@ func (r *inMemoryCommentRepository) GetComments(trackingID string) ([]model.Ship
 	for _, c := range r.comments {
 		if c.TrackingID == trackingID {
 			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+// ── InMemory IncidentRepository ───────────────────────────────────────────────
+
+type inMemoryIncidentRepository struct {
+	mu        sync.RWMutex
+	incidents []model.ShipmentIncident
+}
+
+func NewInMemoryIncidentRepository() IncidentRepository {
+	return &inMemoryIncidentRepository{}
+}
+
+func (r *inMemoryIncidentRepository) ReportIncident(incident model.ShipmentIncident) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.incidents = append(r.incidents, incident)
+	return nil
+}
+
+func (r *inMemoryIncidentRepository) GetIncidents(trackingID string) ([]model.ShipmentIncident, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []model.ShipmentIncident
+	for _, inc := range r.incidents {
+		if inc.TrackingID == trackingID {
+			out = append(out, inc)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
