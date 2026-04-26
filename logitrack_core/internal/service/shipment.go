@@ -479,10 +479,10 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 		return model.Shipment{}, err
 	}
 	if shipment.Status == model.StatusPending {
-		return model.Shipment{}, fmt.Errorf("drafts must be edited directly")
+		return model.Shipment{}, fmt.Errorf("los borradores deben editarse directamente")
 	}
 	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned || shipment.Status == model.StatusCancelled {
-		return model.Shipment{}, fmt.Errorf("cannot correct finalized shipments")
+		return model.Shipment{}, fmt.Errorf("no se pueden corregir envíos finalizados")
 	}
 	// Recompute priority if any ML-relevant field is being corrected.
 	var correctionPrediction *model.PriorityPrediction
@@ -555,7 +555,7 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 
 func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (model.Shipment, error) {
 	if strings.TrimSpace(reason) == "" {
-		return model.Shipment{}, fmt.Errorf("cancellation reason is required")
+		return model.Shipment{}, fmt.Errorf("el motivo de cancelación es obligatorio")
 	}
 	shipment, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {
