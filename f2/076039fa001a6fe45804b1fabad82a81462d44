@@ -1,0 +1,23 @@
+logitrack_web/src/pages/AdminUsers.tsx
+  efdbe7e4bb3aa071 62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f2076039fa001a6fe45804b1fabad82a81462d44",
+  "prompts": {
+    "efdbe7e4bb3aa071": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd94acd9-ad89-4d43-9447-3a149e59662f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1424,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
