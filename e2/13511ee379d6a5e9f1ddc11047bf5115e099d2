@@ -1,0 +1,33 @@
+logitrack_core/internal/service/shipment.go
+  44051c76077bef87 482,485,558
+logitrack_core/test_bcrypt.go
+  44051c76077bef87 5
+logitrack_core/internal/handler/user.go
+  44051c76077bef87 14-15
+logitrack_core/internal/service/shipment_test.go
+  44051c76077bef87 186,191,196,201,206,211,216,221,226,231,297,308,319,330,341,351,376,416,431,458,491,506,580,593,626,687,869,880,891,902,919,934,947,956
+logitrack_core/internal/service/comment_test.go
+  44051c76077bef87 13,56,67,105
+logitrack_core/internal/service/route_test.go
+  44051c76077bef87 37,52,73,178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e213511ee379d6a5e9f1ddc11047bf5115e099d2",
+  "prompts": {
+    "44051c76077bef87": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d2208643-1692-4c02-a5cb-d778075a4f1b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 48,
+      "total_deletions": 2612,
+      "accepted_lines": 48,
+      "overriden_lines": 0
+    }
+  }
+}
