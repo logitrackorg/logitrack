@@ -68,6 +68,11 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		id = uuid.New().String()
 	}
 
+	maxCap := req.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = 50
+	}
+
 	branch := model.Branch{
 		ID:   id,
 		Name: req.Name,
@@ -77,8 +82,9 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province: req.Province,
-		Status:   model.BranchStatusActive,
+		Province:    req.Province,
+		Status:      model.BranchStatusActive,
+		MaxCapacity: maxCap,
 	}
 
 	if err := s.repo.Create(branch); err != nil {
@@ -118,6 +124,11 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 		return model.Branch{}, fmt.Errorf("postal code is required")
 	}
 
+	maxCap := req.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = branch.MaxCapacity
+	}
+
 	update := model.Branch{
 		Name: req.Name,
 		Address: model.Address{
@@ -126,7 +137,8 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province: req.Province,
+		Province:    req.Province,
+		MaxCapacity: maxCap,
 	}
 
 	if err := s.repo.Update(id, update); err != nil {
@@ -175,4 +187,33 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 func (s *BranchService) IsBranchActive(branchID string) bool {
 	b, found := s.repo.GetByID(branchID)
 	return found && b.Status == model.BranchStatusActive
+}
+
+const capacityAlertThreshold = 0.80
+
+func (s *BranchService) GetCapacity(branchID string) (model.BranchCapacity, error) {
+	b, found := s.repo.GetByID(branchID)
+	if !found {
+		return model.BranchCapacity{}, ErrBranchNotFound
+	}
+
+	current := 0
+	if s.counter != nil {
+		current = s.counter.CountActiveByBranch(branchID)
+	}
+
+	maxCap := b.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = 50
+	}
+
+	pct := float64(current) / float64(maxCap) * 100
+
+	return model.BranchCapacity{
+		BranchID:    branchID,
+		Current:     current,
+		MaxCapacity: maxCap,
+		Percentage:  pct,
+		Alert:       pct >= capacityAlertThreshold*100,
+	}, nil
 }

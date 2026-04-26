@@ -13,34 +13,46 @@ const (
 
 // Branch represents a logistics warehouse/branch.
 type Branch struct {
-	ID        string       `json:"id"`
-	Name      string       `json:"name"`
-	Address   Address      `json:"address"`
-	Province  string       `json:"province"`
-	Status    BranchStatus `json:"status"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
-	UpdatedBy string       `json:"updated_by,omitempty"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Address     Address      `json:"address"`
+	Province    string       `json:"province"`
+	Status      BranchStatus `json:"status"`
+	MaxCapacity int          `json:"max_capacity"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	UpdatedBy   string       `json:"updated_by,omitempty"`
+}
+
+// BranchCapacity holds occupancy data for a branch.
+type BranchCapacity struct {
+	BranchID    string  `json:"branch_id"`
+	Current     int     `json:"current"`
+	MaxCapacity int     `json:"max_capacity"`
+	Percentage  float64 `json:"percentage"`
+	Alert       bool    `json:"alert"`
 }
 
 // CreateBranchRequest is the request body for creating a new branch.
 // ID is optional — if omitted, a UUID will be auto-generated.
 type CreateBranchRequest struct {
-	ID         string `json:"id,omitempty"`
-	Name       string `json:"name" binding:"required"`
-	Street     string `json:"street" binding:"required"`
-	City       string `json:"city" binding:"required"`
-	Province   string `json:"province" binding:"required"`
-	PostalCode string `json:"postal_code" binding:"required"`
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name" binding:"required"`
+	Street      string `json:"street" binding:"required"`
+	City        string `json:"city" binding:"required"`
+	Province    string `json:"province" binding:"required"`
+	PostalCode  string `json:"postal_code" binding:"required"`
+	MaxCapacity int    `json:"max_capacity,omitempty"`
 }
 
 // UpdateBranchRequest is the request body for updating branch data.
 type UpdateBranchRequest struct {
-	Name       string `json:"name" binding:"required"`
-	Street     string `json:"street" binding:"required"`
-	City       string `json:"city" binding:"required"`
-	Province   string `json:"province" binding:"required"`
-	PostalCode string `json:"postal_code" binding:"required"`
+	Name        string `json:"name" binding:"required"`
+	Street      string `json:"street" binding:"required"`
+	City        string `json:"city" binding:"required"`
+	Province    string `json:"province" binding:"required"`
+	PostalCode  string `json:"postal_code" binding:"required"`
+	MaxCapacity int    `json:"max_capacity,omitempty"`
 }
 
 // UpdateBranchStatusRequest is the request body for updating branch status.
