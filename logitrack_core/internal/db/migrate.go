@@ -51,6 +51,18 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_confidence  FLOAT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_factors     JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS origin_branch_id     TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS has_incident         BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS incident_type        TEXT NOT NULL DEFAULT '';
+
+		CREATE TABLE IF NOT EXISTS shipment_incidents (
+			id            VARCHAR(50)  PRIMARY KEY,
+			tracking_id   VARCHAR(50)  NOT NULL,
+			incident_type TEXT         NOT NULL,
+			description   TEXT         NOT NULL,
+			reported_by   VARCHAR(100) NOT NULL,
+			created_at    TIMESTAMPTZ  NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_incidents_tracking_id ON shipment_incidents(tracking_id);
 
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
