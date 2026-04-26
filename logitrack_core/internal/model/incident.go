@@ -5,11 +5,11 @@ import "time"
 type IncidentType string
 
 const (
-	IncidentTypeDamage  IncidentType = "daño"
-	IncidentTypeLoss    IncidentType = "perdida"
-	IncidentTypeDelay   IncidentType = "demora"
-	IncidentTypeOpen    IncidentType = "paquete_abierto"
-	IncidentTypeOther   IncidentType = "otro"
+	IncidentTypeDamage IncidentType = "daño"
+	IncidentTypeLoss   IncidentType = "perdida"
+	IncidentTypeDelay  IncidentType = "demora"
+	IncidentTypeOpen   IncidentType = "paquete_abierto"
+	IncidentTypeOther  IncidentType = "otro"
 )
 
 var ValidIncidentTypes = map[IncidentType]bool{
