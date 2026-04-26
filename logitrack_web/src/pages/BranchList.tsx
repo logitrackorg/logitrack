@@ -38,8 +38,6 @@ export function BranchList() {
 
   const [capacities, setCapacities] = useState<Record<string, BranchCapacity>>({});
 
-  useEffect(() => { loadBranches(); }, [loadBranches]);
-
   const loadBranches = useCallback(async () => {
     try {
       const data = await branchApi.list();
@@ -58,6 +56,8 @@ export function BranchList() {
       setLoading(false);
     }
   }, [canViewCapacity]);
+
+  useEffect(() => { loadBranches(); }, [loadBranches]);
 
   const filtered = branches
     .filter((b) => {
