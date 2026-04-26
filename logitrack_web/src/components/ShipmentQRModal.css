@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,7 +46,7 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .qr-modal-header h2 {
@@ -60,7 +60,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #999;
+  color: #6b7280;
   transition: color 0.2s;
   padding: 4px 8px;
   line-height: 1;
@@ -73,7 +73,7 @@
 .qr-printable-area {
   background: white;
   padding: 32px;
-  border: 2px dashed #ddd;
+  border: 2px dashed #d1d5db;
   border-radius: 8px;
   margin-bottom: 20px;
 }
@@ -136,36 +136,36 @@
 }
 
 .btn-primary {
-  background: #007bff;
+  background: #1e3a5f;
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: #1a2f4a;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+  box-shadow: 0 4px 8px rgba(30, 58, 95, 0.3);
 }
 
 .btn-secondary {
-  background: #28a745;
+  background: #16a34a;
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #1e7e34;
+  background: #15803d;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+  box-shadow: 0 4px 8px rgba(22, 163, 74, 0.3);
 }
 
 .btn-outline {
   background: white;
-  border: 1px solid #ddd;
-  color: #333;
+  border: 1px solid #d1d5db;
+  color: #374151;
 }
 
 .btn-outline:hover {
-  background: #f8f9fa;
-  border-color: #999;
+  background: #f9fafb;
+  border-color: #6b7280;
 }
 
 /* Responsive */

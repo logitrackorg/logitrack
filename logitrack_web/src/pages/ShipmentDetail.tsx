@@ -114,6 +114,7 @@ export function ShipmentDetail() {
   const [qrData, setQRData] = useState<QRResponse | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrError, setQRError] = useState<string>('');
+  const [generatingQR, setGeneratingQR] = useState(false);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -216,13 +217,15 @@ export function ShipmentDetail() {
 
     try {
       setQRError('');
+      setGeneratingQR(true);
       const data = await qrService.generateQR(trackingId);
       setQRData(data);
       setShowQRModal(true);
     } catch (error: any) {
       const message = error.response?.data?.error || 'Error al generar código QR';
       setQRError(message);
-      alert(message);
+    } finally {
+      setGeneratingQR(false);
     }
   };
 
@@ -575,23 +578,23 @@ export function ShipmentDetail() {
 
  {/*  BOTÓN GENERAR QR */}
 {shipment.status !== "pending" && (
-  <button 
+  <button
     onClick={handleGenerateQR}
-    disabled={!shipment.tracking_id}
+    disabled={!shipment.tracking_id || generatingQR}
     title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
-    style={{ 
-      background: "#fff", 
-      border: "1px solid #d1d5db", 
-      borderRadius: 6, 
-      padding: "6px 12px", 
-      cursor: !shipment.tracking_id ? "not-allowed" : "pointer", 
-      fontSize: 13, 
-      fontWeight: 600, 
+    style={{
+      background: "#fff",
+      border: "1px solid #d1d5db",
+      borderRadius: 6,
+      padding: "6px 12px",
+      cursor: (!shipment.tracking_id || generatingQR) ? "not-allowed" : "pointer",
+      fontSize: 13,
+      fontWeight: 600,
       color: "#374151",
-      opacity: !shipment.tracking_id ? 0.5 : 1,
+      opacity: (!shipment.tracking_id || generatingQR) ? 0.5 : 1,
     }}
   >
-    📱 Generar QR
+    {generatingQR ? "Generando..." : "📱 Generar QR"}
   </button>
 )}
 
