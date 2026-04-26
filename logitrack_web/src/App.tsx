@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -228,7 +227,7 @@ function AppRoutes() {
           <Route path="*" element={<Navigate to={user?.role === "admin" ? "/admin/users" : "/"} replace />} />
         </Routes>
       </main>
-      <ToastContainer position="top-right" autoClose={5000} />
+      <ToastContainer />
     </>
   );
 }

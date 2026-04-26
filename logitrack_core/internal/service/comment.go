@@ -22,13 +22,13 @@ func NewCommentService(commentRepo repository.CommentRepository, shipmentRepo re
 func (s *CommentService) AddComment(trackingID, author, body string) (model.ShipmentComment, error) {
 	shipment, err := s.shipmentRepo.GetByTrackingID(trackingID)
 	if err != nil {
-		return model.ShipmentComment{}, fmt.Errorf("shipment not found")
+		return model.ShipmentComment{}, fmt.Errorf("envío no encontrado")
 	}
 	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned {
-		return model.ShipmentComment{}, fmt.Errorf("cannot add comments to a finalized shipment")
+		return model.ShipmentComment{}, fmt.Errorf("no se pueden agregar comentarios a un envío finalizado")
 	}
 	if strings.TrimSpace(body) == "" {
-		return model.ShipmentComment{}, fmt.Errorf("comment body is required")
+		return model.ShipmentComment{}, fmt.Errorf("el comentario no puede estar vacío")
 	}
 	comment := model.ShipmentComment{
 		ID:         uuid.NewString(),
@@ -45,7 +45,7 @@ func (s *CommentService) AddComment(trackingID, author, body string) (model.Ship
 
 func (s *CommentService) GetComments(trackingID string) ([]model.ShipmentComment, error) {
 	if _, err := s.shipmentRepo.GetByTrackingID(trackingID); err != nil {
-		return nil, fmt.Errorf("shipment not found")
+		return nil, fmt.Errorf("envío no encontrado")
 	}
 	return s.commentRepo.GetComments(trackingID)
 }

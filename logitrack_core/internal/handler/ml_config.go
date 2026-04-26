@@ -86,7 +86,7 @@ type regenerateResponse struct {
 func (h *MLConfigHandler) Regenerate(c *gin.Context) {
 	var req regenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cuerpo de la solicitud inválido"})
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *MLConfigHandler) Activate(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid config id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de configuración inválido"})
 		return
 	}
 

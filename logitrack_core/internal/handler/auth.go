@@ -88,7 +88,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 		h.repo.DeleteToken(token)
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+	c.JSON(http.StatusOK, gin.H{"message": "sesión cerrada"})
 }
 
 // Me returns the currently authenticated user.
@@ -104,7 +104,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	user, exists := c.Get(middleware.UserKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no autorizado"})
 		return
 	}
 	c.JSON(http.StatusOK, user.(model.User))

@@ -32,12 +32,12 @@ func NewCustomerHandler(repo repository.CustomerRepository) *CustomerHandler {
 func (h *CustomerHandler) GetByDNI(c *gin.Context) {
 	dni := strings.TrimSpace(c.Query("dni"))
 	if dni == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dni query param is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el parámetro dni es obligatorio"})
 		return
 	}
 	customer, ok := h.repo.GetByDNI(dni)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "customer not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "cliente no encontrado"})
 		return
 	}
 	c.JSON(http.StatusOK, customer)

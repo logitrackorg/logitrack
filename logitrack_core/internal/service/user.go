@@ -21,13 +21,13 @@ func NewUserService(authRepo repository.AuthRepository, branchRepo repository.Br
 func (s *UserService) ChangePassword(ctx context.Context, userID string, req model.ChangePasswordRequest) error {
 	// Verify new passwords match
 	if req.NewPassword != req.ConfirmPassword {
-		return fmt.Errorf("new password and confirmation do not match")
+		return fmt.Errorf("la nueva contraseña y la confirmación no coinciden")
 	}
 
 	// Hash new password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("failed to hash password")
+		return fmt.Errorf("error al procesar la contraseña")
 	}
 
 	// Change password (this also verifies the current password)
@@ -37,7 +37,7 @@ func (s *UserService) ChangePassword(ctx context.Context, userID string, req mod
 func (s *UserService) GetProfile(ctx context.Context, userID string) (model.UserProfileResponse, error) {
 	user, err := s.authRepo.GetUserByID(userID)
 	if err != nil {
-		return model.UserProfileResponse{}, fmt.Errorf("failed to get user: %w", err)
+		return model.UserProfileResponse{}, fmt.Errorf("error al obtener el usuario: %w", err)
 	}
 
 	profile := model.UserProfileResponse{

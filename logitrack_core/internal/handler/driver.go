@@ -33,7 +33,7 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	route, shipments, err := h.routeSvc.GetTodayRoute(user.ID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no route assigned for today"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "no tenés una ruta asignada para hoy"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"route": route, "shipments": shipments})

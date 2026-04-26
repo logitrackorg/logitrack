@@ -57,7 +57,7 @@ func isDriverActiveStatus(s model.Status) bool {
 func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (model.Route, error) {
 	t, err := time.Parse("2006-01-02", req.Date)
 	if err != nil {
-		return model.Route{}, fmt.Errorf("invalid date format, use YYYY-MM-DD")
+		return model.Route{}, fmt.Errorf("formato de fecha inválido, usá AAAA-MM-DD")
 	}
 	route := model.Route{
 		ID:          generateRouteID(),
@@ -101,13 +101,13 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 	today := model.NewDateOnly(time.Now().UTC())
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
 	if err != nil {
-		return fmt.Errorf("no route assigned for today")
+		return fmt.Errorf("no tenés una ruta asignada para hoy")
 	}
 	if !route.HasShipment(trackingID) {
-		return fmt.Errorf("shipment not in your route")
+		return fmt.Errorf("el envío no está en tu ruta")
 	}
 	if status != model.StatusDelivered && status != model.StatusDeliveryFailed {
-		return fmt.Errorf("drivers can only mark shipments as delivered or delivery_failed")
+		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado o fallo de entrega")
 	}
 	return nil
 }
