@@ -1,0 +1,59 @@
+logitrack_core/internal/model/shipment.go
+  5ab26329a042af81 92-95
+logitrack_core/internal/model/incident.go
+  5ab26329a042af81 1-35
+logitrack_core/internal/service/shipment_test.go
+  5ab26329a042af81 27,30,34,38,40,42
+logitrack_core/internal/projection/postgres_shipment.go
+  5ab26329a042af81 151-158,194-196,224,245-246,258-259,296-297,430,444,456,492,506,515
+logitrack_core/internal/projection/shipment.go
+  5ab26329a042af81 97-107
+logitrack_core/internal/db/migrate.go
+  5ab26329a042af81 54-65
+logitrack_core/internal/service/incident.go
+  5ab26329a042af81 1-85
+logitrack_web/src/api/shipments.ts
+  5ab26329a042af81 70-71,132-150,196-199
+logitrack_core/internal/repository/inmemory.go
+  5ab26329a042af81 60-68,455-487
+logitrack_web/src/pages/ShipmentList.tsx
+  5ab26329a042af81 3,403-414
+logitrack_core/internal/repository/postgres_incident.go
+  5ab26329a042af81 1-47
+logitrack_core/internal/model/domain_event.go
+  5ab26329a042af81 24-26,68-72
+logitrack_web/src/pages/ShipmentDetail.tsx
+  5ab26329a042af81 10-12,87-92,114,118,123,457-463,779-801,865-941
+logitrack_core/internal/service/incident_test.go
+  5ab26329a042af81 1-217
+logitrack_core/internal/repository/incident.go
+  5ab26329a042af81 1-8
+logitrack_core/internal/handler/incident_handler.go
+  5ab26329a042af81 1-64
+logitrack_core/cmd/server/main.go
+  5ab26329a042af81 59,79,84,161,166-169
+logitrack_core/internal/repository/shipment_es.go
+  5ab26329a042af81 256-266
+logitrack_core/internal/repository/postgres_event_store.go
+  5ab26329a042af81 177-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c9d5b15cd089bee1123f17489f57396ec35ce11a",
+  "prompts": {
+    "5ab26329a042af81": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c24c276-3975-42ce-b85c-8dcf868cf204",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 5433,
+      "total_deletions": 275,
+      "accepted_lines": 743,
+      "overriden_lines": 0
+    }
+  }
+}
