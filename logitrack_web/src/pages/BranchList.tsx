@@ -119,7 +119,7 @@ export function BranchList() {
         <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
           <p style={{ fontSize: 18, fontWeight: 600 }}>No se encontraron sucursales</p>
           <p style={{ fontSize: 14 }}>
-            {branches.length === 0 ? "No hay sucursales registradas en el sistema." : "Intentá ajustar la búsqueda o los filtros."}
+            {branches.length === 0 ? "No hay sucursales registradas en el sistema." : search.trim() === "" ? "Ingresá un término de búsqueda para continuar." : "Intentá ajustar la búsqueda o los filtros."}
           </p>
         </div>
       ) : (
