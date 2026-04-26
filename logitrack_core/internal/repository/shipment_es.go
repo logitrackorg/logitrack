@@ -253,6 +253,17 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			Timestamp:  de.Timestamp,
 		}, true
 
+	case model.EventIncidentReported:
+		payload := de.Payload.(model.IncidentReportedPayload)
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			EventType:  model.EventIncidentReported,
+			ChangedBy:  de.ChangedBy,
+			Notes:      payload.Description,
+			Timestamp:  de.Timestamp,
+		}, true
+
 	default:
 		// draft_saved, draft_updated — not exposed
 		return model.ShipmentEvent{}, false

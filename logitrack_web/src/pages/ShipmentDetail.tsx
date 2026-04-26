@@ -7,6 +7,9 @@ import {
   type ShipmentStatus,
   type SaveDraftPayload,
   type ShipmentComment,
+  type ShipmentIncident,
+  type IncidentType,
+  INCIDENT_TYPE_LABELS,
 } from "../api/shipments";
 import { usersApi } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
@@ -81,6 +84,12 @@ export function ShipmentDetail() {
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
+  const [incidents, setIncidents] = useState<ShipmentIncident[]>([]);
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [incidentType, setIncidentType] = useState<IncidentType>("daño");
+  const [incidentDescription, setIncidentDescription] = useState("");
+  const [reportingIncident, setReportingIncident] = useState(false);
+  const [incidentError, setIncidentError] = useState("");
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [correctionForm, setCorrectionForm] = useState<Record<string, string>>({});
   const [savingCorrection, setSavingCorrection] = useState(false);
@@ -102,14 +111,16 @@ export function ShipmentDetail() {
   const reload = async () => {
     if (!trackingId) return;
     try {
-      const [s, ev, cmts] = await Promise.all([
+      const [s, ev, cmts, incs] = await Promise.all([
         shipmentApi.get(trackingId),
         shipmentApi.getEvents(trackingId),
         shipmentApi.getComments(trackingId),
+        shipmentApi.getIncidents(trackingId),
       ]);
       setShipment(s);
       setEvents(ev ?? []);
       setComments(cmts ?? []);
+      setIncidents(incs ?? []);
       setNewStatus("");
       if (s.status === "pending") {
         setDraftForm({
@@ -443,6 +454,13 @@ export function ShipmentDetail() {
               ✏️ Editar datos
             </button>
           )}
+          {hasRole("operator", "supervisor", "admin") && !["pending", "delivered", "returned", "cancelled"].includes(shipment.status) && !operatorOutOfBranch && (
+            <button
+              onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("daño"); }}
+              style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
+              ⚠ Registrar incidencia
+            </button>
+          )}
           {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
@@ -758,6 +776,29 @@ export function ShipmentDetail() {
           )}
         </div>
 
+        {/* Incidents Card */}
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Incidencias</h2>
+          {incidents.length === 0 ? (
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin incidencias registradas.</p>
+          ) : (
+            <div style={{ display: "grid", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+              {incidents.map((inc) => (
+                <div key={inc.id} style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
+                      {INCIDENT_TYPE_LABELS[inc.incident_type] ?? inc.incident_type}
+                    </span>
+                    <span style={{ color: "#9ca3af", fontSize: 11, whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDateTime(inc.created_at)}</span>
+                  </div>
+                  <p style={{ margin: "4px 0 0", color: "#374151", whiteSpace: "pre-wrap" as const }}>{inc.description}</p>
+                  <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>Reportado por: {inc.reported_by}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Comments Card */}
         <div style={{ ...cardStyle }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comentarios</h2>
@@ -819,6 +860,83 @@ export function ShipmentDetail() {
           saving={savingCorrection}
           error={correctionError}
         />
+      )}
+
+      {/* Incident report modal */}
+      {showIncidentModal && trackingId && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setShowIncidentModal(false)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Registrar incidencia</h2>
+              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+            </div>
+            {incidentError && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+                {incidentError}
+              </div>
+            )}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Tipo de incidencia</label>
+              <select
+                value={incidentType}
+                onChange={(e) => setIncidentType(e.target.value as IncidentType)}
+                style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "#fff" }}
+              >
+                {(Object.entries(INCIDENT_TYPE_LABELS) as [IncidentType, string][]).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Descripción</label>
+              <textarea
+                value={incidentDescription}
+                onChange={(e) => setIncidentDescription(e.target.value)}
+                placeholder="Describí el problema detectado..."
+                rows={4}
+                style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontFamily: "inherit", resize: "vertical" as const }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowIncidentModal(false)}
+                style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                Cancelar
+              </button>
+              <button
+                disabled={reportingIncident || !incidentDescription.trim()}
+                onClick={async () => {
+                  if (!incidentDescription.trim()) return;
+                  setReportingIncident(true);
+                  setIncidentError("");
+                  try {
+                    await shipmentApi.reportIncident(trackingId, incidentType, incidentDescription.trim());
+                    setShowIncidentModal(false);
+                    const [incs, s] = await Promise.all([
+                      shipmentApi.getIncidents(trackingId),
+                      shipmentApi.get(trackingId),
+                    ]);
+                    setIncidents(incs ?? []);
+                    setShipment(s);
+                  } catch (err: unknown) {
+                    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Error al registrar la incidencia.";
+                    setIncidentError(msg);
+                  } finally {
+                    setReportingIncident(false);
+                  }
+                }}
+                style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
+                {reportingIncident ? "Registrando..." : "Confirmar registro"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Vehicle picker modal for pre_transit */}
