@@ -33,6 +33,16 @@ type User struct {
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
+type UserProfileResponse struct {
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	FullName   string `json:"full_name"`
+	Email      string `json:"email,omitempty"`
+	Role       Role   `json:"role"`
+	BranchID   string `json:"branch_id,omitempty"`
+	BranchName string `json:"branch_name,omitempty"`
+}
+
 type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
@@ -41,4 +51,10 @@ type LoginRequest struct {
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  User   `json:"user"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=6"`
+	ConfirmPassword string `json:"confirm_password" binding:"required"`
 }

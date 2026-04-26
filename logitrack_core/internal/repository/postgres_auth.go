@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/logitrack/core/internal/model"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type postgresAuthRepository struct {
@@ -89,6 +91,8 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		addrJSON, _ := json.Marshal(map[string]string{
 			"street": u.street, "city": u.city, "province": u.province, "postal_code": u.postalCode,
 		})
+		// Hash the password using bcrypt
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
 		db.Exec(`
 			INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
 			VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)
@@ -100,7 +104,7 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 				    last_name  = EXCLUDED.last_name,
 				    email      = EXCLUDED.email,
 				    address    = EXCLUDED.address`,
-			u.id, u.username, u.password, u.role, u.branchID,
+			u.id, u.username, string(hashedPassword), u.role, u.branchID,
 			u.firstName, u.lastName, u.email, addrJSON,
 		)
 	}
@@ -155,17 +159,52 @@ const (
 var ErrAccountInactive = fmt.Errorf("account_inactive")
 
 func (r *postgresAuthRepository) FindUser(username, password string) (model.User, error) {
+	var id, role, status, firstName, lastName, passwordHash string
+	var email, addressJSON, branchID, updatedBy sql.NullString
+	var updatedAt sql.NullTime
 	row := r.db.QueryRow(
-		`SELECT `+userSelectCols+` FROM users WHERE username = $1 AND password = $2`,
-		username, password,
+		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, password FROM users WHERE username = $1`,
+		username,
 	)
-	u, err := scanUser(row.Scan)
+	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &passwordHash)
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
 	if err != nil {
-		return model.User{}, err
+		return model.User{}, fmt.Errorf("invalid credentials")
 	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
+		return model.User{}, fmt.Errorf("invalid credentials")
+	}
+
+	u := model.User{
+		ID:        id,
+		Username:  username,
+		FirstName: firstName,
+		LastName:  lastName,
+		Role:      model.Role(role),
+		Status:    model.UserStatus(status),
+	}
+	if branchID.Valid {
+		u.BranchID = branchID.String
+	}
+	if email.Valid {
+		u.Email = email.String
+	}
+	if updatedBy.Valid {
+		u.UpdatedBy = updatedBy.String
+	}
+	if updatedAt.Valid {
+		u.UpdatedAt = &updatedAt.Time
+	}
+	if addressJSON.Valid && len(addressJSON.String) > 0 {
+		var addr model.Address
+		if err := json.Unmarshal([]byte(addressJSON.String), &addr); err == nil {
+			u.Address = &addr
+		}
+	}
+
 	if u.Status == model.UserStatusInactive {
 		return model.User{}, ErrAccountInactive
 	}
@@ -358,4 +397,25 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 	}
 
 	return r.GetUserByID(id)
+}
+
+func (r *postgresAuthRepository) ChangePassword(ctx context.Context, userID, currentPassword, newHashedPassword string) error {
+	// First, verify the current password
+	var storedHash string
+	err := r.db.QueryRowContext(ctx, `SELECT password FROM users WHERE id = $1`, userID).Scan(&storedHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("user not found")
+		}
+		return err
+	}
+
+	// Compare the provided current password with the stored hash
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(currentPassword)); err != nil {
+		return fmt.Errorf("current password is incorrect")
+	}
+
+	// Update to the new password
+	_, err = r.db.ExecContext(ctx, `UPDATE users SET password = $1 WHERE id = $2`, newHashedPassword, userID)
+	return err
 }

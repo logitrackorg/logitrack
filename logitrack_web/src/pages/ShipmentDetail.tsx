@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   shipmentApi,
@@ -11,10 +11,9 @@ import {
   type IncidentType,
   INCIDENT_TYPE_LABELS,
 } from "../api/shipments";
-import { usersApi } from "../api/users";
+import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
-import type { User } from "../api/auth";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
@@ -67,7 +66,7 @@ export function ShipmentDetail() {
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [drivers, setDrivers] = useState<User[]>([]);
+  const [drivers, setDrivers] = useState<UserProfile[]>([]);
   const [newStatus, setNewStatus] = useState<ShipmentStatus | "">("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
@@ -108,7 +107,7 @@ export function ShipmentDetail() {
   const [selectedVehiclePlate, setSelectedVehiclePlate] = useState("");
   const [assigningVehicle, setAssigningVehicle] = useState(false);
   const [vehiclePickerError, setVehiclePickerError] = useState("");
-  const reload = async () => {
+  const reload = useCallback(async () => {
     if (!trackingId) return;
     try {
       const [s, ev, cmts, incs] = await Promise.all([
@@ -138,7 +137,7 @@ export function ShipmentDetail() {
     } catch {
       setError("Envío no encontrado.");
     }
-  };
+  }, [trackingId]);
 
   const loadAssignedVehicle = async (tid: string) => {
     setLoadingVehicle(true);
@@ -207,7 +206,7 @@ export function ShipmentDetail() {
     reload();
     if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
-  }, [trackingId]);
+  }, [trackingId, reload]);
 
   const handleSaveDraftChanges = async () => {
     if (!trackingId || !draftForm) return;
