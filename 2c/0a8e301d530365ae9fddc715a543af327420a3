@@ -1,0 +1,39 @@
+logitrack_web/src/pages/BranchList.tsx
+  46ea31e34b70fc31 1-2,37,39,41,45-52,58-60,145,167-171,250-279
+logitrack_web/src/pages/PublicTracking.tsx
+  46ea31e34b70fc31 61,63
+logitrack_web/src/pages/AdminUsers.tsx
+  46ea31e34b70fc31 4-5,26-79,86-89,93,98,115-123,134-136,139-144,147-148,158,162-167,170-179,183,193-198,208,215-216,222-229,239,242,248-283,292,297-322,333-385,399,404-406,409,415-447,449-450,452-460,462-463,465-476,478-480,482-483,494-513
+logitrack_web/src/App.tsx
+  46ea31e34b70fc31 2,20,72,74,80,221-226,230
+logitrack_web/src/pages/AvailableVehicles.tsx
+  46ea31e34b70fc31 1,22,37,41
+logitrack_web/src/pages/Login.tsx
+  46ea31e34b70fc31 20-26,66-74
+logitrack_web/src/pages/ShipmentList.tsx
+  46ea31e34b70fc31 3,5,66-80,104-112,117,152-202,302-325,346-358,371-418,424-515,523-524
+logitrack_web/src/pages/UserProfile.tsx
+  46ea31e34b70fc31 1-303
+logitrack_web/src/components/Toast.tsx
+  46ea31e34b70fc31 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "2c0a8e301d530365ae9fddc715a543af327420a3",
+  "prompts": {
+    "46ea31e34b70fc31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be92380b-ae98-4f14-b1bd-e3f38f0a0468",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1033,
+      "total_deletions": 118,
+      "accepted_lines": 1033,
+      "overriden_lines": 0
+    }
+  }
+}
