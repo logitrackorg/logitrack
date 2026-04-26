@@ -52,6 +52,7 @@ export function BranchList() {
     .filter((b) => {
       if (statusFilter && b.status !== statusFilter) return false;
       if (search) {
+        if (!search.trim()) return false;
         const q = search.toLowerCase();
         return (
           b.name.toLowerCase().includes(q) ||
