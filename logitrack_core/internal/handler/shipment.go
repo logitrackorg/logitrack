@@ -19,7 +19,7 @@ func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) b
 		return false
 	}
 	if shipmentBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only modify shipments assigned to your branch"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "solo podés modificar envíos asignados a tu sucursal"})
 		return true
 	}
 	return false
@@ -255,7 +255,7 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
 		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
 			return
 		}
 	}
@@ -329,6 +329,60 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, shipment)
 }
 
+// BulkUpdateStatus transitions multiple shipments to ready_for_pickup or delivering.
+func (h *ShipmentHandler) BulkUpdateStatus(c *gin.Context) {
+	var req model.BulkStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Status != model.StatusReadyForPickup && req.Status != model.StatusDelivering {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "solo se permite ready_for_pickup o delivering en actualizaciones masivas"})
+		return
+	}
+	if req.Status == model.StatusDelivering && req.DriverID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "driver_id es requerido para el estado delivering"})
+		return
+	}
+
+	user := c.MustGet(middleware.UserKey).(model.User)
+	today := model.NewDateOnly(timeNow())
+
+	result := model.BulkStatusResult{Skipped: []model.BulkSkipped{}}
+
+	for _, trackingID := range req.TrackingIDs {
+		current, err := h.svc.GetByTrackingID(trackingID)
+		if err != nil {
+			result.Skipped = append(result.Skipped, model.BulkSkipped{TrackingID: trackingID, Reason: "envío no encontrado"})
+			continue
+		}
+
+		if (user.Role == model.RoleOperator || user.Role == model.RoleSupervisor) && user.BranchID != "" && current.ReceivingBranchID != user.BranchID {
+			result.Skipped = append(result.Skipped, model.BulkSkipped{TrackingID: trackingID, Reason: "sin permiso de sucursal"})
+			continue
+		}
+
+		statusReq := model.UpdateStatusRequest{
+			Status:    req.Status,
+			ChangedBy: user.Username,
+			DriverID:  req.DriverID,
+		}
+		_, err = h.svc.UpdateStatus(trackingID, statusReq)
+		if err != nil {
+			result.Skipped = append(result.Skipped, model.BulkSkipped{TrackingID: trackingID, Reason: err.Error()})
+			continue
+		}
+
+		if req.Status == model.StatusDelivering {
+			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
+			_ = h.routeSvc.AddShipmentToDriverRoute(req.DriverID, trackingID, today)
+		}
+		result.Updated++
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // isDriverActiveStatus returns true for statuses where a shipment is actively assigned to a driver.
 func isDriverActiveStatus(s model.Status) bool {
 	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
@@ -356,7 +410,7 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
 		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
 			return
 		}
 	}

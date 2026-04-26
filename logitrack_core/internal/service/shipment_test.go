@@ -24,18 +24,22 @@ func testBranchRepo() repository.BranchRepository {
 type testSetup struct {
 	svc          *ShipmentService
 	commentSvc   *CommentService
+	incidentSvc  *IncidentService
 	shipmentRepo repository.ShipmentRepository
 	commentRepo  repository.CommentRepository
+	incidentRepo repository.IncidentRepository
 }
 
 func newSetup() testSetup {
-	shipmentRepo := repository.NewInMemoryShipmentRepository()
+	shipmentRepo, eventStore, proj := repository.NewInMemoryShipmentRepositoryWithDeps()
 	branchRepo := testBranchRepo()
 	customerRepo := repository.NewInMemoryCustomerRepository()
 	commentRepo := repository.NewInMemoryCommentRepository()
+	incidentRepo := repository.NewInMemoryIncidentRepository()
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
+	incidentSvc := NewIncidentService(incidentRepo, shipmentRepo, eventStore, proj)
 	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
-	return testSetup{svc, commentSvc, shipmentRepo, commentRepo}
+	return testSetup{svc, commentSvc, incidentSvc, shipmentRepo, commentRepo, incidentRepo}
 }
 
 func defaultSender() model.Customer {

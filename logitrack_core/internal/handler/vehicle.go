@@ -277,7 +277,7 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only assign shipments from your branch"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "solo podés asignar envíos de tu sucursal"})
 		return
 	}
 
@@ -410,7 +410,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	startUser := c.MustGet(middleware.UserKey).(model.User)
 	if startUser.Role == model.RoleSupervisor && startUser.BranchID != "" {
 		if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != startUser.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only start trips for vehicles at your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés iniciar viajes de vehículos asignados a tu sucursal"})
 			return
 		}
 	}
@@ -629,7 +629,7 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	if user.Role == model.RoleSupervisor && user.BranchID != "" {
 		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only end trips for vehicles arriving at your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés finalizar viajes de vehículos con destino a tu sucursal"})
 			return
 		}
 	}

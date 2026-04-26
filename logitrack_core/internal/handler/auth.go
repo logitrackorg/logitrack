@@ -57,7 +57,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
 		h.log(req.Username, "", model.AccessEventLoginFailure)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		if err == repository.ErrAccountInactive {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "account_inactive"})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
 	token := uuid.NewString()
