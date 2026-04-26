@@ -21,9 +21,9 @@ const (
 	EventDraftUpdated      = "draft_updated"
 	EventDraftConfirmed    = "draft_confirmed"
 	EventStatusChanged     = "status_changed"
-	EventShipmentCorrected  = "shipment_corrected"
-	EventShipmentCancelled  = "shipment_cancelled"
-	EventIncidentReported   = "incident_reported"
+	EventShipmentCorrected = "shipment_corrected"
+	EventShipmentCancelled = "shipment_cancelled"
+	EventIncidentReported  = "incident_reported"
 )
 
 // Payload types — each event type carries its own typed payload.

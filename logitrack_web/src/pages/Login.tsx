@@ -17,8 +17,13 @@ export function Login() {
     try {
       await login(username, password);
       navigate("/");
-    } catch {
-      setError("Usuario o contraseña incorrectos.");
+    } catch (e: unknown) {
+      const code = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (code === "account_inactive") {
+        setError("inactive");
+      } else {
+        setError("credentials");
+      }
     } finally {
       setLoading(false);
     }
@@ -58,7 +63,15 @@ export function Login() {
             />
           </div>
 
-          {error && <p style={{ color: "#ef4444", fontSize: 13, margin: 0 }}>{error}</p>}
+          {error === "credentials" && (
+            <p style={{ color: "#ef4444", fontSize: 13, margin: 0 }}>Usuario o contraseña incorrectos.</p>
+          )}
+          {error === "inactive" && (
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px" }}>
+              <p style={{ color: "#991b1b", fontSize: 13, margin: "0 0 4px", fontWeight: 600 }}>Tu cuenta está inactiva.</p>
+              <p style={{ color: "#7f1d1d", fontSize: 13, margin: 0 }}>Contactá con un administrador para reactivarla.</p>
+            </div>
+          )}
 
           <button type="submit" disabled={loading}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: 15, marginTop: 4 }}>

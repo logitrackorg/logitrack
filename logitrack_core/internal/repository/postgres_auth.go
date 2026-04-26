@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -22,30 +23,85 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		branch_id  VARCHAR(50)
 	)`)
 
-	seed := []struct {
+	type seedUser struct {
 		id, username, password, role, branchID string
-	}{
-		{"1", "op_caba", "op_caba123", "operator", "caba"},
-		{"2", "sup_caba", "sup_caba123", "supervisor", "caba"},
-		{"3", "op_cordoba", "op_cordoba123", "operator", "cordoba"},
-		{"4", "sup_cordoba", "sup_cordoba123", "supervisor", "cordoba"},
-		{"5", "chofer_caba", "chofer_caba123", "driver", "caba"},
-		{"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba"},
-		{"11", "chofer_mendoza", "chofer_mendoza123", "driver", "mendoza"},
-		{"6", "op_mendoza", "op_mendoza123", "operator", "mendoza"},
-		{"7", "sup_mendoza", "sup_mendoza123", "supervisor", "mendoza"},
-		{"8", "gerente", "gerente123", "manager", ""},
-		{"9", "admin", "admin123", "admin", ""},
+		firstName, lastName, email             string
+		street, city, province, postalCode     string
+	}
+	seed := []seedUser{
+		{
+			"1", "op_caba", "op_caba123", "operator", "caba",
+			"Carlos", "García", "carlos.garcia@logitrack.com",
+			"Av. Corrientes 1234", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043",
+		},
+		{
+			"2", "sup_caba", "sup_caba123", "supervisor", "caba",
+			"María", "López", "maria.lopez@logitrack.com",
+			"Av. Santa Fe 567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1059",
+		},
+		{
+			"3", "op_cordoba", "op_cordoba123", "operator", "cordoba",
+			"Juan", "Martínez", "juan.martinez@logitrack.com",
+			"Av. Colón 890", "Córdoba", "Córdoba", "X5000",
+		},
+		{
+			"4", "sup_cordoba", "sup_cordoba123", "supervisor", "cordoba",
+			"Ana", "Fernández", "ana.fernandez@logitrack.com",
+			"Bv. San Juan 1111", "Córdoba", "Córdoba", "X5001",
+		},
+		{
+			"5", "chofer_caba", "chofer_caba123", "driver", "caba",
+			"Luis", "Rodríguez", "luis.rodriguez@logitrack.com",
+			"Av. Rivadavia 3456", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1084",
+		},
+		{
+			"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba",
+			"Pablo", "Díaz", "pablo.diaz@logitrack.com",
+			"Av. Vélez Sársfield 2222", "Córdoba", "Córdoba", "X5010",
+		},
+		{
+			"11", "chofer_mendoza", "chofer_mendoza123", "driver", "mendoza",
+			"Roberto", "Sánchez", "roberto.sanchez@logitrack.com",
+			"Av. San Martín 789", "Mendoza", "Mendoza", "M5500",
+		},
+		{
+			"6", "op_mendoza", "op_mendoza123", "operator", "mendoza",
+			"Sofía", "González", "sofia.gonzalez@logitrack.com",
+			"Calle Las Heras 456", "Mendoza", "Mendoza", "M5501",
+		},
+		{
+			"7", "sup_mendoza", "sup_mendoza123", "supervisor", "mendoza",
+			"Diego", "Pérez", "diego.perez@logitrack.com",
+			"Av. Mitre 321", "Mendoza", "Mendoza", "M5502",
+		},
+		{
+			"8", "gerente", "gerente123", "manager", "",
+			"Valentina", "Torres", "valentina.torres@logitrack.com",
+			"Av. Del Libertador 4567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1426",
+		},
+		{
+			"9", "admin", "admin123", "admin", "",
+			"Alejandro", "Ramírez", "alejandro.ramirez@logitrack.com",
+			"Av. 9 de Julio 123", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1073",
+		},
 	}
 	for _, u := range seed {
+		addrJSON, _ := json.Marshal(map[string]string{
+			"street": u.street, "city": u.city, "province": u.province, "postal_code": u.postalCode,
+		})
 		db.Exec(`
-			INSERT INTO users (id, username, password, role, branch_id)
-			VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+			INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
+			VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)
 			ON CONFLICT (username) DO UPDATE
-				SET password  = EXCLUDED.password,
-				    role      = EXCLUDED.role,
-				    branch_id = EXCLUDED.branch_id`,
+				SET password   = EXCLUDED.password,
+				    role       = EXCLUDED.role,
+				    branch_id  = EXCLUDED.branch_id,
+				    first_name = EXCLUDED.first_name,
+				    last_name  = EXCLUDED.last_name,
+				    email      = EXCLUDED.email,
+				    address    = EXCLUDED.address`,
 			u.id, u.username, u.password, u.role, u.branchID,
+			u.firstName, u.lastName, u.email, addrJSON,
 		)
 	}
 
@@ -54,19 +110,49 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 
 func scanUser(scan func(...any) error) (model.User, error) {
 	var u model.User
-	var role string
-	var branchID sql.NullString
-	if err := scan(&u.ID, &u.Username, &role, &branchID); err != nil {
+	var role, status string
+	var branchID, email, firstName, lastName, updatedBy sql.NullString
+	var updatedAt sql.NullTime
+	var addressJSON []byte
+	if err := scan(&u.ID, &u.Username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt); err != nil {
 		return model.User{}, err
 	}
 	u.Role = model.Role(role)
+	u.Status = model.UserStatus(status)
 	if branchID.Valid {
 		u.BranchID = branchID.String
+	}
+	if email.Valid {
+		u.Email = email.String
+	}
+	if firstName.Valid {
+		u.FirstName = firstName.String
+	}
+	if lastName.Valid {
+		u.LastName = lastName.String
+	}
+	if updatedBy.Valid {
+		u.UpdatedBy = updatedBy.String
+	}
+	if updatedAt.Valid {
+		t := updatedAt.Time
+		u.UpdatedAt = &t
+	}
+	if len(addressJSON) > 0 {
+		var addr model.Address
+		if err := json.Unmarshal(addressJSON, &addr); err == nil {
+			u.Address = &addr
+		}
 	}
 	return u, nil
 }
 
-const userSelectCols = `id, username, role, branch_id`
+const (
+	userSelectCols        = `id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at`
+	userSelectColsAliased = `u.id, u.username, u.first_name, u.last_name, u.email, u.role, u.branch_id, u.status, u.address, u.updated_by, u.updated_at`
+)
+
+var ErrAccountInactive = fmt.Errorf("account_inactive")
 
 func (r *postgresAuthRepository) FindUser(username, password string) (model.User, error) {
 	row := r.db.QueryRow(
@@ -77,7 +163,13 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
-	return u, err
+	if err != nil {
+		return model.User{}, err
+	}
+	if u.Status == model.UserStatusInactive {
+		return model.User{}, ErrAccountInactive
+	}
+	return u, nil
 }
 
 func (r *postgresAuthRepository) SaveToken(token string, user model.User) {
@@ -91,10 +183,10 @@ func (r *postgresAuthRepository) SaveToken(token string, user model.User) {
 
 func (r *postgresAuthRepository) GetUserByToken(token string) (model.User, error) {
 	row := r.db.QueryRow(`
-		SELECT u.id, u.username, u.role, u.branch_id
+		SELECT `+userSelectColsAliased+`
 		FROM tokens t
 		JOIN users u ON u.id = t.user_id
-		WHERE t.token = $1`, token,
+		WHERE t.token = $1 AND u.status = 'activo'`, token,
 	)
 	u, err := scanUser(row.Scan)
 	if err == sql.ErrNoRows {
@@ -163,16 +255,22 @@ func (r *postgresAuthRepository) ListAll() []model.User {
 	return result
 }
 
-func (r *postgresAuthRepository) CreateUser(username, password string, role model.Role, branchID string) (model.User, error) {
+func (r *postgresAuthRepository) CreateUser(cmd UserCreate) (model.User, error) {
 	var id string
 	if err := r.db.QueryRow(`SELECT COALESCE(MAX(id::int), 0) + 1 FROM users`).Scan(&id); err != nil {
 		return model.User{}, err
 	}
+	addrJSON, _ := json.Marshal(cmd.Address)
 	_, err := r.db.Exec(
-		`INSERT INTO users (id, username, password, role, branch_id) VALUES ($1, $2, $3, $4, NULLIF($5, ''))`,
-		id, username, password, string(role), branchID,
+		`INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
+		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)`,
+		id, cmd.Username, cmd.Password, string(cmd.Role), cmd.BranchID,
+		cmd.FirstName, cmd.LastName, cmd.Email, addrJSON,
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "users_email_key") || (strings.Contains(err.Error(), "unique") && strings.Contains(err.Error(), "email")) {
+			return model.User{}, fmt.Errorf("email already in use")
+		}
 		if strings.Contains(err.Error(), "unique") {
 			return model.User{}, fmt.Errorf("username already exists")
 		}
@@ -182,25 +280,82 @@ func (r *postgresAuthRepository) CreateUser(username, password string, role mode
 }
 
 func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model.User, error) {
+	setClauses := []string{}
+	args := []any{}
+	argIdx := 1
+
 	if update.Username != nil {
-		if _, err := r.db.Exec(`UPDATE users SET username = $1 WHERE id = $2`, *update.Username, id); err != nil {
-			return model.User{}, err
-		}
+		setClauses = append(setClauses, fmt.Sprintf("username = $%d", argIdx))
+		args = append(args, *update.Username)
+		argIdx++
 	}
 	if update.Password != nil {
-		if _, err := r.db.Exec(`UPDATE users SET password = $1 WHERE id = $2`, *update.Password, id); err != nil {
-			return model.User{}, err
-		}
+		setClauses = append(setClauses, fmt.Sprintf("password = $%d", argIdx))
+		args = append(args, *update.Password)
+		argIdx++
+	}
+	if update.FirstName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("first_name = $%d", argIdx))
+		args = append(args, *update.FirstName)
+		argIdx++
+	}
+	if update.LastName != nil {
+		setClauses = append(setClauses, fmt.Sprintf("last_name = $%d", argIdx))
+		args = append(args, *update.LastName)
+		argIdx++
+	}
+	if update.Email != nil {
+		setClauses = append(setClauses, fmt.Sprintf("email = NULLIF($%d, '')", argIdx))
+		args = append(args, *update.Email)
+		argIdx++
 	}
 	if update.Role != nil {
-		if _, err := r.db.Exec(`UPDATE users SET role = $1 WHERE id = $2`, string(*update.Role), id); err != nil {
-			return model.User{}, err
-		}
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, string(*update.Role))
+		argIdx++
 	}
 	if update.BranchID != nil {
-		if _, err := r.db.Exec(`UPDATE users SET branch_id = NULLIF($1, '') WHERE id = $2`, *update.BranchID, id); err != nil {
-			return model.User{}, err
+		setClauses = append(setClauses, fmt.Sprintf("branch_id = NULLIF($%d, '')", argIdx))
+		args = append(args, *update.BranchID)
+		argIdx++
+	}
+	if update.Status != nil {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, string(*update.Status))
+		argIdx++
+	}
+	if update.Address != nil {
+		addrJSON, err := json.Marshal(update.Address)
+		if err == nil {
+			setClauses = append(setClauses, fmt.Sprintf("address = $%d", argIdx))
+			args = append(args, addrJSON)
+			argIdx++
 		}
 	}
+
+	if len(setClauses) == 0 {
+		return r.GetUserByID(id)
+	}
+
+	setClauses = append(setClauses, fmt.Sprintf("updated_by = $%d", argIdx))
+	args = append(args, update.UpdatedBy)
+	argIdx++
+	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argIdx))
+	args = append(args, time.Now())
+	argIdx++
+
+	args = append(args, id)
+	query := `UPDATE users SET ` + strings.Join(setClauses, ", ") + fmt.Sprintf(` WHERE id = $%d`, argIdx)
+	if _, err := r.db.Exec(query, args...); err != nil {
+		if strings.Contains(err.Error(), "users_email_key") || strings.Contains(err.Error(), "unique") && strings.Contains(err.Error(), "email") {
+			return model.User{}, fmt.Errorf("email already in use")
+		}
+		return model.User{}, err
+	}
+
+	if update.Status != nil && *update.Status == model.UserStatusInactive {
+		r.db.Exec(`DELETE FROM tokens WHERE user_id = $1`, id)
+	}
+
 	return r.GetUserByID(id)
 }

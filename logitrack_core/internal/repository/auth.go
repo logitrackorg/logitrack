@@ -2,11 +2,28 @@ package repository
 
 import "github.com/logitrack/core/internal/model"
 
+type UserCreate struct {
+	Username  string
+	Password  string
+	FirstName string
+	LastName  string
+	Email     string
+	Role      model.Role
+	BranchID  string
+	Address   model.Address
+}
+
 type UserUpdate struct {
-	Username *string
-	Password *string
-	Role     *model.Role
-	BranchID *string // nil = no change, "" = clear branch
+	Username  *string
+	Password  *string
+	FirstName *string
+	LastName  *string
+	Email     *string
+	Role      *model.Role
+	BranchID  *string // nil = no change, "" = clear branch
+	Status    *model.UserStatus
+	Address   *model.Address
+	UpdatedBy string
 }
 
 type credential struct {
@@ -23,5 +40,5 @@ type AuthRepository interface {
 	ListAll() []model.User
 	GetUserByID(id string) (model.User, error)
 	UpdateUser(id string, update UserUpdate) (model.User, error)
-	CreateUser(username, password string, role model.Role, branchID string) (model.User, error)
+	CreateUser(cmd UserCreate) (model.User, error)
 }

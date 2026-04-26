@@ -126,6 +126,22 @@ func RunMigrations(db *sql.DB) error {
 			timestamp  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS access_logs_timestamp_idx ON access_logs(timestamp DESC);
+
+		CREATE TABLE IF NOT EXISTS users (
+			id         VARCHAR(10)  PRIMARY KEY,
+			username   VARCHAR(100) UNIQUE NOT NULL,
+			password   VARCHAR(255) NOT NULL,
+			role       VARCHAR(50)  NOT NULL,
+			branch_id  VARCHAR(50)
+		);
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS status     VARCHAR(20)  NOT NULL DEFAULT 'activo';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS email      VARCHAR(255);
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100) NOT NULL DEFAULT '';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name  VARCHAR(100) NOT NULL DEFAULT '';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS address    JSONB;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by TEXT NOT NULL DEFAULT '';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+		CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users(email) WHERE email IS NOT NULL AND email <> '';
 	`)
 	return err
 }
