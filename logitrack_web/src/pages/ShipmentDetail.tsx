@@ -221,8 +221,8 @@ export function ShipmentDetail() {
       const data = await qrService.generateQR(trackingId);
       setQRData(data);
       setShowQRModal(true);
-    } catch (error: any) {
-      const message = error.response?.data?.error || 'Error al generar código QR';
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar código QR';
       setQRError(message);
     } finally {
       setGeneratingQR(false);
