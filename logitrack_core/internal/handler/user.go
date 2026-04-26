@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
@@ -32,6 +33,31 @@ func NewUserHandler(authRepo repository.AuthRepository, userSvc *service.UserSer
 func (h *UserHandler) ListDrivers(c *gin.Context) {
 	drivers := h.authRepo.ListByRole(model.RoleDriver, c.Query("branch_id"))
 	c.JSON(http.StatusOK, gin.H{"drivers": drivers})
+}
+
+// GetMe returns the authenticated user's profile.
+//
+// @Summary      Current user profile
+// @Description  Returns the authenticated user's full profile information.
+// @Tags         users
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  model.UserProfileResponse
+// @Failure      401  {object}  map[string]string
+// @Router       /users/me [get]
+func (h *UserHandler) GetMe(c *gin.Context) {
+	user, exists := c.Get(middleware.UserKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	u := user.(model.User)
+	profile, err := h.userSvc.GetProfile(c.Request.Context(), u.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user profile"})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
 }
 
 // ChangePassword changes the current user's password.

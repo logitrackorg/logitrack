@@ -88,7 +88,7 @@ func main() {
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc)
-	userSvc := service.NewUserService(authRepo)
+	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
@@ -198,6 +198,7 @@ func main() {
 	// Users — list drivers (operator, supervisor, admin)
 	canListDrivers := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.GET("/users/drivers", canListDrivers, userHandler.ListDrivers)
+	protected.GET("/users/me", allRoles, userHandler.GetMe)
 	protected.POST("/users/me/password", allRoles, userHandler.ChangePassword)
 
 	// Customers — autocomplete by DNI (operator+)

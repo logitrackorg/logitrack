@@ -11,10 +11,9 @@ import {
   type IncidentType,
   INCIDENT_TYPE_LABELS,
 } from "../api/shipments";
-import { usersApi } from "../api/users";
+import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
-import type { User } from "../api/auth";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
@@ -67,7 +66,7 @@ export function ShipmentDetail() {
   const navigate = useNavigate();
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [drivers, setDrivers] = useState<User[]>([]);
+  const [drivers, setDrivers] = useState<UserProfile[]>([]);
   const [newStatus, setNewStatus] = useState<ShipmentStatus | "">("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");

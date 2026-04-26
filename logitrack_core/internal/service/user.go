@@ -10,11 +10,12 @@ import (
 )
 
 type UserService struct {
-	authRepo repository.AuthRepository
+	authRepo   repository.AuthRepository
+	branchRepo repository.BranchRepository
 }
 
-func NewUserService(authRepo repository.AuthRepository) *UserService {
-	return &UserService{authRepo: authRepo}
+func NewUserService(authRepo repository.AuthRepository, branchRepo repository.BranchRepository) *UserService {
+	return &UserService{authRepo: authRepo, branchRepo: branchRepo}
 }
 
 func (s *UserService) ChangePassword(ctx context.Context, userID string, req model.ChangePasswordRequest) error {
@@ -31,4 +32,28 @@ func (s *UserService) ChangePassword(ctx context.Context, userID string, req mod
 
 	// Change password (this also verifies the current password)
 	return s.authRepo.ChangePassword(ctx, userID, req.CurrentPassword, string(hashed))
+}
+
+func (s *UserService) GetProfile(ctx context.Context, userID string) (model.UserProfileResponse, error) {
+	user, err := s.authRepo.GetUserByID(userID)
+	if err != nil {
+		return model.UserProfileResponse{}, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	profile := model.UserProfileResponse{
+		ID:       user.ID,
+		Username: user.Username,
+		FullName: user.FirstName + " " + user.LastName,
+		Email:    user.Email,
+		Role:     user.Role,
+		BranchID: user.BranchID,
+	}
+
+	if user.BranchID != "" {
+		if branch, exists := s.branchRepo.GetByID(user.BranchID); exists {
+			profile.BranchName = branch.Name
+		}
+	}
+
+	return profile, nil
 }

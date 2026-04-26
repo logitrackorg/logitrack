@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
-import { usersApi } from "../api/users";
-import type { User } from "../api/auth";
+import { usersApi, type UserProfile } from "../api/users";
 import { fmtDate } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
@@ -107,7 +106,7 @@ export function ShipmentList() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
   const [bulkDriverId, setBulkDriverId] = useState("");
-  const [drivers, setDrivers] = useState<User[]>([]);
+  const [drivers, setDrivers] = useState<UserProfile[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
 
