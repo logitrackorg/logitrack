@@ -1,0 +1,25 @@
+logitrack_web/src/pages/BranchList.tsx
+  c2e22edcfaa00372 223,288,293,306,308,315-323,325,333,339-404,431-445
+logitrack_core/internal/service/branch_test.go
+  c2e22edcfaa00372 51-65,346-543
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c2f60203b81c2c52811d136ef9cebd0633e971b2",
+  "prompts": {
+    "c2e22edcfaa00372": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6b3488a-72ae-4fa8-bbaf-aea5747f558c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 3688,
+      "total_deletions": 11,
+      "accepted_lines": 310,
+      "overriden_lines": 0
+    }
+  }
+}
