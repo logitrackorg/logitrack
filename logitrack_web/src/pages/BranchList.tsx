@@ -221,6 +221,7 @@ export function BranchList() {
           title="Editar sucursal"
           submitLabel="Guardar"
           initial={editing}
+          currentCapacity={capacities[editing.id]}
           onClose={() => setEditing(null)}
           onSubmit={async (data) => {
             await branchApi.update(editing.id, data);
@@ -285,11 +286,12 @@ function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
 // ─── Branch Form Modal (Create / Edit) ────────────────────────────────────────
 
 function BranchFormModal({
-  title, submitLabel, initial, onClose, onSubmit, error,
+  title, submitLabel, initial, currentCapacity, onClose, onSubmit, error,
 }: {
   title: string;
   submitLabel: string;
   initial?: Branch;
+  currentCapacity?: BranchCapacity;
   onClose: () => void;
   onSubmit: (data: CreateBranchPayload | UpdateBranchPayload) => Promise<void>;
   error: string;
@@ -302,21 +304,26 @@ function BranchFormModal({
     city: initial?.address.city ?? "",
     province: initial?.province ?? initial?.address.province ?? "",
     postal_code: initial?.address.postal_code ?? "",
+    max_capacity: initial?.max_capacity ?? 50,
   });
+  const [step, setStep] = useState<"form" | "confirm">("form");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
 
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) { setLocalError("El nombre es obligatorio."); return; }
-    if (!form.street.trim()) { setLocalError("La calle es obligatoria."); return; }
-    if (!form.city.trim()) { setLocalError("La ciudad es obligatoria."); return; }
-    if (!form.province) { setLocalError("La provincia es obligatoria."); return; }
-    if (!form.postal_code.trim()) { setLocalError("El código postal es obligatorio."); return; }
+  const validate = () => {
+    if (!form.name.trim()) { setLocalError("El nombre es obligatorio."); return false; }
+    if (!form.street.trim()) { setLocalError("La calle es obligatoria."); return false; }
+    if (!form.city.trim()) { setLocalError("La ciudad es obligatoria."); return false; }
+    if (!form.province) { setLocalError("La provincia es obligatoria."); return false; }
+    if (!form.postal_code.trim()) { setLocalError("El código postal es obligatorio."); return false; }
+    if (form.max_capacity < 1) { setLocalError("La capacidad debe ser al menos 1."); return false; }
+    return true;
+  };
 
+  const doSubmit = async () => {
     setSubmitting(true);
     setLocalError("");
     try {
@@ -324,10 +331,77 @@ function BranchFormModal({
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setLocalError(msg ?? "La operación falló. Intentá de nuevo.");
+      setStep("form");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    if (isEdit && initial && form.max_capacity !== initial.max_capacity) {
+      setStep("confirm");
+      return;
+    }
+    await doSubmit();
+  };
+
+  if (step === "confirm" && initial) {
+    const currentCount = currentCapacity?.current ?? 0;
+    const newPct = Math.round((currentCount / form.max_capacity) * 100);
+    const overCapacity = currentCount > form.max_capacity;
+
+    return (
+      <Modal onClose={onClose}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Confirmar cambio de capacidad</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>{form.name || initial.name}</div>
+            <div style={{ fontSize: 13, color: "#6b7280", display: "grid", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Bultos actuales en el almacén:</span>
+                <strong style={{ color: "#374151" }}>{currentCount} bultos</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Capacidad anterior:</span>
+                <span>{initial.max_capacity} bultos</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Nueva capacidad:</span>
+                <strong style={{ color: "#1e3a5f" }}>{form.max_capacity} bultos</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Ocupación con nueva capacidad:</span>
+                <strong style={{ color: overCapacity ? "#dc2626" : newPct >= 80 ? "#ca8a04" : "#16a34a" }}>
+                  {newPct}%
+                </strong>
+              </div>
+            </div>
+          </div>
+          {overCapacity && (
+            <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 13, color: "#b91c1c", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+              <span>La nueva capacidad ({form.max_capacity}) es menor que los bultos actuales ({currentCount}). El almacén quedaría con exceso de carga.</span>
+            </div>
+          )}
+          {!overCapacity && newPct >= 80 && (
+            <div style={{ padding: "10px 14px", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+              <span>Con esta capacidad, el almacén quedaría al {newPct}% de ocupación.</span>
+            </div>
+          )}
+          {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <button type="button" onClick={() => setStep("form")} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Volver</button>
+            <button type="button" onClick={doSubmit} disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
+              {submitting ? "Guardando..." : "Confirmar cambio"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -355,9 +429,21 @@ function BranchFormModal({
             </select>
           </Field>
         </div>
-        <Field label="Código postal *">
-          <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
-        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Código postal *">
+            <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
+          </Field>
+          <Field label="Capacidad máxima (bultos) *">
+            <input
+              style={inputStyle}
+              type="number"
+              min={1}
+              required
+              value={form.max_capacity}
+              onChange={(e) => setForm((prev) => ({ ...prev, max_capacity: Math.max(1, parseInt(e.target.value) || 1) }))}
+            />
+          </Field>
+        </div>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
