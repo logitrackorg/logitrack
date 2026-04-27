@@ -1,0 +1,40 @@
+logitrack_web/src/pages/ShipmentDetail.tsx
+  d40ad1de5cab4e4c 26,120-123,237-257,627-648,1155,1168-1176,1184-1198
+logitrack_core/internal/service/ml_config.go
+  c9d76b0c63ece310 119,122,126,129
+logitrack_web/src/utils/printShipmentDocument.ts
+  d40ad1de5cab4e4c 1-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "0b1b23fbaf83d2e5a0bcf5b5cb6e16000d7dccdb",
+  "prompts": {
+    "c9d76b0c63ece310": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15482684-076b-48b3-a92a-b993d4b164de",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 273,
+      "total_deletions": 4,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "d40ad1de5cab4e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93de72a-afbc-4e36-9dc6-7e7eda63436e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2181,
+      "total_deletions": 19,
+      "accepted_lines": 411,
+      "overriden_lines": 0
+    }
+  }
+}
