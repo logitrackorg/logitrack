@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type Shipment } from "../api/shipments";
-import { branchApi, type Branch } from "../api/branches";
+import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -60,6 +60,8 @@ export function NewShipment() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [senderSuggestion, setSenderSuggestion] = useState<Customer | null>(null);
   const [recipientSuggestion, setRecipientSuggestion] = useState<Customer | null>(null);
+  const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
+  const [capacityConfirmed, setCapacityConfirmed] = useState(false);
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
@@ -70,6 +72,13 @@ export function NewShipment() {
     }).catch(() => {});
     branchApi.listActive().then(setBranches).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setBranchCapacity(null);
+    setCapacityConfirmed(false);
+    if (!form.receiving_branch_id) return;
+    branchApi.getCapacity(form.receiving_branch_id).then(setBranchCapacity).catch(() => {});
+  }, [form.receiving_branch_id]);
 
   const set = (field: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -161,6 +170,8 @@ export function NewShipment() {
     if (/^[a-zA-Z]+$/.test(form.sender.address.postal_code)) { setError("El código postal del remitente debe contener al menos un dígito."); return; }
     if (!form.recipient.address.postal_code) { setError("El código postal del destinatario es obligatorio."); return; }
     if (/^[a-zA-Z]+$/.test(form.recipient.address.postal_code)) { setError("El código postal del destinatario debe contener al menos un dígito."); return; }
+    const branchAtLimit = branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity;
+    if (branchAtLimit && !capacityConfirmed) { setError("La sucursal receptora está al límite de capacidad. Confirmá que querés continuar de todas formas."); return; }
     setLoading(true);
     setError("");
     try {
@@ -194,6 +205,17 @@ export function NewShipment() {
     <div style={{ padding: isMobile ? 16 : "24px 32px", maxWidth: 720, margin: "0 auto" }}>
       <button onClick={() => navigate("/")} style={backBtn}>← Volver al listado</button>
       <h1 style={{ marginTop: 16, marginBottom: 24 }}>Nuevo envío</h1>
+
+      {branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
+        <div style={{ border: "1px solid #fb923c", background: "#fff7ed", borderRadius: 10, padding: "14px 18px", marginBottom: 24 }}>
+          <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 14, color: "#c2410c" }}>
+            La sucursal receptora está al límite de capacidad
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: "#9a3412" }}>
+            Esta sucursal tiene {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés continuar, pero la sucursal estará por encima de su capacidad.
+          </p>
+        </div>
+      )}
 
       {drafts.length > 0 && (
         <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px", marginBottom: 24 }}>
@@ -430,6 +452,20 @@ export function NewShipment() {
         </Section>
 
         {error && <p style={{ color: "#ef4444", margin: 0 }}>{error}</p>}
+
+        {branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "12px 14px" }}>
+            <input
+              type="checkbox"
+              checked={capacityConfirmed}
+              onChange={(e) => setCapacityConfirmed(e.target.checked)}
+              style={{ marginTop: 2, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 13, color: "#7c2d12", fontWeight: 600 }}>
+              Entiendo que la sucursal receptora está al límite de capacidad y quiero crear el envío de todas formas
+            </span>
+          </label>
+        )}
 
         <div style={{ display: "flex", gap: 12 }}>
           <button type="button" disabled={loading} onClick={handleSaveDraft}
