@@ -116,17 +116,17 @@ func (s *MLConfigService) Regenerate(
 	for _, name := range ml.FactorOrder {
 		v, ok := factors[name]
 		if !ok {
-			return nil, 0, fmt.Errorf("missing factor: %s", name)
+			return nil, 0, fmt.Errorf("factor faltante: %s", name)
 		}
 		if v < 1.0 || v > 5.0 {
-			return nil, 0, fmt.Errorf("factor %s must be between 1.0 and 5.0 (got %.2f)", name, v)
+			return nil, 0, fmt.Errorf("el factor %s debe estar entre 1.0 y 5.0 (valor recibido: %.2f)", name, v)
 		}
 	}
 	if altaThreshold <= mediaThreshold {
-		return nil, 0, fmt.Errorf("alta_threshold (%.2f) must be greater than media_threshold (%.2f)", altaThreshold, mediaThreshold)
+		return nil, 0, fmt.Errorf("el umbral alta (%.2f) debe ser mayor que el umbral media (%.2f)", altaThreshold, mediaThreshold)
 	}
 	if altaThreshold < 0 || altaThreshold > 1 || mediaThreshold < 0 || mediaThreshold > 1 {
-		return nil, 0, fmt.Errorf("thresholds must be between 0.0 and 1.0")
+		return nil, 0, fmt.Errorf("los umbrales deben estar entre 0.0 y 1.0")
 	}
 
 	// Persist the new config
