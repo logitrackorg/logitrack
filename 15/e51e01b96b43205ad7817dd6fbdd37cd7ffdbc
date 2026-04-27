@@ -1,0 +1,35 @@
+logitrack_core/internal/handler/organization.go
+  d40ad1de5cab4e4c 1-69
+logitrack_core/cmd/server/main.go
+  d40ad1de5cab4e4c 78-81,216-219
+logitrack_core/internal/db/migrate.go
+  d40ad1de5cab4e4c 121-134
+logitrack_core/internal/repository/postgres_organization.go
+  d40ad1de5cab4e4c 1-54
+logitrack_core/internal/model/organization.go
+  d40ad1de5cab4e4c 1-14
+logitrack_core/internal/service/organization.go
+  d40ad1de5cab4e4c 1-28
+logitrack_core/internal/repository/organization.go
+  d40ad1de5cab4e4c 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "15e51e01b96b43205ad7817dd6fbdd37cd7ffdbc",
+  "prompts": {
+    "d40ad1de5cab4e4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e93de72a-afbc-4e36-9dc6-7e7eda63436e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 3241,
+      "total_deletions": 18,
+      "accepted_lines": 421,
+      "overriden_lines": 0
+    }
+  }
+}
