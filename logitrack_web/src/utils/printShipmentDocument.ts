@@ -1,5 +1,6 @@
 import type { Shipment } from '../api/shipments';
 import type { Branch } from '../api/branches';
+import type { OrganizationConfig } from '../api/organizationApi';
 
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: 'Sobre',
@@ -41,6 +42,7 @@ export function printShipmentDocument(
   branches: Branch[],
   qrBase64: string,
   trackingUrl: string,
+  org?: OrganizationConfig | null,
 ): void {
   const cor = shipment.corrections ?? {};
 
@@ -86,6 +88,9 @@ export function printShipmentDocument(
 
   const now = fmtDateTimeES(new Date().toISOString());
   const createdAt = fmtDateES(shipment.created_at);
+
+  const orgName = org?.name || 'La organización responsable del servicio';
+  const orgSubLines = [org?.cuit ? `CUIT: ${org.cuit}` : '', org?.address || '', org?.phone || ''].filter(Boolean);
 
   printWindow.document.write(`<!DOCTYPE html>
 <html lang="es">
@@ -219,8 +224,8 @@ export function printShipmentDocument(
 <body>
   <div class="doc-header">
     <div class="doc-header-left">
-      <span class="brand">LogiTrack</span>
-      <span class="brand-sub">Sistema de gestión logística</span>
+      <span class="brand">${orgName}</span>
+      ${orgSubLines.map(l => `<span class="brand-sub">${l}</span>`).join('')}
     </div>
     <div>
       <div class="doc-title">COMPROBANTE DE ENVÍO</div>
@@ -291,7 +296,7 @@ export function printShipmentDocument(
     <p class="sig-title">Consentimiento y declaración del remitente</p>
     <p class="sig-consent">
       El remitente declara que el contenido y los datos consignados en este comprobante son correctos y verídicos,
-      y presta conformidad para el transporte del presente envío por parte de LogiTrack bajo los términos del servicio contratado.
+      y presta conformidad para el transporte del presente envío bajo los términos del servicio contratado con ${orgName}.
       Los datos personales del destinatario son utilizados exclusivamente para la gestión logística de este envío,
       conforme a la Ley N.° 25.326 de Protección de los Datos Personales.
     </p>
@@ -312,14 +317,14 @@ export function printShipmentDocument(
   </div>
 
   <div class="disclaimer">
-    La organización responsable del servicio actúa como responsable del tratamiento de los datos personales declarados en este
-    formulario con la finalidad exclusiva de ejecutar el servicio de transporte contratado. El titular de los datos puede ejercer
-    los derechos de acceso, rectificación y supresión previstos en la Ley N.° 25.326 de Protección de los Datos Personales ante
-    dicha organización. La DIRECCIÓN NACIONAL DE PROTECCIÓN DE DATOS PERSONALES es el organismo de control competente.
+    ${orgName} actúa como responsable del tratamiento de los datos personales declarados en este formulario con la finalidad
+    exclusiva de ejecutar el servicio de transporte contratado. El titular de los datos puede ejercer los derechos de acceso,
+    rectificación y supresión previstos en la Ley N.° 25.326 de Protección de los Datos Personales ante ${orgName}.
+    La DIRECCIÓN NACIONAL DE PROTECCIÓN DE DATOS PERSONALES es el organismo de control competente.
   </div>
 
   <div class="footer">
-    <span>LogiTrack — Sistema de gestión logística</span>
+    <span>${orgName}</span>
     <span>Documento generado el ${now}</span>
   </div>
 

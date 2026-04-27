@@ -24,6 +24,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
 import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
+import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending:           [],
@@ -120,6 +121,7 @@ export function ShipmentDetail() {
   // Estados para impresión de alta
   const [printingDoc, setPrintingDoc] = useState(false);
   const [printDocError, setPrintDocError] = useState('');
+  const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -246,7 +248,7 @@ export function ShipmentDetail() {
       setPrintDocError('');
       setPrintingDoc(true);
       const qr = await qrService.generateQR(shipment.tracking_id);
-      printShipmentDocument(shipment, branches, qr.qr_code_base64, qr.tracking_url);
+      printShipmentDocument(shipment, branches, qr.qr_code_base64, qr.tracking_url, orgConfig);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar el documento de impresión';
       setPrintDocError(message);
@@ -259,6 +261,7 @@ export function ShipmentDetail() {
     reload();
     if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
+    organizationApi.get().then(setOrgConfig).catch(() => {});
   }, [trackingId, reload]);
 
   const handleSaveDraftChanges = async () => {
