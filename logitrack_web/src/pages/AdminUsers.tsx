@@ -3,6 +3,7 @@ import { adminApi, type UserUpdatePayload, type UserCreatePayload } from "../api
 import { branchApi, type Branch } from "../api/branches";
 import type { User, Role, UserStatus, UserAddress } from "../api/auth";
 import { fmtDateTime } from "../utils/date";
+import { useAuth } from "../context/AuthContext";
 
 const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
 const ROLES_WITH_BRANCH: Role[] = ["operator", "supervisor", "driver"];
@@ -79,6 +80,7 @@ function validatePersonalFields(s: { first_name: string; last_name: string; emai
 }
 
 export function AdminUsers() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -307,10 +309,14 @@ export function AdminUsers() {
                 <label style={labelStyle}>
                   Rol *
                   <select value={editState.role}
+                    disabled={editingUser?.id === currentUser?.id}
                     onChange={e => setEditState(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
-                    style={inputStyle}>
+                    style={{ ...inputStyle, ...(editingUser?.id === currentUser?.id ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}>
                     {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                   </select>
+                  {editingUser?.id === currentUser?.id && (
+                    <span style={{ fontSize: 11, color: "#6b7280", marginTop: 4, display: "block" }}>No podés modificar tu propio rol.</span>
+                  )}
                 </label>
                 <label style={labelStyle}>
                   Estado *
