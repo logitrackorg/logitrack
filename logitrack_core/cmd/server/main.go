@@ -75,6 +75,10 @@ func main() {
 	mlConfigSvc.InitFromDB()
 	mlConfigHandler := handler.NewMLConfigHandler(mlConfigSvc)
 
+	orgRepo := repository.NewPostgresOrganizationRepository(database)
+	orgSvc := service.NewOrganizationService(orgRepo)
+	orgHandler := handler.NewOrganizationHandler(orgSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
@@ -208,6 +212,10 @@ func main() {
 
 	// Customers — autocomplete by DNI (operator+)
 	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)
+
+	// Organization config — read: all authenticated, write: admin only
+	protected.GET("/organization", middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver), orgHandler.Get)
+	protected.PUT("/organization", adminOnly, orgHandler.Update)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)

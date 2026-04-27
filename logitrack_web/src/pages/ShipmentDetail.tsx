@@ -23,6 +23,8 @@ import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
 import { qrService, type QRResponse } from '../api/qrService';
+import { printShipmentDocument } from '../utils/printShipmentDocument';
+import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   pending:           [],
@@ -115,6 +117,11 @@ export function ShipmentDetail() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrError, setQRError] = useState<string>('');
   const [generatingQR, setGeneratingQR] = useState(false);
+
+  // Estados para impresión de alta
+  const [printingDoc, setPrintingDoc] = useState(false);
+  const [printDocError, setPrintDocError] = useState('');
+  const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -229,10 +236,32 @@ export function ShipmentDetail() {
     }
   };
 
+  // Función para imprimir el alta del envío (CA-1, CA-2, CA-3, CA-4)
+  const handlePrintDocument = async () => {
+    if (!shipment) return;
+    // CA-3: solo envíos confirmados con tracking ID asignado
+    if (!shipment.tracking_id.startsWith('LT-')) {
+      setPrintDocError('El documento solo puede generarse para envíos confirmados con tracking ID asignado.');
+      return;
+    }
+    try {
+      setPrintDocError('');
+      setPrintingDoc(true);
+      const qr = await qrService.generateQR(shipment.tracking_id);
+      printShipmentDocument(shipment, branches, qr.qr_code_base64, qr.tracking_url, orgConfig);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar el documento de impresión';
+      setPrintDocError(message);
+    } finally {
+      setPrintingDoc(false);
+    }
+  };
+
   useEffect(() => {
     reload();
     if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
+    organizationApi.get().then(setOrgConfig).catch(() => {});
   }, [trackingId, reload]);
 
   const handleSaveDraftChanges = async () => {
@@ -595,6 +624,28 @@ export function ShipmentDetail() {
     }}
   >
     {generatingQR ? "Generando..." : "📱 Generar QR"}
+  </button>
+)}
+
+{/* BOTÓN IMPRIMIR ALTA — CA-1, CA-2, CA-3, CA-4 */}
+{hasRole("operator", "supervisor", "admin") && shipment.status !== "pending" && (
+  <button
+    onClick={handlePrintDocument}
+    disabled={printingDoc}
+    title="Imprimir comprobante de alta del envío"
+    style={{
+      background: "#fff",
+      border: "1px solid #d1d5db",
+      borderRadius: 6,
+      padding: "6px 12px",
+      cursor: printingDoc ? "not-allowed" : "pointer",
+      fontSize: 13,
+      fontWeight: 600,
+      color: "#374151",
+      opacity: printingDoc ? 0.5 : 1,
+    }}
+  >
+    {printingDoc ? "Generando..." : "🖨️ Imprimir alta"}
   </button>
 )}
 
@@ -1104,7 +1155,7 @@ export function ShipmentDetail() {
             </div>
           </div>
         </div>
-      )})
+      )}
       {/* 🆕 AGREGAR AQUÍ - MODAL DE QR */}
       {qrData && (
         <ShipmentQRModal
@@ -1117,20 +1168,37 @@ export function ShipmentDetail() {
       )}
 
       {qrError && (
-        <div style={{ 
-          position: "fixed", 
-          bottom: 24, 
-          right: 24, 
-          background: "#fef2f2", 
-          border: "1px solid #fecaca", 
-          color: "#dc2626", 
-          padding: "12px 16px", 
-          borderRadius: 8, 
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          color: "#dc2626",
+          padding: "12px 16px",
+          borderRadius: 8,
           fontSize: 13,
           boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           zIndex: 1001,
         }}>
           {qrError}
+        </div>
+      )}
+      {printDocError && (
+        <div style={{
+          position: "fixed",
+          bottom: qrError ? 80 : 24,
+          right: 24,
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          color: "#dc2626",
+          padding: "12px 16px",
+          borderRadius: 8,
+          fontSize: 13,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          zIndex: 1001,
+        }}>
+          {printDocError}
         </div>
       )}
     </div> 

@@ -168,7 +168,13 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 
 	currentUser, _ := c.Get("user")
-	updatedBy := currentUser.(model.User).Username
+	cu := currentUser.(model.User)
+	updatedBy := cu.Username
+
+	if req.Role != nil && id == cu.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No podés modificar tu propio rol."})
+		return
+	}
 
 	update := repository.UserUpdate{
 		FirstName: req.FirstName,

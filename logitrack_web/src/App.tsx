@@ -14,6 +14,7 @@ import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
+import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
 import { AccessLog } from "./pages/AccessLog";
@@ -59,6 +60,9 @@ function Nav() {
       )}
       {hasRole("admin") && (
         <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/organization" style={navStyle}>Organización</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/admin/users" style={navStyle}>Usuarios</NavLink>
@@ -197,6 +201,12 @@ function AppRoutes() {
           <Route path="/ml-config" element={
             <ProtectedRoute roles={["admin"]}>
               <MLConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/organization" element={
+            <ProtectedRoute roles={["admin"]}>
+              <OrganizationConfig />
             </ProtectedRoute>
           } />
 
