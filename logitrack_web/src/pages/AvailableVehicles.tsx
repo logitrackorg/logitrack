@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { vehicleApi, type Vehicle, type VehicleType } from "../api/vehicles";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -19,7 +19,7 @@ export function AvailableVehicles() {
   const [filterType, setFilterType] = useState<VehicleType | "">("");
   const [filterCapacity, setFilterCapacity] = useState<string>("");
 
-  const loadAvailableVehicles = async () => {
+  const loadAvailableVehicles = useCallback(async () => {
     setLoading(true);
     try {
       const filters: { type?: VehicleType; min_capacity?: number } = {};
@@ -34,11 +34,11 @@ export function AvailableVehicles() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterType, filterCapacity]);
 
   useEffect(() => {
     loadAvailableVehicles();
-  }, [filterType, filterCapacity]);
+  }, [loadAvailableVehicles]);
 
   if (!hasRole("supervisor") && !hasRole("admin")) {
     return <Navigate to="/dashboard" replace />;

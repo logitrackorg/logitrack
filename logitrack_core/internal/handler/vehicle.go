@@ -83,7 +83,7 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 	// Validate branch exists
 	_, found := h.branchRepo.GetByID(req.BranchID)
 	if !found {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Branch not found: " + req.BranchID})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Sucursal no encontrada: " + req.BranchID})
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Ya existe un vehículo con la misma patente"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create vehicle"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al crear el vehículo"})
 		return
 	}
 
@@ -277,7 +277,7 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 	if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "you can only assign shipments from your branch"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "solo podés asignar envíos de tu sucursal"})
 		return
 	}
 
@@ -410,7 +410,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	startUser := c.MustGet(middleware.UserKey).(model.User)
 	if startUser.Role == model.RoleSupervisor && startUser.BranchID != "" {
 		if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != startUser.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only start trips for vehicles at your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés iniciar viajes de vehículos asignados a tu sucursal"})
 			return
 		}
 	}
@@ -529,20 +529,20 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 	plate := c.Param("plate")
 	trackingID := c.Param("trackingId")
 	if plate == "" || trackingID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "plate and trackingId are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "la patente y el ID de seguimiento son obligatorios"})
 		return
 	}
 
 	vehicle, found := h.repo.GetByLicensePlate(plate)
 	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"error": "vehicle not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "vehículo no encontrado"})
 		return
 	}
 
 	// Vehicle must be en_carga to allow unassignment
 	if vehicle.Status != model.VehicleStatusLoading {
 		c.JSON(http.StatusConflict, gin.H{
-			"error":          "shipments can only be removed while the vehicle is loading",
+			"error":          "solo se pueden desasignar envíos mientras el vehículo está en carga",
 			"current_status": getStatusLabel(vehicle.Status),
 		})
 		return
@@ -557,7 +557,7 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 		}
 	}
 	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"error": "shipment not assigned to this vehicle"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "el envío no está asignado a este vehículo"})
 		return
 	}
 
@@ -579,13 +579,13 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 		Location:  branchCity,
 	}
 	if _, err := h.shipmentSvc.UpdateStatus(trackingID, statusReq); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "error transitioning shipment: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al cambiar el estado del envío: " + err.Error()})
 		return
 	}
 
 	// Remove from vehicle
 	if err := h.repo.RemoveShipment(vehicle.ID, trackingID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "error removing shipment from vehicle: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al desasignar el envío del vehículo: " + err.Error()})
 		return
 	}
 
@@ -629,7 +629,7 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	if user.Role == model.RoleSupervisor && user.BranchID != "" {
 		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only end trips for vehicles arriving at your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés finalizar viajes de vehículos con destino a tu sucursal"})
 			return
 		}
 	}

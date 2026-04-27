@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { branchApi, type Branch, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
+import { useCallback, useEffect, useState } from "react";
+import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { fmtDateTime } from "../utils/date";
@@ -34,24 +34,36 @@ export function BranchList() {
   const [error, setError] = useState("");
 
   const isAdmin = hasRole("admin");
+  const canViewCapacity = hasRole("supervisor", "manager", "admin");
 
-  useEffect(() => { loadBranches(); }, []);
+  const [capacities, setCapacities] = useState<Record<string, BranchCapacity>>({});
 
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       const data = await branchApi.list();
       setBranches(data);
+      if (canViewCapacity) {
+        const caps = await Promise.all(
+          data.map((b) => branchApi.getCapacity(b.id).catch(() => null))
+        );
+        const map: Record<string, BranchCapacity> = {};
+        caps.forEach((c) => { if (c) map[c.branch_id] = c; });
+        setCapacities(map);
+      }
     } catch {
       setError("No se pudieron cargar las sucursales.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewCapacity]);
+
+  useEffect(() => { loadBranches(); }, [loadBranches]);
 
   const filtered = branches
     .filter((b) => {
       if (statusFilter && b.status !== statusFilter) return false;
       if (search) {
+        if (!search.trim()) return false;
         const q = search.toLowerCase();
         return (
           b.name.toLowerCase().includes(q) ||
@@ -119,7 +131,7 @@ export function BranchList() {
         <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
           <p style={{ fontSize: 18, fontWeight: 600 }}>No se encontraron sucursales</p>
           <p style={{ fontSize: 14 }}>
-            {branches.length === 0 ? "No hay sucursales registradas en el sistema." : "Intentá ajustar la búsqueda o los filtros."}
+            {branches.length === 0 ? "No hay sucursales registradas en el sistema." : search.trim() === "" ? "Ingresá un término de búsqueda para continuar." : "Intentá ajustar la búsqueda o los filtros."}
           </p>
         </div>
       ) : (
@@ -131,6 +143,7 @@ export function BranchList() {
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
                 <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
+                {canViewCapacity && <th style={isMobile ? { display: "none" } : thStyle}>Capacidad</th>}
                 <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
                 {isAdmin && <th style={thStyle}>Acciones</th>}
               </tr>
@@ -152,6 +165,11 @@ export function BranchList() {
                       {statusLabel(b.status)}
                     </span>
                   </td>
+                  {canViewCapacity && (
+                    <td style={isMobile ? { display: "none" } : tdStyle}>
+                      <CapacityIndicator cap={capacities[b.id]} />
+                    </td>
+                  )}
                   <td style={isMobile ? { display: "none" } : tdStyle}>
                     <div style={{ fontSize: 12 }}>{fmtDateTime(b.updated_at)}</div>
                     {b.updated_by && <div style={{ fontSize: 11, color: "#9ca3af" }}>por {b.updated_by}</div>}
@@ -203,6 +221,7 @@ export function BranchList() {
           title="Editar sucursal"
           submitLabel="Guardar"
           initial={editing}
+          currentCapacity={capacities[editing.id]}
           onClose={() => setEditing(null)}
           onSubmit={async (data) => {
             await branchApi.update(editing.id, data);
@@ -230,14 +249,49 @@ export function BranchList() {
   );
 }
 
+// ─── Capacity Indicator ───────────────────────────────────────────────────────
+
+function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
+  if (!cap) {
+    return <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>;
+  }
+
+  const pct = Math.min(cap.percentage, 100);
+  const barColor = cap.alert ? "#dc2626" : pct >= 60 ? "#ca8a04" : "#16a34a";
+  const textColor = cap.alert ? "#dc2626" : "#374151";
+
+  return (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: textColor }}>
+          {cap.current} / {cap.max_capacity} bultos
+        </span>
+        {cap.alert && (
+          <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 700, marginLeft: 4 }}>⚠</span>
+        )}
+      </div>
+      <div style={{ background: "#e5e7eb", borderRadius: 4, height: 6, overflow: "hidden" }}>
+        <div style={{
+          width: `${pct}%`, height: "100%", borderRadius: 4,
+          background: barColor, transition: "width 0.3s",
+        }} />
+      </div>
+      <div style={{ fontSize: 11, color: cap.alert ? "#dc2626" : "#6b7280", marginTop: 2 }}>
+        {Math.round(pct)}% ocupado
+      </div>
+    </div>
+  );
+}
+
 // ─── Branch Form Modal (Create / Edit) ────────────────────────────────────────
 
 function BranchFormModal({
-  title, submitLabel, initial, onClose, onSubmit, error,
+  title, submitLabel, initial, currentCapacity, onClose, onSubmit, error,
 }: {
   title: string;
   submitLabel: string;
   initial?: Branch;
+  currentCapacity?: BranchCapacity;
   onClose: () => void;
   onSubmit: (data: CreateBranchPayload | UpdateBranchPayload) => Promise<void>;
   error: string;
@@ -250,21 +304,26 @@ function BranchFormModal({
     city: initial?.address.city ?? "",
     province: initial?.province ?? initial?.address.province ?? "",
     postal_code: initial?.address.postal_code ?? "",
+    max_capacity: initial?.max_capacity ?? 50,
   });
+  const [step, setStep] = useState<"form" | "confirm">("form");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState("");
 
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) { setLocalError("El nombre es obligatorio."); return; }
-    if (!form.street.trim()) { setLocalError("La calle es obligatoria."); return; }
-    if (!form.city.trim()) { setLocalError("La ciudad es obligatoria."); return; }
-    if (!form.province) { setLocalError("La provincia es obligatoria."); return; }
-    if (!form.postal_code.trim()) { setLocalError("El código postal es obligatorio."); return; }
+  const validate = () => {
+    if (!form.name.trim()) { setLocalError("El nombre es obligatorio."); return false; }
+    if (!form.street.trim()) { setLocalError("La calle es obligatoria."); return false; }
+    if (!form.city.trim()) { setLocalError("La ciudad es obligatoria."); return false; }
+    if (!form.province) { setLocalError("La provincia es obligatoria."); return false; }
+    if (!form.postal_code.trim()) { setLocalError("El código postal es obligatorio."); return false; }
+    if (form.max_capacity < 1) { setLocalError("La capacidad debe ser al menos 1."); return false; }
+    return true;
+  };
 
+  const doSubmit = async () => {
     setSubmitting(true);
     setLocalError("");
     try {
@@ -272,10 +331,77 @@ function BranchFormModal({
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setLocalError(msg ?? "La operación falló. Intentá de nuevo.");
+      setStep("form");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    if (isEdit && initial && form.max_capacity !== initial.max_capacity) {
+      setStep("confirm");
+      return;
+    }
+    await doSubmit();
+  };
+
+  if (step === "confirm" && initial) {
+    const currentCount = currentCapacity?.current ?? 0;
+    const newPct = Math.round((currentCount / form.max_capacity) * 100);
+    const overCapacity = currentCount > form.max_capacity;
+
+    return (
+      <Modal onClose={onClose}>
+        <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Confirmar cambio de capacidad</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>{form.name || initial.name}</div>
+            <div style={{ fontSize: 13, color: "#6b7280", display: "grid", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Bultos actuales en el almacén:</span>
+                <strong style={{ color: "#374151" }}>{currentCount} bultos</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Capacidad anterior:</span>
+                <span>{initial.max_capacity} bultos</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Nueva capacidad:</span>
+                <strong style={{ color: "#1e3a5f" }}>{form.max_capacity} bultos</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Ocupación con nueva capacidad:</span>
+                <strong style={{ color: overCapacity ? "#dc2626" : newPct >= 80 ? "#ca8a04" : "#16a34a" }}>
+                  {newPct}%
+                </strong>
+              </div>
+            </div>
+          </div>
+          {overCapacity && (
+            <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 13, color: "#b91c1c", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+              <span>La nueva capacidad ({form.max_capacity}) es menor que los bultos actuales ({currentCount}). El almacén quedaría con exceso de carga.</span>
+            </div>
+          )}
+          {!overCapacity && newPct >= 80 && (
+            <div style={{ padding: "10px 14px", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+              <span>Con esta capacidad, el almacén quedaría al {newPct}% de ocupación.</span>
+            </div>
+          )}
+          {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <button type="button" onClick={() => setStep("form")} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Volver</button>
+            <button type="button" onClick={doSubmit} disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
+              {submitting ? "Guardando..." : "Confirmar cambio"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -303,9 +429,21 @@ function BranchFormModal({
             </select>
           </Field>
         </div>
-        <Field label="Código postal *">
-          <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
-        </Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Código postal *">
+            <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
+          </Field>
+          <Field label="Capacidad máxima (bultos) *">
+            <input
+              style={inputStyle}
+              type="number"
+              min={1}
+              required
+              value={form.max_capacity}
+              onChange={(e) => setForm((prev) => ({ ...prev, max_capacity: Math.max(1, parseInt(e.target.value) || 1) }))}
+            />
+          </Field>
+        </div>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>

@@ -10,9 +10,18 @@ import (
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+type stubCounter struct{ n int }
+
+func (s *stubCounter) CountActiveByBranch(string) int { return s.n }
+
 func newBranchSvc() (*BranchService, repository.BranchRepository) {
 	repo := repository.NewInMemoryBranchRepository()
-	return NewBranchService(repo), repo
+	return NewBranchService(repo, &stubCounter{0}), repo
+}
+
+func newBranchSvcWithActiveShipments(n int) (*BranchService, repository.BranchRepository) {
+	repo := repository.NewInMemoryBranchRepository()
+	return NewBranchService(repo, &stubCounter{n}), repo
 }
 
 func defaultCreateBranchReq() model.CreateBranchRequest {
@@ -34,6 +43,21 @@ func mustAddBranch(t *testing.T, repo repository.BranchRepository, id string, st
 		Address:  model.Address{Street: "Calle 1", City: "Ciudad", Province: "Prov", PostalCode: "1000"},
 		Province: "Prov",
 		Status:   status,
+	}
+	repo.Add(b)
+	return b
+}
+
+// mustAddBranchWithCapacity is like mustAddBranch but sets a specific max_capacity.
+func mustAddBranchWithCapacity(t *testing.T, repo repository.BranchRepository, id string, status model.BranchStatus, maxCap int) model.Branch {
+	t.Helper()
+	b := model.Branch{
+		ID:          id,
+		Name:        "BRANCH-" + id,
+		Address:     model.Address{Street: "Calle 1", City: "Ciudad", Province: "Prov", PostalCode: "1000"},
+		Province:    "Prov",
+		Status:      status,
+		MaxCapacity: maxCap,
 	}
 	repo.Add(b)
 	return b
@@ -229,6 +253,42 @@ func TestBranchUpdateStatus_InvalidStatus(t *testing.T) {
 	}
 }
 
+func TestBranchUpdateStatus_BlockedByActiveShipments(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(3)
+	mustAddBranch(t, repo, "b1", model.BranchStatusActive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusOutOfService}
+	_, err := svc.UpdateStatus("b1", req, "admin1")
+	if !errors.Is(err, ErrBranchHasActiveShipments) {
+		t.Errorf("expected ErrBranchHasActiveShipments, got: %v", err)
+	}
+}
+
+func TestBranchUpdateStatus_ForceOverridesActiveShipments(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(3)
+	mustAddBranch(t, repo, "b1", model.BranchStatusActive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusOutOfService, Force: true}
+	b, err := svc.UpdateStatus("b1", req, "admin1")
+	if err != nil {
+		t.Fatalf("unexpected error with force=true: %v", err)
+	}
+	if b.Status != model.BranchStatusOutOfService {
+		t.Errorf("status: got %q, want %q", b.Status, model.BranchStatusOutOfService)
+	}
+}
+
+func TestBranchUpdateStatus_ActiveToActiveNotBlocked(t *testing.T) {
+	svc, repo := newBranchSvcWithActiveShipments(5)
+	mustAddBranch(t, repo, "b1", model.BranchStatusInactive)
+
+	req := model.UpdateBranchStatusRequest{Status: model.BranchStatusActive}
+	_, err := svc.UpdateStatus("b1", req, "admin1")
+	if err != nil {
+		t.Fatalf("reactivation should not be blocked: %v", err)
+	}
+}
+
 // ─── ListActive ───────────────────────────────────────────────────────────────
 
 func TestBranchListActive_FiltersInactive(t *testing.T) {
@@ -281,5 +341,203 @@ func TestBranchSearch_EmptyQueryReturnsAll(t *testing.T) {
 	results := svc.Search("")
 	if len(results) != 2 {
 		t.Errorf("Search(''): got %d results, want 2", len(results))
+	}
+}
+
+// ─── Create — max_capacity ────────────────────────────────────────────────────
+
+func TestBranchCreate_DefaultMaxCapacity(t *testing.T) {
+	svc, _ := newBranchSvc()
+	b, err := svc.Create(defaultCreateBranchReq())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if b.MaxCapacity != 50 {
+		t.Errorf("max_capacity: got %d, want 50 (default)", b.MaxCapacity)
+	}
+}
+
+func TestBranchCreate_ExplicitMaxCapacity(t *testing.T) {
+	svc, _ := newBranchSvc()
+	req := defaultCreateBranchReq()
+	req.MaxCapacity = 120
+	b, err := svc.Create(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if b.MaxCapacity != 120 {
+		t.Errorf("max_capacity: got %d, want 120", b.MaxCapacity)
+	}
+}
+
+func TestBranchCreate_NegativeMaxCapacityDefaultsTo50(t *testing.T) {
+	svc, _ := newBranchSvc()
+	req := defaultCreateBranchReq()
+	req.MaxCapacity = -10
+	b, err := svc.Create(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if b.MaxCapacity != 50 {
+		t.Errorf("max_capacity: got %d, want 50 (default for negative)", b.MaxCapacity)
+	}
+}
+
+// ─── Update — max_capacity ────────────────────────────────────────────────────
+
+func TestBranchUpdate_MaxCapacityChanged(t *testing.T) {
+	svc, repo := newBranchSvc()
+	b := mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 30)
+
+	req := model.UpdateBranchRequest{
+		Name:        b.Name,
+		Street:      b.Address.Street,
+		City:        b.Address.City,
+		Province:    b.Province,
+		PostalCode:  b.Address.PostalCode,
+		MaxCapacity: 75,
+	}
+	updated, err := svc.Update("b1", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if updated.MaxCapacity != 75 {
+		t.Errorf("max_capacity: got %d, want 75", updated.MaxCapacity)
+	}
+}
+
+func TestBranchUpdate_ZeroMaxCapacityPreservesExisting(t *testing.T) {
+	svc, repo := newBranchSvc()
+	b := mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 30)
+
+	req := model.UpdateBranchRequest{
+		Name:        b.Name,
+		Street:      b.Address.Street,
+		City:        b.Address.City,
+		Province:    b.Province,
+		PostalCode:  b.Address.PostalCode,
+		MaxCapacity: 0,
+	}
+	updated, err := svc.Update("b1", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if updated.MaxCapacity != 30 {
+		t.Errorf("max_capacity: got %d, want 30 (preserved on zero)", updated.MaxCapacity)
+	}
+}
+
+// ─── GetCapacity ──────────────────────────────────────────────────────────────
+
+func TestGetCapacity_NotFound(t *testing.T) {
+	svc, _ := newBranchSvc()
+	_, err := svc.GetCapacity("nonexistent")
+	if !errors.Is(err, ErrBranchNotFound) {
+		t.Errorf("expected ErrBranchNotFound, got: %v", err)
+	}
+}
+
+func TestGetCapacity_ZeroOccupancy(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{0})
+	mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 10)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cap.Current != 0 {
+		t.Errorf("current: got %d, want 0", cap.Current)
+	}
+	if cap.MaxCapacity != 10 {
+		t.Errorf("max_capacity: got %d, want 10", cap.MaxCapacity)
+	}
+	if cap.Percentage != 0 {
+		t.Errorf("percentage: got %v, want 0", cap.Percentage)
+	}
+	if cap.Alert {
+		t.Error("alert: got true, want false")
+	}
+}
+
+func TestGetCapacity_PartialOccupancy(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{5})
+	mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 10)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cap.Current != 5 {
+		t.Errorf("current: got %d, want 5", cap.Current)
+	}
+	if cap.Percentage != 50 {
+		t.Errorf("percentage: got %v, want 50", cap.Percentage)
+	}
+	if cap.Alert {
+		t.Error("alert: got true, want false at 50%")
+	}
+}
+
+func TestGetCapacity_AlertTriggersAtEightyPercent(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{8})
+	mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 10)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cap.Alert {
+		t.Errorf("alert: got false, want true at 80%%")
+	}
+}
+
+func TestGetCapacity_BelowAlertThreshold(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{7})
+	mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 10)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cap.Alert {
+		t.Errorf("alert: got true, want false at 70%%")
+	}
+}
+
+func TestGetCapacity_OverCapacity(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{15})
+	mustAddBranchWithCapacity(t, repo, "b1", model.BranchStatusActive, 10)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cap.Current != 15 {
+		t.Errorf("current: got %d, want 15", cap.Current)
+	}
+	if cap.Percentage != 150 {
+		t.Errorf("percentage: got %v, want 150", cap.Percentage)
+	}
+	if !cap.Alert {
+		t.Error("alert: got false, want true when over capacity")
+	}
+}
+
+func TestGetCapacity_ZeroBranchMaxCapacityDefaultsTo50(t *testing.T) {
+	repo := repository.NewInMemoryBranchRepository()
+	svc := NewBranchService(repo, &stubCounter{0})
+	mustAddBranch(t, repo, "b1", model.BranchStatusActive) // MaxCapacity=0 (zero value)
+
+	cap, err := svc.GetCapacity("b1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cap.MaxCapacity != 50 {
+		t.Errorf("max_capacity: got %d, want 50 (default for zero)", cap.MaxCapacity)
 	}
 }

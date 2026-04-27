@@ -89,6 +89,10 @@ type Shipment struct {
 
 	// Corrections: typed non-destructive field overrides; original data is never modified.
 	Corrections *ShipmentCorrections `json:"corrections,omitempty"`
+
+	// HasIncident is set when at least one incident has been reported on the shipment.
+	HasIncident  bool         `json:"has_incident,omitempty"`
+	IncidentType IncidentType `json:"incident_type,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
@@ -241,6 +245,12 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	if incoming.SpecialInstructions != nil {
 		base.SpecialInstructions = incoming.SpecialInstructions
 	}
+}
+
+// CanGenerateQR returns true if the shipment can generate a QR code. AGREGADO
+// QR codes can only be generated for confirmed shipments (not drafts).
+func (s *Shipment) CanGenerateQR() bool {
+	return s.TrackingID != "" && s.Status != StatusPending
 }
 
 type CreateShipmentRequest struct {

@@ -35,7 +35,7 @@ func (h *CommentHandler) GetComments(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	if user.Role == model.RoleOperator && user.BranchID != "" {
 		if shipment, err := h.shipmentSvc.GetByTrackingID(trackingID); err != nil || shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "you can only view shipments assigned to your branch"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
 			return
 		}
 	}

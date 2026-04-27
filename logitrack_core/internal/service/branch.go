@@ -11,17 +11,24 @@ import (
 )
 
 var (
-	ErrBranchNotFound      = errors.New("branch not found")
-	ErrBranchDuplicateName = errors.New("duplicate branch name")
-	ErrBranchNotActive     = errors.New("branch is not active")
+	ErrBranchNotFound           = errors.New("sucursal no encontrada")
+	ErrBranchDuplicateName      = errors.New("ya existe una sucursal con ese nombre")
+	ErrBranchNotActive          = errors.New("la sucursal no está activa")
+	ErrBranchHasActiveShipments = errors.New("la sucursal tiene envíos activos")
 )
 
-type BranchService struct {
-	repo repository.BranchRepository
+// ActiveShipmentCounter counts non-terminal shipments assigned to a branch.
+type ActiveShipmentCounter interface {
+	CountActiveByBranch(branchID string) int
 }
 
-func NewBranchService(repo repository.BranchRepository) *BranchService {
-	return &BranchService{repo: repo}
+type BranchService struct {
+	repo    repository.BranchRepository
+	counter ActiveShipmentCounter
+}
+
+func NewBranchService(repo repository.BranchRepository, counter ActiveShipmentCounter) *BranchService {
+	return &BranchService{repo: repo, counter: counter}
 }
 
 func (s *BranchService) List() []model.Branch {
@@ -41,24 +48,29 @@ func (s *BranchService) Search(query string) []model.Branch {
 
 func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, error) {
 	if strings.TrimSpace(req.Name) == "" {
-		return model.Branch{}, fmt.Errorf("name is required")
+		return model.Branch{}, fmt.Errorf("el nombre es obligatorio")
 	}
 	if strings.TrimSpace(req.Street) == "" {
-		return model.Branch{}, fmt.Errorf("street is required")
+		return model.Branch{}, fmt.Errorf("la calle es obligatoria")
 	}
 	if strings.TrimSpace(req.City) == "" {
-		return model.Branch{}, fmt.Errorf("city is required")
+		return model.Branch{}, fmt.Errorf("la ciudad es obligatoria")
 	}
 	if strings.TrimSpace(req.Province) == "" {
-		return model.Branch{}, fmt.Errorf("province is required")
+		return model.Branch{}, fmt.Errorf("la provincia es obligatoria")
 	}
 	if strings.TrimSpace(req.PostalCode) == "" {
-		return model.Branch{}, fmt.Errorf("postal code is required")
+		return model.Branch{}, fmt.Errorf("el código postal es obligatorio")
 	}
 
 	id := strings.TrimSpace(req.ID)
 	if id == "" {
 		id = uuid.New().String()
+	}
+
+	maxCap := req.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = 50
 	}
 
 	branch := model.Branch{
@@ -70,15 +82,16 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province: req.Province,
-		Status:   model.BranchStatusActive,
+		Province:    req.Province,
+		Status:      model.BranchStatusActive,
+		MaxCapacity: maxCap,
 	}
 
 	if err := s.repo.Create(branch); err != nil {
 		if err == repository.ErrDuplicateBranchName {
-			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists: %w", req.Name, ErrBranchDuplicateName)
+			return model.Branch{}, fmt.Errorf("ya existe una sucursal con el nombre '%s': %w", req.Name, ErrBranchDuplicateName)
 		}
-		return model.Branch{}, fmt.Errorf("failed to create branch: %w", err)
+		return model.Branch{}, fmt.Errorf("error al crear la sucursal: %w", err)
 	}
 
 	created, _ := s.repo.GetByID(branch.ID)
@@ -92,23 +105,28 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 	}
 
 	if branch.Status != model.BranchStatusActive {
-		return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active (current status: %s): %w", branch.Status, ErrBranchNotActive)
+		return model.Branch{}, fmt.Errorf("no se puede editar una sucursal inactiva (estado actual: %s): %w", branch.Status, ErrBranchNotActive)
 	}
 
 	if strings.TrimSpace(req.Name) == "" {
-		return model.Branch{}, fmt.Errorf("name is required")
+		return model.Branch{}, fmt.Errorf("el nombre es obligatorio")
 	}
 	if strings.TrimSpace(req.Street) == "" {
-		return model.Branch{}, fmt.Errorf("street is required")
+		return model.Branch{}, fmt.Errorf("la calle es obligatoria")
 	}
 	if strings.TrimSpace(req.City) == "" {
-		return model.Branch{}, fmt.Errorf("city is required")
+		return model.Branch{}, fmt.Errorf("la ciudad es obligatoria")
 	}
 	if strings.TrimSpace(req.Province) == "" {
-		return model.Branch{}, fmt.Errorf("province is required")
+		return model.Branch{}, fmt.Errorf("la provincia es obligatoria")
 	}
 	if strings.TrimSpace(req.PostalCode) == "" {
-		return model.Branch{}, fmt.Errorf("postal code is required")
+		return model.Branch{}, fmt.Errorf("el código postal es obligatorio")
+	}
+
+	maxCap := req.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = branch.MaxCapacity
 	}
 
 	update := model.Branch{
@@ -119,17 +137,18 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 			Province:   req.Province,
 			PostalCode: req.PostalCode,
 		},
-		Province: req.Province,
+		Province:    req.Province,
+		MaxCapacity: maxCap,
 	}
 
 	if err := s.repo.Update(id, update); err != nil {
 		if err == repository.ErrDuplicateBranchName {
-			return model.Branch{}, fmt.Errorf("a branch with name '%s' already exists: %w", req.Name, ErrBranchDuplicateName)
+			return model.Branch{}, fmt.Errorf("ya existe una sucursal con el nombre '%s': %w", req.Name, ErrBranchDuplicateName)
 		}
 		if repository.IsNotUpdatable(err) {
-			return model.Branch{}, fmt.Errorf("cannot edit a branch that is not active: %w", ErrBranchNotActive)
+			return model.Branch{}, fmt.Errorf("no se puede editar una sucursal inactiva: %w", ErrBranchNotActive)
 		}
-		return model.Branch{}, fmt.Errorf("failed to update branch: %w", err)
+		return model.Branch{}, fmt.Errorf("error al actualizar la sucursal: %w", err)
 	}
 
 	updated, _ := s.repo.GetByID(id)
@@ -148,11 +167,17 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 		model.BranchStatusOutOfService: true,
 	}
 	if !validStatuses[req.Status] {
-		return model.Branch{}, fmt.Errorf("invalid status: %s", req.Status)
+		return model.Branch{}, fmt.Errorf("estado inválido: %s", req.Status)
+	}
+
+	if req.Status != model.BranchStatusActive && !req.Force && s.counter != nil {
+		if n := s.counter.CountActiveByBranch(id); n > 0 {
+			return model.Branch{}, fmt.Errorf("%w: %d pedido(s) activo(s) asignados", ErrBranchHasActiveShipments, n)
+		}
 	}
 
 	if err := s.repo.UpdateStatus(id, req.Status, username); err != nil {
-		return model.Branch{}, fmt.Errorf("failed to update status: %w", err)
+		return model.Branch{}, fmt.Errorf("error al actualizar el estado: %w", err)
 	}
 
 	updated, _ := s.repo.GetByID(id)
@@ -162,4 +187,33 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 func (s *BranchService) IsBranchActive(branchID string) bool {
 	b, found := s.repo.GetByID(branchID)
 	return found && b.Status == model.BranchStatusActive
+}
+
+const capacityAlertThreshold = 0.80
+
+func (s *BranchService) GetCapacity(branchID string) (model.BranchCapacity, error) {
+	b, found := s.repo.GetByID(branchID)
+	if !found {
+		return model.BranchCapacity{}, ErrBranchNotFound
+	}
+
+	current := 0
+	if s.counter != nil {
+		current = s.counter.CountActiveByBranch(branchID)
+	}
+
+	maxCap := b.MaxCapacity
+	if maxCap <= 0 {
+		maxCap = 50
+	}
+
+	pct := float64(current) / float64(maxCap) * 100
+
+	return model.BranchCapacity{
+		BranchID:    branchID,
+		Current:     current,
+		MaxCapacity: maxCap,
+		Percentage:  pct,
+		Alert:       pct >= capacityAlertThreshold*100,
+	}, nil
 }

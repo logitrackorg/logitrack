@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { User, Role } from "./auth";
+import type { User, Role, UserStatus, UserAddress } from "./auth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1",
@@ -13,8 +13,13 @@ api.interceptors.request.use((config) => {
 
 export interface UserUpdatePayload {
   username?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
   role?: Role;
   branch_id?: string;
+  status?: UserStatus;
+  address?: UserAddress;
 }
 
 export interface UserCreatePayload {
@@ -22,6 +27,10 @@ export interface UserCreatePayload {
   password: string;
   role: Role;
   branch_id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  address: UserAddress;
 }
 
 export const adminApi = {

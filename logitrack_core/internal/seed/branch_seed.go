@@ -10,14 +10,14 @@ import (
 func LoadBranches(repo repository.BranchRepository) {
 	branches := []model.Branch{
 		// Active hubs
-		{ID: "caba", Name: "CDBA-01", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}, Province: "Buenos Aires", Status: model.BranchStatusActive},
-		{ID: "cordoba", Name: "CORD-01", Address: model.Address{Street: "Av. Colón 567", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}, Province: "Córdoba", Status: model.BranchStatusActive},
-		{ID: "mendoza", Name: "MEND-01", Address: model.Address{Street: "Av. San Martín 1200", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}, Province: "Mendoza", Status: model.BranchStatusActive},
+		{ID: "caba", Name: "CDBA-01", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}, Province: "Buenos Aires", Status: model.BranchStatusActive, MaxCapacity: 8},
+		{ID: "cordoba", Name: "CORD-01", Address: model.Address{Street: "Av. Colón 567", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}, Province: "Córdoba", Status: model.BranchStatusActive, MaxCapacity: 20},
+		{ID: "mendoza", Name: "MEND-01", Address: model.Address{Street: "Av. San Martín 1200", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}, Province: "Mendoza", Status: model.BranchStatusActive, MaxCapacity: 5},
 		// Inactive branches
-		{ID: "jujuy", Name: "JUJY-01", Address: model.Address{Street: "Av. Fascio 200", City: "San Salvador de Jujuy", Province: "Jujuy", PostalCode: "Y4600"}, Province: "Jujuy", Status: model.BranchStatusInactive},
-		{ID: "posadas", Name: "POSA-01", Address: model.Address{Street: "Av. Mitre 1500", City: "Posadas", Province: "Misiones", PostalCode: "N3300"}, Province: "Misiones", Status: model.BranchStatusInactive},
+		{ID: "jujuy", Name: "JUJY-01", Address: model.Address{Street: "Av. Fascio 200", City: "San Salvador de Jujuy", Province: "Jujuy", PostalCode: "Y4600"}, Province: "Jujuy", Status: model.BranchStatusInactive, MaxCapacity: 15},
+		{ID: "posadas", Name: "POSA-01", Address: model.Address{Street: "Av. Mitre 1500", City: "Posadas", Province: "Misiones", PostalCode: "N3300"}, Province: "Misiones", Status: model.BranchStatusInactive, MaxCapacity: 15},
 		// Out of service
-		{ID: "bariloche", Name: "BARI-01", Address: model.Address{Street: "Av. Bustillo 1200", City: "San Carlos de Bariloche", Province: "Río Negro", PostalCode: "R8400"}, Province: "Río Negro", Status: model.BranchStatusOutOfService},
+		{ID: "bariloche", Name: "BARI-01", Address: model.Address{Street: "Av. Bustillo 1200", City: "San Carlos de Bariloche", Province: "Río Negro", PostalCode: "R8400"}, Province: "Río Negro", Status: model.BranchStatusOutOfService, MaxCapacity: 20},
 	}
 	for _, b := range branches {
 		b.CreatedAt = time.Now()

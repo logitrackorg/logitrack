@@ -5,12 +5,27 @@ const api = axios.create({
 });
 
 export type Role = "operator" | "supervisor" | "manager" | "admin" | "driver";
+export type UserStatus = "activo" | "inactivo";
+
+export interface UserAddress {
+  street?: string;
+  city: string;
+  province: string;
+  postal_code?: string;
+}
 
 export interface User {
   id: string;
   username: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
   role: Role;
   branch_id?: string;
+  status: UserStatus;
+  address?: UserAddress;
+  updated_by?: string;
+  updated_at?: string;
 }
 
 export interface LoginResponse {

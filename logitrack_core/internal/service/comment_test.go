@@ -10,7 +10,7 @@ import (
 func TestAddComment_ShipmentNotFound(t *testing.T) {
 	ts := newSetup()
 	_, err := ts.commentSvc.AddComment("LT-NOTEXIST", "supervisor", "hello")
-	if err == nil || !strings.Contains(err.Error(), "shipment not found") {
+	if err == nil || !strings.Contains(err.Error(), "envío no encontrado") {
 		t.Errorf("expected shipment-not-found error, got: %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestAddComment_FinalizedShipments(t *testing.T) {
 			ts := newSetup()
 			id := tc.setup(ts)
 			_, err := ts.commentSvc.AddComment(id, "supervisor", "late comment")
-			if err == nil || !strings.Contains(err.Error(), "cannot add comments to a finalized shipment") {
+			if err == nil || !strings.Contains(err.Error(), "no se pueden agregar comentarios a un envío finalizado") {
 				t.Errorf("expected finalized-shipment error for %s, got: %v", tc.name, err)
 			}
 		})
@@ -64,7 +64,7 @@ func TestAddComment_EmptyBodyRejected(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	_, err := ts.commentSvc.AddComment(ship.TrackingID, "supervisor", "   ")
-	if err == nil || !strings.Contains(err.Error(), "comment body is required") {
+	if err == nil || !strings.Contains(err.Error(), "el comentario no puede estar vacío") {
 		t.Errorf("expected empty-body error, got: %v", err)
 	}
 }
@@ -102,7 +102,7 @@ func TestAddComment_AllowedOnCancelledShipment(t *testing.T) {
 func TestGetComments_ShipmentNotFound(t *testing.T) {
 	ts := newSetup()
 	_, err := ts.commentSvc.GetComments("LT-NOTEXIST")
-	if err == nil || !strings.Contains(err.Error(), "shipment not found") {
+	if err == nil || !strings.Contains(err.Error(), "envío no encontrado") {
 		t.Errorf("expected shipment-not-found error, got: %v", err)
 	}
 }
