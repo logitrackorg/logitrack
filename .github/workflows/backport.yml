@@ -46,23 +46,27 @@ jobs:
 
             # Open a PR
             PR_BODY="Automatic backport of changes merged into \`main\` back into \`develop\`."$'\n\n'"Triggered by commit: ${{ github.sha }}"$'\n\n'"> Resolve any conflicts directly in this branch before merging."
-            gh pr create \
+            if ! gh pr create \
               --title "chore: backport main → develop" \
               --body "$PR_BODY" \
               --base develop \
-              --head "$BACKPORT_BRANCH" \
-              --label "backport" || true
+              --head "$BACKPORT_BRANCH"; then
+              echo "::error::Failed to create backport PR. Check token permissions and branch protection rules."
+              exit 1
+            fi
           else
             echo "Merge conflict detected. Opening a draft PR for manual resolution."
             git merge --abort || true
             git push origin "$BACKPORT_BRANCH"
 
             CONFLICT_BODY="Automatic backport failed due to merge conflicts. Please resolve them manually."$'\n\n'"Triggered by commit: ${{ github.sha }}"
-            gh pr create \
+            if ! gh pr create \
               --title "chore: backport main → develop (conflicts)" \
               --body "$CONFLICT_BODY" \
               --base develop \
               --head "$BACKPORT_BRANCH" \
-              --label "backport" \
-              --draft || true
+              --draft; then
+              echo "::error::Failed to create draft backport PR. Check token permissions and branch protection rules."
+              exit 1
+            fi
           fi
