@@ -1,0 +1,25 @@
+logitrack_web/src/pages/AdminUsers.tsx
+  d652503b2fa64d11 6,83,312,314,317-319
+logitrack_core/internal/handler/admin.go
+  d652503b2fa64d11 171-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e795f8c43beb82b8df789d8df070c2b63f342a24",
+  "prompts": {
+    "d652503b2fa64d11": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c3eca3c5-c737-4abf-815d-374fb9c15cba",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 738,
+      "total_deletions": 2,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
