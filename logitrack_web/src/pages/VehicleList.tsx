@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { shipmentApi } from "../api/shipments";
-import { branchApi, type Branch } from "../api/branches";
+import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
@@ -55,6 +55,9 @@ export function VehicleList() {
   const [showStartTripModal, setShowStartTripModal] = useState(false);
   const [startTripDestBranch, setStartTripDestBranch] = useState("");
   const [startingTrip, setStartingTrip] = useState(false);
+  const [startTripCapacity, setStartTripCapacity] = useState<BranchCapacity | null>(null);
+  const [startTripCapacityLoading, setStartTripCapacityLoading] = useState(false);
+  const [startTripCapacityConfirmed, setStartTripCapacityConfirmed] = useState(false);
   // Load shipments modal
   const [loadModalVehicle, setLoadModalVehicle] = useState<Vehicle | null>(null);
   const [loadInput, setLoadInput] = useState("");
@@ -180,7 +183,25 @@ export function VehicleList() {
       return;
     }
     setStartTripDestBranch("");
+    setStartTripCapacity(null);
+    setStartTripCapacityConfirmed(false);
     setShowStartTripModal(true);
+  };
+
+  const handleStartTripBranchChange = async (branchId: string) => {
+    setStartTripDestBranch(branchId);
+    setStartTripCapacity(null);
+    setStartTripCapacityConfirmed(false);
+    if (!branchId) return;
+    setStartTripCapacityLoading(true);
+    try {
+      const cap = await branchApi.getCapacity(branchId);
+      setStartTripCapacity(cap);
+    } catch {
+      setStartTripCapacity(null);
+    } finally {
+      setStartTripCapacityLoading(false);
+    }
   };
 
   const confirmStartTrip = async () => {
@@ -777,70 +798,104 @@ export function VehicleList() {
       )}
 
       {/* Start Trip modal — asks for destination branch */}
-      {showStartTripModal && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          onClick={() => setShowStartTripModal(false)}
-        >
+      {showStartTripModal && (() => {
+        const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
+        const numShipments = vehicle?.assigned_shipments?.length ?? 0;
+        const wouldExceed = startTripCapacity != null && (startTripCapacity.current + numShipments) > startTripCapacity.max_capacity;
+        const canConfirm = !!startTripDestBranch && !startingTrip && !startTripCapacityLoading && (!wouldExceed || startTripCapacityConfirmed);
+        return (
           <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-            onClick={(e) => e.stopPropagation()}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={() => setShowStartTripModal(false)}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Iniciar viaje</h2>
-              <button onClick={() => setShowStartTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
-            </div>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>
-              El vehículo <strong>{selectedForAssign}</strong> iniciará un viaje. Todos los envíos cargados pasarán a En tránsito.
-            </p>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal destino *</label>
-              <select
-                value={startTripDestBranch}
-                onChange={(e) => setStartTripDestBranch(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
-              >
-                <option value="">Seleccioná la sucursal destino...</option>
-                {(() => {
-                  const byProvince = branches.reduce((acc, b) => {
-                    if (!acc[b.province]) acc[b.province] = [];
-                    acc[b.province].push(b);
-                    return acc;
-                  }, {} as Record<string, typeof branches>);
-                  return Object.entries(byProvince)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([province, pBranches]) => (
-                      <optgroup key={province} label={province}>
-                        {[...pBranches]
-                          .sort((a, b) => a.name.localeCompare(b.name))
-                          .map(b => (
-                            <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                          ))}
-                      </optgroup>
-                    ));
-                })()}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowStartTripModal(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
-                Cancelar
-              </button>
-              <button
-                onClick={confirmStartTrip}
-                disabled={!startTripDestBranch || startingTrip}
-                style={{
-                  padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                  background: !startTripDestBranch || startingTrip ? "#9ca3af" : "#3b82f6",
-                  color: "#fff", cursor: !startTripDestBranch || startingTrip ? "not-allowed" : "pointer",
-                  opacity: startingTrip ? 0.7 : 1,
-                }}
-              >
-                {startingTrip ? "Iniciando..." : "Iniciar viaje"}
-              </button>
+            <div
+              style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Iniciar viaje</h2>
+                <button onClick={() => setShowStartTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              </div>
+              <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>
+                El vehículo <strong>{selectedForAssign}</strong> iniciará un viaje. Todos los envíos cargados pasarán a En tránsito.
+              </p>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal destino *</label>
+                <select
+                  value={startTripDestBranch}
+                  onChange={(e) => handleStartTripBranchChange(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
+                >
+                  <option value="">Seleccioná la sucursal destino...</option>
+                  {(() => {
+                    const byProvince = branches.reduce((acc, b) => {
+                      if (!acc[b.province]) acc[b.province] = [];
+                      acc[b.province].push(b);
+                      return acc;
+                    }, {} as Record<string, typeof branches>);
+                    return Object.entries(byProvince)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([province, pBranches]) => (
+                        <optgroup key={province} label={province}>
+                          {[...pBranches]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(b => (
+                              <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                            ))}
+                        </optgroup>
+                      ));
+                  })()}
+                </select>
+                {startTripCapacityLoading && (
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: "6px 0 0" }}>Verificando capacidad de la sucursal...</p>
+                )}
+                {startTripCapacity && !startTripCapacityLoading && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+                    Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
+                  </div>
+                )}
+              </div>
+
+              {wouldExceed && (
+                <div style={{ background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+                  <p style={{ margin: "0 0 8px", fontWeight: 700, fontSize: 13, color: "#c2410c" }}>
+                    La sucursal superará su capacidad
+                  </p>
+                  <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9a3412" }}>
+                    Con los {numShipments} bulto{numShipments !== 1 ? "s" : ""} de este vehículo, la sucursal quedaría con {startTripCapacity!.current + numShipments} de {startTripCapacity!.max_capacity} bultos ({Math.round(((startTripCapacity!.current + numShipments) / startTripCapacity!.max_capacity) * 100)}% de capacidad).
+                  </p>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: "#7c2d12", fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={startTripCapacityConfirmed}
+                      onChange={(e) => setStartTripCapacityConfirmed(e.target.checked)}
+                    />
+                    Entiendo la situación y quiero continuar de todas formas
+                  </label>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => setShowStartTripModal(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmStartTrip}
+                  disabled={!canConfirm}
+                  style={{
+                    padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
+                    background: !canConfirm ? "#9ca3af" : "#3b82f6",
+                    color: "#fff", cursor: !canConfirm ? "not-allowed" : "pointer",
+                    opacity: startingTrip ? 0.7 : 1,
+                  }}
+                >
+                  {startingTrip ? "Iniciando..." : "Iniciar viaje"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
