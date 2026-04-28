@@ -1,0 +1,23 @@
+logitrack_core/cmd/server/main.go
+  ab49437165d2bc45 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "0930ae69fd792eabf377713a00c2754c71a2adcd",
+  "prompts": {
+    "ab49437165d2bc45": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "74dc3b0b-7a40-47ba-86b2-5e17b9799c71",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
