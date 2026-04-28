@@ -153,7 +153,6 @@ export function BranchList() {
                 <tr key={b.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={tdStyle}>
                     <div style={{ fontWeight: 600 }}>{b.name}</div>
-                    <div style={{ fontSize: 11, color: "#9ca3af" }}>{b.id}</div>
                   </td>
                   <td style={tdStyle}>{b.address.city}, {b.province}</td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>

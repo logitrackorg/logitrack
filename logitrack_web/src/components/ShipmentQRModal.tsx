@@ -6,7 +6,6 @@ interface Props {
   onClose: () => void;
   trackingId: string;
   qrCodeBase64: string;
-  trackingUrl: string;
 }
 
 const ShipmentQRModal: React.FC<Props> = ({
@@ -14,7 +13,6 @@ const ShipmentQRModal: React.FC<Props> = ({
   onClose,
   trackingId,
   qrCodeBase64,
-  trackingUrl,
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -54,12 +52,6 @@ const ShipmentQRModal: React.FC<Props> = ({
               font-family: 'Courier New', monospace;
               letter-spacing: 2px;
               margin-top: 16px;
-            }
-            .tracking-url {
-              font-size: 11px;
-              color: #666;
-              margin-top: 8px;
-              word-break: break-all;
             }
           </style>
         </head>
@@ -113,9 +105,7 @@ const ShipmentQRModal: React.FC<Props> = ({
               <strong>Tracking ID:</strong>
               <div className="tracking-number">{trackingId}</div>
             </div>
-            <div className="qr-url-text">
-              <small>{trackingUrl}</small>
-            </div>
+
           </div>
         </div>
 
