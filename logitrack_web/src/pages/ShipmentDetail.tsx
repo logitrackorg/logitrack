@@ -248,7 +248,7 @@ export function ShipmentDetail() {
       setPrintDocError('');
       setPrintingDoc(true);
       const qr = await qrService.generateQR(shipment.tracking_id);
-      printShipmentDocument(shipment, branches, qr.qr_code_base64, qr.tracking_url, orgConfig);
+      printShipmentDocument(shipment, branches, qr.qr_code_base64, orgConfig);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar el documento de impresión';
       setPrintDocError(message);
@@ -792,7 +792,7 @@ export function ShipmentDetail() {
                   <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
                 </div>
                 <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                  <span>by <strong>{ev.changed_by || "system"}</strong></span>
+                  <span>por <strong>{ev.changed_by || "sistema"}</strong></span>
                   {ev.location && (() => {
                     const b = branches.find(x => x.id === ev.location);
                     return (
@@ -1163,7 +1163,6 @@ export function ShipmentDetail() {
           onClose={() => setShowQRModal(false)}
           trackingId={qrData.tracking_id}
           qrCodeBase64={qrData.qr_code_base64}
-          trackingUrl={qrData.tracking_url}
         />
       )}
 

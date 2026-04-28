@@ -16,6 +16,14 @@ type postgresAuthRepository struct {
 	db *sql.DB
 }
 
+func hashPassword(plain string) (string, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashed), nil
+}
+
 func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 	db.Exec(`CREATE TABLE IF NOT EXISTS users (
 		id         VARCHAR(10)  PRIMARY KEY,
@@ -33,57 +41,57 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 	seed := []seedUser{
 		{
 			"1", "op_caba", "op_caba123", "operator", "caba",
-			"Carlos", "García", "carlos.garcia@logitrack.com",
+			"Lionel", "Messi", "lionel.messi@logitrack.com",
 			"Av. Corrientes 1234", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043",
 		},
 		{
 			"2", "sup_caba", "sup_caba123", "supervisor", "caba",
-			"María", "López", "maria.lopez@logitrack.com",
+			"Yamila", "Rodríguez", "yamila.rodriguez@logitrack.com",
 			"Av. Santa Fe 567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1059",
 		},
 		{
 			"3", "op_cordoba", "op_cordoba123", "operator", "cordoba",
-			"Juan", "Martínez", "juan.martinez@logitrack.com",
+			"Julián", "Álvarez", "julian.alvarez@logitrack.com",
 			"Av. Colón 890", "Córdoba", "Córdoba", "X5000",
 		},
 		{
 			"4", "sup_cordoba", "sup_cordoba123", "supervisor", "cordoba",
-			"Ana", "Fernández", "ana.fernandez@logitrack.com",
+			"Estefanía", "Banini", "estefania.banini@logitrack.com",
 			"Bv. San Juan 1111", "Córdoba", "Córdoba", "X5001",
 		},
 		{
 			"5", "chofer_caba", "chofer_caba123", "driver", "caba",
-			"Luis", "Rodríguez", "luis.rodriguez@logitrack.com",
+			"Rodrigo", "De Paul", "rodrigo.depaul@logitrack.com",
 			"Av. Rivadavia 3456", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1084",
 		},
 		{
 			"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba",
-			"Pablo", "Díaz", "pablo.diaz@logitrack.com",
+			"Lautaro", "Martínez", "lautaro.martinez@logitrack.com",
 			"Av. Vélez Sársfield 2222", "Córdoba", "Córdoba", "X5010",
 		},
 		{
 			"11", "chofer_mendoza", "chofer_mendoza123", "driver", "mendoza",
-			"Roberto", "Sánchez", "roberto.sanchez@logitrack.com",
+			"Florencia", "Bonsegundo", "florencia.bonsegundo@logitrack.com",
 			"Av. San Martín 789", "Mendoza", "Mendoza", "M5500",
 		},
 		{
 			"6", "op_mendoza", "op_mendoza123", "operator", "mendoza",
-			"Sofía", "González", "sofia.gonzalez@logitrack.com",
+			"Ángel", "Di María", "angel.dimaria@logitrack.com",
 			"Calle Las Heras 456", "Mendoza", "Mendoza", "M5501",
 		},
 		{
 			"7", "sup_mendoza", "sup_mendoza123", "supervisor", "mendoza",
-			"Diego", "Pérez", "diego.perez@logitrack.com",
+			"Mariana", "Larroquette", "mariana.larroquette@logitrack.com",
 			"Av. Mitre 321", "Mendoza", "Mendoza", "M5502",
 		},
 		{
 			"8", "gerente", "gerente123", "manager", "",
-			"Valentina", "Torres", "valentina.torres@logitrack.com",
+			"Emiliano", "Martínez", "emiliano.martinez@logitrack.com",
 			"Av. Del Libertador 4567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1426",
 		},
 		{
 			"9", "admin", "admin123", "admin", "",
-			"Alejandro", "Ramírez", "alejandro.ramirez@logitrack.com",
+			"Vanina", "Correa", "vanina.correa@logitrack.com",
 			"Av. 9 de Julio 123", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1073",
 		},
 	}
@@ -300,10 +308,14 @@ func (r *postgresAuthRepository) CreateUser(cmd UserCreate) (model.User, error) 
 		return model.User{}, err
 	}
 	addrJSON, _ := json.Marshal(cmd.Address)
-	_, err := r.db.Exec(
+	hashedPassword, err := hashPassword(cmd.Password)
+	if err != nil {
+		return model.User{}, err
+	}
+	_, err = r.db.Exec(
 		`INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
 		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)`,
-		id, cmd.Username, cmd.Password, string(cmd.Role), cmd.BranchID,
+		id, cmd.Username, string(hashedPassword), string(cmd.Role), cmd.BranchID,
 		cmd.FirstName, cmd.LastName, cmd.Email, addrJSON,
 	)
 	if err != nil {
@@ -329,8 +341,12 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 		argIdx++
 	}
 	if update.Password != nil {
+		hashed, err := hashPassword(*update.Password)
+		if err != nil {
+			return model.User{}, err
+		}
 		setClauses = append(setClauses, fmt.Sprintf("password = $%d", argIdx))
-		args = append(args, *update.Password)
+		args = append(args, hashed)
 		argIdx++
 	}
 	if update.FirstName != nil {

@@ -112,11 +112,11 @@ export function ShipmentList() {
 
   const dateRangeInvalid = !!(dateFrom && dateTo && dateTo < dateFrom);
 
-  const load = async (q?: string) => {
+  const load = async () => {
     setLoading(true);
     setSelected(new Set());
     try {
-      const data = q ? await shipmentApi.search(q) : await shipmentApi.list();
+      const data = await shipmentApi.list();
       setShipments(data ?? []);
     } finally {
       setLoading(false);
@@ -125,11 +125,6 @@ export function ShipmentList() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    load(query.trim() || undefined);
-  };
 
   // Returns YYYY-MM-DD in local time for a given ISO timestamp
   const localDate = (iso: string) => {
@@ -145,6 +140,21 @@ export function ShipmentList() {
       const created = localDate(s.created_at);
       if (dateFrom && created < dateFrom) return false;
       if (dateTo && created > dateTo) return false;
+    }
+    const q = query.trim().toLowerCase();
+    if (q.length >= 3) {
+      const cor = s.corrections ?? {};
+      const senderName = (cor.sender_name ?? s.sender?.name ?? "").toLowerCase();
+      const recipientName = (cor.recipient_name ?? s.recipient?.name ?? "").toLowerCase();
+      const senderCity = (cor.sender_city ?? s.sender?.address?.city ?? "").toLowerCase();
+      const recipientCity = (cor.recipient_city ?? s.recipient?.address?.city ?? "").toLowerCase();
+      if (
+        !s.tracking_id.toLowerCase().includes(q) &&
+        !senderName.includes(q) &&
+        !recipientName.includes(q) &&
+        !senderCity.includes(q) &&
+        !recipientCity.includes(q)
+      ) return false;
     }
     return true;
   });
@@ -214,21 +224,17 @@ export function ShipmentList() {
 
       {/* Search & filters */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, flex: 1, minWidth: 240 }}>
+        <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 240 }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por ID de seguimiento, remitente, destinatario o ciudad..."
             style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }} />
-          <button type="submit"
-            style={{ background: "#4b5563", color: "#fff", border: "none", borderRadius: 6, padding: "8px 14px", cursor: "pointer" }}>
-            Buscar
-          </button>
           {query && (
-            <button type="button" onClick={() => { setQuery(""); load(); }}
+            <button type="button" onClick={() => setQuery("")}
               style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>
               Limpiar
             </button>
           )}
-        </form>
+        </div>
 
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
           Desde

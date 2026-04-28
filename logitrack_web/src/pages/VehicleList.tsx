@@ -433,7 +433,7 @@ export function VehicleList() {
         <input
           type="text"
           value={plateSearch}
-          onChange={(e) => setPlateSearch(e.target.value.toUpperCase())}
+          onChange={(e) => setPlateSearch(e.target.value)}
           placeholder="Buscar por patente..."
           style={{
             padding: "6px 12px",

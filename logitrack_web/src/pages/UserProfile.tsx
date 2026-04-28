@@ -192,25 +192,27 @@ export function UserProfile() {
                     />
                   </div>
 
-                  <div>
-                    <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
-                      Sucursal Asignada
-                    </label>
-                    <input
-                      type="text"
-                      value={profile?.branch_name || profile?.branch_id || "No asignada"}
-                      readOnly
-                      disabled
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 6,
-                        background: "#f8fafc",
-                        color: "#334155",
-                      }}
-                    />
-                  </div>
+                  {(profile?.branch_name || profile?.branch_id) && (
+                    <div>
+                      <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+                        Sucursal Asignada
+                      </label>
+                      <input
+                        type="text"
+                        value={profile.branch_name || profile.branch_id}
+                        readOnly
+                        disabled
+                        style={{
+                          width: "100%",
+                          padding: "10px 12px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 6,
+                          background: "#f8fafc",
+                          color: "#334155",
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
