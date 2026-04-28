@@ -547,7 +547,7 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 	}
 	setPriority(&updated, correctionPrediction)
 	for _, f := range req.Corrections.Fields() {
-		body := fmt.Sprintf("[Correction] %s. New value: %s", f.Label, f.Value)
+		body := fmt.Sprintf("[Corrección] %s. Nuevo valor: %s", f.Label, f.Value)
 		_, _ = s.commentSvc.AddComment(trackingID, username, body)
 	}
 	return updated, nil
