@@ -208,7 +208,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			FromStatus: &from,
 			ToStatus:   model.StatusInProgress,
 			ChangedBy:  de.ChangedBy,
-			Notes:      "Shipment confirmed",
+			Notes:      "Envío confirmado",
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -236,7 +236,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			FromStatus: &from,
 			ToStatus:   payload.Status,
 			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Data correction: %d field(s) updated", len(payload.Corrections.Fields())),
+			Notes:      fmt.Sprintf("Corrección de datos: %d campo(s) actualizado(s)", len(payload.Corrections.Fields())),
 			Timestamp:  de.Timestamp,
 		}, true
 

@@ -792,7 +792,7 @@ export function ShipmentDetail() {
                   <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
                 </div>
                 <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                  <span>by <strong>{ev.changed_by || "system"}</strong></span>
+                  <span>por <strong>{ev.changed_by || "sistema"}</strong></span>
                   {ev.location && (() => {
                     const b = branches.find(x => x.id === ev.location);
                     return (

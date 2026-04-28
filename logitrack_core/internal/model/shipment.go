@@ -137,35 +137,35 @@ func (c ShipmentCorrections) Fields() []CorrectedField {
 			fields = append(fields, CorrectedField{Label: label, Value: *v})
 		}
 	}
-	str(c.SenderName, "Sender name")
-	str(c.SenderPhone, "Sender phone")
-	str(c.SenderEmail, "Sender email")
-	str(c.SenderDNI, "Sender DNI")
-	str(c.OriginStreet, "Origin address (street)")
-	str(c.OriginCity, "Origin city")
-	str(c.OriginProvince, "Origin province")
-	str(c.OriginPostalCode, "Origin postal code")
-	str(c.RecipientName, "Recipient name")
-	str(c.RecipientPhone, "Recipient phone")
-	str(c.RecipientEmail, "Recipient email")
-	str(c.RecipientDNI, "Recipient DNI")
-	str(c.DestinationStreet, "Destination address (street)")
-	str(c.DestinationCity, "Destination city")
-	str(c.DestinationProvince, "Destination province")
-	str(c.DestinationPostalCode, "Destination postal code")
-	str(c.WeightKg, "Weight (kg)")
+	str(c.SenderName, "Nombre remitente")
+	str(c.SenderPhone, "Teléfono remitente")
+	str(c.SenderEmail, "Email remitente")
+	str(c.SenderDNI, "DNI remitente")
+	str(c.OriginStreet, "Dirección origen (calle)")
+	str(c.OriginCity, "Ciudad origen")
+	str(c.OriginProvince, "Provincia origen")
+	str(c.OriginPostalCode, "Código postal origen")
+	str(c.RecipientName, "Nombre destinatario")
+	str(c.RecipientPhone, "Teléfono destinatario")
+	str(c.RecipientEmail, "Email destinatario")
+	str(c.RecipientDNI, "DNI destinatario")
+	str(c.DestinationStreet, "Dirección destino (calle)")
+	str(c.DestinationCity, "Ciudad destino")
+	str(c.DestinationProvince, "Provincia destino")
+	str(c.DestinationPostalCode, "Código postal destino")
+	str(c.WeightKg, "Peso (kg)")
 	if c.PackageType != nil {
-		fields = append(fields, CorrectedField{Label: "Package type", Value: string(*c.PackageType)})
+		fields = append(fields, CorrectedField{Label: "Tipo de paquete", Value: string(*c.PackageType)})
 	}
-	str(c.SpecialInstructions, "Special instructions")
+	str(c.SpecialInstructions, "Instrucciones especiales")
 	if c.ShipmentType != nil {
-		fields = append(fields, CorrectedField{Label: "Shipment type", Value: string(*c.ShipmentType)})
+		fields = append(fields, CorrectedField{Label: "Tipo de envío", Value: string(*c.ShipmentType)})
 	}
 	if c.TimeWindow != nil {
-		fields = append(fields, CorrectedField{Label: "Time window", Value: string(*c.TimeWindow)})
+		fields = append(fields, CorrectedField{Label: "Ventana horaria", Value: string(*c.TimeWindow)})
 	}
-	str(c.ColdChain, "Cold chain")
-	str(c.IsFragile, "Fragile")
+	str(c.ColdChain, "Cadena de frío")
+	str(c.IsFragile, "Frágil")
 	return fields
 }
 
