@@ -1,0 +1,35 @@
+logitrack_core/internal/repository/postgres_auth.go
+  20bb8e03498b941a 36,41,46,51,56,61,66,71,76,81,86
+logitrack_web/src/pages/VehicleList.tsx
+  20bb8e03498b941a 436
+logitrack_core/internal/model/shipment.go
+  20bb8e03498b941a 140-156,158,160,162,165,167-168
+logitrack_core/internal/service/shipment.go
+  20bb8e03498b941a 550
+logitrack_core/internal/seed/seed.go
+  20bb8e03498b941a 98-101,117-121,138,154-157,175-179,195,212-216,232-235,252,268-271,288-291,308,325-328,344-348,367-373
+logitrack_web/src/pages/ShipmentDetail.tsx
+  20bb8e03498b941a 795
+logitrack_core/internal/repository/shipment_es.go
+  20bb8e03498b941a 211,239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8b078c33c78289bcb3afb5bd902753cafb103081",
+  "prompts": {
+    "20bb8e03498b941a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d668a199-6d14-48e7-8dc3-3d615fa61d11",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 4364,
+      "total_deletions": 94,
+      "accepted_lines": 94,
+      "overriden_lines": 0
+    }
+  }
+}
