@@ -1,0 +1,105 @@
+logitrack_core/internal/repository/shipment_es.go
+  e6be330cf52dae7b 197,204,209
+CLAUDE.md
+  e6be330cf52dae7b 98-107,110-118,120-121,134,136-137,140,153
+logitrack_core/internal/model/system_config.go
+  e6be330cf52dae7b 1-9
+logitrack_core/internal/projection/shipment.go
+  e6be330cf52dae7b 51,67,74-78
+logitrack_web/src/components/StatusBadge.tsx
+  e6be330cf52dae7b 4-20
+logitrack_web/src/pages/NewShipment.tsx
+  e6be330cf52dae7b 71
+  fc0fb2b9a4e2fd81 470-485
+logitrack_core/internal/model/shipment.go
+  e6be330cf52dae7b 8-24,95-99,260,263
+logitrack_web/src/pages/PublicTracking.tsx
+  e6be330cf52dae7b 12-28,49,52,57,62,72,77,91-103,124-129
+logitrack_core/cmd/server/main.go
+  e6be330cf52dae7b 82-85,89,192-193,197,201,225-228
+logitrack_core/internal/service/incident_test.go
+  e6be330cf52dae7b 28-29,139-140,142,144,146-147
+logitrack_web/CLAUDE.md
+  e6be330cf52dae7b 62,66,68,70-77
+logitrack_web/src/api/shipments.ts
+  e6be330cf52dae7b 26-43,89-91
+logitrack_core/internal/repository/system_config.go
+  e6be330cf52dae7b 1-38
+logitrack_web/src/pages/SystemConfig.tsx
+  e6be330cf52dae7b 1-189
+logitrack_core/internal/db/migrate.go
+  e6be330cf52dae7b 56-72
+logitrack_core/internal/model/event.go
+  e6be330cf52dae7b 22
+logitrack_core/internal/handler/shipment.go
+  e6be330cf52dae7b 297-299,313,318,337-338,341-342,374,386
+logitrack_core/internal/seed/seed.go
+  fc0fb2b9a4e2fd81 254,261-264,276,283-287,321,462
+  e6be330cf52dae7b 85,94,99-102,105,114,119-123,126,133,141,144,153,158-160,163,171,174,179-183,186,200-201,218-222,225,234,239-242,245,259-260,267,281-282,290,305-309,312,326,329,339,344-347,350,364-368,371,379,382,387-440,466
+logitrack_core/internal/projection/postgres_shipment.go
+  e6be330cf52dae7b 55,65,80-98,100,214-216,237-240,248,270-271,284-285,323-324,455,483,546
+logitrack_web/src/pages/Dashboard.tsx
+  e6be330cf52dae7b 10-26
+logitrack_core/internal/handler/vehicle_test.go
+  e6be330cf52dae7b 143,148-149
+logitrack_core/internal/handler/vehicle.go
+  e6be330cf52dae7b 284-291,293-294,306,347,349,471,582-588,590,660,663,665
+logitrack_core/internal/service/route_test.go
+  e6be330cf52dae7b 67-68,73,221-227,283-286
+logitrack_web/src/App.tsx
+  e6be330cf52dae7b 17,65-67,211-216
+logitrack_core/internal/handler/system_config.go
+  e6be330cf52dae7b 1-35
+logitrack_core/internal/service/shipment.go
+  fc0fb2b9a4e2fd81 524-570,574-588
+  e6be330cf52dae7b 14-18,47,60-70,151,219-220,254,284,368-369,375-393,395,397-398,400-422,425-426,430,435,441-442,456,466,475,478,491-503,506,513-523,571-573,589-593,626,629-640,719-722,724-725,727-730,736,741-814,854-911
+logitrack_web/src/pages/ShipmentDetail.tsx
+  fc0fb2b9a4e2fd81 39-40,504-506,565,570
+  e6be330cf52dae7b 20,28,31-38,41-47,51-67,118,136-137,153,199,278,281-288,297,351,508,531,536,543,552-564,566-569,571-600,681,703,724-725,728,735,742,746,761,792-793,818,823-824,826,1113,1124,1185,1563,1566,1569,1579,1583-1587
+logitrack_web/src/api/systemConfig.ts
+  e6be330cf52dae7b 1-22
+logitrack_core/internal/service/comment_test.go
+  e6be330cf52dae7b 28-29
+logitrack_core/internal/service/route.go
+  e6be330cf52dae7b 38,41,50,105-106
+logitrack_core/internal/service/shipment_test.go
+  fc0fb2b9a4e2fd81 707,709,711-713,715
+  e6be330cf52dae7b 88,92,99-100,103,107-108,111,123-162,164-172,175-177,179-183,186-190,193,195-196,198-199,291-292,319-320,353,373,428-429,445-446,457,461,464,467,474,478,487,503,521-522,536-537,551-552,573,584,655,657,662-663,683,689,696,700-701,736,747-748,776-808,824,837,843,847,856,962,974-975,1098,1100-1102,1104,1109-1111,1127,1301-1302,1317,1338-1339,1443,1450,1454-1455,1461,1472-1473
+logitrack_core/internal/service/system_config.go
+  e6be330cf52dae7b 1-30
+logitrack_web/src/pages/ShipmentList.tsx
+  e6be330cf52dae7b 39,67,69,105,141,174,183,189,201,258-259,261-266,269,271-274,319,401,443,469-470
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "bde7353d798e3f62a018b27b8b086cbb4253ef77",
+  "prompts": {
+    "e6be330cf52dae7b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2d6ddb6-05d5-4a98-919d-54fc87456755",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 6496,
+      "total_deletions": 550,
+      "accepted_lines": 1382,
+      "overriden_lines": 28
+    },
+    "fc0fb2b9a4e2fd81": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c17bfab-b9b4-4470-824d-affe6257a10b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 121,
+      "total_deletions": 59,
+      "accepted_lines": 104,
+      "overriden_lines": 0
+    }
+  }
+}
