@@ -149,7 +149,7 @@ func main() {
 	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
 	protected.GET("/vehicles/by-plate/:plate", canViewVehicle, vehicleHandler.GetByPlate)
 	protected.GET("/vehicles/by-shipment/:trackingId", allRoles, vehicleHandler.GetByShipment)
-	canWriteVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	canWriteVehicle := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	canAssignShipment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.PATCH("/vehicles/by-plate/:plate/status", canWriteVehicle, vehicleHandler.UpdateStatusByPlate)
 	protected.POST("/vehicles/by-plate/:plate/assign", canAssignShipment, vehicleHandler.AssignToShipment)

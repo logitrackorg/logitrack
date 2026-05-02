@@ -5,23 +5,23 @@ import "time"
 type Status string
 
 const (
-	StatusDraft                Status = "draft"               // borrador — datos parciales, sin tracking ID
-	StatusAtOriginHub          Status = "at_origin_hub"       // en sucursal de origen, confirmado
-	StatusLoaded               Status = "loaded"              // cargado en vehículo, listo para partir
-	StatusInTransit            Status = "in_transit"          // en tránsito entre sucursales
-	StatusAtHub                Status = "at_hub"              // en sucursal intermedia o de destino
-	StatusOutForDelivery       Status = "out_for_delivery"    // en reparto última milla
-	StatusDelivered            Status = "delivered"           // entregado — terminal
-	StatusDeliveryFailed       Status = "delivery_failed"     // intento de entrega fallido
-	StatusRedeliveryScheduled  Status = "redelivery_scheduled" // reentrega agendada
-	StatusNoEntregado          Status = "no_entregado"        // no retirado del mostrador
-	StatusRechazado            Status = "rechazado"           // destinatario rechazó el envío
-	StatusReadyForPickup       Status = "ready_for_pickup"    // listo para retiro en sucursal
-	StatusReadyForReturn       Status = "ready_for_return"    // listo para devolución al remitente
-	StatusReturned             Status = "returned"            // devuelto al remitente — terminal
-	StatusCancelled            Status = "cancelled"           // cancelado — terminal
-	StatusLost                 Status = "lost"                // extraviado — terminal
-	StatusDestroyed            Status = "destroyed"           // daño total — terminal
+	StatusDraft               Status = "draft"                // borrador — datos parciales, sin tracking ID
+	StatusAtOriginHub         Status = "at_origin_hub"        // en sucursal de origen, confirmado
+	StatusLoaded              Status = "loaded"               // cargado en vehículo, listo para partir
+	StatusInTransit           Status = "in_transit"           // en tránsito entre sucursales
+	StatusAtHub               Status = "at_hub"               // en sucursal intermedia o de destino
+	StatusOutForDelivery      Status = "out_for_delivery"     // en reparto última milla
+	StatusDelivered           Status = "delivered"            // entregado — terminal
+	StatusDeliveryFailed      Status = "delivery_failed"      // intento de entrega fallido
+	StatusRedeliveryScheduled Status = "redelivery_scheduled" // reentrega agendada
+	StatusNoEntregado         Status = "no_entregado"         // no retirado del mostrador
+	StatusRechazado           Status = "rechazado"            // destinatario rechazó el envío
+	StatusReadyForPickup      Status = "ready_for_pickup"     // listo para retiro en sucursal
+	StatusReadyForReturn      Status = "ready_for_return"     // listo para devolución al remitente
+	StatusReturned            Status = "returned"             // devuelto al remitente — terminal
+	StatusCancelled           Status = "cancelled"            // cancelado — terminal
+	StatusLost                Status = "lost"                 // extraviado — terminal
+	StatusDestroyed           Status = "destroyed"            // daño total — terminal
 )
 
 type PackageType string

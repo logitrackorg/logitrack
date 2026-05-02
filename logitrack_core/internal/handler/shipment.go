@@ -25,6 +25,22 @@ func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) b
 	return false
 }
 
+// operatorReadForbidden returns true (and writes 403) when an operator tries to read a shipment
+// that neither belongs to their branch nor is in_transit toward it.
+func operatorReadForbidden(c *gin.Context, user model.User, shipment model.Shipment) bool {
+	if user.Role != model.RoleOperator || user.BranchID == "" {
+		return false
+	}
+	if shipment.ReceivingBranchID == user.BranchID {
+		return false
+	}
+	if shipment.Status == model.StatusInTransit && shipment.CurrentLocation == user.BranchID {
+		return false
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
+	return true
+}
+
 // CancelRequest is the body for cancelling a shipment.
 type CancelRequest struct {
 	Reason string `json:"reason" binding:"required"`
@@ -254,8 +270,7 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
-		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
+		if operatorReadForbidden(c, user, shipment) {
 			return
 		}
 	}
@@ -407,8 +422,7 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
-		if user.Role == model.RoleOperator && user.BranchID != "" && shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
+		if operatorReadForbidden(c, user, shipment) {
 			return
 		}
 	}

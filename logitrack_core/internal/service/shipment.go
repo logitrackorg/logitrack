@@ -373,15 +373,9 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		return model.Shipment{}, err
 	}
 
-	// Block transitions not valid for counter-shipments (is_returning=true)
-	if current.IsReturning {
-		blocked := map[model.Status]bool{
-			model.StatusOutForDelivery: true,
-			model.StatusReadyForPickup: true,
-		}
-		if blocked[req.Status] {
-			return model.Shipment{}, fmt.Errorf("los envíos de retorno no pueden asignarse a ruta ni marcarse para retiro en mostrador")
-		}
+	// Returning shipments cannot do last-mile delivery — they complete via ready_for_return → returned.
+	if current.IsReturning && (req.Status == model.StatusOutForDelivery || req.Status == model.StatusReadyForPickup) {
+		return model.Shipment{}, fmt.Errorf("los envíos de retorno no pueden asignarse a ruta de última milla ni a retiro en mostrador")
 	}
 
 	// Block redelivery when max attempts reached
@@ -717,14 +711,15 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return model.Shipment{}, err
 	}
 	cancellable := map[model.Status]bool{
-		model.StatusAtOriginHub:  true,
-		model.StatusAtHub:        true,
+		model.StatusAtOriginHub:    true,
+		model.StatusAtHub:          true,
 		model.StatusReadyForPickup: true,
+		model.StatusReadyForReturn: true,
 	}
 	if !cancellable[shipment.Status] {
 		return model.Shipment{}, fmt.Errorf("no se puede cancelar un envío con estado '%s'", shipment.Status)
 	}
-	if shipment.IsReturning {
+	if shipment.IsReturning && shipment.Status != model.StatusReadyForReturn {
 		return model.Shipment{}, fmt.Errorf("no se puede cancelar un envío que ya está en proceso de devolución")
 	}
 	now := time.Now().UTC()
@@ -737,6 +732,12 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 	})
 	if err != nil {
 		return model.Shipment{}, err
+	}
+
+	// Shipments already in ready_for_return are being returned — no counter-shipment needed.
+	if shipment.Status == model.StatusReadyForReturn {
+		_, _ = s.commentSvc.AddComment(trackingID, username, fmt.Sprintf("[Cancelación] %s", reason))
+		return updated, nil
 	}
 
 	// Create counter-shipment
@@ -904,11 +905,11 @@ func isValidTransition(from, to model.Status) bool {
 			model.StatusReturned,
 		},
 		// Terminal states — no transitions
-		model.StatusDelivered:  {},
-		model.StatusReturned:   {},
-		model.StatusCancelled:  {},
-		model.StatusLost:       {},
-		model.StatusDestroyed:  {},
+		model.StatusDelivered: {},
+		model.StatusReturned:  {},
+		model.StatusCancelled: {},
+		model.StatusLost:      {},
+		model.StatusDestroyed: {},
 	}
 	for _, s := range allowed[from] {
 		if s == to {

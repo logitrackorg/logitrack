@@ -281,17 +281,9 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// Block assigning counter-shipments (is_returning=true) to routes for last-mile delivery
-	if shipment.IsReturning {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "Los envíos de retorno no pueden asignarse a ruta de última milla",
-		})
-		return
-	}
-
 	allowedStatuses := map[model.Status]bool{
-		model.StatusAtOriginHub:  true,
-		model.StatusAtHub:        true,
+		model.StatusAtOriginHub:    true,
+		model.StatusAtHub:          true,
 		model.StatusReadyForPickup: true,
 	}
 	if !allowedStatuses[shipment.Status] {
@@ -416,7 +408,7 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	}
 
 	startUser := c.MustGet(middleware.UserKey).(model.User)
-	if startUser.Role == model.RoleSupervisor && startUser.BranchID != "" {
+	if (startUser.Role == model.RoleSupervisor || startUser.Role == model.RoleOperator) && startUser.BranchID != "" {
 		if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != startUser.BranchID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés iniciar viajes de vehículos asignados a tu sucursal"})
 			return
@@ -641,7 +633,7 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	}
 
 	user := c.MustGet(middleware.UserKey).(model.User)
-	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+	if (user.Role == model.RoleSupervisor || user.Role == model.RoleOperator) && user.BranchID != "" {
 		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés finalizar viajes de vehículos con destino a tu sucursal"})
 			return
@@ -657,8 +649,15 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		}
 	}
 
-	// Transition all assigned shipments to at_hub (service promotes to at_origin_hub if needed)
+	// Transition all assigned shipments to at_hub, skipping terminal ones.
+	terminalStatuses := map[model.Status]bool{
+		model.StatusDelivered: true, model.StatusReturned: true,
+		model.StatusCancelled: true, model.StatusLost: true, model.StatusDestroyed: true,
+	}
 	for _, tid := range vehicle.AssignedShipments {
+		if s, err := h.shipmentSvc.GetByTrackingID(tid); err == nil && terminalStatuses[s.Status] {
+			continue
+		}
 		statusReq := model.UpdateStatusRequest{
 			Status:    model.StatusAtHub,
 			ChangedBy: user.Username,
