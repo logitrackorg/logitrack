@@ -53,6 +53,23 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS origin_branch_id     TEXT NOT NULL DEFAULT '';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS has_incident         BOOLEAN NOT NULL DEFAULT FALSE;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS incident_type        TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS parent_shipment_id   TEXT;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_attempts    INT NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS is_returning         BOOLEAN NOT NULL DEFAULT FALSE;
+
+		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
+		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
+		UPDATE shipments SET status = 'loaded'         WHERE status = 'pre_transit';
+		UPDATE shipments SET status = 'at_hub'         WHERE status = 'at_branch';
+		UPDATE shipments SET status = 'out_for_delivery' WHERE status = 'delivering';
+
+		CREATE TABLE IF NOT EXISTS system_config (
+			id                   INTEGER PRIMARY KEY DEFAULT 1,
+			max_delivery_attempts INTEGER NOT NULL DEFAULT 3
+		);
+		INSERT INTO system_config (id, max_delivery_attempts)
+		VALUES (1, 3)
+		ON CONFLICT (id) DO NOTHING;
 
 		CREATE TABLE IF NOT EXISTS shipment_incidents (
 			id            VARCHAR(50)  PRIMARY KEY,

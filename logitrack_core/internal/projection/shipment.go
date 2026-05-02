@@ -48,7 +48,7 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 			return
 		}
 		draft.TrackingID = payload.NewTrackingID
-		draft.Status = model.StatusInProgress
+		draft.Status = model.StatusAtOriginHub
 		draft.UpdatedAt = event.Timestamp
 		delete(p.shipments, payload.OldTrackingID)
 		p.shipments[payload.NewTrackingID] = draft
@@ -64,12 +64,18 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if payload.Location != "" && payload.ToStatus != model.StatusDelivered {
 			shipment.CurrentLocation = payload.Location
 		}
-		if payload.ToStatus == model.StatusAtBranch && payload.Location != "" {
+		if (payload.ToStatus == model.StatusAtHub || payload.ToStatus == model.StatusAtOriginHub) && payload.Location != "" {
 			shipment.ReceivingBranchID = payload.Location
 		}
 		if payload.ToStatus == model.StatusDelivered {
 			t := event.Timestamp
 			shipment.DeliveredAt = &t
+		}
+		if payload.ToStatus == model.StatusDeliveryFailed {
+			shipment.DeliveryAttempts++
+		}
+		if payload.ToStatus == model.StatusNoEntregado || payload.ToStatus == model.StatusRechazado {
+			shipment.IsReturning = true
 		}
 		p.shipments[event.TrackingID] = shipment
 

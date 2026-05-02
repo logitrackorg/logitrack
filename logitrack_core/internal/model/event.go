@@ -19,7 +19,7 @@ type UpdateStatusRequest struct {
 	ChangedBy    string `json:"changed_by"`
 	Location     string `json:"location"`
 	Notes        string `json:"notes"`
-	DriverID     string `json:"driver_id"`     // required when status = "delivering"
+	DriverID     string `json:"driver_id"`     // required when status = "out_for_delivery"
 	RecipientDNI string `json:"recipient_dni"` // required when status = "delivered"
 	SenderDNI    string `json:"sender_dni"`    // required when status = "returned"
 }

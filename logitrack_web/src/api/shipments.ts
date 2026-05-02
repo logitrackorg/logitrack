@@ -23,7 +23,24 @@ api.interceptors.response.use(
   }
 );
 
-export type ShipmentStatus = "pending" | "in_progress" | "pre_transit" | "in_transit" | "at_branch" | "delivering" | "delivery_failed" | "delivered" | "ready_for_pickup" | "ready_for_return" | "returned" | "cancelled"  | "pending";
+export type ShipmentStatus =
+  | "draft"
+  | "at_origin_hub"
+  | "loaded"
+  | "in_transit"
+  | "at_hub"
+  | "out_for_delivery"
+  | "delivery_failed"
+  | "redelivery_scheduled"
+  | "no_entregado"
+  | "rechazado"
+  | "delivered"
+  | "ready_for_pickup"
+  | "ready_for_return"
+  | "returned"
+  | "cancelled"
+  | "lost"
+  | "destroyed";
 export type PackageType = "envelope" | "box" | "pallet";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
@@ -69,6 +86,9 @@ export interface Shipment {
   corrections?: Record<string, string>;
   has_incident?: boolean;
   incident_type?: IncidentType;
+  parent_shipment_id?: string;
+  delivery_attempts?: number;
+  is_returning?: boolean;
 }
 
 export interface ShipmentEvent {

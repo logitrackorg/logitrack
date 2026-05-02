@@ -294,9 +294,9 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	if branchForbidden(c, user, current.ReceivingBranchID) {
 		return
 	}
-	if user.Role == model.RoleOperator {
-		if fromStatus == model.StatusDelivering {
-			c.JSON(http.StatusForbidden, gin.H{"error": "los operadores no pueden modificar envíos en estado de entrega"})
+	if user.Role == model.RoleOperator || user.Role == model.RoleSupervisor {
+		if fromStatus == model.StatusOutForDelivery {
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo los choferes pueden modificar envíos en estado de reparto"})
 			return
 		}
 	}
@@ -310,15 +310,13 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 	shipment, err := h.svc.UpdateStatus(trackingID, req)
 	if err == nil {
 		today := model.NewDateOnly(timeNow())
-		if req.Status == model.StatusDelivering && req.DriverID != "" {
+		if req.Status == model.StatusOutForDelivery && req.DriverID != "" {
 			// Remove from any existing driver route (handles retry with same or different driver),
 			// then assign to the (new) driver.
 			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
 			_ = h.routeSvc.AddShipmentToDriverRoute(req.DriverID, trackingID, today)
-		} else if req.Status == model.StatusAtBranch && fromStatus == model.StatusDeliveryFailed {
+		} else if (req.Status == model.StatusAtHub || req.Status == model.StatusAtOriginHub) && fromStatus == model.StatusDeliveryFailed {
 			// Shipment returned to branch — remove from driver route.
-			// Delivered shipments are NOT removed: they stay in the route and are visible
-			// to the driver for the rest of the day via isVisibleForDriver.
 			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
 		}
 	}
@@ -336,12 +334,12 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Status != model.StatusReadyForPickup && req.Status != model.StatusDelivering {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "solo se permite ready_for_pickup o delivering en actualizaciones masivas"})
+	if req.Status != model.StatusReadyForPickup && req.Status != model.StatusOutForDelivery {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "solo se permite ready_for_pickup o out_for_delivery en actualizaciones masivas"})
 		return
 	}
-	if req.Status == model.StatusDelivering && req.DriverID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "driver_id es requerido para el estado delivering"})
+	if req.Status == model.StatusOutForDelivery && req.DriverID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "driver_id es requerido para el estado out_for_delivery"})
 		return
 	}
 
@@ -373,7 +371,7 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *gin.Context) {
 			continue
 		}
 
-		if req.Status == model.StatusDelivering {
+		if req.Status == model.StatusOutForDelivery {
 			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
 			_ = h.routeSvc.AddShipmentToDriverRoute(req.DriverID, trackingID, today)
 		}
@@ -385,7 +383,7 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *gin.Context) {
 
 // isDriverActiveStatus returns true for statuses where a shipment is actively assigned to a driver.
 func isDriverActiveStatus(s model.Status) bool {
-	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
+	return s == model.StatusOutForDelivery || s == model.StatusDeliveryFailed
 }
 
 // GetEvents returns the full event history for a shipment.

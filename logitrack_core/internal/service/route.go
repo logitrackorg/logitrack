@@ -35,14 +35,10 @@ func (s *RouteService) GetTodayRoute(driverID string) (model.Route, []model.Ship
 	return route, shipments, nil
 }
 
-// isVisibleForDriver returns true for shipments the driver should see on their route:
-// - any active (non-terminal, non-pending) status
-// - delivered on the same day as the route (visible until the day rolls over)
+// isVisibleForDriver returns true for shipments the driver should see on their route.
 func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 	switch sh.Status {
-	case model.StatusInProgress, model.StatusPreTransit, model.StatusInTransit,
-		model.StatusAtBranch, model.StatusDelivering, model.StatusDeliveryFailed,
-		model.StatusReadyForPickup, model.StatusReadyForReturn:
+	case model.StatusOutForDelivery, model.StatusDeliveryFailed:
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(*sh.DeliveredAt).Equal(routeDate)
@@ -51,7 +47,7 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 }
 
 func isDriverActiveStatus(s model.Status) bool {
-	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
+	return s == model.StatusOutForDelivery || s == model.StatusDeliveryFailed
 }
 
 func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (model.Route, error) {
@@ -106,8 +102,8 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 	if !route.HasShipment(trackingID) {
 		return fmt.Errorf("el envío no está en tu ruta")
 	}
-	if status != model.StatusDelivered && status != model.StatusDeliveryFailed {
-		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado o fallo de entrega")
+	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost {
+		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado, fallo de entrega o extraviado")
 	}
 	return nil
 }

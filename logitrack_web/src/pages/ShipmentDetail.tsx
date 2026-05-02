@@ -17,7 +17,7 @@ import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
-import { branchApi, branchLabel, branchLabelById, type Branch } from "../api/branches";
+import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -25,35 +25,46 @@ import ShipmentQRModal from '../components/ShipmentQRModal';
 import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
+import { systemConfigApi } from '../api/systemConfig';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
-  pending:           [],
-  in_progress:       ["pre_transit"],
-  pre_transit:       [],          // locked — driven by fleet (Start Trip)
-  in_transit:        [],          // locked — driven by fleet (End Trip)
-  at_branch:         ["pre_transit", "delivering", "ready_for_pickup", "ready_for_return"],
-  delivering:        ["delivered", "delivery_failed"],
-  delivery_failed:   ["delivering", "at_branch"],
-  delivered:         [],
-  ready_for_pickup:  ["delivered", "pre_transit"],
-  ready_for_return:  ["returned"],
-  returned:          [],
-  cancelled:         [],
+  draft:                [],
+  at_origin_hub:        ["loaded", "ready_for_return", "lost", "destroyed"],
+  loaded:               [],
+  in_transit:           ["lost", "destroyed"],
+  at_hub:               ["loaded", "out_for_delivery", "ready_for_pickup", "lost", "destroyed"],
+  out_for_delivery:     ["delivered", "delivery_failed", "lost", "destroyed"],
+  delivery_failed:      ["redelivery_scheduled", "ready_for_pickup", "rechazado"],
+  redelivery_scheduled: ["out_for_delivery"],
+  no_entregado:         [],
+  rechazado:            [],
+  delivered:            [],
+  ready_for_pickup:     ["delivered", "no_entregado"],
+  ready_for_return:     ["returned"],
+  returned:             [],
+  cancelled:            [],
+  lost:                 [],
+  destroyed:            [],
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  pending:           "Borrador",
-  in_progress:       "En proceso",
-  pre_transit:       "Pre-tránsito",
-  in_transit:        "En tránsito",
-  at_branch:         "En sucursal",
-  delivering:        "En reparto",
-  delivery_failed:   "Entrega fallida",
-  delivered:         "Entregado",
-  ready_for_pickup:  "Listo para retiro",
-  ready_for_return:  "Listo para devolución",
-  returned:          "Devuelto",
-  cancelled:         "Cancelado",
+  draft:                "Borrador",
+  at_origin_hub:        "En sucursal de origen",
+  loaded:               "Cargado",
+  in_transit:           "En tránsito",
+  at_hub:               "En sucursal",
+  out_for_delivery:     "En reparto",
+  delivery_failed:      "Entrega fallida",
+  redelivery_scheduled: "Reentrega programada",
+  no_entregado:         "No entregado",
+  rechazado:            "Rechazado",
+  delivered:            "Entregado",
+  ready_for_pickup:     "Listo para retiro",
+  ready_for_return:     "Listo para devolución",
+  returned:             "Devuelto",
+  cancelled:            "Cancelado",
+  lost:                 "Extraviado",
+  destroyed:            "Daño total",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -104,7 +115,7 @@ export function ShipmentDetail() {
   const [assignedVehicle, setAssignedVehicle] = useState<VehicleStatusResponse | null>(null);
   const [loadingVehicle, setLoadingVehicle] = useState(false);
   const [showVehicleDetail, setShowVehicleDetail] = useState(false);
-  // Vehicle picker for pre_transit
+  // Vehicle picker for loaded
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
   const [availableVehicles, setAvailableVehicles] = useState<import("../api/vehicles").Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
@@ -122,6 +133,8 @@ export function ShipmentDetail() {
   const [printingDoc, setPrintingDoc] = useState(false);
   const [printDocError, setPrintDocError] = useState('');
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
+  const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
+  const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -137,7 +150,7 @@ export function ShipmentDetail() {
       setComments(cmts ?? []);
       setIncidents(incs ?? []);
       setNewStatus("");
-      if (s.status === "pending") {
+      if (s.status === "draft") {
         setDraftForm({
           sender: { ...s.sender, phone: (s.sender.phone ?? "").replace(/\D/g, "") },
           recipient: { ...s.recipient, phone: (s.recipient.phone ?? "").replace(/\D/g, "") },
@@ -183,7 +196,7 @@ export function ShipmentDetail() {
     setLoadingVehicles(true);
     try {
       // Determine which branch the shipment is currently at
-      const branchId = (s.status === "at_branch" || s.status === "ready_for_pickup")
+      const branchId = (s.status === "at_hub" || s.status === "ready_for_pickup")
         ? s.current_location
         : s.receiving_branch_id;
       const vehicles = await vehicleApi.listAvailable({ branch_id: branchId ?? undefined });
@@ -262,7 +275,16 @@ export function ShipmentDetail() {
     if (trackingId) loadAssignedVehicle(trackingId);
     branchApi.list().then(setBranches);
     organizationApi.get().then(setOrgConfig).catch(() => {});
+    systemConfigApi.get().then((cfg) => setMaxDeliveryAttempts(cfg.max_delivery_attempts)).catch(() => {});
   }, [trackingId, reload]);
+
+  useEffect(() => {
+    if (shipment?.status === "draft" && shipment.receiving_branch_id) {
+      branchApi.getCapacity(shipment.receiving_branch_id).then(setBranchCapacity).catch(() => {});
+    } else {
+      setBranchCapacity(null);
+    }
+  }, [shipment?.status, shipment?.receiving_branch_id]);
 
   const handleSaveDraftChanges = async () => {
     if (!trackingId || !draftForm) return;
@@ -272,7 +294,7 @@ export function ShipmentDetail() {
     setSaveDraftError("");
     try {
       await shipmentApi.updateDraft(trackingId, draftForm);
-      navigate("/?status=pending");
+      navigate("/?status=draft");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setSaveDraftError(msg ?? "No se pudieron guardar los cambios.");
@@ -326,7 +348,7 @@ export function ShipmentDetail() {
         status: newStatus,
         location,
         notes,
-        driver_id: newStatus === "delivering" ? selectedDriverId : undefined,
+        driver_id: newStatus === "out_for_delivery" ? selectedDriverId : undefined,
         recipient_dni: newStatus === "delivered" ? recipientDni : undefined,
         sender_dni: newStatus === "returned" ? senderDni : undefined,
       });
@@ -479,9 +501,11 @@ export function ShipmentDetail() {
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
   const nextStatuses = TRANSITIONS[shipment.status].filter(
-    (s) => s !== "ready_for_return" || isAtOriginBranch
+    (s) => s !== "ready_for_return" || (shipment.is_returning && isAtOriginBranch)
   ).filter(
-    () => !hasRole("operator") || shipment.status !== "delivering"
+    (s) => !shipment.is_returning || (s !== "out_for_delivery" && s !== "ready_for_pickup")
+  ).filter(
+    () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
@@ -504,19 +528,19 @@ export function ShipmentDetail() {
         </h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <PriorityBadge priority={shipment.priority} />
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "pending" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin", "operator") && shipment.status !== "draft" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
             <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
               ✏️ Editar datos
             </button>
           )}
-          {hasRole("operator", "supervisor", "admin") && !["pending", "delivered", "returned", "cancelled"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("daño"); }}
               style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
               ⚠ Registrar incidencia
             </button>
           )}
-          {hasRole("supervisor", "admin") && shipment.status !== "pending" && shipment.status !== "pre_transit" && shipment.status !== "in_transit" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
             <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
               Cancelar envío
@@ -525,7 +549,55 @@ export function ShipmentDetail() {
           <StatusBadge status={shipment.status} />
         </div>
       </div>
-      {shipment.status === "pending" && draftForm ? (
+      {/* Banner: contra-envío */}
+      {shipment.parent_shipment_id && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
+          ↩️ Este es un <strong>contra-envío</strong> generado a partir de{" "}
+          <a href={`/shipments/${shipment.parent_shipment_id}`} style={{ color: "#92400e", fontWeight: 700 }}>
+            {shipment.parent_shipment_id}
+          </a>
+        </div>
+      )}
+
+      {/* Banner: modo devolución */}
+      {shipment.is_returning && (
+        <div style={{ background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#5b21b6" }}>
+          ↩️ Este envío está en <strong>modo devolución</strong>
+        </div>
+      )}
+
+      {/* Contador de intentos de entrega */}
+      {!shipment.is_returning && (shipment.delivery_attempts ?? 0) > 0 && (() => {
+        const attempts = shipment.delivery_attempts ?? 0;
+        const atLimit = attempts >= maxDeliveryAttempts;
+        return (
+          <div style={{
+            background: atLimit ? "#fef2f2" : "#fffbeb",
+            border: `1px solid ${atLimit ? "#fecaca" : "#fcd34d"}`,
+            borderRadius: 8, padding: "10px 14px", marginBottom: 14,
+            fontSize: 13, color: atLimit ? "#b91c1c" : "#92400e",
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span>{atLimit ? "🚫" : "⚠️"}</span>
+            <span>
+              Intentos de entrega fallidos:{" "}
+              <strong>{attempts}/{maxDeliveryAttempts}</strong>
+              {atLimit && " — límite alcanzado, no se puede reintentar"}
+            </span>
+          </div>
+        );
+      })()}
+
+      {shipment.status === "draft" && branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
+          <strong>⚠️ La sucursal receptora está al límite de capacidad</strong>
+          <div style={{ marginTop: 4, color: "#78350f" }}>
+            {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés confirmar el envío, pero la sucursal estará por encima de su capacidad.
+          </div>
+        </div>
+      )}
+
+      {shipment.status === "draft" && draftForm ? (
         /* ── Draft edit form ── */
         <DraftEditForm
           form={draftForm}
@@ -606,7 +678,7 @@ export function ShipmentDetail() {
       )}
 
  {/*  BOTÓN GENERAR QR */}
-{shipment.status !== "pending" && (
+{shipment.status !== "draft" && (
   <button
     onClick={handleGenerateQR}
     disabled={!shipment.tracking_id || generatingQR}
@@ -628,7 +700,7 @@ export function ShipmentDetail() {
 )}
 
 {/* BOTÓN IMPRIMIR ALTA — CA-1, CA-2, CA-3, CA-4 */}
-{hasRole("operator", "supervisor", "admin") && shipment.status !== "pending" && (
+{hasRole("operator", "supervisor", "admin") && shipment.status !== "draft" && (
   <button
     onClick={handlePrintDocument}
     disabled={printingDoc}
@@ -649,29 +721,29 @@ export function ShipmentDetail() {
   </button>
 )}
 
-      {/* Status update — supervisor and admin only */}
-      {(shipment.status === "pre_transit" || shipment.status === "in_transit") && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
+      {/* Status update — supervisor y operador (no admin) */}
+      {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
           <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
-            {shipment.status === "pre_transit"
+            {shipment.status === "loaded"
               ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
               : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
           </p>
         </div>
       )}
 
-      {nextStatuses.length > 0 && hasRole("supervisor", "admin", "operator") && !operatorOutOfBranch && (
+      {nextStatuses.length > 0 && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Actualizar estado</h2>
           <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {nextStatuses.map((s) => (
                 <button key={s} type="button" onClick={() => {
-                  if (s === "pre_transit") {
+                  if (s === "loaded") {
                     openVehiclePicker(shipment);
                   } else {
                     setNewStatus(s);
-                    if (s === "delivering") {
+                    if (s === "out_for_delivery") {
                       usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id).then(setDrivers);
                     }
                   }
@@ -686,7 +758,7 @@ export function ShipmentDetail() {
                 </button>
               ))}
             </div>
-            {newStatus === "delivering" && (
+            {newStatus === "out_for_delivery" && (
               <select
                 value={selectedDriverId}
                 onChange={(e) => setSelectedDriverId(e.target.value)}
@@ -717,8 +789,8 @@ export function ShipmentDetail() {
                 style={inputStyle}
               />
             )}
-            {newStatus === "at_branch" && shipment.status === "delivery_failed" && (() => {
-              const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_branch")?.location;
+            {newStatus === "at_hub" && shipment.status === "delivery_failed" && (() => {
+              const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_hub")?.location;
               return returnLocation ? (
                 <p style={{ margin: 0, fontSize: 13, color: "#4b5563" }}>
                   Devolviendo a: <strong>{branchLabel(returnLocation, branches)}</strong>
@@ -743,15 +815,15 @@ export function ShipmentDetail() {
               disabled={
                 !newStatus || updating ||
                 (newStatus === "delivery_failed" && !notes.trim()) ||
-                (newStatus === "delivering" && !selectedDriverId) ||
+                (newStatus === "out_for_delivery" && !selectedDriverId) ||
                 (newStatus === "delivered" && !recipientDni.trim()) ||
                 (newStatus === "returned" && !senderDni.trim())
               }
               style={{
-                background: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "delivering" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#1e3a5f" : "#e5e7eb",
-                color: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "delivering" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#fff" : "#9ca3af",
+                background: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#1e3a5f" : "#e5e7eb",
+                color: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#fff" : "#9ca3af",
                 border: "none", borderRadius: 6, padding: "8px 16px",
-                cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "delivering" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
+                cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
                 fontWeight: 600, alignSelf: "start",
               }}>
               {updating ? "Actualizando..." : "Confirmar cambio"}
@@ -1038,7 +1110,7 @@ export function ShipmentDetail() {
         </div>
       )}
 
-      {/* Vehicle picker modal for pre_transit */}
+      {/* Vehicle picker modal for loaded */}
       {showVehiclePicker && shipment && (
         <div
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
@@ -1049,7 +1121,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Pre-tránsito</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargado</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
@@ -1110,7 +1182,7 @@ export function ShipmentDetail() {
                   color: !selectedVehiclePlate || assigningVehicle ? "#9ca3af" : "#fff",
                 }}
               >
-                {assigningVehicle ? "Asignando..." : "Asignar y pasar a Pre-tránsito"}
+                {assigningVehicle ? "Asignando..." : "Asignar vehículo"}
               </button>
             </div>
           </div>
@@ -1488,13 +1560,13 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
   const receivingBranch = receivingBranchId ? branches.find((b) => b.id === receivingBranchId) : undefined;
   const firstStop = receivingBranch ? receivingBranch.id : origin;
 
-  // Confirmed stops: receiving branch (or origin fallback) + each at_branch arrival
+  // Confirmed stops: receiving branch (or origin fallback) + each at_hub arrival
   const stops: { location: string; status: ShipmentStatus; timestamp: string; current: boolean }[] = [];
 
-  stops.push({ location: firstStop, status: "in_progress" as ShipmentStatus, timestamp: events[0].timestamp, current: false });
+  stops.push({ location: firstStop, status: "at_origin_hub" as ShipmentStatus, timestamp: events[0].timestamp, current: false });
 
   for (const ev of events) {
-    if (ev.to_status === "at_branch" && ev.location) {
+    if (ev.to_status === "at_hub" && ev.location) {
       stops.push({ location: ev.location, status: ev.to_status, timestamp: ev.timestamp, current: false });
     }
   }
@@ -1504,11 +1576,15 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
   const lastEvent = events[events.length - 1];
   const isInTransit = lastEvent?.to_status === "in_transit";
   const nextBranch = isInTransit ? lastEvent.location : null;
-  const isDelivering = lastEvent?.to_status === "delivering";
+  const isDelivering = lastEvent?.to_status === "out_for_delivery";
   const isDelivered = lastEvent?.to_status === "delivered";
 
   const statusColors: Record<ShipmentStatus, string> = {
-    pending: "#9ca3af", in_progress: "#f59e0b", pre_transit: "#06b6d4", in_transit: "#3b82f6", at_branch: "#8b5cf6", delivering: "#f97316", delivery_failed: "#ef4444", delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed", returned: "#6b7280", cancelled: "#b91c1c",
+    draft: "#9ca3af", at_origin_hub: "#f59e0b", loaded: "#06b6d4", in_transit: "#3b82f6",
+    at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
+    redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
+    delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
+    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937",
   };
 
   const solidLine = (color = "#e5e7eb") => (

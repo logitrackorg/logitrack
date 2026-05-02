@@ -64,13 +64,13 @@ func TestValidateDriver_InvalidStatus(t *testing.T) {
 
 	invalidStatuses := []model.Status{
 		model.StatusInTransit,
-		model.StatusAtBranch,
-		model.StatusDelivering,
+		model.StatusAtHub,
+		model.StatusOutForDelivery,
 		model.StatusCancelled,
 	}
 	for _, status := range invalidStatuses {
 		err := routeSvc.ValidateDriverCanUpdateShipment("driver-01", ship.TrackingID, status)
-		if err == nil || err.Error() != "los choferes solo pueden marcar envíos como entregado o fallo de entrega" {
+		if err == nil || err.Error() != "los choferes solo pueden marcar envíos como entregado, fallo de entrega o extraviado" {
 			t.Errorf("status %s: expected invalid-status error, got: %v", status, err)
 		}
 	}
@@ -218,6 +218,13 @@ func TestGetTodayRoute_ReturnsRouteAndShipmentDetails(t *testing.T) {
 
 	ship1 := mustCreate(t, ts)
 	ship2 := mustCreate(t, ts)
+	// Advance both to out_for_delivery so they are visible to the driver
+	toInTransit(t, ts, ship1.TrackingID)
+	toAtHub(t, ts, ship1.TrackingID)
+	toOutForDelivery(t, ts, ship1.TrackingID)
+	toInTransit(t, ts, ship2.TrackingID)
+	toAtHub(t, ts, ship2.TrackingID)
+	toOutForDelivery(t, ts, ship2.TrackingID)
 	today := model.NewDateOnly(time.Now().UTC())
 
 	routeRepo.Create(model.Route{
@@ -273,6 +280,10 @@ func TestGetTodayRoute_IgnoresMissingShipments(t *testing.T) {
 	routeSvc, ts, routeRepo := newRouteSetup(t)
 
 	ship := mustCreate(t, ts)
+	// Advance to out_for_delivery so it is visible to the driver
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 	today := model.NewDateOnly(time.Now().UTC())
 
 	routeRepo.Create(model.Route{

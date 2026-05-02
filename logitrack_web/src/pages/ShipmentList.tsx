@@ -36,7 +36,7 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
   ];
 
   const rows = shipments.map((s) => [
-    s.status === "pending" ? "" : s.tracking_id,
+    s.status === "draft" ? "" : s.tracking_id,
     s.status,
     s.priority ?? "",
     corr(s, "origin_city", s.sender.address.city),
@@ -64,9 +64,9 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
 type StatusFilter = ShipmentStatus | "active" | "";
 
 // Statuses eligible for bulk operations
-const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_branch", "delivery_failed"];
+const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 
-type BulkAction = "ready_for_pickup" | "delivering";
+type BulkAction = "ready_for_pickup" | "out_for_delivery";
 
 interface BulkConfirmState {
   action: BulkAction;
@@ -102,7 +102,7 @@ export function ShipmentList() {
   const navigate = useNavigate();
 
   // Bulk selection state
-  const canBulk = hasRole("operator", "supervisor", "admin");
+  const canBulk = hasRole("operator", "supervisor");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
   const [bulkDriverId, setBulkDriverId] = useState("");
@@ -138,7 +138,7 @@ export function ShipmentList() {
   };
 
   const filtered = shipments.filter((s) => {
-    if (statusFilter === "active" && (s.status === "delivered" || s.status === "pending" || s.status === "returned" || s.status === "cancelled")) return false;
+    if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
     if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
     if (branchFilter && s.receiving_branch_id !== branchFilter) return false;
     if (!dateRangeInvalid) {
@@ -171,7 +171,7 @@ export function ShipmentList() {
 
   const openBulkAction = (action: BulkAction) => {
     if (selected.size === 0) return;
-    if (action === "delivering") {
+    if (action === "out_for_delivery") {
       usersApi.listDrivers(user?.branch_id).then(setDrivers).catch(() => {});
       setBulkDriverId("");
     }
@@ -180,13 +180,13 @@ export function ShipmentList() {
 
   const executeBulk = async () => {
     if (!bulkConfirm) return;
-    if (bulkConfirm.action === "delivering" && !bulkDriverId) return;
+    if (bulkConfirm.action === "out_for_delivery" && !bulkDriverId) return;
     setBulkLoading(true);
     try {
       const result = await shipmentApi.bulkUpdateStatus({
         tracking_ids: Array.from(selected),
         status: bulkConfirm.action,
-        driver_id: bulkConfirm.action === "delivering" ? bulkDriverId : undefined,
+        driver_id: bulkConfirm.action === "out_for_delivery" ? bulkDriverId : undefined,
       });
       setBulkResult(result);
       setBulkConfirm(null);
@@ -198,7 +198,7 @@ export function ShipmentList() {
   };
 
   const actionLabel = (action: BulkAction) =>
-    action === "ready_for_pickup" ? "Listo para retiro" : "En reparto";
+    action === "ready_for_pickup" ? "Listo para retiro" : "En reparto (asignar a chofer)";
 
   return (
     <div style={{ padding: 24 }}>
@@ -255,18 +255,23 @@ export function ShipmentList() {
           style={selectStyle}>
           <option value="active">Activos</option>
           <option value="">Todos</option>
-          <option value="at_branch">En sucursal</option>
-          <option value="cancelled">Cancelados</option>
-          <option value="delivered">Entregados</option>
-          <option value="delivery_failed">Entrega fallida</option>
-          <option value="delivering">En reparto</option>
-          <option value="pending">Borrador</option>
-          <option value="in_progress">En proceso</option>
-          <option value="pre_transit">Pre tránsito</option>
+          <option value="at_origin_hub">En sucursal de origen</option>
+          <option value="loaded">Cargado</option>
           <option value="in_transit">En tránsito</option>
+          <option value="at_hub">En sucursal</option>
+          <option value="out_for_delivery">En reparto</option>
+          <option value="delivery_failed">Entrega fallida</option>
+          <option value="redelivery_scheduled">Reentrega programada</option>
+          <option value="no_entregado">No entregado</option>
+          <option value="rechazado">Rechazado</option>
           <option value="ready_for_pickup">Listo para retiro</option>
           <option value="ready_for_return">Listo para devolución</option>
+          <option value="delivered">Entregados</option>
           <option value="returned">Devueltos</option>
+          <option value="cancelled">Cancelados</option>
+          <option value="lost">Extraviados</option>
+          <option value="destroyed">Daño total</option>
+          <option value="draft">Borrador</option>
         </select>
 
         {isOperator ? (
@@ -311,7 +316,7 @@ export function ShipmentList() {
             Marcar como "Listo para retiro"
           </button>
           <button
-            onClick={() => openBulkAction("delivering")}
+            onClick={() => openBulkAction("out_for_delivery")}
             style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
             Asignar a reparto
           </button>
@@ -393,7 +398,7 @@ export function ShipmentList() {
                         )}
                       </td>
                     )}
-                    <td style={td}><code>{s.status === "pending" ? <span style={{ color: "#9ca3af" }}>—</span> : s.tracking_id}</code></td>
+                    <td style={td}><code>{s.status === "draft" ? <span style={{ color: "#9ca3af" }}>—</span> : s.tracking_id}</code></td>
                     <td style={td}>{corr(s, "sender_name", s.sender.name)}</td>
                     <td style={td}>{corr(s, "recipient_name", s.recipient.name)}</td>
                     <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>
@@ -435,7 +440,7 @@ export function ShipmentList() {
               Los envíos que no admitan esta transición serán omitidos sin cancelar la operación.
             </p>
 
-            {bulkConfirm.action === "delivering" && (
+            {bulkConfirm.action === "out_for_delivery" && (
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 6, color: "#374151" }}>
                   Chofer asignado
@@ -461,8 +466,8 @@ export function ShipmentList() {
               </button>
               <button
                 onClick={executeBulk}
-                disabled={bulkLoading || (bulkConfirm.action === "delivering" && !bulkDriverId)}
-                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: (bulkLoading || (bulkConfirm.action === "delivering" && !bulkDriverId)) ? 0.6 : 1 }}>
+                disabled={bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: (bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)) ? 0.6 : 1 }}>
                 {bulkLoading ? "Procesando..." : "Confirmar"}
               </button>
             </div>

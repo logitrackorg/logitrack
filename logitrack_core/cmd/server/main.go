@@ -79,9 +79,14 @@ func main() {
 	orgSvc := service.NewOrganizationService(orgRepo)
 	orgHandler := handler.NewOrganizationHandler(orgSvc)
 
+	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
+	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
+	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
+	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
@@ -184,16 +189,16 @@ func main() {
 	canCorrect := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.PATCH("/shipments/:tracking_id/correct", canCorrect, shipmentHandler.CorrectShipment)
 
-	// Cancel shipment — supervisor, admin
-	canCancel := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	// Cancel shipment — operator, supervisor, admin (branch check enforced in handler/service)
+	canCancel := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
 	protected.POST("/shipments/:tracking_id/cancel", canCancel, shipmentHandler.CancelShipment)
 
 	// Change status — supervisor, admin, driver (driver further restricted in handler)
-	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin, model.RoleDriver)
+	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
 	// Bulk status update — operator, supervisor, admin (not driver)
-	canBulkStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
+	canBulkStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 	protected.POST("/shipments/bulk-status", canBulkStatus, shipmentHandler.BulkUpdateStatus)
 
 	// Stats / dashboard — supervisor, manager, admin
@@ -216,6 +221,10 @@ func main() {
 	// Organization config — read: all authenticated, write: admin only
 	protected.GET("/organization", middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver), orgHandler.Get)
 	protected.PUT("/organization", adminOnly, orgHandler.Update)
+
+	// System config — admin only
+	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
+	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)

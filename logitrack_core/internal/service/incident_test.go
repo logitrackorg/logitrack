@@ -25,8 +25,8 @@ func TestReportIncident_TerminalStates(t *testing.T) {
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 					Status: model.StatusDelivered, ChangedBy: "driver",
 					RecipientDNI: defaultRecipient().DNI,
@@ -136,15 +136,15 @@ func TestReportIncident_AllowedOnActiveStates(t *testing.T) {
 		name  string
 		setup func(ts testSetup, id string)
 	}{
-		{"in_progress", func(_ testSetup, _ string) {}},
-		{"at_branch", func(ts testSetup, id string) {
+		{"at_origin_hub", func(_ testSetup, _ string) {}},
+		{"at_hub", func(ts testSetup, id string) {
 			toInTransit(t, ts, id)
-			toAtBranch(t, ts, id)
+			toAtHub(t, ts, id)
 		}},
-		{"delivering", func(ts testSetup, id string) {
+		{"out_for_delivery", func(ts testSetup, id string) {
 			toInTransit(t, ts, id)
-			toAtBranch(t, ts, id)
-			toDelivering(t, ts, id)
+			toAtHub(t, ts, id)
+			toOutForDelivery(t, ts, id)
 		}},
 	}
 

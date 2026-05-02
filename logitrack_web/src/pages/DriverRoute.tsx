@@ -80,7 +80,7 @@ export function DriverRoute() {
 
   const [ry, rm, rd] = data.route.date.split("-");
   const today = `${rd}/${rm}/${ry}`;
-  const pending = data.shipments.filter((s) => s.status === "delivering").length;
+  const pending = data.shipments.filter((s) => s.status === "out_for_delivery").length;
   const done = data.shipments.filter((s) => s.status === "delivered" || s.status === "delivery_failed").length;
 
   const filteredShipments = data.shipments.filter((s) => {
@@ -156,7 +156,7 @@ export function DriverRoute() {
               </p>
             )}
 
-            {shipment.status === "delivering" && !failedShipmentId && !deliverShipmentId && (
+            {shipment.status === "out_for_delivery" && !failedShipmentId && !deliverShipmentId && (
               <div style={{ display: "flex", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => { setDeliverShipmentId(shipment.tracking_id); setRecipientDni(""); }}
@@ -183,7 +183,7 @@ export function DriverRoute() {
               </div>
             )}
 
-            {shipment.status === "delivering" && deliverShipmentId === shipment.tracking_id && (
+            {shipment.status === "out_for_delivery" && deliverShipmentId === shipment.tracking_id && (
               <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
                   DNI del destinatario
@@ -224,7 +224,7 @@ export function DriverRoute() {
               </div>
             )}
 
-            {shipment.status === "delivering" && failedShipmentId === shipment.tracking_id && !deliverShipmentId && (
+            {shipment.status === "out_for_delivery" && failedShipmentId === shipment.tracking_id && !deliverShipmentId && (
               <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
                 <textarea
                   value={failedNotes}

@@ -281,9 +281,17 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
+	// Block assigning counter-shipments (is_returning=true) to routes for last-mile delivery
+	if shipment.IsReturning {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Los envíos de retorno no pueden asignarse a ruta de última milla",
+		})
+		return
+	}
+
 	allowedStatuses := map[model.Status]bool{
-		model.StatusInProgress:     true,
-		model.StatusAtBranch:       true,
+		model.StatusAtOriginHub:  true,
+		model.StatusAtHub:        true,
 		model.StatusReadyForPickup: true,
 	}
 	if !allowedStatuses[shipment.Status] {
@@ -295,7 +303,7 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 
 	// Branch match: shipment must be at the same branch as the vehicle
 	shipmentBranch := shipment.ReceivingBranchID
-	if shipment.Status == model.StatusAtBranch || shipment.Status == model.StatusReadyForPickup {
+	if shipment.Status == model.StatusAtHub || shipment.Status == model.StatusAtOriginHub || shipment.Status == model.StatusReadyForPickup {
 		shipmentBranch = shipment.CurrentLocation
 	}
 	if shipmentBranch != *vehicle.AssignedBranch {
@@ -336,9 +344,9 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// Transition shipment to pre_transit
+	// Transition shipment to loaded
 	statusReq := model.UpdateStatusRequest{
-		Status:    model.StatusPreTransit,
+		Status:    model.StatusLoaded,
 		ChangedBy: user.Username,
 		Notes:     "Vehicle assigned: " + vehicle.LicensePlate,
 	}
@@ -460,10 +468,9 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 			Status:    model.StatusInTransit,
 			ChangedBy: startUser.Username,
 			Location:  destBranch.Address.City,
-			Notes:     "Trip started. Vehicle: " + vehicle.LicensePlate,
+			Notes:     "Viaje iniciado. Vehículo: " + vehicle.LicensePlate,
 		}
 		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
-			// Log but continue for other shipments
 			_ = err
 		}
 	}
@@ -572,8 +579,15 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 		}
 	}
 
+	// Determine target status: at_origin_hub if unassigning at origin, at_hub otherwise
+	unassignStatus := model.StatusAtHub
+	if shipmentToUnassign, err2 := h.shipmentSvc.GetByTrackingID(trackingID); err2 == nil {
+		if vehicle.AssignedBranch != nil && *vehicle.AssignedBranch == shipmentToUnassign.OriginBranchID {
+			unassignStatus = model.StatusAtOriginHub
+		}
+	}
 	statusReq := model.UpdateStatusRequest{
-		Status:    model.StatusAtBranch,
+		Status:    unassignStatus,
 		ChangedBy: user.Username,
 		Notes:     "Unassigned from vehicle: " + vehicle.LicensePlate,
 		Location:  branchCity,
@@ -643,12 +657,12 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		}
 	}
 
-	// Transition all assigned shipments to at_branch
+	// Transition all assigned shipments to at_hub (service promotes to at_origin_hub if needed)
 	for _, tid := range vehicle.AssignedShipments {
 		statusReq := model.UpdateStatusRequest{
-			Status:    model.StatusAtBranch,
+			Status:    model.StatusAtHub,
 			ChangedBy: user.Username,
-			Notes:     "Trip ended. Vehicle: " + vehicle.LicensePlate,
+			Notes:     "Viaje finalizado. Vehículo: " + vehicle.LicensePlate,
 		}
 		if destCity != "" {
 			statusReq.Location = destCity
