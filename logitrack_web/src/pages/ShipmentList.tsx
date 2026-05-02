@@ -140,7 +140,7 @@ export function ShipmentList() {
   const filtered = shipments.filter((s) => {
     if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
     if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
-    if (branchFilter && s.receiving_branch_id !== branchFilter) return false;
+    if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
     if (!dateRangeInvalid) {
       const created = localDate(s.created_at);
       if (dateFrom && created < dateFrom) return false;

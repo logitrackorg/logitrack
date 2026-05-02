@@ -149,14 +149,17 @@ export interface ShipmentComment {
   updated_at: string;
 }
 
-export type IncidentType = "daño" | "perdida" | "demora" | "paquete_abierto" | "otro";
+export type IncidentType = "extraviado" | "danio_total" | "otro";
 
 export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
-  "daño": "Daño en el paquete",
-  "perdida": "Pérdida del paquete",
-  "demora": "Demora significativa",
-  "paquete_abierto": "Paquete abierto/violado",
+  "extraviado": "Extraviado",
+  "danio_total": "Daño total",
   "otro": "Otro",
+};
+
+export const TERMINAL_INCIDENT_STATUS: Partial<Record<IncidentType, "lost" | "destroyed">> = {
+  "extraviado": "lost",
+  "danio_total": "destroyed",
 };
 
 export interface ShipmentIncident {

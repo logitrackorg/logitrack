@@ -10,6 +10,7 @@ import {
   type ShipmentIncident,
   type IncidentType,
   INCIDENT_TYPE_LABELS,
+  TERMINAL_INCIDENT_STATUS,
 } from "../api/shipments";
 import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
@@ -29,11 +30,11 @@ import { systemConfigApi } from '../api/systemConfig';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   draft:                [],
-  at_origin_hub:        ["loaded", "ready_for_return", "lost", "destroyed"],
+  at_origin_hub:        ["loaded", "ready_for_return"],
   loaded:               [],
-  in_transit:           ["lost", "destroyed"],
-  at_hub:               ["loaded", "out_for_delivery", "ready_for_pickup", "lost", "destroyed"],
-  out_for_delivery:     ["delivered", "delivery_failed", "lost", "destroyed"],
+  in_transit:           [],
+  at_hub:               ["loaded", "out_for_delivery", "ready_for_pickup"],
+  out_for_delivery:     ["delivered", "delivery_failed"],
   delivery_failed:      ["redelivery_scheduled", "ready_for_pickup", "rechazado"],
   redelivery_scheduled: ["out_for_delivery"],
   no_entregado:         [],
@@ -100,7 +101,7 @@ export function ShipmentDetail() {
   const [addingComment, setAddingComment] = useState(false);
   const [incidents, setIncidents] = useState<ShipmentIncident[]>([]);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
-  const [incidentType, setIncidentType] = useState<IncidentType>("daño");
+  const [incidentType, setIncidentType] = useState<IncidentType>("extraviado");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [reportingIncident, setReportingIncident] = useState(false);
   const [incidentError, setIncidentError] = useState("");
@@ -349,8 +350,8 @@ export function ShipmentDetail() {
         location,
         notes,
         driver_id: newStatus === "out_for_delivery" ? selectedDriverId : undefined,
-        recipient_dni: newStatus === "delivered" ? recipientDni : undefined,
-        sender_dni: newStatus === "returned" ? senderDni : undefined,
+        recipient_dni: newStatus === "delivered" || (newStatus === "returned" && shipment?.is_returning) ? recipientDni : undefined,
+        sender_dni: newStatus === "returned" && !shipment?.is_returning ? senderDni : undefined,
       });
       setLocation(""); setNotes(""); setSelectedDriverId(""); setRecipientDni(""); setSenderDni("");
       await reload();
@@ -535,7 +536,7 @@ export function ShipmentDetail() {
           )}
           {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
-              onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("daño"); }}
+              onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
               style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
               ⚠ Registrar incidencia
             </button>
@@ -780,11 +781,20 @@ export function ShipmentDetail() {
                 style={inputStyle}
               />
             )}
-            {newStatus === "returned" && (
+            {newStatus === "returned" && !shipment.is_returning && (
               <input
                 value={senderDni}
                 onChange={(e) => setSenderDni(e.target.value)}
                 placeholder="DNI del remitente (obligatorio)"
+                required
+                style={inputStyle}
+              />
+            )}
+            {newStatus === "returned" && shipment.is_returning && (
+              <input
+                value={recipientDni}
+                onChange={(e) => setRecipientDni(e.target.value)}
+                placeholder="DNI del destinatario / remitente original (obligatorio)"
                 required
                 style={inputStyle}
               />
@@ -807,27 +817,30 @@ export function ShipmentDetail() {
             {newStatus === "delivered" && !recipientDni.trim() && (
               <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
             )}
-            {newStatus === "returned" && !senderDni.trim() && (
+            {newStatus === "returned" && !shipment.is_returning && !senderDni.trim() && (
               <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
             )}
+            {newStatus === "returned" && shipment.is_returning && !recipientDni.trim() && (
+              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
+            )}
             {updateError && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{updateError}</p>}
+            {(() => {
+              const returnedDniMissing = newStatus === "returned" && (shipment.is_returning ? !recipientDni.trim() : !senderDni.trim());
+              const disabled = !newStatus || updating || (newStatus === "delivery_failed" && !notes.trim()) || (newStatus === "out_for_delivery" && !selectedDriverId) || (newStatus === "delivered" && !recipientDni.trim()) || returnedDniMissing;
+              return (
             <button type="submit"
-              disabled={
-                !newStatus || updating ||
-                (newStatus === "delivery_failed" && !notes.trim()) ||
-                (newStatus === "out_for_delivery" && !selectedDriverId) ||
-                (newStatus === "delivered" && !recipientDni.trim()) ||
-                (newStatus === "returned" && !senderDni.trim())
-              }
+              disabled={disabled}
               style={{
-                background: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#1e3a5f" : "#e5e7eb",
-                color: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "#fff" : "#9ca3af",
+                background: !disabled ? "#1e3a5f" : "#e5e7eb",
+                color: !disabled ? "#fff" : "#9ca3af",
                 border: "none", borderRadius: 6, padding: "8px 16px",
                 cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
                 fontWeight: 600, alignSelf: "start",
               }}>
               {updating ? "Actualizando..." : "Confirmar cambio"}
             </button>
+              );
+            })()}
           </form>
         </div>
       )}
@@ -1064,6 +1077,11 @@ export function ShipmentDetail() {
                 ))}
               </select>
             </div>
+            {TERMINAL_INCIDENT_STATUS[incidentType] && (
+              <div style={{ background: "#fef3c7", border: "1px solid #fbbf24", color: "#92400e", padding: "10px 12px", borderRadius: 6, marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+                <strong>Atención:</strong> Al confirmar esta incidencia, el envío quedará en estado <strong>{incidentType === "extraviado" ? "Extraviado" : "Daño total"}</strong> y no podrá continuar su flujo. Esta acción es irreversible.
+              </div>
+            )}
             <div style={{ marginBottom: 18 }}>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Descripción</label>
               <textarea
@@ -1087,7 +1105,11 @@ export function ShipmentDetail() {
                   setReportingIncident(true);
                   setIncidentError("");
                   try {
+                    const terminalStatus = TERMINAL_INCIDENT_STATUS[incidentType];
                     await shipmentApi.reportIncident(trackingId, incidentType, incidentDescription.trim());
+                    if (terminalStatus) {
+                      await shipmentApi.updateStatus(trackingId, { status: terminalStatus, location: "", notes: incidentDescription.trim() });
+                    }
                     setShowIncidentModal(false);
                     const [incs, s] = await Promise.all([
                       shipmentApi.getIncidents(trackingId),
@@ -1102,8 +1124,8 @@ export function ShipmentDetail() {
                     setReportingIncident(false);
                   }
                 }}
-                style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
-                {reportingIncident ? "Registrando..." : "Confirmar registro"}
+                style={{ background: TERMINAL_INCIDENT_STATUS[incidentType] ? "#dc2626" : "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
+                {reportingIncident ? "Registrando..." : TERMINAL_INCIDENT_STATUS[incidentType] ? "Confirmar y cerrar envío" : "Confirmar registro"}
               </button>
             </div>
           </div>
