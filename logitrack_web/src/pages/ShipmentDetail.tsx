@@ -262,7 +262,7 @@ export function ShipmentDetail() {
       setPrintDocError('');
       setPrintingDoc(true);
       const qr = await qrService.generateQR(shipment.tracking_id);
-      printShipmentDocument(shipment, branches, qr.qr_code_base64, qr.tracking_url, orgConfig);
+      printShipmentDocument(shipment, branches, qr.qr_code_base64, orgConfig);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar el documento de impresión';
       setPrintDocError(message);
@@ -1257,7 +1257,6 @@ export function ShipmentDetail() {
           onClose={() => setShowQRModal(false)}
           trackingId={qrData.tracking_id}
           qrCodeBase64={qrData.qr_code_base64}
-          trackingUrl={qrData.tracking_url}
         />
       )}
 
