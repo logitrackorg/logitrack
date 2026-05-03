@@ -16,6 +16,14 @@ type postgresAuthRepository struct {
 	db *sql.DB
 }
 
+func hashPassword(plain string) (string, error) {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashed), nil
+}
+
 func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 	db.Exec(`CREATE TABLE IF NOT EXISTS users (
 		id         VARCHAR(10)  PRIMARY KEY,
@@ -300,10 +308,14 @@ func (r *postgresAuthRepository) CreateUser(cmd UserCreate) (model.User, error) 
 		return model.User{}, err
 	}
 	addrJSON, _ := json.Marshal(cmd.Address)
-	_, err := r.db.Exec(
+	hashedPassword, err := hashPassword(cmd.Password)
+	if err != nil {
+		return model.User{}, err
+	}
+	_, err = r.db.Exec(
 		`INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
 		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)`,
-		id, cmd.Username, cmd.Password, string(cmd.Role), cmd.BranchID,
+		id, cmd.Username, string(hashedPassword), string(cmd.Role), cmd.BranchID,
 		cmd.FirstName, cmd.LastName, cmd.Email, addrJSON,
 	)
 	if err != nil {
@@ -329,8 +341,12 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 		argIdx++
 	}
 	if update.Password != nil {
+		hashed, err := hashPassword(*update.Password)
+		if err != nil {
+			return model.User{}, err
+		}
 		setClauses = append(setClauses, fmt.Sprintf("password = $%d", argIdx))
-		args = append(args, *update.Password)
+		args = append(args, hashed)
 		argIdx++
 	}
 	if update.FirstName != nil {

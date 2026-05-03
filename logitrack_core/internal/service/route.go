@@ -35,14 +35,10 @@ func (s *RouteService) GetTodayRoute(driverID string) (model.Route, []model.Ship
 	return route, shipments, nil
 }
 
-// isVisibleForDriver returns true for shipments the driver should see on their route:
-// - any active (non-terminal, non-pending) status
-// - delivered on the same day as the route (visible until the day rolls over)
+// isVisibleForDriver returns true for shipments the driver should see on their route.
 func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 	switch sh.Status {
-	case model.StatusInProgress, model.StatusPreTransit, model.StatusInTransit,
-		model.StatusAtBranch, model.StatusDelivering, model.StatusDeliveryFailed,
-		model.StatusReadyForPickup, model.StatusReadyForReturn:
+	case model.StatusOutForDelivery, model.StatusDeliveryFailed:
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(*sh.DeliveredAt).Equal(routeDate)
@@ -51,7 +47,7 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 }
 
 func isDriverActiveStatus(s model.Status) bool {
-	return s == model.StatusDelivering || s == model.StatusDeliveryFailed
+	return s == model.StatusOutForDelivery || s == model.StatusDeliveryFailed
 }
 
 func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (model.Route, error) {
@@ -66,6 +62,7 @@ func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (m
 		ShipmentIDs: req.ShipmentIDs,
 		CreatedBy:   createdBy,
 		CreatedAt:   time.Now().UTC(),
+		Status:      model.RouteStatusPending,
 	}
 	return s.repo.Create(route)
 }
@@ -81,9 +78,27 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 			ShipmentIDs: []string{trackingID},
 			CreatedBy:   "system",
 			CreatedAt:   time.Now().UTC(),
+			Status:      model.RouteStatusPending,
 		}
 		_, err = s.repo.Create(newRoute)
 		return err
+	}
+	if route.Status == model.RouteStatusActive {
+		return fmt.Errorf("la ruta ya está iniciada, no se pueden agregar nuevos envíos")
+	}
+	if route.Status == model.RouteStatusFinished {
+		// Nueva tanda de envíos después de una ruta finalizada — reabre para que el chofer la inicie de nuevo.
+		// Purge shipments that are already in a terminal delivery state so they don't bleed into the new batch.
+		active := route.ShipmentIDs[:0]
+		for _, sid := range route.ShipmentIDs {
+			sh, err := s.shipmentRepo.GetByTrackingID(sid)
+			if err != nil || isDriverActiveStatus(sh.Status) {
+				active = append(active, sid)
+			}
+		}
+		route.ShipmentIDs = active
+		route.Status = model.RouteStatusPending
+		route.StartedAt = nil
 	}
 	if route.HasShipment(trackingID) {
 		return nil
@@ -103,13 +118,70 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 	if err != nil {
 		return fmt.Errorf("no tenés una ruta asignada para hoy")
 	}
+	if route.Status == model.RouteStatusPending {
+		return fmt.Errorf("debés iniciar la ruta antes de registrar entregas")
+	}
 	if !route.HasShipment(trackingID) {
 		return fmt.Errorf("el envío no está en tu ruta")
 	}
-	if status != model.StatusDelivered && status != model.StatusDeliveryFailed {
-		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado o fallo de entrega")
+	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost {
+		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado, fallo de entrega o extraviado")
 	}
 	return nil
+}
+
+// CanAssignToRoute returns an error if the driver already has an active route for the given date.
+func (s *RouteService) CanAssignToRoute(driverID string, date model.DateOnly) error {
+	route, err := s.repo.GetByDriverAndDate(driverID, date)
+	if err != nil {
+		return nil // no route yet — assignment will create one
+	}
+	if route.Status == model.RouteStatusActive {
+		return fmt.Errorf("la ruta del chofer ya está iniciada, no se pueden agregar nuevos envíos")
+	}
+	return nil
+}
+
+// StartRoute sets the driver's today route to active.
+func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
+	today := model.NewDateOnly(time.Now().UTC())
+	route, err := s.repo.GetByDriverAndDate(driverID, today)
+	if err != nil {
+		return model.Route{}, fmt.Errorf("no tenés una ruta asignada para hoy")
+	}
+	if route.Status == model.RouteStatusActive {
+		return model.Route{}, fmt.Errorf("la ruta ya está iniciada")
+	}
+	if route.Status == model.RouteStatusFinished {
+		return model.Route{}, fmt.Errorf("la ruta ya finalizó")
+	}
+	now := time.Now().UTC()
+	if err := s.repo.UpdateStatus(route.ID, model.RouteStatusActive, &now); err != nil {
+		return model.Route{}, err
+	}
+	route.Status = model.RouteStatusActive
+	route.StartedAt = &now
+	return route, nil
+}
+
+// CheckAndFinalizeRoute finalizes the route if all shipments reached a terminal delivery state.
+// Called after each driver status update; errors are intentionally ignored by callers.
+func (s *RouteService) CheckAndFinalizeRoute(driverID string) {
+	today := model.NewDateOnly(time.Now().UTC())
+	route, err := s.repo.GetByDriverAndDate(driverID, today)
+	if err != nil || route.Status != model.RouteStatusActive || len(route.ShipmentIDs) == 0 {
+		return
+	}
+	for _, id := range route.ShipmentIDs {
+		sh, err := s.shipmentRepo.GetByTrackingID(id)
+		if err != nil {
+			return
+		}
+		if sh.Status != model.StatusDelivered && sh.Status != model.StatusDeliveryFailed && sh.Status != model.StatusLost {
+			return
+		}
+	}
+	_ = s.repo.UpdateStatus(route.ID, model.RouteStatusFinished, route.StartedAt)
 }
 
 func generateRouteID() string {

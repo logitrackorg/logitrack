@@ -140,13 +140,13 @@ func TestAssignToShipment_Happy(t *testing.T) {
 		t.Errorf("vehicle.AssignedShipments: got %v, want [%s]", v.AssignedShipments, ship.TrackingID)
 	}
 
-	// Shipment should be in pre_transit
+	// Shipment should be in loaded
 	updated, err := ts.shipmentSvc.GetByTrackingID(ship.TrackingID)
 	if err != nil {
 		t.Fatalf("GetByTrackingID: %v", err)
 	}
-	if updated.Status != model.StatusPreTransit {
-		t.Errorf("shipment status: got %q, want %q", updated.Status, model.StatusPreTransit)
+	if updated.Status != model.StatusLoaded {
+		t.Errorf("shipment status: got %q, want %q", updated.Status, model.StatusLoaded)
 	}
 }
 

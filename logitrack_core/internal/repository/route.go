@@ -1,6 +1,10 @@
 package repository
 
-import "github.com/logitrack/core/internal/model"
+import (
+	"time"
+
+	"github.com/logitrack/core/internal/model"
+)
 
 type RouteRepository interface {
 	Create(route model.Route) (model.Route, error)
@@ -8,4 +12,5 @@ type RouteRepository interface {
 	GetByDriverAndDate(driverID string, date model.DateOnly) (model.Route, error)
 	GetByID(id string) (model.Route, error)
 	RemoveShipmentFromDate(trackingID string, date model.DateOnly) error
+	UpdateStatus(id string, status model.RouteStatus, startedAt *time.Time) error
 }

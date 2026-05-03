@@ -67,8 +67,8 @@ export function VehicleList() {
   const { hasRole, user } = useAuth();
 
   const isAdmin = hasRole("admin");
-  const canWrite = hasRole("admin") || hasRole("supervisor");
-  const canManageTrips = hasRole("supervisor");
+  const canWrite = hasRole("admin") || hasRole("supervisor") || hasRole("operator");
+  const canManageTrips = hasRole("supervisor") || hasRole("operator");
   const isOperator = user?.role === "operator";
   const hasBranchDefault = isOperator || user?.role === "supervisor";
   const [branchFilter, setBranchFilter] = useState(hasBranchDefault ? (user?.branch_id ?? "") : "");
@@ -250,18 +250,18 @@ export function VehicleList() {
     if (!selectedForAssign) return false;
     const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
     if (!vehicle || vehicle.status !== "en_carga") return false;
-    if (user?.role === "supervisor" && user.branch_id) {
+    if ((user?.role === "supervisor" || user?.role === "operator") && user.branch_id) {
       return vehicle.assigned_branch === user.branch_id;
     }
     return true;
   };
 
-  // Check if the selected vehicle can end trip (status is "en_transito" and supervisor matches destination branch)
+  // Check if the selected vehicle can end trip (status is "en_transito" and supervisor/operator matches destination branch)
   const canEndTrip = () => {
     if (!selectedForAssign) return false;
     const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
     if (!vehicle || vehicle.status !== "en_transito") return false;
-    if (user?.role === "supervisor" && user.branch_id) {
+    if ((user?.role === "supervisor" || user?.role === "operator") && user.branch_id) {
       return vehicle.destination_branch === user.branch_id;
     }
     return true;

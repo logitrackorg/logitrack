@@ -13,6 +13,7 @@ import (
 var (
 	ErrBranchNotFound           = errors.New("sucursal no encontrada")
 	ErrBranchDuplicateName      = errors.New("ya existe una sucursal con ese nombre")
+	ErrBranchDuplicateID        = errors.New("ya existe una sucursal con ese ID")
 	ErrBranchNotActive          = errors.New("la sucursal no está activa")
 	ErrBranchHasActiveShipments = errors.New("la sucursal tiene envíos activos")
 )
@@ -63,7 +64,7 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		return model.Branch{}, fmt.Errorf("el código postal es obligatorio")
 	}
 
-	id := strings.TrimSpace(req.ID)
+	id := strings.ToLower(strings.TrimSpace(req.ID))
 	if id == "" {
 		id = uuid.New().String()
 	}
@@ -88,6 +89,9 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 	}
 
 	if err := s.repo.Create(branch); err != nil {
+		if err == repository.ErrDuplicateBranchID {
+			return model.Branch{}, fmt.Errorf("ya existe una sucursal con el ID '%s': %w", branch.ID, ErrBranchDuplicateID)
+		}
 		if err == repository.ErrDuplicateBranchName {
 			return model.Branch{}, fmt.Errorf("ya existe una sucursal con el nombre '%s': %w", req.Name, ErrBranchDuplicateName)
 		}

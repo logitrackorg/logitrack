@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/projection"
@@ -394,6 +395,19 @@ func (r *inMemoryRouteRepository) RemoveShipmentFromDate(trackingID string, date
 		r.routes[i].ShipmentIDs = filtered
 	}
 	return nil
+}
+
+func (r *inMemoryRouteRepository) UpdateStatus(id string, status model.RouteStatus, startedAt *time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, route := range r.routes {
+		if route.ID == id {
+			r.routes[i].Status = status
+			r.routes[i].StartedAt = startedAt
+			return nil
+		}
+	}
+	return fmt.Errorf("route not found")
 }
 
 // ── InMemory CustomerRepository ───────────────────────────────────────────────
