@@ -1,0 +1,134 @@
+logitrack_core/internal/repository/inmemory.go
+  d7786be5fa281229 9,400-412
+logitrack_web/src/pages/DriverRoute.tsx
+  d7786be5fa281229 7-18,29,42-55,99,108-111,129-161,164-170,174-194,251,278,319
+  0c1195e2e0354500 128
+logitrack_web/src/pages/ShipmentList.tsx
+  01caad2866ae7aaf 407
+logitrack_web/src/pages/ShipmentDetail.tsx
+  28e6777b5ba08b8b 353-354,786,795,799,822,825,830
+  d7786be5fa281229 510-511
+  e160cd6344d6c3e5 1586,1591-1594
+logitrack_core/internal/db/migrate.go
+  d7786be5fa281229 99-101,103-104
+logitrack_core/internal/model/route.go
+  d7786be5fa281229 43-50,52-59
+logitrack_core/internal/repository/route.go
+  d7786be5fa281229 3-7,15
+logitrack_core/internal/handler/vehicle.go
+  3006f54a3f2a9643 6,17-18,86-90
+logitrack_core/internal/repository/branch.go
+  0c1195e2e0354500 10
+logitrack_core/internal/repository/postgres_branch.go
+  0c1195e2e0354500 119-127,135
+logitrack_core/cmd/server/main.go
+  d7786be5fa281229 211
+logitrack_web/src/pages/AdminUsers.tsx
+  3006f54a3f2a9643 421-436
+logitrack_core/internal/seed/seed.go
+  d7786be5fa281229 483
+logitrack_core/internal/service/branch.go
+  0c1195e2e0354500 16,92-94
+  3006f54a3f2a9643 67
+logitrack_core/internal/handler/admin.go
+  3006f54a3f2a9643 6-7,60-76,90,110-113,118,183,188
+logitrack_core/internal/repository/postgres_route.go
+  d7786be5fa281229 25-27,29-30,32,43-59,73,83,90,101-102,125-130,132,139-157,159-163
+logitrack_core/internal/handler/branch.go
+  3006f54a3f2a9643 6-8,16-54,105-114,142-149
+  0c1195e2e0354500 117
+logitrack_web/src/api/driver.ts
+  d7786be5fa281229 33-34,44
+logitrack_core/internal/handler/shipment.go
+  d7786be5fa281229 325-332,344-347,375-381
+logitrack_core/internal/handler/driver.go
+  d7786be5fa281229 30-39
+logitrack_core/internal/service/route.go
+  28e6777b5ba08b8b 91-99
+  d7786be5fa281229 65,81,86-90,100-102,121-123,133-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "ff59790d5482b4076fdf97264cf684a7ff255f40",
+  "prompts": {
+    "01caad2866ae7aaf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5872af73-cbe0-47a3-9cf9-b7b31ca4544e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 63,
+      "total_deletions": 42,
+      "accepted_lines": 63,
+      "overriden_lines": 0
+    },
+    "0c1195e2e0354500": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a63e5d45-d338-4dd2-aa73-52d2ee84c75a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 687,
+      "total_deletions": 10,
+      "accepted_lines": 18,
+      "overriden_lines": 0
+    },
+    "28e6777b5ba08b8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "247eca8c-b5a5-419d-a1f8-f2ac40925efc",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 17,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "3006f54a3f2a9643": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a6b5f572-43b7-449a-809e-1f2cf9363fbf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 1369,
+      "total_deletions": 9,
+      "accepted_lines": 114,
+      "overriden_lines": 0
+    },
+    "d7786be5fa281229": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82502adf-0f88-4031-b1d8-494e02bcd0a8",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 3058,
+      "total_deletions": 86,
+      "accepted_lines": 301,
+      "overriden_lines": 0
+    },
+    "e160cd6344d6c3e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a18f879b-5d19-42f5-8962-f003304e2dc1",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 10,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
