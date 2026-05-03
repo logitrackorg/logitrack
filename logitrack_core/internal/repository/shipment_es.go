@@ -194,19 +194,19 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 		return model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
-			ToStatus:   model.StatusInProgress,
+			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
 			Notes:      de.Payload.(model.ShipmentCreatedPayload).Notes,
 			Timestamp:  de.Timestamp,
 		}, true
 
 	case model.EventDraftConfirmed:
-		from := model.StatusPending
+		from := model.StatusDraft
 		return model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
-			ToStatus:   model.StatusInProgress,
+			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
 			Notes:      "Envío confirmado",
 			Timestamp:  de.Timestamp,

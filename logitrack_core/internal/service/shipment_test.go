@@ -85,30 +85,30 @@ func mustStatus(t *testing.T, ts testSetup, id string, req model.UpdateStatusReq
 	return ship
 }
 
-// advance in_progress → pre_transit → in_transit (to Córdoba / br-cordoba)
+// advance at_origin_hub → loaded → in_transit (to Córdoba / br-cordoba)
 func toInTransit(t *testing.T, ts testSetup, id string) model.Shipment {
 	t.Helper()
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
-		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+		Status: model.StatusLoaded, ChangedBy: "supervisor",
 	})
 	return mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusInTransit, Location: "Córdoba", ChangedBy: "supervisor",
 	})
 }
 
-// advance in_transit → at_branch (location auto-derived)
-func toAtBranch(t *testing.T, ts testSetup, id string) model.Shipment {
+// advance in_transit → at_hub (location auto-derived from prior in_transit event)
+func toAtHub(t *testing.T, ts testSetup, id string) model.Shipment {
 	t.Helper()
 	return mustStatus(t, ts, id, model.UpdateStatusRequest{
-		Status: model.StatusAtBranch, ChangedBy: "supervisor",
+		Status: model.StatusAtHub, ChangedBy: "supervisor",
 	})
 }
 
-// advance at_branch → delivering
-func toDelivering(t *testing.T, ts testSetup, id string) model.Shipment {
+// advance at_hub → out_for_delivery
+func toOutForDelivery(t *testing.T, ts testSetup, id string) model.Shipment {
 	t.Helper()
 	return mustStatus(t, ts, id, model.UpdateStatusRequest{
-		Status: model.StatusDelivering, DriverID: "driver-01", ChangedBy: "supervisor",
+		Status: model.StatusOutForDelivery, DriverID: "driver-01", ChangedBy: "supervisor",
 	})
 }
 
@@ -120,47 +120,83 @@ func TestIsValidTransition(t *testing.T) {
 		to   model.Status
 		want bool
 	}{
-		// valid transitions
-		{model.StatusInProgress, model.StatusPreTransit, true},
-		{model.StatusPreTransit, model.StatusInTransit, true},
-		{model.StatusPreTransit, model.StatusInProgress, true},
-		{model.StatusPreTransit, model.StatusAtBranch, true},
-		{model.StatusInTransit, model.StatusAtBranch, true},
-		{model.StatusAtBranch, model.StatusPreTransit, true},
-		{model.StatusAtBranch, model.StatusDelivering, true},
-		{model.StatusAtBranch, model.StatusReadyForPickup, true},
-		{model.StatusAtBranch, model.StatusReadyForReturn, true},
-		{model.StatusDelivering, model.StatusDelivered, true},
-		{model.StatusDelivering, model.StatusDeliveryFailed, true},
-		{model.StatusDeliveryFailed, model.StatusDelivering, true},
-		{model.StatusDeliveryFailed, model.StatusAtBranch, true},
+		// valid transitions — at_origin_hub
+		{model.StatusAtOriginHub, model.StatusLoaded, true},
+		{model.StatusAtOriginHub, model.StatusReadyForReturn, true},
+		{model.StatusAtOriginHub, model.StatusLost, true},
+		{model.StatusAtOriginHub, model.StatusDestroyed, true},
+
+		// valid transitions — loaded
+		{model.StatusLoaded, model.StatusInTransit, true},
+		{model.StatusLoaded, model.StatusAtOriginHub, true},
+		{model.StatusLoaded, model.StatusAtHub, true},
+
+		// valid transitions — in_transit
+		{model.StatusInTransit, model.StatusAtHub, true},
+		{model.StatusInTransit, model.StatusAtOriginHub, true},
+		{model.StatusInTransit, model.StatusLost, true},
+		{model.StatusInTransit, model.StatusDestroyed, true},
+
+		// valid transitions — at_hub
+		{model.StatusAtHub, model.StatusLoaded, true},
+		{model.StatusAtHub, model.StatusOutForDelivery, true},
+		{model.StatusAtHub, model.StatusReadyForPickup, true},
+		{model.StatusAtHub, model.StatusLost, true},
+		{model.StatusAtHub, model.StatusDestroyed, true},
+		{model.StatusAtHub, model.StatusReadyForReturn, false},
+
+		// valid transitions — out_for_delivery
+		{model.StatusOutForDelivery, model.StatusDelivered, true},
+		{model.StatusOutForDelivery, model.StatusDeliveryFailed, true},
+		{model.StatusOutForDelivery, model.StatusLost, true},
+		{model.StatusOutForDelivery, model.StatusDestroyed, true},
+
+		// valid transitions — delivery_failed
+		{model.StatusDeliveryFailed, model.StatusRedeliveryScheduled, true},
+		{model.StatusDeliveryFailed, model.StatusReadyForPickup, true},
+		{model.StatusDeliveryFailed, model.StatusRechazado, true},
+
+		// valid transitions — redelivery_scheduled
+		{model.StatusRedeliveryScheduled, model.StatusOutForDelivery, true},
+
+		// valid transitions — ready_for_pickup
 		{model.StatusReadyForPickup, model.StatusDelivered, true},
-		{model.StatusReadyForPickup, model.StatusPreTransit, true},
+		{model.StatusReadyForPickup, model.StatusNoEntregado, true},
+
+		// valid transitions — no_entregado / rechazado
+		{model.StatusNoEntregado, model.StatusAtHub, true},
+		{model.StatusNoEntregado, model.StatusAtOriginHub, false},
+		{model.StatusRechazado, model.StatusAtHub, true},
+		{model.StatusRechazado, model.StatusAtOriginHub, false},
+
+		// valid transitions — ready_for_return
 		{model.StatusReadyForReturn, model.StatusReturned, true},
 
-		// invalid: pending can only be confirmed, not updated via UpdateStatus
-		{model.StatusPending, model.StatusInProgress, false},
-		{model.StatusPending, model.StatusInTransit, false},
+		// invalid: draft can only be confirmed, not updated via UpdateStatus
+		{model.StatusDraft, model.StatusAtOriginHub, false},
+		{model.StatusDraft, model.StatusInTransit, false},
 
-		// invalid: cannot skip steps (pre_transit is now required before in_transit)
-		{model.StatusInProgress, model.StatusInTransit, false},
-		{model.StatusInProgress, model.StatusDelivered, false},
-		{model.StatusInProgress, model.StatusAtBranch, false},
-		{model.StatusAtBranch, model.StatusInTransit, false},
+		// invalid: cannot skip steps
+		{model.StatusAtOriginHub, model.StatusInTransit, false},
+		{model.StatusAtOriginHub, model.StatusDelivered, false},
+		{model.StatusAtOriginHub, model.StatusAtHub, false},
+		{model.StatusAtHub, model.StatusInTransit, false},
 		{model.StatusReadyForPickup, model.StatusInTransit, false},
 		{model.StatusInTransit, model.StatusDelivered, false},
-		{model.StatusInTransit, model.StatusDelivering, false},
-		{model.StatusAtBranch, model.StatusDelivered, false},
-		{model.StatusAtBranch, model.StatusReturned, false},
-		{model.StatusDelivering, model.StatusAtBranch, false},
-		{model.StatusDelivering, model.StatusInTransit, false},
+		{model.StatusInTransit, model.StatusOutForDelivery, false},
+		{model.StatusAtHub, model.StatusDelivered, false},
+		{model.StatusAtHub, model.StatusReturned, false},
+		{model.StatusOutForDelivery, model.StatusAtHub, false},
+		{model.StatusOutForDelivery, model.StatusInTransit, false},
 
 		// invalid: terminal states have no outgoing transitions
-		{model.StatusDelivered, model.StatusInProgress, false},
+		{model.StatusDelivered, model.StatusAtOriginHub, false},
 		{model.StatusDelivered, model.StatusInTransit, false},
-		{model.StatusReturned, model.StatusInProgress, false},
-		{model.StatusCancelled, model.StatusInProgress, false},
+		{model.StatusReturned, model.StatusAtOriginHub, false},
+		{model.StatusCancelled, model.StatusAtOriginHub, false},
 		{model.StatusCancelled, model.StatusInTransit, false},
+		{model.StatusLost, model.StatusAtOriginHub, false},
+		{model.StatusDestroyed, model.StatusAtOriginHub, false},
 	}
 	for _, tc := range tests {
 		got := isValidTransition(tc.from, tc.to)
@@ -252,8 +288,8 @@ func TestCreate_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ship.Status != model.StatusInProgress {
-		t.Errorf("status = %s, want in_progress", ship.Status)
+	if ship.Status != model.StatusAtOriginHub {
+		t.Errorf("status = %s, want at_origin_hub", ship.Status)
 	}
 	if !strings.HasPrefix(ship.TrackingID, "LT-") {
 		t.Errorf("tracking_id = %q, want LT- prefix", ship.TrackingID)
@@ -280,8 +316,8 @@ func TestSaveDraft_PartialDataIsAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ship.Status != model.StatusPending {
-		t.Errorf("status = %s, want pending", ship.Status)
+	if ship.Status != model.StatusDraft {
+		t.Errorf("status = %s, want draft", ship.Status)
 	}
 	if !strings.HasPrefix(ship.TrackingID, "DRAFT-") {
 		t.Errorf("tracking_id = %q, want DRAFT- prefix", ship.TrackingID)
@@ -314,7 +350,7 @@ func TestSaveDraft_ValidatesEmailWhenProvided(t *testing.T) {
 
 func TestUpdateDraft_RejectsNonDraft(t *testing.T) {
 	ts := newSetup()
-	ship := mustCreate(t, ts) // status: in_progress, not pending
+	ship := mustCreate(t, ts) // status: at_origin_hub, not draft
 	_, err := ts.svc.UpdateDraft(ship.TrackingID, model.SaveDraftRequest{})
 	if err == nil || !strings.Contains(err.Error(), "solo se pueden actualizar envíos en borrador") {
 		t.Errorf("expected non-draft error, got: %v", err)
@@ -334,7 +370,7 @@ func TestUpdateDraft_ValidatesDNIWhenProvided(t *testing.T) {
 
 // ─── ConfirmDraft ─────────────────────────────────────────────────────────────
 
-func TestConfirmDraft_RejectsNonDraft(t *testing.T) {
+func TestConfirmDraft_RejectsNonConfirmable(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	_, err := ts.svc.ConfirmDraft(ship.TrackingID, "operator")
@@ -389,8 +425,8 @@ func TestConfirmDraft_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if confirmed.Status != model.StatusInProgress {
-		t.Errorf("status = %s, want in_progress", confirmed.Status)
+	if confirmed.Status != model.StatusAtOriginHub {
+		t.Errorf("status = %s, want at_origin_hub", confirmed.Status)
 	}
 	if !strings.HasPrefix(confirmed.TrackingID, "LT-") {
 		t.Errorf("tracking_id = %q, want LT- prefix", confirmed.TrackingID)
@@ -406,8 +442,8 @@ func TestUpdateStatus_DeliveryFailed_RequiresNotes(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
-	toDelivering(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDeliveryFailed, ChangedBy: "driver",
@@ -418,28 +454,28 @@ func TestUpdateStatus_DeliveryFailed_RequiresNotes(t *testing.T) {
 	}
 }
 
-func TestUpdateStatus_Delivering_RequiresDriverID(t *testing.T) {
+func TestUpdateStatus_OutForDelivery_RequiresDriverID(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
 
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusDelivering, ChangedBy: "supervisor",
+		Status: model.StatusOutForDelivery, ChangedBy: "supervisor",
 		// DriverID intentionally empty
 	})
-	if err == nil || !strings.Contains(err.Error(), "el driver_id es obligatorio al pasar a estado de entrega") {
+	if err == nil || !strings.Contains(err.Error(), "el driver_id es obligatorio al pasar a estado de reparto") {
 		t.Errorf("expected driver_id-required error, got: %v", err)
 	}
 }
 
 func TestUpdateStatus_InvalidTransition(t *testing.T) {
 	ts := newSetup()
-	ship := mustCreate(t, ts) // in_progress
+	ship := mustCreate(t, ts) // at_origin_hub
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "supervisor",
 	})
-	if err == nil || !strings.Contains(err.Error(), "invalid transition") {
+	if err == nil || !strings.Contains(err.Error(), "transición inválida") {
 		t.Errorf("expected invalid transition error, got: %v", err)
 	}
 }
@@ -448,7 +484,7 @@ func TestUpdateStatus_InTransit_SameDestinationRejected(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts) // CurrentLocation = br-caba
 	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+		Status: model.StatusLoaded, ChangedBy: "supervisor",
 	})
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status:    model.StatusInTransit,
@@ -464,7 +500,7 @@ func TestUpdateStatus_InTransit_DifferentDestinationAllowed(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+		Status: model.StatusLoaded, ChangedBy: "supervisor",
 	})
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status:    model.StatusInTransit,
@@ -482,8 +518,8 @@ func TestUpdateStatus_Delivered_RequiresRecipientDNI(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
-	toDelivering(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver",
@@ -497,8 +533,8 @@ func TestUpdateStatus_Delivered_WrongDNIRejected(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
-	toDelivering(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver", RecipientDNI: "00000000",
@@ -512,8 +548,8 @@ func TestUpdateStatus_Delivered_CorrectDNISucceeds(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
-	toDelivering(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 
 	result, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver",
@@ -534,7 +570,7 @@ func TestUpdateStatus_Delivered_UsesCorrectedRecipientDNI(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
 
 	// Apply a correction to recipient DNI before delivering
 	correctedDNI := "11111111"
@@ -545,7 +581,7 @@ func TestUpdateStatus_Delivered_UsesCorrectedRecipientDNI(t *testing.T) {
 		t.Fatalf("correction failed: %v", err)
 	}
 
-	toDelivering(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
 
 	// Original DNI should be rejected
 	_, err = ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
@@ -616,15 +652,15 @@ func TestUpdateStatus_Returned_CorrectSenderDNISucceeds(t *testing.T) {
 
 func TestUpdateStatus_ReadyForReturn_NotAtOriginRejected(t *testing.T) {
 	ts := newSetup()
-	ship := mustCreate(t, ts) // ReceivingBranchID = br-caba
+	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID) // now at br-cordoba, not br-caba
+	toAtHub(t, ts, ship.TrackingID) // at br-cordoba — at_hub → ready_for_return is invalid
 
 	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusReadyForReturn, ChangedBy: "supervisor",
 	})
-	if err == nil || !strings.Contains(err.Error(), "no está en su sucursal de origen") {
-		t.Errorf("expected origin-branch error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "transición inválida") {
+		t.Errorf("expected invalid transition error, got: %v", err)
 	}
 }
 
@@ -644,37 +680,39 @@ func TestUpdateStatus_ReadyForReturn_AtOriginSucceeds(t *testing.T) {
 
 // ─── UpdateStatus – auto-derive location ─────────────────────────────────────
 
-func TestUpdateStatus_AtBranch_AutoDerivesLocationFromInTransitEvent(t *testing.T) {
+func TestUpdateStatus_AtHub_AutoDerivesLocationFromInTransitEvent(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts) // CurrentLocation = br-caba
 
 	toInTransit(t, ts, ship.TrackingID) // goes to br-cordoba
 
-	result := toAtBranch(t, ts, ship.TrackingID)
+	result := toAtHub(t, ts, ship.TrackingID)
 	// CurrentLocation must now be the destination set in the in_transit event (br-cordoba)
 	if result.CurrentLocation != "br-cordoba" {
 		t.Errorf("CurrentLocation = %q, want %q", result.CurrentLocation, "br-cordoba")
 	}
 }
 
-func TestUpdateStatus_AtBranch_FromDeliveryFailed_AutoDerivesFromLastAtBranch(t *testing.T) {
+func TestUpdateStatus_AtHub_FromDeliveryFailed_AutoDerivesFromLastAtHub(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
-	toAtBranch(t, ts, ship.TrackingID) // at br-cordoba
-	toDelivering(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID) // at br-cordoba
+	toOutForDelivery(t, ts, ship.TrackingID)
 
-	// delivery_failed
 	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDeliveryFailed, ChangedBy: "driver", Notes: "nobody home",
 	})
 
-	// delivery_failed → at_branch: auto-derives from last at_branch event
+	// rechazado auto-transitions to at_hub — verify the auto-derived location
 	result := mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusAtBranch, ChangedBy: "supervisor",
+		Status: model.StatusRechazado, ChangedBy: "supervisor",
 	})
+	if result.Status != model.StatusAtHub {
+		t.Errorf("Status = %q, want at_hub after rechazado auto-transition", result.Status)
+	}
 	if result.CurrentLocation != "br-cordoba" {
-		t.Errorf("CurrentLocation = %q, want %q after delivery_failed → at_branch", result.CurrentLocation, "br-cordoba")
+		t.Errorf("CurrentLocation = %q, want %q after rechazado auto-transition", result.CurrentLocation, "br-cordoba")
 	}
 }
 
@@ -695,7 +733,7 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 		setup func(ts testSetup) string
 	}{
 		{
-			name: "pending",
+			name: "draft",
 			setup: func(ts testSetup) string {
 				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
 				return d.TrackingID
@@ -706,8 +744,8 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 					Status: model.StatusDelivered, ChangedBy: "driver",
 					RecipientDNI: defaultRecipient().DNI,
@@ -736,6 +774,39 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 			},
 		},
 		{
+			name: "loaded",
+			setup: func(ts testSetup) string {
+				ship := mustCreate(t, ts)
+				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+					Status: model.StatusLoaded, ChangedBy: "supervisor",
+				})
+				return ship.TrackingID
+			},
+		},
+		{
+			name: "out_for_delivery",
+			setup: func(ts testSetup) string {
+				ship := mustCreate(t, ts)
+				toInTransit(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
+				return ship.TrackingID
+			},
+		},
+		{
+			name: "delivery_failed",
+			setup: func(ts testSetup) string {
+				ship := mustCreate(t, ts)
+				toInTransit(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
+				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+					Status: model.StatusDeliveryFailed, ChangedBy: "driver", Notes: "nobody home",
+				})
+				return ship.TrackingID
+			},
+		},
+		{
 			name: "already cancelled",
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
@@ -750,7 +821,7 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 			ts := newSetup()
 			id := tc.setup(ts)
 			_, err := ts.svc.CancelShipment(id, "supervisor", "some reason")
-			if err == nil || !strings.Contains(err.Error(), "cannot cancel") {
+			if err == nil || !strings.Contains(err.Error(), "no se puede cancelar") {
 				t.Errorf("expected cannot-cancel error for %s, got: %v", tc.name, err)
 			}
 		})
@@ -763,40 +834,17 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 		setup func(ts testSetup) string
 	}{
 		{
-			name: "in_progress",
+			name: "at_origin_hub",
 			setup: func(ts testSetup) string {
 				return mustCreate(t, ts).TrackingID
 			},
 		},
 		{
-			name: "at_branch",
+			name: "at_hub",
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				return ship.TrackingID
-			},
-		},
-		{
-			name: "delivering",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
-				return ship.TrackingID
-			},
-		},
-		{
-			name: "delivery_failed",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
-				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-					Status: model.StatusDeliveryFailed, ChangedBy: "driver", Notes: "nobody home",
-				})
+				toAtHub(t, ts, ship.TrackingID)
 				return ship.TrackingID
 			},
 		},
@@ -805,7 +853,7 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 					Status: model.StatusReadyForPickup, ChangedBy: "supervisor",
 				})
@@ -911,7 +959,7 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "pending draft",
+			name: "draft",
 			setup: func(ts testSetup) string {
 				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
 				return d.TrackingID
@@ -923,8 +971,8 @@ func TestCorrectShipment_BlockedStates(t *testing.T) {
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 					Status: model.StatusDelivered, ChangedBy: "driver",
 					RecipientDNI: defaultRecipient().DNI,
@@ -1047,20 +1095,20 @@ func TestCorrectShipment_CorrectionsAccumulate(t *testing.T) {
 // out and back to the origin branch (br-caba), which is the ReceivingBranchID.
 func advanceToReadyForReturn(t *testing.T, ts testSetup, id string) {
 	t.Helper()
-	// in_progress → in_transit (to Córdoba)
+	// at_origin_hub → loaded → in_transit (to Córdoba)
 	toInTransit(t, ts, id)
-	// in_transit → at_branch (at br-cordoba)
-	toAtBranch(t, ts, id)
-	// at_branch → pre_transit → in_transit (back to Buenos Aires / br-caba)
+	// in_transit → at_hub (at br-cordoba)
+	toAtHub(t, ts, id)
+	// at_hub → loaded → in_transit (back to Buenos Aires / br-caba)
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
-		Status: model.StatusPreTransit, ChangedBy: "supervisor",
+		Status: model.StatusLoaded, ChangedBy: "supervisor",
 	})
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusInTransit, Location: "Buenos Aires", ChangedBy: "supervisor",
 	})
-	// in_transit → at_branch (auto-derives to br-caba)
-	toAtBranch(t, ts, id)
-	// at_branch → ready_for_return (now at origin br-caba)
+	// in_transit → at_hub (auto-derives to br-caba) → auto-promotes to at_origin_hub since at origin
+	toAtHub(t, ts, id)
+	// at_origin_hub → ready_for_return (manual, since IsReturning=false here)
 	mustStatus(t, ts, id, model.UpdateStatusRequest{
 		Status: model.StatusReadyForReturn, ChangedBy: "supervisor",
 	})
@@ -1076,7 +1124,7 @@ func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipm
 		Recipient:           defaultRecipient(),
 		WeightKg:            1.0,
 		PackageType:         model.PackageBox,
-		Status:              model.StatusInProgress,
+		Status:              model.StatusAtOriginHub,
 		CurrentLocation:     "br-caba",
 		CreatedAt:           createdAt,
 		UpdatedAt:           createdAt,
@@ -1250,8 +1298,8 @@ func TestGetByTrackingID_ReturnsCompleteShipment(t *testing.T) {
 	if result.Recipient.DNI != ship.Recipient.DNI {
 		t.Errorf("recipient DNI = %q, want %q", result.Recipient.DNI, ship.Recipient.DNI)
 	}
-	if result.Status != model.StatusInProgress {
-		t.Errorf("status = %q, want in_progress", result.Status)
+	if result.Status != model.StatusAtOriginHub {
+		t.Errorf("status = %q, want at_origin_hub", result.Status)
 	}
 }
 
@@ -1266,7 +1314,7 @@ func TestGetByTrackingID_NotFound(t *testing.T) {
 
 func TestGetByTrackingID_ReflectsCurrentStatus(t *testing.T) {
 	ts := newSetup()
-	ship := mustCreate(t, ts) // in_progress
+	ship := mustCreate(t, ts) // at_origin_hub
 
 	toInTransit(t, ts, ship.TrackingID)
 
@@ -1287,8 +1335,8 @@ func TestGetByTrackingID_Draft(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Status != model.StatusPending {
-		t.Errorf("status = %q, want pending", result.Status)
+	if result.Status != model.StatusDraft {
+		t.Errorf("status = %q, want draft", result.Status)
 	}
 	if !strings.HasPrefix(result.TrackingID, "DRAFT-") {
 		t.Errorf("tracking_id = %q, want DRAFT- prefix", result.TrackingID)
@@ -1392,25 +1440,25 @@ func TestList_FilterByDateRange(t *testing.T) {
 func TestList_IncludesShipmentsOfEveryStatus(t *testing.T) {
 	ts := newSetup()
 
-	mustCreate(t, ts) // in_progress
+	mustCreate(t, ts) // at_origin_hub
 
 	s2 := mustCreate(t, ts)
 	toInTransit(t, ts, s2.TrackingID) // in_transit
 
 	s3 := mustCreate(t, ts)
 	toInTransit(t, ts, s3.TrackingID)
-	toAtBranch(t, ts, s3.TrackingID) // at_branch
+	toAtHub(t, ts, s3.TrackingID) // at_hub
 
 	s4 := mustCreate(t, ts)
 	toInTransit(t, ts, s4.TrackingID)
-	toAtBranch(t, ts, s4.TrackingID)
-	toDelivering(t, ts, s4.TrackingID)
+	toAtHub(t, ts, s4.TrackingID)
+	toOutForDelivery(t, ts, s4.TrackingID)
 	mustStatus(t, ts, s4.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusDelivered, ChangedBy: "driver",
 		RecipientDNI: defaultRecipient().DNI,
 	}) // delivered
 
-	ts.svc.SaveDraft(model.SaveDraftRequest{}) // pending
+	ts.svc.SaveDraft(model.SaveDraftRequest{}) // draft
 
 	all, err := ts.svc.List(model.ShipmentFilter{})
 	if err != nil {
@@ -1421,8 +1469,8 @@ func TestList_IncludesShipmentsOfEveryStatus(t *testing.T) {
 		statusSet[s.Status] = true
 	}
 	for _, want := range []model.Status{
-		model.StatusInProgress, model.StatusInTransit,
-		model.StatusAtBranch, model.StatusDelivered, model.StatusPending,
+		model.StatusAtOriginHub, model.StatusInTransit,
+		model.StatusAtHub, model.StatusDelivered, model.StatusDraft,
 	} {
 		if !statusSet[want] {
 			t.Errorf("List is missing status %q — at least one shipment should have it", want)

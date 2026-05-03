@@ -418,6 +418,22 @@ export function AdminUsers() {
                 Contraseña *
                 <input type="password" value={createForm.password} onChange={e => setCreateForm(s => ({ ...s, password: e.target.value }))} placeholder="••••••••" style={inputStyle} />
               </label>
+              {createForm.password.length > 0 && (() => {
+                const ok6 = createForm.password.length >= 6;
+                const okNum = /\d/.test(createForm.password);
+                const item = (met: boolean, text: string) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "#16a34a" : "#dc2626" }}>
+                    <span style={{ fontWeight: 700 }}>{met ? "✓" : "✗"}</span>
+                    {text}
+                  </div>
+                );
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb" }}>
+                    {item(ok6, "Al menos 6 caracteres")}
+                    {item(okNum, "Al menos un número")}
+                  </div>
+                );
+              })()}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={labelStyle}>
                   Rol *

@@ -30,6 +30,8 @@ export interface DriverRoute {
   shipment_ids: string[];
   created_by: string;
   created_at: string;
+  status: "pendiente" | "en_curso" | "finalizada";
+  started_at?: string;
 }
 
 export interface DriverRouteResponse {
@@ -39,4 +41,5 @@ export interface DriverRouteResponse {
 
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
+  startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
 };

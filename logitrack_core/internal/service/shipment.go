@@ -11,6 +11,11 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
+// SystemConfigProvider is a minimal interface for reading system config in the shipment service.
+type SystemConfigProvider interface {
+	Get() model.SystemConfig
+}
+
 var (
 	reDNI   = regexp.MustCompile(`^\d+$`)
 	reEmail = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -39,6 +44,7 @@ type ShipmentService struct {
 	customerRepo repository.CustomerRepository
 	commentSvc   *CommentService
 	mlClient     *MLService
+	sysConfig    SystemConfigProvider
 }
 
 func NewShipmentService(
@@ -49,6 +55,17 @@ func NewShipmentService(
 	mlClient *MLService,
 ) *ShipmentService {
 	return &ShipmentService{repo: repo, branchRepo: branchRepo, customerRepo: customerRepo, commentSvc: commentSvc, mlClient: mlClient}
+}
+
+func (s *ShipmentService) SetSystemConfig(cfg SystemConfigProvider) {
+	s.sysConfig = cfg
+}
+
+func (s *ShipmentService) maxDeliveryAttempts() int {
+	if s.sysConfig != nil {
+		return s.sysConfig.Get().MaxDeliveryAttempts
+	}
+	return 3
 }
 
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
@@ -131,7 +148,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		OriginBranchID:      req.ReceivingBranchID,
-		Status:              model.StatusInProgress,
+		Status:              model.StatusAtOriginHub,
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -199,7 +216,8 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		Status:              model.StatusPending,
+		OriginBranchID:      req.ReceivingBranchID,
+		Status:              model.StatusDraft,
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -233,7 +251,7 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	if existing.Status != model.StatusPending {
+	if existing.Status != model.StatusDraft {
 		return model.Shipment{}, fmt.Errorf("solo se pueden actualizar envíos en borrador")
 	}
 	existing.Sender = req.Sender
@@ -263,7 +281,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	if draft.Status != model.StatusPending {
+	if draft.Status != model.StatusDraft {
 		return model.Shipment{}, fmt.Errorf("solo se pueden confirmar envíos en borrador")
 	}
 	// Validate required fields
@@ -347,47 +365,75 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if req.Status == model.StatusDeliveryFailed && strings.TrimSpace(req.Notes) == "" {
 		return model.Shipment{}, fmt.Errorf("las notas son obligatorias para fallo de entrega")
 	}
-	if req.Status == model.StatusDelivering && strings.TrimSpace(req.DriverID) == "" {
-		return model.Shipment{}, fmt.Errorf("el driver_id es obligatorio al pasar a estado de entrega")
+	if req.Status == model.StatusOutForDelivery && strings.TrimSpace(req.DriverID) == "" {
+		return model.Shipment{}, fmt.Errorf("el driver_id es obligatorio al pasar a estado de reparto")
 	}
 	current, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {
 		return model.Shipment{}, err
 	}
+
+	// Returning shipments cannot do last-mile delivery — they complete via ready_for_return → returned.
+	if current.IsReturning && (req.Status == model.StatusOutForDelivery || req.Status == model.StatusReadyForPickup) {
+		return model.Shipment{}, fmt.Errorf("los envíos de retorno no pueden asignarse a ruta de última milla ni a retiro en mostrador")
+	}
+
+	// Block redelivery when max attempts reached
+	if req.Status == model.StatusRedeliveryScheduled {
+		if current.DeliveryAttempts >= s.maxDeliveryAttempts() {
+			return model.Shipment{}, fmt.Errorf("se alcanzó el máximo de %d intentos de entrega — el envío debe ir a retiro en mostrador", s.maxDeliveryAttempts())
+		}
+	}
+
 	if !isValidTransition(current.Status, req.Status) {
-		return model.Shipment{}, fmt.Errorf("invalid transition: %s → %s", current.Status, req.Status)
+		return model.Shipment{}, fmt.Errorf("transición inválida: %s → %s", current.Status, req.Status)
 	}
-	// Validate returned: sender DNI must match (corrections take precedence)
+
+	// Validate returned: DNI check — asymmetric for counter-shipments
 	if req.Status == model.StatusReturned {
-		if strings.TrimSpace(req.SenderDNI) == "" {
-			return model.Shipment{}, fmt.Errorf("el DNI del remitente es obligatorio para la devolución")
-		}
-		expectedSenderDNI := current.Sender.DNI
-		if current.Corrections != nil && current.Corrections.SenderDNI != nil {
-			expectedSenderDNI = *current.Corrections.SenderDNI
-		}
-		if expectedSenderDNI != req.SenderDNI {
-			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del remitente")
+		if current.ParentShipmentID != nil {
+			// Counter-shipment: the person picking up is the original sender, stored as recipient
+			if strings.TrimSpace(req.RecipientDNI) == "" {
+				return model.Shipment{}, fmt.Errorf("el DNI del remitente original es obligatorio para la devolución")
+			}
+			expectedDNI := current.Recipient.DNI
+			if current.Corrections != nil && current.Corrections.RecipientDNI != nil {
+				expectedDNI = *current.Corrections.RecipientDNI
+			}
+			if expectedDNI != req.RecipientDNI {
+				return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del remitente original")
+			}
+		} else {
+			if strings.TrimSpace(req.SenderDNI) == "" {
+				return model.Shipment{}, fmt.Errorf("el DNI del remitente es obligatorio para la devolución")
+			}
+			expectedSenderDNI := current.Sender.DNI
+			if current.Corrections != nil && current.Corrections.SenderDNI != nil {
+				expectedSenderDNI = *current.Corrections.SenderDNI
+			}
+			if expectedSenderDNI != req.SenderDNI {
+				return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del remitente")
+			}
 		}
 	}
-	// Validate ready_for_return: only allowed when shipment is back at its origin branch.
-	// OriginBranchID is set at creation and never changes; ReceivingBranchID is updated
-	// on every at_branch transition so it cannot be used as the origin reference.
+
+	// Validate ready_for_return: only allowed when shipment is at its origin branch.
 	if req.Status == model.StatusReadyForReturn {
 		originID := current.OriginBranchID
 		if originID == "" {
-			originID = current.ReceivingBranchID // fallback for pre-existing data without OriginBranchID
+			originID = current.ReceivingBranchID
 		}
 		if current.CurrentLocation != originID {
 			if b, ok := s.branchRepo.GetByID(originID); ok {
 				return model.Shipment{}, fmt.Errorf(
-					"el envío no está en su sucursal de origen (%s) — la devolución por remitente no aplica en esta sucursal", b.Address.City,
+					"el envío no está en su sucursal de origen (%s)", b.Address.City,
 				)
 			}
 			return model.Shipment{}, fmt.Errorf("el envío no está en su sucursal de origen")
 		}
 	}
-	// Validate DNI before touching the repository (corrections take precedence)
+
+	// Validate DNI for delivered
 	if req.Status == model.StatusDelivered {
 		if strings.TrimSpace(req.RecipientDNI) == "" {
 			return model.Shipment{}, fmt.Errorf("el DNI del destinatario es obligatorio para la entrega")
@@ -401,7 +447,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
-	// Validate any → in_transit: destination must differ from current branch
+	// Validate in_transit: destination must differ from current branch
 	if req.Status == model.StatusInTransit {
 		destID := s.locationToBranchID(req.Location)
 		if destID == current.CurrentLocation {
@@ -411,7 +457,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 
 	// Auto-derive location from prior events when needed
 	location := req.Location
-	if req.Status == model.StatusAtBranch && current.Status == model.StatusInTransit {
+	if req.Status == model.StatusAtHub && current.Status == model.StatusInTransit {
 		events, _ := s.repo.GetEvents(trackingID)
 		for i := len(events) - 1; i >= 0; i-- {
 			if events[i].ToStatus == model.StatusInTransit {
@@ -420,10 +466,10 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 	}
-	if req.Status == model.StatusAtBranch && current.Status == model.StatusDeliveryFailed {
+	if req.Status == model.StatusAtHub && current.Status == model.StatusDeliveryFailed {
 		events, _ := s.repo.GetEvents(trackingID)
 		for i := len(events) - 1; i >= 0; i-- {
-			if events[i].ToStatus == model.StatusAtBranch {
+			if events[i].ToStatus == model.StatusAtHub || events[i].ToStatus == model.StatusAtOriginHub {
 				location = events[i].Location
 				break
 			}
@@ -436,16 +482,109 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		resolvedLocation = s.locationToBranchID(location)
 	}
 
-	return s.repo.UpdateStatus(repository.StatusUpdateCmd{
+	// Determine actual target status: if arriving at hub and it's the origin branch, use at_origin_hub
+	targetStatus := req.Status
+	if req.Status == model.StatusAtHub && resolvedLocation != "" {
+		originID := current.OriginBranchID
+		if originID == "" {
+			originID = current.ReceivingBranchID
+		}
+		if resolvedLocation == originID {
+			targetStatus = model.StatusAtOriginHub
+		}
+	}
+
+	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 		TrackingID: trackingID,
 		FromStatus: current.Status,
-		ToStatus:   req.Status,
+		ToStatus:   targetStatus,
 		Location:   resolvedLocation,
 		ChangedBy:  req.ChangedBy,
 		Notes:      req.Notes,
 		DriverID:   req.DriverID,
 		Timestamp:  time.Now().UTC(),
 	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
+	if targetStatus == model.StatusAtOriginHub && updated.IsReturning {
+		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: trackingID,
+			FromStatus: targetStatus,
+			ToStatus:   model.StatusReadyForReturn,
+			Location:   resolvedLocation,
+			ChangedBy:  req.ChangedBy,
+			Notes:      "Envío de retorno llegó a sucursal de origen — listo para devolución",
+			Timestamp:  time.Now().UTC(),
+		})
+		if autoErr == nil {
+			return autoUpdated, nil
+		}
+	}
+
+	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
+	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
+		// Derive hub location from the last at_hub/at_origin_hub event
+		autoLocation := ""
+		if evs, _ := s.repo.GetEvents(trackingID); len(evs) > 0 {
+			for i := len(evs) - 1; i >= 0; i-- {
+				if evs[i].ToStatus == model.StatusAtHub || evs[i].ToStatus == model.StatusAtOriginHub {
+					autoLocation = evs[i].Location
+					break
+				}
+			}
+		}
+
+		autoHub := model.StatusAtHub
+		if autoLocation != "" {
+			originID := updated.OriginBranchID
+			if originID == "" {
+				originID = updated.ReceivingBranchID
+			}
+			if autoLocation == originID {
+				autoHub = model.StatusAtOriginHub
+			}
+		}
+
+		var autoNotes string
+		if targetStatus == model.StatusNoEntregado {
+			autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
+		} else {
+			autoNotes = "Destinatario rechazó el envío — devuelto a sucursal"
+		}
+
+		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: trackingID,
+			FromStatus: targetStatus,
+			ToStatus:   autoHub,
+			Location:   autoLocation,
+			ChangedBy:  req.ChangedBy,
+			Notes:      autoNotes,
+			Timestamp:  time.Now().UTC(),
+		})
+		if autoErr == nil {
+			// If the auto-transition landed on at_origin_hub and is_returning, also fire ready_for_return
+			if autoHub == model.StatusAtOriginHub && autoUpdated.IsReturning {
+				rfrUpdated, rfrErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+					TrackingID: trackingID,
+					FromStatus: autoHub,
+					ToStatus:   model.StatusReadyForReturn,
+					Location:   autoLocation,
+					ChangedBy:  req.ChangedBy,
+					Notes:      "Envío de retorno llegó a sucursal de origen — listo para devolución",
+					Timestamp:  time.Now().UTC(),
+				})
+				if rfrErr == nil {
+					return rfrUpdated, nil
+				}
+			}
+			return autoUpdated, nil
+		}
+	}
+
+	return updated, nil
 }
 
 // CorrectShipment stores field corrections without modifying original data and
@@ -478,11 +617,21 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	if shipment.Status == model.StatusPending {
+	if shipment.Status == model.StatusDraft {
 		return model.Shipment{}, fmt.Errorf("los borradores deben editarse directamente")
 	}
-	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned || shipment.Status == model.StatusCancelled {
-		return model.Shipment{}, fmt.Errorf("no se pueden corregir envíos finalizados")
+	terminalOrFrozen := map[model.Status]bool{
+		model.StatusDelivered:           true,
+		model.StatusReturned:            true,
+		model.StatusCancelled:           true,
+		model.StatusLost:                true,
+		model.StatusDestroyed:           true,
+		model.StatusNoEntregado:         true,
+		model.StatusRechazado:           true,
+		model.StatusRedeliveryScheduled: true,
+	}
+	if terminalOrFrozen[shipment.Status] {
+		return model.Shipment{}, fmt.Errorf("no se pueden corregir envíos finalizados o en proceso de devolución")
 	}
 	// Recompute priority if any ML-relevant field is being corrected.
 	var correctionPrediction *model.PriorityPrediction
@@ -561,28 +710,109 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	nonCancellable := map[model.Status]bool{
-		model.StatusPending:    true,
-		model.StatusPreTransit: true,
-		model.StatusInTransit:  true,
-		model.StatusDelivered:  true,
-		model.StatusReturned:   true,
-		model.StatusCancelled:  true,
+	cancellable := map[model.Status]bool{
+		model.StatusAtOriginHub:    true,
+		model.StatusAtHub:          true,
+		model.StatusReadyForPickup: true,
+		model.StatusReadyForReturn: true,
 	}
-	if nonCancellable[shipment.Status] {
-		return model.Shipment{}, fmt.Errorf("cannot cancel a shipment with status '%s'", shipment.Status)
+	if !cancellable[shipment.Status] {
+		return model.Shipment{}, fmt.Errorf("no se puede cancelar un envío con estado '%s'", shipment.Status)
 	}
+	if shipment.IsReturning && shipment.Status != model.StatusReadyForReturn {
+		return model.Shipment{}, fmt.Errorf("no se puede cancelar un envío que ya está en proceso de devolución")
+	}
+	now := time.Now().UTC()
 	updated, err := s.repo.CancelShipment(repository.CancelCmd{
 		TrackingID: trackingID,
 		Username:   username,
 		Reason:     reason,
 		FromStatus: shipment.Status,
-		Timestamp:  time.Now().UTC(),
+		Timestamp:  now,
 	})
 	if err != nil {
 		return model.Shipment{}, err
 	}
-	body := fmt.Sprintf("[Cancellation] %s", reason)
+
+	// Shipments already in ready_for_return are being returned — no counter-shipment needed.
+	if shipment.Status == model.StatusReadyForReturn {
+		_, _ = s.commentSvc.AddComment(trackingID, username, fmt.Sprintf("[Cancelación] %s", reason))
+		return updated, nil
+	}
+
+	// Create counter-shipment
+	counterID := generateTrackingID()
+	counterLocation := shipment.CurrentLocation
+	if counterLocation == "" {
+		counterLocation = shipment.ReceivingBranchID
+	}
+
+	// Counter-shipment starts at:
+	//   - at_origin_hub (with auto-transition to ready_for_return) if already at origin
+	//   - at_hub otherwise
+	counterStatus := model.StatusAtHub
+	originID := shipment.OriginBranchID
+	if originID == "" {
+		originID = shipment.ReceivingBranchID
+	}
+	if counterLocation == originID {
+		counterStatus = model.StatusAtOriginHub
+	}
+
+	parentID := trackingID
+	counter := model.Shipment{
+		TrackingID:          counterID,
+		Sender:              model.Customer{}, // no sender for counter-shipments
+		Recipient:           shipment.Sender,  // original sender becomes recipient
+		WeightKg:            shipment.WeightKg,
+		PackageType:         shipment.PackageType,
+		IsFragile:           shipment.IsFragile,
+		SpecialInstructions: shipment.SpecialInstructions,
+		ShipmentType:        model.ShipmentTypeNormal,
+		TimeWindow:          model.TimeWindowFlexible,
+		ColdChain:           shipment.ColdChain,
+		ReceivingBranchID:   counterLocation,
+		OriginBranchID:      originID,
+		Status:              counterStatus,
+		CurrentLocation:     counterLocation,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		ParentShipmentID:    &parentID,
+		IsReturning:         true,
+	}
+
+	if s.mlClient != nil {
+		pred := s.mlClient.PredictFromShipment(counter)
+		setPriority(&counter, pred)
+	}
+
+	_, err = s.repo.Create(repository.CreateShipmentCmd{
+		Shipment:  counter,
+		ChangedBy: username,
+		Notes:     fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID),
+	})
+	if err != nil {
+		// Log but don't fail the cancellation
+		_ = err
+	} else {
+		// If counter-shipment is at origin, auto-transition to ready_for_return
+		if counterStatus == model.StatusAtOriginHub {
+			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
+				TrackingID: counterID,
+				FromStatus: model.StatusAtOriginHub,
+				ToStatus:   model.StatusReadyForReturn,
+				Location:   counterLocation,
+				ChangedBy:  username,
+				Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
+				Timestamp:  now,
+			})
+		}
+		_, _ = s.commentSvc.AddComment(counterID, username,
+			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
+	}
+
+	body := fmt.Sprintf("[Cancelación] %s — Contra-envío generado: %s", reason, counterID)
 	_, _ = s.commentSvc.AddComment(trackingID, username, body)
 	return updated, nil
 }
@@ -622,18 +852,64 @@ func generateDraftID() string {
 
 func isValidTransition(from, to model.Status) bool {
 	allowed := map[model.Status][]model.Status{
-		model.StatusPending:        {},                                                                    // drafts transition via ConfirmDraft, not UpdateStatus
-		model.StatusInProgress:     {model.StatusPreTransit},                                              // confirmed → pre-transit (vehicle assigned, ready to depart)
-		model.StatusPreTransit:     {model.StatusInTransit, model.StatusInProgress, model.StatusAtBranch}, // pre-transit → start transit or unassigned back
-		model.StatusInTransit:      {model.StatusAtBranch},
-		model.StatusAtBranch:       {model.StatusPreTransit, model.StatusDelivering, model.StatusReadyForPickup, model.StatusReadyForReturn},
-		model.StatusDelivering:     {model.StatusDelivered, model.StatusDeliveryFailed},
-		model.StatusDeliveryFailed: {model.StatusDelivering, model.StatusAtBranch},
-		model.StatusDelivered:      {},
-		model.StatusReadyForPickup: {model.StatusDelivered, model.StatusPreTransit},
-		model.StatusReadyForReturn: {model.StatusReturned},
-		model.StatusReturned:       {},
-		model.StatusCancelled:      {},
+		model.StatusDraft: {}, // draft transitions only via ConfirmDraft
+		model.StatusAtOriginHub: {
+			model.StatusLoaded,
+			model.StatusReadyForReturn,
+			model.StatusLost,
+			model.StatusDestroyed,
+		},
+		model.StatusLoaded: {
+			model.StatusInTransit,
+			model.StatusAtOriginHub, // unassign at origin
+			model.StatusAtHub,       // unassign at intermediate hub
+		},
+		model.StatusInTransit: {
+			model.StatusAtHub,
+			model.StatusAtOriginHub, // when destination = origin branch (handled by service)
+			model.StatusLost,
+			model.StatusDestroyed,
+		},
+		model.StatusAtHub: {
+			model.StatusLoaded,
+			model.StatusOutForDelivery,
+			model.StatusReadyForPickup,
+			model.StatusLost,
+			model.StatusDestroyed,
+		},
+		model.StatusOutForDelivery: {
+			model.StatusDelivered,
+			model.StatusDeliveryFailed,
+			model.StatusLost,
+			model.StatusDestroyed,
+		},
+		model.StatusDeliveryFailed: {
+			model.StatusRedeliveryScheduled,
+			model.StatusReadyForPickup,
+			model.StatusRechazado,
+		},
+		model.StatusRedeliveryScheduled: {
+			model.StatusOutForDelivery,
+		},
+		model.StatusReadyForPickup: {
+			model.StatusDelivered,
+			model.StatusNoEntregado,
+		},
+		model.StatusNoEntregado: {
+			model.StatusAtHub,
+		},
+		model.StatusRechazado: {
+			model.StatusAtHub,
+		},
+		model.StatusReadyForReturn: {
+			model.StatusReturned,
+		},
+		// Terminal states — no transitions
+		model.StatusDelivered: {},
+		model.StatusReturned:  {},
+		model.StatusCancelled: {},
+		model.StatusLost:      {},
+		model.StatusDestroyed: {},
 	}
 	for _, s := range allowed[from] {
 		if s == to {

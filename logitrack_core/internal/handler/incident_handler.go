@@ -21,9 +21,8 @@ func NewIncidentHandler(svc *service.IncidentService, shipmentSvc *service.Shipm
 func (h *IncidentHandler) GetIncidents(c *gin.Context) {
 	trackingID := c.Param("tracking_id")
 	user := c.MustGet(middleware.UserKey).(model.User)
-	if user.Role == model.RoleOperator && user.BranchID != "" {
-		if shipment, err := h.shipmentSvc.GetByTrackingID(trackingID); err != nil || shipment.ReceivingBranchID != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
+	if shipment, err := h.shipmentSvc.GetByTrackingID(trackingID); err == nil {
+		if operatorReadForbidden(c, user, shipment) {
 			return
 		}
 	}

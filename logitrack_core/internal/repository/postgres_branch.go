@@ -115,10 +115,16 @@ func (r *postgresBranchRepository) ListActive() []model.Branch {
 }
 
 func (r *postgresBranchRepository) Create(branch model.Branch) error {
-	// Check for duplicate name
 	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM branches WHERE LOWER(name) = LOWER($1)`, branch.Name).Scan(&count)
-	if err != nil {
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM branches WHERE id = $1`, branch.ID).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrDuplicateBranchID
+	}
+
+	// Check for duplicate name
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM branches WHERE LOWER(name) = LOWER($1)`, branch.Name).Scan(&count); err != nil {
 		return err
 	}
 	if count > 0 {
@@ -126,7 +132,7 @@ func (r *postgresBranchRepository) Create(branch model.Branch) error {
 	}
 
 	now := time.Now()
-	_, err = r.db.Exec(`
+	_, err := r.db.Exec(`
 		INSERT INTO branches (id, name, street, city, province, postal_code, status, created_at, updated_at, max_capacity)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`, branch.ID, branch.Name, branch.Address.Street, branch.Address.City,

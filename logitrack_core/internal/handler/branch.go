@@ -3,12 +3,54 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
 )
+
+var rePostalCode = regexp.MustCompile(`^[A-Z0-9]{4,10}$`)
+
+func isValidPostalCode(s string) bool {
+	if !rePostalCode.MatchString(s) {
+		return false
+	}
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateBranchFields(name, street, city, province string) string {
+	if !hasLetter(name) {
+		return "El nombre debe contener al menos una letra"
+	}
+	if !hasLetter(city) {
+		return "La ciudad debe contener al menos una letra"
+	}
+	if !hasLetter(street) {
+		return "La calle debe contener al menos una letra"
+	}
+	if !hasLetter(province) {
+		return "La provincia debe contener al menos una letra"
+	}
+	return ""
+}
 
 type BranchHandler struct {
 	svc *service.BranchService
@@ -60,9 +102,19 @@ func (h *BranchHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if msg := validateBranchFields(req.Name, req.Street, req.City, req.Province); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+	req.PostalCode = strings.ToUpper(req.PostalCode)
+	if !isValidPostalCode(req.PostalCode) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El código postal debe tener entre 4 y 10 caracteres alfanuméricos (ej. C1043, 5000)."})
+		return
+	}
+
 	branch, err := h.svc.Create(req)
 	if err != nil {
-		if errors.Is(err, service.ErrBranchDuplicateName) {
+		if errors.Is(err, service.ErrBranchDuplicateID) || errors.Is(err, service.ErrBranchDuplicateName) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
@@ -84,6 +136,16 @@ func (h *BranchHandler) Update(c *gin.Context) {
 	var req model.UpdateBranchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if msg := validateBranchFields(req.Name, req.Street, req.City, req.Province); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+	req.PostalCode = strings.ToUpper(req.PostalCode)
+	if !isValidPostalCode(req.PostalCode) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El código postal debe tener entre 4 y 10 caracteres alfanuméricos (ej. C1043, 5000)."})
 		return
 	}
 

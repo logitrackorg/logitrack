@@ -25,8 +25,8 @@ func TestAddComment_FinalizedShipments(t *testing.T) {
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
 				toInTransit(t, ts, ship.TrackingID)
-				toAtBranch(t, ts, ship.TrackingID)
-				toDelivering(t, ts, ship.TrackingID)
+				toAtHub(t, ts, ship.TrackingID)
+				toOutForDelivery(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
 					Status: model.StatusDelivered, ChangedBy: "driver",
 					RecipientDNI: defaultRecipient().DNI,
