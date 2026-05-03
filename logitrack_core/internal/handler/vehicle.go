@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
 )
+
+var validPlateRegex = regexp.MustCompile(`^(?:[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$`)
 
 type VehicleHandler struct {
 	repo        repository.VehicleRepository
@@ -77,6 +80,11 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 	var req model.CreateVehicleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !validPlateRegex.MatchString(req.LicensePlate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de patente inválido. Formatos aceptados: ABC123 o AB123CD"})
 		return
 	}
 

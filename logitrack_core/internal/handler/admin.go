@@ -3,6 +3,8 @@ package handler
 import (
 	"net/http"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
@@ -13,7 +15,6 @@ var (
 	reEmail    = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 	reName     = regexp.MustCompile(`^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s'\-]+$`)
 	reUsername = regexp.MustCompile(`^[a-zA-Z0-9_\-]+$`)
-	rePostal   = regexp.MustCompile(`^[A-Z0-9]{4,10}$`)
 )
 
 var rolesRequiringBranch = map[model.Role]bool{
@@ -56,6 +57,23 @@ type updateUserRequest struct {
 	Address   *model.Address    `json:"address"`
 }
 
+func validatePassword(password string) error {
+	if len(password) < 6 {
+		return errMsg("La contraseña debe tener al menos 6 caracteres.")
+	}
+	hasDigit := false
+	for _, r := range password {
+		if unicode.IsDigit(r) {
+			hasDigit = true
+			break
+		}
+	}
+	if !hasDigit {
+		return errMsg("La contraseña debe contener al menos un número.")
+	}
+	return nil
+}
+
 func validatePersonalFields(firstName, lastName, email string, addr model.Address) error {
 	if !reName.MatchString(firstName) {
 		return gin.Error{Err: errMsg("El nombre solo puede contener letras y espacios.")}
@@ -69,7 +87,7 @@ func validatePersonalFields(firstName, lastName, email string, addr model.Addres
 	if addr.Street == "" || addr.City == "" || addr.Province == "" || addr.PostalCode == "" {
 		return gin.Error{Err: errMsg("Todos los campos del domicilio son obligatorios.")}
 	}
-	if !rePostal.MatchString(addr.PostalCode) {
+	if !isValidPostalCode(addr.PostalCode) {
 		return gin.Error{Err: errMsg("El código postal debe tener entre 4 y 10 caracteres alfanuméricos (ej. C1043, 5000).")}
 	}
 	return nil
@@ -89,10 +107,15 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "El nombre de usuario solo puede contener letras, números, guiones y guiones bajos."})
 		return
 	}
+	if err := validatePassword(req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if rolesRequiringBranch[req.Role] && req.BranchID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "La sucursal es obligatoria para este rol."})
 		return
 	}
+	req.Address.PostalCode = strings.ToUpper(req.Address.PostalCode)
 	if err := validatePersonalFields(req.FirstName, req.LastName, req.Email, req.Address); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -157,11 +180,12 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		}
 	}
 	if req.Address != nil {
+		req.Address.PostalCode = strings.ToUpper(req.Address.PostalCode)
 		if req.Address.Street == "" || req.Address.City == "" || req.Address.Province == "" || req.Address.PostalCode == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Todos los campos del domicilio son obligatorios."})
 			return
 		}
-		if !rePostal.MatchString(req.Address.PostalCode) {
+		if !isValidPostalCode(req.Address.PostalCode) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "El código postal debe tener entre 4 y 10 caracteres alfanuméricos (ej. C1043, 5000)."})
 			return
 		}

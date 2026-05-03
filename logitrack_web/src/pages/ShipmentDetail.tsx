@@ -350,8 +350,8 @@ export function ShipmentDetail() {
         location,
         notes,
         driver_id: newStatus === "out_for_delivery" ? selectedDriverId : undefined,
-        recipient_dni: newStatus === "delivered" || (newStatus === "returned" && shipment?.is_returning) ? recipientDni : undefined,
-        sender_dni: newStatus === "returned" && !shipment?.is_returning ? senderDni : undefined,
+        recipient_dni: newStatus === "delivered" || (newStatus === "returned" && !!shipment?.parent_shipment_id) ? recipientDni : undefined,
+        sender_dni: newStatus === "returned" && !shipment?.parent_shipment_id ? senderDni : undefined,
       });
       setLocation(""); setNotes(""); setSelectedDriverId(""); setRecipientDni(""); setSenderDni("");
       await reload();
@@ -507,6 +507,8 @@ export function ShipmentDetail() {
     (s) => !shipment.is_returning || (s !== "out_for_delivery" && s !== "ready_for_pickup")
   ).filter(
     () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
+  ).filter(
+    (s) => s !== "redelivery_scheduled" || (shipment.delivery_attempts ?? 0) < maxDeliveryAttempts
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
@@ -781,7 +783,7 @@ export function ShipmentDetail() {
                 style={inputStyle}
               />
             )}
-            {newStatus === "returned" && !shipment.is_returning && (
+            {newStatus === "returned" && !shipment.parent_shipment_id && (
               <input
                 value={senderDni}
                 onChange={(e) => setSenderDni(e.target.value)}
@@ -790,11 +792,11 @@ export function ShipmentDetail() {
                 style={inputStyle}
               />
             )}
-            {newStatus === "returned" && shipment.is_returning && (
+            {newStatus === "returned" && !!shipment.parent_shipment_id && (
               <input
                 value={recipientDni}
                 onChange={(e) => setRecipientDni(e.target.value)}
-                placeholder="DNI del destinatario / remitente original (obligatorio)"
+                placeholder="DNI del destinatario -remitente original- (obligatorio)"
                 required
                 style={inputStyle}
               />
@@ -817,15 +819,15 @@ export function ShipmentDetail() {
             {newStatus === "delivered" && !recipientDni.trim() && (
               <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
             )}
-            {newStatus === "returned" && !shipment.is_returning && !senderDni.trim() && (
+            {newStatus === "returned" && !shipment.parent_shipment_id && !senderDni.trim() && (
               <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
             )}
-            {newStatus === "returned" && shipment.is_returning && !recipientDni.trim() && (
+            {newStatus === "returned" && !!shipment.parent_shipment_id && !recipientDni.trim() && (
               <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
             )}
             {updateError && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{updateError}</p>}
             {(() => {
-              const returnedDniMissing = newStatus === "returned" && (shipment.is_returning ? !recipientDni.trim() : !senderDni.trim());
+              const returnedDniMissing = newStatus === "returned" && (shipment.parent_shipment_id ? !recipientDni.trim() : !senderDni.trim());
               const disabled = !newStatus || updating || (newStatus === "delivery_failed" && !notes.trim()) || (newStatus === "out_for_delivery" && !selectedDriverId) || (newStatus === "delivered" && !recipientDni.trim()) || returnedDniMissing;
               return (
             <button type="submit"
@@ -1581,13 +1583,15 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
   const receivingBranch = receivingBranchId ? branches.find((b) => b.id === receivingBranchId) : undefined;
   const firstStop = receivingBranch ? receivingBranch.id : origin;
 
-  // Confirmed stops: receiving branch (or origin fallback) + each at_hub arrival
+  // Confirmed stops: receiving branch (or origin fallback) + each at_hub/at_origin_hub arrival
   const stops: { location: string; status: ShipmentStatus; timestamp: string; current: boolean }[] = [];
 
   stops.push({ location: firstStop, status: "at_origin_hub" as ShipmentStatus, timestamp: events[0].timestamp, current: false });
 
-  for (const ev of events) {
-    if (ev.to_status === "at_hub" && ev.location) {
+  // Skip events[0] — it's already the first stop. Include both at_hub and at_origin_hub so
+  // return passages through the origin branch (promoted to at_origin_hub by the backend) are shown.
+  for (const ev of events.slice(1)) {
+    if ((ev.to_status === "at_hub" || ev.to_status === "at_origin_hub") && ev.location) {
       stops.push({ location: ev.location, status: ev.to_status, timestamp: ev.timestamp, current: false });
     }
   }

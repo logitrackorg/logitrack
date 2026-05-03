@@ -322,9 +322,16 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		}
 	}
 
+	today := model.NewDateOnly(timeNow())
+	if req.Status == model.StatusOutForDelivery && req.DriverID != "" {
+		if err := h.routeSvc.CanAssignToRoute(req.DriverID, today); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	shipment, err := h.svc.UpdateStatus(trackingID, req)
 	if err == nil {
-		today := model.NewDateOnly(timeNow())
 		if req.Status == model.StatusOutForDelivery && req.DriverID != "" {
 			// Remove from any existing driver route (handles retry with same or different driver),
 			// then assign to the (new) driver.
@@ -333,6 +340,10 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		} else if (req.Status == model.StatusAtHub || req.Status == model.StatusAtOriginHub) && fromStatus == model.StatusDeliveryFailed {
 			// Shipment returned to branch — remove from driver route.
 			_ = h.routeSvc.RemoveShipmentFromTodayRoute(trackingID)
+		}
+		if user.Role == model.RoleDriver &&
+			(req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed || req.Status == model.StatusLost) {
+			h.routeSvc.CheckAndFinalizeRoute(user.ID)
 		}
 	}
 	if err != nil {
@@ -360,6 +371,13 @@ func (h *ShipmentHandler) BulkUpdateStatus(c *gin.Context) {
 
 	user := c.MustGet(middleware.UserKey).(model.User)
 	today := model.NewDateOnly(timeNow())
+
+	if req.Status == model.StatusOutForDelivery && req.DriverID != "" {
+		if err := h.routeSvc.CanAssignToRoute(req.DriverID, today); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
 
 	result := model.BulkStatusResult{Skipped: []model.BulkSkipped{}}
 

@@ -18,17 +18,6 @@ func NewDriverHandler(routeSvc *service.RouteService) *DriverHandler {
 }
 
 // GetRoute returns today's assigned route and shipments for the authenticated driver.
-//
-// @Summary      Driver route
-// @Description  Returns today's route with full shipment details for the authenticated driver. Driver role only.
-// @Tags         driver
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {object}  map[string]interface{}  "route and shipments"
-// @Failure      401  {object}  map[string]string
-// @Failure      403  {object}  map[string]string
-// @Failure      404  {object}  map[string]string
-// @Router       /driver/route [get]
 func (h *DriverHandler) GetRoute(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	route, shipments, err := h.routeSvc.GetTodayRoute(user.ID)
@@ -37,4 +26,15 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"route": route, "shipments": shipments})
+}
+
+// StartRoute transitions the driver's today route from pendiente → en_curso.
+func (h *DriverHandler) StartRoute(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	route, err := h.routeSvc.StartRoute(user.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"route": route})
 }

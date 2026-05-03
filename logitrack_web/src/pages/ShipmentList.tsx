@@ -404,7 +404,7 @@ export function ShipmentList() {
                         )}
                       </td>
                     )}
-                    <td style={td}><code>{s.status === "draft" ? <span style={{ color: "#9ca3af" }}>—</span> : s.tracking_id}</code></td>
+                    <td style={td}><code style={s.status === "draft" ? { color: "#9ca3af" } : undefined}>{s.tracking_id}</code></td>
                     <td style={td}>{corr(s, "sender_name", s.sender.name)}</td>
                     <td style={td}>{corr(s, "recipient_name", s.recipient.name)}</td>
                     <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>

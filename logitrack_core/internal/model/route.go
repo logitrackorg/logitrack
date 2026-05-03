@@ -40,13 +40,23 @@ func (d DateOnly) String() string {
 	return time.Time(d).Format("2006-01-02")
 }
 
+type RouteStatus string
+
+const (
+	RouteStatusPending  RouteStatus = "pendiente"
+	RouteStatusActive   RouteStatus = "en_curso"
+	RouteStatusFinished RouteStatus = "finalizada"
+)
+
 type Route struct {
-	ID          string    `json:"id"`
-	Date        DateOnly  `json:"date"`
-	DriverID    string    `json:"driver_id"`
-	ShipmentIDs []string  `json:"shipment_ids"`
-	CreatedBy   string    `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string      `json:"id"`
+	Date        DateOnly    `json:"date"`
+	DriverID    string      `json:"driver_id"`
+	ShipmentIDs []string    `json:"shipment_ids"`
+	CreatedBy   string      `json:"created_by"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Status      RouteStatus `json:"status"`
+	StartedAt   *time.Time  `json:"started_at,omitempty"`
 }
 
 func (r Route) HasShipment(trackingID string) bool {

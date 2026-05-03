@@ -96,8 +96,12 @@ func RunMigrations(db *sql.DB) error {
 			driver_id    TEXT NOT NULL,
 			shipment_ids JSONB NOT NULL DEFAULT '[]',
 			created_by   TEXT NOT NULL,
-			created_at   TIMESTAMPTZ NOT NULL
+			created_at   TIMESTAMPTZ NOT NULL,
+			status       TEXT NOT NULL DEFAULT 'pendiente',
+			started_at   TIMESTAMPTZ
 		);
+		ALTER TABLE routes ADD COLUMN IF NOT EXISTS status     TEXT NOT NULL DEFAULT 'pendiente';
+		ALTER TABLE routes ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
 		CREATE INDEX IF NOT EXISTS routes_driver_date_idx ON routes(driver_id, date);
 
 		CREATE TABLE IF NOT EXISTS customers (

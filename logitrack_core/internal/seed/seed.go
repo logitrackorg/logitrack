@@ -141,25 +141,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado", hoursAgo: 6},
 			},
 		},
-		// In transit (en tránsito)
-		{
-			trackingID:         "LT-M3N4O5P6",
-			sender:             model.Customer{DNI: "24783601", Name: "Ana Perez", Phone: "543881112233", Address: model.Address{Street: "Av. Colón 320", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}},
-			recipient:          model.Customer{DNI: "28934075", Name: "Juan Castro", Phone: "542614334455", Address: model.Address{Street: "Belgrano 980", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}},
-			weightKg:           5.2,
-			packageType:        model.PackageBox,
-			shipmentType:       model.ShipmentTypeNormal,
-			timeWindow:         model.TimeWindowAfternoon,
-			receivingBranchID:  "mendoza",
-			priority:           "baja",
-			priorityScore:      0.22,
-			priorityConfidence: 0.79,
-			events: []eventSeed{
-				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado", hoursAgo: 30},
-				{from: model.StatusAtOriginHub, to: model.StatusLoaded, changedBy: "op_cordoba", location: "cordoba", notes: "Cargado en vehículo EF456GH", hoursAgo: 28},
-				{from: model.StatusLoaded, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "mendoza", notes: "Vehículo partió hacia Mendoza", hoursAgo: 26},
-			},
-		},
 		// Delivered
 		{
 			trackingID:         "LT-Q7R8S9T0",
@@ -181,24 +162,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: model.StatusLoaded, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "caba", notes: "Vehículo partió hacia Buenos Aires", hoursAgo: 90},
 				{from: model.StatusInTransit, to: model.StatusAtHub, changedBy: "op_caba", location: "caba", notes: "Llegó a sucursal CABA", hoursAgo: 48},
 				{from: model.StatusAtHub, to: model.StatusDelivered, changedBy: "op_caba", location: "caba", notes: "Entregado exitosamente", hoursAgo: 24},
-			},
-		},
-		// Loaded (cargado en vehículo)
-		{
-			trackingID:         "LT-U1V2W3X4",
-			sender:             model.Customer{DNI: "31760294", Name: "Florencia Díaz", Phone: "541122334455", Address: model.Address{Street: "Pueyrredón 678", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1032"}},
-			recipient:          model.Customer{DNI: "26843019", Name: "Nicolás Herrera", Phone: "542945567788", Address: model.Address{Street: "San Martín 200", City: "Río Gallegos", Province: "Santa Cruz", PostalCode: "Z9400"}},
-			weightKg:           2.1,
-			packageType:        model.PackageBox,
-			shipmentType:       model.ShipmentTypeNormal,
-			timeWindow:         model.TimeWindowFlexible,
-			receivingBranchID:  "caba",
-			priority:           "media",
-			priorityScore:      0.36,
-			priorityConfidence: 0.73,
-			events: []eventSeed{
-				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado", hoursAgo: 4},
-				{from: model.StatusAtOriginHub, to: model.StatusLoaded, changedBy: "op_caba", location: "caba", notes: "Cargado en vehículo AB123CD", hoursAgo: 2},
 			},
 		},
 		// Out for delivery — assigned to driver chofer (ID: 5)
@@ -517,5 +480,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		ShipmentIDs: []string{"LT-DELIVER01"},
 		CreatedBy:   "supervisor1",
 		CreatedAt:   now.Add(-1 * time.Hour),
+		Status:      model.RouteStatusPending,
 	})
 }
