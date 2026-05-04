@@ -9,18 +9,23 @@ import { useIsMobile } from "../hooks/useIsMobile";
 
 // User-facing status labels (no internal domain language)
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
-  pending: "Borrador",
-  in_progress: "En proceso",
-  pre_transit: "Preparando despacho",
-  in_transit: "En tránsito",
-  at_branch: "En centro logístico",
-  delivering: "En camino a domicilio",
-  delivery_failed: "Intento de entrega fallido",
-  delivered: "Entregado",
-  ready_for_pickup: "Listo para retiro",
-  ready_for_return: "Listo para devolución",
-  returned: "Devuelto",
-  cancelled: "Cancelado",
+  draft:                "Borrador",
+  at_origin_hub:        "En sucursal de origen",
+  loaded:               "Preparando despacho",
+  in_transit:           "En tránsito",
+  at_hub:               "En centro logístico",
+  out_for_delivery:     "En camino a domicilio",
+  delivery_failed:      "Intento de entrega fallido",
+  redelivery_scheduled: "Reentrega programada",
+  no_entregado:         "No entregado",
+  rechazado:            "Rechazado",
+  delivered:            "Entregado",
+  ready_for_pickup:     "Listo para retiro",
+  ready_for_return:     "Listo para devolución",
+  returned:             "Devuelto",
+  cancelled:            "Cancelado",
+  lost:                 "Extraviado",
+  destroyed:            "Daño total",
 };
 
 interface EventDescription {
@@ -41,20 +46,20 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
   const { from_status: from, to_status: to } = ev;
 
   // Creation
-  if (!from && to === "in_progress") {
+  if (!from && to === "at_origin_hub") {
     return { icon: "📦", title: "Envío registrado", subtitle: cityLine };
   }
-  if (!from && to === "pending") {
+  if (!from && to === "draft") {
     return { icon: "📋", title: "Borrador creado" };
   }
 
   // Confirmation / ready to dispatch
-  if (from === "pending" && to === "in_progress") {
+  if (from === "draft" && to === "at_origin_hub") {
     return { icon: "✅", title: "Envío confirmado", subtitle: cityLine };
   }
 
   // Loaded onto vehicle
-  if (to === "pre_transit") {
+  if (to === "loaded") {
     return { icon: "🚛", title: "Cargado y listo para despachar", subtitle: cityLine };
   }
 
@@ -64,12 +69,12 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
   }
 
   // Arrived at a logistics center
-  if (to === "at_branch") {
+  if (to === "at_hub" || to === "at_origin_hub") {
     return { icon: "🏭", title: "Llegó al centro logístico", subtitle: cityLine };
   }
 
   // Out for delivery
-  if (to === "delivering") {
+  if (to === "out_for_delivery") {
     return { icon: "🛵", title: "En camino a domicilio", subtitle: cityLine };
   }
 
@@ -81,6 +86,19 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
   // Delivery failed
   if (to === "delivery_failed") {
     return { icon: "⚠️", title: "El intento de entrega no fue exitoso" };
+  }
+
+  // Redelivery scheduled
+  if (to === "redelivery_scheduled") {
+    return { icon: "🔄", title: "Reentrega programada" };
+  }
+
+  // No entregado / rechazado
+  if (to === "no_entregado") {
+    return { icon: "🚷", title: "No pudo ser entregado" };
+  }
+  if (to === "rechazado") {
+    return { icon: "🚫", title: "Envío rechazado por el destinatario" };
   }
 
   // Ready for pickup at branch
@@ -101,6 +119,14 @@ function describeEvent(ev: ShipmentEvent, branches: Branch[]): EventDescription 
   // Cancelled
   if (to === "cancelled") {
     return { icon: "🚫", title: "Envío cancelado" };
+  }
+
+  // Lost / destroyed
+  if (to === "lost") {
+    return { icon: "🔍", title: "Envío extraviado" };
+  }
+  if (to === "destroyed") {
+    return { icon: "💥", title: "Daño total — envío destruido" };
   }
 
   // Fallback — should never reach here for known statuses

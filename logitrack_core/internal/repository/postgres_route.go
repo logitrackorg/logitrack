@@ -22,10 +22,14 @@ func (r *postgresRouteRepository) Create(route model.Route) (model.Route, error)
 	if err != nil {
 		return model.Route{}, err
 	}
+	if route.Status == "" {
+		route.Status = model.RouteStatusPending
+	}
 	_, err = r.db.Exec(`
-		INSERT INTO routes (id, date, driver_id, shipment_ids, created_by, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
+		INSERT INTO routes (id, date, driver_id, shipment_ids, created_by, created_at, status, started_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		route.ID, route.Date.String(), route.DriverID, ids, route.CreatedBy, route.CreatedAt,
+		string(route.Status), route.StartedAt,
 	)
 	return route, err
 }
@@ -36,8 +40,23 @@ func (r *postgresRouteRepository) Update(route model.Route) error {
 		return err
 	}
 	res, err := r.db.Exec(`
-		UPDATE routes SET shipment_ids = $1 WHERE id = $2`,
-		ids, route.ID,
+		UPDATE routes SET shipment_ids = $1, status = $2, started_at = $3 WHERE id = $4`,
+		ids, string(route.Status), route.StartedAt, route.ID,
+	)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("route not found")
+	}
+	return nil
+}
+
+func (r *postgresRouteRepository) UpdateStatus(id string, status model.RouteStatus, startedAt *time.Time) error {
+	res, err := r.db.Exec(`
+		UPDATE routes SET status = $1, started_at = $2 WHERE id = $3`,
+		string(status), startedAt, id,
 	)
 	if err != nil {
 		return err
@@ -51,7 +70,7 @@ func (r *postgresRouteRepository) Update(route model.Route) error {
 
 func (r *postgresRouteRepository) GetByDriverAndDate(driverID string, date model.DateOnly) (model.Route, error) {
 	row := r.db.QueryRow(`
-		SELECT id, date, driver_id, shipment_ids, created_by, created_at
+		SELECT id, date, driver_id, shipment_ids, created_by, created_at, status, started_at
 		FROM routes
 		WHERE driver_id = $1 AND date = $2`,
 		driverID, date.String(),
@@ -61,14 +80,14 @@ func (r *postgresRouteRepository) GetByDriverAndDate(driverID string, date model
 
 func (r *postgresRouteRepository) GetByID(id string) (model.Route, error) {
 	row := r.db.QueryRow(`
-		SELECT id, date, driver_id, shipment_ids, created_by, created_at
+		SELECT id, date, driver_id, shipment_ids, created_by, created_at, status, started_at
 		FROM routes WHERE id = $1`, id)
 	return scanRoute(row)
 }
 
 func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date model.DateOnly) error {
 	rows, err := r.db.Query(`
-		SELECT id, date, driver_id, shipment_ids, created_by, created_at
+		SELECT id, date, driver_id, shipment_ids, created_by, created_at, status, started_at
 		FROM routes WHERE date = $1 AND shipment_ids @> jsonb_build_array($2::text)`,
 		date.String(), trackingID,
 	)
@@ -79,17 +98,8 @@ func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date
 
 	var toUpdate []model.Route
 	for rows.Next() {
-		var (
-			route   model.Route
-			dateStr string
-			idsJSON []byte
-			ts      time.Time
-		)
-		if err := rows.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts); err != nil {
-			continue
-		}
-		route.CreatedAt = ts
-		if err := json.Unmarshal(idsJSON, &route.ShipmentIDs); err != nil {
+		route, err := scanRouteRow(rows)
+		if err != nil {
 			continue
 		}
 		filtered := route.ShipmentIDs[:0]
@@ -112,19 +122,45 @@ func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date
 
 func scanRoute(row *sql.Row) (model.Route, error) {
 	var (
-		route   model.Route
-		dateStr string
-		idsJSON []byte
-		ts      time.Time
+		route     model.Route
+		dateStr   string
+		idsJSON   []byte
+		ts        time.Time
+		statusStr string
+		startedAt sql.NullTime
 	)
-	err := row.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts)
+	err := row.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts, &statusStr, &startedAt)
 	if err == sql.ErrNoRows {
 		return model.Route{}, fmt.Errorf("route not found")
 	}
 	if err != nil {
 		return model.Route{}, err
 	}
+	return buildRoute(route, dateStr, idsJSON, ts, statusStr, startedAt)
+}
+
+func scanRouteRow(rows *sql.Rows) (model.Route, error) {
+	var (
+		route     model.Route
+		dateStr   string
+		idsJSON   []byte
+		ts        time.Time
+		statusStr string
+		startedAt sql.NullTime
+	)
+	if err := rows.Scan(&route.ID, &dateStr, &route.DriverID, &idsJSON, &route.CreatedBy, &ts, &statusStr, &startedAt); err != nil {
+		return model.Route{}, err
+	}
+	return buildRoute(route, dateStr, idsJSON, ts, statusStr, startedAt)
+}
+
+func buildRoute(route model.Route, dateStr string, idsJSON []byte, ts time.Time, statusStr string, startedAt sql.NullTime) (model.Route, error) {
 	route.CreatedAt = ts
+	route.Status = model.RouteStatus(statusStr)
+	if startedAt.Valid {
+		t := startedAt.Time
+		route.StartedAt = &t
+	}
 
 	var d model.DateOnly
 	if err := json.Unmarshal([]byte(`"`+dateStr+`"`), &d); err != nil {

@@ -5,19 +5,23 @@ import "time"
 type IncidentType string
 
 const (
-	IncidentTypeDamage IncidentType = "daño"
-	IncidentTypeLoss   IncidentType = "perdida"
-	IncidentTypeDelay  IncidentType = "demora"
-	IncidentTypeOpen   IncidentType = "paquete_abierto"
-	IncidentTypeOther  IncidentType = "otro"
+	IncidentTypeDamage     IncidentType = "daño"
+	IncidentTypeLoss       IncidentType = "perdida"
+	IncidentTypeDelay      IncidentType = "demora"
+	IncidentTypeOpen       IncidentType = "paquete_abierto"
+	IncidentTypeOther      IncidentType = "otro"
+	IncidentTypeExtraviado IncidentType = "extraviado"
+	IncidentTypeDanioTotal IncidentType = "danio_total"
 )
 
 var ValidIncidentTypes = map[IncidentType]bool{
-	IncidentTypeDamage: true,
-	IncidentTypeLoss:   true,
-	IncidentTypeDelay:  true,
-	IncidentTypeOpen:   true,
-	IncidentTypeOther:  true,
+	IncidentTypeDamage:     true,
+	IncidentTypeLoss:       true,
+	IncidentTypeDelay:      true,
+	IncidentTypeOpen:       true,
+	IncidentTypeOther:      true,
+	IncidentTypeExtraviado: true,
+	IncidentTypeDanioTotal: true,
 }
 
 type ShipmentIncident struct {

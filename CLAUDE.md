@@ -95,22 +95,30 @@ UUID tokens in PostgreSQL `tokens` table. `Authorization: Bearer <token>` requir
 ### Shipment state machine
 
 ```
-pending ──confirm──► in_progress ──[vehicle]──► pre_transit ──[StartTrip]──► in_transit ──► at_branch ──► in_transit (next hop)
-                                                                                                        ├─► delivering ──► delivered
-                                                                                                        │              └─► delivery_failed ──► delivering (retry)
-                                                                                                        │                                  └─► at_branch (return leg)
-                                                                                                        ├─► ready_for_pickup ──► delivered
-                                                                                                        │                    └─► pre_transit (transfer via vehicle)
-                                                                                                        └─► ready_for_return ──► returned
+draft ──confirm──► at_origin_hub ──[vehicle]──► loaded ──[StartTrip]──► in_transit ──► at_hub ──► in_transit (next hop)
+                       │                                                                        ├─► out_for_delivery ──► delivered
+                       │                                                                        │                   └─► delivery_failed ──► redelivery_scheduled ──► out_for_delivery (retry)
+                       │                                                                        │                                        ├─► ready_for_pickup ──► delivered
+                       │                                                                        │                                        │                    └─► no_entregado ──► at_hub / at_origin_hub
+                       │                                                                        │                                        └─► rechazado ──► at_hub / at_origin_hub
+                       │                                                                        ├─► ready_for_pickup ──► delivered
+                       │                                                                        │                    └─► loaded (transfer via vehicle)
+                       │                                                                        └─► ready_for_return ──► returned
+                       └─► ready_for_return (is_returning=true, auto on arrival)
 ```
 
-- `pending` = draft; transitions only via `ConfirmDraft`, not `UpdateStatus`.
-- `pre_transit`: reverts to `in_progress` if unassigned from vehicle.
-- `in_transit` only goes to `at_branch` — never directly to `delivered`.
-- `delivering` only goes to `delivered` or `delivery_failed`.
+Any hub transition can also go to `lost` or `destroyed` (terminal).
+
+- `draft`: transitions only via `ConfirmDraft`, not `UpdateStatus`.
+- `loaded`: reverts to `at_origin_hub` / `at_hub` if unassigned from vehicle.
+- `in_transit` only goes to `at_hub` or `at_origin_hub` — never directly to `delivered`.
+- `out_for_delivery` only goes to `delivered`, `delivery_failed`, `lost`, or `destroyed`.
+- `at_origin_hub` + `is_returning=true` → auto-promoted to `ready_for_return`.
+- Delivery retry limit: configurable via `system_config.max_delivery_attempts` (default 3, range 1–10).
+  When limit reached: `delivery_failed` can only go to `ready_for_pickup` or `rechazado`.
 - `ready_for_return`: `current_location` must equal the receiving branch's city (enforced server-side).
-- Terminal states: `delivered`, `returned`, `cancelled` — no further transitions.
-- Cancellable: `in_progress`, `at_branch`, `delivering`, `delivery_failed`, `ready_for_pickup`, `ready_for_return`. NOT cancellable: `pre_transit`, `in_transit`, `pending`, terminal.
+- Terminal states: `delivered`, `returned`, `cancelled`, `lost`, `destroyed` — no further transitions.
+- Cancellable: `at_origin_hub`, `at_hub`, `ready_for_pickup`. NOT cancellable: `loaded`, `in_transit`, `draft`, terminal.
 
 ### Business rules
 
@@ -123,13 +131,13 @@ pending ──confirm──► in_progress ──[vehicle]──► pre_transit 
 - Email: `user@domain.tld` format. Only when non-empty (optional).
 
 **`location` field on status updates** — most transitions set it automatically:
-- `→ pre_transit`: set by vehicle assignment
+- `→ loaded`: set by vehicle assignment
 - `→ in_transit`: set by `StartTrip`
-- `in_transit → at_branch`: auto-derived from last `in_transit` event
-- `delivery_failed → at_branch`: auto-derived from last `at_branch` event
+- `in_transit → at_hub`: auto-derived from last `in_transit` event
+- `delivery_failed → at_hub`: auto-derived from last `at_hub` event
 - All other transitions: not required
 
-**`receiving_branch_id` lifecycle**: on `at_branch`, both projections update `receiving_branch_id` to the new branch, so operators/supervisors at the destination see the shipment in their filtered list.
+**`receiving_branch_id` lifecycle**: on `at_hub`, both projections update `receiving_branch_id` to the new branch, so operators/supervisors at the destination see the shipment in their filtered list.
 
 ### Role-based permissions (defined in `main.go`)
 
@@ -142,7 +150,7 @@ pending ──confirm──► in_progress ──[vehicle]──► pre_transit 
 - Admin only: POST /vehicles, POST/PATCH /branches; all /ml/config routes
 - Driver only: GET /driver/route
 
-**Operator restrictions**: cannot update a shipment in `delivering` status (reserved for supervisor/admin/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
+**Operator restrictions**: cannot update a shipment in `out_for_delivery` status (reserved for supervisor/admin/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
 
 **Branch restrictions** (`branchForbidden` in handler):
 - Operators + supervisors get 403 on writes for shipments whose `receiving_branch_id` ≠ their branch.

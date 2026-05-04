@@ -68,7 +68,7 @@ export function NewShipment() {
 
   useEffect(() => {
     shipmentApi.list().then((all) => {
-      setDrafts(all.filter((s) => s.status === "pending"));
+      setDrafts(all.filter((s) => s.status === "draft"));
     }).catch(() => {});
     branchApi.listActive().then(setBranches).catch(() => {});
   }, []);
@@ -467,16 +467,22 @@ export function NewShipment() {
           </label>
         )}
 
-        <div style={{ display: "flex", gap: 12 }}>
-          <button type="button" disabled={loading} onClick={handleSaveDraft}
-            style={{ flex: 1, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "12px", cursor: "pointer", fontWeight: 600, fontSize: 15 }}>
-            {loading ? "Guardando..." : "Guardar borrador"}
-          </button>
-          <button type="submit" disabled={loading}
-            style={{ flex: 1, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: 15 }}>
-            {loading ? "Creando..." : "Crear envío"}
-          </button>
-        </div>
+        {(() => {
+          const atLimit = branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity;
+          const blocked = atLimit && !capacityConfirmed;
+          return (
+            <div style={{ display: "flex", gap: 12 }}>
+              <button type="button" disabled={loading || blocked} onClick={handleSaveDraft}
+                style={{ flex: 1, background: "#fff", color: blocked ? "#9ca3af" : "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "12px", cursor: blocked ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 15 }}>
+                {loading ? "Guardando..." : "Guardar borrador"}
+              </button>
+              <button type="submit" disabled={loading || blocked}
+                style={{ flex: 1, background: blocked ? "#9ca3af" : "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "12px", cursor: blocked ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 15 }}>
+                {loading ? "Creando..." : "Crear envío"}
+              </button>
+            </div>
+          );
+        })()}
       </form>
     </div>
   );

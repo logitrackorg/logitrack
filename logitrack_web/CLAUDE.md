@@ -59,18 +59,21 @@ src/
 | `/vehicles/available` | AvailableVehicles | supervisor, manager, admin |
 | `/branches` | BranchList | operator, supervisor, manager, admin |
 | `/ml-config` | MLConfig | admin |
+| `/system-config` | SystemConfig | admin |
 
 ## Shipment status update rules
 
-The status update form in `ShipmentDetail` conditionally shows a location field based on the transition:
+The status update form in `ShipmentDetail` conditionally shows fields based on the transition:
 
-| Transition | Location field |
+| Transition | Location / extra field |
 |---|---|
-| `pending → in_transit` | Required — destination branch dropdown |
-| `in_transit → at_branch` | Auto-derived; display only |
-| `at_branch → in_transit` | Required — next branch dropdown |
-| `at_branch → delivering` | Not shown |
-| `delivering → at_branch` | Auto-derived from last `at_branch` event; display only |
-| `delivering → delivered` | Not shown |
+| `at_origin_hub / at_hub → loaded` | Triggers vehicle picker (fleet-driven) |
+| `in_transit → at_hub` | Auto-derived; display only |
+| `at_hub → in_transit` | Not shown (fleet-driven via Start Trip) |
+| `at_hub → out_for_delivery` | Driver selector (required) |
+| `out_for_delivery → delivered` | Recipient DNI (required) |
+| `out_for_delivery → delivery_failed` | Notes/motivo (required) |
+| `ready_for_return → returned` | Sender DNI (required) |
+| `delivery_failed → at_hub` | Auto-derived from last `at_hub` event; display only |
 
 See the parent `../CLAUDE.md` for the full backend architecture, shipment state machine, and hardcoded user credentials.

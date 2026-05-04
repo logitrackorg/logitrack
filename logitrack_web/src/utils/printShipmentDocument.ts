@@ -50,7 +50,6 @@ export function printShipmentDocument(
   shipment: Shipment,
   branches: Branch[],
   qrBase64: string,
-  trackingUrl: string,
   org?: OrganizationConfig | null,
 ): void {
   const cor = shipment.corrections ?? {};
@@ -181,8 +180,7 @@ export function printShipmentDocument(
     .qr-img { width: 128px; height: 128px; flex-shrink: 0; }
     .qr-info { flex: 1; }
     .qr-tracking { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: #1e3a5f; letter-spacing: 2px; margin-bottom: 4px; }
-    .qr-url { font-size: 10px; color: #6b7280; word-break: break-all; }
-    .qr-hint { font-size: 11px; color: #374151; margin-top: 8px; }
+.qr-hint { font-size: 11px; color: #374151; margin-top: 8px; }
 
     .sig-section {
       border: 1px solid #d1d5db;
@@ -296,8 +294,7 @@ export function printShipmentDocument(
     <img class="qr-img" src="data:image/png;base64,${qrBase64}" alt="QR ${shipment.tracking_id}" />
     <div class="qr-info">
       <div class="qr-tracking">${shipment.tracking_id}</div>
-      <div class="qr-url">${trackingUrl}</div>
-      <div class="qr-hint">Escanear para seguimiento en tiempo real del envío.</div>
+<div class="qr-hint">Escanear para seguimiento en tiempo real del envío.</div>
     </div>
   </div>
 

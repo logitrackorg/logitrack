@@ -7,18 +7,23 @@ import { fmtDateTime } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 
 const statusConfig: Record<ShipmentStatus, { label: string; color: string; bg: string }> = {
-  pending:     { label: "Borrador",        color: "#374151", bg: "#f3f4f6" },
-  in_progress: { label: "En proceso",      color: "#92400e", bg: "#fef3c7" },
-  pre_transit: { label: "Pre tránsito",    color: "#0e7490", bg: "#cffafe" },
-  in_transit:  { label: "En tránsito",     color: "#1e40af", bg: "#dbeafe" },
-  at_branch:   { label: "En sucursal",     color: "#5b21b6", bg: "#ede9fe" },
-  delivering:       { label: "En reparto",         color: "#9a3412", bg: "#ffedd5" },
-  delivery_failed:  { label: "Entrega fallida",    color: "#991b1b", bg: "#fee2e2" },
-  delivered:        { label: "Entregado",           color: "#065f46", bg: "#d1fae5" },
-  ready_for_pickup: { label: "Listo para retiro",  color: "#0e7490", bg: "#cffafe" },
-  ready_for_return: { label: "Listo para devolución", color: "#5b21b6", bg: "#ede9fe" },
-  returned:         { label: "Devuelto",            color: "#374151", bg: "#f3f4f6" },
-  cancelled:        { label: "Cancelado",           color: "#b91c1c", bg: "#fee2e2" },
+  draft:                { label: "Borrador",              color: "#374151", bg: "#f3f4f6" },
+  at_origin_hub:        { label: "En sucursal de origen",      color: "#92400e", bg: "#fef3c7" },
+  loaded:               { label: "Cargado",               color: "#0e7490", bg: "#cffafe" },
+  in_transit:           { label: "En tránsito",           color: "#1e40af", bg: "#dbeafe" },
+  at_hub:               { label: "En sucursal",                color: "#5b21b6", bg: "#ede9fe" },
+  out_for_delivery:     { label: "En reparto",            color: "#9a3412", bg: "#ffedd5" },
+  delivery_failed:      { label: "Entrega fallida",       color: "#991b1b", bg: "#fee2e2" },
+  redelivery_scheduled: { label: "Reentrega programada",  color: "#9a3412", bg: "#ffedd5" },
+  no_entregado:         { label: "No entregado",          color: "#991b1b", bg: "#fee2e2" },
+  rechazado:            { label: "Rechazado",             color: "#7f1d1d", bg: "#fef2f2" },
+  delivered:            { label: "Entregado",             color: "#065f46", bg: "#d1fae5" },
+  ready_for_pickup:     { label: "Listo para retiro",     color: "#0e7490", bg: "#cffafe" },
+  ready_for_return:     { label: "Listo para devolución", color: "#5b21b6", bg: "#ede9fe" },
+  returned:             { label: "Devuelto",              color: "#374151", bg: "#f3f4f6" },
+  cancelled:            { label: "Cancelado",             color: "#b91c1c", bg: "#fee2e2" },
+  lost:                 { label: "Extraviado",            color: "#1f2937", bg: "#e5e7eb" },
+  destroyed:            { label: "Daño total",            color: "#111827", bg: "#d1d5db" },
 };
 
 function toDateInput(d: Date): string {

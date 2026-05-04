@@ -5,18 +5,23 @@ import "time"
 type Status string
 
 const (
-	StatusPending        Status = "pending"     // draft — partial data, no tracking ID yet
-	StatusInProgress     Status = "in_progress" // confirmed — tracking ID assigned, awaiting transit
-	StatusPreTransit     Status = "pre_transit" // pre-transit — vehicle assigned, ready to depart
-	StatusInTransit      Status = "in_transit"
-	StatusAtBranch       Status = "at_branch"
-	StatusDelivering     Status = "delivering"
-	StatusDelivered      Status = "delivered"
-	StatusDeliveryFailed Status = "delivery_failed"
-	StatusReadyForPickup Status = "ready_for_pickup" // recipient picks up at current branch
-	StatusReadyForReturn Status = "ready_for_return" // sender picks up — only valid at origin branch
-	StatusReturned       Status = "returned"         // sender picked up — terminal
-	StatusCancelled      Status = "cancelled"        // cancelled by supervisor/admin — terminal
+	StatusDraft               Status = "draft"                // borrador — datos parciales, sin tracking ID
+	StatusAtOriginHub         Status = "at_origin_hub"        // en sucursal de origen, confirmado
+	StatusLoaded              Status = "loaded"               // cargado en vehículo, listo para partir
+	StatusInTransit           Status = "in_transit"           // en tránsito entre sucursales
+	StatusAtHub               Status = "at_hub"               // en sucursal intermedia o de destino
+	StatusOutForDelivery      Status = "out_for_delivery"     // en reparto última milla
+	StatusDelivered           Status = "delivered"            // entregado — terminal
+	StatusDeliveryFailed      Status = "delivery_failed"      // intento de entrega fallido
+	StatusRedeliveryScheduled Status = "redelivery_scheduled" // reentrega agendada
+	StatusNoEntregado         Status = "no_entregado"         // no retirado del mostrador
+	StatusRechazado           Status = "rechazado"            // destinatario rechazó el envío
+	StatusReadyForPickup      Status = "ready_for_pickup"     // listo para retiro en sucursal
+	StatusReadyForReturn      Status = "ready_for_return"     // listo para devolución al remitente
+	StatusReturned            Status = "returned"             // devuelto al remitente — terminal
+	StatusCancelled           Status = "cancelled"            // cancelado — terminal
+	StatusLost                Status = "lost"                 // extraviado — terminal
+	StatusDestroyed           Status = "destroyed"            // daño total — terminal
 )
 
 type PackageType string
@@ -86,6 +91,11 @@ type Shipment struct {
 	UpdatedAt           time.Time  `json:"updated_at"`
 	EstimatedDeliveryAt time.Time  `json:"estimated_delivery_at"`
 	DeliveredAt         *time.Time `json:"delivered_at,omitempty"`
+
+	// Counter-shipment & return tracking
+	ParentShipmentID *string `json:"parent_shipment_id,omitempty"` // set when this is a counter-shipment
+	DeliveryAttempts int     `json:"delivery_attempts,omitempty"`  // incremented on every delivery_failed
+	IsReturning      bool    `json:"is_returning,omitempty"`       // true for counter-shipments and return-mode shipments
 
 	// Corrections: typed non-destructive field overrides; original data is never modified.
 	Corrections *ShipmentCorrections `json:"corrections,omitempty"`
@@ -247,10 +257,10 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	}
 }
 
-// CanGenerateQR returns true if the shipment can generate a QR code. AGREGADO
+// CanGenerateQR returns true if the shipment can generate a QR code.
 // QR codes can only be generated for confirmed shipments (not drafts).
 func (s *Shipment) CanGenerateQR() bool {
-	return s.TrackingID != "" && s.Status != StatusPending
+	return s.TrackingID != "" && s.Status != StatusDraft
 }
 
 type CreateShipmentRequest struct {
