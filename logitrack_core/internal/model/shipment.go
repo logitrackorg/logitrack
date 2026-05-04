@@ -33,10 +33,12 @@ const (
 )
 
 type Address struct {
-	Street     string `json:"street,omitempty"`
-	City       string `json:"city"`
-	Province   string `json:"province"`
-	PostalCode string `json:"postal_code,omitempty"`
+	Street     string   `json:"street,omitempty"`
+	City       string   `json:"city"`
+	Province   string   `json:"province"`
+	PostalCode string   `json:"postal_code,omitempty"`
+	Latitude   *float64 `json:"latitude,omitempty"`
+	Longitude  *float64 `json:"longitude,omitempty"`
 }
 
 type ShipmentType string
@@ -77,6 +79,9 @@ type Shipment struct {
 	// ReceivingBranchID (which tracks the current hosting branch), this never changes
 	// and is used to enforce ready_for_return semantics.
 	OriginBranchID string `json:"origin_branch_id,omitempty"`
+	// FinalBranchID is the branch geographically closest to the recipient's address.
+	// Set once at creation/confirmation and never changes. Represents the last-mile hub.
+	FinalBranchID string `json:"final_branch_id,omitempty"`
 
 	// Priority (set by ML service on create/confirm)
 	Priority           string                  `json:"priority,omitempty"`            // alta / media / baja

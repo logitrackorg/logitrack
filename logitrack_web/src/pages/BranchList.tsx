@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -415,7 +416,15 @@ function BranchFormModal({
           <input style={inputStyle} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="ej. CDBA-02" />
         </Field>
         <Field label="Calle *">
-          <input style={inputStyle} required value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="Av. Corrientes 1234" />
+          <AddressAutocomplete style={inputStyle} required value={form.street}
+            onChange={(v) => set("street", v)}
+            onAddressSelect={(p) => {
+              if (p.street) set("street", p.street);
+              if (p.city) set("city", p.city);
+              if (p.province) set("province", p.province);
+              if (p.postal_code) set("postal_code", p.postal_code);
+            }}
+            placeholder="Av. Corrientes 1234, Rosario" />
         </Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Ciudad *">

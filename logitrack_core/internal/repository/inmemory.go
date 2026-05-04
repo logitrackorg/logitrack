@@ -327,6 +327,19 @@ func (r *inMemoryVehicleRepository) SetDestinationBranch(id string, branchID *st
 	return nil
 }
 
+func (r *inMemoryVehicleRepository) UpdateLocation(id string, lat, lng float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vehicles[id]
+	if !ok {
+		return fmt.Errorf("vehicle not found")
+	}
+	v.CurrentLatitude = &lat
+	v.CurrentLongitude = &lng
+	r.vehicles[id] = v
+	return nil
+}
+
 // ── InMemory RouteRepository ──────────────────────────────────────────────────
 
 type inMemoryRouteRepository struct {

@@ -27,6 +27,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
+import { AddressAutocomplete, type AddressParts } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   draft:                [],
@@ -676,7 +677,7 @@ export function ShipmentDetail() {
               </>;
             })()}
           </div>
-          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} destination={shipment.recipient.address.city} branches={branches} />
+          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} finalBranchId={shipment.final_branch_id} destination={shipment.recipient.address.city} branches={branches} />
         </>
       )}
 
@@ -1460,7 +1461,12 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
             {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
           </DField>
-          <DField label="Calle *"><input style={inp} required value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
+          <DField label="Calle *">
+            <AddressAutocomplete style={inp} required value={form.sender.address.street ?? ""}
+              onChange={(v) => setSenderAddr("street", v)}
+              onAddressSelect={(p) => onChange({ ...form, sender: { ...form.sender, address: { ...form.sender.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
+              placeholder="Av. Corrientes 1234, Buenos Aires" />
+          </DField>
           <DField label="Ciudad *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
           <DField label="Provincia *">
             <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
@@ -1483,7 +1489,12 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
             {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
           </DField>
-          <DField label="Calle *"><input style={inp} required value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
+          <DField label="Calle *">
+            <AddressAutocomplete style={inp} required value={form.recipient.address.street ?? ""}
+              onChange={(v) => setRecipientAddr("street", v)}
+              onAddressSelect={(p) => onChange({ ...form, recipient: { ...form.recipient, address: { ...form.recipient.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
+              placeholder="San Martín 456, Córdoba" />
+          </DField>
           <DField label="Ciudad *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
           <DField label="Provincia *">
             <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
@@ -1571,10 +1582,11 @@ const fsStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius
 const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "#1e3a5f", padding: "0 6px" };
 const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, width: "100%", boxSizing: "border-box" };
 
-function RouteTimeline({ events, origin, receivingBranchId, destination, branches }: {
+function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, destination, branches }: {
   events: ShipmentEvent[];
   origin: string;
   receivingBranchId?: string;
+  finalBranchId?: string;
   destination: string;
   branches: Branch[];
 }) {
@@ -1582,6 +1594,7 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
 
   const receivingBranch = receivingBranchId ? branches.find((b) => b.id === receivingBranchId) : undefined;
   const firstStop = receivingBranch ? receivingBranch.id : origin;
+  const finalBranch = finalBranchId ? branches.find((b) => b.id === finalBranchId) : undefined;
 
   // Confirmed stops: receiving branch (or origin fallback) + each at_hub/at_origin_hub arrival
   const stops: { location: string; status: ShipmentStatus; timestamp: string; current: boolean }[] = [];
@@ -1645,6 +1658,9 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
                   );
                 })()}
                 <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(stop.timestamp)}</div>
+                {stop.location === finalBranchId && (
+                  <div style={{ fontSize: 10, color: "#8b5cf6", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
+                )}
               </div>
             </div>
             {i < stops.length - 1 && solidLine()}
@@ -1679,6 +1695,28 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
                     <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
                   );
                 })()}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Final branch — shown as pending node if not yet visited */}
+        {finalBranch && !stops.some(s => s.location === finalBranchId) && !isDelivered && !isDelivering && (
+          <>
+            {dashedLine()}
+            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: "#f9fafb", border: "3px dashed #8b5cf6",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6" }}>
+                  {stops.length + (isInTransit && nextBranch ? 2 : 1)}
+                </span>
+              </div>
+              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
+                <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>Sucursal final</div>
               </div>
             </div>
           </>
@@ -1780,7 +1818,21 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
-            <DField label="Calle (origen)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
+            <DField label="Calle (origen)">
+              <AddressAutocomplete
+                style={inp}
+                value={form.origin_street ?? ""}
+                onChange={(v) => set("origin_street", v)}
+                onAddressSelect={(p: AddressParts) => onChange({
+                  ...form,
+                  origin_street:      p.street      || form.origin_street      || "",
+                  origin_city:        p.city         || form.origin_city         || "",
+                  origin_province:    p.province     || form.origin_province     || "",
+                  origin_postal_code: p.postal_code  || form.origin_postal_code  || "",
+                })}
+                placeholder="Av. Corrientes 1234, San Miguel"
+              />
+            </DField>
             <DField label="Ciudad (origen)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
             <DField label="Provincia (origen)">
               <select style={inp} value={form.origin_province ?? ""} onChange={(e) => set("origin_province", e.target.value)}>
@@ -1800,7 +1852,21 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
-            <DField label="Calle (destino)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
+            <DField label="Calle (destino)">
+              <AddressAutocomplete
+                style={inp}
+                value={form.destination_street ?? ""}
+                onChange={(v) => set("destination_street", v)}
+                onAddressSelect={(p: AddressParts) => onChange({
+                  ...form,
+                  destination_street:      p.street      || form.destination_street      || "",
+                  destination_city:        p.city         || form.destination_city         || "",
+                  destination_province:    p.province     || form.destination_province     || "",
+                  destination_postal_code: p.postal_code  || form.destination_postal_code  || "",
+                })}
+                placeholder="San Martín 456, Córdoba"
+              />
+            </DField>
             <DField label="Ciudad (destino)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
             <DField label="Provincia (destino)">
               <select style={inp} value={form.destination_province ?? ""} onChange={(e) => set("destination_province", e.target.value)}>

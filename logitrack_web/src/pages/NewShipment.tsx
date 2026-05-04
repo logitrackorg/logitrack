@@ -6,6 +6,7 @@ import { customerApi, type Customer } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
+import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
 
 const PROVINCES = [
   "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
@@ -90,6 +91,40 @@ export function NewShipment() {
     setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, [field]: value } }));
   const setRecipientAddr = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, address: { ...prev.recipient.address, [field]: value } } }));
+
+  const applySenderAddress = (parts: AddressParts) =>
+    setForm((prev) => ({
+      ...prev,
+      sender: {
+        ...prev.sender,
+        address: {
+          ...prev.sender.address,
+          ...(parts.street && { street: parts.street }),
+          ...(parts.city && { city: parts.city }),
+          ...(parts.province && { province: parts.province }),
+          ...(parts.postal_code && { postal_code: parts.postal_code }),
+          ...(parts.latitude !== undefined && { latitude: parts.latitude }),
+          ...(parts.longitude !== undefined && { longitude: parts.longitude }),
+        },
+      },
+    }));
+
+  const applyRecipientAddress = (parts: AddressParts) =>
+    setForm((prev) => ({
+      ...prev,
+      recipient: {
+        ...prev.recipient,
+        address: {
+          ...prev.recipient.address,
+          ...(parts.street && { street: parts.street }),
+          ...(parts.city && { city: parts.city }),
+          ...(parts.province && { province: parts.province }),
+          ...(parts.postal_code && { postal_code: parts.postal_code }),
+          ...(parts.latitude !== undefined && { latitude: parts.latitude }),
+          ...(parts.longitude !== undefined && { longitude: parts.longitude }),
+        },
+      },
+    }));
 
   const handleSenderDNI = (dni: string) => {
     setSender("dni", dni);
@@ -272,8 +307,14 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Calle *">
-              <input style={input} required value={form.sender.address.street}
-                onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" />
+              <AddressAutocomplete
+                style={input}
+                required
+                value={form.sender.address.street}
+                onChange={(street) => setSenderAddr("street", street)}
+                onAddressSelect={applySenderAddress}
+                placeholder="Av. Corrientes 1234"
+              />
             </Field>
             <Field label="Ciudad *">
               <input style={input} required value={form.sender.address.city}
@@ -324,8 +365,14 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Calle *">
-              <input style={input} required value={form.recipient.address.street}
-                onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" />
+              <AddressAutocomplete
+                style={input}
+                required
+                value={form.recipient.address.street}
+                onChange={(street) => setRecipientAddr("street", street)}
+                onAddressSelect={applyRecipientAddress}
+                placeholder="San Martín 456"
+              />
             </Field>
             <Field label="Ciudad *">
               <input style={input} required value={form.recipient.address.city}

@@ -159,6 +159,12 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 				merged, event.Timestamp, event.TrackingID,
 			)
 		}
+		if err == nil && payload.FinalBranchID != "" {
+			_, err = p.db.Exec(
+				`UPDATE shipments SET final_branch_id = $1 WHERE tracking_id = $2`,
+				payload.FinalBranchID, event.TrackingID,
+			)
+		}
 		return err
 
 	case model.EventShipmentCancelled:
@@ -212,8 +218,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			shipment_type, time_window, cold_chain,
 			priority, priority_score, priority_confidence, priority_factors,
 			has_incident, incident_type,
-			parent_shipment_id, delivery_attempts, is_returning
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+			parent_shipment_id, delivery_attempts, is_returning,
+			final_branch_id
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -237,7 +244,8 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			priority_factors      = EXCLUDED.priority_factors,
 			parent_shipment_id    = EXCLUDED.parent_shipment_id,
 			delivery_attempts     = EXCLUDED.delivery_attempts,
-			is_returning          = EXCLUDED.is_returning`,
+			is_returning          = EXCLUDED.is_returning,
+			final_branch_id       = CASE WHEN EXCLUDED.final_branch_id != '' THEN EXCLUDED.final_branch_id ELSE shipments.final_branch_id END`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -246,6 +254,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.Priority, s.PriorityScore, s.PriorityConfidence, nullableBytes(priorityFactors),
 		s.HasIncident, string(s.IncidentType),
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
+		s.FinalBranchID,
 	)
 	return err
 }
@@ -268,7 +277,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       shipment_type, time_window, cold_chain,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -282,7 +291,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       shipment_type, time_window, cold_chain,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
@@ -321,7 +330,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       shipment_type, time_window, cold_chain,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
 		FROM shipments
 		WHERE LOWER(tracking_id) LIKE $1
 		   OR LOWER(sender->>'name') LIKE $1
@@ -480,7 +489,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&shipmentType, &timeWindow, &s.ColdChain,
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
-		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning,
+		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -543,7 +552,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&shipmentType, &timeWindow, &s.ColdChain,
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
-			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning,
+			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID,
 		)
 		if err != nil {
 			return nil, err

@@ -64,12 +64,13 @@ type StatusUpdateCmd struct {
 }
 
 type CorrectCmd struct {
-	TrackingID  string
-	Username    string
-	Status      model.Status // current status (unchanged)
-	Corrections model.ShipmentCorrections
-	Timestamp   time.Time
-	Prediction  *model.PriorityPrediction
+	TrackingID    string
+	Username      string
+	Status        model.Status // current status (unchanged)
+	Corrections   model.ShipmentCorrections
+	Timestamp     time.Time
+	Prediction    *model.PriorityPrediction
+	FinalBranchID string // recalculated when destination address changes; empty = no change
 }
 
 type CancelCmd struct {

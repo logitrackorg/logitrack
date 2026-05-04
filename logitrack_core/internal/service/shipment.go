@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -139,6 +140,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		TrackingID:          generateTrackingID(),
 		Sender:              req.Sender,
 		Recipient:           req.Recipient,
+		FinalBranchID:       s.resolveFinalBranch(req.Recipient),
 		WeightKg:            req.WeightKg,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
@@ -340,6 +342,14 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 			return model.Shipment{}, fmt.Errorf("la sucursal '%s' está fuera de servicio y no puede recibir envíos", b.Name)
 		}
 	}
+	if draft.FinalBranchID == "" {
+		draft.FinalBranchID = s.resolveFinalBranch(draft.Recipient)
+		if draft.FinalBranchID != "" {
+			draft.UpdatedAt = time.Now().UTC()
+			s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: draft}) //nolint:errcheck
+		}
+	}
+
 	var prediction *model.PriorityPrediction
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
@@ -683,13 +693,42 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 			correctionPrediction = s.mlClient.PredictFromShipment(effective)
 		}
 	}
+	newFinalBranch := ""
+	c := req.Corrections
+	if c.DestinationStreet != nil || c.DestinationCity != nil || c.DestinationProvince != nil || c.DestinationPostalCode != nil {
+		effective := shipment.Recipient
+		if stored := shipment.Corrections; stored != nil {
+			if stored.DestinationStreet != nil {
+				effective.Address.Street = *stored.DestinationStreet
+			}
+			if stored.DestinationCity != nil {
+				effective.Address.City = *stored.DestinationCity
+			}
+			if stored.DestinationProvince != nil {
+				effective.Address.Province = *stored.DestinationProvince
+			}
+		}
+		if c.DestinationStreet != nil {
+			effective.Address.Street = *c.DestinationStreet
+		}
+		if c.DestinationCity != nil {
+			effective.Address.City = *c.DestinationCity
+		}
+		if c.DestinationProvince != nil {
+			effective.Address.Province = *c.DestinationProvince
+		}
+		effective.Address.Latitude = nil
+		newFinalBranch = s.resolveFinalBranch(effective)
+	}
+
 	updated, err := s.repo.ApplyCorrections(repository.CorrectCmd{
-		TrackingID:  trackingID,
-		Username:    username,
-		Status:      shipment.Status,
-		Corrections: req.Corrections,
-		Timestamp:   time.Now().UTC(),
-		Prediction:  correctionPrediction,
+		TrackingID:    trackingID,
+		Username:      username,
+		Status:        shipment.Status,
+		Corrections:   req.Corrections,
+		Timestamp:     time.Now().UTC(),
+		Prediction:    correctionPrediction,
+		FinalBranchID: newFinalBranch,
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -917,4 +956,34 @@ func isValidTransition(from, to model.Status) bool {
 		}
 	}
 	return false
+}
+
+// geocodeCustomer resolves lat/lng for a customer's address if not already set.
+// Returns true if coordinates were resolved. Never fails — silently ignores errors.
+func geocodeCustomer(c *model.Customer) bool {
+	if c.Address.Latitude != nil {
+		return false
+	}
+	lat, lng, _ := geo.GeocodeShipmentAddress(c.Address.Street, c.Address.City, c.Address.Province)
+	if lat == 0 && lng == 0 {
+		return false
+	}
+	c.Address.Latitude = &lat
+	c.Address.Longitude = &lng
+	return true
+}
+
+// resolveFinalBranch returns the ID of the nearest active branch to the recipient's address.
+func (s *ShipmentService) resolveFinalBranch(recipient model.Customer) string {
+	lat, lng := 0.0, 0.0
+	if recipient.Address.Latitude != nil {
+		lat, lng = *recipient.Address.Latitude, *recipient.Address.Longitude
+	} else {
+		lat, lng, _ = geo.GeocodeShipmentAddress("", recipient.Address.City, recipient.Address.Province)
+	}
+	if lat == 0 && lng == 0 {
+		return ""
+	}
+	branches := s.branchRepo.List()
+	return geo.NearestBranch(lat, lng, branches)
 }
