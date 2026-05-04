@@ -21,9 +21,10 @@ const config: Record<ShipmentStatus, { label: string; color: string }> = {
 };
 
 export function StatusBadge({ status }: { status: ShipmentStatus }) {
+  const { label, color } = config[status] ?? { label: status, color: '#9ca3af' };
   return (
-    <span className={`badge badge-${status}`}>
-      {LABELS[status]}
+    <span className={`badge badge-${status}`} style={{ color }}>
+      {label}
     </span>
   );
 }
