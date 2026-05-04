@@ -289,20 +289,6 @@ h3 { font-size: 0.9375rem; }
   white-space: nowrap;
 }
 
-/* Status badge colors */
-.badge-pending          { background: #9ca3af; color: #fff; }
-.badge-in_progress      { background: #f59e0b; color: #fff; }
-.badge-pre_transit      { background: #06b6d4; color: #fff; }
-.badge-in_transit       { background: #3b82f6; color: #fff; }
-.badge-at_branch        { background: #8b5cf6; color: #fff; }
-.badge-delivering       { background: #f97316; color: #fff; }
-.badge-delivery_failed  { background: #ef4444; color: #fff; }
-.badge-delivered        { background: #10b981; color: #fff; }
-.badge-ready_for_pickup { background: #0891b2; color: #fff; }
-.badge-ready_for_return { background: #7c3aed; color: #fff; }
-.badge-returned         { background: #6b7280; color: #fff; }
-.badge-cancelled        { background: #b91c1c; color: #fff; }
-
 /* Priority badge */
 .badge-priority {
   display: inline-block;

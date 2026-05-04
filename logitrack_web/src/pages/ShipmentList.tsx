@@ -7,17 +7,15 @@ import { fmtDate } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { useAuth } from "../context/AuthContext";
+import { Plus, Download, X, AlertTriangle, RefreshCw, Package, Search, Filter, ChevronDown, Truck, AlertCircle, CheckCircle2, TrendingUp } from "lucide-react";
 
-// Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
   const v = s.corrections?.[key];
   return v !== undefined ? v : String(fallback);
 }
 
 function csvEscape(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 
@@ -27,30 +25,40 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
     const b = branches.find((b) => b.id === id);
     return b ? `${b.name} — ${b.address.city}` : id;
   };
-
   const headers = [
-    "ID de seguimiento", "Estado", "Prioridad",
-    "Ciudad de origen", "Provincia de origen", "Ciudad de destino", "Provincia de destino",
-    "Sucursal receptora", "Tipo de envío", "Peso (kg)", "Ubicación actual",
-    "Creado", "Entrega estimada",
+    "ID de seguimiento",
+    "Estado",
+    "Prioridad",
+    "Ciudad de origen",
+    "Provincia de origen",
+    "Ciudad de destino",
+    "Provincia de destino",
+    "Sucursal receptora",
+    "Tipo de envío",
+    "Peso (kg)",
+    "Ubicación actual",
+    "Creado",
+    "Entrega estimada",
   ];
-
-  const rows = shipments.map((s) => [
-    s.status === "draft" ? "" : s.tracking_id,
-    s.status,
-    s.priority ?? "",
-    corr(s, "origin_city", s.sender.address.city),
-    s.sender.address.province,
-    corr(s, "destination_city", s.recipient.address.city),
-    s.recipient.address.province,
-    branchName(s.receiving_branch_id),
-    s.shipment_type ?? "",
-    corr(s, "weight_kg", s.weight_kg),
-    s.current_location ?? "",
-    fmtDate(s.created_at),
-    fmtDate(s.estimated_delivery_at),
-  ].map(csvEscape).join(","));
-
+  const rows = shipments.map((s) =>
+    [
+      s.status === "draft" ? "" : s.tracking_id,
+      s.status,
+      s.priority ?? "",
+      corr(s, "origin_city", s.sender.address.city),
+      s.sender.address.province,
+      corr(s, "destination_city", s.recipient.address.city),
+      s.recipient.address.province,
+      branchName(s.receiving_branch_id),
+      s.shipment_type ?? "",
+      corr(s, "weight_kg", s.weight_kg),
+      s.current_location ?? "",
+      fmtDate(s.created_at),
+      fmtDate(s.estimated_delivery_at),
+    ]
+      .map(csvEscape)
+      .join(",")
+  );
   const csv = [headers.join(","), ...rows].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -62,21 +70,45 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
 }
 
 type StatusFilter = ShipmentStatus | "active" | "";
-
-// Statuses eligible for bulk operations
-const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
-
+const BULK_ELIGIBLE: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 type BulkAction = "ready_for_pickup" | "out_for_delivery";
-
-interface BulkConfirmState {
+interface BulkConfirm {
   action: BulkAction;
   count: number;
 }
-
 interface BulkResult {
   updated: number;
   skipped: { tracking_id: string; reason: string }[];
 }
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "active", label: "Activos" },
+  { value: "", label: "Todos" },
+  { value: "at_origin_hub", label: "En sucursal de origen" },
+  { value: "loaded", label: "Cargado" },
+  { value: "in_transit", label: "En tránsito" },
+  { value: "at_hub", label: "En sucursal" },
+  { value: "out_for_delivery", label: "En reparto" },
+  { value: "delivery_failed", label: "Entrega fallida" },
+  { value: "redelivery_scheduled", label: "Reentrega programada" },
+  { value: "no_entregado", label: "No entregado" },
+  { value: "rechazado", label: "Rechazado" },
+  { value: "ready_for_pickup", label: "Listo para retiro" },
+  { value: "ready_for_return", label: "Listo para devolución" },
+  { value: "delivered", label: "Entregados" },
+  { value: "returned", label: "Devueltos" },
+  { value: "cancelled", label: "Cancelados" },
+  { value: "lost", label: "Extraviados" },
+  { value: "destroyed", label: "Daño total" },
+  { value: "draft", label: "Borrador" },
+];
+
+const inputCls =
+  "h-9 px-3 rounded-xl border border-slate-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+const btnPrimary =
+  "inline-flex items-center gap-1.5 h-9 px-4 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-blue-500/20";
+const btnSecondary =
+  "inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-gray-600 transition-colors cursor-pointer disabled:opacity-50";
 
 export function ShipmentList() {
   const [searchParams] = useSearchParams();
@@ -84,13 +116,13 @@ export function ShipmentList() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
     (searchParams.get("status") as StatusFilter) ??
-    (sessionStorage.getItem("shipment_status_filter") as StatusFilter) ??
-    "active"
+      (sessionStorage.getItem("shipment_status_filter") as StatusFilter) ??
+      "active"
   );
-
   useEffect(() => {
     sessionStorage.setItem("shipment_status_filter", statusFilter);
   }, [statusFilter]);
+
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const { hasRole, user } = useAuth();
@@ -101,14 +133,14 @@ export function ShipmentList() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Bulk selection state
   const canBulk = hasRole("operator", "supervisor");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirm | null>(null);
   const [bulkDriverId, setBulkDriverId] = useState("");
   const [drivers, setDrivers] = useState<UserProfile[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
 
   const dateRangeInvalid = !!(dateFrom && dateTo && dateTo < dateFrom);
 
@@ -116,26 +148,37 @@ export function ShipmentList() {
     setLoading(true);
     setSelected(new Set());
     try {
-      const data = await shipmentApi.list();
-      setShipments(data ?? []);
+      setShipments((await shipmentApi.list()) ?? []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+  useEffect(() => {
+    branchApi
+      .listActive()
+      .then(setBranches)
+      .catch(() => {});
+  }, []);
 
-  // Returns YYYY-MM-DD in local time for a given ISO timestamp
   const localDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
   const filtered = shipments.filter((s) => {
-    if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
+    const terminal = ["delivered", "draft", "returned", "cancelled", "lost", "destroyed"];
+    if (statusFilter === "active" && terminal.includes(s.status)) return false;
     if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
-    if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
+    if (
+      branchFilter &&
+      s.receiving_branch_id !== branchFilter &&
+      !(s.status === "in_transit" && s.current_location === branchFilter)
+    )
+      return false;
     if (!dateRangeInvalid) {
       const created = localDate(s.created_at);
       if (dateFrom && created < dateFrom) return false;
@@ -144,45 +187,36 @@ export function ShipmentList() {
     const q = query.trim().toLowerCase();
     if (q.length >= 3) {
       const cor = s.corrections ?? {};
-      const senderName = (cor.sender_name ?? s.sender?.name ?? "").toLowerCase();
-      const recipientName = (cor.recipient_name ?? s.recipient?.name ?? "").toLowerCase();
-      const senderCity = (cor.sender_city ?? s.sender?.address?.city ?? "").toLowerCase();
-      const recipientCity = (cor.recipient_city ?? s.recipient?.address?.city ?? "").toLowerCase();
-      if (
-        !s.tracking_id.toLowerCase().includes(q) &&
-        !senderName.includes(q) &&
-        !recipientName.includes(q) &&
-        !senderCity.includes(q) &&
-        !recipientCity.includes(q)
-      ) return false;
+      const fields = [
+        cor.sender_name ?? s.sender?.name ?? "",
+        cor.recipient_name ?? s.recipient?.name ?? "",
+        cor.sender_city ?? s.sender?.address?.city ?? "",
+        cor.recipient_city ?? s.recipient?.address?.city ?? "",
+        s.tracking_id,
+      ];
+      if (!fields.some((f) => f.toLowerCase().includes(q))) return false;
     }
     return true;
   });
 
-  const eligibleInView = filtered.filter((s) => BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus));
+  const eligibleInView = filtered.filter((s) => BULK_ELIGIBLE.includes(s.status as ShipmentStatus));
   const allEligibleSelected = eligibleInView.length > 0 && eligibleInView.every((s) => selected.has(s.tracking_id));
 
-  const toggleSelect = (trackingId: string) => {
+  const toggleSelect = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(trackingId)) next.delete(trackingId);
-      else next.add(trackingId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
-  };
-
-  const toggleSelectAll = () => {
-    if (allEligibleSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(eligibleInView.map((s) => s.tracking_id)));
-    }
-  };
 
   const openBulkAction = (action: BulkAction) => {
     if (selected.size === 0) return;
     if (action === "out_for_delivery") {
-      usersApi.listDrivers(user?.branch_id).then(setDrivers).catch(() => {});
+      usersApi
+        .listDrivers(user?.branch_id)
+        .then(setDrivers)
+        .catch(() => {});
       setBulkDriverId("");
     }
     setBulkConfirm({ action, count: selected.size });
@@ -207,273 +241,546 @@ export function ShipmentList() {
     }
   };
 
-  const actionLabel = (action: BulkAction) =>
-    action === "ready_for_pickup" ? "Listo para retiro" : "En reparto (asignar a chofer)";
+  const branchesByProvince = branches.reduce(
+    (acc, b) => {
+      if (!acc[b.province]) acc[b.province] = [];
+      acc[b.province].push(b);
+      return acc;
+    },
+    {} as Record<string, Branch[]>
+  );
+
+  // Calcular stats rápidos
+  const stats = {
+    total: shipments.length,
+    active: shipments.filter(s => !['delivered', 'returned', 'cancelled', 'lost', 'destroyed', 'draft'].includes(s.status)).length,
+    inTransit: shipments.filter(s => s.status === 'in_transit' || s.status === 'out_for_delivery').length,
+    delivered: shipments.filter(s => s.status === 'delivered').length,
+    incidents: shipments.filter(s => s.has_incident).length,
+  };
+
+  // Active filter pills
+  const activeFilters: { key: string; label: string; onRemove: () => void }[] = [];
+  if (query) activeFilters.push({ key: 'query', label: `Búsqueda: "${query}"`, onRemove: () => setQuery('') });
+  if (statusFilter && statusFilter !== 'active') activeFilters.push({ key: 'status', label: STATUS_OPTIONS.find(o => o.value === statusFilter)?.label ?? statusFilter, onRemove: () => setStatusFilter('active') });
+  if (branchFilter) activeFilters.push({ key: 'branch', label: branches.find(b => b.id === branchFilter)?.name ?? branchFilter, onRemove: () => setBranchFilter('') });
+  if (dateFrom) activeFilters.push({ key: 'dateFrom', label: `Desde ${dateFrom}`, onRemove: () => setDateFrom('') });
+  if (dateTo) activeFilters.push({ key: 'dateTo', label: `Hasta ${dateTo}`, onRemove: () => setDateTo('') });
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>Envíos</h1>
-        {hasRole("operator", "supervisor", "admin") && (
-          <button onClick={() => navigate("/new")}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
-            + Nuevo envío
-          </button>
+    <div className={`max-w-[1400px] mx-auto space-y-4 ${canBulk && selected.size > 0 ? "pb-24" : ""}`}>
+      {/* Header con stats - Premium KPI Cards */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Envíos</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {loading ? "Cargando..." : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+        
+        {/* KPI Cards */}
+        {!loading && filtered.length > 0 && (
+          <div className="flex items-center gap-2">
+            {/* Activos */}
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setStatusFilter('active')}>
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-gray-900 leading-tight">{stats.active}</div>
+                <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Activos</div>
+              </div>
+            </div>
+            
+            {/* En Tránsito */}
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setStatusFilter('in_transit')}>
+              <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
+                <Truck className="w-4 h-4 text-orange-600" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-gray-900 leading-tight">{stats.inTransit}</div>
+                <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">En tránsito</div>
+              </div>
+            </div>
+            
+            {/* Entregados */}
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setStatusFilter('delivered')}>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-gray-900 leading-tight">{stats.delivered}</div>
+                <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Entregados</div>
+              </div>
+            </div>
+            
+            {/* Incidencias */}
+            {stats.incidents > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-red-700 leading-tight">{stats.incidents}</div>
+                  <div className="text-[10px] text-red-500 font-medium uppercase tracking-wide">Incidencias</div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
-      </div>
-
-      {/* Search & filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 240 }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por ID de seguimiento, remitente, destinatario o ciudad..."
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }} />
-          {query && (
-            <button type="button" onClick={() => setQuery("")}
-              style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>
-              Limpiar
+        <div className="flex items-center gap-2">
+          <button onClick={load} disabled={loading} className={btnSecondary} title="Actualizar">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          {hasRole("admin", "manager") && (
+            <button onClick={() => exportToCSV(filtered, branches)} className={btnSecondary}>
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Exportar CSV</span>
+            </button>
+          )}
+          {hasRole("operator", "supervisor", "admin") && (
+            <button onClick={() => navigate("/new")} className={btnPrimary}>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Nuevo envío</span>
             </button>
           )}
         </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          Desde
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={selectStyle} />
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          Hasta
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            style={{ ...selectStyle, borderColor: dateRangeInvalid ? "#ef4444" : "#d1d5db" }} />
-        </label>
-        {dateRangeInvalid && (
-          <span style={{ fontSize: 13, color: "#ef4444", alignSelf: "center" }}>
-            La fecha "Hasta" debe ser posterior a "Desde"
-          </span>
-        )}
-        {(dateFrom || dateTo) && (
-          <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); }}
-            style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14 }}>
-            Limpiar fechas
-          </button>
-        )}
-
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          style={selectStyle}>
-          <option value="active">Activos</option>
-          <option value="">Todos</option>
-          <option value="at_origin_hub">En sucursal de origen</option>
-          <option value="loaded">Cargado</option>
-          <option value="in_transit">En tránsito</option>
-          <option value="at_hub">En sucursal</option>
-          <option value="out_for_delivery">En reparto</option>
-          <option value="delivery_failed">Entrega fallida</option>
-          <option value="redelivery_scheduled">Reentrega programada</option>
-          <option value="no_entregado">No entregado</option>
-          <option value="rechazado">Rechazado</option>
-          <option value="ready_for_pickup">Listo para retiro</option>
-          <option value="ready_for_return">Listo para devolución</option>
-          <option value="delivered">Entregados</option>
-          <option value="returned">Devueltos</option>
-          <option value="cancelled">Cancelados</option>
-          <option value="lost">Extraviados</option>
-          <option value="destroyed">Daño total</option>
-          <option value="draft">Borrador</option>
-        </select>
-
-        {isOperator ? (
-          <span style={{ ...selectStyle, display: "inline-flex", alignItems: "center", background: "#f0f9ff", border: "1px solid #bfdbfe", color: "#1e3a5f", fontWeight: 500 }}>
-            {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
-          </span>
-        ) : (
-          <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={selectStyle}>
-            <option value="">Todas las sucursales</option>
-            {(() => {
-              const byProvince = branches.reduce((acc, b) => {
-                if (!acc[b.province]) acc[b.province] = [];
-                acc[b.province].push(b);
-                return acc;
-              }, {} as Record<string, Branch[]>);
-              return Object.entries(byProvince)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([province, pBranches]) => (
-                  <optgroup key={province} label={province}>
-                    {[...pBranches]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(b => (
-                        <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                      ))}
-                  </optgroup>
-                ));
-            })()}
-          </select>
-        )}
-
       </div>
 
-      {/* Bulk action toolbar */}
-      {canBulk && selected.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "10px 16px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>
-            {selected.size} {selected.size === 1 ? "envío seleccionado" : "envíos seleccionados"}
-          </span>
-          <button
-            onClick={() => openBulkAction("ready_for_pickup")}
-            style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-            Marcar como "Listo para retiro"
-          </button>
-          <button
-            onClick={() => openBulkAction("out_for_delivery")}
-            style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-            Asignar a reparto
-          </button>
-          <button
-            onClick={() => setSelected(new Set())}
-            style={{ background: "transparent", color: "#6b7280", border: "none", cursor: "pointer", fontSize: 13, marginLeft: "auto" }}>
-            Cancelar selección
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <p>Cargando...</p>
-      ) : filtered.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No se encontraron envíos.</p>
-      ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}</p>
-            {hasRole("admin", "manager") && (
-              <button
-                onClick={() => exportToCSV(filtered, branches)}
-                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-                Exportar CSV
-              </button>
+      {/* Filters - Panel colapsable */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Header del panel de filtros */}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-medium text-gray-700">Filtros</span>
+            {(query || statusFilter !== "active" || branchFilter || dateFrom || dateTo) && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[#1e3a5f] text-[10px] font-semibold text-white">
+                Active
+              </span>
             )}
           </div>
-          <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 800 }}>
-            <thead>
-              <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                {canBulk && (
-                  <th style={{ ...th, width: 40, textAlign: "center" }}>
-                    {eligibleInView.length > 0 && (
-                      <input
-                        type="checkbox"
-                        checked={allEligibleSelected}
-                        onChange={toggleSelectAll}
-                        title="Seleccionar todos los elegibles"
-                        style={{ cursor: "pointer" }}
-                      />
-                    )}
-                  </th>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+        </button>
+
+        {/* Contenido de filtros */}
+        {showFilters && (
+          <div className="px-4 pb-4 space-y-3">
+            {/* Fila 1: Búsqueda y Estado */}
+            <div className="flex flex-wrap gap-3">
+              {/* Search - Premium con icono grande */}
+              <div className="relative flex-1 min-w-72">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar por ID, nombre o ciudad..."
+                  className={`${inputCls} w-full pl-11 pr-8 h-10`}
+                />
+                {query && (
+                  <button
+                    onClick={() => setQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-slate-100 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
-                <th style={th}>ID de seguimiento</th>
-                <th style={th}>Remitente</th>
-                <th style={th}>Destinatario</th>
-                <th style={th}>Origen → Destino</th>
-                <th style={th}>Peso</th>
-                <th style={th}>Prioridad</th>
-                <th style={th}>Estado</th>
-                <th style={th}>Creado</th>
-                <th style={th}>Entrega estimada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => {
-                const isEligible = BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus);
-                const isChecked = selected.has(s.tracking_id);
-                return (
-                  <tr key={s.tracking_id}
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (target.tagName === "INPUT") return;
-                      navigate(`/shipments/${s.tracking_id}`);
+              </div>
+
+              {/* Status */}
+              <div className="w-44">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                  className={`${inputCls} w-full`}>
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Branch */}
+              {isOperator ? (
+                <span className="inline-flex items-center h-9 px-3 rounded-lg border border-blue-200 bg-blue-50 text-sm font-medium text-[#1e3a5f]">
+                  {branches.find((b) => b.id === branchFilter)?.name ?? branchFilter}
+                </span>
+              ) : (
+                <div className="w-56">
+                  <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} className={`${inputCls} w-full`}>
+                    <option value="">Todas las sucursales</option>
+                    {Object.entries(branchesByProvince)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([province, pBranches]) => (
+                        <optgroup key={province} label={province}>
+                          {[...pBranches]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.name} — {b.address.city}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Fila 2: Fechas */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500 font-medium">Fecha de creación:</span>
+              <div className="flex items-center gap-2">
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={`${inputCls} w-36`} />
+                <span className="text-gray-400">—</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className={`${inputCls} w-36 ${dateRangeInvalid ? "border-red-300 focus:border-red-400" : ""}`}
+                />
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={() => {
+                      setDateFrom("");
+                      setDateTo("");
                     }}
-                    style={{ borderBottom: "1px solid #e5e7eb", cursor: "pointer", background: isChecked ? "#eff6ff" : "" }}
-                    onMouseEnter={(e) => { if (!isChecked) e.currentTarget.style.background = "#f0f9ff"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = isChecked ? "#eff6ff" : ""; }}>
+                    className="text-gray-400 hover:text-gray-600 p-1">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {dateRangeInvalid && (
+                <span className="flex items-center gap-1 text-xs text-red-600">
+                  <AlertTriangle className="w-3 h-3" /> Rango inválido
+                </span>
+              )}
+            </div>
+
+            {/* Active Filter Pills */}
+            {activeFilters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                <span className="text-xs text-slate-500 font-medium">Filtros activos:</span>
+                {activeFilters.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={f.onRemove}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 transition-colors cursor-pointer group">
+                    {f.label}
+                    <X className="w-3 h-3 group-hover:text-slate-800" />
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    setQuery("");
+                    setStatusFilter("active");
+                    setBranchFilter("");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  className="text-xs text-blue-600 font-medium hover:underline cursor-pointer">
+                  Limpiar todo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+        {/* Bulk toolbar - Fixed bottom */}
+        {canBulk && selected.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 bg-gray-900/95 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-800/50 animate-in slide-in-from-bottom-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center">
+                <span className="text-sm font-bold text-white">{selected.size}</span>
+              </div>
+              <span className="text-sm font-medium text-white">
+                {selected.size === 1 ? "envío seleccionado" : "envíos seleccionados"}
+              </span>
+            </div>
+            <div className="h-6 w-px bg-gray-700" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openBulkAction("ready_for_pickup")}
+                className="h-8 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-all hover:scale-105 cursor-pointer">
+                Listo para retiro
+              </button>
+              <button
+                onClick={() => openBulkAction("out_for_delivery")}
+                className="h-8 px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-all hover:scale-105 cursor-pointer">
+                Asignar a reparto
+              </button>
+            </div>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="ml-2 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
+        {loading ? (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    {canBulk && <th className="w-10 px-4 py-3"></th>}
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Remitente</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Destinatario</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Ruta</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Peso</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Prioridad</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Creado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Entrega est.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[...Array(5)].map((_, i) => (
+                    <tr key={i}>
+                      {canBulk && <td className="px-4 py-3"><div className="w-4 h-4 bg-slate-100 rounded animate-pulse" /></td>}
+                      <td className="px-4 py-3"><div className="h-4 w-24 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-32 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-32 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-40 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-12 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-5 w-16 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-5 w-20 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-100 rounded animate-pulse" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-20 bg-slate-100 rounded animate-pulse" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                <Package className="w-8 h-8 text-slate-400" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Sin resultados</h3>
+              <p className="text-sm text-gray-500 max-w-sm mb-4">No se encontraron envíos con los filtros aplicados. Intentá con otros criterios de búsqueda.</p>
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setStatusFilter("active");
+                  setBranchFilter("");
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+                className="text-sm text-[#1e3a5f] font-medium hover:underline">
+                Limpiar todos los filtros
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto max-h-[70vh]">
+              <table className="w-full text-sm border-collapse">
+                <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 shadow-sm">
+                  <tr>
                     {canBulk && (
-                      <td style={{ ...td, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                        {isEligible && (
+                      <th className="w-10 px-3 py-3 text-center bg-slate-50">
+                        {eligibleInView.length > 0 && (
                           <input
                             type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleSelect(s.tracking_id)}
-                            style={{ cursor: "pointer" }}
+                            checked={allEligibleSelected}
+                            onChange={() =>
+                              allEligibleSelected
+                                ? setSelected(new Set())
+                                : setSelected(new Set(eligibleInView.map((s) => s.tracking_id)))
+                            }
+                            className="cursor-pointer rounded"
                           />
                         )}
-                      </td>
+                      </th>
                     )}
-                    <td style={td}><code style={s.status === "draft" ? { color: "#9ca3af" } : undefined}>{s.tracking_id}</code></td>
-                    <td style={td}>{corr(s, "sender_name", s.sender.name)}</td>
-                    <td style={td}>{corr(s, "recipient_name", s.recipient.name)}</td>
-                    <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>
-                    <td style={td}>{corr(s, "weight_kg", s.weight_kg)} kg</td>
-                    <td style={td}><PriorityBadge priority={s.priority} /></td>
-                    <td style={td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <StatusBadge status={s.status} />
-                        {s.has_incident && (
-                          <span
-                            title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
-                            style={{ display: "inline-flex", alignItems: "center", background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 5px", fontSize: 12 }}>
-                            ⚠
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td style={td}>{fmtDate(s.created_at)}</td>
-                    <td style={td}>{fmtDate(s.estimated_delivery_at)}</td>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Involucrados
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Ruta
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Peso
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Prioridad
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Creado
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                      Entrega est.
+                    </th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map((s) => {
+                    const isEligible = BULK_ELIGIBLE.includes(s.status as ShipmentStatus);
+                    const isChecked = selected.has(s.tracking_id);
+                    return (
+                      <tr
+                        key={s.tracking_id}
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).tagName === "INPUT") return;
+                          navigate(`/shipments/${s.tracking_id}`);
+                        }}
+                        className={`cursor-pointer transition-all duration-150 group ${isChecked ? "bg-blue-50/70" : "hover:bg-slate-50/80"}`}>
+                        {canBulk && (
+                          <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            {isEligible && (
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleSelect(s.tracking_id)}
+                                className="cursor-pointer rounded"
+                              />
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <code
+                            className={`text-xs font-mono font-semibold tracking-wide ${s.status === "draft" ? "text-gray-400" : "text-[#1e3a5f]"}`}>
+                            {s.tracking_id}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            {/* Remitente avatar */}
+                            <div className="flex-shrink-0" title={`Remitente: ${corr(s, "sender_name", s.sender.name)}`}>
+                              <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white shadow-sm flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-emerald-700">
+                                  {(corr(s, "sender_name", s.sender.name) || "R").charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                            {/* Destinatario avatar */}
+                            <div className="flex-shrink-0" title={`Destinatario: ${corr(s, "recipient_name", s.recipient.name)}`}>
+                              <div className="w-8 h-8 rounded-full bg-violet-100 border-2 border-white shadow-sm flex items-center justify-center -ml-4">
+                                <span className="text-[10px] font-bold text-violet-700">
+                                  {(corr(s, "recipient_name", s.recipient.name) || "D").charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate max-w-[140px]" title={corr(s, "sender_name", s.sender.name)}>
+                                {corr(s, "sender_name", s.sender.name)}
+                              </div>
+                              <div className="text-xs text-gray-400 truncate max-w-[140px]">→ {corr(s, "recipient_name", s.recipient.name)}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium truncate max-w-16">
+                              {corr(s, "origin_city", s.sender.address.city)}
+                            </span>
+                            <Truck className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                            <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium truncate max-w-16">
+                              {corr(s, "destination_city", s.recipient.address.city)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                          {corr(s, "weight_kg", s.weight_kg)} kg
+                        </td>
+                        <td className="px-4 py-3">
+                          <PriorityBadge priority={s.priority} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {/* Ping indicator for active states */}
+                            {['in_transit', 'out_for_delivery', 'at_hub', 'loaded', 'at_origin_hub'].includes(s.status) && (
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                              </span>
+                            )}
+                            <StatusBadge status={s.status} />
+                            {s.has_incident && (
+                              <span
+                                title={
+                                  s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"
+                                }
+                                className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] border border-amber-200">
+                                !
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{fmtDate(s.created_at)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                          {fmtDate(s.estimated_delivery_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </>
-      )}
+        )}
 
       {/* Bulk confirm modal */}
       {bulkConfirm && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Confirmar actualización masiva</h3>
-            <p style={{ margin: "0 0 16px", color: "#374151", fontSize: 14 }}>
-              Se actualizarán <strong>{bulkConfirm.count}</strong> {bulkConfirm.count === 1 ? "envío" : "envíos"} al estado{" "}
-              <strong>"{actionLabel(bulkConfirm.action)}"</strong>.
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Actualización masiva</h2>
+              <button onClick={() => setBulkConfirm(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Se actualizarán <strong className="text-gray-900">{bulkConfirm.count}</strong>{" "}
+              {bulkConfirm.count === 1 ? "envío" : "envíos"} a{" "}
+              <strong className="text-gray-900">
+                "{bulkConfirm.action === "ready_for_pickup" ? "Listo para retiro" : "En reparto"}"
+              </strong>
+              .
             </p>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
-              Los envíos que no admitan esta transición serán omitidos sin cancelar la operación.
-            </p>
-
+            <p className="text-xs text-gray-400">Los envíos que no admitan esta transición serán omitidos.</p>
             {bulkConfirm.action === "out_for_delivery" && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 6, color: "#374151" }}>
-                  Chofer asignado
-                </label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700">Chofer asignado</label>
                 <select
                   value={bulkDriverId}
                   onChange={(e) => setBulkDriverId(e.target.value)}
-                  style={{ ...selectStyle, width: "100%" }}>
+                  className="w-full h-9 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb]">
                   <option value="">Seleccioná un chofer...</option>
                   {drivers.map((d) => (
-                    <option key={d.id} value={d.id}>{d.username}</option>
+                    <option key={d.id} value={d.id}>
+                      {d.username}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <div className="flex gap-2 justify-end pt-1">
               <button
                 onClick={() => setBulkConfirm(null)}
                 disabled={bulkLoading}
-                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: 14 }}>
+                className="h-9 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-medium text-gray-600 transition-colors cursor-pointer disabled:opacity-50">
                 Cancelar
               </button>
               <button
                 onClick={executeBulk}
                 disabled={bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)}
-                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: (bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)) ? 0.6 : 1 }}>
+                className={btnPrimary}>
                 {bulkLoading ? "Procesando..." : "Confirmar"}
               </button>
             </div>
@@ -483,41 +790,31 @@ export function ShipmentList() {
 
       {/* Bulk result modal */}
       {bulkResult && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Resultado de la actualización masiva</h3>
-            <p style={{ margin: "0 0 8px", fontSize: 14, color: "#374151" }}>
-              <strong style={{ color: "#16a34a" }}>{bulkResult.updated}</strong> {bulkResult.updated === 1 ? "envío actualizado" : "envíos actualizados"} exitosamente.
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 className="text-base font-bold text-gray-900">Resultado</h2>
+            <p className="text-sm text-gray-600">
+              <strong className="text-emerald-600">{bulkResult.updated}</strong>{" "}
+              {bulkResult.updated === 1 ? "envío actualizado" : "envíos actualizados"} correctamente.
             </p>
             {bulkResult.skipped.length > 0 && (
-              <>
-                <p style={{ margin: "0 0 8px", fontSize: 14, color: "#374151" }}>
-                  <strong style={{ color: "#d97706" }}>{bulkResult.skipped.length}</strong> {bulkResult.skipped.length === 1 ? "envío omitido" : "envíos omitidos"}:
+              <div>
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong className="text-amber-600">{bulkResult.skipped.length}</strong>{" "}
+                  {bulkResult.skipped.length === 1 ? "envío omitido" : "envíos omitidos"}:
                 </p>
-                <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 16 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: "#f9fafb" }}>
-                        <th style={{ ...th, padding: "8px 12px" }}>ID</th>
-                        <th style={{ ...th, padding: "8px 12px" }}>Motivo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bulkResult.skipped.map((s) => (
-                        <tr key={s.tracking_id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                          <td style={{ padding: "8px 12px" }}><code>{s.tracking_id}</code></td>
-                          <td style={{ padding: "8px 12px", color: "#6b7280" }}>{s.reason}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 text-xs">
+                  {bulkResult.skipped.map((s) => (
+                    <div key={s.tracking_id} className="flex items-center gap-3 px-3 py-2">
+                      <code className="font-mono text-[#1e3a5f] font-semibold">{s.tracking_id}</code>
+                      <span className="text-gray-400">{s.reason}</span>
+                    </div>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setBulkResult(null)}
-                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+            <div className="flex justify-end">
+              <button onClick={() => setBulkResult(null)} className={btnPrimary}>
                 Aceptar
               </button>
             </div>
@@ -527,9 +824,3 @@ export function ShipmentList() {
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: "10px 14px", fontWeight: 600, color: "#374151" };
-const td: React.CSSProperties = { padding: "10px 14px" };
-const selectStyle: React.CSSProperties = { padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" };
-const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 };
-const modalStyle: React.CSSProperties = { background: "#fff", borderRadius: 10, padding: 24, width: 480, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" };
