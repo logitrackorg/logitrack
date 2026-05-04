@@ -1,0 +1,71 @@
+logitrack_core/internal/model/branch.go
+  17dfdbbad9e75f3c 22-23,41-49,54-61
+logitrack_core/internal/model/vehicle.go
+  17dfdbbad9e75f3c 38-40
+logitrack_core/internal/model/domain_event.go
+  17dfdbbad9e75f3c 59-62
+logitrack_web/src/pages/ShipmentDetail.tsx
+  17dfdbbad9e75f3c 30,680,1464-1469,1492-1497,1585,1589,1597,1661-1663,1703-1724,1821-1835,1855-1869
+logitrack_core/internal/repository/shipment_es.go
+  17dfdbbad9e75f3c 120-123
+logitrack_web/src/pages/AdminUsers.tsx
+  17dfdbbad9e75f3c 2,363-366,484-487
+logitrack_web/src/components/AddressAutocomplete.tsx
+  17dfdbbad9e75f3c 1-207
+logitrack_core/internal/handler/vehicle.go
+  17dfdbbad9e75f3c 527-529,685,691-692
+logitrack_core/internal/repository/inmemory.go
+  17dfdbbad9e75f3c 330-342
+logitrack_core/internal/service/branch.go
+  17dfdbbad9e75f3c 9,78-84,97-98,146-152,163-164
+logitrack_core/internal/db/migrate.go
+  17dfdbbad9e75f3c 59
+logitrack_core/internal/geo/geocoder.go
+  17dfdbbad9e75f3c 3-8,30-72
+logitrack_core/internal/repository/vehicle.go
+  17dfdbbad9e75f3c 26
+logitrack_core/internal/repository/postgres_vehicle.go
+  17dfdbbad9e75f3c 41-43,54-55,64-65,68-69,90-98,103-104,221-228
+logitrack_core/internal/seed/branch_seed.go
+  17dfdbbad9e75f3c 13-15,17-18,20
+logitrack_core/internal/model/shipment.go
+  17dfdbbad9e75f3c 36-41,82-84
+logitrack_core/internal/repository/postgres_branch.go
+  17dfdbbad9e75f3c 32-33,47,50,79-84,88,145-146,149-150,180-182,184-185
+logitrack_core/internal/projection/postgres_shipment.go
+  17dfdbbad9e75f3c 162-167,221-223,247-248,257,280,294,333,492,555
+logitrack_core/internal/seed/seed.go
+  17dfdbbad9e75f3c 12-13,47-53,56-62,65-71,96-97,116-117,137-138,155-156,178-179,199-200,219-220,241-242,264-265,286-287,303-304,324-325,345-346,370-371,397-398,434
+logitrack_web/src/api/shipments.ts
+  17dfdbbad9e75f3c 80
+logitrack_web/src/pages/NewShipment.tsx
+  17dfdbbad9e75f3c 9,95-128,310-317,368-375
+logitrack_web/src/pages/BranchList.tsx
+  17dfdbbad9e75f3c 2,419-427
+logitrack_core/internal/service/shipment.go
+  17dfdbbad9e75f3c 10,143,345-352,696-723,725-731,960-989
+logitrack_core/internal/geo/cities.go
+  17dfdbbad9e75f3c 223-224
+logitrack_core/internal/repository/shipment.go
+  17dfdbbad9e75f3c 67-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fa0394bc0f67835d3790c6847aa0197e03e4ccde",
+  "prompts": {
+    "17dfdbbad9e75f3c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5e77dfc-b46e-4040-8b94-516b1c29f072",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 10540,
+      "total_deletions": 212,
+      "accepted_lines": 687,
+      "overriden_lines": 0
+    }
+  }
+}
