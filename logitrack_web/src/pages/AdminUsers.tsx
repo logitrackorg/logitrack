@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { adminApi, type UserUpdatePayload, type UserCreatePayload } from "../api/admin";
 import { branchApi, type Branch } from "../api/branches";
 import type { User, Role, UserStatus, UserAddress } from "../api/auth";
@@ -359,7 +360,10 @@ export function AdminUsers() {
             <div style={{ display: "grid", gap: 14, marginBottom: 20 }}>
               <label style={labelStyle}>
                 Calle y número *
-                <input value={editState.address.street ?? ""} onChange={e => setEditState(s => ({ ...s, address: { ...s.address, street: e.target.value } }))} placeholder="Av. Corrientes 1234" style={inputStyle} />
+                <AddressAutocomplete style={inputStyle} value={editState.address.street ?? ""}
+                  onChange={(v) => setEditState(s => ({ ...s, address: { ...s.address, street: v } }))}
+                  onAddressSelect={(p) => setEditState(s => ({ ...s, address: { ...s.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } }))}
+                  placeholder="Av. Corrientes 1234, Buenos Aires" />
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={labelStyle}>
@@ -477,7 +481,10 @@ export function AdminUsers() {
             <div style={{ display: "grid", gap: 14, marginBottom: 20 }}>
               <label style={labelStyle}>
                 Calle y número *
-                <input value={createForm.address.street ?? ""} onChange={e => setCreateForm(s => ({ ...s, address: { ...s.address, street: e.target.value } }))} placeholder="Av. Corrientes 1234" style={inputStyle} />
+                <AddressAutocomplete style={inputStyle} value={createForm.address.street ?? ""}
+                  onChange={(v) => setCreateForm(s => ({ ...s, address: { ...s.address, street: v } }))}
+                  onAddressSelect={(p) => setCreateForm(s => ({ ...s, address: { ...s.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } }))}
+                  placeholder="Av. Corrientes 1234, Buenos Aires" />
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={labelStyle}>

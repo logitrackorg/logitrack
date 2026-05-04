@@ -56,9 +56,10 @@ type StatusChangedPayload struct {
 }
 
 type ShipmentCorrectedPayload struct {
-	Status      Status // current status (unchanged by correction)
-	Corrections ShipmentCorrections
-	Prediction  *PriorityPrediction
+	Status        Status // current status (unchanged by correction)
+	Corrections   ShipmentCorrections
+	Prediction    *PriorityPrediction
+	FinalBranchID string // non-empty when recalculated due to destination address change
 }
 
 type ShipmentCancelledPayload struct {

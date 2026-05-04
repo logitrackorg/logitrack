@@ -117,9 +117,10 @@ func (r *eventSourcedShipmentRepository) ApplyCorrections(cmd CorrectCmd) (model
 		TrackingID: cmd.TrackingID,
 		EventType:  model.EventShipmentCorrected,
 		Payload: model.ShipmentCorrectedPayload{
-			Status:      cmd.Status,
-			Corrections: cmd.Corrections,
-			Prediction:  cmd.Prediction,
+			Status:        cmd.Status,
+			Corrections:   cmd.Corrections,
+			Prediction:    cmd.Prediction,
+			FinalBranchID: cmd.FinalBranchID,
 		},
 		ChangedBy: cmd.Username,
 		Timestamp: cmd.Timestamp,

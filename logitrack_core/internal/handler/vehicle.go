@@ -524,6 +524,9 @@ func (h *VehicleHandler) AssignBranch(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al asignar el branch: " + err.Error()})
 		return
 	}
+	if branch, found := h.branchRepo.GetByID(branchID); found && branch.Latitude != nil {
+		_ = h.repo.UpdateLocation(vehicle.ID, *branch.Latitude, *branch.Longitude)
+	}
 
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
 	resp := buildVehicleResponse(updatedVehicle)
@@ -679,11 +682,14 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		}
 	}
 
-	// Vehicle arrives at destination — set assigned_branch = destination_branch
+	// Vehicle arrives at destination — set assigned_branch = destination_branch and update location
 	if vehicle.DestinationBranch != nil {
 		destID := *vehicle.DestinationBranch
 		if err := h.repo.AssignBranch(vehicle.ID, &destID); err != nil {
 			_ = err
+		}
+		if destBranch, found := h.branchRepo.GetByID(destID); found && destBranch.Latitude != nil {
+			_ = h.repo.UpdateLocation(vehicle.ID, *destBranch.Latitude, *destBranch.Longitude)
 		}
 	}
 

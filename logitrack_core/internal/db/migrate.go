@@ -56,6 +56,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS parent_shipment_id   TEXT;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_attempts    INT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS is_returning         BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS final_branch_id      TEXT NOT NULL DEFAULT '';
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
