@@ -11,7 +11,8 @@ import (
 
 // ─── test helpers ────────────────────────────────────────────────────────────
 
-func strPtr(s string) *string { return &s }
+func strPtr(s string) *string  { return &s }
+func floatPtr(f float64) *float64 { return &f }
 
 func testBranchRepo() repository.BranchRepository {
 	r := repository.NewInMemoryBranchRepository()
@@ -311,7 +312,7 @@ func TestCreate_EmptyEmailsAreOptional(t *testing.T) {
 
 func TestSaveDraft_PartialDataIsAllowed(t *testing.T) {
 	ts := newSetup()
-	req := model.SaveDraftRequest{WeightKg: 1.5}
+	req := model.SaveDraftRequest{WeightKg: floatPtr(1.5)}
 	ship, err := ts.svc.SaveDraft(req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -402,7 +403,7 @@ func TestConfirmDraft_RejectsShortDNI(t *testing.T) {
 			DNI: "87654321", Name: "Bob", Phone: "22222222",
 			Address: model.Address{City: "Córdoba", Province: "Córdoba"},
 		},
-		WeightKg: 2.0, PackageType: model.PackageBox,
+		WeightKg: floatPtr(2.0), PackageType: model.PackageBox,
 	})
 	// SaveDraft catches the short DNI first
 	if err == nil {
@@ -419,7 +420,7 @@ func TestConfirmDraft_Success(t *testing.T) {
 	draft, _ := ts.svc.SaveDraft(model.SaveDraftRequest{
 		Sender:    defaultSender(),
 		Recipient: defaultRecipient(),
-		WeightKg:  2.0, PackageType: model.PackageBox,
+		WeightKg:  floatPtr(2.0), PackageType: model.PackageBox,
 	})
 	confirmed, err := ts.svc.ConfirmDraft(draft.TrackingID, "operator")
 	if err != nil {
@@ -1329,7 +1330,7 @@ func TestGetByTrackingID_ReflectsCurrentStatus(t *testing.T) {
 
 func TestGetByTrackingID_Draft(t *testing.T) {
 	ts := newSetup()
-	draft, _ := ts.svc.SaveDraft(model.SaveDraftRequest{WeightKg: 2.0})
+	draft, _ := ts.svc.SaveDraft(model.SaveDraftRequest{WeightKg: floatPtr(2.0)})
 
 	result, err := ts.svc.GetByTrackingID(draft.TrackingID)
 	if err != nil {

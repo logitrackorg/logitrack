@@ -208,7 +208,8 @@ export function NewShipment() {
     setLoading(true);
     setError("");
     try {
-      const shipment = await shipmentApi.saveDraft(form);
+      const draftPayload = { ...form, weight_kg: form.weight_kg || undefined };
+      const shipment = await shipmentApi.saveDraft(draftPayload);
       navigate(`/shipments/${shipment.tracking_id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;

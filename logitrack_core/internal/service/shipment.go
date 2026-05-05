@@ -229,11 +229,15 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		timeWindow = model.TimeWindowFlexible
 	}
 
+	var weightKg float64
+	if req.WeightKg != nil {
+		weightKg = *req.WeightKg
+	}
 	shipment := model.Shipment{
 		TrackingID:          generateDraftID(),
 		Sender:              req.Sender,
 		Recipient:           req.Recipient,
-		WeightKg:            req.WeightKg,
+		WeightKg:            weightKg,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
 		SpecialInstructions: req.SpecialInstructions,
@@ -287,7 +291,11 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	}
 	existing.Sender = req.Sender
 	existing.Recipient = req.Recipient
-	existing.WeightKg = req.WeightKg
+	if req.WeightKg != nil {
+		existing.WeightKg = *req.WeightKg
+	} else {
+		existing.WeightKg = 0
+	}
 	existing.PackageType = req.PackageType
 	existing.IsFragile = req.IsFragile
 	existing.SpecialInstructions = req.SpecialInstructions
