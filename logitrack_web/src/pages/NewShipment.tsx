@@ -31,7 +31,7 @@ const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
   { value: "afternoon", label: "Tarde (12-18)" },
 ];
 
-const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'\-]+$/;
+const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
 const validateName = (name: string) =>
   name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
 

@@ -1383,7 +1383,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'\-]+$/;
+  const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
   const validateNameField = (name: string) =>
     name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
 
