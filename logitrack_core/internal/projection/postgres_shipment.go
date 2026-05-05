@@ -497,9 +497,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	s.ShipmentType = model.ShipmentType(shipmentType)
 	s.TimeWindow = model.TimeWindow(timeWindow)
 	s.IncidentType = model.IncidentType(incidentType)
-	if estimatedAt != nil {
-		s.EstimatedDeliveryAt = *estimatedAt
-	}
+	s.EstimatedDeliveryAt = estimatedAt
 	if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 		return model.Shipment{}, err
 	}
@@ -557,9 +555,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		s.ShipmentType = model.ShipmentType(shipmentType)
 		s.TimeWindow = model.TimeWindow(timeWindow)
 		s.IncidentType = model.IncidentType(incidentType)
-		if estimatedAt != nil {
-			s.EstimatedDeliveryAt = *estimatedAt
-		}
+		s.EstimatedDeliveryAt = estimatedAt
 		if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 			return nil, err
 		}
@@ -588,11 +584,11 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 	return result, rows.Err()
 }
 
-func nullableTime(t time.Time) interface{} {
-	if t.IsZero() {
+func nullableTime(t *time.Time) interface{} {
+	if t == nil || t.IsZero() {
 		return nil
 	}
-	return t
+	return *t
 }
 
 func nullableBytes(b []byte) interface{} {

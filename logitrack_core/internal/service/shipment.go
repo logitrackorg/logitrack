@@ -171,7 +171,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	}
 	setPriority(&shipment, prediction)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
@@ -384,7 +384,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Notes:               "Shipment confirmed",
 		Timestamp:           now,
 		Prediction:          prediction,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -811,7 +811,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		CurrentLocation:     counterLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 		ParentShipmentID:    &parentID,
 		IsReturning:         true,
 	}

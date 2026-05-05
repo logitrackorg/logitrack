@@ -50,7 +50,7 @@ type ConfirmDraftCmd struct {
 	Notes               string
 	Timestamp           time.Time
 	Prediction          *model.PriorityPrediction
-	EstimatedDeliveryAt time.Time
+	EstimatedDeliveryAt *time.Time
 }
 
 type StatusUpdateCmd struct {

@@ -45,7 +45,7 @@ type DraftConfirmedPayload struct {
 	OldTrackingID       string
 	NewTrackingID       string
 	Prediction          *PriorityPrediction
-	EstimatedDeliveryAt time.Time
+	EstimatedDeliveryAt *time.Time
 }
 
 type StatusChangedPayload struct {

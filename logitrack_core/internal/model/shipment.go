@@ -89,7 +89,7 @@ type Shipment struct {
 	CurrentLocation     string     `json:"current_location,omitempty"` // branch ID of current location
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
-	EstimatedDeliveryAt time.Time  `json:"estimated_delivery_at"`
+	EstimatedDeliveryAt *time.Time `json:"estimated_delivery_at"`
 	DeliveredAt         *time.Time `json:"delivered_at,omitempty"`
 
 	// Counter-shipment & return tracking
