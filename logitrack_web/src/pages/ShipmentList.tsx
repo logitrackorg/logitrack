@@ -48,7 +48,7 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
     corr(s, "weight_kg", s.weight_kg),
     s.current_location ?? "",
     fmtDate(s.created_at),
-    fmtDate(s.estimated_delivery_at),
+    s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "",
   ].map(csvEscape).join(","));
 
   const csv = [headers.join(","), ...rows].join("\n");
@@ -423,7 +423,7 @@ export function ShipmentList() {
                       </div>
                     </td>
                     <td style={td}>{fmtDate(s.created_at)}</td>
-                    <td style={td}>{fmtDate(s.estimated_delivery_at)}</td>
+                    <td style={td}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
                   </tr>
                 );
               })}
