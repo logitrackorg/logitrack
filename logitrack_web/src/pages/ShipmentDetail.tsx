@@ -155,7 +155,7 @@ export function ShipmentDetail() {
         setDraftForm({
           sender: { ...s.sender, phone: (s.sender.phone ?? "").replace(/\D/g, "") },
           recipient: { ...s.recipient, phone: (s.recipient.phone ?? "").replace(/\D/g, "") },
-          weight_kg: s.weight_kg || null,
+          weight_kg: s.weight_kg || undefined,
           package_type: s.package_type ?? "box",
           is_fragile: s.is_fragile ?? false,
           special_instructions: s.special_instructions ?? "",
@@ -1816,7 +1816,7 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0.1" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || null)} placeholder="Sin definir" /></DField>
+            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0.1" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || undefined)} placeholder="Sin definir" /></DField>
             <DField label="Tipo">
               <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}

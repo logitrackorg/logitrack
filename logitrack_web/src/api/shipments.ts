@@ -129,7 +129,7 @@ export interface CreateShipmentPayload {
 export interface SaveDraftPayload {
   sender: Customer;
   recipient: Customer;
-  weight_kg?: number | null;
+  weight_kg?: number;
   package_type?: PackageType;
   is_fragile?: boolean;
   special_instructions?: string;
