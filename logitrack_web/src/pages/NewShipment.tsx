@@ -31,6 +31,10 @@ const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
   { value: "afternoon", label: "Tarde (12-18)" },
 ];
 
+const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
+const validateName = (name: string) =>
+  name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
+
 const emptyAddress = { street: "", city: "", province: "", postal_code: "" };
 const emptyCustomer = () => ({ dni: "", name: "", phone: "", email: "", address: { ...emptyAddress } });
 
@@ -56,6 +60,8 @@ export function NewShipment() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [senderNameError, setSenderNameError] = useState("");
+  const [recipientNameError, setRecipientNameError] = useState("");
   const [drafts, setDrafts] = useState<Shipment[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [senderSuggestion, setSenderSuggestion] = useState<Customer | null>(null);
@@ -90,6 +96,15 @@ export function NewShipment() {
     setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, [field]: value } }));
   const setRecipientAddr = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, recipient: { ...prev.recipient, address: { ...prev.recipient.address, [field]: value } } }));
+
+  const handleSenderName = (name: string) => {
+    setSender("name", name);
+    setSenderNameError(validateName(name));
+  };
+  const handleRecipientName = (name: string) => {
+    setRecipient("name", name);
+    setRecipientNameError(validateName(name));
+  };
 
   const handleSenderDNI = (dni: string) => {
     setSender("dni", dni);
@@ -159,6 +174,8 @@ export function NewShipment() {
     e.preventDefault();
     if (!form.sender.phone) { setError("El teléfono del remitente es obligatorio."); return; }
     if (!form.recipient.phone) { setError("El teléfono del destinatario es obligatorio."); return; }
+    const sne = validateName(form.sender.name); if (sne) { setError(sne); return; }
+    const rne = validateName(form.recipient.name); if (rne) { setError(rne); return; }
     if (form.sender.dni.length < 7) { setError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
     if (form.recipient.dni.length < 7) { setError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
     if (!form.weight_kg || form.weight_kg <= 0) { setError("El peso debe ser mayor a 0."); return; }
@@ -247,8 +264,9 @@ export function NewShipment() {
         <Section title="Remitente">
           <Row2>
             <Field label="Nombre completo *">
-              <input style={input} required value={form.sender.name}
-                onChange={(e) => setSender("name", e.target.value)} placeholder="ej: Carlos Mendez" />
+              <input style={{ ...input, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name}
+                onChange={(e) => handleSenderName(e.target.value)} placeholder="ej: Carlos Mendez" />
+              {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
             </Field>
             <Field label="Teléfono *">
               <input style={input} required value={form.sender.phone}
@@ -299,8 +317,9 @@ export function NewShipment() {
         <Section title="Destinatario">
           <Row2>
             <Field label="Nombre completo *">
-              <input style={input} required value={form.recipient.name}
-                onChange={(e) => setRecipient("name", e.target.value)} placeholder="ej: Laura Gomez" />
+              <input style={{ ...input, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name}
+                onChange={(e) => handleRecipientName(e.target.value)} placeholder="ej: Laura Gomez" />
+              {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
             </Field>
             <Field label="Teléfono *">
               <input style={input} required value={form.recipient.phone}

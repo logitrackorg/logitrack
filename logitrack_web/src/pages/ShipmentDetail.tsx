@@ -1381,8 +1381,23 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
 
   const [senderSuggestion, setSenderSuggestion] = useState<Customer | null>(null);
   const [recipientSuggestion, setRecipientSuggestion] = useState<Customer | null>(null);
+  const [senderNameError, setSenderNameError] = useState("");
+  const [recipientNameError, setRecipientNameError] = useState("");
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
+  const validateNameField = (name: string) =>
+    name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
+
+  const handleSenderName = (name: string) => {
+    setSender("name", name);
+    setSenderNameError(validateNameField(name));
+  };
+  const handleRecipientName = (name: string) => {
+    setRecipient("name", name);
+    setRecipientNameError(validateNameField(name));
+  };
 
   const handleSenderDNI = (dni: string) => {
     setSender("dni", dni);
@@ -1459,7 +1474,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Remitente</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *"><input style={inp} required value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
+          <DField label="Nombre *">
+            <input style={{ ...inp, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
+            {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
+          </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
@@ -1482,7 +1500,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Destinatario</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *"><input style={inp} required value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
+          <DField label="Nombre *">
+            <input style={{ ...inp, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
+            {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
+          </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
