@@ -1816,7 +1816,7 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0.1" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || undefined)} placeholder="Sin definir" /></DField>
+            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0.1" value={form.weight_kg || ""} onChange={(e) => onChange({ ...form, weight_kg: parseFloat(e.target.value) || undefined })} placeholder="Sin definir" /></DField>
             <DField label="Tipo">
               <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
