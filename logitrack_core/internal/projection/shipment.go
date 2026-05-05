@@ -50,6 +50,7 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		draft.TrackingID = payload.NewTrackingID
 		draft.Status = model.StatusAtOriginHub
 		draft.UpdatedAt = event.Timestamp
+		draft.EstimatedDeliveryAt = payload.EstimatedDeliveryAt
 		delete(p.shipments, payload.OldTrackingID)
 		p.shipments[payload.NewTrackingID] = draft
 

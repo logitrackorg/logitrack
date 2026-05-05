@@ -44,12 +44,13 @@ type UpdateDraftCmd struct {
 }
 
 type ConfirmDraftCmd struct {
-	DraftID       string
-	NewTrackingID string
-	ChangedBy     string
-	Notes         string
-	Timestamp     time.Time
-	Prediction    *model.PriorityPrediction
+	DraftID             string
+	NewTrackingID       string
+	ChangedBy           string
+	Notes               string
+	Timestamp           time.Time
+	Prediction          *model.PriorityPrediction
+	EstimatedDeliveryAt time.Time
 }
 
 type StatusUpdateCmd struct {

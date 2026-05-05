@@ -241,12 +241,13 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		OriginBranchID:      req.ReceivingBranchID,
-		Status:              model.StatusDraft,
-		CurrentLocation:     currentLocation,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		OriginBranchID:  req.ReceivingBranchID,
+		Status:          model.StatusDraft,
+		CurrentLocation: currentLocation,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		// EstimatedDeliveryAt is intentionally left as zero — it will be
+		// calculated with definitive data at the moment of confirmation.
 	}
 	return s.repo.SaveDraft(repository.SaveDraftCmd{Shipment: shipment})
 }
@@ -375,13 +376,15 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
 	}
+	now := time.Now().UTC()
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
-		DraftID:       draftID,
-		NewTrackingID: generateTrackingID(),
-		ChangedBy:     changedBy,
-		Notes:         "Shipment confirmed",
-		Timestamp:     time.Now().UTC(),
-		Prediction:    prediction,
+		DraftID:             draftID,
+		NewTrackingID:       generateTrackingID(),
+		ChangedBy:           changedBy,
+		Notes:               "Shipment confirmed",
+		Timestamp:           now,
+		Prediction:          prediction,
+		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
 	})
 	if err != nil {
 		return model.Shipment{}, err
