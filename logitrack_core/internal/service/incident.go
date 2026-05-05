@@ -37,7 +37,7 @@ func (s *IncidentService) ReportIncident(trackingID, reportedBy string, incident
 	if err != nil {
 		return model.ShipmentIncident{}, fmt.Errorf("envío no encontrado")
 	}
-	if shipment.Status == model.StatusDelivered || shipment.Status == model.StatusReturned || shipment.Status == model.StatusCancelled {
+	if model.IsTerminalStatus(shipment.Status) {
 		return model.ShipmentIncident{}, fmt.Errorf("el envío se encuentra en un estado terminal que no admite nuevas incidencias")
 	}
 	if !model.ValidIncidentTypes[incidentType] {

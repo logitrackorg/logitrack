@@ -263,6 +263,15 @@ func (s *Shipment) CanGenerateQR() bool {
 	return s.TrackingID != "" && s.Status != StatusDraft
 }
 
+// IsTerminalStatus returns true for statuses that accept no further transitions or incidents.
+func IsTerminalStatus(s Status) bool {
+	switch s {
+	case StatusDelivered, StatusReturned, StatusCancelled, StatusLost, StatusDestroyed:
+		return true
+	}
+	return false
+}
+
 type CreateShipmentRequest struct {
 	Sender    Customer `json:"sender"    binding:"required"`
 	Recipient Customer `json:"recipient" binding:"required"`
