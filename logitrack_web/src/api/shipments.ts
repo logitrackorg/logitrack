@@ -81,7 +81,7 @@ export interface Shipment {
   status: ShipmentStatus;
   created_at: string;
   updated_at: string;
-  estimated_delivery_at: string;
+  estimated_delivery_at: string | null;
   delivered_at?: string;
   corrections?: Record<string, string>;
   has_incident?: boolean;
