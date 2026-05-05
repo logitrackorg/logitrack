@@ -162,6 +162,7 @@ export function ShipmentDetail() {
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
           cold_chain: s.cold_chain ?? false,
+          receiving_branch_id: s.receiving_branch_id ?? "",
         });
       }
     } catch {
