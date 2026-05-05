@@ -1107,10 +1107,6 @@ export function ShipmentDetail() {
                   setReportingIncident(true);
                   setIncidentError("");
                   try {
-                    const terminalStatus = TERMINAL_INCIDENT_STATUS[incidentType];
-                    if (terminalStatus) {
-                      await shipmentApi.updateStatus(trackingId, { status: terminalStatus, location: "", notes: incidentDescription.trim() });
-                    }
                     await shipmentApi.reportIncident(trackingId, incidentType, incidentDescription.trim());
                     setShowIncidentModal(false);
                     const [incs, s] = await Promise.all([
