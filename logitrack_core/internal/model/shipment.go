@@ -296,7 +296,7 @@ type SaveDraftRequest struct {
 	Sender    Customer `json:"sender"`
 	Recipient Customer `json:"recipient"`
 
-	WeightKg            float64      `json:"weight_kg"`
+	WeightKg            *float64     `json:"weight_kg"`
 	PackageType         PackageType  `json:"package_type"`
 	IsFragile           bool         `json:"is_fragile"`
 	SpecialInstructions string       `json:"special_instructions"`

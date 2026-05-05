@@ -155,7 +155,7 @@ export function ShipmentDetail() {
         setDraftForm({
           sender: { ...s.sender, phone: (s.sender.phone ?? "").replace(/\D/g, "") },
           recipient: { ...s.recipient, phone: (s.recipient.phone ?? "").replace(/\D/g, "") },
-          weight_kg: s.weight_kg ?? 0,
+          weight_kg: s.weight_kg || null,
           package_type: s.package_type ?? "box",
           is_fragile: s.is_fragile ?? false,
           special_instructions: s.special_instructions ?? "",
@@ -637,7 +637,7 @@ export function ShipmentDetail() {
               ].filter(Boolean).join(", ");
               const destCorrected = !!(cor.destination_street || cor.destination_city || cor.destination_province || cor.destination_postal_code);
               const originalDest = fmtAddr(shipment.recipient.address);
-              const weightVal = cv("weight_kg", `${shipment.weight_kg} kg`);
+              const weightVal = cv("weight_kg", shipment.weight_kg ? `${shipment.weight_kg} kg` : "—");
               const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
               const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
               return <>
@@ -662,7 +662,7 @@ export function ShipmentDetail() {
                   {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
                   {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
-                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Peso" />
+                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : (shipment.weight_kg ? `${shipment.weight_kg} kg` : "—")} original={shipment.weight_kg ? `${shipment.weight_kg} kg` : "—"} corrected={weightVal.corrected} label="Peso" />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
                 </Card>
                 <Card title="Fechas y ubicación">
@@ -1816,7 +1816,7 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
+            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0.1" value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || null)} placeholder="Sin definir" /></DField>
             <DField label="Tipo">
               <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
