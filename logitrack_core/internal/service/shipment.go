@@ -19,6 +19,7 @@ type SystemConfigProvider interface {
 var (
 	reDNI   = regexp.MustCompile(`^\d+$`)
 	reEmail = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	reName  = regexp.MustCompile(`^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'\-]+$`)
 )
 
 func validateDNI(dni, field string) error {
@@ -34,6 +35,16 @@ func validateDNI(dni, field string) error {
 func validateEmail(email, field string) error {
 	if !reEmail.MatchString(email) {
 		return fmt.Errorf("%s no es una dirección de email válida", field)
+	}
+	return nil
+}
+
+func validateName(name, field string) error {
+	if name == "" {
+		return nil
+	}
+	if !reName.MatchString(name) {
+		return fmt.Errorf("%s no puede contener números ni caracteres especiales", field)
 	}
 	return nil
 }
@@ -102,6 +113,12 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		return model.Shipment{}, err
 	}
 	if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
 		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
@@ -178,6 +195,12 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 			return model.Shipment{}, err
 		}
 	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
+		return model.Shipment{}, err
+	}
 	if req.Sender.Email != "" {
 		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
@@ -236,6 +259,12 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 			return model.Shipment{}, err
 		}
+	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
+		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
 		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
