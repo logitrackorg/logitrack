@@ -531,7 +531,7 @@ export function ShipmentDetail() {
         </h1>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <PriorityBadge priority={shipment.priority} />
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "draft" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin", "operator") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
               ✏️ Editar datos
             </button>
