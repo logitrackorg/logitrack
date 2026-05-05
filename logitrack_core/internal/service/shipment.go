@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"regexp"
 	"strings"
@@ -846,8 +848,10 @@ func generateTrackingID() string {
 }
 
 func generateDraftID() string {
-	id := uuid.New().String()
-	return fmt.Sprintf("DRAFT-%s", strings.ToUpper(id[:8]))
+	var b [4]byte
+	rand.Read(b[:])
+	n := binary.BigEndian.Uint32(b[:])%90000 + 10000
+	return fmt.Sprintf("BORRADOR-%d", n)
 }
 
 func isValidTransition(from, to model.Status) bool {

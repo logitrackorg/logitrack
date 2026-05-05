@@ -613,6 +613,7 @@ export function ShipmentDetail() {
           saveError={saveDraftError}
           confirmError={confirmError}
           createdAt={fmt(shipment.created_at)}
+          draftId={shipment.tracking_id}
         />
       ) : (
         /* ── Read-only info grid ── */
@@ -1355,7 +1356,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, saveError, confirmError, createdAt }: {
+function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, saveError, confirmError, createdAt, draftId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onSave: () => void;
@@ -1365,6 +1366,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
   saveError: string;
   confirmError: string;
   createdAt: string;
+  draftId: string;
 }) {
   const isMobile = useIsMobile();
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
@@ -1448,7 +1450,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
 
   return (
     <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Creado: {createdAt}</p>
+      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#6b7280" }}>
+        <span>Creado: {createdAt}</span>
+        <span>ID del borrador: <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "#374151" }}>{draftId}</code></span>
+      </div>
 
       {/* Remitente */}
       <fieldset style={fsStyle}>

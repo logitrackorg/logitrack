@@ -202,13 +202,14 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 
 	case model.EventDraftConfirmed:
 		from := model.StatusDraft
+		payload := de.Payload.(model.DraftConfirmedPayload)
 		return model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
 			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
-			Notes:      "Envío confirmado",
+			Notes:      fmt.Sprintf("Confirmado desde borrador %s", payload.OldTrackingID),
 			Timestamp:  de.Timestamp,
 		}, true
 
