@@ -4,6 +4,8 @@ import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { shipmentApi } from "../api/shipments";
 import { StatusBadge } from "../components/StatusBadge";
 
+
+
 const ROUTE_STATUS_LABEL: Record<string, string> = {
   pendiente: "Pendiente",
   en_curso: "En curso",
@@ -29,6 +31,9 @@ export function DriverRoute() {
   const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
   const [search, setSearch] = useState("");
+  const [endingTrip, setEndingTrip] = useState(false);
+  const [showEndTripModal, setShowEndTripModal] = useState(false);
+  const [endTripError, setEndTripError] = useState('');
 
   const load = () =>
     driverApi
@@ -50,6 +55,23 @@ export function DriverRoute() {
       setActionError(msg ?? "No se pudo iniciar la ruta.");
     } finally {
       setStartingRoute(false);
+    }
+  };
+
+  const handleEndTrip = async () => {
+    setEndingTrip(true);
+    setEndTripError('');
+
+    try {
+      await driverApi.endTrip();
+      setShowEndTripModal(false);
+      load();
+      alert('✅ Recorrida finalizada exitosamente');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Error al finalizar recorrida';
+      setEndTripError(message);
+    } finally {
+      setEndingTrip(false);
     }
   };
 
@@ -114,6 +136,8 @@ export function DriverRoute() {
   const today = `${rd}/${rm}/${ry}`;
   const pending = data.shipments.filter((s) => s.status === "out_for_delivery").length;
   const done = data.shipments.filter((s) => s.status === "delivered" || s.status === "delivery_failed").length;
+  const hasDelivering = data.shipments.some(s => s.status === 'out_for_delivery');
+  const canEndTrip = !hasDelivering && done > 0;
 
   const filteredShipments = data.shipments.filter((s) => {
     if (!search.trim()) return true;
@@ -199,6 +223,32 @@ export function DriverRoute() {
         style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", marginBottom: 16 }}
       />
 
+      {routeStatus === "en_curso" && (
+        <button
+          onClick={() => setShowEndTripModal(true)}
+          disabled={!canEndTrip}
+          title={hasDelivering ? 'Tenés envíos pendientes de entrega' : 'Finalizar recorrida'}
+          style={{
+            width: '100%',
+            background: hasDelivering ? '#9ca3af' : '#10b981',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            padding: '12px 24px',
+            fontWeight: 700,
+            fontSize: 15,
+            cursor: hasDelivering ? 'not-allowed' : 'pointer',
+            marginBottom: 16,
+          }}
+        >
+          {hasDelivering ? '⚠️ Completá todos los envíos primero' : '✅ Finalizar recorrida'}
+        </button>
+      )}
+
+      {actionError && (
+        <p style={{ color: "#ef4444", margin: "0 0 16px", fontSize: 14 }}>{actionError}</p>
+      )}
+
       {actionError && (
         <p style={{ color: "#ef4444", margin: "0 0 16px", fontSize: 14 }}>{actionError}</p>
       )}
@@ -220,143 +270,233 @@ export function DriverRoute() {
           const specialInstructions = cor.special_instructions ?? shipment.special_instructions;
 
           return (
-          <div
-            key={shipment.tracking_id}
-            onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-            style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-              <div>
-                <code style={{ fontSize: 12, color: "#6b7280" }}>{shipment.tracking_id}</code>
-                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{recipientName}</div>
-                <div style={{ fontSize: 13, color: "#4b5563", marginTop: 2 }}>{recipientPhone}</div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>{destAddress}</div>
+            <div
+              key={shipment.tracking_id}
+              onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
+              style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <code style={{ fontSize: 12, color: "#6b7280" }}>{shipment.tracking_id}</code>
+                  <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{recipientName}</div>
+                  <div style={{ fontSize: 13, color: "#4b5563", marginTop: 2 }}>{recipientPhone}</div>
+                  <div style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>{destAddress}</div>
+                </div>
+                <StatusBadge status={shipment.status} />
               </div>
-              <StatusBadge status={shipment.status} />
+
+              {specialInstructions && (
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>
+                  {specialInstructions}
+                </p>
+              )}
+
+              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && !failedShipmentId && !deliverShipmentId && (
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => { setDeliverShipmentId(shipment.tracking_id); setRecipientDni(""); }}
+                    disabled={submitting}
+                    style={{
+                      background: "#10b981", color: "#fff", border: "none",
+                      borderRadius: 6, padding: "8px 20px", cursor: "pointer",
+                      fontWeight: 700, fontSize: 14,
+                    }}
+                  >
+                    Entregar
+                  </button>
+                  <button
+                    onClick={() => { setFailedShipmentId(shipment.tracking_id); setFailedNotes(""); }}
+                    disabled={submitting}
+                    style={{
+                      background: "#fff", color: "#dc2626", border: "1px solid #dc2626",
+                      borderRadius: 6, padding: "8px 16px", cursor: "pointer",
+                      fontWeight: 600, fontSize: 14,
+                    }}
+                  >
+                    Intento fallido
+                  </button>
+                </div>
+              )}
+
+              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && deliverShipmentId === shipment.tracking_id && (
+                <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                    DNI del destinatario
+                  </label>
+                  <input
+                    value={recipientDni}
+                    onChange={(e) => setRecipientDni(e.target.value)}
+                    placeholder="Ej: 30123456"
+                    style={{
+                      padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db",
+                      fontSize: 14, width: "100%", boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handleDeliver(shipment.tracking_id)}
+                      disabled={!recipientDni.trim() || submitting}
+                      style={{
+                        background: !recipientDni.trim() ? "#e5e7eb" : "#10b981",
+                        color: !recipientDni.trim() ? "#9ca3af" : "#fff",
+                        border: "none", borderRadius: 6, padding: "8px 16px",
+                        cursor: !recipientDni.trim() ? "default" : "pointer",
+                        fontWeight: 700, fontSize: 14,
+                      }}
+                    >
+                      {submitting ? "Guardando…" : "Confirmar entrega"}
+                    </button>
+                    <button
+                      onClick={() => setDeliverShipmentId(null)}
+                      style={{
+                        background: "#fff", color: "#374151", border: "1px solid #d1d5db",
+                        borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && failedShipmentId === shipment.tracking_id && !deliverShipmentId && (
+                <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                  <textarea
+                    value={failedNotes}
+                    onChange={(e) => setFailedNotes(e.target.value)}
+                    placeholder="Motivo del intento fallido (obligatorio)"
+                    rows={2}
+                    style={{
+                      padding: "8px 12px", borderRadius: 6, border: "1px solid #fca5a5",
+                      fontSize: 14, resize: "vertical", width: "100%", boxSizing: "border-box",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handleFailedAttempt(shipment.tracking_id)}
+                      disabled={!failedNotes.trim() || submitting}
+                      style={{
+                        background: !failedNotes.trim() ? "#e5e7eb" : "#dc2626",
+                        color: !failedNotes.trim() ? "#9ca3af" : "#fff",
+                        border: "none", borderRadius: 6, padding: "8px 16px",
+                        cursor: !failedNotes.trim() ? "default" : "pointer",
+                        fontWeight: 700, fontSize: 14,
+                      }}
+                    >
+                      {submitting ? "Guardando…" : "Confirmar"}
+                    </button>
+                    <button
+                      onClick={() => setFailedShipmentId(null)}
+                      style={{
+                        background: "#fff", color: "#374151", border: "1px solid #d1d5db",
+                        borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+      </div>
+      {showEndTripModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 32,
+            maxWidth: 420,
+            width: 'calc(100% - 32px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 20, color: '#1e3a5f' }}>
+              ¿Finalizar recorrida?
+            </h2>
+
+            <div style={{ marginBottom: 20, fontSize: 14, color: '#374151' }}>
+              <p style={{ margin: '8px 0' }}>
+                📦 Entregados: <strong>{done - data.shipments.filter(s => s.status === 'delivery_failed').length}</strong>
+              </p>
+              <p style={{ margin: '8px 0' }}>
+                ⚠️ Fallidos: <strong>{data.shipments.filter(s => s.status === 'delivery_failed').length}</strong>
+              </p>
             </div>
 
-            {specialInstructions && (
-              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>
-                {specialInstructions}
-              </p>
-            )}
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+              Los envíos fallidos volverán automáticamente a la sucursal.
+              El vehículo quedará disponible para nuevas asignaciones.
+            </p>
 
-            {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && !failedShipmentId && !deliverShipmentId && (
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => { setDeliverShipmentId(shipment.tracking_id); setRecipientDni(""); }}
-                  disabled={submitting}
-                  style={{
-                    background: "#10b981", color: "#fff", border: "none",
-                    borderRadius: 6, padding: "8px 20px", cursor: "pointer",
-                    fontWeight: 700, fontSize: 14,
-                  }}
-                >
-                  Entregar
-                </button>
-                <button
-                  onClick={() => { setFailedShipmentId(shipment.tracking_id); setFailedNotes(""); }}
-                  disabled={submitting}
-                  style={{
-                    background: "#fff", color: "#dc2626", border: "1px solid #dc2626",
-                    borderRadius: 6, padding: "8px 16px", cursor: "pointer",
-                    fontWeight: 600, fontSize: 14,
-                  }}
-                >
-                  Intento fallido
-                </button>
+            {endTripError && (
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#dc2626',
+                padding: 12,
+                borderRadius: 6,
+                fontSize: 13,
+                marginBottom: 16,
+              }}>
+                {endTripError}
               </div>
             )}
 
-            {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && deliverShipmentId === shipment.tracking_id && (
-              <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                  DNI del destinatario
-                </label>
-                <input
-                  value={recipientDni}
-                  onChange={(e) => setRecipientDni(e.target.value)}
-                  placeholder="Ej: 30123456"
-                  style={{
-                    padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db",
-                    fontSize: 14, width: "100%", boxSizing: "border-box",
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => handleDeliver(shipment.tracking_id)}
-                    disabled={!recipientDni.trim() || submitting}
-                    style={{
-                      background: !recipientDni.trim() ? "#e5e7eb" : "#10b981",
-                      color: !recipientDni.trim() ? "#9ca3af" : "#fff",
-                      border: "none", borderRadius: 6, padding: "8px 16px",
-                      cursor: !recipientDni.trim() ? "default" : "pointer",
-                      fontWeight: 700, fontSize: 14,
-                    }}
-                  >
-                    {submitting ? "Guardando…" : "Confirmar entrega"}
-                  </button>
-                  <button
-                    onClick={() => setDeliverShipmentId(null)}
-                    style={{
-                      background: "#fff", color: "#374151", border: "1px solid #d1d5db",
-                      borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && failedShipmentId === shipment.tracking_id && !deliverShipmentId && (
-              <div style={{ display: "grid", gap: 8, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-                <textarea
-                  value={failedNotes}
-                  onChange={(e) => setFailedNotes(e.target.value)}
-                  placeholder="Motivo del intento fallido (obligatorio)"
-                  rows={2}
-                  style={{
-                    padding: "8px 12px", borderRadius: 6, border: "1px solid #fca5a5",
-                    fontSize: 14, resize: "vertical", width: "100%", boxSizing: "border-box",
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => handleFailedAttempt(shipment.tracking_id)}
-                    disabled={!failedNotes.trim() || submitting}
-                    style={{
-                      background: !failedNotes.trim() ? "#e5e7eb" : "#dc2626",
-                      color: !failedNotes.trim() ? "#9ca3af" : "#fff",
-                      border: "none", borderRadius: 6, padding: "8px 16px",
-                      cursor: !failedNotes.trim() ? "default" : "pointer",
-                      fontWeight: 700, fontSize: 14,
-                    }}
-                  >
-                    {submitting ? "Guardando…" : "Confirmar"}
-                  </button>
-                  <button
-                    onClick={() => setFailedShipmentId(null)}
-                    style={{
-                      background: "#fff", color: "#374151", border: "1px solid #d1d5db",
-                      borderRadius: 6, padding: "8px 14px", cursor: "pointer", fontSize: 14,
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => setShowEndTripModal(false)}
+                disabled={endingTrip}
+                style={{
+                  flex: 1,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEndTrip}
+                disabled={endingTrip}
+                style={{
+                  flex: 1,
+                  background: '#10b981',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '10px 16px',
+                  cursor: endingTrip ? 'not-allowed' : 'pointer',
+                  fontWeight: 700,
+                  fontSize: 14,
+                }}
+              >
+                {endingTrip ? 'Finalizando...' : 'Confirmar'}
+              </button>
+            </div>
           </div>
-        );})}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

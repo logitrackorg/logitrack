@@ -209,6 +209,7 @@ func main() {
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
+	protected.POST("/driver/end-trip", driverOnly, vehicleHandler.DriverEndTrip)
 
 	// Users — list drivers (operator, supervisor, admin)
 	canListDrivers := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)

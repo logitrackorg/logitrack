@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { Shipment } from "./shipments";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1",
@@ -42,4 +43,17 @@ export interface DriverRouteResponse {
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
+   async endTrip(): Promise<void> {
+    const token = localStorage.getItem('token');
+    await axios.post(
+      `${API_URL}/driver/end-trip`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+  },
 };
+

@@ -707,3 +707,127 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	resp["message"] = "Viaje finalizado. El vehículo está disponible en el branch de destino."
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *VehicleHandler) DriverEndTrip(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	if user.Role != model.RoleDriver {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Solo choferes pueden usar este endpoint"})
+		return
+	}
+
+	// Buscar vehículo asignado al chofer (buscar en todos los vehículos in_transit)
+	var driverVehicle *model.Vehicle
+	for _, v := range h.repo.List() {
+		if v.Status == model.VehicleStatusInTransit {
+			// Verificar si algún envío está asignado a este chofer
+			for _, trackingID := range v.AssignedShipments {
+				shipment, err := h.shipmentSvc.GetByTrackingID(trackingID)
+				if err == nil && shipment.Status == model.StatusOutForDelivery {
+					// Verificar en la ruta del día si este chofer tiene este envío
+					// Por ahora asumimos que si hay envíos en out_for_delivery, es su vehículo
+					driverVehicle = &v
+					break
+				}
+			}
+			if driverVehicle != nil {
+				break
+			}
+		}
+	}
+
+	if driverVehicle == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No tenés un vehículo en tránsito asignado"})
+		return
+	}
+
+	// Validar que todos los envíos estén finalizados (delivered o delivery_failed)
+	pendingShipments := []string{}
+	deliveredCount := 0
+	failedCount := 0
+
+	for _, trackingID := range driverVehicle.AssignedShipments {
+		shipment, err := h.shipmentSvc.GetByTrackingID(trackingID)
+		if err != nil {
+			continue
+		}
+
+		switch shipment.Status {
+		case model.StatusOutForDelivery:
+			pendingShipments = append(pendingShipments, trackingID)
+		case model.StatusDelivered:
+			deliveredCount++
+		case model.StatusDeliveryFailed:
+			failedCount++
+		}
+	}
+
+	if len(pendingShipments) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":             "Aún tenés envíos pendientes de entrega. Completá o marcá como fallidos antes de finalizar.",
+			"pending_shipments": pendingShipments,
+		})
+		return
+	}
+
+	// Determinar ubicación actual (branch de destino)
+	var destCity string
+	if driverVehicle.DestinationBranch != nil {
+		destBranch, found := h.branchRepo.GetByID(*driverVehicle.DestinationBranch)
+		if found {
+			destCity = destBranch.Address.City
+		}
+	}
+
+	// Retornar envíos fallidos a at_hub automáticamente
+	for _, trackingID := range driverVehicle.AssignedShipments {
+		shipment, err := h.shipmentSvc.GetByTrackingID(trackingID)
+		if err != nil {
+			continue
+		}
+
+		if shipment.Status == model.StatusDeliveryFailed {
+			// Cambiar a at_hub automáticamente
+			statusReq := model.UpdateStatusRequest{
+				Status:    model.StatusAtHub,
+				ChangedBy: user.Username,
+				Notes:     "Devuelto a sucursal tras finalizar recorrida",
+			}
+			if destCity != "" {
+				statusReq.Location = destCity
+			}
+			_, _ = h.shipmentSvc.UpdateStatus(trackingID, statusReq)
+		}
+	}
+
+	// Asignar vehículo al branch de destino
+	if driverVehicle.DestinationBranch != nil {
+		destID := *driverVehicle.DestinationBranch
+		if err := h.repo.AssignBranch(driverVehicle.ID, &destID); err != nil {
+			_ = err
+		}
+	}
+
+	// Limpiar envíos y destino
+	if err := h.repo.ClearShipments(driverVehicle.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al liberar los envíos"})
+		return
+	}
+	if err := h.repo.SetDestinationBranch(driverVehicle.ID, nil); err != nil {
+		_ = err
+	}
+
+	// Cambiar estado del vehículo a disponible
+	if err := h.repo.UpdateStatusByUser(driverVehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          "Recorrida finalizada exitosamente",
+		"delivered_count":  deliveredCount,
+		"failed_count":     failedCount,
+		"vehicle_plate":    driverVehicle.LicensePlate,
+		"destination_city": destCity,
+	})
+}
