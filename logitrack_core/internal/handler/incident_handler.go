@@ -65,6 +65,10 @@ func (h *IncidentHandler) ReportIncident(c *gin.Context) {
 	if branchForbidden(c, user, existing.ReceivingBranchID) {
 		return
 	}
+	if model.IsTerminalStatus(existing.Status) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el envío se encuentra en un estado terminal que no admite nuevas incidencias"})
+		return
+	}
 
 	// For terminal incident types (extraviado, daño total), update the shipment status
 	// as part of the same request so both operations succeed or fail together.

@@ -33,12 +33,8 @@ func NewIncidentService(
 }
 
 func (s *IncidentService) ReportIncident(trackingID, reportedBy string, incidentType model.IncidentType, description string) (model.ShipmentIncident, error) {
-	shipment, err := s.shipmentRepo.GetByTrackingID(trackingID)
-	if err != nil {
+	if _, err := s.shipmentRepo.GetByTrackingID(trackingID); err != nil {
 		return model.ShipmentIncident{}, fmt.Errorf("envío no encontrado")
-	}
-	if model.IsTerminalStatus(shipment.Status) {
-		return model.ShipmentIncident{}, fmt.Errorf("el envío se encuentra en un estado terminal que no admite nuevas incidencias")
 	}
 	if !model.ValidIncidentTypes[incidentType] {
 		return model.ShipmentIncident{}, fmt.Errorf("tipo de incidencia no válido")

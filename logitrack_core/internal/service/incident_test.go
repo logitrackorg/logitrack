@@ -15,59 +15,6 @@ func TestReportIncident_ShipmentNotFound(t *testing.T) {
 	}
 }
 
-func TestReportIncident_TerminalStates(t *testing.T) {
-	tests := []struct {
-		name  string
-		setup func(ts testSetup) string
-	}{
-		{
-			name: "delivered",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				toInTransit(t, ts, ship.TrackingID)
-				toAtHub(t, ts, ship.TrackingID)
-				toOutForDelivery(t, ts, ship.TrackingID)
-				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-					Status: model.StatusDelivered, ChangedBy: "driver",
-					RecipientDNI: defaultRecipient().DNI,
-				})
-				return ship.TrackingID
-			},
-		},
-		{
-			name: "returned",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				advanceToReadyForReturn(t, ts, ship.TrackingID)
-				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-					Status: model.StatusReturned, ChangedBy: "supervisor",
-					SenderDNI: defaultSender().DNI,
-				})
-				return ship.TrackingID
-			},
-		},
-		{
-			name: "cancelled",
-			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
-				ts.svc.CancelShipment(ship.TrackingID, "supervisor", "motivo de prueba")
-				return ship.TrackingID
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ts := newSetup()
-			id := tc.setup(ts)
-			_, err := ts.incidentSvc.ReportIncident(id, "operator", model.IncidentTypeDamage, "paquete roto")
-			if err == nil || !strings.Contains(err.Error(), "estado terminal") {
-				t.Errorf("expected terminal-state error for %s, got: %v", tc.name, err)
-			}
-		})
-	}
-}
-
 func TestReportIncident_InvalidType(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
