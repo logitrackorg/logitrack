@@ -1,0 +1,23 @@
+logitrack_core/internal/service/shipment.go
+  540e8485bf8841f0 890-891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "180c3c8dded1d008357dcb21e83c44532b03b1bf",
+  "prompts": {
+    "540e8485bf8841f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f1d345d3-a501-4eb5-8b29-36ea232b7e96",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
