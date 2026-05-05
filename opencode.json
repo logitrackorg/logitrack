@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "google/gemini-flash-latest",
+  "permission": {
+    "bash": "ask",
+    "edit": "allow"
+  },
+  "plugin": [
+    "oh-my-opencode",
+    "opencode-supermemory",
+    "opencode-shell-strategy"
+  ]
+}
