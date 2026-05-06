@@ -63,17 +63,16 @@ func main() {
 			},
 			ShipmentType: model.ShipmentTypeExpress,
 			TimeWindow:   model.TimeWindowAfternoon,
-			PackageType:  model.PackagePallet,
+			PackageType:  model.PackageBox,
 			WeightKg:     30.0,
 			IsFragile:    true,
-			ColdChain:    true,
 		},
 	}
 
 	names := []string{
 		"Express long-distance fragile",
 		"Normal short-distance envelope",
-		"Express far-distance pallet fragile+cold",
+		"Express far-distance pallet fragile",
 	}
 
 	for i, tc := range testCases {

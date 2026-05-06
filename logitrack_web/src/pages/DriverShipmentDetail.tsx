@@ -6,7 +6,6 @@ import { StatusBadge } from "../components/StatusBadge";
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: "Sobre",
   box: "Caja",
-  pallet: "Palet",
 };
 
 export function DriverShipmentDetail() {
@@ -66,6 +65,7 @@ export function DriverShipmentDetail() {
         <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
         {shipment.is_fragile && <Row label="Frágil" value="⚠️ Sí" />}
         <Row label="Peso" value={`${weightKg} kg`} />
+        <Row label="Entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla"} />
         {specialInstructions && (
           <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 13, color: "#92400e" }}>
             {specialInstructions}

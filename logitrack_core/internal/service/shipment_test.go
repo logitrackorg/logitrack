@@ -851,7 +851,12 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 		{
 			name: "ready_for_pickup",
 			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
+				req := defaultCreateReq()
+				req.DeliveryMethod = model.DeliveryMethodBranchPickup
+				ship, err := ts.svc.Create(req)
+				if err != nil {
+					t.Fatalf("create with branch_pickup: %v", err)
+				}
 				toInTransit(t, ts, ship.TrackingID)
 				toAtHub(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{

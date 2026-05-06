@@ -4,7 +4,7 @@ import { mlConfigApi, type MLConfig, type MLFactors } from "../api/mlConfig";
 const FACTOR_LABELS: Record<keyof MLFactors, { label: string; description: string }> = {
   shipment_type:    { label: "Tipo de envío",        description: "Express vs. estándar — los envíos express reciben mayor prioridad" },
   distance_km:      { label: "Distancia",             description: "Las rutas más largas tienen mayor riesgo de demora" },
-  restrictions:     { label: "Restricciones",         description: "Los envíos frágiles o con cadena de frío requieren manejo especial" },
+  restrictions:     { label: "Restricciones",         description: "Los envíos frágiles requieren manejo especial" },
   time_window:      { label: "Ventana horaria",       description: "Los plazos de mañana son más ajustados que las ventanas flexibles" },
   volume_score:     { label: "Volumen / Peso",        description: "Los paquetes más grandes agregan complejidad logística" },
   route_saturation: { label: "Saturación de ruta",   description: "Las rutas con mayor demanda enfrentan más riesgo de congestión" },

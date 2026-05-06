@@ -213,17 +213,22 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		}
 	}
 
+	deliveryMethod := s.DeliveryMethod
+	if deliveryMethod == "" {
+		deliveryMethod = model.DeliveryMethodLastMile
+	}
+
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
 			tracking_id, status, current_location, weight_kg, package_type,
 			is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
 			sender, recipient, corrections,
-			shipment_type, time_window, cold_chain,
+			shipment_type, time_window,
 			priority, priority_score, priority_confidence, priority_factors,
 			has_incident, incident_type,
 			parent_shipment_id, delivery_attempts, is_returning,
-			final_branch_id
+			final_branch_id, delivery_method
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
@@ -241,7 +246,6 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			corrections           = EXCLUDED.corrections,
 			shipment_type         = EXCLUDED.shipment_type,
 			time_window           = EXCLUDED.time_window,
-			cold_chain            = EXCLUDED.cold_chain,
 			priority              = EXCLUDED.priority,
 			priority_score        = EXCLUDED.priority_score,
 			priority_confidence   = EXCLUDED.priority_confidence,
@@ -249,16 +253,17 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			parent_shipment_id    = EXCLUDED.parent_shipment_id,
 			delivery_attempts     = EXCLUDED.delivery_attempts,
 			is_returning          = EXCLUDED.is_returning,
-			final_branch_id       = CASE WHEN EXCLUDED.final_branch_id != '' THEN EXCLUDED.final_branch_id ELSE shipments.final_branch_id END`,
+			final_branch_id       = CASE WHEN EXCLUDED.final_branch_id != '' THEN EXCLUDED.final_branch_id ELSE shipments.final_branch_id END,
+			delivery_method       = EXCLUDED.delivery_method`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
-		string(s.ShipmentType), string(s.TimeWindow), s.ColdChain,
+		string(s.ShipmentType), string(s.TimeWindow),
 		s.Priority, s.PriorityScore, s.PriorityConfidence, nullableBytes(priorityFactors),
 		s.HasIncident, string(s.IncidentType),
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
-		s.FinalBranchID,
+		s.FinalBranchID, string(deliveryMethod),
 	)
 	return err
 }
@@ -278,10 +283,10 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
-		       shipment_type, time_window, cold_chain,
+		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -292,10 +297,10 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
-		       shipment_type, time_window, cold_chain,
+		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
@@ -331,10 +336,10 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
-		       shipment_type, time_window, cold_chain,
+		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
 		FROM shipments
 		WHERE LOWER(tracking_id) LIKE $1
 		   OR LOWER(sender->>'name') LIKE $1
@@ -479,6 +484,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		shipmentType        string
 		timeWindow          string
 		incidentType        string
+		deliveryMethod      string
 		senderJSON          []byte
 		recipientJSON       []byte
 		correctionsJSON     []byte
@@ -490,10 +496,10 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
-		&shipmentType, &timeWindow, &s.ColdChain,
+		&shipmentType, &timeWindow,
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
-		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID,
+		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -506,6 +512,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	s.ShipmentType = model.ShipmentType(shipmentType)
 	s.TimeWindow = model.TimeWindow(timeWindow)
 	s.IncidentType = model.IncidentType(incidentType)
+	s.DeliveryMethod = model.DeliveryMethod(deliveryMethod)
 	s.EstimatedDeliveryAt = estimatedAt
 	if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 		return model.Shipment{}, err
@@ -540,6 +547,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			shipmentType        string
 			timeWindow          string
 			incidentType        string
+			deliveryMethod      string
 			senderJSON          []byte
 			recipientJSON       []byte
 			correctionsJSON     []byte
@@ -551,10 +559,10 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
-			&shipmentType, &timeWindow, &s.ColdChain,
+			&shipmentType, &timeWindow,
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
-			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID,
+			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 		)
 		if err != nil {
 			return nil, err
@@ -564,6 +572,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		s.ShipmentType = model.ShipmentType(shipmentType)
 		s.TimeWindow = model.TimeWindow(timeWindow)
 		s.IncidentType = model.IncidentType(incidentType)
+		s.DeliveryMethod = model.DeliveryMethod(deliveryMethod)
 		s.EstimatedDeliveryAt = estimatedAt
 		if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 			return nil, err
