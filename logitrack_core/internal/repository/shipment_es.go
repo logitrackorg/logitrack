@@ -72,9 +72,10 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 		TrackingID: cmd.DraftID,
 		EventType:  model.EventDraftConfirmed,
 		Payload: model.DraftConfirmedPayload{
-			OldTrackingID: cmd.DraftID,
-			NewTrackingID: cmd.NewTrackingID,
-			Prediction:    cmd.Prediction,
+			OldTrackingID:       cmd.DraftID,
+			NewTrackingID:       cmd.NewTrackingID,
+			Prediction:          cmd.Prediction,
+			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -203,13 +204,14 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 
 	case model.EventDraftConfirmed:
 		from := model.StatusDraft
+		payload := de.Payload.(model.DraftConfirmedPayload)
 		return model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
 			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
-			Notes:      "Envío confirmado",
+			Notes:      fmt.Sprintf("Confirmado desde borrador %s", payload.OldTrackingID),
 			Timestamp:  de.Timestamp,
 		}, true
 

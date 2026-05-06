@@ -163,6 +163,7 @@ export function ShipmentDetail() {
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
           cold_chain: s.cold_chain ?? false,
+          receiving_branch_id: s.receiving_branch_id ?? "",
         });
       }
     } catch {
@@ -613,6 +614,7 @@ export function ShipmentDetail() {
           saveError={saveDraftError}
           confirmError={confirmError}
           createdAt={fmt(shipment.created_at)}
+          draftId={shipment.tracking_id}
         />
       ) : (
         /* ── Read-only info grid ── */
@@ -668,7 +670,7 @@ export function ShipmentDetail() {
                 </Card>
                 <Card title="Fechas y ubicación">
                   <InfoRow label="Creado"          value={fmt(shipment.created_at)} />
-                  <InfoRow label="Entrega est."    value={fmt(shipment.estimated_delivery_at)} />
+                  <InfoRow label="Entrega est."    value={shipment.estimated_delivery_at ? fmt(shipment.estimated_delivery_at) : "—"} />
                   {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
                     <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
@@ -1355,7 +1357,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, saveError, confirmError, createdAt }: {
+function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, saveError, confirmError, createdAt, draftId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onSave: () => void;
@@ -1365,6 +1367,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
   saveError: string;
   confirmError: string;
   createdAt: string;
+  draftId: string;
 }) {
   const isMobile = useIsMobile();
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
@@ -1379,8 +1382,23 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
 
   const [senderSuggestion, setSenderSuggestion] = useState<Customer | null>(null);
   const [recipientSuggestion, setRecipientSuggestion] = useState<Customer | null>(null);
+  const [senderNameError, setSenderNameError] = useState("");
+  const [recipientNameError, setRecipientNameError] = useState("");
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
+  const validateNameField = (name: string) =>
+    name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
+
+  const handleSenderName = (name: string) => {
+    setSender("name", name);
+    setSenderNameError(validateNameField(name));
+  };
+  const handleRecipientName = (name: string) => {
+    setRecipient("name", name);
+    setRecipientNameError(validateNameField(name));
+  };
 
   const handleSenderDNI = (dni: string) => {
     setSender("dni", dni);
@@ -1448,13 +1466,19 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
 
   return (
     <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>Creado: {createdAt}</p>
+      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#6b7280" }}>
+        <span>Creado: {createdAt}</span>
+        <span>ID del borrador: <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "#374151" }}>{draftId}</code></span>
+      </div>
 
       {/* Remitente */}
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Remitente</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *"><input style={inp} required value={form.sender.name ?? ""} onChange={(e) => setSender("name", e.target.value)} placeholder="Carlos Mendez" /></DField>
+          <DField label="Nombre *">
+            <input style={{ ...inp, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
+            {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
+          </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
@@ -1482,7 +1506,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Destinatario</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *"><input style={inp} required value={form.recipient.name ?? ""} onChange={(e) => setRecipient("name", e.target.value)} placeholder="Laura Gomez" /></DField>
+          <DField label="Nombre *">
+            <input style={{ ...inp, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
+            {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
+          </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
@@ -1549,8 +1576,11 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
         <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
           Guardá los cambios antes de confirmar. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+        </p>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+          <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
         {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}

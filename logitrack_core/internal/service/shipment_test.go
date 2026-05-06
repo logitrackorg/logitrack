@@ -319,8 +319,8 @@ func TestSaveDraft_PartialDataIsAllowed(t *testing.T) {
 	if ship.Status != model.StatusDraft {
 		t.Errorf("status = %s, want draft", ship.Status)
 	}
-	if !strings.HasPrefix(ship.TrackingID, "DRAFT-") {
-		t.Errorf("tracking_id = %q, want DRAFT- prefix", ship.TrackingID)
+	if !strings.HasPrefix(ship.TrackingID, "BORRADOR-") {
+		t.Errorf("tracking_id = %q, want BORRADOR- prefix", ship.TrackingID)
 	}
 }
 
@@ -1128,7 +1128,7 @@ func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipm
 		CurrentLocation:     "br-caba",
 		CreatedAt:           createdAt,
 		UpdatedAt:           createdAt,
-		EstimatedDeliveryAt: createdAt.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := createdAt.AddDate(0, 0, 7); return &t }(),
 	}
 	created, err := ts.shipmentRepo.Create(repository.CreateShipmentCmd{
 		Shipment:  s,
@@ -1338,8 +1338,8 @@ func TestGetByTrackingID_Draft(t *testing.T) {
 	if result.Status != model.StatusDraft {
 		t.Errorf("status = %q, want draft", result.Status)
 	}
-	if !strings.HasPrefix(result.TrackingID, "DRAFT-") {
-		t.Errorf("tracking_id = %q, want DRAFT- prefix", result.TrackingID)
+	if !strings.HasPrefix(result.TrackingID, "BORRADOR-") {
+		t.Errorf("tracking_id = %q, want BORRADOR- prefix", result.TrackingID)
 	}
 }
 

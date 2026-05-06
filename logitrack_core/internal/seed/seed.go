@@ -415,7 +415,8 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 
 	for _, s := range seeds {
 		createdAt := now.Add(-time.Duration(s.events[0].hoursAgo) * time.Hour)
-		estimated := createdAt.AddDate(0, 0, 7)
+		estimatedTime := createdAt.AddDate(0, 0, 7)
+		estimated := &estimatedTime
 
 		// Build the initial shipment snapshot for the shipment_created event
 		initialShipment := model.Shipment{

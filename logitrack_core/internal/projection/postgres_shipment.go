@@ -50,19 +50,23 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET tracking_id = $1, status = $2, updated_at = $3,
-				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7
-				WHERE tracking_id = $8`,
+				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7,
+				    estimated_delivery_at = $8
+				WHERE tracking_id = $9`,
 				payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
+				payload.EstimatedDeliveryAt,
 				payload.OldTrackingID,
 			)
 			return err
 		}
 		_, err := p.db.Exec(`
 			UPDATE shipments
-			SET tracking_id = $1, status = $2, updated_at = $3
-			WHERE tracking_id = $4`,
-			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp, payload.OldTrackingID,
+			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4
+			WHERE tracking_id = $5`,
+			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
+			payload.EstimatedDeliveryAt,
+			payload.OldTrackingID,
 		)
 		return err
 
@@ -502,9 +506,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	s.ShipmentType = model.ShipmentType(shipmentType)
 	s.TimeWindow = model.TimeWindow(timeWindow)
 	s.IncidentType = model.IncidentType(incidentType)
-	if estimatedAt != nil {
-		s.EstimatedDeliveryAt = *estimatedAt
-	}
+	s.EstimatedDeliveryAt = estimatedAt
 	if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 		return model.Shipment{}, err
 	}
@@ -562,9 +564,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		s.ShipmentType = model.ShipmentType(shipmentType)
 		s.TimeWindow = model.TimeWindow(timeWindow)
 		s.IncidentType = model.IncidentType(incidentType)
-		if estimatedAt != nil {
-			s.EstimatedDeliveryAt = *estimatedAt
-		}
+		s.EstimatedDeliveryAt = estimatedAt
 		if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 			return nil, err
 		}
@@ -593,11 +593,11 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 	return result, rows.Err()
 }
 
-func nullableTime(t time.Time) interface{} {
-	if t.IsZero() {
+func nullableTime(t *time.Time) interface{} {
+	if t == nil || t.IsZero() {
 		return nil
 	}
-	return t
+	return *t
 }
 
 func nullableBytes(b []byte) interface{} {

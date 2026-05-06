@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"regexp"
 	"strings"
@@ -20,6 +22,7 @@ type SystemConfigProvider interface {
 var (
 	reDNI   = regexp.MustCompile(`^\d+$`)
 	reEmail = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	reName  = regexp.MustCompile(`^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'\-]+$`)
 )
 
 func validateDNI(dni, field string) error {
@@ -35,6 +38,16 @@ func validateDNI(dni, field string) error {
 func validateEmail(email, field string) error {
 	if !reEmail.MatchString(email) {
 		return fmt.Errorf("%s no es una dirección de email válida", field)
+	}
+	return nil
+}
+
+func validateName(name, field string) error {
+	if name == "" {
+		return nil
+	}
+	if !reName.MatchString(name) {
+		return fmt.Errorf("%s no puede contener números ni caracteres especiales", field)
 	}
 	return nil
 }
@@ -105,6 +118,12 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 		return model.Shipment{}, err
 	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
+		return model.Shipment{}, err
+	}
 	if req.Sender.Email != "" {
 		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
 			return model.Shipment{}, err
@@ -154,7 +173,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	}
 	setPriority(&shipment, prediction)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
@@ -179,6 +198,12 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 			return model.Shipment{}, err
 		}
+	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
+		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
 		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
@@ -218,12 +243,13 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		OriginBranchID:      req.ReceivingBranchID,
-		Status:              model.StatusDraft,
-		CurrentLocation:     currentLocation,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		OriginBranchID:  req.ReceivingBranchID,
+		Status:          model.StatusDraft,
+		CurrentLocation: currentLocation,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		// EstimatedDeliveryAt is intentionally left as zero — it will be
+		// calculated with definitive data at the moment of confirmation.
 	}
 	return s.repo.SaveDraft(repository.SaveDraftCmd{Shipment: shipment})
 }
@@ -238,6 +264,12 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		if err := validateDNI(req.Recipient.DNI, "recipient_dni"); err != nil {
 			return model.Shipment{}, err
 		}
+	}
+	if err := validateName(req.Sender.Name, "El nombre del remitente"); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validateName(req.Recipient.Name, "El nombre del destinatario"); err != nil {
+		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
 		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
@@ -354,13 +386,15 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
 	}
+	now := time.Now().UTC()
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
-		DraftID:       draftID,
-		NewTrackingID: generateTrackingID(),
-		ChangedBy:     changedBy,
-		Notes:         "Shipment confirmed",
-		Timestamp:     time.Now().UTC(),
-		Prediction:    prediction,
+		DraftID:             draftID,
+		NewTrackingID:       generateTrackingID(),
+		ChangedBy:           changedBy,
+		Notes:               "Shipment confirmed",
+		Timestamp:           now,
+		Prediction:          prediction,
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -816,7 +850,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		CurrentLocation:     counterLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 		ParentShipmentID:    &parentID,
 		IsReturning:         true,
 	}
@@ -885,8 +919,10 @@ func generateTrackingID() string {
 }
 
 func generateDraftID() string {
-	id := uuid.New().String()
-	return fmt.Sprintf("DRAFT-%s", strings.ToUpper(id[:8]))
+	var b [4]byte
+	rand.Read(b[:])
+	n := binary.BigEndian.Uint32(b[:])%90000 + 10000
+	return fmt.Sprintf("BORRADOR-%d", n)
 }
 
 func isValidTransition(from, to model.Status) bool {

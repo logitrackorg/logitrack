@@ -1,7 +1,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 ARG VITE_API_URL=http://localhost:8080/api/v1
 RUN npm run build
