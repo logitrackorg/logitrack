@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type Shipment } from "../api/shipments";
+import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { fmtDateTime } from "../utils/date";
@@ -18,7 +18,6 @@ const PROVINCES = [
 const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
   { value: "envelope", label: "Sobre" },
   { value: "box",      label: "Caja" },
-  { value: "pallet",   label: "Pallet" },
 ];
 
 const SHIPMENT_TYPES: { value: ShipmentType; label: string }[] = [
@@ -30,6 +29,11 @@ const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
   { value: "flexible",  label: "Flexible" },
   { value: "morning",   label: "Mañana (8-12)" },
   { value: "afternoon", label: "Tarde (12-18)" },
+];
+
+const DELIVERY_METHODS: { value: DeliveryMethod; label: string; description: string }[] = [
+  { value: "ultima_milla",    label: "Última milla", description: "Entrega a domicilio del destinatario (≤ 50 km de la sucursal final)" },
+  { value: "retiro_sucursal", label: "Retiro en sucursal", description: "El destinatario retira el envío en la sucursal de destino" },
 ];
 
 const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
@@ -47,7 +51,7 @@ const initialForm: CreateShipmentPayload = {
   special_instructions: "",
   shipment_type: "normal",
   time_window: "flexible",
-  cold_chain: false,
+  delivery_method: "ultima_milla",
   receiving_branch_id: "",
 };
 
@@ -298,21 +302,6 @@ export function NewShipment() {
         {/* Remitente */}
         <Section title="Remitente">
           <Row2>
-            <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name}
-                onChange={(e) => handleSenderName(e.target.value)} placeholder="ej: Carlos Mendez" />
-              {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
-            </Field>
-            <Field label="Teléfono *">
-              <input style={input} required value={form.sender.phone}
-                onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" />
-            </Field>
-          </Row2>
-          <Row2>
-            <Field label="Email">
-              <input style={input} type="email" value={form.sender.email}
-                onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" />
-            </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
                 <input style={input} required value={form.sender.dni}
@@ -321,6 +310,21 @@ export function NewShipment() {
                   <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />
                 )}
               </div>
+            </Field>
+            <Field label="Nombre completo *">
+              <input style={{ ...input, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name}
+                onChange={(e) => handleSenderName(e.target.value)} placeholder="ej: Carlos Mendez" />
+              {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
+            </Field>
+          </Row2>
+          <Row2>
+            <Field label="Teléfono *">
+              <input style={input} required value={form.sender.phone}
+                onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" />
+            </Field>
+            <Field label="Email">
+              <input style={input} type="email" value={form.sender.email}
+                onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" />
             </Field>
           </Row2>
           <Row2>
@@ -357,21 +361,6 @@ export function NewShipment() {
         {/* Destinatario */}
         <Section title="Destinatario">
           <Row2>
-            <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name}
-                onChange={(e) => handleRecipientName(e.target.value)} placeholder="ej: Laura Gomez" />
-              {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
-            </Field>
-            <Field label="Teléfono *">
-              <input style={input} required value={form.recipient.phone}
-                onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" />
-            </Field>
-          </Row2>
-          <Row2>
-            <Field label="Email">
-              <input style={input} type="email" value={form.recipient.email}
-                onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" />
-            </Field>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
                 <input style={input} required value={form.recipient.dni}
@@ -380,6 +369,21 @@ export function NewShipment() {
                   <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />
                 )}
               </div>
+            </Field>
+            <Field label="Nombre completo *">
+              <input style={{ ...input, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name}
+                onChange={(e) => handleRecipientName(e.target.value)} placeholder="ej: Laura Gomez" />
+              {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
+            </Field>
+          </Row2>
+          <Row2>
+            <Field label="Teléfono *">
+              <input style={input} required value={form.recipient.phone}
+                onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" />
+            </Field>
+            <Field label="Email">
+              <input style={input} type="email" value={form.recipient.email}
+                onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" />
             </Field>
           </Row2>
           <Row2>
@@ -496,17 +500,37 @@ export function NewShipment() {
               </select>
             </Field>
           </Row2>
+          <Field label="Método de entrega *">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {DELIVERY_METHODS.map((m) => (
+                <label key={m.value} style={{
+                  display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer",
+                  border: `1px solid ${form.delivery_method === m.value ? "#3b82f6" : "#e5e7eb"}`,
+                  background: form.delivery_method === m.value ? "#eff6ff" : "#fff",
+                  borderRadius: 8, padding: "10px 12px",
+                }}>
+                  <input
+                    type="radio"
+                    name="delivery_method"
+                    value={m.value}
+                    checked={form.delivery_method === m.value}
+                    onChange={() => set("delivery_method", m.value)}
+                    style={{ marginTop: 3, flexShrink: 0 }}
+                  />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</span>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>{m.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Field>
           <Field label="">
             <div style={{ display: "flex", gap: 20 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <input type="checkbox" checked={!!form.is_fragile}
                   onChange={(e) => set("is_fragile", e.target.checked)} />
                 Contenido frágil (manipular con cuidado)
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!form.cold_chain}
-                  onChange={(e) => set("cold_chain", e.target.checked)} />
-                Cadena de frío (refrigerado)
               </label>
             </div>
           </Field>
@@ -517,7 +541,51 @@ export function NewShipment() {
           </Field>
         </Section>
 
-        {error && <p style={{ color: "#ef4444", margin: 0 }}>{error}</p>}
+        {error && (
+          <div
+            role="alert"
+            style={{
+              display: "flex",
+              gap: 12,
+              alignItems: "flex-start",
+              background: "#fef2f2",
+              border: "1px solid #fca5a5",
+              borderLeft: "4px solid #dc2626",
+              borderRadius: 8,
+              padding: "12px 16px",
+              color: "#991b1b",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+            }}
+          >
+            <span aria-hidden style={{ fontSize: 18, lineHeight: 1.2, flexShrink: 0 }}>⚠</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>
+                No se pudo procesar la solicitud
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.45, color: "#7f1d1d", wordBreak: "break-word" }}>
+                {error}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError("")}
+              aria-label="Cerrar mensaje"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "#991b1b",
+                fontSize: 18,
+                lineHeight: 1,
+                padding: "2px 4px",
+                marginLeft: 4,
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
           <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "12px 14px" }}>

@@ -36,7 +36,7 @@ func RunMigrations(db *sql.DB) error {
 			corrections           JSONB,
 			shipment_type         TEXT NOT NULL DEFAULT 'normal',
 			time_window           TEXT NOT NULL DEFAULT 'flexible',
-			cold_chain            BOOLEAN NOT NULL DEFAULT FALSE,
+			delivery_method       TEXT NOT NULL DEFAULT 'ultima_milla',
 			priority              TEXT NOT NULL DEFAULT '',
 			priority_score        FLOAT NOT NULL DEFAULT 0,
 			priority_confidence   FLOAT NOT NULL DEFAULT 0,
@@ -45,7 +45,6 @@ func RunMigrations(db *sql.DB) error {
 
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS shipment_type        TEXT NOT NULL DEFAULT 'normal';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS time_window          TEXT NOT NULL DEFAULT 'flexible';
-		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS cold_chain           BOOLEAN NOT NULL DEFAULT FALSE;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority             TEXT NOT NULL DEFAULT '';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_score       FLOAT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS priority_confidence  FLOAT NOT NULL DEFAULT 0;
@@ -57,6 +56,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_attempts    INT NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS is_returning         BOOLEAN NOT NULL DEFAULT FALSE;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS final_branch_id      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_method      TEXT NOT NULL DEFAULT 'ultima_milla';
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';

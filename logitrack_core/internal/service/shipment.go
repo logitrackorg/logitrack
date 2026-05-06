@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/geo"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -48,6 +49,57 @@ func validateName(name, field string) error {
 	}
 	if !reName.MatchString(name) {
 		return fmt.Errorf("%s no puede contener números ni caracteres especiales", field)
+	}
+	return nil
+}
+
+// resolveDeliveryMethod validates input and applies the default (ultima_milla) when empty.
+func resolveDeliveryMethod(m model.DeliveryMethod) (model.DeliveryMethod, error) {
+	switch m {
+	case "":
+		return model.DeliveryMethodLastMile, nil
+	case model.DeliveryMethodLastMile, model.DeliveryMethodBranchPickup:
+		return m, nil
+	default:
+		return "", fmt.Errorf("delivery_method inválido: %q (debe ser 'ultima_milla' o 'retiro_sucursal')", m)
+	}
+}
+
+// MaxLastMileDistanceKm is the maximum distance (in km) between the recipient's address
+// and the final branch for last-mile delivery to be allowed. Beyond this, the customer
+// must opt for branch pickup.
+const MaxLastMileDistanceKm = 50.0
+
+// validateLastMileReachable returns an error when delivery_method is ultima_milla and
+// the recipient's address sits farther than MaxLastMileDistanceKm from the final branch.
+// If coordinates cannot be resolved on either side, the check is skipped (no error).
+func (s *ShipmentService) validateLastMileReachable(method model.DeliveryMethod, recipient model.Customer, finalBranchID string) error {
+	if method != model.DeliveryMethodLastMile {
+		return nil
+	}
+	rLat, rLng := 0.0, 0.0
+	if recipient.Address.Latitude != nil && recipient.Address.Longitude != nil {
+		rLat, rLng = *recipient.Address.Latitude, *recipient.Address.Longitude
+	} else {
+		rLat, rLng, _ = geo.GeocodeShipmentAddress(recipient.Address.Street, recipient.Address.City, recipient.Address.Province)
+	}
+	if rLat == 0 && rLng == 0 {
+		return nil
+	}
+	branch, ok := s.branchRepo.GetByID(finalBranchID)
+	if !ok || branch.Latitude == nil || branch.Longitude == nil {
+		return nil
+	}
+	distKm := ml.HaversineKm(rLat, rLng, *branch.Latitude, *branch.Longitude)
+	if distKm > MaxLastMileDistanceKm {
+		branchLabel := branch.Name
+		if branch.Address.City != "" {
+			branchLabel = fmt.Sprintf("%s — %s", branch.Name, branch.Address.City)
+		}
+		return fmt.Errorf(
+			"la dirección del destinatario está a %.1f km de la sucursal más cercana (%s). El máximo para entrega a domicilio es %.0f km: debe seleccionar 'Retiro en sucursal'",
+			distKm, branchLabel, MaxLastMileDistanceKm,
+		)
 	}
 	return nil
 }
@@ -149,6 +201,15 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	if timeWindow == "" {
 		timeWindow = model.TimeWindowFlexible
 	}
+	deliveryMethod, err := resolveDeliveryMethod(req.DeliveryMethod)
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	finalBranchID := s.resolveFinalBranch(req.Recipient)
+	if err := s.validateLastMileReachable(deliveryMethod, req.Recipient, finalBranchID); err != nil {
+		return model.Shipment{}, err
+	}
 
 	var prediction *model.PriorityPrediction
 	if s.mlClient != nil {
@@ -159,21 +220,21 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		TrackingID:          generateTrackingID(),
 		Sender:              req.Sender,
 		Recipient:           req.Recipient,
-		FinalBranchID:       s.resolveFinalBranch(req.Recipient),
+		FinalBranchID:       finalBranchID,
 		WeightKg:            req.WeightKg,
 		PackageType:         req.PackageType,
 		IsFragile:           req.IsFragile,
 		SpecialInstructions: req.SpecialInstructions,
 		ShipmentType:        shipmentType,
 		TimeWindow:          timeWindow,
-		ColdChain:           req.ColdChain,
+		DeliveryMethod:      deliveryMethod,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		OriginBranchID:      req.ReceivingBranchID,
 		Status:              model.StatusAtOriginHub,
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
+		EstimatedDeliveryAt: s.estimatedDelivery(now, req.ReceivingBranchID, finalBranchID, string(shipmentType)),
 	}
 	setPriority(&shipment, prediction)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
@@ -230,6 +291,10 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 	if timeWindow == "" {
 		timeWindow = model.TimeWindowFlexible
 	}
+	deliveryMethod, err := resolveDeliveryMethod(req.DeliveryMethod)
+	if err != nil {
+		return model.Shipment{}, err
+	}
 
 	shipment := model.Shipment{
 		TrackingID:          generateDraftID(),
@@ -241,7 +306,7 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		SpecialInstructions: req.SpecialInstructions,
 		ShipmentType:        shipmentType,
 		TimeWindow:          timeWindow,
-		ColdChain:           req.ColdChain,
+		DeliveryMethod:      deliveryMethod,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		OriginBranchID:  req.ReceivingBranchID,
 		Status:          model.StatusDraft,
@@ -288,6 +353,10 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	if existing.Status != model.StatusDraft {
 		return model.Shipment{}, fmt.Errorf("solo se pueden actualizar envíos en borrador")
 	}
+	deliveryMethod, err := resolveDeliveryMethod(req.DeliveryMethod)
+	if err != nil {
+		return model.Shipment{}, err
+	}
 	existing.Sender = req.Sender
 	existing.Recipient = req.Recipient
 	existing.WeightKg = req.WeightKg
@@ -296,7 +365,7 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	existing.SpecialInstructions = req.SpecialInstructions
 	existing.ShipmentType = req.ShipmentType
 	existing.TimeWindow = req.TimeWindow
-	existing.ColdChain = req.ColdChain
+	existing.DeliveryMethod = deliveryMethod
 	existing.ReceivingBranchID = req.ReceivingBranchID
 	existing.UpdatedAt = time.Now().UTC()
 	// Prefer branch ID derived from receiving branch; fall back to origin city lookup.
@@ -381,6 +450,12 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 			s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: draft}) //nolint:errcheck
 		}
 	}
+	if draft.DeliveryMethod == "" {
+		draft.DeliveryMethod = model.DeliveryMethodLastMile
+	}
+	if err := s.validateLastMileReachable(draft.DeliveryMethod, draft.Recipient, draft.FinalBranchID); err != nil {
+		return model.Shipment{}, err
+	}
 
 	var prediction *model.PriorityPrediction
 	if s.mlClient != nil {
@@ -394,7 +469,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Notes:               "Shipment confirmed",
 		Timestamp:           now,
 		Prediction:          prediction,
-		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
+		EstimatedDeliveryAt: s.estimatedDelivery(now, draft.OriginBranchID, draft.FinalBranchID, string(draft.ShipmentType)),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -431,6 +506,26 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 
 	if !isValidTransition(current.Status, req.Status) {
 		return model.Shipment{}, fmt.Errorf("transición inválida: %s → %s", current.Status, req.Status)
+	}
+
+	// Restringir transición desde at_hub según delivery_method elegido al crear el pedido.
+	// Excepción: ready_for_pickup desde delivery_failed sigue permitido (fallback de última milla agotada),
+	// porque esta guarda sólo aplica cuando el estado actual es at_hub.
+	if current.Status == model.StatusAtHub {
+		method := current.DeliveryMethod
+		if method == "" {
+			method = model.DeliveryMethodLastMile
+		}
+		switch method {
+		case model.DeliveryMethodLastMile:
+			if req.Status == model.StatusReadyForPickup {
+				return model.Shipment{}, fmt.Errorf("envío configurado para entrega a domicilio: usar 'En reparto'")
+			}
+		case model.DeliveryMethodBranchPickup:
+			if req.Status == model.StatusOutForDelivery {
+				return model.Shipment{}, fmt.Errorf("envío configurado para retiro en sucursal: usar 'Listo para retiro'")
+			}
+		}
 	}
 
 	// Validate returned: DNI check — asymmetric for counter-shipments
@@ -681,7 +776,7 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 	var correctionPrediction *model.PriorityPrediction
 	if s.mlClient != nil {
 		c := req.Corrections
-		if c.ShipmentType != nil || c.TimeWindow != nil || c.ColdChain != nil ||
+		if c.ShipmentType != nil || c.TimeWindow != nil ||
 			c.IsFragile != nil || c.OriginProvince != nil || c.DestinationProvince != nil {
 			// Build effective shipment: start from original, apply stored corrections,
 			// then layer the incoming corrections on top.
@@ -692,9 +787,6 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 				}
 				if stored.TimeWindow != nil {
 					effective.TimeWindow = *stored.TimeWindow
-				}
-				if stored.ColdChain != nil {
-					effective.ColdChain = *stored.ColdChain == "true"
 				}
 				if stored.IsFragile != nil {
 					effective.IsFragile = *stored.IsFragile == "true"
@@ -711,9 +803,6 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 			}
 			if c.TimeWindow != nil {
 				effective.TimeWindow = *c.TimeWindow
-			}
-			if c.ColdChain != nil {
-				effective.ColdChain = *c.ColdChain == "true"
 			}
 			if c.IsFragile != nil {
 				effective.IsFragile = *c.IsFragile == "true"
@@ -843,14 +932,13 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		SpecialInstructions: shipment.SpecialInstructions,
 		ShipmentType:        model.ShipmentTypeNormal,
 		TimeWindow:          model.TimeWindowFlexible,
-		ColdChain:           shipment.ColdChain,
 		ReceivingBranchID:   counterLocation,
 		OriginBranchID:      originID,
 		Status:              counterStatus,
 		CurrentLocation:     counterLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
+		EstimatedDeliveryAt: nil,
 		ParentShipmentID:    &parentID,
 		IsReturning:         true,
 	}
@@ -911,6 +999,27 @@ func (s *ShipmentService) GetEvents(trackingID string) ([]model.ShipmentEvent, e
 
 func (s *ShipmentService) Stats(filter model.ShipmentFilter) (model.Stats, error) {
 	return s.repo.Stats(filter)
+}
+
+func (s *ShipmentService) estimatedDelivery(from time.Time, originBranchID, finalBranchID, shipmentType string) *time.Time {
+	var distKm float64
+	origin, okO := s.branchRepo.GetByID(originBranchID)
+	dest, okD := s.branchRepo.GetByID(finalBranchID)
+	if okO && okD && origin.Latitude != nil && origin.Longitude != nil && dest.Latitude != nil && dest.Longitude != nil {
+		distKm = ml.HaversineKm(*origin.Latitude, *origin.Longitude, *dest.Latitude, *dest.Longitude)
+	} else {
+		originProvince, destProvince := "", ""
+		if okO {
+			originProvince = origin.Province
+		}
+		if okD {
+			destProvince = dest.Province
+		}
+		distKm = ml.ComputeDistance(originProvince, destProvince)
+	}
+	days := ml.EstimateDeliveryDaysFromDistance(distKm, shipmentType)
+	t := from.AddDate(0, 0, days)
+	return &t
 }
 
 func generateTrackingID() string {

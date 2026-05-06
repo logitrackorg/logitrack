@@ -27,7 +27,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
-import { AddressAutocomplete, type AddressParts } from '../components/AddressAutocomplete';
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   draft:                [],
@@ -70,7 +70,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Sobre", box: "Caja", pallet: "Pallet",
+  envelope: "Sobre", box: "Caja",
 };
 
 export function ShipmentDetail() {
@@ -162,7 +162,6 @@ export function ShipmentDetail() {
           special_instructions: s.special_instructions ?? "",
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
-          cold_chain: s.cold_chain ?? false,
           receiving_branch_id: s.receiving_branch_id ?? "",
         });
       }
@@ -390,7 +389,6 @@ export function ShipmentDetail() {
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
       shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      cold_chain: c.cold_chain ?? (shipment.cold_chain ? "true" : "false"),
       is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     });
     setCorrectionError("");
@@ -423,7 +421,6 @@ export function ShipmentDetail() {
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
       shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      cold_chain: c.cold_chain ?? (shipment.cold_chain ? "true" : "false"),
       is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     };
     const changed: Record<string, string> = {};
@@ -455,7 +452,6 @@ export function ShipmentDetail() {
     for (const [key, label] of required) {
       if (!correctionForm[key]?.trim()) { setCorrectionError(`${label} es obligatorio.`); return; }
     }
-    if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("El peso debe ser mayor a 0."); return; }
     if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
     if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
     if (/^\d+$/.test(correctionForm.origin_city ?? "")) { setCorrectionError("La ciudad del remitente no puede contener solo números."); return; }
@@ -503,6 +499,7 @@ export function ShipmentDetail() {
   if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
+  const deliveryMethod = shipment.delivery_method ?? "ultima_milla";
   const nextStatuses = TRANSITIONS[shipment.status].filter(
     (s) => s !== "ready_for_return" || (shipment.is_returning && isAtOriginBranch)
   ).filter(
@@ -511,6 +508,15 @@ export function ShipmentDetail() {
     () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
   ).filter(
     (s) => s !== "redelivery_scheduled" || (shipment.delivery_attempts ?? 0) < maxDeliveryAttempts
+  ).filter(
+    // Restringir at_hub según delivery_method elegido al crear el pedido.
+    // Excepción: from delivery_failed, ready_for_pickup sigue disponible (fallback de última milla agotada).
+    (s) => {
+      if (shipment.status !== "at_hub") return true;
+      if (deliveryMethod === "ultima_milla" && s === "ready_for_pickup") return false;
+      if (deliveryMethod === "retiro_sucursal" && s === "out_for_delivery") return false;
+      return true;
+    }
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
@@ -661,9 +667,9 @@ export function ShipmentDetail() {
                 <Card title="Paquete">
                   <InfoRowEx {...pkgVal} label="Tipo" />
                   {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
-                  {shipment.cold_chain && <InfoRow label="Cadena de frío" value="Sí" />}
                   {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
                   {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
+                  <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Peso" />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
@@ -1312,7 +1318,6 @@ const PROVINCES = [
 const PACKAGE_TYPES = [
   { value: "envelope", label: "Sobre" },
   { value: "box",      label: "Caja" },
-  { value: "pallet",   label: "Pallet" },
 ];
 const SHIPMENT_TYPES = [
   { value: "normal",  label: "Normal" },
@@ -1560,10 +1565,6 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
                 <input type="checkbox" checked={!!form.is_fragile} onChange={(e) => set("is_fragile", e.target.checked)} />
                 Contenido frágil (manipular con cuidado)
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
-                <input type="checkbox" checked={!!form.cold_chain} onChange={(e) => set("cold_chain", e.target.checked)} />
-                Cadena de frío (refrigerado)
               </label>
             </div>
           </DField>
@@ -1849,28 +1850,11 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
             <DField label="Calle (origen)">
-              <AddressAutocomplete
-                style={inp}
-                value={form.origin_street ?? ""}
-                onChange={(v) => set("origin_street", v)}
-                onAddressSelect={(p: AddressParts) => onChange({
-                  ...form,
-                  origin_street:      p.street      || form.origin_street      || "",
-                  origin_city:        p.city         || form.origin_city         || "",
-                  origin_province:    p.province     || form.origin_province     || "",
-                  origin_postal_code: p.postal_code  || form.origin_postal_code  || "",
-                })}
-                placeholder="Av. Corrientes 1234, San Miguel"
-              />
+              <input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </DField>
-            <DField label="Ciudad (origen)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
-            <DField label="Provincia (origen)">
-              <select style={inp} value={form.origin_province ?? ""} onChange={(e) => set("origin_province", e.target.value)}>
-                <option value="">Seleccionar</option>
-                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </DField>
-            <DField label="Código postal (origen)"><input style={inp} value={form.origin_postal_code ?? ""} onChange={(e) => set("origin_postal_code", e.target.value)} /></DField>
+            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_city}</div></DField>
+            <DField label="Provincia (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_province}</div></DField>
+            <DField label="Código postal (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -1883,28 +1867,11 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
             <DField label="Calle (destino)">
-              <AddressAutocomplete
-                style={inp}
-                value={form.destination_street ?? ""}
-                onChange={(v) => set("destination_street", v)}
-                onAddressSelect={(p: AddressParts) => onChange({
-                  ...form,
-                  destination_street:      p.street      || form.destination_street      || "",
-                  destination_city:        p.city         || form.destination_city         || "",
-                  destination_province:    p.province     || form.destination_province     || "",
-                  destination_postal_code: p.postal_code  || form.destination_postal_code  || "",
-                })}
-                placeholder="San Martín 456, Córdoba"
-              />
+              <input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
             </DField>
-            <DField label="Ciudad (destino)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
-            <DField label="Provincia (destino)">
-              <select style={inp} value={form.destination_province ?? ""} onChange={(e) => set("destination_province", e.target.value)}>
-                <option value="">Seleccionar</option>
-                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </DField>
-            <DField label="Código postal (destino)"><input style={inp} value={form.destination_postal_code ?? ""} onChange={(e) => set("destination_postal_code", e.target.value)} /></DField>
+            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_city}</div></DField>
+            <DField label="Provincia (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_province}</div></DField>
+            <DField label="Código postal (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -1912,26 +1879,18 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
+            <DField label="Peso (kg)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.weight_kg} kg</div></DField>
             <DField label="Tipo">
               <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </DField>
             <DField label="Tipo de envío">
-              <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
-                {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              <div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.shipment_type === "express" ? "Express" : "Normal"}</div>
             </DField>
             <DField label="Ventana horaria">
               <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </DField>
-            <DField label="Cadena de frío">
-              <select style={inp} value={form.cold_chain ?? "false"} onChange={(e) => set("cold_chain", e.target.value)}>
-                <option value="false">No</option>
-                <option value="true">Sí (refrigerado)</option>
               </select>
             </DField>
             <DField label="Contenido frágil">

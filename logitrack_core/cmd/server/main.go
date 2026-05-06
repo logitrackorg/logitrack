@@ -53,7 +53,7 @@ func main() {
 
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
-	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
+	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)

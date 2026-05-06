@@ -5,7 +5,6 @@ import type { OrganizationConfig } from '../api/organizationApi';
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: 'Sobre',
   box: 'Caja',
-  pallet: 'Pallet',
 };
 
 const SHIPMENT_TYPE_LABELS: Record<string, string> = {
@@ -17,6 +16,11 @@ const TIME_WINDOW_LABELS: Record<string, string> = {
   morning: 'Mañana (8–12 hs)',
   afternoon: 'Tarde (12–18 hs)',
   flexible: 'Flexible',
+};
+
+const DELIVERY_METHOD_LABELS: Record<string, string> = {
+  ultima_milla: 'Última milla (a domicilio)',
+  retiro_sucursal: 'Retiro en sucursal',
 };
 
 function escapeHtml(str: string): string {
@@ -79,6 +83,7 @@ export function printShipmentDocument(
   const packageType = escapeHtml(PACKAGE_LABELS[cor.package_type ?? shipment.package_type] ?? shipment.package_type);
   const shipmentType = escapeHtml(SHIPMENT_TYPE_LABELS[cor.shipment_type ?? shipment.shipment_type ?? 'normal'] ?? 'Normal');
   const timeWindow = escapeHtml(TIME_WINDOW_LABELS[cor.time_window ?? shipment.time_window ?? 'flexible'] ?? 'Flexible');
+  const deliveryMethod = escapeHtml(DELIVERY_METHOD_LABELS[shipment.delivery_method ?? 'ultima_milla'] ?? 'Última milla (a domicilio)');
   const specialInstructions = escapeHtml(cor.special_instructions ?? shipment.special_instructions ?? '');
 
   const receivingBranch = branches.find(b => b.id === shipment.receiving_branch_id);
@@ -88,7 +93,6 @@ export function printShipmentDocument(
 
   const characteristics: string[] = [];
   if (shipment.is_fragile) characteristics.push('Frágil');
-  if (shipment.cold_chain) characteristics.push('Cadena de frío');
   if (characteristics.length === 0) characteristics.push('Sin características especiales');
 
   const printWindow = window.open('', '_blank');
@@ -277,6 +281,10 @@ export function printShipmentDocument(
     <div class="pkg-item">
       <span class="pkg-label">Ventana horaria</span>
       <span class="pkg-value">${timeWindow}</span>
+    </div>
+    <div class="pkg-item" style="grid-column: span 4;">
+      <span class="pkg-label">Método de entrega</span>
+      <span class="pkg-value">${deliveryMethod}</span>
     </div>
     <div class="pkg-item" style="grid-column: span 4;">
       <span class="pkg-label">Características</span>

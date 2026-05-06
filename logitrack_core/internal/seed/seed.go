@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
@@ -21,7 +22,7 @@ type shipmentSeed struct {
 	specialInstr       string
 	shipmentType       model.ShipmentType
 	timeWindow         model.TimeWindow
-	coldChain          bool
+	deliveryMethod     model.DeliveryMethod
 	receivingBranchID  string
 	priority           string
 	priorityScore      float64
@@ -81,7 +82,7 @@ func LoadVehicles(repo repository.VehicleRepository) {
 
 // Load populates the event store with seed domain events, then rebuilds the projection.
 // Idempotent: if events already exist in the store, only rebuilds the projection and returns.
-func Load(store repository.EventStore, proj projection.Projector, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository) {
+func Load(store repository.EventStore, proj projection.Projector, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository, branchRepo repository.BranchRepository) {
 	existing, _ := store.LoadAll()
 	if len(existing) > 0 {
 		proj.Rebuild(existing)
@@ -116,7 +117,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			sender:             model.Customer{DNI: "29371084", Name: "Martina López", Phone: "541192345678", Address: model.Address{Street: "Av. del Libertador 500", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1001", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)}},
 			recipient:          model.Customer{DNI: "25618930", Name: "Diego Fernández", Phone: "542619876543", Email: "dfernandez@empresa.com", Address: model.Address{Street: "Belgrano 321", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8272)}},
 			weightKg:           12.0,
-			packageType:        model.PackagePallet,
+			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeExpress,
 			timeWindow:         model.TimeWindowMorning,
 			receivingBranchID:  "mendoza",
@@ -267,7 +268,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
 			timeWindow:         model.TimeWindowAfternoon,
-			coldChain:          true,
+			deliveryMethod:     model.DeliveryMethodBranchPickup,
 			receivingBranchID:  "caba",
 			priority:           "media",
 			priorityScore:      0.45,
@@ -303,7 +304,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			sender:             model.Customer{DNI: "26778899", Name: "Cecilia Romero", Phone: "542614556677", Address: model.Address{Street: "Belgrano 450", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8272)}},
 			recipient:          model.Customer{DNI: "34112233", Name: "Gustavo Medina", Phone: "541155443322", Address: model.Address{Street: "Av. Corrientes 800", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)}},
 			weightKg:           11.0,
-			packageType:        model.PackagePallet,
+			packageType:        model.PackageBox,
 			isFragile:          true,
 			shipmentType:       model.ShipmentTypeNormal,
 			timeWindow:         model.TimeWindowMorning,
@@ -350,6 +351,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			specialInstr:       "Equipamiento médico — manejar con extremo cuidado, mantener vertical",
 			shipmentType:       model.ShipmentTypeExpress,
 			timeWindow:         model.TimeWindowMorning,
+			deliveryMethod:     model.DeliveryMethodBranchPickup,
 			receivingBranchID:  "mendoza",
 			priority:           "alta",
 			priorityScore:      0.78,
@@ -373,6 +375,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
 			timeWindow:         model.TimeWindowFlexible,
+			deliveryMethod:     model.DeliveryMethodBranchPickup,
 			receivingBranchID:  "caba",
 			priority:           "baja",
 			priorityScore:      0.18,
@@ -415,8 +418,12 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 
 	for _, s := range seeds {
 		createdAt := now.Add(-time.Duration(s.events[0].hoursAgo) * time.Hour)
-		estimatedTime := createdAt.AddDate(0, 0, 7)
-		estimated := &estimatedTime
+		estimated := estimateDeliverySeed(createdAt, s.events[0].location, s.receivingBranchID, string(s.shipmentType), branchRepo)
+
+		deliveryMethod := s.deliveryMethod
+		if deliveryMethod == "" {
+			deliveryMethod = model.DeliveryMethodLastMile
+		}
 
 		// Build the initial shipment snapshot for the shipment_created event
 		initialShipment := model.Shipment{
@@ -429,7 +436,7 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			SpecialInstructions: s.specialInstr,
 			ShipmentType:        s.shipmentType,
 			TimeWindow:          s.timeWindow,
-			ColdChain:           s.coldChain,
+			DeliveryMethod:      deliveryMethod,
 			ReceivingBranchID:   s.receivingBranchID,
 			OriginBranchID:      s.events[0].location,
 			FinalBranchID:       s.receivingBranchID,
@@ -492,4 +499,25 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		CreatedAt:   now.Add(-1 * time.Hour),
 		Status:      model.RouteStatusPending,
 	})
+}
+
+func estimateDeliverySeed(from time.Time, originBranchID, finalBranchID, shipmentType string, repo repository.BranchRepository) *time.Time {
+	var distKm float64
+	origin, okO := repo.GetByID(originBranchID)
+	dest, okD := repo.GetByID(finalBranchID)
+	if okO && okD && origin.Latitude != nil && origin.Longitude != nil && dest.Latitude != nil && dest.Longitude != nil {
+		distKm = ml.HaversineKm(*origin.Latitude, *origin.Longitude, *dest.Latitude, *dest.Longitude)
+	} else {
+		originProv, destProv := "", ""
+		if okO {
+			originProv = origin.Province
+		}
+		if okD {
+			destProv = dest.Province
+		}
+		distKm = ml.ComputeDistance(originProv, destProv)
+	}
+	days := ml.EstimateDeliveryDaysFromDistance(distKm, shipmentType)
+	t := from.AddDate(0, 0, days)
+	return &t
 }

@@ -41,9 +41,10 @@ export type ShipmentStatus =
   | "cancelled"
   | "lost"
   | "destroyed";
-export type PackageType = "envelope" | "box" | "pallet";
+export type PackageType = "envelope" | "box";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
+export type DeliveryMethod = "ultima_milla" | "retiro_sucursal";
 export type Priority = "alta" | "media" | "baja";
 
 export interface PriorityFactorDetail {
@@ -70,7 +71,7 @@ export interface Shipment {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   priority?: Priority;
   priority_score?: number;
   priority_confidence?: number;
@@ -121,7 +122,7 @@ export interface CreateShipmentPayload {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   receiving_branch_id: string;
   created_by?: string;
 }
@@ -136,7 +137,7 @@ export interface SaveDraftPayload {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   receiving_branch_id?: string;
   created_by?: string;
 }

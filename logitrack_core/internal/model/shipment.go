@@ -29,7 +29,6 @@ type PackageType string
 const (
 	PackageEnvelope PackageType = "envelope"
 	PackageBox      PackageType = "box"
-	PackagePallet   PackageType = "pallet"
 )
 
 type Address struct {
@@ -56,6 +55,13 @@ const (
 	TimeWindowFlexible  TimeWindow = "flexible"
 )
 
+type DeliveryMethod string
+
+const (
+	DeliveryMethodLastMile     DeliveryMethod = "ultima_milla"
+	DeliveryMethodBranchPickup DeliveryMethod = "retiro_sucursal"
+)
+
 type Shipment struct {
 	TrackingID string `json:"tracking_id"`
 
@@ -69,9 +75,9 @@ type Shipment struct {
 	SpecialInstructions string      `json:"special_instructions,omitempty"`
 
 	// Shipment attributes
-	ShipmentType ShipmentType `json:"shipment_type,omitempty"` // normal / express
-	TimeWindow   TimeWindow   `json:"time_window,omitempty"`   // morning / afternoon / flexible
-	ColdChain    bool         `json:"cold_chain,omitempty"`    // requires refrigeration
+	ShipmentType   ShipmentType   `json:"shipment_type,omitempty"`   // normal / express
+	TimeWindow     TimeWindow     `json:"time_window,omitempty"`     // morning / afternoon / flexible
+	DeliveryMethod DeliveryMethod `json:"delivery_method,omitempty"` // ultima_milla / retiro_sucursal — fijado al crear, no editable
 
 	// Receiving branch
 	ReceivingBranchID string `json:"receiving_branch_id,omitempty"`
@@ -134,7 +140,6 @@ type ShipmentCorrections struct {
 	SpecialInstructions   *string       `json:"special_instructions,omitempty"`
 	ShipmentType          *ShipmentType `json:"shipment_type,omitempty"`
 	TimeWindow            *TimeWindow   `json:"time_window,omitempty"`
-	ColdChain             *string       `json:"cold_chain,omitempty"` // "true" / "false"
 	IsFragile             *string       `json:"is_fragile,omitempty"` // "true" / "false"
 }
 
@@ -179,7 +184,6 @@ func (c ShipmentCorrections) Fields() []CorrectedField {
 	if c.TimeWindow != nil {
 		fields = append(fields, CorrectedField{Label: "Ventana horaria", Value: string(*c.TimeWindow)})
 	}
-	str(c.ColdChain, "Cadena de frío")
 	str(c.IsFragile, "Frágil")
 	return fields
 }
@@ -251,9 +255,6 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	if incoming.TimeWindow != nil {
 		base.TimeWindow = incoming.TimeWindow
 	}
-	if incoming.ColdChain != nil {
-		base.ColdChain = incoming.ColdChain
-	}
 	if incoming.IsFragile != nil {
 		base.IsFragile = incoming.IsFragile
 	}
@@ -272,15 +273,15 @@ type CreateShipmentRequest struct {
 	Sender    Customer `json:"sender"    binding:"required"`
 	Recipient Customer `json:"recipient" binding:"required"`
 
-	WeightKg            float64      `json:"weight_kg"           binding:"required,gt=0"`
-	PackageType         PackageType  `json:"package_type"        binding:"required"`
-	IsFragile           bool         `json:"is_fragile"`
-	SpecialInstructions string       `json:"special_instructions"`
-	ShipmentType        ShipmentType `json:"shipment_type"`
-	TimeWindow          TimeWindow   `json:"time_window"`
-	ColdChain           bool         `json:"cold_chain"`
-	ReceivingBranchID   string       `json:"receiving_branch_id" binding:"required"`
-	CreatedBy           string       `json:"created_by"`
+	WeightKg            float64        `json:"weight_kg"           binding:"required,gt=0"`
+	PackageType         PackageType    `json:"package_type"        binding:"required"`
+	IsFragile           bool           `json:"is_fragile"`
+	SpecialInstructions string         `json:"special_instructions"`
+	ShipmentType        ShipmentType   `json:"shipment_type"`
+	TimeWindow          TimeWindow     `json:"time_window"`
+	DeliveryMethod      DeliveryMethod `json:"delivery_method"`
+	ReceivingBranchID   string         `json:"receiving_branch_id" binding:"required"`
+	CreatedBy           string         `json:"created_by"`
 }
 
 // ShipmentFilter holds optional query filters for listing shipments.
@@ -301,13 +302,13 @@ type SaveDraftRequest struct {
 	Sender    Customer `json:"sender"`
 	Recipient Customer `json:"recipient"`
 
-	WeightKg            float64      `json:"weight_kg"`
-	PackageType         PackageType  `json:"package_type"`
-	IsFragile           bool         `json:"is_fragile"`
-	SpecialInstructions string       `json:"special_instructions"`
-	ShipmentType        ShipmentType `json:"shipment_type"`
-	TimeWindow          TimeWindow   `json:"time_window"`
-	ColdChain           bool         `json:"cold_chain"`
-	ReceivingBranchID   string       `json:"receiving_branch_id"`
-	CreatedBy           string       `json:"created_by"`
+	WeightKg            float64        `json:"weight_kg"`
+	PackageType         PackageType    `json:"package_type"`
+	IsFragile           bool           `json:"is_fragile"`
+	SpecialInstructions string         `json:"special_instructions"`
+	ShipmentType        ShipmentType   `json:"shipment_type"`
+	TimeWindow          TimeWindow     `json:"time_window"`
+	DeliveryMethod      DeliveryMethod `json:"delivery_method"`
+	ReceivingBranchID   string         `json:"receiving_branch_id"`
+	CreatedBy           string         `json:"created_by"`
 }
