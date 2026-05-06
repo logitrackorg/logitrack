@@ -1128,7 +1128,7 @@ func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipm
 		CurrentLocation:     "br-caba",
 		CreatedAt:           createdAt,
 		UpdatedAt:           createdAt,
-		EstimatedDeliveryAt: createdAt.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := createdAt.AddDate(0, 0, 7); return &t }(),
 	}
 	created, err := ts.shipmentRepo.Create(repository.CreateShipmentCmd{
 		Shipment:  s,

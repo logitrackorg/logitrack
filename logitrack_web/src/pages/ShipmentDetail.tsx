@@ -669,7 +669,7 @@ export function ShipmentDetail() {
                 </Card>
                 <Card title="Fechas y ubicación">
                   <InfoRow label="Creado"          value={fmt(shipment.created_at)} />
-                  <InfoRow label="Entrega est."    value={fmt(shipment.estimated_delivery_at)} />
+                  <InfoRow label="Entrega est."    value={shipment.estimated_delivery_at ? fmt(shipment.estimated_delivery_at) : "—"} />
                   {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
                     <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
@@ -1565,8 +1565,11 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
         <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
           Guardá los cambios antes de confirmar. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+        </p>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+          <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
         {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}

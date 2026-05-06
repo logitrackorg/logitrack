@@ -72,9 +72,10 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 		TrackingID: cmd.DraftID,
 		EventType:  model.EventDraftConfirmed,
 		Payload: model.DraftConfirmedPayload{
-			OldTrackingID: cmd.DraftID,
-			NewTrackingID: cmd.NewTrackingID,
-			Prediction:    cmd.Prediction,
+			OldTrackingID:       cmd.DraftID,
+			NewTrackingID:       cmd.NewTrackingID,
+			Prediction:          cmd.Prediction,
+			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,

@@ -171,7 +171,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	}
 	setPriority(&shipment, prediction)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
@@ -241,12 +241,13 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		ColdChain:           req.ColdChain,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		OriginBranchID:      req.ReceivingBranchID,
-		Status:              model.StatusDraft,
-		CurrentLocation:     currentLocation,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		OriginBranchID:  req.ReceivingBranchID,
+		Status:          model.StatusDraft,
+		CurrentLocation: currentLocation,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		// EstimatedDeliveryAt is intentionally left as zero — it will be
+		// calculated with definitive data at the moment of confirmation.
 	}
 	return s.repo.SaveDraft(repository.SaveDraftCmd{Shipment: shipment})
 }
@@ -375,13 +376,15 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
 	}
+	now := time.Now().UTC()
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
-		DraftID:       draftID,
-		NewTrackingID: generateTrackingID(),
-		ChangedBy:     changedBy,
-		Notes:         "Shipment confirmed",
-		Timestamp:     time.Now().UTC(),
-		Prediction:    prediction,
+		DraftID:             draftID,
+		NewTrackingID:       generateTrackingID(),
+		ChangedBy:           changedBy,
+		Notes:               "Shipment confirmed",
+		Timestamp:           now,
+		Prediction:          prediction,
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -808,7 +811,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		CurrentLocation:     counterLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: now.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := now.AddDate(0, 0, 7); return &t }(),
 		ParentShipmentID:    &parentID,
 		IsReturning:         true,
 	}
