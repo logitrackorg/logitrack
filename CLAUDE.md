@@ -63,7 +63,9 @@ Skipping any of these means the field silently disappears at the DB boundary.
 
 `DomainEvent` objects are the source of truth. Each write appends a domain event to `EventStore` and applies it to `ShipmentProjection`. Reads (List, Search, Stats, GetByTrackingID) are served from the projection.
 
-**ShipmentRepository** uses command structs: `CreateShipmentCmd`, `SaveDraftCmd`, `UpdateDraftCmd`, `ConfirmDraftCmd`, `StatusUpdateCmd`, `CorrectCmd`, `CancelCmd`.
+**ShipmentRepository** uses command structs: `CreateShipmentCmd`, `SaveDraftCmd`, `UpdateDraftCmd`, `ConfirmDraftCmd`, `StatusUpdateCmd`, `CorrectCmd`, `CancelCmd`, `ExtendETACmd`.
+
+**Domain event types**: `EventShipmentCreated`, `EventDraftSaved`, `EventDraftUpdated`, `EventDraftConfirmed`, `EventStatusChanged`, `EventShipmentCorrected`, `EventShipmentCancelled`, `EventIncidentReported`, `EventShipmentETAExtended` (emitido al iniciar un retorno — extiende `EstimatedDeliveryAt` en `ReturnETAExtraDays = 10` días).
 
 ### Auth & Users
 
@@ -120,6 +122,19 @@ Any hub transition can also go to `lost` or `destroyed` (terminal).
 - Terminal states: `delivered`, `returned`, `cancelled`, `lost`, `destroyed` — no further transitions.
 - Cancellable: `at_origin_hub`, `at_hub`, `ready_for_pickup`. NOT cancellable: `loaded`, `in_transit`, `draft`, terminal.
 
+**UI labels for status codes** — los códigos internos no cambian; solo el texto mostrado al usuario operativo (badges, filtros, dashboard, detalle de envío). Definidos en `logitrack_web/src/components/StatusBadge.tsx`, `pages/ShipmentDetail.tsx`, `pages/ShipmentList.tsx` y `pages/Dashboard.tsx`:
+
+| Código | Etiqueta UI |
+|---|---|
+| `loaded` | **Enviar a sucursal** (antes "Cargado") |
+| `out_for_delivery` | **Última milla** (antes "En reparto") |
+| `at_hub` (genérico) | **En sucursal** |
+| `at_hub` cuando `current_location == final_branch_id` | **En sucursal de destino** (override por envío) |
+
+La página pública de tracking (`pages/PublicTracking.tsx`) mantiene su redacción amigable propia para clientes finales ("Cargado y listo para despachar", "En camino a domicilio") y no se rige por estas etiquetas operativas, salvo el override de "En sucursal de destino" que sí se aplica al badge.
+
+**Override por envío** — cuando una etiqueta depende del estado del envío (no solo del código), se computa en `logitrack_web/src/utils/shipmentStatus.ts` (`shipmentStatusLabelOverride`) y se pasa al `StatusBadge` por prop `label`. Hoy solo aplica al caso `at_hub` arriba. Si en el futuro otra transición necesita un texto contextual, se agrega ahí — no duplicar la comparación en cada call site.
+
 ### Business rules
 
 **DNI validation** (before any repo write in `service/shipment.go`):
@@ -141,16 +156,21 @@ Any hub transition can also go to `lost` or `destroyed` (terminal).
 
 ### Role-based permissions (defined in `main.go`)
 
-- Non-driver: GET /shipments, /branches, /branches/search, /search, /customers, /vehicles
-- All roles: GET /shipments/:id, /events, /comments, /vehicles/by-shipment/:trackingId
-- Operator + Supervisor + Admin: POST/PATCH shipments (create, draft, confirm, comment, correct, vehicle assign)
-- Operator + Supervisor + Admin + Driver: PATCH /shipments/:id/status
-- Supervisor + Manager + Admin: GET /stats, /vehicles/by-plate/:plate
-- Supervisor + Admin: GET /users/drivers; vehicle status/assign-branch/start-trip/end-trip/unassign
-- Admin only: POST /vehicles, POST/PATCH /branches; all /ml/config routes
-- Driver only: GET /driver/route
+**Admin scope** is configuration-only. Admin does NOT participate in any operational shipment flow (no list, no detail, no create, no draft, no correct, no cancel, no status change, no comment, no incident report, no quote, no stats, no driver assignment). Admin manages: branches, fleet config (POST /vehicles, assign-branch), users, organization, system config, ML config, pricing config, access logs.
 
-**Operator restrictions**: cannot update a shipment in `out_for_delivery` status (reserved for supervisor/admin/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
+Middleware groups:
+- `adminOnly`: admin only.
+- `authenticated`: all roles (operator, supervisor, manager, admin, driver). Used only for `/auth/me`, `/users/me`, `/users/me/password`, `GET /organization`.
+- `mgmtNonDriver`: operator + supervisor + manager + admin. Used for management screens (branches list/search/capacity, vehicles list, customers).
+- `shipmentRead`: operator + supervisor + manager. Shipment list/search.
+- `shipmentDetailRead`: operator + supervisor + manager + driver. Shipment detail, events, QR, comments/incidents read, vehicle-by-shipment.
+- `shipmentWrite`: operator + supervisor. All shipment writes (create, draft, confirm, correct, cancel, comment, incident, bulk-status), pricing quote, vehicle operational ops (assign, start-trip, end-trip, unassign, status), customers autocomplete, drivers list, **daily routing plan generate/apply**.
+- `canChangeStatus`: operator + supervisor + driver. Driver further restricted in handler.
+- `driverOnly`: driver-specific routes.
+- `canViewStats`: supervisor + manager.
+- `canManageBranch`, `canCreateVehicle`: admin.
+
+**Operator restrictions**: cannot update a shipment in `out_for_delivery` status (reserved for supervisor/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
 
 **Branch restrictions** (`branchForbidden` in handler):
 - Operators + supervisors get 403 on writes for shipments whose `receiving_branch_id` ≠ their branch.
@@ -168,7 +188,11 @@ Routes link a driver to shipments for a date (`YYYY-MM-DD`). ID format: `ROUTE-X
 
 Non-destructive edits. Stored in `Shipment.Corrections` (typed struct, `*field` pointers); accumulate via `Merge()`. Blocked on `pending` and terminal states. Each correction auto-generates a `[Correction]` comment and an `"edited"` ShipmentEvent (status unchanged). When any ML-relevant field is corrected, priority is recomputed and persisted.
 
-Correctable fields: all sender/recipient/address fields + `weight_kg`, `package_type`, `special_instructions`, `shipment_type`, `time_window`, `cold_chain`, `is_fragile`.
+Correctable fields: all sender/recipient/address fields + `special_instructions` + `time_window`.
+
+**Non-correctable fields** (locked at creation/confirmation): `weight_kg`, `package_type`, `is_fragile`, `shipment_type`. The price is immutable post-confirmation; editing these fields would create a mismatch between what was charged and what was committed. Note: `package_type` does not affect the price calculation but remains locked as part of the delivery contract.
+
+**Directional restriction on `time_window` corrections**: only allowed when the new window has equal or lower restrictiveness/surcharge. `flexible → morning|afternoon` is rejected (would raise the underlying price commitment); `morning ↔ afternoon` is allowed (same tier, same price); anything `→ flexible` is allowed.
 
 ### Cancellation (`POST /shipments/:tracking_id/cancel` — supervisor + admin)
 
@@ -208,7 +232,7 @@ Default factor weights (configurable 1.0–5.0 by admin):
 |--------|--------|--------------|
 | `shipment_type` | 3.0 | express=1.0 / normal=0.0 |
 | `distance_km` | 2.5 | Haversine / 2500 |
-| `restrictions` | 2.0 | (is_fragile + cold_chain) / 2 |
+| `restrictions` | 2.0 | is_fragile (0/1) |
 | `time_window` | 1.5 | morning=1.0 / afternoon=0.5 / flexible=0.0 |
 | `volume_score` | 1.0 | (pkg_base + weight_kg/2) / 25 |
 | `route_saturation` | 0.8 | FNV hash of "origin-dest" |
@@ -216,6 +240,85 @@ Default factor weights (configurable 1.0–5.0 by admin):
 Default thresholds: alta > 0.65, media > 0.35. Province coords in `internal/ml/dataset.go ProvinceCoords`.
 
 On `POST /ml/config/regenerate`: saves config, retrains, saves blob, hot-swaps model, recalculates all non-terminal shipment priorities.
+
+### Pricing
+
+Rule-based pricing engine with admin-editable config (singleton table `pricing_config`, fila `id=1`). Computed once on `Create` and `ConfirmDraft`; **never recalculated** afterwards (immutable). Persisted on `Shipment.Price` (`*float64`), `Shipment.PriceBreakdown` (JSONB), `Shipment.PriceCurrency` (default `"ARS"`).
+
+Formula:
+```
+subtotal = (base_fare + cost_per_km × distance_km) × shipmentMultiplier + weight_surcharge + last_mile_surcharge
+total    = subtotal × time_window_multiplier × fragile_multiplier
+```
+
+- `last_mile_surcharge` only applies when `delivery_method == ultima_milla`.
+- `time_window_multiplier` applies to `morning` and `afternoon`; `flexible` uses 1.0 (no recargo).
+- Package type (`envelope`/`box`) **no afecta el precio** — solo es un dato descriptivo del envío.
+- All multipliers must be ≥ 1. All flat amounts must be ≥ 0.
+
+Distance uses real lat/lng from `Address.Latitude/Longitude` via `ml.HaversineKm`, falling back to `ml.ComputeDistance` by province if either side lacks coords.
+
+Default config (all editable from `/admin/pricing`):
+
+| Param | Default |
+|---|---|
+| `base_fare` | 10000 |
+| `cost_per_km` | 100 |
+| `weight_surcharge_mid` (5–25 kg) | 5000 |
+| `weight_surcharge_high` (>25 kg) | 25000 |
+| `last_mile_surcharge` | 5000 |
+| `shipment_express_multiplier` | 1.5 |
+| `time_window_restrictive_multiplier` | 1.10 |
+| `fragile_multiplier` | 1.20 |
+
+**UI rule**: la ventana horaria (`time_window`) se oculta en el form de nuevo envío cuando el método de entrega es `retiro_sucursal`, y se resetea a `flexible` automáticamente. Solo aplica para `ultima_milla`.
+
+Endpoints:
+- `POST /pricing/quote` — operator/supervisor (used by the New Shipment form). Returns `{ total, currency, breakdown }` without persisting.
+- `GET /pricing/config` — admin only.
+- `PATCH /pricing/config` — admin only. Validates: flat amounts ≥ 0, all multipliers ≥ 1.
+
+### Daily routing (intelligent dispatch)
+
+Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de una sucursal corre al inicio del día desde `/routing`. **No persiste plan** — el plan vive en memoria del cliente entre `Generate` y `Apply`.
+
+**`RoutingConfig`** (singleton tabla `routing_config` id=1, admin-editable desde `/routing-config`):
+
+| Param | Default | Rango | Descripción |
+|---|---|---|---|
+| `sla_force_horizon_hours` | 24 | 1–168 | SLA crítico fuerza despacho. |
+| `priority_force_threshold` | 0.75 | 0–1 | Score que dispara despacho forzado. |
+| `min_fill_rate` | 0.40 | 0.1–1 | % capacidad del vehículo más grande para consolidar. |
+| `max_shipments_per_driver` | 15 | 1–100 | Tope cantidad ruta del chofer. |
+| `max_weight_kg_per_driver` | 150 | 1–5000 | Tope peso ruta del chofer. |
+
+**Flujo del algoritmo** (`GeneratePlan(branchID)`):
+
+1. **Filtrar candidatos**: shipments con `receiving_branch_id == branchID && status ∈ {at_origin_hub, at_hub}`. Excluir `delivery_method == retiro_sucursal`.
+2. **Particionar**:
+   - Última milla: `final_branch_id == branchID && delivery_method == ultima_milla && status == at_hub && !is_returning`.
+   - Inter-sucursal: el resto. Para `is_returning` el destino es `origin_branch_id`; para el resto, `final_branch_id`.
+3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Reparte entre choferes con load-balancing por peso, respetando topes.
+4. **Despacho inter-sucursal por destino** (3 reglas):
+   - **SLA forced**: alguno cumple `EstimatedDeliveryAt - now < sla_force_horizon_hours` o `priority_score >= priority_force_threshold`.
+   - **Consolidación**: `sum(peso) >= min_fill_rate × largest_vehicle_capacity_in_pool`.
+   - Sin regla → `unassigned` con motivo `esperando_consolidacion`.
+5. **Selección de vehículo**: el más chico que cubre el peso total. Si ninguno cubre, el más grande con bin-packing por prioridad (excedente a `unassigned` con `sobrepeso_excede_vehiculo`).
+6. **Pasada piggyback**: para cada `unassigned` por motivo de inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino del envío que la sucursal actual (Haversine de lat/lng de branches, fallback a distancia entre provincias). Cualquier mejora cuenta. Elige la mayor.
+
+**`ApplyPlan`** — per-item best-effort (no transaccional, son 3 stores distintos):
+- Re-fetcheo de cada shipment y vehicle antes de mutar.
+- Drift detectado (estado del shipment cambió, vehículo no disponible, capacidad excedida) → item `failed` con motivo en español, el resto continúa.
+- Inter-sucursal: setea `destination_branch` del vehículo + asigna shipments + transiciona shipment a `loaded` + promueve vehículo a `en_carga`. **NO** hace `start-trip` (sigue manual desde Flota; el modal precarga el destino seteado).
+- Última milla: usa flujo existente `UpdateStatus(out_for_delivery, driver_id)` + `RouteService.AddShipmentToDriverRoute`.
+
+Endpoints:
+- `POST /routing/plan` — operator/supervisor (su propia sucursal). Genera plan en memoria.
+- `POST /routing/apply` — operator/supervisor (su propia sucursal). Aplica plan editado.
+- `GET /routing/config` — admin only.
+- `PATCH /routing/config` — admin only. Valida rangos de cada parámetro.
+
+**Limitación MVP**: rutea un solo hop. La regla de piggyback mitiga esto cuando un despacho intermedio acerca el envío a su destino final.
 
 ### Adding a new endpoint
 
@@ -330,8 +433,13 @@ Conventional Commits: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style
 `seed.Load()` populates on every restart (idempotent):
 
 - **6 branches**: caba, cordoba, mendoza (`activo`); jujuy, posadas (`inactivo`); bariloche (`fuera_de_servicio`). Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
-- **15 sample shipments** covering key states (in_progress, at_branch, delivering, delivered, multi-hop). See `seed/seed.go`.
+- **Escenario de ruteo en CABA** (al loguearse `op_caba` y tocar "Generar plan" en `/routing`):
+  - 6 envíos `at_hub` en CABA con destino final CABA → última milla.
+  - 5 envíos `at_origin_hub` en CABA con destino Córdoba (sum 400 kg) → consolida.
+  - 2 envíos `at_origin_hub` en CABA con destino Mendoza (sum 20 kg) → no consolida solos, pero piggybackean en el camión a Córdoba (Córdoba está más cerca de Mendoza que CABA).
+  - 1 envío `retiro_sucursal` en CABA → silenciosamente excluido del ruteo.
 - **3 sample vehicles**: `AB123CD` furgoneta/caba, `EF456GH` camion/cordoba, `IJ789KL` motocicleta/caba (mantenimiento).
+- Otros envíos para variedad de dashboard: 1 entregado, 1 cancelado, 1 en `at_hub` Córdoba, 1 en `at_hub` Mendoza, 1 `out_for_delivery` con chofer caba.
 - Customers auto-upserted from all shipments.
 
 ## API reference
@@ -344,4 +452,8 @@ Full route list is in `cmd/server/main.go`. Key public endpoints:
 | GET | /api/v1/public/track/:id/events | no auth |
 | GET | /api/v1/public/branches | no auth |
 | POST | /api/v1/auth/login | returns token + user |
+| POST | /api/v1/routing/plan | operator/supervisor (su sucursal). Genera plan en memoria. |
+| POST | /api/v1/routing/apply | operator/supervisor (su sucursal). Aplica plan editado, devuelve resumen per-item. |
+| GET | /api/v1/routing/config | admin only. |
+| PATCH | /api/v1/routing/config | admin only. Valida rangos. |
 | GET | /health | health check |

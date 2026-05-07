@@ -327,6 +327,19 @@ func (r *inMemoryVehicleRepository) SetDestinationBranch(id string, branchID *st
 	return nil
 }
 
+func (r *inMemoryVehicleRepository) UpdateLocation(id string, lat, lng float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vehicles[id]
+	if !ok {
+		return fmt.Errorf("vehicle not found")
+	}
+	v.CurrentLatitude = &lat
+	v.CurrentLongitude = &lng
+	r.vehicles[id] = v
+	return nil
+}
+
 // ── InMemory RouteRepository ──────────────────────────────────────────────────
 
 type inMemoryRouteRepository struct {
@@ -467,6 +480,30 @@ func (r *inMemoryCommentRepository) GetComments(trackingID string) ([]model.Ship
 	return out, nil
 }
 
+// ── InMemory PricingConfigRepository ──────────────────────────────────────────
+
+type inMemoryPricingConfigRepository struct {
+	mu  sync.RWMutex
+	cfg model.PricingConfig
+}
+
+func NewInMemoryPricingConfigRepository() PricingConfigRepository {
+	return &inMemoryPricingConfigRepository{cfg: model.DefaultPricingConfig()}
+}
+
+func (r *inMemoryPricingConfigRepository) Get() model.PricingConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.cfg
+}
+
+func (r *inMemoryPricingConfigRepository) Update(cfg model.PricingConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg = cfg
+	return nil
+}
+
 // ── InMemory IncidentRepository ───────────────────────────────────────────────
 
 type inMemoryIncidentRepository struct {
@@ -498,4 +535,35 @@ func (r *inMemoryIncidentRepository) GetIncidents(trackingID string) ([]model.Sh
 		return out[i].CreatedAt.After(out[j].CreatedAt)
 	})
 	return out, nil
+}
+
+// =============================================================================
+// In-memory RoutingConfigRepository (tests only)
+// =============================================================================
+
+type inMemoryRoutingConfigRepository struct {
+	mu  sync.RWMutex
+	cfg model.RoutingConfig
+	set bool
+}
+
+func NewInMemoryRoutingConfigRepository() RoutingConfigRepository {
+	return &inMemoryRoutingConfigRepository{}
+}
+
+func (r *inMemoryRoutingConfigRepository) Get() model.RoutingConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if !r.set {
+		return model.DefaultRoutingConfig()
+	}
+	return r.cfg
+}
+
+func (r *inMemoryRoutingConfigRepository) Update(cfg model.RoutingConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg = cfg
+	r.set = true
+	return nil
 }

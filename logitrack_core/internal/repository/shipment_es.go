@@ -76,6 +76,8 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 			NewTrackingID:       cmd.NewTrackingID,
 			Prediction:          cmd.Prediction,
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
+			Price:               cmd.Price,
+			PriceBreakdown:      cmd.PriceBreakdown,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -118,11 +120,33 @@ func (r *eventSourcedShipmentRepository) ApplyCorrections(cmd CorrectCmd) (model
 		TrackingID: cmd.TrackingID,
 		EventType:  model.EventShipmentCorrected,
 		Payload: model.ShipmentCorrectedPayload{
-			Status:      cmd.Status,
-			Corrections: cmd.Corrections,
-			Prediction:  cmd.Prediction,
+			Status:        cmd.Status,
+			Corrections:   cmd.Corrections,
+			Prediction:    cmd.Prediction,
+			FinalBranchID: cmd.FinalBranchID,
 		},
 		ChangedBy: cmd.Username,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) ExtendETA(cmd ExtendETACmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventShipmentETAExtended,
+		Payload: model.ShipmentETAExtendedPayload{
+			OldETA:    cmd.OldETA,
+			NewETA:    cmd.NewETA,
+			AddedDays: cmd.AddedDays,
+			Reason:    cmd.Reason,
+		},
+		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
 	}
 	if err := r.store.Append(event); err != nil {

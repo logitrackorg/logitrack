@@ -19,6 +19,8 @@ type Branch struct {
 	Province    string       `json:"province"`
 	Status      BranchStatus `json:"status"`
 	MaxCapacity int          `json:"max_capacity"`
+	Latitude    *float64     `json:"latitude,omitempty"`
+	Longitude   *float64     `json:"longitude,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 	UpdatedBy   string       `json:"updated_by,omitempty"`
@@ -36,23 +38,27 @@ type BranchCapacity struct {
 // CreateBranchRequest is the request body for creating a new branch.
 // ID is optional — if omitted, a UUID will be auto-generated.
 type CreateBranchRequest struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name" binding:"required"`
-	Street      string `json:"street" binding:"required"`
-	City        string `json:"city" binding:"required"`
-	Province    string `json:"province" binding:"required"`
-	PostalCode  string `json:"postal_code" binding:"required"`
-	MaxCapacity int    `json:"max_capacity,omitempty"`
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name" binding:"required"`
+	Street      string   `json:"street" binding:"required"`
+	City        string   `json:"city" binding:"required"`
+	Province    string   `json:"province" binding:"required"`
+	PostalCode  string   `json:"postal_code" binding:"required"`
+	MaxCapacity int      `json:"max_capacity,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
 }
 
 // UpdateBranchRequest is the request body for updating branch data.
 type UpdateBranchRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Street      string `json:"street" binding:"required"`
-	City        string `json:"city" binding:"required"`
-	Province    string `json:"province" binding:"required"`
-	PostalCode  string `json:"postal_code" binding:"required"`
-	MaxCapacity int    `json:"max_capacity,omitempty"`
+	Name        string   `json:"name" binding:"required"`
+	Street      string   `json:"street" binding:"required"`
+	City        string   `json:"city" binding:"required"`
+	Province    string   `json:"province" binding:"required"`
+	PostalCode  string   `json:"postal_code" binding:"required"`
+	MaxCapacity int      `json:"max_capacity,omitempty"`
+	Latitude    *float64 `json:"latitude,omitempty"`
+	Longitude   *float64 `json:"longitude,omitempty"`
 }
 
 // UpdateBranchStatusRequest is the request body for updating branch status.

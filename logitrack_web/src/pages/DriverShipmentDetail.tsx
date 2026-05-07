@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Box, User, AlertTriangle } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { StatusBadge } from "../components/StatusBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
 
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: "Sobre",
   box: "Caja",
-  pallet: "Palet",
 };
 
 export function DriverShipmentDetail() {
@@ -25,8 +27,8 @@ export function DriverShipmentDetail() {
       .finally(() => setLoading(false));
   }, [trackingId]);
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
-  if (error || !shipment) return <div style={{ padding: 24, color: "#ef4444" }}>{error || "No encontrado."}</div>;
+  if (loading) return <div className="p-6 text-sm text-slate-500">Cargando…</div>;
+  if (error || !shipment) return <div className="p-6 text-sm text-rose-600">{error || "No encontrado."}</div>;
 
   const cor = shipment.corrections ?? {};
   const cv = (key: string, fallback: string) => cor[key] ?? fallback;
@@ -44,67 +46,68 @@ export function DriverShipmentDetail() {
   ].filter(Boolean).join(", ");
 
   return (
-    <div style={{ padding: 24, maxWidth: 540 }}>
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <button
         onClick={() => navigate("/driver/route")}
-        style={{ background: "none", border: "none", color: "#1e3a5f", cursor: "pointer", fontSize: 14, padding: 0, marginBottom: 20, fontWeight: 600 }}
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1e3a5f] hover:text-[#15294a] mb-5 cursor-pointer"
       >
-        ← Mi ruta
+        <ArrowLeft className="w-4 h-4" />
+        Mi ruta
       </button>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+      <div className="flex justify-between items-start mb-5 pb-4 border-b border-slate-200">
         <div>
-          <code style={{ fontSize: 13, color: "#6b7280" }}>{shipment.tracking_id}</code>
-          <div style={{ marginTop: 4 }}>
-            <StatusBadge status={shipment.status} />
+          <code className="text-sm font-mono text-slate-500">{shipment.tracking_id}</code>
+          <div className="mt-2">
+            <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
           </div>
         </div>
       </div>
 
-      <section style={sectionStyle}>
-        <h2 style={sectionTitle}>Paquete</h2>
-        <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
-        {shipment.is_fragile && <Row label="Frágil" value="⚠️ Sí" />}
-        <Row label="Peso" value={`${weightKg} kg`} />
-        {specialInstructions && (
-          <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, fontSize: 13, color: "#92400e" }}>
-            {specialInstructions}
-          </div>
-        )}
-      </section>
+      <Card className="mb-3">
+        <CardHeader className="flex items-center gap-2 border-b border-slate-100">
+          <Box className="w-4 h-4 text-slate-500" />
+          <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Paquete</h2>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-3 text-sm">
+          <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
+          {shipment.is_fragile && (
+            <Row label="Frágil" value="⚠️ Sí" highlight />
+          )}
+          <Row label="Peso" value={`${weightKg} kg`} />
+          <Row
+            label="Entrega"
+            value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla"}
+          />
+          {specialInstructions && (
+            <div className="mt-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <span>{specialInstructions}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      <section style={sectionStyle}>
-        <h2 style={sectionTitle}>Destinatario</h2>
-        <Row label="Nombre" value={recipientName} />
-        <Row label="Teléfono" value={recipientPhone} />
-        <Row label="Dirección" value={destAddress} />
-      </section>
+      <Card>
+        <CardHeader className="flex items-center gap-2 border-b border-slate-100">
+          <User className="w-4 h-4 text-slate-500" />
+          <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Destinatario</h2>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-3 text-sm">
+          <Row label="Nombre" value={recipientName} />
+          <Row label="Teléfono" value={recipientPhone} />
+          <Row label="Dirección" value={destAddress} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div style={{ display: "flex", gap: 12, marginBottom: 8, fontSize: 14 }}>
-      <span style={{ color: "#6b7280", minWidth: 80 }}>{label}</span>
-      <span style={{ color: "#111827", fontWeight: 500 }}>{value}</span>
+    <div className="flex gap-3 items-start">
+      <span className="text-slate-500 min-w-[80px]">{label}</span>
+      <span className={highlight ? "font-semibold text-amber-700" : "font-medium text-slate-900"}>{value}</span>
     </div>
   );
 }
-
-const sectionStyle: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 10,
-  padding: 16,
-  marginBottom: 16,
-};
-
-const sectionTitle: React.CSSProperties = {
-  margin: "0 0 12px",
-  fontSize: 13,
-  fontWeight: 700,
-  color: "#374151",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};

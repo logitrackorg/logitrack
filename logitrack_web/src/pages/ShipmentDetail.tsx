@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2 } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -17,9 +18,11 @@ import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
+import { formatCurrencyARS } from "../api/pricing";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
@@ -27,6 +30,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   draft:                [],
@@ -51,10 +55,10 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:                "Borrador",
   at_origin_hub:        "En sucursal de origen",
-  loaded:               "Cargado",
+  loaded:               "Enviar a sucursal",
   in_transit:           "En tránsito",
   at_hub:               "En sucursal",
-  out_for_delivery:     "En reparto",
+  out_for_delivery:     "Última milla",
   delivery_failed:      "Entrega fallida",
   redelivery_scheduled: "Reentrega programada",
   no_entregado:         "No entregado",
@@ -69,7 +73,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Sobre", box: "Caja", pallet: "Pallet",
+  envelope: "Sobre", box: "Caja",
 };
 
 export function ShipmentDetail() {
@@ -161,7 +165,6 @@ export function ShipmentDetail() {
           special_instructions: s.special_instructions ?? "",
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
-          cold_chain: s.cold_chain ?? false,
           receiving_branch_id: s.receiving_branch_id ?? "",
         });
       }
@@ -384,13 +387,8 @@ export function ShipmentDetail() {
       destination_city: c.destination_city ?? shipment.recipient.address?.city ?? "",
       destination_province: c.destination_province ?? shipment.recipient.address?.province ?? "",
       destination_postal_code: c.destination_postal_code ?? shipment.recipient.address?.postal_code ?? "",
-      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
-      package_type: c.package_type ?? shipment.package_type ?? "",
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
-      shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      cold_chain: c.cold_chain ?? (shipment.cold_chain ? "true" : "false"),
-      is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     });
     setCorrectionError("");
     setShowCorrectionModal(true);
@@ -417,13 +415,8 @@ export function ShipmentDetail() {
       destination_city: c.destination_city ?? shipment.recipient.address?.city ?? "",
       destination_province: c.destination_province ?? shipment.recipient.address?.province ?? "",
       destination_postal_code: c.destination_postal_code ?? shipment.recipient.address?.postal_code ?? "",
-      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
-      package_type: c.package_type ?? shipment.package_type ?? "",
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
-      shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      cold_chain: c.cold_chain ?? (shipment.cold_chain ? "true" : "false"),
-      is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     };
     const changed: Record<string, string> = {};
     for (const key of Object.keys(correctionForm)) {
@@ -454,7 +447,6 @@ export function ShipmentDetail() {
     for (const [key, label] of required) {
       if (!correctionForm[key]?.trim()) { setCorrectionError(`${label} es obligatorio.`); return; }
     }
-    if (!correctionForm.weight_kg || parseFloat(correctionForm.weight_kg) <= 0) { setCorrectionError("El peso debe ser mayor a 0."); return; }
     if (changed.sender_dni !== undefined && changed.sender_dni.length < 7) { setCorrectionError("El DNI del remitente debe tener al menos 7 dígitos."); return; }
     if (changed.recipient_dni !== undefined && changed.recipient_dni.length < 7) { setCorrectionError("El DNI del destinatario debe tener al menos 7 dígitos."); return; }
     if (/^\d+$/.test(correctionForm.origin_city ?? "")) { setCorrectionError("La ciudad del remitente no puede contener solo números."); return; }
@@ -502,6 +494,7 @@ export function ShipmentDetail() {
   if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
+  const deliveryMethod = shipment.delivery_method ?? "ultima_milla";
   const nextStatuses = TRANSITIONS[shipment.status].filter(
     (s) => s !== "ready_for_return" || (shipment.is_returning && isAtOriginBranch)
   ).filter(
@@ -510,6 +503,15 @@ export function ShipmentDetail() {
     () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
   ).filter(
     (s) => s !== "redelivery_scheduled" || (shipment.delivery_attempts ?? 0) < maxDeliveryAttempts
+  ).filter(
+    // Restringir at_hub según delivery_method elegido al crear el pedido.
+    // Excepción: from delivery_failed, ready_for_pickup sigue disponible (fallback de última milla agotada).
+    (s) => {
+      if (shipment.status !== "at_hub") return true;
+      if (deliveryMethod === "ultima_milla" && s === "ready_for_pickup") return false;
+      if (deliveryMethod === "retiro_sucursal" && s === "out_for_delivery") return false;
+      return true;
+    }
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
@@ -518,55 +520,74 @@ export function ShipmentDetail() {
   const operatorOutOfBranch = (user?.role === "operator" || user?.role === "supervisor") && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
 
   return (
-    <div style={{ padding: isMobile ? 16 : "24px 32px" }}>
-      <button onClick={() => navigate("/")} style={backBtn}>← Volver al listado</button>
+    <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1100px] mx-auto`}>
+      <button
+        onClick={() => navigate("/")}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Volver al listado
+      </button>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start", marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start" }}>
 
       {/* ── Left column ── */}
       <div>
       <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>
-          <code style={{ fontSize: 22 }}>{shipment.tracking_id}</code>
-        </h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-200">
+        <div className="flex items-center gap-3 min-w-0">
+          <code className="text-xl font-mono font-bold text-slate-900 tracking-tight">{shipment.tracking_id}</code>
+          <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
           <PriorityBadge priority={shipment.priority} />
+        </div>
+        <div className="flex items-center gap-2">
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "draft" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
-            <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-              ✏️ Editar datos
+            <button
+              onClick={openCorrectionModal}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Editar datos
             </button>
           )}
           {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
-              style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
-              ⚠ Registrar incidencia
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold text-amber-800 cursor-pointer transition-colors"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Incidencia
             </button>
           )}
           {hasRole("supervisor", "admin") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
-            <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
-              style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
-              Cancelar envío
+            <button
+              onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-sm font-semibold text-rose-700 cursor-pointer transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Cancelar
             </button>
           )}
-          <StatusBadge status={shipment.status} />
         </div>
       </div>
       {/* Banner: contra-envío */}
       {shipment.parent_shipment_id && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
-          ↩️ Este es un <strong>contra-envío</strong> generado a partir de{" "}
-          <a href={`/shipments/${shipment.parent_shipment_id}`} style={{ color: "#92400e", fontWeight: 700 }}>
-            {shipment.parent_shipment_id}
-          </a>
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+          <Undo2 className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-900">
+            Este es un <strong>contra-envío</strong> generado a partir de{" "}
+            <a href={`/shipments/${shipment.parent_shipment_id}`} className="font-bold underline">
+              {shipment.parent_shipment_id}
+            </a>
+          </p>
         </div>
       )}
 
       {/* Banner: modo devolución */}
       {shipment.is_returning && (
-        <div style={{ background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#5b21b6" }}>
-          ↩️ Este envío está en <strong>modo devolución</strong>
+        <div className="flex items-center gap-2.5 mb-4 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50">
+          <Undo2 className="w-4 h-4 text-violet-700 shrink-0" />
+          <p className="text-sm text-violet-900">Este envío está en <strong>modo devolución</strong></p>
         </div>
       )}
 
@@ -639,7 +660,6 @@ export function ShipmentDetail() {
               ].filter(Boolean).join(", ");
               const destCorrected = !!(cor.destination_street || cor.destination_city || cor.destination_province || cor.destination_postal_code);
               const originalDest = fmtAddr(shipment.recipient.address);
-              const weightVal = cv("weight_kg", `${shipment.weight_kg} kg`);
               const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
               const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
               return <>
@@ -660,11 +680,11 @@ export function ShipmentDetail() {
                 <Card title="Paquete">
                   <InfoRowEx {...pkgVal} label="Tipo" />
                   {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
-                  {shipment.cold_chain && <InfoRow label="Cadena de frío" value="Sí" />}
                   {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
                   {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
+                  <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
-                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Peso" />
+                  <InfoRow label="Peso" value={`${shipment.weight_kg} kg`} />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
                 </Card>
                 <Card title="Fechas y ubicación">
@@ -678,7 +698,7 @@ export function ShipmentDetail() {
               </>;
             })()}
           </div>
-          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} destination={shipment.recipient.address.city} branches={branches} />
+          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} finalBranchId={shipment.final_branch_id} destination={shipment.recipient.address.city} branches={branches} />
         </>
       )}
 
@@ -898,8 +918,13 @@ export function ShipmentDetail() {
       </div>{/* end maxWidth wrapper */}
       </div>{/* end left column */}
 
-      {/* ── Right column: Vehicle & Comments ── */}
+      {/* ── Right column: Price, Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
+        {/* Price Card */}
+        {shipment.price != null && (
+          <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
+        )}
+
         {/* Vehicle Card */}
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
@@ -1147,7 +1172,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargado</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Enviar a sucursal</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
@@ -1311,7 +1336,6 @@ const PROVINCES = [
 const PACKAGE_TYPES = [
   { value: "envelope", label: "Sobre" },
   { value: "box",      label: "Caja" },
-  { value: "pallet",   label: "Pallet" },
 ];
 const SHIPMENT_TYPES = [
   { value: "normal",  label: "Normal" },
@@ -1484,7 +1508,12 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
             {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
           </DField>
-          <DField label="Calle *"><input style={inp} required value={form.sender.address.street ?? ""} onChange={(e) => setSenderAddr("street", e.target.value)} placeholder="Av. Corrientes 1234" /></DField>
+          <DField label="Calle *">
+            <AddressAutocomplete style={inp} required value={form.sender.address.street ?? ""}
+              onChange={(v) => setSenderAddr("street", v)}
+              onAddressSelect={(p) => onChange({ ...form, sender: { ...form.sender, address: { ...form.sender.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
+              placeholder="Av. Corrientes 1234, Buenos Aires" />
+          </DField>
           <DField label="Ciudad *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
           <DField label="Provincia *">
             <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
@@ -1510,7 +1539,12 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
             <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
             {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
           </DField>
-          <DField label="Calle *"><input style={inp} required value={form.recipient.address.street ?? ""} onChange={(e) => setRecipientAddr("street", e.target.value)} placeholder="San Martín 456" /></DField>
+          <DField label="Calle *">
+            <AddressAutocomplete style={inp} required value={form.recipient.address.street ?? ""}
+              onChange={(v) => setRecipientAddr("street", v)}
+              onAddressSelect={(p) => onChange({ ...form, recipient: { ...form.recipient, address: { ...form.recipient.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
+              placeholder="San Martín 456, Córdoba" />
+          </DField>
           <DField label="Ciudad *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
           <DField label="Provincia *">
             <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
@@ -1549,10 +1583,6 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
                 <input type="checkbox" checked={!!form.is_fragile} onChange={(e) => set("is_fragile", e.target.checked)} />
                 Contenido frágil (manipular con cuidado)
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
-                <input type="checkbox" checked={!!form.cold_chain} onChange={(e) => set("cold_chain", e.target.checked)} />
-                Cadena de frío (refrigerado)
               </label>
             </div>
           </DField>
@@ -1601,10 +1631,11 @@ const fsStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius
 const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "#1e3a5f", padding: "0 6px" };
 const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, width: "100%", boxSizing: "border-box" };
 
-function RouteTimeline({ events, origin, receivingBranchId, destination, branches }: {
+function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, destination, branches }: {
   events: ShipmentEvent[];
   origin: string;
   receivingBranchId?: string;
+  finalBranchId?: string;
   destination: string;
   branches: Branch[];
 }) {
@@ -1612,6 +1643,7 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
 
   const receivingBranch = receivingBranchId ? branches.find((b) => b.id === receivingBranchId) : undefined;
   const firstStop = receivingBranch ? receivingBranch.id : origin;
+  const finalBranch = finalBranchId ? branches.find((b) => b.id === finalBranchId) : undefined;
 
   // Confirmed stops: receiving branch (or origin fallback) + each at_hub/at_origin_hub arrival
   const stops: { location: string; status: ShipmentStatus; timestamp: string; current: boolean }[] = [];
@@ -1675,6 +1707,9 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
                   );
                 })()}
                 <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(stop.timestamp)}</div>
+                {stop.location === finalBranchId && (
+                  <div style={{ fontSize: 10, color: "#8b5cf6", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
+                )}
               </div>
             </div>
             {i < stops.length - 1 && solidLine()}
@@ -1709,6 +1744,28 @@ function RouteTimeline({ events, origin, receivingBranchId, destination, branche
                     <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
                   );
                 })()}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Final branch — shown as pending node if not yet visited */}
+        {finalBranch && !stops.some(s => s.location === finalBranchId) && !isDelivered && !isDelivering && (
+          <>
+            {dashedLine()}
+            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: "#f9fafb", border: "3px dashed #8b5cf6",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6" }}>
+                  {stops.length + (isInTransit && nextBranch ? 2 : 1)}
+                </span>
+              </div>
+              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
+                <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>Sucursal final</div>
               </div>
             </div>
           </>
@@ -1751,6 +1808,142 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
       <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
       <span style={{ fontWeight: 500 }}>{value}</span>
+    </div>
+  );
+}
+
+function PriceCard({ price, breakdown }: { price: number; breakdown?: import("../api/shipments").PriceBreakdown }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%)",
+        borderRadius: 12,
+        padding: 18,
+        marginBottom: 16,
+        color: "#fff",
+        boxShadow: "0 4px 12px rgba(30, 58, 95, 0.15)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: "rgba(255, 255, 255, 0.15)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg style={{ width: 22, height: 22 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Precio del envío
+          </p>
+          <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            {formatCurrencyARS(price)}
+          </p>
+        </div>
+      </div>
+
+      {breakdown && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              width: "100%",
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#fff",
+              borderRadius: 8,
+              padding: "8px 12px",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              transition: "background 0.15s",
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.18)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")}
+          >
+            <span>{open ? "Ocultar desglose" : "Ver desglose"}</span>
+            <svg
+              style={{ width: 14, height: 14, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {open && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 4px 0",
+                borderTop: "1px solid rgba(255, 255, 255, 0.15)",
+                display: "grid",
+                gap: 8,
+                fontSize: 12,
+              }}
+            >
+              <PriceRow label="Tarifa base" value={formatCurrencyARS(breakdown.base_fare)} />
+              <PriceRow
+                label={`Distancia (${breakdown.distance_km.toFixed(1)} km)`}
+                value={formatCurrencyARS(breakdown.distance_cost)}
+              />
+              {breakdown.weight_surcharge > 0 && (
+                <PriceRow label="Recargo por peso" value={formatCurrencyARS(breakdown.weight_surcharge)} />
+              )}
+              {breakdown.last_mile_surcharge > 0 && (
+                <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
+              )}
+              {breakdown.shipment_multiplier !== 1 && (
+                <PriceRow label="Tipo de envío" value={`× ${breakdown.shipment_multiplier.toFixed(2)}`} />
+              )}
+              {breakdown.time_window_surplus > 0 && (
+                <PriceRow label="Recargo ventana horaria" value={formatCurrencyARS(breakdown.time_window_surplus)} />
+              )}
+              {breakdown.fragile_surplus > 0 && (
+                <PriceRow label="Recargo frágil" value={formatCurrencyARS(breakdown.fragile_surplus)} />
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingTop: 10,
+                  marginTop: 4,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.15)",
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                <span>Total</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatCurrencyARS(breakdown.total)}</span>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PriceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span style={{ color: "rgba(255, 255, 255, 0.75)" }}>{label}</span>
+      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
   );
 }
@@ -1810,15 +2003,12 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
-            <DField label="Calle (origen)"><input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} /></DField>
-            <DField label="Ciudad (origen)"><input style={inp} value={form.origin_city ?? ""} onChange={(e) => set("origin_city", e.target.value)} /></DField>
-            <DField label="Provincia (origen)">
-              <select style={inp} value={form.origin_province ?? ""} onChange={(e) => set("origin_province", e.target.value)}>
-                <option value="">Seleccionar</option>
-                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+            <DField label="Calle (origen)">
+              <input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </DField>
-            <DField label="Código postal (origen)"><input style={inp} value={form.origin_postal_code ?? ""} onChange={(e) => set("origin_postal_code", e.target.value)} /></DField>
+            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_city}</div></DField>
+            <DField label="Provincia (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_province}</div></DField>
+            <DField label="Código postal (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -1830,15 +2020,12 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
             <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
             <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
-            <DField label="Calle (destino)"><input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} /></DField>
-            <DField label="Ciudad (destino)"><input style={inp} value={form.destination_city ?? ""} onChange={(e) => set("destination_city", e.target.value)} /></DField>
-            <DField label="Provincia (destino)">
-              <select style={inp} value={form.destination_province ?? ""} onChange={(e) => set("destination_province", e.target.value)}>
-                <option value="">Seleccionar</option>
-                {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+            <DField label="Calle (destino)">
+              <input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
             </DField>
-            <DField label="Código postal (destino)"><input style={inp} value={form.destination_postal_code ?? ""} onChange={(e) => set("destination_postal_code", e.target.value)} /></DField>
+            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_city}</div></DField>
+            <DField label="Provincia (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_province}</div></DField>
+            <DField label="Código postal (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -1846,38 +2033,18 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><input style={inp} type="number" step="0.1" min="0" value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", e.target.value)} /></DField>
-            <DField label="Tipo">
-              <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
-                {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </DField>
-            <DField label="Tipo de envío">
-              <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
-                {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </DField>
             <DField label="Ventana horaria">
               <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </DField>
-            <DField label="Cadena de frío">
-              <select style={inp} value={form.cold_chain ?? "false"} onChange={(e) => set("cold_chain", e.target.value)}>
-                <option value="false">No</option>
-                <option value="true">Sí (refrigerado)</option>
-              </select>
-            </DField>
-            <DField label="Contenido frágil">
-              <select style={inp} value={form.is_fragile ?? "false"} onChange={(e) => set("is_fragile", e.target.value)}>
-                <option value="false">No</option>
-                <option value="true">Sí (manipular con cuidado)</option>
               </select>
             </DField>
             <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
               <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
+          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
+            Peso, tipo de paquete, tipo de envío y marca de frágil quedan fijos al crear el envío. La ventana horaria solo puede cambiarse a una opción de igual o menor recargo (no se permite pasar de Flexible a Mañana/Tarde).
+          </p>
         </fieldset>
 
         {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}

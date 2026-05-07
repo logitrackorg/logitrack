@@ -58,8 +58,11 @@ src/
 | `/vehicles/:plate/assign` | VehicleAssignment | supervisor, admin |
 | `/vehicles/available` | AvailableVehicles | supervisor, manager, admin |
 | `/branches` | BranchList | operator, supervisor, manager, admin |
+| `/routing` | Routing (plan diario inteligente) | operator, supervisor |
+| `/routing-config` | RoutingConfig | admin |
 | `/ml-config` | MLConfig | admin |
 | `/system-config` | SystemConfig | admin |
+| `/pricing-config` | PricingConfig | admin |
 
 ## Shipment status update rules
 
@@ -75,5 +78,30 @@ The status update form in `ShipmentDetail` conditionally shows fields based on t
 | `out_for_delivery → delivery_failed` | Notes/motivo (required) |
 | `ready_for_return → returned` | Sender DNI (required) |
 | `delivery_failed → at_hub` | Auto-derived from last `at_hub` event; display only |
+
+## Status code → UI label
+
+Los códigos del backend (`loaded`, `out_for_delivery`, etc.) no cambian; solo el texto que ve el usuario operativo. Si renombrás una etiqueta hay que actualizarla en **todos** estos archivos para mantener consistencia: `components/StatusBadge.tsx`, `pages/ShipmentDetail.tsx` (`STATUS_LABELS` + título del modal de asignación de vehículo), `pages/ShipmentList.tsx` (`<option>` del filtro + `actionLabel` del bulk + botón "Asignar a…"), `pages/Dashboard.tsx` (`statusConfig` + `hint` de la tarjeta "En curso").
+
+Etiquetas vigentes para estados que fueron renombrados:
+
+| Código | Etiqueta UI |
+|---|---|
+| `loaded` | **Enviar a sucursal** (antes "Cargado") |
+| `out_for_delivery` | **Última milla** (antes "En reparto") |
+
+`PublicTracking.tsx` mantiene su propia redacción amigable para clientes finales ("Cargado y listo para despachar", "En camino a domicilio") y queda fuera de este mapeo (excepto el override del badge — ver abajo).
+
+### Override de etiqueta por envío
+
+Cuando la etiqueta depende de un dato del envío (no solo del código de estado), la regla vive en `utils/shipmentStatus.ts → shipmentStatusLabelOverride(shipment)` y se pasa al badge como prop opcional `label`. **No duplicar la comparación en cada call site.**
+
+| Código | Condición | Etiqueta override |
+|---|---|---|
+| `at_hub` | `current_location === final_branch_id` (sucursal final del envío) | "En sucursal de destino" |
+
+Para envíos `at_hub` en sucursales intermedias, el badge sigue mostrando "En sucursal" (default).
+
+Call sites que pasan el override hoy: `ShipmentList`, `ShipmentDetail`, `Dashboard`, `DriverRoute`, `DriverShipmentDetail`, `PublicTracking`. Cualquier nuevo lugar que renderice `<StatusBadge>` para un envío específico debe pasar `label={shipmentStatusLabelOverride(shipment)}`.
 
 See the parent `../CLAUDE.md` for the full backend architecture, shipment state machine, and hardcoded user credentials.

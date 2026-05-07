@@ -35,6 +35,9 @@ type Vehicle struct {
 	AssignedShipments []string      `json:"assigned_shipments,omitempty"` // tracking_ids de los envíos asignados
 	AssignedBranch    *string       `json:"assigned_branch,omitempty"`    // branch_id asignado (branch actual)
 	DestinationBranch *string       `json:"destination_branch,omitempty"` // branch_id de destino (si existe)
+	CurrentLatitude   *float64      `json:"current_latitude,omitempty"`   // posición GPS actual
+	CurrentLongitude  *float64      `json:"current_longitude,omitempty"`
+	LocationUpdatedAt *time.Time    `json:"location_updated_at,omitempty"` // última actualización de posición
 }
 
 // CreateVehicleRequest is the request body for creating a new vehicle.

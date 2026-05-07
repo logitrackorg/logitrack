@@ -44,7 +44,7 @@ func init() {
 var (
 	shipmentTypes = []string{"normal", "express"}
 	timeWindows   = []string{"morning", "afternoon", "flexible"}
-	packageTypes  = []string{"envelope", "box", "pallet"}
+	packageTypes  = []string{"envelope", "box"}
 )
 
 // HaversineKm calculates distance between two points on Earth using Haversine formula.
@@ -73,6 +73,37 @@ func ComputeDistance(originProvince, destProvince string) float64 {
 		d = ProvinceCoords["Ciudad de Buenos Aires"]
 	}
 	return HaversineKm(o[0], o[1], d[0], d[1])
+}
+
+// EstimateDeliveryDaysFromDistance returns estimated delivery days given a precomputed distance in km and shipment type.
+func EstimateDeliveryDaysFromDistance(distKm float64, shipmentType string) int {
+	if shipmentType == "express" {
+		switch {
+		case distKm < 100:
+			return 1
+		case distKm < 500:
+			return 1
+		case distKm < 1500:
+			return 3
+		default:
+			return 4
+		}
+	}
+	switch {
+	case distKm < 100:
+		return 2
+	case distKm < 500:
+		return 3
+	case distKm < 1500:
+		return 5
+	default:
+		return 7
+	}
+}
+
+// EstimateDeliveryDays returns estimated delivery days based on province names and shipment type.
+func EstimateDeliveryDays(originProvince, destProvince, shipmentType string) int {
+	return EstimateDeliveryDaysFromDistance(ComputeDistance(originProvince, destProvince), shipmentType)
 }
 
 // NormalizeFactor normalizes a factor value to 0.0-1.0 range.
@@ -158,14 +189,10 @@ func GenerateDataset(size int, seed int64) []Sample {
 		packageType := packageTypes[rng.Intn(len(packageTypes))]
 		weightKg := rng.Float64()*49.9 + 0.1
 		isFragile := rng.Float64() < 0.25
-		coldChain := rng.Float64() < 0.10
 		routeSaturation := math.Round(rng.Float64()*100) / 100
 
 		restrictionCount := 0.0
 		if isFragile {
-			restrictionCount++
-		}
-		if coldChain {
 			restrictionCount++
 		}
 		volume := ComputeVolumeScore(packageType, weightKg)

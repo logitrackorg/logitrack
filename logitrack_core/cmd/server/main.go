@@ -51,9 +51,13 @@ func main() {
 	routeRepo := repository.NewPostgresRouteRepository(database)
 	customerRepo := repository.NewPostgresCustomerRepository(database)
 
+	pricingConfigRepo := repository.NewPostgresPricingConfigRepository(database)
+	pricingSvc := service.NewPricingService(pricingConfigRepo)
+	pricingHandler := handler.NewPricingHandler(pricingSvc)
+
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
-	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo)
+	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
@@ -83,10 +87,15 @@ func main() {
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
 
+	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
+	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
+	routingCfgHandler := handler.NewRoutingConfigHandler(routingCfgSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
+	shipmentSvc.SetPricingService(pricingSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
@@ -102,6 +111,9 @@ func main() {
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
+
+	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc)
+	routingHandler := handler.NewRoutingHandler(routingSvc)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -123,86 +135,78 @@ func main() {
 
 	protected.GET("/auth/me", authHandler.Me)
 
-	// Branches — list/search: non-driver roles, create/update/status: admin only, capacity: operator+supervisor+manager+admin
-	nonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	// Role groups
+	// Admin manages configuration only — never participates in operational shipment flows.
+	adminOnly := middleware.RequireRoles(model.RoleAdmin)
+	authenticated := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
+	// Management screens (branches, fleet config, customers list) — admin included.
+	mgmtNonDriver := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	// Operational shipment access — admin EXCLUDED.
+	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
+	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+
+	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
-	canViewCapacity := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
-	protected.GET("/branches", nonDriver, branchHandler.List)
-	protected.GET("/branches/search", nonDriver, branchHandler.Search)
+	protected.GET("/branches", mgmtNonDriver, branchHandler.List)
+	protected.GET("/branches/search", mgmtNonDriver, branchHandler.Search)
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
 	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
-	protected.GET("/branches/:id/capacity", canViewCapacity, branchHandler.GetCapacity)
+	protected.GET("/branches/:id/capacity", mgmtNonDriver, branchHandler.GetCapacity)
 
-	// Shipment detail/events — all authenticated roles including driver
-	allRoles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver)
-
-	// Admin only middleware (reused across vehicles, ML config, admin routes)
-	adminOnly := middleware.RequireRoles(model.RoleAdmin)
-
-	// Vehicles — list: non-driver roles, create: admin only, read detail: supervisor+manager+admin, write: supervisor+admin
-	protected.GET("/vehicles", nonDriver, vehicleHandler.List)
-	canViewVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
-	canViewAvailableVehicles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	// Vehicles — fleet management: list/create/admin actions include admin; operational vehicle actions exclude admin.
+	protected.GET("/vehicles", mgmtNonDriver, vehicleHandler.List)
+	canViewVehicle := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	canViewAvailableVehicles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	protected.GET("/vehicles/available", canViewAvailableVehicles, vehicleHandler.ListAvailable)
-	canCreateVehicle := middleware.RequireRoles(model.RoleAdmin)
-	protected.POST("/vehicles", canCreateVehicle, vehicleHandler.Create)
+	protected.POST("/vehicles", adminOnly, vehicleHandler.Create)
 	protected.GET("/vehicles/by-plate/:plate", canViewVehicle, vehicleHandler.GetByPlate)
-	protected.GET("/vehicles/by-shipment/:trackingId", allRoles, vehicleHandler.GetByShipment)
-	canWriteVehicle := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	canAssignShipment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.PATCH("/vehicles/by-plate/:plate/status", canWriteVehicle, vehicleHandler.UpdateStatusByPlate)
-	protected.POST("/vehicles/by-plate/:plate/assign", canAssignShipment, vehicleHandler.AssignToShipment)
+	protected.GET("/vehicles/by-shipment/:trackingId", shipmentDetailRead, vehicleHandler.GetByShipment)
+	protected.PATCH("/vehicles/by-plate/:plate/status", shipmentWrite, vehicleHandler.UpdateStatusByPlate)
+	protected.POST("/vehicles/by-plate/:plate/assign", shipmentWrite, vehicleHandler.AssignToShipment)
 	protected.POST("/vehicles/by-plate/:plate/assign-branch", adminOnly, vehicleHandler.AssignBranch)
-	protected.POST("/vehicles/by-plate/:plate/start-trip", canWriteVehicle, vehicleHandler.StartTrip)
-	protected.POST("/vehicles/by-plate/:plate/end-trip", canWriteVehicle, vehicleHandler.EndTrip)
-	protected.DELETE("/vehicles/by-plate/:plate/shipments/:trackingId", canWriteVehicle, vehicleHandler.UnassignShipment)
+	protected.POST("/vehicles/by-plate/:plate/start-trip", shipmentWrite, vehicleHandler.StartTrip)
+	protected.POST("/vehicles/by-plate/:plate/end-trip", shipmentWrite, vehicleHandler.EndTrip)
+	protected.DELETE("/vehicles/by-plate/:plate/shipments/:trackingId", shipmentWrite, vehicleHandler.UnassignShipment)
 
-	// Shipments list/search — non-driver roles only
-	protected.GET("/shipments", nonDriver, shipmentHandler.List)
-	protected.GET("/search", nonDriver, shipmentHandler.Search)
-	protected.GET("/shipments/:tracking_id", allRoles, shipmentHandler.GetByTrackingID)
-	protected.GET("/shipments/:tracking_id/events", allRoles, shipmentHandler.GetEvents)
+	// Shipments — admin EXCLUDED from every shipment-related route (read and write).
+	protected.GET("/shipments", shipmentRead, shipmentHandler.List)
+	protected.GET("/search", shipmentRead, shipmentHandler.Search)
+	protected.GET("/shipments/:tracking_id", shipmentDetailRead, shipmentHandler.GetByTrackingID)
+	protected.GET("/shipments/:tracking_id/events", shipmentDetailRead, shipmentHandler.GetEvents)
 
-	// QR generation — all authenticated roles
-	protected.GET("/shipments/:tracking_id/qr", allRoles, qrHandler.GenerateShipmentQR)
-	protected.GET("/shipments/:tracking_id/qr/download", allRoles, qrHandler.DownloadShipmentQR)
+	// QR generation — same scope as shipment detail
+	protected.GET("/shipments/:tracking_id/qr", shipmentDetailRead, qrHandler.GenerateShipmentQR)
+	protected.GET("/shipments/:tracking_id/qr/download", shipmentDetailRead, qrHandler.DownloadShipmentQR)
 
-	// Create / draft shipment — operator, supervisor, admin
-	canCreate := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.POST("/shipments", canCreate, shipmentHandler.Create)
-	protected.POST("/shipments/draft", canCreate, shipmentHandler.SaveDraft)
-	protected.PATCH("/shipments/:tracking_id/draft", canCreate, shipmentHandler.UpdateDraft)
-	protected.POST("/shipments/:tracking_id/confirm", canCreate, shipmentHandler.ConfirmDraft)
+	// Create / draft shipment — operator, supervisor
+	protected.POST("/shipments", shipmentWrite, shipmentHandler.Create)
+	protected.POST("/shipments/draft", shipmentWrite, shipmentHandler.SaveDraft)
+	protected.PATCH("/shipments/:tracking_id/draft", shipmentWrite, shipmentHandler.UpdateDraft)
+	protected.POST("/shipments/:tracking_id/confirm", shipmentWrite, shipmentHandler.ConfirmDraft)
 
-	// Comments — read: all authenticated, write: operator/supervisor/admin
-	protected.GET("/shipments/:tracking_id/comments", allRoles, commentHandler.GetComments)
-	canComment := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.POST("/shipments/:tracking_id/comments", canComment, commentHandler.AddComment)
+	// Comments — read: shipment-detail roles, write: operator/supervisor
+	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
+	protected.POST("/shipments/:tracking_id/comments", shipmentWrite, commentHandler.AddComment)
 
-	// Incidents — read: all authenticated, write: operator/supervisor/admin
-	protected.GET("/shipments/:tracking_id/incidents", allRoles, incidentHandler.GetIncidents)
-	canReportIncident := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.POST("/shipments/:tracking_id/incidents", canReportIncident, incidentHandler.ReportIncident)
+	// Incidents — read: shipment-detail roles, write: operator/supervisor
+	protected.GET("/shipments/:tracking_id/incidents", shipmentDetailRead, incidentHandler.GetIncidents)
+	protected.POST("/shipments/:tracking_id/incidents", shipmentWrite, incidentHandler.ReportIncident)
 
-	// Correct shipment data (non-destructive) — operator, supervisor, admin
-	canCorrect := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.PATCH("/shipments/:tracking_id/correct", canCorrect, shipmentHandler.CorrectShipment)
+	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
+	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
+	protected.POST("/shipments/:tracking_id/cancel", shipmentWrite, shipmentHandler.CancelShipment)
 
-	// Cancel shipment — operator, supervisor, admin (branch check enforced in handler/service)
-	canCancel := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.POST("/shipments/:tracking_id/cancel", canCancel, shipmentHandler.CancelShipment)
-
-	// Change status — supervisor, admin, driver (driver further restricted in handler)
+	// Change status — operator, supervisor, driver (driver further restricted in handler)
 	canChangeStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleDriver)
 	protected.PATCH("/shipments/:tracking_id/status", canChangeStatus, shipmentHandler.UpdateStatus)
 
-	// Bulk status update — operator, supervisor, admin (not driver)
-	canBulkStatus := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
-	protected.POST("/shipments/bulk-status", canBulkStatus, shipmentHandler.BulkUpdateStatus)
+	// Bulk status update — operator, supervisor
+	protected.POST("/shipments/bulk-status", shipmentWrite, shipmentHandler.BulkUpdateStatus)
 
-	// Stats / dashboard — supervisor, manager, admin
-	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	// Stats / dashboard — supervisor, manager
+	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
 
 	// Driver route — driver only
@@ -210,22 +214,32 @@ func main() {
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 
-	// Users — list drivers (operator, supervisor, admin)
-	canListDrivers := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleAdmin)
-	protected.GET("/users/drivers", canListDrivers, userHandler.ListDrivers)
-	protected.GET("/users/me", allRoles, userHandler.GetMe)
-	protected.POST("/users/me/password", allRoles, userHandler.ChangePassword)
+	// Users — list drivers (operator, supervisor) for shipment assignment
+	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
+	protected.GET("/users/me", authenticated, userHandler.GetMe)
+	protected.POST("/users/me/password", authenticated, userHandler.ChangePassword)
 
-	// Customers — autocomplete by DNI (operator+)
-	protected.GET("/customers", nonDriver, customerHandler.GetByDNI)
+	// Customers — autocomplete by DNI used during shipment creation
+	protected.GET("/customers", shipmentWrite, customerHandler.GetByDNI)
 
 	// Organization config — read: all authenticated, write: admin only
-	protected.GET("/organization", middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin, model.RoleDriver), orgHandler.Get)
+	protected.GET("/organization", authenticated, orgHandler.Get)
 	protected.PUT("/organization", adminOnly, orgHandler.Update)
 
 	// System config — admin only
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
+
+	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
+	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
+	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
+	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
+	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
+	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
+	protected.POST("/routing/plan", shipmentWrite, routingHandler.Generate)
+	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
