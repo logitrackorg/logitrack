@@ -63,7 +63,9 @@ Skipping any of these means the field silently disappears at the DB boundary.
 
 `DomainEvent` objects are the source of truth. Each write appends a domain event to `EventStore` and applies it to `ShipmentProjection`. Reads (List, Search, Stats, GetByTrackingID) are served from the projection.
 
-**ShipmentRepository** uses command structs: `CreateShipmentCmd`, `SaveDraftCmd`, `UpdateDraftCmd`, `ConfirmDraftCmd`, `StatusUpdateCmd`, `CorrectCmd`, `CancelCmd`.
+**ShipmentRepository** uses command structs: `CreateShipmentCmd`, `SaveDraftCmd`, `UpdateDraftCmd`, `ConfirmDraftCmd`, `StatusUpdateCmd`, `CorrectCmd`, `CancelCmd`, `ExtendETACmd`.
+
+**Domain event types**: `EventShipmentCreated`, `EventDraftSaved`, `EventDraftUpdated`, `EventDraftConfirmed`, `EventStatusChanged`, `EventShipmentCorrected`, `EventShipmentCancelled`, `EventIncidentReported`, `EventShipmentETAExtended` (emitido al iniciar un retorno — extiende `EstimatedDeliveryAt` en `ReturnETAExtraDays = 10` días).
 
 ### Auth & Users
 
@@ -162,7 +164,7 @@ Middleware groups:
 - `mgmtNonDriver`: operator + supervisor + manager + admin. Used for management screens (branches list/search/capacity, vehicles list, customers).
 - `shipmentRead`: operator + supervisor + manager. Shipment list/search.
 - `shipmentDetailRead`: operator + supervisor + manager + driver. Shipment detail, events, QR, comments/incidents read, vehicle-by-shipment.
-- `shipmentWrite`: operator + supervisor. All shipment writes (create, draft, confirm, correct, cancel, comment, incident, bulk-status), pricing quote, vehicle operational ops (assign, start-trip, end-trip, unassign, status), customers autocomplete, drivers list.
+- `shipmentWrite`: operator + supervisor. All shipment writes (create, draft, confirm, correct, cancel, comment, incident, bulk-status), pricing quote, vehicle operational ops (assign, start-trip, end-trip, unassign, status), customers autocomplete, drivers list, **daily routing plan generate/apply**.
 - `canChangeStatus`: operator + supervisor + driver. Driver further restricted in handler.
 - `driverOnly`: driver-specific routes.
 - `canViewStats`: supervisor + manager.
@@ -275,6 +277,48 @@ Endpoints:
 - `POST /pricing/quote` — operator/supervisor (used by the New Shipment form). Returns `{ total, currency, breakdown }` without persisting.
 - `GET /pricing/config` — admin only.
 - `PATCH /pricing/config` — admin only. Validates: flat amounts ≥ 0, all multipliers ≥ 1.
+
+### Daily routing (intelligent dispatch)
+
+Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de una sucursal corre al inicio del día desde `/routing`. **No persiste plan** — el plan vive en memoria del cliente entre `Generate` y `Apply`.
+
+**`RoutingConfig`** (singleton tabla `routing_config` id=1, admin-editable desde `/routing-config`):
+
+| Param | Default | Rango | Descripción |
+|---|---|---|---|
+| `sla_force_horizon_hours` | 24 | 1–168 | SLA crítico fuerza despacho. |
+| `priority_force_threshold` | 0.75 | 0–1 | Score que dispara despacho forzado. |
+| `min_fill_rate` | 0.40 | 0.1–1 | % capacidad del vehículo más grande para consolidar. |
+| `max_shipments_per_driver` | 15 | 1–100 | Tope cantidad ruta del chofer. |
+| `max_weight_kg_per_driver` | 150 | 1–5000 | Tope peso ruta del chofer. |
+
+**Flujo del algoritmo** (`GeneratePlan(branchID)`):
+
+1. **Filtrar candidatos**: shipments con `receiving_branch_id == branchID && status ∈ {at_origin_hub, at_hub}`. Excluir `delivery_method == retiro_sucursal`.
+2. **Particionar**:
+   - Última milla: `final_branch_id == branchID && delivery_method == ultima_milla && status == at_hub && !is_returning`.
+   - Inter-sucursal: el resto. Para `is_returning` el destino es `origin_branch_id`; para el resto, `final_branch_id`.
+3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Reparte entre choferes con load-balancing por peso, respetando topes.
+4. **Despacho inter-sucursal por destino** (3 reglas):
+   - **SLA forced**: alguno cumple `EstimatedDeliveryAt - now < sla_force_horizon_hours` o `priority_score >= priority_force_threshold`.
+   - **Consolidación**: `sum(peso) >= min_fill_rate × largest_vehicle_capacity_in_pool`.
+   - Sin regla → `unassigned` con motivo `esperando_consolidacion`.
+5. **Selección de vehículo**: el más chico que cubre el peso total. Si ninguno cubre, el más grande con bin-packing por prioridad (excedente a `unassigned` con `sobrepeso_excede_vehiculo`).
+6. **Pasada piggyback**: para cada `unassigned` por motivo de inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino del envío que la sucursal actual (Haversine de lat/lng de branches, fallback a distancia entre provincias). Cualquier mejora cuenta. Elige la mayor.
+
+**`ApplyPlan`** — per-item best-effort (no transaccional, son 3 stores distintos):
+- Re-fetcheo de cada shipment y vehicle antes de mutar.
+- Drift detectado (estado del shipment cambió, vehículo no disponible, capacidad excedida) → item `failed` con motivo en español, el resto continúa.
+- Inter-sucursal: setea `destination_branch` del vehículo + asigna shipments + transiciona shipment a `loaded` + promueve vehículo a `en_carga`. **NO** hace `start-trip` (sigue manual desde Flota; el modal precarga el destino seteado).
+- Última milla: usa flujo existente `UpdateStatus(out_for_delivery, driver_id)` + `RouteService.AddShipmentToDriverRoute`.
+
+Endpoints:
+- `POST /routing/plan` — operator/supervisor (su propia sucursal). Genera plan en memoria.
+- `POST /routing/apply` — operator/supervisor (su propia sucursal). Aplica plan editado.
+- `GET /routing/config` — admin only.
+- `PATCH /routing/config` — admin only. Valida rangos de cada parámetro.
+
+**Limitación MVP**: rutea un solo hop. La regla de piggyback mitiga esto cuando un despacho intermedio acerca el envío a su destino final.
 
 ### Adding a new endpoint
 
@@ -389,8 +433,13 @@ Conventional Commits: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style
 `seed.Load()` populates on every restart (idempotent):
 
 - **6 branches**: caba, cordoba, mendoza (`activo`); jujuy, posadas (`inactivo`); bariloche (`fuera_de_servicio`). Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
-- **15 sample shipments** covering key states (in_progress, at_branch, delivering, delivered, multi-hop). See `seed/seed.go`.
+- **Escenario de ruteo en CABA** (al loguearse `op_caba` y tocar "Generar plan" en `/routing`):
+  - 6 envíos `at_hub` en CABA con destino final CABA → última milla.
+  - 5 envíos `at_origin_hub` en CABA con destino Córdoba (sum 400 kg) → consolida.
+  - 2 envíos `at_origin_hub` en CABA con destino Mendoza (sum 20 kg) → no consolida solos, pero piggybackean en el camión a Córdoba (Córdoba está más cerca de Mendoza que CABA).
+  - 1 envío `retiro_sucursal` en CABA → silenciosamente excluido del ruteo.
 - **3 sample vehicles**: `AB123CD` furgoneta/caba, `EF456GH` camion/cordoba, `IJ789KL` motocicleta/caba (mantenimiento).
+- Otros envíos para variedad de dashboard: 1 entregado, 1 cancelado, 1 en `at_hub` Córdoba, 1 en `at_hub` Mendoza, 1 `out_for_delivery` con chofer caba.
 - Customers auto-upserted from all shipments.
 
 ## API reference
@@ -403,4 +452,8 @@ Full route list is in `cmd/server/main.go`. Key public endpoints:
 | GET | /api/v1/public/track/:id/events | no auth |
 | GET | /api/v1/public/branches | no auth |
 | POST | /api/v1/auth/login | returns token + user |
+| POST | /api/v1/routing/plan | operator/supervisor (su sucursal). Genera plan en memoria. |
+| POST | /api/v1/routing/apply | operator/supervisor (su sucursal). Aplica plan editado, devuelve resumen per-item. |
+| GET | /api/v1/routing/config | admin only. |
+| PATCH | /api/v1/routing/config | admin only. Valida rangos. |
 | GET | /health | health check |

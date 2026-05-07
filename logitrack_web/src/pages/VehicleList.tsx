@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Truck, Plus } from "lucide-react";
+import { Truck, Plus, Filter } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { shipmentApi } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
+import { Card } from "../components/ui/card";
+
+const inputClass =
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
+const tdClass = "px-4 py-3 text-slate-700";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
@@ -182,15 +188,29 @@ export function VehicleList() {
     setSelectedVehicle(null);
   };
 
-  const handleStartTrip = async () => {
-    if (!selectedForAssign) {
-      setError("Debés seleccionar un vehículo");
-      return;
-    }
-    setStartTripDestBranch("");
+  const handleStartTrip = async (plate: string) => {
+    if (!plate) return;
+    setSelectedForAssign(plate);
+    const vehicle = vehicles.find((v) => v.license_plate === plate);
+    const presetDest = vehicle?.destination_branch ?? "";
+    setStartTripDestBranch(presetDest);
     setStartTripCapacity(null);
     setStartTripCapacityConfirmed(false);
+    setShowVehicleDetail(false);
+    setSelectedVehicle(null);
     setShowStartTripModal(true);
+    // Si el destino ya viene del plan de ruteo aplicado, precargamos la capacidad.
+    if (presetDest) {
+      setStartTripCapacityLoading(true);
+      try {
+        const cap = await branchApi.getCapacity(presetDest);
+        setStartTripCapacity(cap);
+      } catch {
+        setStartTripCapacity(null);
+      } finally {
+        setStartTripCapacityLoading(false);
+      }
+    }
   };
 
   const handleStartTripBranchChange = async (branchId: string) => {
@@ -227,12 +247,12 @@ export function VehicleList() {
     }
   };
 
-  const handleEndTrip = () => {
-    if (!selectedForAssign) {
-      setError("Debés seleccionar un vehículo");
-      return;
-    }
+  const handleEndTrip = (plate: string) => {
+    if (!plate) return;
+    setSelectedForAssign(plate);
     setError("");
+    setShowVehicleDetail(false);
+    setSelectedVehicle(null);
     setShowEndTripModal(true);
   };
 
@@ -259,24 +279,18 @@ export function VehicleList() {
     }
   };
 
-  // Check if the selected vehicle can start trip (status is "en_carga" and supervisor matches current branch)
-  const canStartTrip = () => {
-    if (!selectedForAssign) return false;
-    const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
-    if (!vehicle || vehicle.status !== "en_carga") return false;
+  const vehicleCanStartTrip = (v: { status: VehicleStatus; assigned_branch?: string | null }) => {
+    if (!canManageTrips || v.status !== "en_carga") return false;
     if ((user?.role === "supervisor" || user?.role === "operator") && user.branch_id) {
-      return vehicle.assigned_branch === user.branch_id;
+      return v.assigned_branch === user.branch_id;
     }
     return true;
   };
 
-  // Check if the selected vehicle can end trip (status is "en_transito" and supervisor/operator matches destination branch)
-  const canEndTrip = () => {
-    if (!selectedForAssign) return false;
-    const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
-    if (!vehicle || vehicle.status !== "en_transito") return false;
+  const vehicleCanEndTrip = (v: { status: VehicleStatus; destination_branch?: string | null }) => {
+    if (!canManageTrips || v.status !== "en_transito") return false;
     if ((user?.role === "supervisor" || user?.role === "operator") && user.branch_id) {
-      return vehicle.destination_branch === user.branch_id;
+      return v.destination_branch === user.branch_id;
     }
     return true;
   };
@@ -428,98 +442,67 @@ export function VehicleList() {
       )}
 
       {/* Filtros */}
-      <div style={{
-        background: "#f9fafb",
-        border: "1px solid #e5e7eb",
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 16,
-        display: "flex",
-        gap: 12,
-        alignItems: "center",
-        flexWrap: "wrap",
-      }}>
-        <input
-          type="text"
-          value={plateSearch}
-          onChange={(e) => setPlateSearch(e.target.value)}
-          placeholder="Buscar por patente..."
-          style={{
-            padding: "6px 12px",
-            borderRadius: 6,
-            border: "1px solid #d1d5db",
-            fontSize: 14,
-            width: 160,
-            textTransform: "uppercase",
-          }}
-        />
-        <button
-          onClick={() => { setShowOnlyAvailable(!showOnlyAvailable); setStatusFilter(""); }}
-          style={{
-            background: showOnlyAvailable ? "#10b981" : "#e5e7eb",
-            color: showOnlyAvailable ? "#fff" : "#374151",
-            border: "none",
-            borderRadius: 6,
-            padding: "6px 14px",
-            cursor: "pointer",
-            fontWeight: 500,
-            fontSize: 14,
-          }}
-        >
-          {showOnlyAvailable ? "✓ Disponible" : "Disponible"}
-        </button>
-        {/* Branch filter */}
-        {isOperator ? (
-          <span style={{ padding: "6px 12px", background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 14, color: "#1e3a5f", fontWeight: 500 }}>
-            {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
-          </span>
-        ) : (
-          <select
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value)}
-            style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
-          >
-            <option value="">Todas las sucursales</option>
-            {[...branches].sort((a, b) => a.name.localeCompare(b.name)).map(b => (
-              <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-            ))}
-          </select>
-        )}
-        <span style={{ fontSize: 14, fontWeight: 500, color: "#374151" }}>Filtrar por estado:</span>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as VehicleStatus | ""); setShowOnlyAvailable(false); }}
-          style={{
-            padding: "6px 12px",
-            borderRadius: 6,
-            border: "1px solid #d1d5db",
-            fontSize: 14,
-            background: "#fff",
-          }}
-        >
-          <option value="">Todos los estados</option>
-          <option value="disponible">Disponible</option>
-          <option value="en_carga">En carga</option>
-          <option value="en_transito">En tránsito</option>
-          <option value="mantenimiento">En mantenimiento</option>
-          <option value="inactivo">Inactivo</option>
-        </select>
-        {(statusFilter || showOnlyAvailable || plateSearch || (!isOperator && branchFilter)) && (
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <input
+            type="text"
+            value={plateSearch}
+            onChange={(e) => setPlateSearch(e.target.value)}
+            placeholder="Buscar por patente…"
+            className={`${inputClass} w-44 uppercase`}
+          />
           <button
-            onClick={() => { setStatusFilter(""); setShowOnlyAvailable(false); setPlateSearch(""); if (!isOperator) setBranchFilter(hasBranchDefault ? (user?.branch_id ?? "") : ""); }}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#6b7280",
-              cursor: "pointer",
-              fontSize: 14,
-              textDecoration: "underline",
-            }}
+            onClick={() => { setShowOnlyAvailable(!showOnlyAvailable); setStatusFilter(""); }}
+            className={`h-10 px-4 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              showOnlyAvailable
+                ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
           >
-            Limpiar filtros
+            {showOnlyAvailable ? "✓ Disponible" : "Disponible"}
           </button>
-        )}
-      </div>
+
+          {isOperator ? (
+            <span className="h-10 inline-flex items-center px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-medium text-[#1e3a5f]">
+              {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
+            </span>
+          ) : (
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Todas las sucursales</option>
+              {[...branches].sort((a, b) => a.name.localeCompare(b.name)).map(b => (
+                <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+              ))}
+            </select>
+          )}
+
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as VehicleStatus | ""); setShowOnlyAvailable(false); }}
+            className={inputClass}
+          >
+            <option value="">Todos los estados</option>
+            <option value="disponible">Disponible</option>
+            <option value="en_carga">En carga</option>
+            <option value="en_transito">En tránsito</option>
+            <option value="mantenimiento">En mantenimiento</option>
+            <option value="inactivo">Inactivo</option>
+          </select>
+
+          {(statusFilter || showOnlyAvailable || plateSearch || (!isOperator && branchFilter)) && (
+            <button
+              onClick={() => { setStatusFilter(""); setShowOnlyAvailable(false); setPlateSearch(""); if (!isOperator) setBranchFilter(hasBranchDefault ? (user?.branch_id ?? "") : ""); }}
+              className="text-sm text-slate-500 hover:text-slate-700 underline cursor-pointer"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      </Card>
 
       {/* Mensajes */}
       {error && (
@@ -552,177 +535,113 @@ export function VehicleList() {
 
       {/* Lista de vehículos */}
       {loading ? (
-        <p>Cargando...</p>
+        <Card className="p-10 text-center">
+          <p className="text-sm text-slate-500">Cargando…</p>
+        </Card>
       ) : filteredVehicles.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>Ningún vehículo coincide con los filtros seleccionados.</p>
+        <Card className="p-10 text-center">
+          <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Ningún vehículo coincide con los filtros seleccionados.</p>
+        </Card>
       ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              {filteredVehicles.length} vehículo{filteredVehicles.length !== 1 ? "s" : ""} {showOnlyAvailable ? "disponible" + (filteredVehicles.length !== 1 ? "s" : "") : "en la flota"}
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {filteredVehicles.length} {filteredVehicles.length !== 1 ? "vehículos" : "vehículo"} {showOnlyAvailable ? (filteredVehicles.length !== 1 ? "disponibles" : "disponible") : "en la flota"}
             </p>
           </div>
-          {canManageTrips && (
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={handleStartTrip}
-                  disabled={!canStartTrip()}
-                  style={{
-                    background: canStartTrip() ? "#3b82f6" : "#9ca3af",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "8px 20px",
-                    cursor: canStartTrip() ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                    opacity: canStartTrip() ? 1 : 0.6,
-                    fontSize: 14,
-                  }}
-                >
-                  Iniciar viaje
-                </button>
-                <button
-                  onClick={handleEndTrip}
-                  disabled={!canEndTrip()}
-                  style={{
-                    background: canEndTrip() ? "#dc2626" : "#9ca3af",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "8px 20px",
-                    cursor: canEndTrip() ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                    opacity: canEndTrip() ? 1 : 0.6,
-                    fontSize: 14,
-                  }}
-                >
-                  Finalizar viaje
-                </button>
-              </div>
-            </div>
-          )}
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 500 }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[900px]">
               <thead>
-                <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                  {canManageTrips && <th style={thStyle}>Seleccionar</th>}
-                  <th style={thStyle}>Patente</th>
-                  <th style={thStyle}>Tipo</th>
-                  <th style={thStyle}>Sucursal actual</th>
-                  <th style={thStyle}>Sucursal destino</th>
-                  <th style={thStyle}>Capacidad (kg)</th>
-                  <th style={thStyle}>Cap. disponible (kg)</th>
-                  <th style={thStyle}>Estado</th>
-                  <th style={thStyle}></th>
+                <tr className="bg-slate-50/50 text-left border-b border-slate-100">
+                  <th className={thClass}>Patente</th>
+                  <th className={thClass}>Tipo</th>
+                  <th className={thClass}>Sucursal actual</th>
+                  <th className={thClass}>Sucursal destino</th>
+                  <th className={thClass}>Capacidad</th>
+                  <th className={thClass}>Cap. disponible</th>
+                  <th className={thClass}>Estado</th>
+                  <th className={thClass}></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredVehicles.map((v) => (
-                  <tr
-                    key={v.id}
-                    style={{ borderBottom: "1px solid #e5e7eb" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "")}
-                  >
-                    {canManageTrips && (
-                      <td style={tdStyle}>
-                        <input
-                          type="radio"
-                          name="vehicle-select"
-                          checked={selectedForAssign === v.license_plate}
-                          onChange={() => setSelectedForAssign(v.license_plate)}
-                          style={{ width: 18, height: 18, cursor: "pointer" }}
-                        />
+                {filteredVehicles.map((v) => {
+                  const assignedBranch = v.assigned_branch ? branches.find(b => b.id === v.assigned_branch) : null;
+                  const destinationBranch = v.destination_branch ? branches.find(b => b.id === v.destination_branch) : null;
+                  const assignedWeight = shipmentWeights[v.license_plate];
+                  const available = assignedWeight !== undefined
+                    ? Math.max(0, v.capacity_kg - assignedWeight)
+                    : v.capacity_kg;
+                  const hasAssignment = assignedWeight !== undefined;
+                  const availableColor = available > 0 ? "text-emerald-600" : "text-rose-600";
+                  return (
+                    <tr
+                      key={v.id}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest("button, a")) return;
+                        handleViewVehicle(v.license_plate);
+                      }}
+                      className="border-b border-slate-100 cursor-pointer transition-colors hover:bg-slate-50"
+                    >
+                      <td className={tdClass}>
+                        <code className="text-xs font-mono font-semibold text-slate-700">{v.license_plate}</code>
                       </td>
-                    )}
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
-                      <code style={{ fontWeight: 600, fontSize: 15 }}>{v.license_plate}</code>
-                    </td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>{vehicleTypeLabels[v.type]}</td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
-                      {(() => {
-                        const branch = v.assigned_branch ? branches.find(b => b.id === v.assigned_branch) : null;
-                        if (branch) {
-                          return (
-                            <span style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 500 }}>
-                              {branch.name}
-                            </span>
-                          );
-                        }
-                        return <span style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>Sin sucursal</span>;
-                      })()}
-                    </td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
-                      {(() => {
-                        const branch = v.destination_branch ? branches.find(b => b.id === v.destination_branch) : null;
-                        if (branch) {
-                          return (
-                            <span style={{ fontSize: 13, color: "#1e3a5f", fontWeight: 500 }}>
-                              {branch.name}
-                            </span>
-                          );
-                        }
-                        return <span style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic" }}>—</span>;
-                      })()}
-                    </td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>{v.capacity_kg} kg</td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
-                      {(() => {
-                        const assignedWeight = shipmentWeights[v.license_plate];
-                        const available = assignedWeight !== undefined 
-                          ? Math.max(0, v.capacity_kg - assignedWeight)
-                          : v.capacity_kg;
-                        const hasAssignment = assignedWeight !== undefined;
-                        const color = available > 0 ? "#10b981" : "#ef4444";
-                        return (
-                          <span style={{ fontWeight: hasAssignment ? 600 : 400, color }}>
-                            {available.toFixed(1)} kg
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ ...tdStyle, cursor: "pointer" }} onClick={() => handleViewVehicle(v.license_plate)}>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          padding: "4px 10px",
-                          borderRadius: 9999,
-                          fontSize: 13,
-                          fontWeight: 500,
-                          background: `${getStatusColor(v.status)}20`,
-                          color: getStatusColor(v.status),
-                        }}
-                      >
+                      <td className={tdClass}>{vehicleTypeLabels[v.type]}</td>
+                      <td className={tdClass}>
+                        {assignedBranch ? (
+                          <span className="text-[#1e3a5f] font-medium">{assignedBranch.name}</span>
+                        ) : (
+                          <span className="text-slate-400 italic">Sin sucursal</span>
+                        )}
+                      </td>
+                      <td className={tdClass}>
+                        {destinationBranch ? (
+                          <span className="text-[#1e3a5f] font-medium">{destinationBranch.name}</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className={tdClass}>
+                        <span className="tabular-nums">{v.capacity_kg} kg</span>
+                      </td>
+                      <td className={tdClass}>
+                        <span className={`tabular-nums ${availableColor} ${hasAssignment ? "font-semibold" : ""}`}>
+                          {available.toFixed(1)} kg
+                        </span>
+                      </td>
+                      <td className={tdClass}>
                         <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
                           style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: getStatusColor(v.status),
+                            background: `${getStatusColor(v.status)}20`,
+                            color: getStatusColor(v.status),
                           }}
-                        />
-                        {vehicleStatusLabels[v.status]}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      {hasRole("operator", "supervisor") && (v.status === "disponible" || v.status === "en_carga") && (
-                        <button
-                          onClick={() => openLoadModal(v)}
-                          style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
                         >
-                          Cargar envíos
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: getStatusColor(v.status) }}
+                          />
+                          {vehicleStatusLabels[v.status]}
+                        </span>
+                      </td>
+                      <td className={tdClass}>
+                        {hasRole("operator", "supervisor") && (v.status === "disponible" || v.status === "en_carga") && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openLoadModal(v); }}
+                            className="inline-flex items-center h-8 px-3 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] text-white text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer"
+                          >
+                            Cargar envíos
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </>
+        </Card>
       )}
 
       {/* Modal de detalle de vehículo */}
@@ -734,6 +653,10 @@ export function VehicleList() {
           readOnly={!canWrite}
           canAssignBranch={isAdmin}
           hideShipments={isAdmin}
+          canStartTrip={vehicleCanStartTrip(selectedVehicle)}
+          canEndTrip={vehicleCanEndTrip(selectedVehicle)}
+          onStartTrip={() => handleStartTrip(selectedVehicle.license_plate)}
+          onEndTrip={() => handleEndTrip(selectedVehicle.license_plate)}
         />
       )}
 
@@ -812,6 +735,10 @@ export function VehicleList() {
         const numShipments = vehicle?.assigned_shipments?.length ?? 0;
         const wouldExceed = startTripCapacity != null && (startTripCapacity.current + numShipments) > startTripCapacity.max_capacity;
         const canConfirm = !!startTripDestBranch && !startingTrip && !startTripCapacityLoading && (!wouldExceed || startTripCapacityConfirmed);
+        // Si el vehículo ya tiene destino (típico cuando viene del plan de ruteo aplicado),
+        // no hace falta elegirlo: solo confirmar.
+        const presetDest = vehicle?.destination_branch ?? "";
+        const presetBranch = presetDest ? branches.find(b => b.id === presetDest) : null;
         return (
           <div
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
@@ -828,42 +755,59 @@ export function VehicleList() {
               <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>
                 El vehículo <strong>{selectedForAssign}</strong> iniciará un viaje. Todos los envíos cargados pasarán a En tránsito.
               </p>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal destino *</label>
-                <select
-                  value={startTripDestBranch}
-                  onChange={(e) => handleStartTripBranchChange(e.target.value)}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
-                >
-                  <option value="">Seleccioná la sucursal destino...</option>
-                  {(() => {
-                    const byProvince = branches.reduce((acc, b) => {
-                      if (!acc[b.province]) acc[b.province] = [];
-                      acc[b.province].push(b);
-                      return acc;
-                    }, {} as Record<string, typeof branches>);
-                    return Object.entries(byProvince)
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([province, pBranches]) => (
-                        <optgroup key={province} label={province}>
-                          {[...pBranches]
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map(b => (
-                              <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                            ))}
-                        </optgroup>
-                      ));
-                  })()}
-                </select>
-                {startTripCapacityLoading && (
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "6px 0 0" }}>Verificando capacidad de la sucursal...</p>
-                )}
-                {startTripCapacity && !startTripCapacityLoading && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-                    Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
+              {presetDest ? (
+                <div style={{ marginBottom: 16, padding: "12px 14px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: "#0369a1", fontWeight: 600, marginBottom: 4 }}>Destino del viaje</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#0c4a6e" }}>
+                    {presetBranch ? `${presetBranch.name} — ${presetBranch.address.city}` : presetDest}
                   </div>
-                )}
-              </div>
+                  {startTripCapacityLoading && (
+                    <p style={{ fontSize: 12, color: "#0369a1", margin: "8px 0 0" }}>Verificando capacidad de la sucursal...</p>
+                  )}
+                  {startTripCapacity && !startTripCapacityLoading && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#0369a1" }}>
+                      Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal destino *</label>
+                  <select
+                    value={startTripDestBranch}
+                    onChange={(e) => handleStartTripBranchChange(e.target.value)}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
+                  >
+                    <option value="">Seleccioná la sucursal destino...</option>
+                    {(() => {
+                      const byProvince = branches.reduce((acc, b) => {
+                        if (!acc[b.province]) acc[b.province] = [];
+                        acc[b.province].push(b);
+                        return acc;
+                      }, {} as Record<string, typeof branches>);
+                      return Object.entries(byProvince)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([province, pBranches]) => (
+                          <optgroup key={province} label={province}>
+                            {[...pBranches]
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(b => (
+                                <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                              ))}
+                          </optgroup>
+                        ));
+                    })()}
+                  </select>
+                  {startTripCapacityLoading && (
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: "6px 0 0" }}>Verificando capacidad de la sucursal...</p>
+                  )}
+                  {startTripCapacity && !startTripCapacityLoading && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+                      Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
+                    </div>
+                  )}
+                </div>
+              )}
 
               {wouldExceed && (
                 <div style={{ background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
@@ -971,13 +915,15 @@ const MANUAL_STATUSES: { value: VehicleStatus; label: string }[] = [
   { value: "inactivo", label: "Inactivo" },
 ];
 
-export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canAssignBranch, hideShipments }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; canAssignBranch?: boolean; hideShipments?: boolean }) {
+export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canAssignBranch, hideShipments, canStartTrip, canEndTrip, onStartTrip, onEndTrip }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; canAssignBranch?: boolean; hideShipments?: boolean; canStartTrip?: boolean; canEndTrip?: boolean; onStartTrip?: () => void; onEndTrip?: () => void }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [assigningBranch, setAssigningBranch] = useState(false);
   const [branchError, setBranchError] = useState("");
   const [branchSuccess, setBranchSuccess] = useState("");
   const [unassigning, setUnassigning] = useState<string | null>(null);
+  const [unassignAllBusy, setUnassignAllBusy] = useState(false);
+  const [showUnassignAllConfirm, setShowUnassignAllConfirm] = useState(false);
   const [unassignError, setUnassignError] = useState("");
   const [currentShipments, setCurrentShipments] = useState<string[]>(vehicle.assigned_shipments ?? []);
   const [currentStatus, setCurrentStatus] = useState<VehicleStatus>(vehicle.status);
@@ -1026,14 +972,40 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
     setUnassigning(trackingId);
     setUnassignError("");
     try {
-      await vehicleApi.unassignShipment(vehicle.license_plate, trackingId);
-      setCurrentShipments(prev => prev.filter(t => t !== trackingId));
+      const updated = await vehicleApi.unassignShipment(vehicle.license_plate, trackingId);
+      setCurrentShipments(updated.assigned_shipments ?? []);
+      setCurrentStatus(updated.status);
       onRefresh?.();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setUnassignError(e.response?.data?.error || "Error al desasignar el envío");
     } finally {
       setUnassigning(null);
+    }
+  };
+
+  const handleUnassignAll = async () => {
+    if (currentShipments.length === 0) return;
+    setShowUnassignAllConfirm(false);
+    setUnassignAllBusy(true);
+    setUnassignError("");
+    let lastStatus: VehicleStatus = currentStatus;
+    let remaining = [...currentShipments];
+    try {
+      for (const trackingId of currentShipments) {
+        const updated = await vehicleApi.unassignShipment(vehicle.license_plate, trackingId);
+        remaining = updated.assigned_shipments ?? [];
+        lastStatus = updated.status;
+        setCurrentShipments(remaining);
+        setCurrentStatus(lastStatus);
+      }
+      onRefresh?.();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setUnassignError(e.response?.data?.error || "Error al desasignar los envíos");
+      onRefresh?.();
+    } finally {
+      setUnassignAllBusy(false);
     }
   };
 
@@ -1063,6 +1035,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
   const currentBranch = branches.find(b => b.id === vehicle.assigned_branch);
   return (
+    <>
     <div
       style={{
         position: "fixed",
@@ -1185,6 +1158,48 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             )}
           </div>
         </div>
+
+        {/* Acciones de viaje — operador / supervisor de la sucursal correspondiente */}
+        {!readOnly && (canStartTrip || canEndTrip) && (
+          <div style={{ marginBottom: 16 }}>
+            {canStartTrip && (
+              <button
+                onClick={onStartTrip}
+                style={{
+                  width: "100%",
+                  background: "#3b82f6",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                Iniciar viaje
+              </button>
+            )}
+            {canEndTrip && (
+              <button
+                onClick={onEndTrip}
+                style={{
+                  width: "100%",
+                  background: "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 14,
+                }}
+              >
+                Finalizar viaje
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Cambio de estado — solo admin */}
         {!readOnly && hideShipments && (
@@ -1325,7 +1340,28 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             padding: 16,
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Envíos asignados</h3>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: 0 }}>Envíos asignados</h3>
+            {!readOnly && currentStatus === "en_carga" && currentShipments.length > 1 && (
+              <button
+                onClick={() => setShowUnassignAllConfirm(true)}
+                disabled={unassignAllBusy || unassigning !== null}
+                style={{
+                  background: unassignAllBusy || unassigning !== null ? "#fca5a5" : "#fef2f2",
+                  color: "#dc2626",
+                  border: "1px solid #fecaca",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  cursor: unassignAllBusy || unassigning !== null ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
+              </button>
+            )}
+          </div>
           {unassignError && (
             <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
               {unassignError}
@@ -1370,10 +1406,10 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                     >
                       Ver
                     </Link>
-                    {!readOnly && (
+                    {!readOnly && currentStatus === "en_carga" && (
                       <button
                         onClick={() => handleUnassign(trackingId)}
-                        disabled={unassigning === trackingId}
+                        disabled={unassigning === trackingId || unassignAllBusy}
                         title="Desasignar envío"
                         style={{
                           background: unassigning === trackingId ? "#f3f4f6" : "#fef2f2",
@@ -1382,14 +1418,14 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                           borderRadius: 6,
                           width: 32,
                           height: 32,
-                          cursor: unassigning === trackingId ? "not-allowed" : "pointer",
+                          cursor: unassigning === trackingId || unassignAllBusy ? "not-allowed" : "pointer",
                           fontWeight: 700,
                           fontSize: 16,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           flexShrink: 0,
-                          opacity: unassigning === trackingId ? 0.5 : 1,
+                          opacity: unassigning === trackingId || unassignAllBusy ? 0.5 : 1,
                         }}
                       >
                         {unassigning === trackingId ? "…" : "✕"}
@@ -1417,8 +1453,59 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         </div>}
       </div>
     </div>
+    {showUnassignAllConfirm && (
+      <div
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
+      >
+        <div
+          style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Desasignar todos los envíos</h2>
+            <button
+              onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
+              style={{ background: "none", border: "none", fontSize: 22, cursor: unassignAllBusy ? "not-allowed" : "pointer", color: "#6b7280" }}
+            >
+              ✕
+            </button>
+          </div>
+          <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px" }}>
+            ¿Confirmás desasignar los <strong>{currentShipments.length} envíos</strong> cargados en el vehículo <strong>{vehicle.license_plate}</strong>?
+          </p>
+          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#374151" }}>
+            <p style={{ margin: "0 0 6px" }}>
+              • Los envíos volverán al estado <strong>En sucursal</strong>.
+            </p>
+            <p style={{ margin: 0 }}>
+              • El vehículo quedará <strong>Disponible</strong>.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setShowUnassignAllConfirm(false)}
+              disabled={unassignAllBusy}
+              style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: unassignAllBusy ? "not-allowed" : "pointer", fontWeight: 500, opacity: unassignAllBusy ? 0.6 : 1 }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleUnassignAll}
+              disabled={unassignAllBusy}
+              style={{
+                padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
+                background: unassignAllBusy ? "#9ca3af" : "#dc2626",
+                color: "#fff", cursor: unassignAllBusy ? "not-allowed" : "pointer",
+                opacity: unassignAllBusy ? 0.7 : 1,
+              }}
+            >
+              {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
-
-const thStyle: React.CSSProperties = { padding: "10px 14px", fontWeight: 600, color: "#374151" };
-const tdStyle: React.CSSProperties = { padding: "10px 14px" };

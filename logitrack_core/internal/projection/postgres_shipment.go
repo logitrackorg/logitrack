@@ -195,6 +195,14 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			string(payload.IncidentType), event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventShipmentETAExtended:
+		payload := event.Payload.(model.ShipmentETAExtendedPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET estimated_delivery_at = $1, updated_at = $2 WHERE tracking_id = $3`,
+			payload.NewETA, event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }

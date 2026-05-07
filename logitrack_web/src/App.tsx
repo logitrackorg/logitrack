@@ -16,6 +16,8 @@ import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { PricingConfig } from "./pages/PricingConfig";
+import { Routing } from "./pages/Routing";
+import { RoutingConfig } from "./pages/RoutingConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
@@ -58,10 +60,16 @@ function Nav() {
         <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
       )}
       {hasRole("operator", "supervisor") && (
+        <NavLink to="/routing" style={navStyle}>Ruteo</NavLink>
+      )}
+      {hasRole("operator", "supervisor") && (
         <NavLink to="/bulk-upload" style={navStyle}>Importar CSV</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/routing-config" style={navStyle}>Config. ruteo</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/system-config" style={navStyle}>Config. sistema</NavLink>
@@ -221,6 +229,18 @@ function AppRoutes() {
           <Route path="/pricing-config" element={
             <ProtectedRoute roles={["admin"]}>
               <PricingConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/routing" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <Routing />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/routing-config" element={
+            <ProtectedRoute roles={["admin"]}>
+              <RoutingConfig />
             </ProtectedRoute>
           } />
 

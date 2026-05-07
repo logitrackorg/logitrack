@@ -536,3 +536,34 @@ func (r *inMemoryIncidentRepository) GetIncidents(trackingID string) ([]model.Sh
 	})
 	return out, nil
 }
+
+// =============================================================================
+// In-memory RoutingConfigRepository (tests only)
+// =============================================================================
+
+type inMemoryRoutingConfigRepository struct {
+	mu  sync.RWMutex
+	cfg model.RoutingConfig
+	set bool
+}
+
+func NewInMemoryRoutingConfigRepository() RoutingConfigRepository {
+	return &inMemoryRoutingConfigRepository{}
+}
+
+func (r *inMemoryRoutingConfigRepository) Get() model.RoutingConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if !r.set {
+		return model.DefaultRoutingConfig()
+	}
+	return r.cfg
+}
+
+func (r *inMemoryRoutingConfigRepository) Update(cfg model.RoutingConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg = cfg
+	r.set = true
+	return nil
+}

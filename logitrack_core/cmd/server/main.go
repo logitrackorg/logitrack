@@ -87,6 +87,10 @@ func main() {
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
 
+	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
+	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
+	routingCfgHandler := handler.NewRoutingConfigHandler(routingCfgSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
@@ -107,6 +111,9 @@ func main() {
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
+
+	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc)
+	routingHandler := handler.NewRoutingHandler(routingSvc)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -150,7 +157,7 @@ func main() {
 
 	// Vehicles — fleet management: list/create/admin actions include admin; operational vehicle actions exclude admin.
 	protected.GET("/vehicles", mgmtNonDriver, vehicleHandler.List)
-	canViewVehicle := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	canViewVehicle := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
 	canViewAvailableVehicles := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	protected.GET("/vehicles/available", canViewAvailableVehicles, vehicleHandler.ListAvailable)
 	protected.POST("/vehicles", adminOnly, vehicleHandler.Create)
@@ -227,6 +234,12 @@ func main() {
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
+	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
+	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
+	protected.POST("/routing/plan", shipmentWrite, routingHandler.Generate)
+	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)

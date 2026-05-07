@@ -698,6 +698,21 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 
 	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
 	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
+		// El envío empieza un retorno → extender la fecha estimada de entrega 10 días.
+		nowET := time.Now().UTC()
+		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
+		if extended, etaErr := s.repo.ExtendETA(repository.ExtendETACmd{
+			TrackingID: trackingID,
+			OldETA:     updated.EstimatedDeliveryAt,
+			NewETA:     *newETA,
+			AddedDays:  model.ReturnETAExtraDays,
+			Reason:     "shipment_returning_to_sender",
+			ChangedBy:  req.ChangedBy,
+			Timestamp:  nowET,
+		}); etaErr == nil {
+			updated = extended
+		}
+
 		// Derive hub location from the last at_hub/at_origin_hub event
 		autoLocation := ""
 		if evs, _ := s.repo.GetEvents(trackingID); len(evs) > 0 {
@@ -965,7 +980,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		CurrentLocation:     counterLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
-		EstimatedDeliveryAt: nil,
+		EstimatedDeliveryAt: returnETA(now, shipment.EstimatedDeliveryAt),
 		ParentShipmentID:    &parentID,
 		IsReturning:         true,
 	}
@@ -1182,4 +1197,16 @@ func (s *ShipmentService) resolveFinalBranch(recipient model.Customer) string {
 	}
 	branches := s.branchRepo.List()
 	return geo.NearestBranch(lat, lng, branches)
+}
+
+// returnETA calcula la fecha estimada para un envío que empieza un retorno:
+// max(now, currentETA) + ReturnETAExtraDays. Devuelve un puntero listo para usar.
+// Si currentETA es nil, parte de now.
+func returnETA(now time.Time, currentETA *time.Time) *time.Time {
+	base := now
+	if currentETA != nil && currentETA.After(now) {
+		base = *currentETA
+	}
+	t := base.AddDate(0, 0, model.ReturnETAExtraDays)
+	return &t
 }

@@ -121,6 +121,17 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.IncidentType = payload.IncidentType
 		shipment.UpdatedAt = event.Timestamp
 		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentETAExtended:
+		payload := event.Payload.(model.ShipmentETAExtendedPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		newETA := payload.NewETA
+		shipment.EstimatedDeliveryAt = &newETA
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
 	}
 }
 

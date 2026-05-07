@@ -18,6 +18,7 @@ type ShipmentRepository interface {
 	UpdateStatus(cmd StatusUpdateCmd) (model.Shipment, error)
 	ApplyCorrections(cmd CorrectCmd) (model.Shipment, error)
 	CancelShipment(cmd CancelCmd) (model.Shipment, error)
+	ExtendETA(cmd ExtendETACmd) (model.Shipment, error)
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
@@ -81,5 +82,15 @@ type CancelCmd struct {
 	Username   string
 	Reason     string
 	FromStatus model.Status
+	Timestamp  time.Time
+}
+
+type ExtendETACmd struct {
+	TrackingID string
+	OldETA     *time.Time
+	NewETA     time.Time
+	AddedDays  int
+	Reason     string
+	ChangedBy  string
 	Timestamp  time.Time
 }
