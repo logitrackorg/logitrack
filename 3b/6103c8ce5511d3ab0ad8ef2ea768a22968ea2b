@@ -1,0 +1,73 @@
+logitrack_web/src/pages/SystemConfig.tsx
+  s_68de4e01090ade::t_8068a927a39672 1-2,4,7-17,27-34,46-73,95-140,146,248-327
+logitrack_core/cmd/server/main.go
+  s_68de4e01090ade::t_a209f849af5cb8 90
+  s_68de4e01090ade::t_586c96e7824f30 238-242
+logitrack_core/internal/handler/vehicle.go
+  s_68de4e01090ade::t_230b8298408965 10
+  s_68de4e01090ade::t_e88c8430b7e74f 101
+logitrack_core/internal/repository/postgres_vehicle.go
+  s_68de4e01090ade::t_84d5f315706338 8
+  s_68de4e01090ade::t_c8466f94eb8365 135,168,174,183,192,198,208,218,225
+logitrack_core/internal/service/routing.go
+  s_68de4e01090ade::t_689527c6caa186 517
+  s_68de4e01090ade::t_b0d598ea7e1d04 1062-1065
+  s_68de4e01090ade::t_91baafc7dd87d5 63
+  s_68de4e01090ade::t_824a0d82614b7a 9
+  s_68de4e01090ade::t_4634bb483d1f5b 227
+logitrack_core/internal/repository/postgres_branch.go
+  s_68de4e01090ade::t_40d0d4585087b5 143,184,191,207,210
+  s_68de4e01090ade::t_2cd622ba700786 7
+logitrack_web/src/utils/date.ts
+  s_68de4e01090ade::t_4dffb6469796e6 7-9
+logitrack_core/internal/clock/clock.go
+  s_68de4e01090ade::t_1e39780e1318db 1-20,35-75
+  s_68de4e01090ade::t_b0a4d58bc9c0a3 21-34
+logitrack_core/internal/handler/clock.go
+  s_68de4e01090ade::t_aba71e896ceda4 1-68
+logitrack_core/internal/seed/seed.go
+  s_68de4e01090ade::t_dca684a3d39693 211
+  s_68de4e01090ade::t_e69acd67c01bc8 132
+  s_68de4e01090ade::t_a705c284dbc9e8 153
+  s_68de4e01090ade::t_c196a0a67792a0 173
+  s_68de4e01090ade::t_56542d986e3ed9 113
+  s_68de4e01090ade::t_fc09a4c97d6c49 192
+logitrack_core/internal/service/comment.go
+  s_68de4e01090ade::t_43b5bf3cce255e 8
+  s_68de4e01090ade::t_c498c3188c2116 38
+logitrack_core/internal/service/route.go
+  s_68de4e01090ade::t_b70afd1cdc213b 9
+  s_68de4e01090ade::t_33e3d9e4ee7842 45
+  s_68de4e01090ade::t_f5e57a851fa337 65,81,207
+  s_68de4e01090ade::t_57dbc9b8e4c3b0 24,112,117,196,219
+logitrack_core/internal/service/shipment.go
+  s_68de4e01090ade::t_e9250fcbdfbadd 12
+  s_68de4e01090ade::t_e82f040d31a525 210,301,392,471,486,678,693,703,753,765,895,931
+logitrack_core/internal/service/incident.go
+  s_68de4e01090ade::t_06cd23bab13792 8
+  s_68de4e01090ade::t_aed604453c261c 50
+logitrack_core/internal/repository/postgres_auth.go
+  s_68de4e01090ade::t_cb3d84185430ff 227,399
+  s_68de4e01090ade::t_0c14e4b8a10950 10
+logitrack_web/src/api/clock.ts
+  s_68de4e01090ade::t_1541c0980eddb2 1-30
+logitrack_core/internal/handler/auth.go
+  s_68de4e01090ade::t_0de6580207e81c 35
+  s_68de4e01090ade::t_bfaa0584bfd554 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3b6103c8ce5511d3ab0ad8ef2ea768a22968ea2b",
+  "prompts": {},
+  "sessions": {
+    "s_68de4e01090ade": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c796cd6-49f2-4097-b53c-b7a8359490a8",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
