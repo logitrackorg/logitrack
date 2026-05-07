@@ -15,6 +15,7 @@ import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
+import { PricingConfig } from "./pages/PricingConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
@@ -64,6 +65,9 @@ function Nav() {
       )}
       {hasRole("admin") && (
         <NavLink to="/system-config" style={navStyle}>Config. sistema</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/pricing-config" style={navStyle}>Tarifario</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/organization" style={navStyle}>Organización</NavLink>
@@ -179,13 +183,13 @@ function AppRoutes() {
           } />
 
           <Route path="/shipments/:trackingId" element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentDetail />
             </ProtectedRoute>
           } />
 
           <Route path="/new" element={
-            <ProtectedRoute roles={["operator", "supervisor", "admin"]}>
+            <ProtectedRoute roles={["operator", "supervisor"]}>
               <NewShipment />
             </ProtectedRoute>
           } />
@@ -211,6 +215,12 @@ function AppRoutes() {
           <Route path="/system-config" element={
             <ProtectedRoute roles={["admin"]}>
               <SystemConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/pricing-config" element={
+            <ProtectedRoute roles={["admin"]}>
+              <PricingConfig />
             </ProtectedRoute>
           } />
 

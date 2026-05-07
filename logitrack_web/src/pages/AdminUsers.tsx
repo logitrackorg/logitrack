@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { Users, Plus, Search } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { adminApi, type UserUpdatePayload, type UserCreatePayload } from "../api/admin";
 import { branchApi, type Branch } from "../api/branches";
 import type { User, Role, UserStatus, UserAddress } from "../api/auth";
 import { fmtDateTime } from "../utils/date";
 import { useAuth } from "../context/AuthContext";
+import { PageHeader } from "../components/ui/page-header";
+import { Card } from "../components/ui/card";
 
 const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
 const ROLES_WITH_BRANCH: Role[] = ["operator", "supervisor", "driver"];
@@ -205,39 +208,69 @@ export function AdminUsers() {
   const sortedBranches = [...branches].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: "1.4rem", color: "#1e3a5f" }}>Gestión de usuarios</h1>
-        <button onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm(emptyCreate()); }}
-          style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-          + Nuevo usuario
-        </button>
-      </div>
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <PageHeader
+        title="Gestión de usuarios"
+        description="Administración de cuentas, roles y permisos del sistema"
+        icon={<Users className="w-5 h-5" />}
+        actions={
+          <button
+            onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm(emptyCreate()); }}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo usuario
+          </button>
+        }
+      />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por usuario, nombre o email..."
-          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, width: 260 }} />
-        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as Role | "")}
-          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}>
+      <Card className="mb-4 p-4">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[260px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por usuario, nombre o email…"
+            className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={e => setRoleFilter(e.target.value as Role | "")}
+          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+        >
           <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as UserStatus | "")}
-          style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as UserStatus | "")}
+          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+        >
           <option value="">Todos los estados</option>
           <option value="activo">Activo</option>
           <option value="inactivo">Inactivo</option>
         </select>
         {(search || roleFilter || statusFilter) && (
-          <button onClick={() => { setSearch(""); setRoleFilter(""); setStatusFilter(""); }}
-            style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, textDecoration: "underline" }}>
+          <button
+            onClick={() => { setSearch(""); setRoleFilter(""); setStatusFilter(""); }}
+            className="text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+          >
             Limpiar
           </button>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280" }}>{filtered.length} usuario{filtered.length !== 1 ? "s" : ""}</span>
+        <span className="ml-auto text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          {filtered.length} usuario{filtered.length !== 1 ? "s" : ""}
+        </span>
       </div>
+      </Card>
 
-      {loading ? <p style={{ color: "#6b7280" }}>Cargando...</p> : (
+      {loading ? (
+        <Card className="p-10 text-center">
+          <p className="text-sm text-slate-500">Cargando…</p>
+        </Card>
+      ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 700 }}>
             <thead>

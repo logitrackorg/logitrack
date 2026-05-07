@@ -76,6 +76,8 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 			NewTrackingID:       cmd.NewTrackingID,
 			Prediction:          cmd.Prediction,
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
+			Price:               cmd.Price,
+			PriceBreakdown:      cmd.PriceBreakdown,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,

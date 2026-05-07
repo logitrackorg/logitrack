@@ -4,6 +4,7 @@ import { publicTrackingApi } from "../api/publicTracking";
 import type { Shipment, ShipmentEvent, ShipmentStatus } from "../api/shipments";
 import type { Branch } from "../api/branches";
 import { StatusBadge } from "../components/StatusBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 
@@ -260,7 +261,7 @@ export function PublicTracking() {
                   </code>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                  <StatusBadge status={shipment.status} />
+                  <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
                   <span style={{ fontSize: 12, color: "#6b7280" }}>{STATUS_LABELS[shipment.status]}</span>
                 </div>
               </div>

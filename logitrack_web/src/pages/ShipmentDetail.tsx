@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2 } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -17,9 +18,11 @@ import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
+import { formatCurrencyARS } from "../api/pricing";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
@@ -52,10 +55,10 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:                "Borrador",
   at_origin_hub:        "En sucursal de origen",
-  loaded:               "Cargado",
+  loaded:               "Enviar a sucursal",
   in_transit:           "En tránsito",
   at_hub:               "En sucursal",
-  out_for_delivery:     "En reparto",
+  out_for_delivery:     "Última milla",
   delivery_failed:      "Entrega fallida",
   redelivery_scheduled: "Reentrega programada",
   no_entregado:         "No entregado",
@@ -384,12 +387,8 @@ export function ShipmentDetail() {
       destination_city: c.destination_city ?? shipment.recipient.address?.city ?? "",
       destination_province: c.destination_province ?? shipment.recipient.address?.province ?? "",
       destination_postal_code: c.destination_postal_code ?? shipment.recipient.address?.postal_code ?? "",
-      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
-      package_type: c.package_type ?? shipment.package_type ?? "",
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
-      shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     });
     setCorrectionError("");
     setShowCorrectionModal(true);
@@ -416,12 +415,8 @@ export function ShipmentDetail() {
       destination_city: c.destination_city ?? shipment.recipient.address?.city ?? "",
       destination_province: c.destination_province ?? shipment.recipient.address?.province ?? "",
       destination_postal_code: c.destination_postal_code ?? shipment.recipient.address?.postal_code ?? "",
-      weight_kg: c.weight_kg ?? String(shipment.weight_kg ?? ""),
-      package_type: c.package_type ?? shipment.package_type ?? "",
       special_instructions: c.special_instructions ?? shipment.special_instructions ?? "",
-      shipment_type: c.shipment_type ?? shipment.shipment_type ?? "normal",
       time_window: c.time_window ?? shipment.time_window ?? "flexible",
-      is_fragile: c.is_fragile ?? (shipment.is_fragile ? "true" : "false"),
     };
     const changed: Record<string, string> = {};
     for (const key of Object.keys(correctionForm)) {
@@ -525,55 +520,74 @@ export function ShipmentDetail() {
   const operatorOutOfBranch = (user?.role === "operator" || user?.role === "supervisor") && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
 
   return (
-    <div style={{ padding: isMobile ? 16 : "24px 32px" }}>
-      <button onClick={() => navigate("/")} style={backBtn}>← Volver al listado</button>
+    <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1100px] mx-auto`}>
+      <button
+        onClick={() => navigate("/")}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Volver al listado
+      </button>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start", marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start" }}>
 
       {/* ── Left column ── */}
       <div>
       <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>
-          <code style={{ fontSize: 22 }}>{shipment.tracking_id}</code>
-        </h1>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-200">
+        <div className="flex items-center gap-3 min-w-0">
+          <code className="text-xl font-mono font-bold text-slate-900 tracking-tight">{shipment.tracking_id}</code>
+          <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
           <PriorityBadge priority={shipment.priority} />
+        </div>
+        <div className="flex items-center gap-2">
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "draft" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
-            <button onClick={openCorrectionModal} style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-              ✏️ Editar datos
+            <button
+              onClick={openCorrectionModal}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Editar datos
             </button>
           )}
           {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
-              style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#92400e" }}>
-              ⚠ Registrar incidencia
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold text-amber-800 cursor-pointer transition-colors"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Incidencia
             </button>
           )}
           {hasRole("supervisor", "admin") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
-            <button onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
-              style={{ background: "#fff", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#b91c1c" }}>
-              Cancelar envío
+            <button
+              onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-sm font-semibold text-rose-700 cursor-pointer transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Cancelar
             </button>
           )}
-          <StatusBadge status={shipment.status} />
         </div>
       </div>
       {/* Banner: contra-envío */}
       {shipment.parent_shipment_id && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
-          ↩️ Este es un <strong>contra-envío</strong> generado a partir de{" "}
-          <a href={`/shipments/${shipment.parent_shipment_id}`} style={{ color: "#92400e", fontWeight: 700 }}>
-            {shipment.parent_shipment_id}
-          </a>
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
+          <Undo2 className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-900">
+            Este es un <strong>contra-envío</strong> generado a partir de{" "}
+            <a href={`/shipments/${shipment.parent_shipment_id}`} className="font-bold underline">
+              {shipment.parent_shipment_id}
+            </a>
+          </p>
         </div>
       )}
 
       {/* Banner: modo devolución */}
       {shipment.is_returning && (
-        <div style={{ background: "#ede9fe", border: "1px solid #c4b5fd", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#5b21b6" }}>
-          ↩️ Este envío está en <strong>modo devolución</strong>
+        <div className="flex items-center gap-2.5 mb-4 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50">
+          <Undo2 className="w-4 h-4 text-violet-700 shrink-0" />
+          <p className="text-sm text-violet-900">Este envío está en <strong>modo devolución</strong></p>
         </div>
       )}
 
@@ -646,7 +660,6 @@ export function ShipmentDetail() {
               ].filter(Boolean).join(", ");
               const destCorrected = !!(cor.destination_street || cor.destination_city || cor.destination_province || cor.destination_postal_code);
               const originalDest = fmtAddr(shipment.recipient.address);
-              const weightVal = cv("weight_kg", `${shipment.weight_kg} kg`);
               const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
               const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
               return <>
@@ -671,7 +684,7 @@ export function ShipmentDetail() {
                   {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
                   <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
-                  <InfoRowEx value={weightVal.corrected ? `${cor.weight_kg} kg` : `${shipment.weight_kg} kg`} original={`${shipment.weight_kg} kg`} corrected={weightVal.corrected} label="Peso" />
+                  <InfoRow label="Peso" value={`${shipment.weight_kg} kg`} />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
                 </Card>
                 <Card title="Fechas y ubicación">
@@ -905,8 +918,13 @@ export function ShipmentDetail() {
       </div>{/* end maxWidth wrapper */}
       </div>{/* end left column */}
 
-      {/* ── Right column: Vehicle & Comments ── */}
+      {/* ── Right column: Price, Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
+        {/* Price Card */}
+        {shipment.price != null && (
+          <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
+        )}
+
         {/* Vehicle Card */}
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
@@ -1154,7 +1172,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargado</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Enviar a sucursal</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
@@ -1794,6 +1812,142 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function PriceCard({ price, breakdown }: { price: number; breakdown?: import("../api/shipments").PriceBreakdown }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      style={{
+        background: "linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%)",
+        borderRadius: 12,
+        padding: 18,
+        marginBottom: 16,
+        color: "#fff",
+        boxShadow: "0 4px 12px rgba(30, 58, 95, 0.15)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: "rgba(255, 255, 255, 0.15)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg style={{ width: 22, height: 22 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Precio del envío
+          </p>
+          <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            {formatCurrencyARS(price)}
+          </p>
+        </div>
+      </div>
+
+      {breakdown && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              width: "100%",
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#fff",
+              borderRadius: 8,
+              padding: "8px 12px",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              transition: "background 0.15s",
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.18)")}
+            onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")}
+          >
+            <span>{open ? "Ocultar desglose" : "Ver desglose"}</span>
+            <svg
+              style={{ width: 14, height: 14, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {open && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 4px 0",
+                borderTop: "1px solid rgba(255, 255, 255, 0.15)",
+                display: "grid",
+                gap: 8,
+                fontSize: 12,
+              }}
+            >
+              <PriceRow label="Tarifa base" value={formatCurrencyARS(breakdown.base_fare)} />
+              <PriceRow
+                label={`Distancia (${breakdown.distance_km.toFixed(1)} km)`}
+                value={formatCurrencyARS(breakdown.distance_cost)}
+              />
+              {breakdown.weight_surcharge > 0 && (
+                <PriceRow label="Recargo por peso" value={formatCurrencyARS(breakdown.weight_surcharge)} />
+              )}
+              {breakdown.last_mile_surcharge > 0 && (
+                <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
+              )}
+              {breakdown.shipment_multiplier !== 1 && (
+                <PriceRow label="Tipo de envío" value={`× ${breakdown.shipment_multiplier.toFixed(2)}`} />
+              )}
+              {breakdown.time_window_surplus > 0 && (
+                <PriceRow label="Recargo ventana horaria" value={formatCurrencyARS(breakdown.time_window_surplus)} />
+              )}
+              {breakdown.fragile_surplus > 0 && (
+                <PriceRow label="Recargo frágil" value={formatCurrencyARS(breakdown.fragile_surplus)} />
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingTop: 10,
+                  marginTop: 4,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.15)",
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                <span>Total</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatCurrencyARS(breakdown.total)}</span>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PriceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <span style={{ color: "rgba(255, 255, 255, 0.75)" }}>{label}</span>
+      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </div>
+  );
+}
+
 const cardStyle: React.CSSProperties = { background: "#f9fafb", borderRadius: 10, padding: 16 };
 const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 };
 const backBtn: React.CSSProperties = { background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
@@ -1879,30 +2033,18 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
         <fieldset style={{ ...fsStyle, marginTop: 12 }}>
           <legend style={legStyle}>Paquete</legend>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Peso (kg)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.weight_kg} kg</div></DField>
-            <DField label="Tipo">
-              <select style={inp} value={form.package_type ?? ""} onChange={(e) => set("package_type", e.target.value)}>
-                {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </DField>
-            <DField label="Tipo de envío">
-              <div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.shipment_type === "express" ? "Express" : "Normal"}</div>
-            </DField>
             <DField label="Ventana horaria">
               <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </DField>
-            <DField label="Contenido frágil">
-              <select style={inp} value={form.is_fragile ?? "false"} onChange={(e) => set("is_fragile", e.target.value)}>
-                <option value="false">No</option>
-                <option value="true">Sí (manipular con cuidado)</option>
               </select>
             </DField>
             <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
               <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
+          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
+            Peso, tipo de paquete, tipo de envío y marca de frágil quedan fijos al crear el envío. La ventana horaria solo puede cambiarse a una opción de igual o menor recargo (no se permite pasar de Flexible a Mañana/Tarde).
+          </p>
         </fieldset>
 
         {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}

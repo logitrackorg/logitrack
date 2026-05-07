@@ -111,6 +111,7 @@ type ShipmentService struct {
 	commentSvc   *CommentService
 	mlClient     *MLService
 	sysConfig    SystemConfigProvider
+	pricingSvc   *PricingService
 }
 
 func NewShipmentService(
@@ -125,6 +126,25 @@ func NewShipmentService(
 
 func (s *ShipmentService) SetSystemConfig(cfg SystemConfigProvider) {
 	s.sysConfig = cfg
+}
+
+func (s *ShipmentService) SetPricingService(p *PricingService) {
+	s.pricingSvc = p
+}
+
+// applyPrice computes and stamps the price + breakdown onto a shipment in place.
+// No-op when the pricing service has not been wired (e.g. unit tests that don't care).
+func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
+	if s.pricingSvc == nil {
+		return
+	}
+	price, breakdown := s.pricingSvc.CalculateForShipment(*shipment)
+	shipment.Price = &price
+	b := breakdown
+	shipment.PriceBreakdown = &b
+	if shipment.PriceCurrency == "" {
+		shipment.PriceCurrency = model.CurrencyARS
+	}
 }
 
 func (s *ShipmentService) maxDeliveryAttempts() int {
@@ -237,6 +257,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		EstimatedDeliveryAt: s.estimatedDelivery(now, req.ReceivingBranchID, finalBranchID, string(shipmentType)),
 	}
 	setPriority(&shipment, prediction)
+	s.applyPrice(&shipment)
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
 		Shipment:  shipment,
 		ChangedBy: req.CreatedBy,
@@ -462,6 +483,16 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		prediction = s.mlClient.PredictFromShipment(draft)
 	}
 	now := time.Now().UTC()
+
+	var pricePtr *float64
+	var breakdownPtr *model.PriceBreakdown
+	if s.pricingSvc != nil {
+		price, breakdown := s.pricingSvc.CalculateForShipment(draft)
+		pricePtr = &price
+		bd := breakdown
+		breakdownPtr = &bd
+	}
+
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
 		DraftID:             draftID,
 		NewTrackingID:       generateTrackingID(),
@@ -470,6 +501,8 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Timestamp:           now,
 		Prediction:          prediction,
 		EstimatedDeliveryAt: s.estimatedDelivery(now, draft.OriginBranchID, draft.FinalBranchID, string(draft.ShipmentType)),
+		Price:               pricePtr,
+		PriceBreakdown:      breakdownPtr,
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -772,24 +805,24 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 	if terminalOrFrozen[shipment.Status] {
 		return model.Shipment{}, fmt.Errorf("no se pueden corregir envíos finalizados o en proceso de devolución")
 	}
+	// Validate directional constraints on price-affecting corrections.
+	// Price is locked at creation, so corrections can only move to an equal-or-cheaper
+	// tier — otherwise the customer would owe more than what was charged.
+	if err := s.validateCorrectionDirection(shipment, req.Corrections); err != nil {
+		return model.Shipment{}, err
+	}
+
 	// Recompute priority if any ML-relevant field is being corrected.
 	var correctionPrediction *model.PriorityPrediction
 	if s.mlClient != nil {
 		c := req.Corrections
-		if c.ShipmentType != nil || c.TimeWindow != nil ||
-			c.IsFragile != nil || c.OriginProvince != nil || c.DestinationProvince != nil {
+		if c.TimeWindow != nil || c.OriginProvince != nil || c.DestinationProvince != nil {
 			// Build effective shipment: start from original, apply stored corrections,
 			// then layer the incoming corrections on top.
 			effective := shipment
 			if stored := shipment.Corrections; stored != nil {
-				if stored.ShipmentType != nil {
-					effective.ShipmentType = *stored.ShipmentType
-				}
 				if stored.TimeWindow != nil {
 					effective.TimeWindow = *stored.TimeWindow
-				}
-				if stored.IsFragile != nil {
-					effective.IsFragile = *stored.IsFragile == "true"
 				}
 				if stored.OriginProvince != nil {
 					effective.Sender.Address.Province = *stored.OriginProvince
@@ -798,14 +831,8 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 					effective.Recipient.Address.Province = *stored.DestinationProvince
 				}
 			}
-			if c.ShipmentType != nil {
-				effective.ShipmentType = *c.ShipmentType
-			}
 			if c.TimeWindow != nil {
 				effective.TimeWindow = *c.TimeWindow
-			}
-			if c.IsFragile != nil {
-				effective.IsFragile = *c.IsFragile == "true"
 			}
 			if c.OriginProvince != nil {
 				effective.Sender.Address.Province = *c.OriginProvince
@@ -1116,6 +1143,30 @@ func geocodeCustomer(c *model.Customer) bool {
 	c.Address.Latitude = &lat
 	c.Address.Longitude = &lng
 	return true
+}
+
+// effectiveTimeWindow returns the time window currently in force on a shipment,
+// preferring a stored correction over the original value.
+func effectiveTimeWindow(s model.Shipment) model.TimeWindow {
+	if s.Corrections != nil && s.Corrections.TimeWindow != nil {
+		return *s.Corrections.TimeWindow
+	}
+	return s.TimeWindow
+}
+
+// validateCorrectionDirection enforces that price-affecting corrections never
+// move the shipment to a more expensive tier. The price is immutable after
+// creation, so upgrades would mean charging the customer less than the new
+// commitment — downgrades are fine because the customer already paid more.
+func (s *ShipmentService) validateCorrectionDirection(current model.Shipment, c model.ShipmentCorrections) error {
+	if c.TimeWindow != nil {
+		from := effectiveTimeWindow(current)
+		to := *c.TimeWindow
+		if model.IsTimeWindowRestrictive(to) && !model.IsTimeWindowRestrictive(from) {
+			return fmt.Errorf("no se puede cambiar la ventana horaria a una más restrictiva (el precio quedaría por debajo del compromiso ya cobrado)")
+		}
+	}
+	return nil
 }
 
 // resolveFinalBranch returns the ID of the nearest active branch to the recipient's address.

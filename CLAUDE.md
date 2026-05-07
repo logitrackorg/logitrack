@@ -120,6 +120,19 @@ Any hub transition can also go to `lost` or `destroyed` (terminal).
 - Terminal states: `delivered`, `returned`, `cancelled`, `lost`, `destroyed` — no further transitions.
 - Cancellable: `at_origin_hub`, `at_hub`, `ready_for_pickup`. NOT cancellable: `loaded`, `in_transit`, `draft`, terminal.
 
+**UI labels for status codes** — los códigos internos no cambian; solo el texto mostrado al usuario operativo (badges, filtros, dashboard, detalle de envío). Definidos en `logitrack_web/src/components/StatusBadge.tsx`, `pages/ShipmentDetail.tsx`, `pages/ShipmentList.tsx` y `pages/Dashboard.tsx`:
+
+| Código | Etiqueta UI |
+|---|---|
+| `loaded` | **Enviar a sucursal** (antes "Cargado") |
+| `out_for_delivery` | **Última milla** (antes "En reparto") |
+| `at_hub` (genérico) | **En sucursal** |
+| `at_hub` cuando `current_location == final_branch_id` | **En sucursal de destino** (override por envío) |
+
+La página pública de tracking (`pages/PublicTracking.tsx`) mantiene su redacción amigable propia para clientes finales ("Cargado y listo para despachar", "En camino a domicilio") y no se rige por estas etiquetas operativas, salvo el override de "En sucursal de destino" que sí se aplica al badge.
+
+**Override por envío** — cuando una etiqueta depende del estado del envío (no solo del código), se computa en `logitrack_web/src/utils/shipmentStatus.ts` (`shipmentStatusLabelOverride`) y se pasa al `StatusBadge` por prop `label`. Hoy solo aplica al caso `at_hub` arriba. Si en el futuro otra transición necesita un texto contextual, se agrega ahí — no duplicar la comparación en cada call site.
+
 ### Business rules
 
 **DNI validation** (before any repo write in `service/shipment.go`):
@@ -141,16 +154,21 @@ Any hub transition can also go to `lost` or `destroyed` (terminal).
 
 ### Role-based permissions (defined in `main.go`)
 
-- Non-driver: GET /shipments, /branches, /branches/search, /search, /customers, /vehicles
-- All roles: GET /shipments/:id, /events, /comments, /vehicles/by-shipment/:trackingId
-- Operator + Supervisor + Admin: POST/PATCH shipments (create, draft, confirm, comment, correct, vehicle assign)
-- Operator + Supervisor + Admin + Driver: PATCH /shipments/:id/status
-- Supervisor + Manager + Admin: GET /stats, /vehicles/by-plate/:plate
-- Supervisor + Admin: GET /users/drivers; vehicle status/assign-branch/start-trip/end-trip/unassign
-- Admin only: POST /vehicles, POST/PATCH /branches; all /ml/config routes
-- Driver only: GET /driver/route
+**Admin scope** is configuration-only. Admin does NOT participate in any operational shipment flow (no list, no detail, no create, no draft, no correct, no cancel, no status change, no comment, no incident report, no quote, no stats, no driver assignment). Admin manages: branches, fleet config (POST /vehicles, assign-branch), users, organization, system config, ML config, pricing config, access logs.
 
-**Operator restrictions**: cannot update a shipment in `out_for_delivery` status (reserved for supervisor/admin/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
+Middleware groups:
+- `adminOnly`: admin only.
+- `authenticated`: all roles (operator, supervisor, manager, admin, driver). Used only for `/auth/me`, `/users/me`, `/users/me/password`, `GET /organization`.
+- `mgmtNonDriver`: operator + supervisor + manager + admin. Used for management screens (branches list/search/capacity, vehicles list, customers).
+- `shipmentRead`: operator + supervisor + manager. Shipment list/search.
+- `shipmentDetailRead`: operator + supervisor + manager + driver. Shipment detail, events, QR, comments/incidents read, vehicle-by-shipment.
+- `shipmentWrite`: operator + supervisor. All shipment writes (create, draft, confirm, correct, cancel, comment, incident, bulk-status), pricing quote, vehicle operational ops (assign, start-trip, end-trip, unassign, status), customers autocomplete, drivers list.
+- `canChangeStatus`: operator + supervisor + driver. Driver further restricted in handler.
+- `driverOnly`: driver-specific routes.
+- `canViewStats`: supervisor + manager.
+- `canManageBranch`, `canCreateVehicle`: admin.
+
+**Operator restrictions**: cannot update a shipment in `out_for_delivery` status (reserved for supervisor/driver). Can transition to `delivered` from other states (e.g. `ready_for_pickup`).
 
 **Branch restrictions** (`branchForbidden` in handler):
 - Operators + supervisors get 403 on writes for shipments whose `receiving_branch_id` ≠ their branch.
@@ -168,7 +186,11 @@ Routes link a driver to shipments for a date (`YYYY-MM-DD`). ID format: `ROUTE-X
 
 Non-destructive edits. Stored in `Shipment.Corrections` (typed struct, `*field` pointers); accumulate via `Merge()`. Blocked on `pending` and terminal states. Each correction auto-generates a `[Correction]` comment and an `"edited"` ShipmentEvent (status unchanged). When any ML-relevant field is corrected, priority is recomputed and persisted.
 
-Correctable fields: all sender/recipient/address fields + `weight_kg`, `package_type`, `special_instructions`, `shipment_type`, `time_window`, `cold_chain`, `is_fragile`.
+Correctable fields: all sender/recipient/address fields + `special_instructions` + `time_window`.
+
+**Non-correctable fields** (locked at creation/confirmation): `weight_kg`, `package_type`, `is_fragile`, `shipment_type`. These all feed into the price, and the price is immutable, so editing them post-confirmation would create a mismatch between what was charged and what was committed.
+
+**Directional restriction on `time_window` corrections**: only allowed when the new window has equal or lower restrictiveness/surcharge. `flexible → morning|afternoon` is rejected (would raise the underlying price commitment); `morning ↔ afternoon` is allowed (same tier, same price); anything `→ flexible` is allowed.
 
 ### Cancellation (`POST /shipments/:tracking_id/cancel` — supervisor + admin)
 
@@ -208,7 +230,7 @@ Default factor weights (configurable 1.0–5.0 by admin):
 |--------|--------|--------------|
 | `shipment_type` | 3.0 | express=1.0 / normal=0.0 |
 | `distance_km` | 2.5 | Haversine / 2500 |
-| `restrictions` | 2.0 | (is_fragile + cold_chain) / 2 |
+| `restrictions` | 2.0 | is_fragile (0/1) |
 | `time_window` | 1.5 | morning=1.0 / afternoon=0.5 / flexible=0.0 |
 | `volume_score` | 1.0 | (pkg_base + weight_kg/2) / 25 |
 | `route_saturation` | 0.8 | FNV hash of "origin-dest" |
@@ -216,6 +238,39 @@ Default factor weights (configurable 1.0–5.0 by admin):
 Default thresholds: alta > 0.65, media > 0.35. Province coords in `internal/ml/dataset.go ProvinceCoords`.
 
 On `POST /ml/config/regenerate`: saves config, retrains, saves blob, hot-swaps model, recalculates all non-terminal shipment priorities.
+
+### Pricing
+
+Rule-based pricing engine with admin-editable config (singleton table `pricing_config`, fila `id=1`). Computed once on `Create` and `ConfirmDraft`; **never recalculated** afterwards (immutable). Persisted on `Shipment.Price` (`*float64`), `Shipment.PriceBreakdown` (JSONB), `Shipment.PriceCurrency` (default `"ARS"`).
+
+Formula:
+```
+subtotal = (base_fare + cost_per_km × distance_km) × packageMultiplier × shipmentMultiplier + weight_surcharge
+total    = subtotal + subtotal × time_window_surcharge_rate + subtotal × fragile_surcharge_rate
+```
+
+Distance uses real lat/lng from `Address.Latitude/Longitude` via `ml.HaversineKm`, falling back to `ml.ComputeDistance` by province if either side lacks coords.
+
+Default config (all editable from `/admin/pricing`):
+
+| Param | Default |
+|---|---|
+| `base_fare` | 1500 |
+| `cost_per_km` | 25 |
+| `weight_surcharge_mid` (5–25 kg) | 500 |
+| `weight_surcharge_high` (>25 kg) | 1500 |
+| `package_envelope_multiplier` | 0.7 |
+| `package_box_multiplier` | 1.0 |
+| `shipment_express_multiplier` | 1.5 |
+| `time_window_restrictive_surcharge` | 0.10 |
+| `fragile_surcharge` | 0.20 |
+
+`time_window_restrictive_surcharge` applies to `morning` and `afternoon` (both restrict to a specific half-day). `flexible` has no surcharge.
+
+Endpoints:
+- `POST /pricing/quote` — operator/supervisor (used by the New Shipment form). Returns `{ total, currency, breakdown }` without persisting.
+- `GET /pricing/config` — admin only.
+- `PATCH /pricing/config` — admin only. Validates that values are non-negative and that the express multiplier is ≥ 1.
 
 ### Adding a new endpoint
 

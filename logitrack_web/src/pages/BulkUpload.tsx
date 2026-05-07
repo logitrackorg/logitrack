@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft, FileSpreadsheet } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod } from "../api/shipments";
 import { branchApi } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
+import { PageHeader } from "../components/ui/page-header";
 
 const TEMPLATE_HEADERS = [
   "sender_name", "sender_dni", "sender_phone", "sender_email",
@@ -354,18 +356,20 @@ export function BulkUpload() {
   const invalidCount = rows.filter((r) => r.status === "invalid").length;
 
   return (
-    <div style={{ padding: "24px 32px", maxWidth: 920, margin: "0 auto" }}>
+    <div className="p-6 md:px-8 max-w-[920px] mx-auto">
       <button
         onClick={() => navigate("/")}
-        style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", padding: 0, fontSize: 14, marginBottom: 16 }}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
       >
-        ← Volver al listado
+        <ArrowLeft className="w-4 h-4" />
+        Volver al listado
       </button>
 
-      <h1 style={{ marginTop: 0, marginBottom: 6 }}>Importación masiva de envíos</h1>
-      <p style={{ color: "#64748b", marginBottom: 28, fontSize: 14, marginTop: 0 }}>
-        Subí un archivo CSV para crear múltiples envíos a la vez. Las filas válidas se importan y las inválidas se omiten con un informe detallado de errores.
-      </p>
+      <PageHeader
+        title="Importación masiva de envíos"
+        description="Subí un archivo CSV para crear múltiples envíos a la vez. Las filas válidas se importan y las inválidas se omiten con un informe detallado de errores."
+        icon={<FileSpreadsheet className="w-5 h-5" />}
+      />
 
       {/* ── IDLE ── */}
       {stage === "idle" && (

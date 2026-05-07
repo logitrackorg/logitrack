@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { ClipboardList } from "lucide-react";
 import { vehicleApi, type VehicleStatusResponse, type VehicleStatus, type VehicleType, type UpdateVehicleStatusRequest } from "../api/vehicles";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
+import { PageHeader } from "../components/ui/page-header";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
@@ -167,8 +169,12 @@ export function VehicleStatus() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Consulta de estado de vehículo</h1>
+    <div className="p-6 max-w-3xl mx-auto">
+      <PageHeader
+        title="Consulta de estado de vehículo"
+        description="Buscá un vehículo por patente y consultá su estado actual"
+        icon={<ClipboardList className="w-5 h-5" />}
+      />
 
       {/* Search form */}
       <form onSubmit={handleSearch} style={{ marginBottom: 24 }}>

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Building2, Plus, Search, AlertCircle, Filter } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { fmtDateTime } from "../utils/date";
+import { PageHeader } from "../components/ui/page-header";
+import { Card } from "../components/ui/card";
 
 const PROVINCES = [
   "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
@@ -95,48 +98,68 @@ export function BranchList() {
   const sortIcon = (key: SortKey) => sortKey === key ? (sortAsc ? " ↑" : " ↓") : "";
 
   return (
-    <div style={{ padding: isMobile ? 16 : "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>Sucursales</h1>
-        {isAdmin && (
-          <button onClick={() => { setShowCreate(true); setError(""); }}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            + Nueva sucursal
-          </button>
-        )}
-      </div>
+    <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1200px] mx-auto`}>
+      <PageHeader
+        title="Sucursales"
+        description="Red de sucursales operativas y su estado"
+        icon={<Building2 className="w-5 h-5" />}
+        actions={
+          isAdmin ? (
+            <button
+              onClick={() => { setShowCreate(true); setError(""); }}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Nueva sucursal
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <input
-          style={{ flex: "1 1 200px", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }}
-          placeholder="Buscar por nombre, ID, ciudad o dirección..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">Todos los estados</option>
-          {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-      </div>
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              placeholder="Buscar por nombre, ID, ciudad o dirección…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <select
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">Todos los estados</option>
+            {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </div>
+      </Card>
 
-      {error && <p style={{ color: "#ef4444", marginBottom: 12 }}>{error}</p>}
+      {error && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <p style={{ color: "#6b7280" }}>Cargando...</p>
+        <Card className="p-10 text-center">
+          <p className="text-sm text-slate-500">Cargando…</p>
+        </Card>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>No se encontraron sucursales</p>
-          <p style={{ fontSize: 14 }}>
+        <Card className="p-12 text-center">
+          <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-base font-semibold text-slate-700">No se encontraron sucursales</p>
+          <p className="mt-1 text-sm text-slate-500">
             {branches.length === 0 ? "No hay sucursales registradas en el sistema." : search.trim() === "" ? "Ingresá un término de búsqueda para continuar." : "Intentá ajustar la búsqueda o los filtros."}
           </p>
-        </div>
+        </Card>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <Card className="overflow-x-auto">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
@@ -197,7 +220,7 @@ export function BranchList() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
 
       {/* Create Modal */}

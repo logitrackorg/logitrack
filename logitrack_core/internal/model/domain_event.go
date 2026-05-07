@@ -46,6 +46,8 @@ type DraftConfirmedPayload struct {
 	NewTrackingID       string
 	Prediction          *PriorityPrediction
 	EstimatedDeliveryAt *time.Time
+	Price               *float64
+	PriceBreakdown      *PriceBreakdown
 }
 
 type StatusChangedPayload struct {

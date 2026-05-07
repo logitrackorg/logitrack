@@ -45,27 +45,37 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 
 	case model.EventDraftConfirmed:
 		payload := event.Payload.(model.DraftConfirmedPayload)
+		var priceBreakdown []byte
+		if payload.PriceBreakdown != nil {
+			priceBreakdown, _ = json.Marshal(payload.PriceBreakdown)
+		}
 		if payload.Prediction != nil {
 			factorsJSON, _ := json.Marshal(payload.Prediction.Factors)
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET tracking_id = $1, status = $2, updated_at = $3,
 				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7,
-				    estimated_delivery_at = $8
-				WHERE tracking_id = $9`,
+				    estimated_delivery_at = $8,
+				    price = COALESCE($9, price),
+				    price_breakdown = COALESCE($10, price_breakdown)
+				WHERE tracking_id = $11`,
 				payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
 				payload.EstimatedDeliveryAt,
+				nullableFloat(payload.Price), nullableBytes(priceBreakdown),
 				payload.OldTrackingID,
 			)
 			return err
 		}
 		_, err := p.db.Exec(`
 			UPDATE shipments
-			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4
-			WHERE tracking_id = $5`,
+			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4,
+			    price = COALESCE($5, price),
+			    price_breakdown = COALESCE($6, price_breakdown)
+			WHERE tracking_id = $7`,
 			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 			payload.EstimatedDeliveryAt,
+			nullableFloat(payload.Price), nullableBytes(priceBreakdown),
 			payload.OldTrackingID,
 		)
 		return err
@@ -212,10 +222,21 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			return err
 		}
 	}
+	var priceBreakdown []byte
+	if s.PriceBreakdown != nil {
+		priceBreakdown, err = json.Marshal(s.PriceBreakdown)
+		if err != nil {
+			return err
+		}
+	}
 
 	deliveryMethod := s.DeliveryMethod
 	if deliveryMethod == "" {
 		deliveryMethod = model.DeliveryMethodLastMile
+	}
+	priceCurrency := s.PriceCurrency
+	if priceCurrency == "" {
+		priceCurrency = model.CurrencyARS
 	}
 
 	_, err = p.db.Exec(`
@@ -228,8 +249,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			priority, priority_score, priority_confidence, priority_factors,
 			has_incident, incident_type,
 			parent_shipment_id, delivery_attempts, is_returning,
-			final_branch_id, delivery_method
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
+			final_branch_id, delivery_method,
+			price, price_breakdown, price_currency
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -254,7 +276,10 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			delivery_attempts     = EXCLUDED.delivery_attempts,
 			is_returning          = EXCLUDED.is_returning,
 			final_branch_id       = CASE WHEN EXCLUDED.final_branch_id != '' THEN EXCLUDED.final_branch_id ELSE shipments.final_branch_id END,
-			delivery_method       = EXCLUDED.delivery_method`,
+			delivery_method       = EXCLUDED.delivery_method,
+			price                 = COALESCE(EXCLUDED.price, shipments.price),
+			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
+			price_currency        = EXCLUDED.price_currency`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -264,6 +289,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.HasIncident, string(s.IncidentType),
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
 		s.FinalBranchID, string(deliveryMethod),
+		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
 	)
 	return err
 }
@@ -286,7 +312,8 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+		       price, price_breakdown, price_currency
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -300,7 +327,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+		       price, price_breakdown, price_currency
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
@@ -339,7 +367,8 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       shipment_type, time_window,
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
-		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+		       price, price_breakdown, price_currency
 		FROM shipments
 		WHERE LOWER(tracking_id) LIKE $1
 		   OR LOWER(sender->>'name') LIKE $1
@@ -490,6 +519,9 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		correctionsJSON     []byte
 		priorityFactorsJSON []byte
 		estimatedAt         *time.Time
+		price               sql.NullFloat64
+		priceBreakdownJSON  []byte
+		priceCurrency       string
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -500,6 +532,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
+		&price, &priceBreakdownJSON, &priceCurrency,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -514,6 +547,18 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	s.IncidentType = model.IncidentType(incidentType)
 	s.DeliveryMethod = model.DeliveryMethod(deliveryMethod)
 	s.EstimatedDeliveryAt = estimatedAt
+	s.PriceCurrency = priceCurrency
+	if price.Valid {
+		v := price.Float64
+		s.Price = &v
+	}
+	if len(priceBreakdownJSON) > 0 {
+		var b model.PriceBreakdown
+		if err := json.Unmarshal(priceBreakdownJSON, &b); err != nil {
+			return model.Shipment{}, err
+		}
+		s.PriceBreakdown = &b
+	}
 	if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 		return model.Shipment{}, err
 	}
@@ -553,6 +598,9 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			correctionsJSON     []byte
 			priorityFactorsJSON []byte
 			estimatedAt         *time.Time
+			price               sql.NullFloat64
+			priceBreakdownJSON  []byte
+			priceCurrency       string
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -563,6 +611,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
+			&price, &priceBreakdownJSON, &priceCurrency,
 		)
 		if err != nil {
 			return nil, err
@@ -574,6 +623,18 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		s.IncidentType = model.IncidentType(incidentType)
 		s.DeliveryMethod = model.DeliveryMethod(deliveryMethod)
 		s.EstimatedDeliveryAt = estimatedAt
+		s.PriceCurrency = priceCurrency
+		if price.Valid {
+			v := price.Float64
+			s.Price = &v
+		}
+		if len(priceBreakdownJSON) > 0 {
+			var b model.PriceBreakdown
+			if err := json.Unmarshal(priceBreakdownJSON, &b); err != nil {
+				return nil, err
+			}
+			s.PriceBreakdown = &b
+		}
 		if err := json.Unmarshal(senderJSON, &s.Sender); err != nil {
 			return nil, err
 		}
@@ -614,4 +675,11 @@ func nullableBytes(b []byte) interface{} {
 		return nil
 	}
 	return b
+}
+
+func nullableFloat(f *float64) interface{} {
+	if f == nil {
+		return nil
+	}
+	return *f
 }
