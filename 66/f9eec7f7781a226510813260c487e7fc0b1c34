@@ -1,0 +1,54 @@
+logitrack_web/src/utils/driverActions.ts
+  s_f9d921afc5800b::t_ac8781c4cd5e90 1-107
+logitrack_core/internal/db/migrate.go
+  s_243fc67da716a0::t_af0e0306428b0e 81
+  s_243fc67da716a0::t_2004019f95e0b9 85-86
+logitrack_core/internal/service/pricing_test.go
+  s_243fc67da716a0::t_25a17060122a43 138-140
+  s_243fc67da716a0::t_b94bfa4aef49bb 84-85
+  s_243fc67da716a0::t_4041ff45babb86 239-241
+  s_243fc67da716a0::t_89e3aafa7128c4 163-165
+logitrack_web/src/pages/DriverRoute.tsx
+  s_f9d921afc5800b::t_b0b990b7f1ba6c 610
+  s_f9d921afc5800b::t_e127fc3d47c0d0 3-18,20,22-34,36,43-47,49-51,55,80-89,93,98,108-112,116,119,121,123-125,131,133,139-147,150-176,178-185,188-201,203-217,219-250,252-261,264-275,277-407,410,413-481,483-484,486-494,497-500,503-609,611-638,641-676,678-689,691-694,696-706,708-733,738,740-743,745-749,757-783
+  s_f9d921afc5800b::t_bf53b85d275c54 1
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_f9d921afc5800b::t_f3b51133e44aa1 58-60,67
+  s_f9d921afc5800b::t_7df83b84feece6 3-16,18-30,37-41,46,50-56,61-63,66,72-83,85-108,110-146,149-150,153-166,168-184,186,188-214,216-319,321-371,379,384-473,475-549
+  s_f9d921afc5800b::t_b5c8e4d4fdd15b 1
+  s_f9d921afc5800b::t_ba701aafdb3204 474
+  s_f9d921afc5800b::t_f4086609268d80 84,109
+CLAUDE.md
+  s_243fc67da716a0::t_fe888b074ef026 266
+  s_243fc67da716a0::t_8f727e8c99328c 270-271
+logitrack_web/src/components/ui/bottom-sheet.tsx
+  s_f9d921afc5800b::t_ca4a59406f08fe 1-42,44-67
+  s_f9d921afc5800b::t_dc2d21b4fb242e 43
+logitrack_core/internal/model/pricing.go
+  s_243fc67da716a0::t_b56657e15245f9 24
+  s_243fc67da716a0::t_49f22dad867441 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "66f9eec7f7781a226510813260c487e7fc0b1c34",
+  "prompts": {},
+  "sessions": {
+    "s_243fc67da716a0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0a9e5516-519a-4d06-9b5f-c0e539a275a6",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_f9d921afc5800b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b2aed90a-25a5-473f-a6a8-0856ed363bdb",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
