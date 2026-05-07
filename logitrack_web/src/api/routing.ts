@@ -32,13 +32,30 @@ export interface RoutingConfig {
 
 export type DispatchRule = "sla_forced" | "consolidation";
 
+export interface RouteStop {
+  tracking_id: string;
+  sequence: number;            // 1-based
+  arrival_min: number;          // minutos desde departure_min; -1 si unsequenced o manual
+  unsequenced?: boolean;        // del backend: el envío no tiene coords, no entró al solver
+  manual?: boolean;             // cliente-side: el operador lo asignó manualmente (post-VRP)
+  time_window?: "morning" | "afternoon" | "flexible" | "";
+  weight_kg: number;
+}
+
 export interface LastMileAssignment {
   driver_id: string;
   driver_name?: string;
-  shipments: string[];           // tracking IDs nuevos
+  shipments: string[];           // tracking IDs nuevos (en el orden de ordered_stops)
   total_weight_kg: number;       // peso de los NUEVOS envíos
   existing_count: number;        // ya en ruta del día
   existing_weight_kg: number;
+  existing_shipments?: string[]; // tracking IDs ya en out_for_delivery / delivery_failed
+  // Campos VRP (presentes solo cuando OptimizedBy=vrp).
+  ordered_stops?: RouteStop[];
+  total_distance_km?: number;
+  total_duration_min?: number;
+  departure_min?: number;        // minutos desde medianoche (base para arrival_min)
+  optimized_by?: "vrp" | "greedy";
 }
 
 export interface InterBranchAssignment {
@@ -50,6 +67,7 @@ export interface InterBranchAssignment {
   total_weight_kg: number;       // peso de los NUEVOS envíos
   capacity_kg: number;
   existing_weight_kg: number;    // ya cargado en el vehículo
+  existing_shipments?: string[]; // tracking IDs ya cargados en el vehículo (status loaded)
 }
 
 export interface UnassignedShipment {
@@ -71,6 +89,7 @@ export interface DriverLoad {
   driver_name?: string;
   existing_count: number;
   existing_weight_kg: number;
+  existing_shipments?: string[];
 }
 
 export interface VehicleLoad {
@@ -78,6 +97,7 @@ export interface VehicleLoad {
   license_plate: string;
   capacity_kg: number;
   existing_weight_kg: number;
+  existing_shipments?: string[];
 }
 
 export interface RoutingPlan {
@@ -128,6 +148,7 @@ export const REASON_LABELS: Record<string, string> = {
   esperando_consolidacion: "Esperando consolidación con otros envíos al mismo destino",
   sobrepeso_excede_vehiculo: "Excede capacidad del vehículo más grande",
   ruta_ya_iniciada: "El chofer ya inició su ruta del día",
+  ventana_horaria_inviable: "No se puede cumplir la ventana horaria del envío",
   // Apply
   envio_no_encontrado: "Envío no encontrado",
   envio_no_pertenece_a_sucursal: "El envío ya no pertenece a esta sucursal",

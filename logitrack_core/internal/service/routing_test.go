@@ -77,7 +77,10 @@ func newRoutingSetup() routingTestSetup {
 	cfgRepo := repository.NewInMemoryRoutingConfigRepository()
 	cfgSvc := NewRoutingConfigService(cfgRepo)
 
-	routingSvc := NewRoutingService(cfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc)
+	// osrmClient nil → el VRP usará Haversine. En tests sin coords reales,
+	// la matriz queda con distancias 0 entre pares y el solver se comporta
+	// como un greedy puro (todos los travel times son 0).
+	routingSvc := NewRoutingService(cfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, nil)
 
 	return routingTestSetup{
 		routingSvc:   routingSvc,
@@ -1129,3 +1132,145 @@ func TestGeneratePlan_LastMile_IncluyeReentregaProgramada(t *testing.T) {
 
 // silence unused-time-import warning
 var _ = time.Now
+
+// =============================================================================
+// VRP — tests del path optimizado (con coords reales)
+// =============================================================================
+
+// branchesWithCoords overwrites the branches in the test repo with versions
+// that have lat/lng populated. Required to exercise the VRP path; without
+// depot coords lastMileVRP falls back to the legacy greedy.
+func branchesWithCoords(repo repository.BranchRepository) {
+	// Coordenadas reales aproximadas de las cabeceras provinciales.
+	repo.Update("br-caba", model.Branch{
+		ID: "br-caba", Name: "CDBA-01",
+		Address:  model.Address{City: "Buenos Aires", Province: "CABA", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)},
+		Province: "CABA", Status: model.BranchStatusActive,
+		Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816),
+	})
+	repo.Update("br-cordoba", model.Branch{
+		ID: "br-cordoba", Name: "CORD-01",
+		Address:  model.Address{City: "Córdoba", Province: "Córdoba", Latitude: fPtr(-31.4201), Longitude: fPtr(-64.1888)},
+		Province: "Córdoba", Status: model.BranchStatusActive,
+		Latitude: fPtr(-31.4201), Longitude: fPtr(-64.1888),
+	})
+}
+
+// createInboundShipWithCoords crea un envío entrante que ya trae lat/lng en
+// el recipient address. El geocoder de service.Create no toca coords no-nil,
+// así que las coordenadas pasadas se preservan en la proyección.
+func createInboundShipWithCoords(t *testing.T, ts routingTestSetup, weightKg float64, originBranchID, destCity string, lat, lon float64) model.Shipment {
+	t.Helper()
+	req := model.CreateShipmentRequest{
+		Sender: model.Customer{
+			DNI: "12345678", Name: "Sender", Phone: "1100000000",
+			Address: model.Address{City: "Córdoba", Province: "Córdoba"},
+		},
+		Recipient: model.Customer{
+			DNI: "87654321", Name: "Recipient", Phone: "2200000000",
+			Address: model.Address{
+				City: destCity, Province: destCity,
+				Latitude: &lat, Longitude: &lon,
+			},
+		},
+		WeightKg:          weightKg,
+		PackageType:       model.PackageBox,
+		ReceivingBranchID: originBranchID,
+		CreatedBy:         "operator",
+	}
+	sh, err := ts.shipmentSvc.Create(req)
+	if err != nil {
+		t.Fatalf("create inbound w/coords: %v", err)
+	}
+	return advanceToAtHub(t, ts, sh.TrackingID, destCity)
+}
+
+// TestGeneratePlan_VRP_ProduceOrderedStops verifica que con depot y recipients
+// con coordenadas reales, el plan de última milla incluye `OrderedStops`
+// poblado, `OptimizedBy = "vrp"`, y `Sequence` consecutiva 1..N.
+func TestGeneratePlan_VRP_ProduceOrderedStops(t *testing.T) {
+	ts := newRoutingSetup()
+	branchesWithCoords(ts.branchRepo)
+	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+
+	// Dos envíos entrantes a CABA con direcciones cercanas (microcentro).
+	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6090, -58.3920) // Microcentro
+	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6010, -58.3850) // Recoleta-ish
+
+	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if len(plan.LastMile) != 1 {
+		t.Fatalf("expected 1 last_mile assignment, got %d", len(plan.LastMile))
+	}
+	a := plan.LastMile[0]
+	if a.OptimizedBy != "vrp" {
+		t.Errorf("expected OptimizedBy=vrp, got %q", a.OptimizedBy)
+	}
+	if len(a.OrderedStops) != 2 {
+		t.Fatalf("expected 2 ordered_stops, got %d", len(a.OrderedStops))
+	}
+	for i, s := range a.OrderedStops {
+		if s.Sequence != i+1 {
+			t.Errorf("stop %d: expected Sequence=%d got %d", i, i+1, s.Sequence)
+		}
+		if s.Unsequenced {
+			t.Errorf("stop %d: expected Unsequenced=false, got true", i)
+		}
+		if s.ArrivalMin < 0 {
+			t.Errorf("stop %d: expected ArrivalMin>=0, got %d", i, s.ArrivalMin)
+		}
+	}
+	if a.TotalDurationMin <= 0 {
+		t.Errorf("expected TotalDurationMin>0, got %d", a.TotalDurationMin)
+	}
+	// El orden de Shipments debe coincidir con OrderedStops (para que ApplyPlan
+	// transicione en la misma secuencia que el chofer planeó visitar).
+	for i, tid := range a.Shipments {
+		if tid != a.OrderedStops[i].TrackingID {
+			t.Errorf("Shipments[%d]=%s != OrderedStops[%d]=%s", i, tid, i, a.OrderedStops[i].TrackingID)
+		}
+	}
+}
+
+// TestGeneratePlan_VRP_EnvioSinCoordsUnsequenced verifica que un envío sin
+// coordenadas en su recipient address se cuelga al final de una ruta como
+// parada Unsequenced (con ArrivalMin=-1).
+func TestGeneratePlan_VRP_EnvioSinCoordsUnsequenced(t *testing.T) {
+	ts := newRoutingSetup()
+	branchesWithCoords(ts.branchRepo)
+	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+
+	// Un envío con coords + un envío sin coords.
+	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6090, -58.3920)
+	sh2 := createInboundShip(t, ts, 5, "Córdoba", "br-cordoba", "Buenos Aires", false)
+	// sh2 queda sin coords.
+
+	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if len(plan.LastMile) != 1 {
+		t.Fatalf("expected 1 last_mile, got %d", len(plan.LastMile))
+	}
+	a := plan.LastMile[0]
+	if len(a.OrderedStops) != 2 {
+		t.Fatalf("expected 2 stops total (1 con coord + 1 unsequenced), got %d", len(a.OrderedStops))
+	}
+	hasUnsequenced := false
+	for _, s := range a.OrderedStops {
+		if s.TrackingID == sh2.TrackingID {
+			if !s.Unsequenced {
+				t.Errorf("expected sh2 marcado Unsequenced=true, got false")
+			}
+			if s.ArrivalMin != -1 {
+				t.Errorf("expected ArrivalMin=-1 para unsequenced, got %d", s.ArrivalMin)
+			}
+			hasUnsequenced = true
+		}
+	}
+	if !hasUnsequenced {
+		t.Errorf("envío sin coords no apareció en OrderedStops")
+	}
+}

@@ -138,13 +138,33 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 // (RouteStatusFinished), el chofer ya volvió a la sucursal — no importa el
 // estado de los envíos, su camión queda libre para una nueva tanda.
 func (s *RouteService) PendingLoad(driverID string, date model.DateOnly) (count int, weightKg float64) {
+	tids := s.PendingShipments(driverID, date)
+	for _, tid := range tids {
+		sh, err := s.shipmentRepo.GetByTrackingID(tid)
+		if err != nil {
+			continue
+		}
+		count++
+		weightKg += sh.WeightKg
+	}
+	return count, weightKg
+}
+
+// PendingShipments devuelve los tracking IDs de los envíos que el chofer
+// todavía tiene físicamente sobre el camión (out_for_delivery / delivery_failed)
+// en la ruta del día. Si la ruta ya terminó, devuelve nil.
+//
+// Es el "espejo" de PendingLoad cuando el caller necesita los IDs (no solo
+// el conteo) — por ejemplo, para mostrarlos en la UI del planificador.
+func (s *RouteService) PendingShipments(driverID string, date model.DateOnly) []string {
 	route, err := s.repo.GetByDriverAndDate(driverID, date)
 	if err != nil {
-		return 0, 0
+		return nil
 	}
 	if route.Status == model.RouteStatusFinished {
-		return 0, 0
+		return nil
 	}
+	var out []string
 	for _, tid := range route.ShipmentIDs {
 		sh, err := s.shipmentRepo.GetByTrackingID(tid)
 		if err != nil {
@@ -153,10 +173,9 @@ func (s *RouteService) PendingLoad(driverID string, date model.DateOnly) (count 
 		if sh.Status != model.StatusOutForDelivery && sh.Status != model.StatusDeliveryFailed {
 			continue
 		}
-		count++
-		weightKg += sh.WeightKg
+		out = append(out, tid)
 	}
-	return count, weightKg
+	return out
 }
 
 // CanAssignToRoute returns an error if the driver already has an active route for the given date.

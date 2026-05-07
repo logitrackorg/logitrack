@@ -10,6 +10,7 @@ import (
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/seed"
@@ -112,7 +113,10 @@ func main() {
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
 
-	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc)
+	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
+	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
+	osrmClient := osrm.NewClient("https://router.project-osrm.org")
+	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, osrmClient)
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
 	r := gin.Default()

@@ -27,11 +27,37 @@ export interface ChangePasswordRequest {
   confirm_password: string;
 }
 
+// El endpoint /users/drivers devuelve model.User (first_name + last_name por separado),
+// no UserProfile (full_name combinado). Acá normalizamos al shape esperado.
+interface RawDriverUser {
+  id: string;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  role: Role;
+  branch_id?: string;
+}
+
+function toUserProfile(u: RawDriverUser): UserProfile {
+  const full = [u.first_name, u.last_name].filter(Boolean).join(" ");
+  return {
+    id: u.id,
+    username: u.username,
+    full_name: full || u.username,
+    email: u.email,
+    role: u.role,
+    branch_id: u.branch_id,
+  };
+}
+
 export const usersApi = {
   getMe: () => api.get<UserProfile>("/users/me").then((r) => r.data),
   listDrivers: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
-    return api.get<{ drivers: UserProfile[] }>("/users/drivers", { params }).then((r) => r.data.drivers ?? []);
+    return api
+      .get<{ drivers: RawDriverUser[] }>("/users/drivers", { params })
+      .then((r) => (r.data.drivers ?? []).map(toUserProfile));
   },
   changePassword: (data: ChangePasswordRequest) => {
     return api.post<{ message: string }>("/users/me/password", data).then((r) => r.data);

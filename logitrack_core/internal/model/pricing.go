@@ -21,12 +21,12 @@ type PricingConfig struct {
 func DefaultPricingConfig() PricingConfig {
 	return PricingConfig{
 		BaseFare:                        10000,
-		CostPerKm:                       100,
+		CostPerKm:                       25,
 		WeightSurchargeMid:              5000,
 		WeightSurchargeHigh:             25000,
 		LastMileSurcharge:               5000,
-		ShipmentExpressMultiplier:       1.5,
-		TimeWindowRestrictiveMultiplier: 1.10,
+		ShipmentExpressMultiplier:       1.2,
+		TimeWindowRestrictiveMultiplier: 1.05,
 		FragileMultiplier:               1.20,
 	}
 }

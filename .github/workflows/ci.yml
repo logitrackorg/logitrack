@@ -62,7 +62,10 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts --registry https://registry.npmmirror.com
+
+      - name: Setup esbuild
+        run: pnpm rebuild esbuild
 
       - name: Lint
         run: pnpm run lint

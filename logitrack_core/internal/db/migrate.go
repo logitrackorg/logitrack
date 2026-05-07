@@ -78,12 +78,12 @@ func RunMigrations(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS pricing_config (
 			id                                 INTEGER PRIMARY KEY DEFAULT 1,
 			base_fare                          NUMERIC(12,2) NOT NULL DEFAULT 10000,
-			cost_per_km                        NUMERIC(12,2) NOT NULL DEFAULT 100,
+			cost_per_km                        NUMERIC(12,2) NOT NULL DEFAULT 25,
 			weight_surcharge_mid               NUMERIC(12,2) NOT NULL DEFAULT 5000,
 			weight_surcharge_high              NUMERIC(12,2) NOT NULL DEFAULT 25000,
 			last_mile_surcharge                NUMERIC(12,2) NOT NULL DEFAULT 5000,
-			shipment_express_multiplier        NUMERIC(6,3)  NOT NULL DEFAULT 1.5,
-			time_window_restrictive_multiplier NUMERIC(6,3)  NOT NULL DEFAULT 1.10,
+			shipment_express_multiplier        NUMERIC(6,3)  NOT NULL DEFAULT 1.2,
+			time_window_restrictive_multiplier NUMERIC(6,3)  NOT NULL DEFAULT 1.05,
 			fragile_multiplier                 NUMERIC(6,3)  NOT NULL DEFAULT 1.20
 		);
 		INSERT INTO pricing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;

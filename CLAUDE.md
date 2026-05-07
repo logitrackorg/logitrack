@@ -263,12 +263,12 @@ Default config (all editable from `/admin/pricing`):
 | Param | Default |
 |---|---|
 | `base_fare` | 10000 |
-| `cost_per_km` | 100 |
+| `cost_per_km` | 25 |
 | `weight_surcharge_mid` (5–25 kg) | 5000 |
 | `weight_surcharge_high` (>25 kg) | 25000 |
 | `last_mile_surcharge` | 5000 |
-| `shipment_express_multiplier` | 1.5 |
-| `time_window_restrictive_multiplier` | 1.10 |
+| `shipment_express_multiplier` | 1.2 |
+| `time_window_restrictive_multiplier` | 1.05 |
 | `fragile_multiplier` | 1.20 |
 
 **UI rule**: la ventana horaria (`time_window`) se oculta en el form de nuevo envío cuando el método de entrega es `retiro_sucursal`, y se resetea a `flexible` automáticamente. Solo aplica para `ultima_milla`.
