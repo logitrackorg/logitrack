@@ -81,7 +81,8 @@ func TestPricing_DistanceAffectsPrice(t *testing.T) {
 	if b.DistanceKm < 600 || b.DistanceKm > 800 {
 		t.Errorf("CABA→CBA distancia esperada ~700km, got %v", b.DistanceKm)
 	}
-	expected := 10000 + 100*b.DistanceKm
+	cfg := model.DefaultPricingConfig()
+	expected := cfg.BaseFare + cfg.CostPerKm*b.DistanceKm
 	if !approxEq(total, expected) {
 		t.Errorf("precio esperado %v, got %v", expected, total)
 	}
@@ -134,8 +135,9 @@ func TestPricing_ExpressMultiplier(t *testing.T) {
 	in.ShipmentType = model.ShipmentTypeExpress
 	express, _ := svc.Quote(in)
 
-	if !approxEq(express, normal*1.5) {
-		t.Errorf("express esperaba %v (1.5×normal), got %v", normal*1.5, express)
+	mult := model.DefaultPricingConfig().ShipmentExpressMultiplier
+	if !approxEq(express, normal*mult) {
+		t.Errorf("express esperaba %v (%v×normal), got %v", normal*mult, mult, express)
 	}
 }
 
@@ -158,8 +160,9 @@ func TestPricing_RestrictiveTimeWindowAddsSurcharge(t *testing.T) {
 	if !approxEq(morning, afternoon) {
 		t.Errorf("morning y afternoon deberían tener mismo precio, got m=%v a=%v", morning, afternoon)
 	}
-	if !approxEq(morning, flex*1.10) {
-		t.Errorf("restrictive esperaba +10%%, flex=%v restrictive=%v", flex, morning)
+	mult := model.DefaultPricingConfig().TimeWindowRestrictiveMultiplier
+	if !approxEq(morning, flex*mult) {
+		t.Errorf("restrictive esperaba %vx, flex=%v restrictive=%v", mult, flex, morning)
 	}
 }
 
@@ -233,8 +236,9 @@ func TestPricing_FullCombination(t *testing.T) {
 	if b.WeightSurcharge != 25000 {
 		t.Errorf("30kg debería dar surcharge 25000, got %v", b.WeightSurcharge)
 	}
-	if b.ShipmentMultiplier != 1.5 {
-		t.Errorf("express esperaba 1.5, got %v", b.ShipmentMultiplier)
+	expected := model.DefaultPricingConfig().ShipmentExpressMultiplier
+	if b.ShipmentMultiplier != expected {
+		t.Errorf("express esperaba %v, got %v", expected, b.ShipmentMultiplier)
 	}
 	if b.TimeWindowSurplus <= 0 || b.FragileSurplus <= 0 {
 		t.Errorf("morning + fragile deberían sumar, got tw=%v fr=%v", b.TimeWindowSurplus, b.FragileSurplus)

@@ -1,41 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, Search, AlertCircle, CheckCircle2, XCircle, Phone, MapPin, AlertTriangle, Play, Calendar } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  MapPin,
+  MessageCircle,
+  Navigation,
+  Package,
+  Phone,
+  Play,
+  Truck,
+  XCircle,
+} from "lucide-react";
 import { driverApi, type DriverRouteResponse } from "../api/driver";
-import { shipmentApi } from "../api/shipments";
-import { StatusBadge } from "../components/StatusBadge";
-import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
-import { GradientCard, GradientCardIcon, GradientCardLabel } from "../components/ui/gradient-card";
+import { BottomSheet } from "../components/ui/bottom-sheet";
+import {
+  FAILED_REASONS,
+  TIME_WINDOW_HOURS,
+  TIME_WINDOW_LABEL,
+  mapsHref,
+  recipientView,
+  sortCompletedShipments,
+  sortPendingShipments,
+  telHref,
+  timeWindowTone,
+  waHref,
+} from "../utils/driverActions";
 
-const ROUTE_STATUS_LABEL: Record<string, string> = {
-  pendiente: "Pendiente",
-  en_curso: "En curso",
-  finalizada: "Finalizada",
-};
-
-const ROUTE_STATUS_COLOR: Record<string, string> = {
-  pendiente: "bg-amber-100 text-amber-800",
-  en_curso: "bg-emerald-100 text-emerald-800",
-  finalizada: "bg-indigo-100 text-indigo-800",
-};
-
-const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
-  const [failedShipmentId, setFailedShipmentId] = useState<string | null>(null);
-  const [failedNotes, setFailedNotes] = useState("");
-  const [deliverShipmentId, setDeliverShipmentId] = useState<string | null>(null);
+
+  // sheets
+  const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
+  const [failedShipment, setFailedShipment] = useState<Shipment | null>(null);
+
   const [recipientDni, setRecipientDni] = useState("");
+  const [failedReason, setFailedReason] = useState<string>("");
+  const [failedNotes, setFailedNotes] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("pendientes");
 
   const load = () =>
     driverApi
@@ -60,18 +77,25 @@ export function DriverRoute() {
     }
   };
 
-  const handleDeliver = async (trackingId: string) => {
-    if (!recipientDni.trim()) return;
+  const closeSheets = () => {
+    setDeliverShipment(null);
+    setFailedShipment(null);
+    setRecipientDni("");
+    setFailedReason("");
+    setFailedNotes("");
+  };
+
+  const handleDeliver = async () => {
+    if (!deliverShipment || !recipientDni.trim()) return;
     setSubmitting(true);
     setActionError("");
     try {
-      await shipmentApi.updateStatus(trackingId, {
+      await shipmentApi.updateStatus(deliverShipment.tracking_id, {
         status: "delivered",
         location: "",
         recipient_dni: recipientDni.trim(),
       });
-      setDeliverShipmentId(null);
-      setRecipientDni("");
+      closeSheets();
       load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -81,297 +105,682 @@ export function DriverRoute() {
     }
   };
 
-  const handleFailedAttempt = async (trackingId: string) => {
-    if (!failedNotes.trim()) return;
+  const handleFailedAttempt = async () => {
+    if (!failedShipment) return;
+    const reasonLabel = FAILED_REASONS.find((r) => r.id === failedReason)?.label ?? "";
+    const note = [reasonLabel, failedNotes.trim()].filter(Boolean).join(" — ");
+    if (!note) return;
     setSubmitting(true);
     setActionError("");
     try {
-      await shipmentApi.updateStatus(trackingId, {
+      await shipmentApi.updateStatus(failedShipment.tracking_id, {
         status: "delivery_failed",
         location: "",
-        notes: failedNotes.trim(),
+        notes: note,
       });
-      setFailedShipmentId(null);
-      setFailedNotes("");
+      closeSheets();
       load();
-    } catch {
-      setActionError("No se pudo registrar el intento fallido.");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setActionError(msg ?? "No se pudo registrar el intento fallido.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="p-6 text-sm text-slate-500">Cargando…</div>;
+  if (loading) return <RouteSkeleton />;
 
-  if (noRoute) {
-    return (
-      <div className="p-6 max-w-lg mx-auto">
-        <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
-          <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-            <p className="mt-1 text-sm text-slate-500">No tenés ninguna ruta asignada para hoy.</p>
-          </div>
-        </div>
-        <Card className="p-8 text-center">
-          <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-500">Cuando un supervisor te asigne envíos, los vas a ver acá.</p>
-        </Card>
-      </div>
-    );
-  }
-
+  if (noRoute) return <NoRouteView />;
   if (!data) return null;
 
   const routeStatus = data.route.status ?? "pendiente";
-
   const [ry, rm, rd] = data.route.date.split("-");
   const today = `${rd}/${rm}/${ry}`;
-  const pending = data.shipments.filter((s) => s.status === "out_for_delivery").length;
-  const done = data.shipments.filter((s) => s.status === "delivered" || s.status === "delivery_failed").length;
 
-  const filteredShipments = data.shipments.filter((s) => {
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return (
-      s.tracking_id.toLowerCase().includes(q) ||
-      s.recipient.name.toLowerCase().includes(q) ||
-      (s.corrections?.recipient_name ?? "").toLowerCase().includes(q)
-    );
-  });
+  const pendingList = data.shipments.filter((s) => s.status === "out_for_delivery");
+  const completedList = data.shipments.filter(
+    (s) => s.status === "delivered" || s.status === "delivery_failed",
+  );
+  const total = data.shipments.length;
+  const done = completedList.length;
+  const pending = pendingList.length;
+  const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   if (routeStatus === "finalizada" && done > 0) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
-          <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-            <p className="mt-1 text-sm text-slate-500">{today}</p>
-          </div>
-        </div>
-
-        <GradientCard tone="emerald" className="mb-5">
-          <div className="flex items-start gap-3">
-            <GradientCardIcon><CheckCircle2 className="w-5 h-5" /></GradientCardIcon>
-            <div>
-              <GradientCardLabel>Ruta finalizada</GradientCardLabel>
-              <p className="mt-1 text-base font-semibold">
-                Completaste todos los envíos del día. {done} de {data.route.shipment_ids.length} procesados.
-              </p>
-            </div>
-          </div>
-        </GradientCard>
-
-        <div className="grid gap-2">
-          {data.shipments.map((shipment) => {
-            const cor = shipment.corrections ?? {};
-            const recipientName = cor.recipient_name ?? shipment.recipient.name;
-            return (
-              <Card
-                key={shipment.tracking_id}
-                onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-                className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <code className="text-[11px] font-mono text-slate-400">{shipment.tracking_id}</code>
-                  <p className="text-sm font-semibold text-slate-900 mt-0.5 truncate">{recipientName}</p>
-                </div>
-                <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-    );
+    return <RouteCompletedView data={data} today={today} />;
   }
 
-  return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="flex items-start justify-between gap-3 mb-2 pb-4 border-b border-slate-200">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-            <p className="mt-1 text-xs text-slate-500">
-              {today} · {data.shipments.length} envíos · {pending} pendientes · {done} completados
-            </p>
-          </div>
-        </div>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ROUTE_STATUS_COLOR[routeStatus] ?? ROUTE_STATUS_COLOR.pendiente}`}>
-          {ROUTE_STATUS_LABEL[routeStatus]}
-        </span>
-      </div>
+  const visibleList = tab === "pendientes"
+    ? sortPendingShipments(pendingList)
+    : sortCompletedShipments(completedList);
 
-      {routeStatus === "pendiente" && (
-        <Card className="p-5 mt-5 mb-5 border-amber-200 bg-amber-50/50">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-bold text-amber-900">Ruta sin iniciar</p>
-              <p className="mt-1 text-xs text-amber-800">
-                Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
-              </p>
-              <button
-                onClick={handleStartRoute}
-                disabled={startingRoute}
-                className="mt-3 inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-bold cursor-pointer transition-colors"
-              >
-                <Play className="w-4 h-4" />
-                {startingRoute ? "Iniciando…" : "Iniciar ruta"}
-              </button>
+  const canAct = routeStatus === "en_curso";
+
+  return (
+    <div className="pb-32">
+      {/* Header sticky con progreso y tabs */}
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
+        <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+                <Truck className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  {today} · {done}/{total} completados
+                </p>
+              </div>
+            </div>
+            <RouteStatusPill status={routeStatus} />
+          </div>
+
+          <div className="mt-3">
+            <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
           </div>
-        </Card>
-      )}
 
-      <div className="relative mt-5 mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por ID o destinatario…"
-          className={`${inputClass} w-full pl-9`}
-        />
+          {canAct && (
+            <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
+              <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
+                Pendientes
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  {pending}
+                </span>
+              </TabButton>
+              <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
+                Completados
+                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  {done}
+                </span>
+              </TabButton>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
+        {actionError && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">{actionError}</span>
+            <button
+              onClick={() => setActionError("")}
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+
+        {routeStatus === "pendiente" && (
+          <Card className="mb-4 border-amber-200 bg-amber-50/60">
+            <div className="p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-amber-900">Ruta sin iniciar</p>
+                <p className="mt-0.5 text-xs text-amber-800 leading-relaxed">
+                  Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {visibleList.length === 0 ? (
+          <Card className="p-8 text-center">
+            {tab === "pendientes" ? (
+              <>
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-900">¡Todo listo por ahora!</p>
+                <p className="mt-1 text-xs text-slate-500">No quedan entregas pendientes.</p>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Aún no completaste ninguna entrega.</p>
+            )}
+          </Card>
+        ) : (
+          <div className="grid gap-3">
+            {visibleList.map((shipment, idx) => (
+              <ShipmentCard
+                key={shipment.tracking_id}
+                shipment={shipment}
+                order={tab === "pendientes" ? idx + 1 : undefined}
+                canAct={canAct && tab === "pendientes"}
+                onDeliver={() => setDeliverShipment(shipment)}
+                onFailed={() => setFailedShipment(shipment)}
+                onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {actionError && (
-        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {actionError}
+      {/* Sticky CTA para iniciar ruta */}
+      {routeStatus === "pendiente" && (
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={handleStartRoute}
+              disabled={startingRoute}
+              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-colors shadow-sm"
+            >
+              <Play className="w-5 h-5" />
+              {startingRoute ? "Iniciando…" : "Iniciar ruta"}
+            </button>
+          </div>
         </div>
       )}
 
-      {filteredShipments.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-slate-500">No hay envíos que coincidan con la búsqueda.</p>
-        </Card>
+      {/* Bottom sheets */}
+      <DeliverSheet
+        open={!!deliverShipment}
+        onClose={() => { setDeliverShipment(null); setRecipientDni(""); }}
+        shipment={deliverShipment}
+        dni={recipientDni}
+        onDniChange={setRecipientDni}
+        submitting={submitting}
+        onConfirm={handleDeliver}
+      />
+      <FailedSheet
+        open={!!failedShipment}
+        onClose={() => { setFailedShipment(null); setFailedReason(""); setFailedNotes(""); }}
+        shipment={failedShipment}
+        reason={failedReason}
+        onReasonChange={setFailedReason}
+        notes={failedNotes}
+        onNotesChange={setFailedNotes}
+        submitting={submitting}
+        onConfirm={handleFailedAttempt}
+      />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+/* Sub-componentes                                                      */
+/* ─────────────────────────────────────────────────────────────────── */
+
+function RouteStatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800" },
+    en_curso: { label: "En curso", cls: "bg-emerald-100 text-emerald-800" },
+    finalizada: { label: "Finalizada", cls: "bg-indigo-100 text-indigo-800" },
+  };
+  const c = map[status] ?? map.pendiente;
+  return (
+    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${c.cls}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${
+        active ? "text-[#1e3a5f]" : "text-slate-500 hover:text-slate-700"
+      }`}
+    >
+      {children}
+      {active && (
+        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[#1e3a5f]" />
+      )}
+    </button>
+  );
+}
+
+function ShipmentCard({
+  shipment,
+  order,
+  canAct,
+  onDeliver,
+  onFailed,
+  onOpen,
+}: {
+  shipment: Shipment;
+  order?: number;
+  canAct: boolean;
+  onDeliver: () => void;
+  onFailed: () => void;
+  onOpen: () => void;
+}) {
+  const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
+  const isCompleted = shipment.status === "delivered" || shipment.status === "delivery_failed";
+  const isFailed = shipment.status === "delivery_failed";
+  const isDelivered = shipment.status === "delivered";
+
+  const tw = shipment.time_window;
+  const twTone = timeWindowTone(tw);
+  const fragile = !!shipment.is_fragile;
+  const attempts = shipment.delivery_attempts ?? 0;
+
+  return (
+    <Card
+      className={
+        isCompleted
+          ? "p-0 bg-slate-50/60 border-slate-200"
+          : "p-0 hover:shadow-md transition-shadow"
+      }
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full text-left px-4 pt-4 pb-3 cursor-pointer"
+      >
+        <div className="flex items-start gap-3">
+          {order !== undefined && (
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-[#1e3a5f] text-white text-sm font-bold flex items-center justify-center">
+              {String(order).padStart(2, "0")}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p className={`text-base font-bold leading-snug ${isCompleted ? "text-slate-600" : "text-slate-900"}`}>
+                {name}
+              </p>
+              {isDelivered && (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Entregado
+                </span>
+              )}
+              {isFailed && (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                  <XCircle className="w-3 h-3" />
+                  Sin entregar
+                </span>
+              )}
+            </div>
+            <p className={`mt-1 text-sm leading-snug flex items-start gap-1.5 ${isCompleted ? "text-slate-500" : "text-slate-700"}`}>
+              <MapPin className="w-3.5 h-3.5 mt-0.5 text-slate-400 shrink-0" />
+              <span className="break-words">{fullAddress}</span>
+            </p>
+          </div>
+          {!isCompleted && <ChevronRight className="w-4 h-4 text-slate-300 mt-1.5 shrink-0" />}
+        </div>
+
+        {!isCompleted && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {tw && (
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <Clock className="w-3 h-3" />
+                {TIME_WINDOW_LABEL[tw] ?? tw} {TIME_WINDOW_HOURS[tw] && `· ${TIME_WINDOW_HOURS[tw]}`}
+              </span>
+            )}
+            {fragile && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                <AlertTriangle className="w-3 h-3" />
+                Frágil
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+              <Package className="w-3 h-3" />
+              {shipment.weight_kg} kg
+            </span>
+            {attempts > 0 && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+                Reintento {attempts + 1}
+              </span>
+            )}
+          </div>
+        )}
+
+        {!isCompleted && specialInstructions && (
+          <div className="mt-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{specialInstructions}</span>
+          </div>
+        )}
+      </button>
+
+      {!isCompleted && (
+        <div className="px-4 pb-4 border-t border-slate-100">
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <a
+              href={telHref(phone)}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
+            >
+              <Phone className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Llamar</span>
+            </a>
+            <a
+              href={waHref(phone)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">WhatsApp</span>
+            </a>
+            <a
+              href={mapsHref(fullAddress)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 cursor-pointer"
+            >
+              <Navigation className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Cómo llegar</span>
+            </a>
+          </div>
+
+          {canAct && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Entregar
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onFailed(); }}
+                className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+              >
+                <XCircle className="w-4 h-4" />
+                No entregado
+              </button>
+            </div>
+          )}
+
+          <p className="mt-3 text-[10px] font-mono text-slate-400 text-center">{shipment.tracking_id}</p>
+        </div>
       )}
 
-      <div className="grid gap-3">
-        {filteredShipments.map((shipment) => {
-          const cor = shipment.corrections ?? {};
-          const recipientName = cor.recipient_name ?? shipment.recipient.name;
-          const recipientPhone = cor.recipient_phone ?? shipment.recipient.phone;
-          const destAddress = [
-            cor.destination_street ?? shipment.recipient.address?.street,
-            cor.destination_city ?? shipment.recipient.address?.city,
-            cor.destination_province ?? shipment.recipient.address?.province,
-          ].filter(Boolean).join(", ");
-          const specialInstructions = cor.special_instructions ?? shipment.special_instructions;
+      {isCompleted && (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-full px-4 pb-3 -mt-1 text-left cursor-pointer"
+        >
+          <p className="text-[10px] font-mono text-slate-400">{shipment.tracking_id}</p>
+        </button>
+      )}
+    </Card>
+  );
+}
 
+function DeliverSheet({
+  open,
+  onClose,
+  shipment,
+  dni,
+  onDniChange,
+  submitting,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shipment: Shipment | null;
+  dni: string;
+  onDniChange: (s: string) => void;
+  submitting: boolean;
+  onConfirm: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (open) {
+      const t = setTimeout(() => inputRef.current?.focus(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  if (!shipment) return null;
+  const { name } = recipientView(shipment);
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Confirmar entrega"
+      description={`Entrega a ${name}`}
+    >
+      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        DNI del destinatario
+      </label>
+      <input
+        ref={inputRef}
+        value={dni}
+        onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="Ej: 30123456"
+        className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
+      />
+      <p className="mt-1.5 text-[11px] text-slate-500">
+        Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
+      </p>
+
+      <div className="grid grid-cols-2 gap-2 mt-5">
+        <button
+          onClick={onClose}
+          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={!dni.trim() || submitting}
+          className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? "Guardando…" : "Confirmar entrega"}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function FailedSheet({
+  open,
+  onClose,
+  shipment,
+  reason,
+  onReasonChange,
+  notes,
+  onNotesChange,
+  submitting,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shipment: Shipment | null;
+  reason: string;
+  onReasonChange: (s: string) => void;
+  notes: string;
+  onNotesChange: (s: string) => void;
+  submitting: boolean;
+  onConfirm: () => void;
+}) {
+  if (!shipment) return null;
+  const { name } = recipientView(shipment);
+  const requiresNotes = reason === "otro";
+  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Marcar como no entregado"
+      description={`No entrega a ${name}`}
+    >
+      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+        ¿Qué pasó?
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {FAILED_REASONS.map((r) => {
+          const active = reason === r.id;
+          return (
+            <button
+              key={r.id}
+              onClick={() => onReasonChange(r.id)}
+              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
+                active
+                  ? "border-rose-500 bg-rose-50 text-rose-800"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {r.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
+      </label>
+      <textarea
+        value={notes}
+        onChange={(e) => onNotesChange(e.target.value)}
+        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
+        rows={3}
+        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
+      />
+
+      <div className="grid grid-cols-2 gap-2 mt-5">
+        <button
+          onClick={onClose}
+          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={!canSubmit || submitting}
+          className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? "Guardando…" : "Confirmar"}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function NoRouteView() {
+  return (
+    <div className="p-6 max-w-lg mx-auto">
+      <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
+        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+          <Truck className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
+          <p className="mt-1 text-sm text-slate-500">No tenés ninguna ruta asignada para hoy.</p>
+        </div>
+      </div>
+      <Card className="p-8 text-center">
+        <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <p className="text-sm text-slate-500">Cuando un supervisor te asigne envíos, los vas a ver acá.</p>
+      </Card>
+    </div>
+  );
+}
+
+function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
+  const navigate = useNavigate();
+  const done = data.shipments.filter((s) => s.status === "delivered").length;
+  const failed = data.shipments.filter((s) => s.status === "delivery_failed").length;
+
+  return (
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
+      <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
+        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+          <Truck className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
+          <p className="mt-1 text-sm text-slate-500">{today}</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 mb-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider opacity-90">Ruta finalizada</p>
+            <p className="mt-1 text-xl font-bold leading-tight">
+              {done} {done === 1 ? "entrega completada" : "entregas completadas"}
+            </p>
+            {failed > 0 && (
+              <p className="text-xs opacity-90 mt-0.5">
+                {failed} {failed === 1 ? "envío sin entregar" : "envíos sin entregar"}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
+        Resumen del día
+      </p>
+      <div className="grid gap-2">
+        {data.shipments.map((shipment) => {
+          const { name } = recipientView(shipment);
+          const delivered = shipment.status === "delivered";
           return (
             <Card
               key={shipment.tracking_id}
               onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-3"
             >
-              <div className="flex justify-between items-start gap-3 mb-3">
-                <div className="min-w-0 flex-1">
-                  <code className="text-xs font-mono text-slate-500">{shipment.tracking_id}</code>
-                  <p className="text-base font-bold text-slate-900 mt-0.5 truncate">{recipientName}</p>
-                  <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{recipientPhone}</span>
-                  </p>
-                  <p className="text-sm text-slate-500 mt-1 flex items-start gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <span>{destAddress}</span>
-                  </p>
-                </div>
-                <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                delivered ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+              }`}>
+                {delivered ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
               </div>
-
-              {specialInstructions && (
-                <div className="mb-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-800 flex items-start gap-2">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                  <span>{specialInstructions}</span>
-                </div>
-              )}
-
-              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && !failedShipmentId && !deliverShipmentId && (
-                <div className="flex gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => { setDeliverShipmentId(shipment.tracking_id); setRecipientDni(""); }}
-                    disabled={submitting}
-                    className="inline-flex items-center gap-1.5 h-10 px-5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold cursor-pointer transition-colors"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    Entregar
-                  </button>
-                  <button
-                    onClick={() => { setFailedShipmentId(shipment.tracking_id); setFailedNotes(""); }}
-                    disabled={submitting}
-                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 text-sm font-semibold cursor-pointer transition-colors"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Intento fallido
-                  </button>
-                </div>
-              )}
-
-              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && deliverShipmentId === shipment.tracking_id && (
-                <div className="grid gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
-                  <label className="text-xs font-semibold text-slate-700">DNI del destinatario</label>
-                  <input
-                    value={recipientDni}
-                    onChange={(e) => setRecipientDni(e.target.value)}
-                    placeholder="Ej: 30123456"
-                    className={inputClass}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleDeliver(shipment.tracking_id)}
-                      disabled={!recipientDni.trim() || submitting}
-                      className="h-10 px-4 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-                    >
-                      {submitting ? "Guardando…" : "Confirmar entrega"}
-                    </button>
-                    <button
-                      onClick={() => setDeliverShipmentId(null)}
-                      className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {routeStatus === "en_curso" && shipment.status === "out_for_delivery" && failedShipmentId === shipment.tracking_id && !deliverShipmentId && (
-                <div className="grid gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
-                  <textarea
-                    value={failedNotes}
-                    onChange={(e) => setFailedNotes(e.target.value)}
-                    placeholder="Motivo del intento fallido (obligatorio)"
-                    rows={2}
-                    className="px-3 py-2 rounded-lg border border-rose-300 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-200 focus:border-rose-500 resize-y"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleFailedAttempt(shipment.tracking_id)}
-                      disabled={!failedNotes.trim() || submitting}
-                      className="h-10 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
-                    >
-                      {submitting ? "Guardando…" : "Confirmar"}
-                    </button>
-                    <button
-                      onClick={() => setFailedShipmentId(null)}
-                      className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>
+                <code className="text-[10px] font-mono text-slate-400">{shipment.tracking_id}</code>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </Card>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function RouteSkeleton() {
+  return (
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
+        <div className="w-10 h-10 rounded-xl bg-slate-100 animate-pulse" />
+        <div className="flex-1">
+          <div className="h-5 w-32 rounded bg-slate-100 animate-pulse" />
+          <div className="mt-2 h-3 w-48 rounded bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+      <div className="grid gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-100 animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/5 rounded bg-slate-100 animate-pulse" />
+                <div className="h-3 w-4/5 rounded bg-slate-100 animate-pulse" />
+                <div className="flex gap-2 mt-3">
+                  <div className="h-6 w-16 rounded-full bg-slate-100 animate-pulse" />
+                  <div className="h-6 w-20 rounded-full bg-slate-100 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
