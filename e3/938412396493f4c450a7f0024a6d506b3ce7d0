@@ -1,0 +1,230 @@
+logitrack_core/internal/handler/routing_config.go
+  s_2161ec7ead29ff::t_2d880ba355bda8 1-35
+logitrack_core/internal/service/route.go
+  s_1c48a287facc2a::t_67e56324b5a255 140-144,148-152,154-161
+  s_1c48a287facc2a::t_1224e51a0ca205 133-134,145-147
+  s_1c48a287facc2a::t_7c48a44a875037 135-139,153
+logitrack_core/internal/service/routing_test.go
+  s_2161ec7ead29ff::t_8fdc7f8fd51aee 490,492-493,505,507,509-510,521,524
+  s_1c48a287facc2a::t_29c455c7ff0cc3 1076-1129
+  s_2161ec7ead29ff::t_ea0daca0baa3b7 232
+  s_2161ec7ead29ff::t_2ecb985d6562a1 1-113,141-197,199,201-231,233-267,269-445,594-597,600-637,640-650,652-673,676-709,712-758,764-779,1130-1131
+  s_2161ec7ead29ff::t_976ecba9e7e6bb 114-140
+  s_2161ec7ead29ff::t_92a52e1b3dbda0 268
+  s_2161ec7ead29ff::t_42151a46c8dd58 528-593
+  s_2161ec7ead29ff::t_7aeade07d0245b 599,639,675,711
+  s_1c48a287facc2a::t_1f82bbbc3d69d2 780-892
+  s_2161ec7ead29ff::t_79b047f1d13f76 651
+  s_2161ec7ead29ff::t_81509b3d805063 759-763
+  s_2161ec7ead29ff::t_3da92151a4dae6 198,200
+  s_1c48a287facc2a::t_c5ecf3dc7b0cb1 893-976,981-984,990-1030
+  s_2161ec7ead29ff::t_85fea87f9314a2 446-489,491,494-504,506,508,511-520,522-523,525-527
+  s_2161ec7ead29ff::t_d381dcb05739db 598,638,674,710
+  s_1c48a287facc2a::t_f3db4a4a7474cb 977-980,985-989
+  s_1c48a287facc2a::t_aad695662ad72f 1031-1075
+docs/manual-geolocalizacion.md
+  s_a9e43f0940af87::t_79444aace1ca2b 1-66
+logitrack_core/internal/db/migrate.go
+  s_2161ec7ead29ff::t_6a78b0c08e2ecc 111-116,120
+  s_2161ec7ead29ff::t_d0945c75f37e9c 119
+  s_2161ec7ead29ff::t_1ba9dcab4bf990 110,117-118,121
+logitrack_core/internal/handler/routing.go
+  s_2161ec7ead29ff::t_2c1e3058ea352b 1-85
+docs/specs/US-089-099-ruteo-inteligente.md
+  s_2161ec7ead29ff::t_2d27c84ab79a67 1-220
+docs/manual-borradores.md
+  s_a9e43f0940af87::t_c14ef6a59ad6e9 1-113
+CLAUDE.md
+  s_2161ec7ead29ff::t_acdc246785c2e8 66-68
+  s_2161ec7ead29ff::t_33d5d90ee8c63d 281-322
+  s_2161ec7ead29ff::t_9441b3f26eb88d 436-440,442
+  s_2161ec7ead29ff::t_47f659ebf981fa 167
+  s_2161ec7ead29ff::t_82a3dc1279fbdd 455-458
+logitrack_web/src/pages/Routing.tsx
+  s_2161ec7ead29ff::t_d40fcb8d3fd51c 686-687,691-697,699,701-706
+  s_2161ec7ead29ff::t_7639933d52198c 146
+  s_2161ec7ead29ff::t_2e710e6a7927f8 266-276
+  s_2161ec7ead29ff::t_0b6d1f2514281f 501,510-514
+  s_1c48a287facc2a::t_a78b59e9d2e4cd 611-612,619-625
+  s_2161ec7ead29ff::t_b83380ffb582ad 1-27,36-82,111-115,119,123,125-126,128-137,141-142,144-145,147-183,195-265,277-500,502-509,515-610,613-618,626-664,667-677,684-685,707-736,742-752,756-770,772-774,797-800,802,804,831-896
+  s_2161ec7ead29ff::t_0852bcf7ace6bb 688-690,698,700
+  s_1c48a287facc2a::t_de2fed41a93b94 191
+  s_2161ec7ead29ff::t_fc6d5b03631447 737-740
+  s_1c48a287facc2a::t_87052439bc6eb0 775-796
+  s_2161ec7ead29ff::t_6187063aaa3093 806
+  s_1c48a287facc2a::t_0be79294744742 826
+  s_1c48a287facc2a::t_d49eea02d2c278 83-110,120-122,124,127,138-140,143
+  s_2161ec7ead29ff::t_b951853683b591 753-755
+  s_2161ec7ead29ff::t_3ca00f8adde7b3 771,801
+  s_2161ec7ead29ff::t_aa1f3ace85c2a4 28-35
+  s_2161ec7ead29ff::t_cfa5b7798ebdf7 184-190,194
+  s_1c48a287facc2a::t_9f16cd76ab52ee 665-666,678-683
+  s_1c48a287facc2a::t_bf8238d27c3636 116-118
+  s_2161ec7ead29ff::t_ea99401a1750e6 741
+  s_2161ec7ead29ff::t_ee2f86fac54aa1 803,805,807-825,827-830
+  s_1c48a287facc2a::t_4ed4738ceb20bc 192-193
+logitrack_core/cmd/server/main.go
+  s_2161ec7ead29ff::t_de01dea7ad7654 238-243
+  s_2161ec7ead29ff::t_9d3173ccd14386 115-117
+  s_2191b7ae4038ba::t_c055d043761611 160
+  s_2161ec7ead29ff::t_9aeb84e13aef32 90-93
+logitrack_core/internal/repository/routing_config.go
+  s_2161ec7ead29ff::t_aab73f18fdca2a 26,30,48
+  s_2161ec7ead29ff::t_ae2aae185a119a 1-24,27-28,31-40,46,49-51
+  s_2161ec7ead29ff::t_9b5cbb8a38bb31 25,29,41-45,47
+docs/specs/US-081-088-nuevas-funcionalidades.md
+  s_a9e43f0940af87::t_bfe05ee2e4879c 1-113
+logitrack_core/internal/model/domain_event.go
+  s_2161ec7ead29ff::t_69fa5e4cd4214f 82-91
+  s_2161ec7ead29ff::t_9fc06906c4dd3c 19-27,30-32
+logitrack_core/internal/projection/shipment.go
+  s_2161ec7ead29ff::t_828c6325ac85c7 124-134
+logitrack_core/internal/model/routing.go
+  s_1c48a287facc2a::t_7a2187637545c8 96-97
+  s_1c48a287facc2a::t_82c3b207f56dc8 15-21,23-28
+  s_2161ec7ead29ff::t_10ec88ee858015 1-14,22,29-32,39-46,48-58,87-94,98-120
+  s_1c48a287facc2a::t_96083c0cef7813 59-66,95
+  s_1c48a287facc2a::t_a7fdb9806eeadf 67-86
+  s_1c48a287facc2a::t_cc846cd93d44c7 33-38,47
+logitrack_core/internal/repository/shipment.go
+  s_2161ec7ead29ff::t_ee1031968ef6fe 21
+  s_2161ec7ead29ff::t_12b83330f7c31d 87-96
+logitrack_web/src/pages/VehicleList.tsx
+  s_2161ec7ead29ff::t_7ca3e30716d03a 195-196,202-213
+  s_2191b7ae4038ba::t_53f68e3735851a 975-977,987-988,990-1008
+  s_2191b7ae4038ba::t_eb9f6bc9f3b915 926
+  s_2191b7ae4038ba::t_dbcc40df166899 538-540,542-545,547-550,553-554,556-564,568-588,590-613,615,617-618,621-640,644
+  s_2191b7ae4038ba::t_2c51f507733a07 191-194,199-200
+  s_2191b7ae4038ba::t_40ce3b41c6ec8c 282-283,285,290-291,293
+  s_2191b7ae4038ba::t_c04122d24b640c 445-453,455-460,462,464-505
+  s_2191b7ae4038ba::t_84fd46689b15ad 1412,1421,1428
+  s_2191b7ae4038ba::t_1cc2fd49728cb1 989
+  s_2191b7ae4038ba::t_1c08f9b4253f7b 1162-1203
+  s_2191b7ae4038ba::t_1c9edc55562678 1347
+  s_2191b7ae4038ba::t_f8ae0c902a8e39 1343-1346,1348-1364
+  s_2191b7ae4038ba::t_e0d7b2f0f2a0b5 1511
+  s_2191b7ae4038ba::t_395025c16fb1cc 3,9-14
+  s_2191b7ae4038ba::t_6899f8b3093fe6 1038
+  s_2191b7ae4038ba::t_b8388aa38d7cdc 918,925
+  s_2191b7ae4038ba::t_ebdedc38983ac0 250-252,254-255
+  s_2191b7ae4038ba::t_bcb0b3ff15bfc7 1409
+  s_2191b7ae4038ba::t_58d0aefe23bec0 656-659
+  s_2161ec7ead29ff::t_8240d1a7247f40 738-741,758-762,764-810
+  s_2191b7ae4038ba::t_224b5d7c33d91a 1456-1509
+logitrack_core/internal/service/shipment.go
+  s_2161ec7ead29ff::t_afd3b901c667ef 1201-1212
+  s_2161ec7ead29ff::t_59e3cfd7618774 983
+  s_2161ec7ead29ff::t_40b13f60ac7c29 701-715
+docs/manual-fecha-estimada-entrega.md
+  s_a9e43f0940af87::t_c107c339e7e3eb 1-62
+docs/manual-tipo-envio.md
+  s_a9e43f0940af87::t_4e06586f172867 1-74
+logitrack_core/internal/service/routing_config.go
+  s_2161ec7ead29ff::t_8f7ab213c4e44d 1-49
+logitrack_core/internal/model/routing_config.go
+  s_2161ec7ead29ff::t_b00185a0dd47cf 1-5,11-14,20-21
+  s_2161ec7ead29ff::t_db06f6909a245d 6-10,15-19
+docs/manual-ruteo-inteligente.md
+  s_2161ec7ead29ff::t_e283cdd42a7d2a 1-168
+docs/specs/00-indice.md
+  s_a9e43f0940af87::t_bb22b4ba49395b 36
+  s_2161ec7ead29ff::t_b9e0a76af89909 47
+  s_a9e43f0940af87::t_9a2fef37bb0e9e 46
+logitrack_core/internal/projection/postgres_shipment.go
+  s_2161ec7ead29ff::t_5b117a248e38ae 198-205
+logitrack_web/CLAUDE.md
+  s_2161ec7ead29ff::t_e0a016dcdbd355 61-62,65
+docs/state-machine.md
+  s_a9e43f0940af87::t_4b9c00e28722f9 5-22
+  s_a9e43f0940af87::t_4d6e1e4492b42e 31-106
+logitrack_web/src/api/routing.ts
+  s_1c48a287facc2a::t_2d96dcbd2dd92f 125,130
+  s_1c48a287facc2a::t_676800c912283b 63-68,89
+  s_1c48a287facc2a::t_216a7df93d24b2 69-82,90-91
+  s_2161ec7ead29ff::t_a1c8e46dee7892 1-37,42-48,51,53-62,83-88,92-124,126-129,131-155
+  s_1c48a287facc2a::t_8b1f92552fc039 38-41,49-50,52
+logitrack_core/internal/service/routing.go
+  s_2161ec7ead29ff::t_28a41b780e93d7 78,110,120,162-164
+  s_2161ec7ead29ff::t_48410bb44665a2 827-850,852-854,860,862-873,875-881,883-903,914-930
+  s_2161ec7ead29ff::t_3054e80d9f238e 904-913
+  s_1c48a287facc2a::t_ebb645544d0308 323
+  s_1c48a287facc2a::t_441241e03d3983 253-257,265-273,279,282,285-286,315-320
+  s_1c48a287facc2a::t_5bfcd4e3fa258a 190-192
+  s_1c48a287facc2a::t_883c4aaaf69ef0 193-198
+  s_1c48a287facc2a::t_cc3341ae45e161 523-525
+  s_2161ec7ead29ff::t_e7c994bd94ebb1 851,855-859,861,874
+  s_1c48a287facc2a::t_8d4f86ef379481 409,418
+  s_1c48a287facc2a::t_f4cca70b81a684 882
+  s_1c48a287facc2a::t_f5cb04c60bb83c 127
+  s_1c48a287facc2a::t_20c07137baa60a 363-365,369
+  s_1c48a287facc2a::t_8d8504c62bc331 449,475
+  s_1c48a287facc2a::t_8ed00321e0cc9e 64
+  s_2161ec7ead29ff::t_13262b57d8599d 94-96,98-103
+  s_1c48a287facc2a::t_1ced3c002f259c 149-150
+  s_1c48a287facc2a::t_25aecae7cc5eb2 326-330,333,341-349,359
+  s_1c48a287facc2a::t_2bdadbeed8fe5a 724-726,729-731,745-751,757-759,763-764,775,778,781-784,787,790
+  s_1c48a287facc2a::t_72495b6cdef432 84-88,107-108,111-115
+  s_1c48a287facc2a::t_7d43d4cf5e9f74 505-512,542-545
+  s_2161ec7ead29ff::t_ab722e6d97ff3b 1-7,9-60,67-77,79-83,89-93,97,104-106,109,116-119,121-126,128,148,165-179,200-203,206-210,229,231-233,238-241,243-246,248-252,258-264,274-278,280-281,283-284,287-314,321-322,324-325,331-332,334-340,350-358,360-362,366-368,370-408,410-417,419-448,450-474,476-504,513-522,526-541,546-723,727-728,732-744,752-756,760-762,765-774,776-777,779-780,785-786,788-789,791-826
+  s_2161ec7ead29ff::t_1c0c8dc39a52a8 61-63
+  s_1c48a287facc2a::t_08cd672dd9bf9b 204-205,211-228,230,234-237,242,247
+  s_1c48a287facc2a::t_daa380be4bf92b 129-147,151-161
+  s_2161ec7ead29ff::t_b0429ad543b83d 180-189,199
+  s_2161ec7ead29ff::t_4142f777cd14c2 8
+  s_1c48a287facc2a::t_25f8ffd8a30830 65-66
+logitrack_web/src/App.tsx
+  s_2161ec7ead29ff::t_cdf964237d5f5b 235-246
+  s_2161ec7ead29ff::t_1213337d071186 19-20
+  s_2161ec7ead29ff::t_473e99867ddd3c 63-64,71-72
+logitrack_core/internal/repository/inmemory.go
+  s_2161ec7ead29ff::t_35ae5b3fec3062 539-569
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_2161ec7ead29ff::t_d8a24b6ebed665 1-16,18-210
+  s_2161ec7ead29ff::t_03d6aaa6576730 17
+logitrack_core/internal/seed/seed.go
+  s_2161ec7ead29ff::t_573b10fd9e2099 471-475,496
+  s_2161ec7ead29ff::t_1dc88b9276380f 28
+  s_2161ec7ead29ff::t_42c4cf875f8d82 95-105,107-109,111-114,117-121,123-126,130-133,135-142,144-147,151-154,156,160-162,164-167,171-174,177,179-181,183-186,190-193,196,198-200,202-205,209-213,217-219,221-224,227-230,232-235,239-243,245,249-260,262,266-269,272,274,279,283-286,291,294,296,300-303,305-306,309-312,314,317-320,322-325,327-344,346-350,352,355-358,360-363,365-366,368-371,373-377,380-384,386-389,392,396,398-402,405,407-410,414-455,457-459,461-464
+logitrack_core/internal/repository/shipment_es.go
+  s_2161ec7ead29ff::t_7fe5d414f9313b 138-158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "e3938412396493f4c450a7f0024a6d506b3ce7d0",
+  "prompts": {},
+  "sessions": {
+    "s_1c48a287facc2a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c94dccd5-0613-4c89-893c-391bb215e711",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_2161ec7ead29ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "43a1ebb3-ad2c-4bb1-b5b4-6bc36d2f0c4a",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_2191b7ae4038ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eecdfb58-0fa0-426f-be7a-df40409488dd",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_a9e43f0940af87": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "239f5a54-5f4c-4b4a-97c6-3376a9f42113",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
