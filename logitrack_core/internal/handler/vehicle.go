@@ -22,13 +22,9 @@ type VehicleHandler struct {
 	branchRepo  repository.BranchRepository
 }
 
-// effectiveWeight returns the shipment's weight after applying any weight correction.
+// effectiveWeight returns the shipment's weight. Weight is now locked at creation
+// (no longer correctable), so this is just shipment.WeightKg.
 func effectiveWeight(s model.Shipment) float64 {
-	if s.Corrections != nil && s.Corrections.WeightKg != nil {
-		if v, err := strconv.ParseFloat(*s.Corrections.WeightKg, 64); err == nil {
-			return v
-		}
-	}
 	return s.WeightKg
 }
 

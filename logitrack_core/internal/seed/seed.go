@@ -8,6 +8,7 @@ import (
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/service"
 )
 
 func fPtr(f float64) *float64 { return &f }
@@ -82,7 +83,7 @@ func LoadVehicles(repo repository.VehicleRepository) {
 
 // Load populates the event store with seed domain events, then rebuilds the projection.
 // Idempotent: if events already exist in the store, only rebuilds the projection and returns.
-func Load(store repository.EventStore, proj projection.Projector, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository, branchRepo repository.BranchRepository) {
+func Load(store repository.EventStore, proj projection.Projector, customerRepo repository.CustomerRepository, routeRepo repository.RouteRepository, branchRepo repository.BranchRepository, pricingSvc *service.PricingService) {
 	existing, _ := store.LoadAll()
 	if len(existing) > 0 {
 		proj.Rebuild(existing)
@@ -448,6 +449,13 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			CreatedAt:           createdAt,
 			UpdatedAt:           createdAt,
 			EstimatedDeliveryAt: estimated,
+			PriceCurrency:       model.CurrencyARS,
+		}
+		if pricingSvc != nil {
+			price, breakdown := pricingSvc.CalculateForShipment(initialShipment)
+			initialShipment.Price = &price
+			bd := breakdown
+			initialShipment.PriceBreakdown = &bd
 		}
 
 		// Emit shipment_created event

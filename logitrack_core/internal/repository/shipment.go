@@ -51,6 +51,8 @@ type ConfirmDraftCmd struct {
 	Timestamp           time.Time
 	Prediction          *model.PriorityPrediction
 	EstimatedDeliveryAt *time.Time
+	Price               *float64
+	PriceBreakdown      *model.PriceBreakdown
 }
 
 type StatusUpdateCmd struct {

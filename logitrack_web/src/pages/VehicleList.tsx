@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Truck, Plus } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { shipmentApi } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
+import { PageHeader } from "../components/ui/page-header";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
@@ -58,6 +60,9 @@ export function VehicleList() {
   const [startTripCapacity, setStartTripCapacity] = useState<BranchCapacity | null>(null);
   const [startTripCapacityLoading, setStartTripCapacityLoading] = useState(false);
   const [startTripCapacityConfirmed, setStartTripCapacityConfirmed] = useState(false);
+  // End-trip modal
+  const [showEndTripModal, setShowEndTripModal] = useState(false);
+  const [endingTrip, setEndingTrip] = useState(false);
   // Load shipments modal
   const [loadModalVehicle, setLoadModalVehicle] = useState<Vehicle | null>(null);
   const [loadInput, setLoadInput] = useState("");
@@ -222,17 +227,24 @@ export function VehicleList() {
     }
   };
 
-  const handleEndTrip = async () => {
+  const handleEndTrip = () => {
     if (!selectedForAssign) {
       setError("Debés seleccionar un vehículo");
       return;
     }
+    setError("");
+    setShowEndTripModal(true);
+  };
 
+  const confirmEndTrip = async () => {
+    if (!selectedForAssign) return;
+    setEndingTrip(true);
     setError("");
     try {
       // Call the end-trip endpoint to clear shipment, destination_branch and change status to available
       await vehicleApi.endTrip(selectedForAssign);
       setSuccess("Viaje finalizado. El vehículo está disponible.");
+      setShowEndTripModal(false);
       setSelectedForAssign("");
       loadVehicles();
     } catch (err: unknown) {
@@ -242,6 +254,8 @@ export function VehicleList() {
       } else {
         setError("Error al finalizar el viaje");
       }
+    } finally {
+      setEndingTrip(false);
     }
   };
 
@@ -307,28 +321,23 @@ export function VehicleList() {
   });
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>Gestión de flota</h1>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {isAdmin && (
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <PageHeader
+        title="Gestión de flota"
+        description="Vehículos, asignación a sucursales y trips operativos"
+        icon={<Truck className="w-5 h-5" />}
+        actions={
+          isAdmin ? (
             <button
               onClick={() => setShowForm(!showForm)}
-              style={{
-                background: "#1e3a5f",
-                color: "#fff",
-                border: "none",
-                borderRadius: 6,
-                padding: "8px 16px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
             >
-              + Nuevo vehículo
+              <Plus className="w-4 h-4" />
+              Nuevo vehículo
             </button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
       {/* New Vehicle modal */}
       {showForm && isAdmin && (
@@ -890,6 +899,61 @@ export function VehicleList() {
                   }}
                 >
                   {startingTrip ? "Iniciando..." : "Iniciar viaje"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* End Trip confirmation modal */}
+      {showEndTripModal && (() => {
+        const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
+        const numShipments = vehicle?.assigned_shipments?.length ?? 0;
+        const destBranch = vehicle?.destination_branch ? branches.find(b => b.id === vehicle.destination_branch) : null;
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={() => !endingTrip && setShowEndTripModal(false)}
+          >
+            <div
+              style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Finalizar viaje</h2>
+                <button onClick={() => !endingTrip && setShowEndTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: endingTrip ? "not-allowed" : "pointer", color: "#6b7280" }}>✕</button>
+              </div>
+              <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px" }}>
+                ¿Confirmás finalizar el viaje del vehículo <strong>{selectedForAssign}</strong>?
+              </p>
+              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#374151" }}>
+                <p style={{ margin: "0 0 6px" }}>
+                  • Los {numShipments} envío{numShipments !== 1 ? "s" : ""} pasarán al estado <strong>En sucursal</strong>{destBranch ? <> en <strong>{destBranch.name}</strong></> : ""}.
+                </p>
+                <p style={{ margin: 0 }}>
+                  • El vehículo quedará <strong>Disponible</strong>.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setShowEndTripModal(false)}
+                  disabled={endingTrip}
+                  style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: endingTrip ? "not-allowed" : "pointer", fontWeight: 500, opacity: endingTrip ? 0.6 : 1 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmEndTrip}
+                  disabled={endingTrip}
+                  style={{
+                    padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
+                    background: endingTrip ? "#9ca3af" : "#dc2626",
+                    color: "#fff", cursor: endingTrip ? "not-allowed" : "pointer",
+                    opacity: endingTrip ? 0.7 : 1,
+                  }}
+                >
+                  {endingTrip ? "Finalizando..." : "Finalizar viaje"}
                 </button>
               </div>
             </div>

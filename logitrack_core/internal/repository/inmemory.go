@@ -480,6 +480,30 @@ func (r *inMemoryCommentRepository) GetComments(trackingID string) ([]model.Ship
 	return out, nil
 }
 
+// ── InMemory PricingConfigRepository ──────────────────────────────────────────
+
+type inMemoryPricingConfigRepository struct {
+	mu  sync.RWMutex
+	cfg model.PricingConfig
+}
+
+func NewInMemoryPricingConfigRepository() PricingConfigRepository {
+	return &inMemoryPricingConfigRepository{cfg: model.DefaultPricingConfig()}
+}
+
+func (r *inMemoryPricingConfigRepository) Get() model.PricingConfig {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.cfg
+}
+
+func (r *inMemoryPricingConfigRepository) Update(cfg model.PricingConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cfg = cfg
+	return nil
+}
+
 // ── InMemory IncidentRepository ───────────────────────────────────────────────
 
 type inMemoryIncidentRepository struct {

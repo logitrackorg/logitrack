@@ -39,6 +39,7 @@ func newSetup() testSetup {
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := NewIncidentService(incidentRepo, shipmentRepo, eventStore, proj)
 	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
+	svc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository()))
 	return testSetup{svc, commentSvc, incidentSvc, shipmentRepo, commentRepo, incidentRepo}
 }
 
@@ -1530,6 +1531,95 @@ func TestList_CancelledShipmentIncluded(t *testing.T) {
 	}
 	if !found {
 		t.Error("cancelled shipment not found in List result")
+	}
+}
+
+// ─── Pricing on Create / ConfirmDraft ────────────────────────────────────────
+
+func TestCreate_AssignsPriceAndBreakdown(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+	if ship.Price == nil || *ship.Price <= 0 {
+		t.Errorf("price should be set on create, got %v", ship.Price)
+	}
+	if ship.PriceBreakdown == nil {
+		t.Fatal("price breakdown should be set on create")
+	}
+	if ship.PriceCurrency != "ARS" {
+		t.Errorf("currency = %q, want ARS", ship.PriceCurrency)
+	}
+}
+
+func TestConfirmDraft_AssignsPrice(t *testing.T) {
+	ts := newSetup()
+	draft, err := ts.svc.SaveDraft(model.SaveDraftRequest{
+		Sender: defaultSender(), Recipient: defaultRecipient(),
+		WeightKg: 4.0, PackageType: model.PackageBox,
+	})
+	if err != nil {
+		t.Fatalf("save draft: %v", err)
+	}
+	confirmed, err := ts.svc.ConfirmDraft(draft.TrackingID, "operator")
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if confirmed.Price == nil || *confirmed.Price <= 0 {
+		t.Errorf("price should be set after confirm, got %v", confirmed.Price)
+	}
+}
+
+// ─── Correction directional validation ───────────────────────────────────────
+
+func TestCorrectShipment_TimeWindow_FlexibleToRestrictive_Rejected(t *testing.T) {
+	ts := newSetup()
+	// Create with flexible window (default).
+	ship := mustCreate(t, ts)
+	if ship.TimeWindow != model.TimeWindowFlexible {
+		t.Fatalf("seed assumption broken: window = %s", ship.TimeWindow)
+	}
+
+	cases := []model.TimeWindow{model.TimeWindowMorning, model.TimeWindowAfternoon}
+	for _, tw := range cases {
+		t.Run(string(tw), func(t *testing.T) {
+			twCopy := tw
+			_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+				Corrections: model.ShipmentCorrections{TimeWindow: &twCopy},
+			})
+			if err == nil || !strings.Contains(err.Error(), "ventana horaria") {
+				t.Errorf("expected restrictive direction error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCorrectShipment_TimeWindow_RestrictiveToFlexible_Allowed(t *testing.T) {
+	ts := newSetup()
+	req := defaultCreateReq()
+	req.TimeWindow = model.TimeWindowMorning
+	ship, err := ts.svc.Create(req)
+	if err != nil {
+		t.Fatalf("create with morning: %v", err)
+	}
+	flex := model.TimeWindowFlexible
+	_, err = ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+		Corrections: model.ShipmentCorrections{TimeWindow: &flex},
+	})
+	if err != nil {
+		t.Errorf("morning → flexible should be allowed, got: %v", err)
+	}
+}
+
+func TestCorrectShipment_TimeWindow_BetweenRestrictive_Allowed(t *testing.T) {
+	ts := newSetup()
+	req := defaultCreateReq()
+	req.TimeWindow = model.TimeWindowMorning
+	ship, _ := ts.svc.Create(req)
+	pm := model.TimeWindowAfternoon
+	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+		Corrections: model.ShipmentCorrections{TimeWindow: &pm},
+	})
+	if err != nil {
+		t.Errorf("morning ↔ afternoon (same tier) should be allowed, got: %v", err)
 	}
 }
 

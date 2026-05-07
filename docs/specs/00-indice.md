@@ -42,6 +42,7 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 074 | [Exportar listado de envíos a CSV](./US-074-exportar-csv.md) | Implementada |
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
+| 080 | [Precio del envío](./US-080-precio-envio.md) | Implementada |
 
 ## Convenciones
 

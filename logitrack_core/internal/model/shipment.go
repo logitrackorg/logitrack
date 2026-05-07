@@ -114,6 +114,11 @@ type Shipment struct {
 	// HasIncident is set when at least one incident has been reported on the shipment.
 	HasIncident  bool         `json:"has_incident,omitempty"`
 	IncidentType IncidentType `json:"incident_type,omitempty"`
+
+	// Pricing — calculated at creation/confirmation, never recalculated.
+	Price          *float64        `json:"price,omitempty"`
+	PriceBreakdown *PriceBreakdown `json:"price_breakdown,omitempty"`
+	PriceCurrency  string          `json:"price_currency,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
@@ -135,12 +140,8 @@ type ShipmentCorrections struct {
 	DestinationCity       *string       `json:"destination_city,omitempty"`
 	DestinationProvince   *string       `json:"destination_province,omitempty"`
 	DestinationPostalCode *string       `json:"destination_postal_code,omitempty"`
-	WeightKg              *string       `json:"weight_kg,omitempty"`
-	PackageType           *PackageType  `json:"package_type,omitempty"`
 	SpecialInstructions   *string       `json:"special_instructions,omitempty"`
-	ShipmentType          *ShipmentType `json:"shipment_type,omitempty"`
 	TimeWindow            *TimeWindow   `json:"time_window,omitempty"`
-	IsFragile             *string       `json:"is_fragile,omitempty"` // "true" / "false"
 }
 
 // CorrectedField pairs a human-readable label with its corrected value, used for auto-comments.
@@ -173,18 +174,10 @@ func (c ShipmentCorrections) Fields() []CorrectedField {
 	str(c.DestinationCity, "Ciudad destino")
 	str(c.DestinationProvince, "Provincia destino")
 	str(c.DestinationPostalCode, "Código postal destino")
-	str(c.WeightKg, "Peso (kg)")
-	if c.PackageType != nil {
-		fields = append(fields, CorrectedField{Label: "Tipo de paquete", Value: string(*c.PackageType)})
-	}
 	str(c.SpecialInstructions, "Instrucciones especiales")
-	if c.ShipmentType != nil {
-		fields = append(fields, CorrectedField{Label: "Tipo de envío", Value: string(*c.ShipmentType)})
-	}
 	if c.TimeWindow != nil {
 		fields = append(fields, CorrectedField{Label: "Ventana horaria", Value: string(*c.TimeWindow)})
 	}
-	str(c.IsFragile, "Frágil")
 	return fields
 }
 
@@ -243,20 +236,8 @@ func (base *ShipmentCorrections) Merge(incoming ShipmentCorrections) {
 	if incoming.DestinationPostalCode != nil {
 		base.DestinationPostalCode = incoming.DestinationPostalCode
 	}
-	if incoming.WeightKg != nil {
-		base.WeightKg = incoming.WeightKg
-	}
-	if incoming.PackageType != nil {
-		base.PackageType = incoming.PackageType
-	}
-	if incoming.ShipmentType != nil {
-		base.ShipmentType = incoming.ShipmentType
-	}
 	if incoming.TimeWindow != nil {
 		base.TimeWindow = incoming.TimeWindow
-	}
-	if incoming.IsFragile != nil {
-		base.IsFragile = incoming.IsFragile
 	}
 	if incoming.SpecialInstructions != nil {
 		base.SpecialInstructions = incoming.SpecialInstructions

@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
 import { fmtDate } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
+import { PageHeader } from "../components/ui/page-header";
+import { Card } from "../components/ui/card";
 
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
@@ -63,7 +67,6 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
 
 type StatusFilter = ShipmentStatus | "active" | "";
 
-// Statuses eligible for bulk operations
 const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 
 type BulkAction = "ready_for_pickup" | "out_for_delivery";
@@ -77,6 +80,9 @@ interface BulkResult {
   updated: number;
   skipped: { tracking_id: string; reason: string }[];
 }
+
+const inputClass =
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
 
 export function ShipmentList() {
   const [searchParams] = useSearchParams();
@@ -101,7 +107,6 @@ export function ShipmentList() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Bulk selection state
   const canBulk = hasRole("operator", "supervisor");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
@@ -126,7 +131,6 @@ export function ShipmentList() {
   useEffect(() => { load(); }, []);
   useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
 
-  // Returns YYYY-MM-DD in local time for a given ISO timestamp
   const localDate = (iso: string) => {
     const d = new Date(iso);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -208,254 +212,315 @@ export function ShipmentList() {
   };
 
   const actionLabel = (action: BulkAction) =>
-    action === "ready_for_pickup" ? "Listo para retiro" : "En reparto (asignar a chofer)";
+    action === "ready_for_pickup" ? "Listo para retiro" : "Última milla (asignar a chofer)";
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h1 style={{ margin: 0 }}>Envíos</h1>
-        {hasRole("operator", "supervisor", "admin") && (
-          <button onClick={() => navigate("/new")}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
-            + Nuevo envío
-          </button>
-        )}
-      </div>
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <PageHeader
+        title="Envíos"
+        description="Seguimiento y gestión del flujo logístico"
+        icon={<Package className="w-5 h-5" />}
+        actions={
+          hasRole("operator", "supervisor") ? (
+            <button
+              onClick={() => navigate("/new")}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Nuevo envío
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Search & filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8, flex: 1, minWidth: 240 }}>
-          <input value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por ID de seguimiento, remitente, destinatario o ciudad..."
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 }} />
-          {query && (
-            <button type="button" onClick={() => setQuery("")}
-              style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>
-              Limpiar
-            </button>
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-[260px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por ID, remitente, destinatario o ciudad…"
+              className={`${inputClass} w-full pl-9 pr-${query ? "10" : "3"}`}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Desde</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className={inputClass}
+            />
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hasta</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className={`${inputClass} ${dateRangeInvalid ? "border-rose-400 focus:border-rose-500 focus:ring-rose-200" : ""}`}
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className={inputClass}
+          >
+            <option value="active">Activos</option>
+            <option value="">Todos</option>
+            <option value="at_origin_hub">En sucursal de origen</option>
+            <option value="loaded">Enviar a sucursal</option>
+            <option value="in_transit">En tránsito</option>
+            <option value="at_hub">En sucursal</option>
+            <option value="out_for_delivery">Última milla</option>
+            <option value="delivery_failed">Entrega fallida</option>
+            <option value="redelivery_scheduled">Reentrega programada</option>
+            <option value="no_entregado">No entregado</option>
+            <option value="rechazado">Rechazado</option>
+            <option value="ready_for_pickup">Listo para retiro</option>
+            <option value="ready_for_return">Listo para devolución</option>
+            <option value="delivered">Entregados</option>
+            <option value="returned">Devueltos</option>
+            <option value="cancelled">Cancelados</option>
+            <option value="lost">Extraviados</option>
+            <option value="destroyed">Daño total</option>
+            <option value="draft">Borrador</option>
+          </select>
+
+          {isOperator ? (
+            <span className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
+              <MapPin className="w-3.5 h-3.5" />
+              {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
+            </span>
+          ) : (
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Todas las sucursales</option>
+              {(() => {
+                const byProvince = branches.reduce((acc, b) => {
+                  if (!acc[b.province]) acc[b.province] = [];
+                  acc[b.province].push(b);
+                  return acc;
+                }, {} as Record<string, Branch[]>);
+                return Object.entries(byProvince)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([province, pBranches]) => (
+                    <optgroup key={province} label={province}>
+                      {[...pBranches]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(b => (
+                          <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                        ))}
+                    </optgroup>
+                  ));
+              })()}
+            </select>
           )}
         </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          Desde
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={selectStyle} />
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: "#374151" }}>
-          Hasta
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-            style={{ ...selectStyle, borderColor: dateRangeInvalid ? "#ef4444" : "#d1d5db" }} />
-        </label>
         {dateRangeInvalid && (
-          <span style={{ fontSize: 13, color: "#ef4444", alignSelf: "center" }}>
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-600">
+            <AlertTriangle className="w-3.5 h-3.5" />
             La fecha "Hasta" debe ser posterior a "Desde"
-          </span>
+          </p>
         )}
-        {(dateFrom || dateTo) && (
-          <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); }}
-            style={{ background: "#e5e7eb", border: "none", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontSize: 14 }}>
-            Limpiar fechas
-          </button>
-        )}
-
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          style={selectStyle}>
-          <option value="active">Activos</option>
-          <option value="">Todos</option>
-          <option value="at_origin_hub">En sucursal de origen</option>
-          <option value="loaded">Cargado</option>
-          <option value="in_transit">En tránsito</option>
-          <option value="at_hub">En sucursal</option>
-          <option value="out_for_delivery">En reparto</option>
-          <option value="delivery_failed">Entrega fallida</option>
-          <option value="redelivery_scheduled">Reentrega programada</option>
-          <option value="no_entregado">No entregado</option>
-          <option value="rechazado">Rechazado</option>
-          <option value="ready_for_pickup">Listo para retiro</option>
-          <option value="ready_for_return">Listo para devolución</option>
-          <option value="delivered">Entregados</option>
-          <option value="returned">Devueltos</option>
-          <option value="cancelled">Cancelados</option>
-          <option value="lost">Extraviados</option>
-          <option value="destroyed">Daño total</option>
-          <option value="draft">Borrador</option>
-        </select>
-
-        {isOperator ? (
-          <span style={{ ...selectStyle, display: "inline-flex", alignItems: "center", background: "#f0f9ff", border: "1px solid #bfdbfe", color: "#1e3a5f", fontWeight: 500 }}>
-            {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
-          </span>
-        ) : (
-          <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={selectStyle}>
-            <option value="">Todas las sucursales</option>
-            {(() => {
-              const byProvince = branches.reduce((acc, b) => {
-                if (!acc[b.province]) acc[b.province] = [];
-                acc[b.province].push(b);
-                return acc;
-              }, {} as Record<string, Branch[]>);
-              return Object.entries(byProvince)
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([province, pBranches]) => (
-                  <optgroup key={province} label={province}>
-                    {[...pBranches]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map(b => (
-                        <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                      ))}
-                  </optgroup>
-                ));
-            })()}
-          </select>
-        )}
-
-      </div>
+      </Card>
 
       {/* Bulk action toolbar */}
       {canBulk && selected.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "10px 16px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>
+        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <span className="text-sm font-semibold text-[#1e3a5f]">
             {selected.size} {selected.size === 1 ? "envío seleccionado" : "envíos seleccionados"}
           </span>
           <button
             onClick={() => openBulkAction("ready_for_pickup")}
-            style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+          >
             Marcar como "Listo para retiro"
           </button>
           <button
             onClick={() => openBulkAction("out_for_delivery")}
-            style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-            Asignar a reparto
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Asignar a última milla
           </button>
           <button
             onClick={() => setSelected(new Set())}
-            style={{ background: "transparent", color: "#6b7280", border: "none", cursor: "pointer", fontSize: 13, marginLeft: "auto" }}>
+            className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+          >
             Cancelar selección
           </button>
         </div>
       )}
 
       {loading ? (
-        <p>Cargando...</p>
+        <Card className="p-10 text-center">
+          <p className="text-sm text-slate-500">Cargando…</p>
+        </Card>
       ) : filtered.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No se encontraron envíos.</p>
+        <Card className="p-10 text-center">
+          <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">No se encontraron envíos con los filtros aplicados.</p>
+        </Card>
       ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>{filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}</p>
-            {hasRole("admin", "manager") && (
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}
+            </p>
+            {hasRole("manager") && (
               <button
                 onClick={() => exportToCSV(filtered, branches)}
-                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
                 Exportar CSV
               </button>
             )}
           </div>
-          <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 800 }}>
-            <thead>
-              <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-                {canBulk && (
-                  <th style={{ ...th, width: 40, textAlign: "center" }}>
-                    {eligibleInView.length > 0 && (
-                      <input
-                        type="checkbox"
-                        checked={allEligibleSelected}
-                        onChange={toggleSelectAll}
-                        title="Seleccionar todos los elegibles"
-                        style={{ cursor: "pointer" }}
-                      />
-                    )}
-                  </th>
-                )}
-                <th style={th}>ID de seguimiento</th>
-                <th style={th}>Remitente</th>
-                <th style={th}>Destinatario</th>
-                <th style={th}>Origen → Destino</th>
-                <th style={th}>Peso</th>
-                <th style={th}>Prioridad</th>
-                <th style={th}>Estado</th>
-                <th style={th}>Creado</th>
-                <th style={th}>Entrega estimada</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => {
-                const isEligible = BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus);
-                const isChecked = selected.has(s.tracking_id);
-                return (
-                  <tr key={s.tracking_id}
-                    onClick={(e) => {
-                      const target = e.target as HTMLElement;
-                      if (target.tagName === "INPUT") return;
-                      navigate(`/shipments/${s.tracking_id}`);
-                    }}
-                    style={{ borderBottom: "1px solid #e5e7eb", cursor: "pointer", background: isChecked ? "#eff6ff" : "" }}
-                    onMouseEnter={(e) => { if (!isChecked) e.currentTarget.style.background = "#f0f9ff"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = isChecked ? "#eff6ff" : ""; }}>
-                    {canBulk && (
-                      <td style={{ ...td, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                        {isEligible && (
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleSelect(s.tracking_id)}
-                            style={{ cursor: "pointer" }}
-                          />
-                        )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[900px]">
+              <thead>
+                <tr className="bg-slate-50/50 text-left border-b border-slate-100">
+                  {canBulk && (
+                    <th className="px-4 py-3 w-10 text-center">
+                      {eligibleInView.length > 0 && (
+                        <input
+                          type="checkbox"
+                          checked={allEligibleSelected}
+                          onChange={toggleSelectAll}
+                          title="Seleccionar todos los elegibles"
+                          className="cursor-pointer accent-[#1e3a5f]"
+                        />
+                      )}
+                    </th>
+                  )}
+                  <th className={thClass}>ID de seguimiento</th>
+                  <th className={thClass}>Remitente</th>
+                  <th className={thClass}>Destinatario</th>
+                  <th className={thClass}>Origen → Destino</th>
+                  <th className={thClass}>Peso</th>
+                  <th className={thClass}>Prioridad</th>
+                  <th className={thClass}>Estado</th>
+                  <th className={thClass}>Creado</th>
+                  <th className={thClass}>Entrega est.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s) => {
+                  const isEligible = BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus);
+                  const isChecked = selected.has(s.tracking_id);
+                  return (
+                    <tr
+                      key={s.tracking_id}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.tagName === "INPUT") return;
+                        navigate(`/shipments/${s.tracking_id}`);
+                      }}
+                      className={`border-b border-slate-100 cursor-pointer transition-colors ${
+                        isChecked ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      {canBulk && (
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          {isEligible && (
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleSelect(s.tracking_id)}
+                              className="cursor-pointer accent-[#1e3a5f]"
+                            />
+                          )}
+                        </td>
+                      )}
+                      <td className={tdClass}>
+                        <code className={`text-xs font-mono ${s.status === "draft" ? "text-slate-400" : "text-slate-700"}`}>
+                          {s.tracking_id}
+                        </code>
                       </td>
-                    )}
-                    <td style={td}><code style={s.status === "draft" ? { color: "#9ca3af" } : undefined}>{s.tracking_id}</code></td>
-                    <td style={td}>{corr(s, "sender_name", s.sender.name)}</td>
-                    <td style={td}>{corr(s, "recipient_name", s.recipient.name)}</td>
-                    <td style={td}>{corr(s, "origin_city", s.sender.address.city)} → {corr(s, "destination_city", s.recipient.address.city)}</td>
-                    <td style={td}>{corr(s, "weight_kg", s.weight_kg)} kg</td>
-                    <td style={td}><PriorityBadge priority={s.priority} /></td>
-                    <td style={td}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <StatusBadge status={s.status} />
-                        {s.has_incident && (
-                          <span
-                            title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
-                            style={{ display: "inline-flex", alignItems: "center", background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 5px", fontSize: 12 }}>
-                            ⚠
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td style={td}>{fmtDate(s.created_at)}</td>
-                    <td style={td}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className={tdClass}>{corr(s, "sender_name", s.sender.name)}</td>
+                      <td className={tdClass}>{corr(s, "recipient_name", s.recipient.name)}</td>
+                      <td className={tdClass}>
+                        <span className="text-slate-600">{corr(s, "origin_city", s.sender.address.city)}</span>
+                        <span className="mx-1.5 text-slate-300">→</span>
+                        <span className="text-slate-600">{corr(s, "destination_city", s.recipient.address.city)}</span>
+                      </td>
+                      <td className={tdClass}>
+                        <span className="tabular-nums">{corr(s, "weight_kg", s.weight_kg)} kg</span>
+                      </td>
+                      <td className={tdClass}><PriorityBadge priority={s.priority} /></td>
+                      <td className={tdClass}>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} />
+                          {s.has_incident && (
+                            <span
+                              title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`${tdClass} text-slate-500`}>{fmtDate(s.created_at)}</td>
+                      <td className={`${tdClass} text-slate-500`}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </>
+        </Card>
       )}
 
       {/* Bulk confirm modal */}
       {bulkConfirm && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Confirmar actualización masiva</h3>
-            <p style={{ margin: "0 0 16px", color: "#374151", fontSize: 14 }}>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Confirmar actualización masiva</h3>
+            <p className="text-sm text-slate-700 mb-3">
               Se actualizarán <strong>{bulkConfirm.count}</strong> {bulkConfirm.count === 1 ? "envío" : "envíos"} al estado{" "}
               <strong>"{actionLabel(bulkConfirm.action)}"</strong>.
             </p>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+            <p className="text-xs text-slate-500 mb-4">
               Los envíos que no admitan esta transición serán omitidos sin cancelar la operación.
             </p>
 
             {bulkConfirm.action === "out_for_delivery" && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 6, color: "#374151" }}>
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Chofer asignado
                 </label>
                 <select
                   value={bulkDriverId}
                   onChange={(e) => setBulkDriverId(e.target.value)}
-                  style={{ ...selectStyle, width: "100%" }}>
-                  <option value="">Seleccioná un chofer...</option>
+                  className={`${inputClass} w-full`}
+                >
+                  <option value="">Seleccioná un chofer…</option>
                   {drivers.map((d) => (
                     <option key={d.id} value={d.id}>{d.username}</option>
                   ))}
@@ -463,18 +528,20 @@ export function ShipmentList() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setBulkConfirm(null)}
                 disabled={bulkLoading}
-                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #d1d5db", background: "#fff", cursor: "pointer", fontSize: 14 }}>
+                className="h-10 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 disabled:opacity-50 cursor-pointer"
+              >
                 Cancelar
               </button>
               <button
                 onClick={executeBulk}
                 disabled={bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)}
-                style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: (bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)) ? 0.6 : 1 }}>
-                {bulkLoading ? "Procesando..." : "Confirmar"}
+                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {bulkLoading ? "Procesando…" : "Confirmar"}
               </button>
             </div>
           </div>
@@ -483,30 +550,32 @@ export function ShipmentList() {
 
       {/* Bulk result modal */}
       {bulkResult && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <h3 style={{ margin: "0 0 12px" }}>Resultado de la actualización masiva</h3>
-            <p style={{ margin: "0 0 8px", fontSize: 14, color: "#374151" }}>
-              <strong style={{ color: "#16a34a" }}>{bulkResult.updated}</strong> {bulkResult.updated === 1 ? "envío actualizado" : "envíos actualizados"} exitosamente.
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900 mb-3">Resultado de la actualización masiva</h3>
+            <p className="text-sm text-slate-700 mb-2">
+              <strong className="text-emerald-600">{bulkResult.updated}</strong>{" "}
+              {bulkResult.updated === 1 ? "envío actualizado" : "envíos actualizados"} exitosamente.
             </p>
             {bulkResult.skipped.length > 0 && (
               <>
-                <p style={{ margin: "0 0 8px", fontSize: 14, color: "#374151" }}>
-                  <strong style={{ color: "#d97706" }}>{bulkResult.skipped.length}</strong> {bulkResult.skipped.length === 1 ? "envío omitido" : "envíos omitidos"}:
+                <p className="text-sm text-slate-700 mb-2">
+                  <strong className="text-amber-600">{bulkResult.skipped.length}</strong>{" "}
+                  {bulkResult.skipped.length === 1 ? "envío omitido" : "envíos omitidos"}:
                 </p>
-                <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 16 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-lg mb-4">
+                  <table className="w-full text-xs">
                     <thead>
-                      <tr style={{ background: "#f9fafb" }}>
-                        <th style={{ ...th, padding: "8px 12px" }}>ID</th>
-                        <th style={{ ...th, padding: "8px 12px" }}>Motivo</th>
+                      <tr className="bg-slate-50">
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">ID</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Motivo</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bulkResult.skipped.map((s) => (
-                        <tr key={s.tracking_id} style={{ borderTop: "1px solid #e5e7eb" }}>
-                          <td style={{ padding: "8px 12px" }}><code>{s.tracking_id}</code></td>
-                          <td style={{ padding: "8px 12px", color: "#6b7280" }}>{s.reason}</td>
+                        <tr key={s.tracking_id} className="border-t border-slate-100">
+                          <td className="px-3 py-2"><code className="font-mono">{s.tracking_id}</code></td>
+                          <td className="px-3 py-2 text-slate-500">{s.reason}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -514,10 +583,11 @@ export function ShipmentList() {
                 </div>
               </>
             )}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="flex justify-end">
               <button
                 onClick={() => setBulkResult(null)}
-                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold cursor-pointer"
+              >
                 Aceptar
               </button>
             </div>
@@ -528,8 +598,5 @@ export function ShipmentList() {
   );
 }
 
-const th: React.CSSProperties = { padding: "10px 14px", fontWeight: 600, color: "#374151" };
-const td: React.CSSProperties = { padding: "10px 14px" };
-const selectStyle: React.CSSProperties = { padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" };
-const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 };
-const modalStyle: React.CSSProperties = { background: "#fff", borderRadius: 10, padding: 24, width: 480, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" };
+const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
+const tdClass = "px-4 py-3 text-slate-700";

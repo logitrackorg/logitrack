@@ -1,29 +1,35 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { LayoutDashboard, MapPin, ArrowRight, Package, Truck, CheckCircle2, AlertCircle, RotateCcw, Box } from "lucide-react";
 import { shipmentApi, type Stats, type Shipment, type ShipmentStatus } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
+import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { PageHeader } from "../components/ui/page-header";
+import { Card } from "../components/ui/card";
+import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
+import { StatCard } from "../components/ui/stat-card";
 
-const statusConfig: Record<ShipmentStatus, { label: string; color: string; bg: string }> = {
-  draft:                { label: "Borrador",              color: "#374151", bg: "#f3f4f6" },
-  at_origin_hub:        { label: "En sucursal de origen",      color: "#92400e", bg: "#fef3c7" },
-  loaded:               { label: "Cargado",               color: "#0e7490", bg: "#cffafe" },
-  in_transit:           { label: "En tránsito",           color: "#1e40af", bg: "#dbeafe" },
-  at_hub:               { label: "En sucursal",                color: "#5b21b6", bg: "#ede9fe" },
-  out_for_delivery:     { label: "En reparto",            color: "#9a3412", bg: "#ffedd5" },
-  delivery_failed:      { label: "Entrega fallida",       color: "#991b1b", bg: "#fee2e2" },
-  redelivery_scheduled: { label: "Reentrega programada",  color: "#9a3412", bg: "#ffedd5" },
-  no_entregado:         { label: "No entregado",          color: "#991b1b", bg: "#fee2e2" },
-  rechazado:            { label: "Rechazado",             color: "#7f1d1d", bg: "#fef2f2" },
-  delivered:            { label: "Entregado",             color: "#065f46", bg: "#d1fae5" },
-  ready_for_pickup:     { label: "Listo para retiro",     color: "#0e7490", bg: "#cffafe" },
-  ready_for_return:     { label: "Listo para devolución", color: "#5b21b6", bg: "#ede9fe" },
-  returned:             { label: "Devuelto",              color: "#374151", bg: "#f3f4f6" },
-  cancelled:            { label: "Cancelado",             color: "#b91c1c", bg: "#fee2e2" },
-  lost:                 { label: "Extraviado",            color: "#1f2937", bg: "#e5e7eb" },
-  destroyed:            { label: "Daño total",            color: "#111827", bg: "#d1d5db" },
+const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "success" | "warning" | "danger" | "info" }> = {
+  draft:                { label: "Borradores",                  tone: "default" },
+  at_origin_hub:        { label: "En sucursal de origen",       tone: "warning" },
+  loaded:               { label: "Enviar a sucursal",           tone: "info" },
+  in_transit:           { label: "En tránsito",                 tone: "info" },
+  at_hub:               { label: "En sucursal",                 tone: "info" },
+  out_for_delivery:     { label: "Última milla",                tone: "warning" },
+  delivery_failed:      { label: "Entrega fallida",             tone: "danger" },
+  redelivery_scheduled: { label: "Reentrega programada",        tone: "warning" },
+  no_entregado:         { label: "No entregados",               tone: "danger" },
+  rechazado:            { label: "Rechazados",                  tone: "danger" },
+  delivered:            { label: "Entregados",                  tone: "success" },
+  ready_for_pickup:     { label: "Listos para retiro",          tone: "info" },
+  ready_for_return:     { label: "Listos para devolución",      tone: "warning" },
+  returned:             { label: "Devueltos",                   tone: "default" },
+  cancelled:            { label: "Cancelados",                  tone: "danger" },
+  lost:                 { label: "Extraviados",                 tone: "danger" },
+  destroyed:            { label: "Daño total",                  tone: "danger" },
 };
 
 function toDateInput(d: Date): string {
@@ -36,6 +42,9 @@ function defaultRange(): { from: string; to: string } {
   from.setDate(from.getDate() - 29);
   return { from: toDateInput(from), to: toDateInput(to) };
 }
+
+const inputClass =
+  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
 
 export function Dashboard() {
   const { user, hasRole } = useAuth();
@@ -50,8 +59,6 @@ export function Dashboard() {
 
   const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
   const supervisorBranch = isSupervisor ? (user?.branch_id ?? "") : "";
-
-  // For supervisors the branch is always their own; for managers it's selectable.
   const effectiveBranch = isSupervisor ? supervisorBranch : selectedBranch;
 
   useEffect(() => {
@@ -80,7 +87,6 @@ export function Dashboard() {
     });
   }, [effectiveBranch]);
 
-  // Group branches by province for the dropdown.
   const branchesByProvince = branches.reduce<Record<string, Branch[]>>((acc, b) => {
     const prov = b.address.province;
     if (!acc[prov]) acc[prov] = [];
@@ -92,7 +98,6 @@ export function Dashboard() {
     branchesByProvince[prov].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Label shown next to "Dashboard" heading.
   const branchLabel = (() => {
     if (isSupervisor) {
       const b = branches.find((br) => br.id === supervisorBranch);
@@ -103,79 +108,124 @@ export function Dashboard() {
     return b ? b.name : effectiveBranch;
   })();
 
+  // Highlighted KPIs (gradient cards on top)
+  const totalShipments = stats?.total ?? 0;
+  const inProgress = (stats?.by_status?.in_transit ?? 0) + (stats?.by_status?.out_for_delivery ?? 0) + (stats?.by_status?.loaded ?? 0);
+  const delivered = stats?.by_status?.delivered ?? 0;
+  const issues = (stats?.by_status?.delivery_failed ?? 0) + (stats?.by_status?.lost ?? 0) + (stats?.by_status?.destroyed ?? 0);
+
   return (
-    <div style={{ padding: 24 }}>
-      {/* Header with branch filter */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
-        <h1 style={{ margin: 0 }}>Dashboard</h1>
+    <div className="p-6 max-w-[1400px] mx-auto">
+      <PageHeader
+        title="Dashboard"
+        description="Vista consolidada de la operación logística"
+        icon={<LayoutDashboard className="w-5 h-5" />}
+        actions={
+          isSupervisor ? (
+            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
+              <MapPin className="w-3.5 h-3.5" />
+              {branchLabel}
+            </span>
+          ) : (
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Todas las sucursales</option>
+              {sortedProvinces.map((prov) => (
+                <optgroup key={prov} label={prov}>
+                  {branchesByProvince[prov].map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          )
+        }
+      />
 
-        {isSupervisor ? (
-          // Supervisor: locked badge showing their branch
-          <span style={{
-            background: "#dbeafe", color: "#1e40af", borderRadius: 8,
-            padding: "4px 12px", fontSize: 13, fontWeight: 600,
-          }}>
-            {branchLabel}
-          </span>
-        ) : (
-          // Manager / admin: branch selector
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value)}
-            style={{
-              border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 10px",
-              fontSize: 13, background: "#fff", color: "#374151", cursor: "pointer",
-            }}
-          >
-            <option value="">Todas las sucursales</option>
-            {sortedProvinces.map((prov) => (
-              <optgroup key={prov} label={prov}>
-                {branchesByProvince[prov].map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        )}
+      {/* Highlighted KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <GradientCard tone="brand">
+          <div className="flex items-start gap-3">
+            <GradientCardIcon><Box className="w-5 h-5" /></GradientCardIcon>
+            <div className="flex-1 min-w-0">
+              <GradientCardLabel>Total de envíos</GradientCardLabel>
+              <GradientCardValue className="mt-1">{totalShipments}</GradientCardValue>
+            </div>
+          </div>
+        </GradientCard>
+
+        <StatCard
+          label="En curso"
+          value={inProgress}
+          hint="Enviar a sucursal + en tránsito + última milla"
+          icon={<Truck className="w-4 h-4" />}
+          tone="info"
+        />
+        <StatCard
+          label="Entregados"
+          value={delivered}
+          hint="Completados con éxito"
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          tone="success"
+          onClick={() => navigate("/?status=delivered")}
+        />
+        <StatCard
+          label="Problemas"
+          value={issues}
+          hint="Fallidos + extraviados + dañados"
+          icon={<AlertCircle className="w-4 h-4" />}
+          tone="danger"
+        />
       </div>
 
-      {/* Stats cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 32 }}>
-        <StatCard label="Total de envíos" value={stats?.total ?? 0} color="#1e3a5f" bg="#e0eaff" />
-        {(Object.keys(statusConfig) as ShipmentStatus[]).map((s) => (
-          <StatCard
-            key={s}
-            label={statusConfig[s].label}
-            value={stats?.by_status?.[s] ?? 0}
-            color={statusConfig[s].color}
-            bg={statusConfig[s].bg}
-            onClick={() => navigate(`/?status=${s}`)}
-          />
-        ))}
-      </div>
+      {/* Status breakdown */}
+      <Card className="p-5 mb-6">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-base font-semibold text-slate-900">Distribución por estado</h2>
+          <p className="text-xs text-slate-500">Click en una tarjeta para filtrar el listado</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {(Object.keys(statusConfig) as ShipmentStatus[]).map((s) => {
+            const cfg = statusConfig[s];
+            const value = stats?.by_status?.[s] ?? 0;
+            return (
+              <StatCard
+                key={s}
+                label={cfg.label}
+                value={value}
+                tone={cfg.tone}
+                icon={<Package className="w-4 h-4" />}
+                onClick={() => navigate(`/?status=${s}`)}
+                className="!p-3"
+              />
+            );
+          })}
+        </div>
+      </Card>
 
-      {/* Shipments created vs delivered per day chart */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: "1rem" }}>Envíos creados vs entregados por día</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <label htmlFor="date-from" style={{ color: "#6b7280" }}>Desde</label>
+      {/* Chart */}
+      <Card className="p-5 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-base font-semibold text-slate-900">Envíos creados vs entregados por día</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Desde</span>
             <input
-              id="date-from"
               type="date"
               value={dateFrom}
               max={dateTo}
               onChange={(e) => setDateFrom(e.target.value)}
-              style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 13 }}
+              className={inputClass}
             />
-            <label htmlFor="date-to" style={{ color: "#6b7280" }}>Hasta</label>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hasta</span>
             <input
-              id="date-to"
               type="date"
               value={dateTo}
               min={dateFrom}
               onChange={(e) => setDateTo(e.target.value)}
-              style={{ border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 13 }}
+              className={inputClass}
             />
           </div>
         </div>
@@ -185,56 +235,62 @@ export function Dashboard() {
           dateFrom={dateFrom}
           dateTo={dateTo}
         />
-      </div>
+      </Card>
 
       {/* Recent shipments */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: "1rem" }}>Envíos recientes</h2>
-        <button
-          onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: 14 }}
-        >
-          Ver todos →
-        </button>
-      </div>
-
-      {recent.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>Todavía no hay envíos.</p>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 500 }}>
-          <thead>
-            <tr style={{ background: "#f9fafb", textAlign: "left" }}>
-              <th style={th}>ID de seguimiento</th>
-              <th style={th}>Destinatario</th>
-              <th style={th}>Destino</th>
-              <th style={th}>Estado</th>
-              <th style={th}>Fecha de creación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recent.map((s) => (
-              <tr
-                key={s.tracking_id}
-                onClick={() => navigate(`/shipments/${s.tracking_id}`)}
-                style={{ borderBottom: "1px solid #e5e7eb", cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "")}
-              >
-                <td style={td}><code>{s.tracking_id}</code></td>
-                <td style={td}>{s.recipient.name}</td>
-                <td style={td}>{s.recipient.address.city}</td>
-                <td style={td}><StatusBadge status={s.status} /></td>
-                <td style={td}>{fmtDateTime(s.created_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-base font-semibold text-slate-900">Envíos recientes</h2>
+          <button
+            onClick={() => navigate("/")}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] cursor-pointer"
+          >
+            Ver todos <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
-      )}
+
+        {recent.length === 0 ? (
+          <div className="p-10 text-center">
+            <RotateCcw className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Todavía no hay envíos.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="bg-slate-50/30 text-left border-b border-slate-100">
+                  <th className={thClass}>ID de seguimiento</th>
+                  <th className={thClass}>Destinatario</th>
+                  <th className={thClass}>Destino</th>
+                  <th className={thClass}>Estado</th>
+                  <th className={thClass}>Creado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((s) => (
+                  <tr
+                    key={s.tracking_id}
+                    onClick={() => navigate(`/shipments/${s.tracking_id}`)}
+                    className="border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors"
+                  >
+                    <td className={tdClass}><code className="text-xs font-mono text-slate-700">{s.tracking_id}</code></td>
+                    <td className={tdClass}>{s.recipient.name}</td>
+                    <td className={`${tdClass} text-slate-600`}>{s.recipient.address.city}</td>
+                    <td className={tdClass}><StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} /></td>
+                    <td className={`${tdClass} text-slate-500`}>{fmtDateTime(s.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
+
+const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
+const tdClass = "px-4 py-3 text-slate-700";
 
 // --- DayChart ---
 
@@ -246,7 +302,6 @@ interface DayChartProps {
 }
 
 function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
-  // Build ordered list of days in the range.
   const days: { date: string; created: number; delivered: number }[] = [];
   if (dateFrom && dateTo) {
     const cur = new Date(dateFrom + "T00:00:00");
@@ -259,47 +314,41 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
   }
 
   if (days.length === 0) {
-    return <p style={{ color: "#6b7280", fontSize: 14 }}>Seleccioná un rango de fechas para ver el gráfico.</p>;
+    return <p className="text-sm text-slate-500">Seleccioná un rango de fechas para ver el gráfico.</p>;
   }
 
   const maxCount = Math.max(...days.map((d) => Math.max(d.created, d.delivered)), 1);
-  const chartH = 160;
-  // Each day group has 2 bars + inner gap; calculate slot width for the whole day
+  const chartH = 180;
   const slotW = Math.max(10, Math.min(52, Math.floor(700 / days.length)));
   const innerGap = 1;
   const barW = Math.max(2, Math.floor((slotW - innerGap) / 2) - 1);
   const groupGap = Math.max(2, slotW - 2 * barW - innerGap);
   const svgW = days.length * (2 * barW + innerGap + groupGap) + 40;
-
-  // Y-axis ticks (0, max/2, max)
   const yTicks = [0, Math.round(maxCount / 2), maxCount].filter((v, i, a) => a.indexOf(v) === i);
 
   return (
-    <div style={{ overflowX: "auto", background: "#f9fafb", borderRadius: 10, padding: "16px 8px 8px 8px", border: "1px solid #e5e7eb" }}>
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 16, paddingLeft: 40, marginBottom: 8, fontSize: 11, color: "#374151" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#3b82f6" }} />
+    <div className="overflow-x-auto rounded-lg bg-slate-50 border border-slate-200 p-4">
+      <div className="flex gap-4 pl-10 mb-2 text-xs text-slate-700">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-[#2563eb]" />
           Creados
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 2, background: "#10b981" }} />
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />
           Entregados
         </span>
       </div>
-      <svg width={svgW} height={chartH + 48} style={{ display: "block" }}>
-        {/* Y-axis ticks and gridlines */}
+      <svg width={svgW} height={chartH + 48} className="block">
         {yTicks.map((tick) => {
           const y = chartH - Math.round((tick / maxCount) * chartH) + 8;
           return (
             <g key={tick}>
-              <line x1={34} x2={svgW} y1={y} y2={y} stroke="#e5e7eb" strokeWidth={1} />
-              <text x={30} y={y + 4} textAnchor="end" fontSize={10} fill="#9ca3af">{tick}</text>
+              <line x1={34} x2={svgW} y1={y} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+              <text x={30} y={y + 4} textAnchor="end" fontSize={10} fill="#94a3b8">{tick}</text>
             </g>
           );
         })}
 
-        {/* Bar groups */}
         {days.map((d, i) => {
           const groupX = 40 + i * (2 * barW + innerGap + groupGap);
           const centerX = groupX + barW + innerGap / 2;
@@ -313,15 +362,14 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
 
           return (
             <g key={d.date}>
-              {/* Created bar (blue) */}
               <rect
                 x={xCreated}
                 y={chartH - createdH + 8}
                 width={barW}
                 height={createdH}
                 rx={2}
-                fill="#3b82f6"
-                opacity={0.85}
+                fill="#2563eb"
+                opacity={0.9}
               >
                 <title>{d.date} — Creados: {d.created}</title>
               </rect>
@@ -331,12 +379,11 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
                 </text>
               )}
               {d.created > 0 && createdH <= 14 && (
-                <text x={xCreated + barW / 2} y={chartH - createdH + 8 - 3} textAnchor="middle" fontSize={9} fill="#3b82f6" fontWeight={600}>
+                <text x={xCreated + barW / 2} y={chartH - createdH + 8 - 3} textAnchor="middle" fontSize={9} fill="#2563eb" fontWeight={600}>
                   {d.created}
                 </text>
               )}
 
-              {/* Delivered bar (green) */}
               <rect
                 x={xDelivered}
                 y={chartH - deliveredH + 8}
@@ -344,7 +391,7 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
                 height={deliveredH}
                 rx={2}
                 fill="#10b981"
-                opacity={0.85}
+                opacity={0.9}
               >
                 <title>{d.date} — Entregados: {d.delivered}</title>
               </rect>
@@ -365,7 +412,7 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
                   y={chartH + 22}
                   textAnchor="middle"
                   fontSize={9}
-                  fill="#6b7280"
+                  fill="#64748b"
                   transform={`rotate(-40, ${centerX}, ${chartH + 22})`}
                 >
                   {d.date.slice(5)}
@@ -375,46 +422,10 @@ function DayChart({ byDay, byDayDelivered, dateFrom, dateTo }: DayChartProps) {
           );
         })}
       </svg>
-      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, paddingLeft: 40, display: "flex", gap: 16 }}>
-        <span>Creados en el período: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.created, 0)}</strong></span>
-        <span>Entregados en el período: <strong style={{ color: "#374151" }}>{days.reduce((s, d) => s + d.delivered, 0)}</strong></span>
+      <div className="flex gap-4 pl-10 mt-1 text-xs text-slate-500">
+        <span>Creados en el período: <strong className="text-slate-700">{days.reduce((s, d) => s + d.created, 0)}</strong></span>
+        <span>Entregados en el período: <strong className="text-slate-700">{days.reduce((s, d) => s + d.delivered, 0)}</strong></span>
       </div>
     </div>
   );
 }
-
-function StatCard({
-  label,
-  value,
-  color,
-  bg,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  color: string;
-  bg: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: bg,
-        borderRadius: 10,
-        padding: "16px 20px",
-        width: "100%",
-        border: "none",
-        textAlign: "left",
-        cursor: onClick ? "pointer" : "default",
-      }}
-    >
-      <div style={{ fontSize: 28, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 13, color, opacity: 0.8, marginTop: 4 }}>{label}</div>
-    </button>
-  );
-}
-
-const th: React.CSSProperties = { padding: "10px 14px", fontWeight: 600, color: "#374151" };
-const td: React.CSSProperties = { padding: "10px 14px" };

@@ -57,6 +57,9 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS is_returning         BOOLEAN NOT NULL DEFAULT FALSE;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS final_branch_id      TEXT NOT NULL DEFAULT '';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS delivery_method      TEXT NOT NULL DEFAULT 'ultima_milla';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price                NUMERIC(12,2);
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
@@ -71,6 +74,38 @@ func RunMigrations(db *sql.DB) error {
 		INSERT INTO system_config (id, max_delivery_attempts)
 		VALUES (1, 3)
 		ON CONFLICT (id) DO NOTHING;
+
+		CREATE TABLE IF NOT EXISTS pricing_config (
+			id                                 INTEGER PRIMARY KEY DEFAULT 1,
+			base_fare                          NUMERIC(12,2) NOT NULL DEFAULT 10000,
+			cost_per_km                        NUMERIC(12,2) NOT NULL DEFAULT 100,
+			weight_surcharge_mid               NUMERIC(12,2) NOT NULL DEFAULT 5000,
+			weight_surcharge_high              NUMERIC(12,2) NOT NULL DEFAULT 25000,
+			last_mile_surcharge                NUMERIC(12,2) NOT NULL DEFAULT 5000,
+			shipment_express_multiplier        NUMERIC(6,3)  NOT NULL DEFAULT 1.5,
+			time_window_restrictive_multiplier NUMERIC(6,3)  NOT NULL DEFAULT 1.10,
+			fragile_multiplier                 NUMERIC(6,3)  NOT NULL DEFAULT 1.20
+		);
+		INSERT INTO pricing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE pricing_config DROP COLUMN IF EXISTS package_envelope_multiplier;
+		ALTER TABLE pricing_config DROP COLUMN IF EXISTS package_box_multiplier;
+		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS last_mile_surcharge NUMERIC(12,2) NOT NULL DEFAULT 800;
+
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns
+			           WHERE table_name='pricing_config' AND column_name='time_window_restrictive_surcharge') THEN
+				ALTER TABLE pricing_config RENAME COLUMN time_window_restrictive_surcharge TO time_window_restrictive_multiplier;
+				UPDATE pricing_config SET time_window_restrictive_multiplier = time_window_restrictive_multiplier + 1
+				WHERE time_window_restrictive_multiplier < 1;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns
+			           WHERE table_name='pricing_config' AND column_name='fragile_surcharge') THEN
+				ALTER TABLE pricing_config RENAME COLUMN fragile_surcharge TO fragile_multiplier;
+				UPDATE pricing_config SET fragile_multiplier = fragile_multiplier + 1
+				WHERE fragile_multiplier < 1;
+			END IF;
+		END $$;
 
 		CREATE TABLE IF NOT EXISTS shipment_incidents (
 			id            VARCHAR(50)  PRIMARY KEY,

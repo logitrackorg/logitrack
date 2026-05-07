@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { CircleCheck } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleType } from "../api/vehicles";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
+import { PageHeader } from "../components/ui/page-header";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
   motocicleta: "Motocicleta",
@@ -50,8 +52,12 @@ export function AvailableVehicles() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Vehículos Disponibles</h1>
+    <div className="p-6 max-w-[1000px] mx-auto">
+      <PageHeader
+        title="Vehículos disponibles"
+        description="Vehículos con capacidad y estado para asignar a envíos"
+        icon={<CircleCheck className="w-5 h-5" />}
+      />
 
       {/* Filtros */}
       <div

@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { Brain } from "lucide-react";
 import { mlConfigApi, type MLConfig, type MLFactors } from "../api/mlConfig";
+import { PageHeader } from "../components/ui/page-header";
 
 const FACTOR_LABELS: Record<keyof MLFactors, { label: string; description: string }> = {
   shipment_type:    { label: "Tipo de envío",        description: "Express vs. estándar — los envíos express reciben mayor prioridad" },
@@ -172,11 +174,11 @@ export function MLConfig() {
 
   return (
     <div style={containerStyle}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Configuración de prioridad ML</h1>
-      <p style={{ color: "#6b7280", marginBottom: 24, fontSize: 14 }}>
-        Ajustá los pesos de cada factor para calcular el puntaje de prioridad de los envíos. Al guardar,
-        el modelo se reentrenará y se recalcularán todos los envíos activos.
-      </p>
+      <PageHeader
+        title="Configuración de prioridad ML"
+        description="Ajustá los pesos de cada factor para calcular el puntaje de prioridad de los envíos. Al guardar, el modelo se reentrenará y se recalcularán todos los envíos activos."
+        icon={<Brain className="w-5 h-5" />}
+      />
 
       {activeConfig && activeConfig.id > 0 && (
         <div style={{ marginBottom: 16, fontSize: 13, color: "#374151" }}>

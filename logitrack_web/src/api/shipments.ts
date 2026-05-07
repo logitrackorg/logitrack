@@ -59,6 +59,21 @@ export interface Address {
   city: string;
   province: string;
   postal_code?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface PriceBreakdown {
+  base_fare: number;
+  distance_km: number;
+  distance_cost: number;
+  weight_surcharge: number;
+  last_mile_surcharge: number;
+  shipment_multiplier: number;
+  time_window_surplus: number;
+  fragile_surplus: number;
+  subtotal: number;
+  total: number;
 }
 
 export interface Shipment {
@@ -91,6 +106,9 @@ export interface Shipment {
   parent_shipment_id?: string;
   delivery_attempts?: number;
   is_returning?: boolean;
+  price?: number;
+  price_breakdown?: PriceBreakdown;
+  price_currency?: string;
 }
 
 export interface ShipmentEvent {
