@@ -4,6 +4,9 @@ export const fmtDate = (iso: string): string =>
 export const fmtDateTime = (iso: string): string =>
   new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+export const fmtDateTimeSeconds = (d: Date): string =>
+  d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 // fmtMinutesAsTime convierte minutos desde medianoche a "HH:MM" (24h).
 // Acepta valores >=24*60 (envuelve cíclicamente). Devuelve "—" para valores
 // negativos (representan paradas unsequenced sin tiempo estimado).

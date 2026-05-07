@@ -3,9 +3,9 @@ package service
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
@@ -47,7 +47,7 @@ func (s *IncidentService) ReportIncident(trackingID, reportedBy string, incident
 		return model.ShipmentIncident{}, fmt.Errorf("la descripción es requerida")
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	incident := model.ShipmentIncident{
 		ID:           uuid.NewString(),
 		TrackingID:   trackingID,

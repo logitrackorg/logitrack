@@ -3,9 +3,9 @@ package service
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -35,7 +35,7 @@ func (s *CommentService) AddComment(trackingID, author, body string) (model.Ship
 		TrackingID: trackingID,
 		Author:     author,
 		Body:       body,
-		CreatedAt:  time.Now().UTC(),
+		CreatedAt:  clock.Now().UTC(),
 	}
 	if err := s.commentRepo.AddComment(comment); err != nil {
 		return model.ShipmentComment{}, err

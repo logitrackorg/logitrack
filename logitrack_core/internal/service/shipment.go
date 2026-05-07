@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
@@ -206,7 +207,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 			return model.Shipment{}, err
 		}
 	}
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
@@ -297,7 +298,7 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 			return model.Shipment{}, err
 		}
 	}
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	currentLocation := s.locationToBranchID(req.Sender.Address.City)
 	if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
 		currentLocation = b.ID
@@ -388,7 +389,7 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	existing.TimeWindow = req.TimeWindow
 	existing.DeliveryMethod = deliveryMethod
 	existing.ReceivingBranchID = req.ReceivingBranchID
-	existing.UpdatedAt = time.Now().UTC()
+	existing.UpdatedAt = clock.Now().UTC()
 	// Prefer branch ID derived from receiving branch; fall back to origin city lookup.
 	if req.ReceivingBranchID != "" {
 		if b, ok := s.branchRepo.GetByID(req.ReceivingBranchID); ok {
@@ -467,7 +468,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if draft.FinalBranchID == "" {
 		draft.FinalBranchID = s.resolveFinalBranch(draft.Recipient)
 		if draft.FinalBranchID != "" {
-			draft.UpdatedAt = time.Now().UTC()
+			draft.UpdatedAt = clock.Now().UTC()
 			s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: draft}) //nolint:errcheck
 		}
 	}
@@ -482,7 +483,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	if s.mlClient != nil {
 		prediction = s.mlClient.PredictFromShipment(draft)
 	}
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 
 	var pricePtr *float64
 	var breakdownPtr *model.PriceBreakdown
@@ -674,7 +675,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		ChangedBy:  req.ChangedBy,
 		Notes:      req.Notes,
 		DriverID:   req.DriverID,
-		Timestamp:  time.Now().UTC(),
+		Timestamp:  clock.Now().UTC(),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -689,7 +690,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Location:   resolvedLocation,
 			ChangedBy:  req.ChangedBy,
 			Notes:      "Envío de retorno llegó a sucursal de origen — listo para devolución",
-			Timestamp:  time.Now().UTC(),
+			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
 			return autoUpdated, nil
@@ -699,7 +700,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
 	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
 		// El envío empieza un retorno → extender la fecha estimada de entrega 10 días.
-		nowET := time.Now().UTC()
+		nowET := clock.Now().UTC()
 		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
 		if extended, etaErr := s.repo.ExtendETA(repository.ExtendETACmd{
 			TrackingID: trackingID,
@@ -749,7 +750,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Location:   autoLocation,
 			ChangedBy:  req.ChangedBy,
 			Notes:      autoNotes,
-			Timestamp:  time.Now().UTC(),
+			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
 			// If the auto-transition landed on at_origin_hub and is_returning, also fire ready_for_return
@@ -761,7 +762,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 					Location:   autoLocation,
 					ChangedBy:  req.ChangedBy,
 					Notes:      "Envío de retorno llegó a sucursal de origen — listo para devolución",
-					Timestamp:  time.Now().UTC(),
+					Timestamp:  clock.Now().UTC(),
 				})
 				if rfrErr == nil {
 					return rfrUpdated, nil
@@ -891,7 +892,7 @@ func (s *ShipmentService) CorrectShipment(trackingID, username string, req model
 		Username:      username,
 		Status:        shipment.Status,
 		Corrections:   req.Corrections,
-		Timestamp:     time.Now().UTC(),
+		Timestamp:     clock.Now().UTC(),
 		Prediction:    correctionPrediction,
 		FinalBranchID: newFinalBranch,
 	})
@@ -927,7 +928,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 	if shipment.IsReturning && shipment.Status != model.StatusReadyForReturn {
 		return model.Shipment{}, fmt.Errorf("no se puede cancelar un envío que ya está en proceso de devolución")
 	}
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	updated, err := s.repo.CancelShipment(repository.CancelCmd{
 		TrackingID: trackingID,
 		Username:   username,

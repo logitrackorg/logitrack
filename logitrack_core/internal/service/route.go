@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -20,7 +21,7 @@ func NewRouteService(repo repository.RouteRepository, shipmentRepo repository.Sh
 }
 
 func (s *RouteService) GetTodayRoute(driverID string) (model.Route, []model.Shipment, error) {
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
 	if err != nil {
 		return model.Route{}, nil, err
@@ -41,7 +42,7 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 	case model.StatusOutForDelivery, model.StatusDeliveryFailed:
 		return true
 	case model.StatusDelivered:
-		return sh.DeliveredAt != nil && model.NewDateOnly(*sh.DeliveredAt).Equal(routeDate)
+		return sh.DeliveredAt != nil && model.NewDateOnly(sh.DeliveredAt.In(clock.LocalTZ)).Equal(routeDate)
 	}
 	return false
 }
@@ -61,7 +62,7 @@ func (s *RouteService) Create(req model.CreateRouteRequest, createdBy string) (m
 		DriverID:    req.DriverID,
 		ShipmentIDs: req.ShipmentIDs,
 		CreatedBy:   createdBy,
-		CreatedAt:   time.Now().UTC(),
+		CreatedAt:   clock.Now().UTC(),
 		Status:      model.RouteStatusPending,
 	}
 	return s.repo.Create(route)
@@ -77,7 +78,7 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 			DriverID:    driverID,
 			ShipmentIDs: []string{trackingID},
 			CreatedBy:   "system",
-			CreatedAt:   time.Now().UTC(),
+			CreatedAt:   clock.Now().UTC(),
 			Status:      model.RouteStatusPending,
 		}
 		_, err = s.repo.Create(newRoute)
@@ -108,12 +109,12 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 }
 
 func (s *RouteService) RemoveShipmentFromTodayRoute(trackingID string) error {
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	return s.repo.RemoveShipmentFromDate(trackingID, today)
 }
 
 func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID string, status model.Status) error {
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
 	if err != nil {
 		return fmt.Errorf("no tenés una ruta asignada para hoy")
@@ -192,7 +193,7 @@ func (s *RouteService) CanAssignToRoute(driverID string, date model.DateOnly) er
 
 // StartRoute sets the driver's today route to active.
 func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
 	if err != nil {
 		return model.Route{}, fmt.Errorf("no tenés una ruta asignada para hoy")
@@ -203,7 +204,7 @@ func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
 	if route.Status == model.RouteStatusFinished {
 		return model.Route{}, fmt.Errorf("la ruta ya finalizó")
 	}
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 	if err := s.repo.UpdateStatus(route.ID, model.RouteStatusActive, &now); err != nil {
 		return model.Route{}, err
 	}
@@ -215,7 +216,7 @@ func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
 // CheckAndFinalizeRoute finalizes the route if all shipments reached a terminal delivery state.
 // Called after each driver status update; errors are intentionally ignored by callers.
 func (s *RouteService) CheckAndFinalizeRoute(driverID string) {
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
 	if err != nil || route.Status != model.RouteStatusActive || len(route.ShipmentIDs) == 0 {
 		return
