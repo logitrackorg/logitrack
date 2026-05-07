@@ -1,0 +1,19 @@
+logitrack_core/cmd/server/main.go
+  s_1e2015cd145ec1::t_54e6057162d973 116-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "27d8852e8db42bf4a3cd37415c853a3109177d80",
+  "prompts": {},
+  "sessions": {
+    "s_1e2015cd145ec1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2bada9c-81a3-4061-a197-babb8890958a",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
