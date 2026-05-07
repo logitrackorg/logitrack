@@ -15,11 +15,11 @@ interface FieldDef {
 }
 
 const FIELDS: FieldDef[] = [
-  { key: "base_fare",                         label: "Tarifa base",                  hint: "Precio inicial fijo aplicado a todo envío.",                                          step: 50, min: 0, max: 18446744073709551615, format: "currency" },
-  { key: "cost_per_km",                       label: "Costo por km",                 hint: "Se suma al precio base según los kilómetros entre origen y destino.",                  step: 1,  min: 0, max: 18446744073709551615, format: "currency" },
-  { key: "weight_surcharge_mid",              label: "Recargo peso 5–25 kg",         hint: "Suma fija cuando el envío pesa entre 5 y 25 kg.",                                     step: 50, min: 0, max: 18446744073709551615, format: "currency" },
-  { key: "weight_surcharge_high",             label: "Recargo peso > 25 kg",         hint: "Suma fija cuando el envío supera los 25 kg.",                                         step: 50, min: 0, max: 18446744073709551615, format: "currency" },
-  { key: "last_mile_surcharge",               label: "Costo adicional última milla", hint: "Suma fija cuando el método de entrega es entrega a domicilio (última milla).",         step: 50, min: 0, max: 18446744073709551615, format: "currency" },
+  { key: "base_fare",                         label: "Tarifa base",                  hint: "Precio inicial fijo aplicado a todo envío.",                                          step: 50, min: 0, max: Number.MAX_SAFE_INTEGER, format: "currency" },
+  { key: "cost_per_km",                       label: "Costo por km",                 hint: "Se suma al precio base según los kilómetros entre origen y destino.",                  step: 1,  min: 0, max: Number.MAX_SAFE_INTEGER, format: "currency" },
+  { key: "weight_surcharge_mid",              label: "Recargo peso 5–25 kg",         hint: "Suma fija cuando el envío pesa entre 5 y 25 kg.",                                     step: 50, min: 0, max: Number.MAX_SAFE_INTEGER, format: "currency" },
+  { key: "weight_surcharge_high",             label: "Recargo peso > 25 kg",         hint: "Suma fija cuando el envío supera los 25 kg.",                                         step: 50, min: 0, max: Number.MAX_SAFE_INTEGER, format: "currency" },
+  { key: "last_mile_surcharge",               label: "Costo adicional última milla", hint: "Suma fija cuando el método de entrega es entrega a domicilio (última milla).",         step: 50, min: 0, max: Number.MAX_SAFE_INTEGER, format: "currency" },
   { key: "shipment_express_multiplier",       label: "Multiplicador express",      hint: "Factor aplicado al subtotal cuando el envío es express. Mínimo 1.",                     step: 0.05,  min: 1,   max: 5,      format: "multiplier" },
   { key: "time_window_restrictive_multiplier", label: "Multiplicador ventana restrictiva", hint: "Aplica a ventanas Mañana y Tarde (no a Flexible). Ej: 1.10 = +10% al subtotal.", step: 0.01, min: 1, max: 5, format: "multiplier" },
   { key: "fragile_multiplier",                 label: "Multiplicador frágil",             hint: "Aplica al subtotal cuando el envío está marcado como frágil. Ej: 1.20 = +20%.", step: 0.01, min: 1, max: 5, format: "multiplier" },
