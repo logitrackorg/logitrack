@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"log"
 	"sort"
 	"time"
 
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/vrp"
 )
 
 // RoutingService genera y aplica el plan de ruteo diario para una sucursal.
@@ -23,6 +26,7 @@ type RoutingService struct {
 	authRepo     repository.AuthRepository
 	routeSvc     *RouteService
 	shipmentSvc  *ShipmentService
+	osrmClient   *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 }
 
 func NewRoutingService(
@@ -33,6 +37,7 @@ func NewRoutingService(
 	authRepo repository.AuthRepository,
 	routeSvc *RouteService,
 	shipmentSvc *ShipmentService,
+	osrmClient *osrm.Client,
 ) *RoutingService {
 	return &RoutingService{
 		cfgSvc:       cfgSvc,
@@ -42,6 +47,7 @@ func NewRoutingService(
 		authRepo:     authRepo,
 		routeSvc:     routeSvc,
 		shipmentSvc:  shipmentSvc,
+		osrmClient:   osrmClient,
 	}
 }
 
@@ -123,8 +129,8 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 		// Edge: at_origin_hub + final == branch (no es ruteable hoy) → no entra al plan
 	}
 
-	// 2) Última milla — bin-packing por chofer
-	plan.LastMile, plan.Unassigned, plan.BlockedDrivers = s.binPackLastMile(lastMileQ, branchID, cfg, plan.Unassigned, plan.BlockedDrivers)
+	// 2) Última milla — VRP optimizado (con fallback automático al greedy)
+	plan.LastMile, plan.Unassigned, plan.BlockedDrivers = s.lastMileVRP(lastMileQ, branchID, cfg, plan.Unassigned, plan.BlockedDrivers, now)
 
 	// Cargas pendientes de los choferes no bloqueados (incluso los que el algoritmo
 	// no usó en este plan). Sirve para validación cliente-side al reasignar manual.
@@ -137,11 +143,13 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 			continue
 		}
 		count, weight := s.routeSvc.PendingLoad(d.ID, model.NewDateOnly(now))
+		existingTIDs := s.routeSvc.PendingShipments(d.ID, model.NewDateOnly(now))
 		plan.DriverLoads = append(plan.DriverLoads, model.DriverLoad{
-			DriverID:         d.ID,
-			DriverName:       driverDisplayName(d),
-			ExistingCount:    count,
-			ExistingWeightKg: roundKg(weight),
+			DriverID:          d.ID,
+			DriverName:        driverDisplayName(d),
+			ExistingCount:     count,
+			ExistingWeightKg:  roundKg(weight),
+			ExistingShipments: existingTIDs,
 		})
 	}
 
@@ -152,11 +160,15 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 	// Cargas actuales de cada vehículo del pool — útil cuando el operador
 	// reasigna manualmente a un vehículo que no entró al plan.
 	for _, v := range availableVehicles {
+		// Copia defensiva: AssignedShipments podría compartir backing con
+		// el slice del repo. El cliente solo lee, pero igual evitamos sorpresas.
+		existingTIDs := append([]string(nil), v.AssignedShipments...)
 		plan.VehicleLoads = append(plan.VehicleLoads, model.VehicleLoad{
-			VehicleID:        v.ID,
-			LicensePlate:     v.LicensePlate,
-			CapacityKg:       v.CapacityKg,
-			ExistingWeightKg: roundKg(existingVehicleLoad[v.ID]),
+			VehicleID:         v.ID,
+			LicensePlate:      v.LicensePlate,
+			CapacityKg:        v.CapacityKg,
+			ExistingWeightKg:  roundKg(existingVehicleLoad[v.ID]),
+			ExistingShipments: existingTIDs,
 		})
 	}
 
@@ -250,11 +262,12 @@ func (s *RoutingService) binPackLastMile(
 	sortShipmentsForRouting(queue)
 
 	type bucket struct {
-		driver           model.User
-		shipments        []string
-		weight           float64 // peso de los envíos NUEVOS de este plan
-		existingCount    int     // envíos ya en la ruta pendiente del día
-		existingWeightKg float64
+		driver            model.User
+		shipments         []string
+		weight            float64 // peso de los envíos NUEVOS de este plan
+		existingCount     int     // envíos ya en la ruta pendiente del día
+		existingWeightKg  float64
+		existingShipments []string
 	}
 	buckets := make([]*bucket, len(drivers))
 	// Orden estable de drivers por ID para load-balancing determinístico
@@ -266,10 +279,12 @@ func (s *RoutingService) binPackLastMile(
 		// del día. Sin esto, aplicar el plan varias veces seguidas iría sumando
 		// envíos al mismo chofer hasta superar el peso máximo configurado.
 		count, weight := s.routeSvc.PendingLoad(d.ID, today)
+		existingTIDs := s.routeSvc.PendingShipments(d.ID, today)
 		buckets[i] = &bucket{
-			driver:           d,
-			existingCount:    count,
-			existingWeightKg: weight,
+			driver:            d,
+			existingCount:     count,
+			existingWeightKg:  weight,
+			existingShipments: existingTIDs,
 		}
 	}
 
@@ -312,12 +327,13 @@ func (s *RoutingService) binPackLastMile(
 			continue
 		}
 		out = append(out, model.LastMileAssignment{
-			DriverID:         b.driver.ID,
-			DriverName:       driverDisplayName(b.driver),
-			Shipments:        b.shipments,
-			TotalWeightKg:    roundKg(b.weight),
-			ExistingCount:    b.existingCount,
-			ExistingWeightKg: roundKg(b.existingWeightKg),
+			DriverID:          b.driver.ID,
+			DriverName:        driverDisplayName(b.driver),
+			Shipments:         b.shipments,
+			TotalWeightKg:     roundKg(b.weight),
+			ExistingCount:     b.existingCount,
+			ExistingWeightKg:  roundKg(b.existingWeightKg),
+			ExistingShipments: b.existingShipments,
 		})
 	}
 	return out, unassigned, blocked
@@ -473,6 +489,7 @@ func (s *RoutingService) dispatchInterBranch(
 			TotalWeightKg:     roundKg(sumWeights(included)),
 			CapacityKg:        chosen.CapacityKg,
 			ExistingWeightKg:  roundKg(existingLoad[chosen.ID]),
+			ExistingShipments: append([]string(nil), chosen.AssignedShipments...),
 		})
 		used[chosen.ID] = true
 
@@ -497,7 +514,9 @@ func (s *RoutingService) dispatchInterBranch(
 func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model.ApplyPlanRequest, username string) (model.ApplyPlanResponse, error) {
 	plan := req.Plan
 	today := model.NewDateOnly(time.Now().UTC())
-	var items []model.ApplyResultItem
+	// Inicializamos como empty (no nil) para que el JSON siempre serialice
+	// como `[]` y no como `null` — el frontend asume array.
+	items := make([]model.ApplyResultItem, 0)
 
 	// === Última milla ===
 	for _, asgmt := range plan.LastMile {
@@ -927,4 +946,320 @@ func (s *RoutingService) branchDistance(b1, b2 string) float64 {
 		return ml.HaversineKm(*br1.Latitude, *br1.Longitude, *br2.Latitude, *br2.Longitude)
 	}
 	return ml.ComputeDistance(br1.Province, br2.Province)
+}
+
+// =============================================================================
+// VRP — última milla optimizada
+// =============================================================================
+
+// lastMileVRP es el reemplazo de binPackLastMile cuando hay coordenadas
+// disponibles. Construye una matriz de tiempos (OSRM o Haversine) y resuelve
+// el VRP con el solver del paquete vrp. Si el depósito no tiene coordenadas,
+// si ningún envío las tiene, o si el solver falla, cae al greedy clásico.
+//
+// Mantiene la semántica de binPackLastMile: choferes con ruta ya iniciada
+// quedan en `blocked`, envíos no asignables quedan en `unassigned`. Lo nuevo
+// es que cada LastMileAssignment trae OrderedStops con la secuencia óptima
+// y horas estimadas de llegada.
+func (s *RoutingService) lastMileVRP(
+	queue []model.Shipment,
+	branchID string,
+	cfg model.RoutingConfig,
+	unassigned []model.UnassignedShipment,
+	blocked []model.BlockedDriver,
+	now time.Time,
+) ([]model.LastMileAssignment, []model.UnassignedShipment, []model.BlockedDriver) {
+	if len(queue) == 0 {
+		return nil, unassigned, blocked
+	}
+
+	depot, ok := s.branchRepo.GetByID(branchID)
+	if !ok || depot.Latitude == nil || depot.Longitude == nil {
+		// Sin coords del depósito el VRP no es posible — fallback al greedy.
+		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
+	}
+
+	// Filtro de drivers: idéntico a binPackLastMile (replicar la lógica
+	// asegura que ambos paths tengan el mismo comportamiento de bloqueos).
+	allDrivers := s.authRepo.ListByRole(model.RoleDriver, branchID)
+	today := model.NewDateOnly(now)
+	var drivers []model.User
+	for _, d := range allDrivers {
+		if err := s.routeSvc.CanAssignToRoute(d.ID, today); err != nil {
+			blocked = append(blocked, model.BlockedDriver{
+				DriverID:   d.ID,
+				DriverName: driverDisplayName(d),
+				Reason:     "ruta_ya_iniciada",
+			})
+			continue
+		}
+		drivers = append(drivers, d)
+	}
+
+	if len(drivers) == 0 {
+		reason := "sin_choferes_disponibles"
+		if len(allDrivers) > 0 {
+			reason = "choferes_ya_iniciaron_ruta"
+		}
+		for _, sh := range queue {
+			unassigned = append(unassigned, model.UnassignedShipment{
+				TrackingID:  sh.TrackingID,
+				Destination: lastMileDestLabel,
+				Reason:      reason,
+				WeightKg:    sh.WeightKg,
+				Priority:    sh.Priority,
+			})
+		}
+		return nil, unassigned, blocked
+	}
+
+	// Particionar la cola entre envíos con coords (entran al solver) y
+	// envíos sin coords (se cuelgan al final de alguna ruta como unsequenced).
+	var withCoords, withoutCoords []model.Shipment
+	for _, sh := range queue {
+		if sh.Recipient.Address.Latitude != nil && sh.Recipient.Address.Longitude != nil {
+			withCoords = append(withCoords, sh)
+		} else {
+			withoutCoords = append(withoutCoords, sh)
+		}
+	}
+	if len(withCoords) == 0 {
+		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
+	}
+
+	// Construir Problem.
+	depotCoord := vrp.Coord{Lat: *depot.Latitude, Lon: *depot.Longitude}
+	deliveries := make([]vrp.Node, len(withCoords))
+	deliveryCoords := make([]vrp.Coord, len(withCoords))
+	for i, sh := range withCoords {
+		c := vrp.Coord{Lat: *sh.Recipient.Address.Latitude, Lon: *sh.Recipient.Address.Longitude}
+		deliveries[i] = vrp.Node{
+			ID:         sh.TrackingID,
+			Coord:      c,
+			WeightKg:   sh.WeightKg,
+			TimeWindow: sh.TimeWindow,
+		}
+		deliveryCoords[i] = c
+	}
+
+	vrpDrivers := make([]vrp.Driver, len(drivers))
+	for i, d := range drivers {
+		count, weight := s.routeSvc.PendingLoad(d.ID, today)
+		vrpDrivers[i] = vrp.Driver{
+			ID:               d.ID,
+			MaxShipments:     cfg.MaxShipmentsPerDriver,
+			MaxWeightKg:      cfg.MaxWeightKgPerDriver,
+			ExistingCount:    count,
+			ExistingWeightKg: weight,
+		}
+	}
+
+	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords)
+
+	// DepartureMin: si el operador genera el plan después de las 8:00, las
+	// horas estimadas tienen que partir de la hora actual, no de las 8:00.
+	departureMin := float64(now.Hour()*60 + now.Minute())
+	if departureMin < 8*60 {
+		departureMin = 8 * 60
+	}
+
+	problem := vrp.Problem{
+		Depot:          vrp.Node{ID: "depot", Coord: depotCoord},
+		Deliveries:     deliveries,
+		Drivers:        vrpDrivers,
+		DurationMatrix: dur,
+		DistanceMatrix: dist,
+		DepartureMin:   departureMin,
+		// 10 minutos por parada: contempla estacionar, salir del vehículo,
+		// llamar al cliente, esperar que abra, entregar y hacer firmar,
+		// y retomar la marcha. Para zonas con porteros/edificios suele ser
+		// más alto; para zonas residenciales rápidas, menos. Promediamos.
+		ServiceTimeMin: 10,
+		DayEndMin:      18 * 60,
+	}
+
+	sol := vrp.Solve(problem)
+
+	// Si el solver no produjo nada y nada quedó como unassigned, algo raro
+	// pasó — caemos al greedy para no devolver un plan vacío.
+	if len(sol.Routes) == 0 && len(sol.Unassigned) == 0 {
+		log.Printf("[routing] VRP devolvió solución vacía, fallback a greedy (branch=%s, n=%d)", branchID, len(withCoords))
+		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
+	}
+
+	// Mapear routes → LastMileAssignment.
+	driverByID := map[string]model.User{}
+	for _, d := range drivers {
+		driverByID[d.ID] = d
+	}
+	shipByTID := map[string]model.Shipment{}
+	for _, sh := range withCoords {
+		shipByTID[sh.TrackingID] = sh
+	}
+	type existing struct {
+		count     int
+		weight    float64
+		shipments []string
+	}
+	existingByDriver := map[string]existing{}
+	for _, vd := range vrpDrivers {
+		existingByDriver[vd.ID] = existing{
+			count:     vd.ExistingCount,
+			weight:    vd.ExistingWeightKg,
+			shipments: s.routeSvc.PendingShipments(vd.ID, today),
+		}
+	}
+
+	out := make([]model.LastMileAssignment, 0, len(sol.Routes))
+	for _, r := range sol.Routes {
+		stops := make([]model.RouteStop, len(r.Stops))
+		shipIDs := make([]string, len(r.Stops))
+		totalWeight := 0.0
+		for i, st := range r.Stops {
+			sh := shipByTID[st.NodeID]
+			stops[i] = model.RouteStop{
+				TrackingID: st.NodeID,
+				Sequence:   i + 1,
+				ArrivalMin: int(st.ArrivalMin + 0.5),
+				TimeWindow: string(sh.TimeWindow),
+				WeightKg:   sh.WeightKg,
+			}
+			shipIDs[i] = st.NodeID
+			totalWeight += sh.WeightKg
+		}
+		ex := existingByDriver[r.DriverID]
+		drv := driverByID[r.DriverID]
+		out = append(out, model.LastMileAssignment{
+			DriverID:          r.DriverID,
+			DriverName:        driverDisplayName(drv),
+			Shipments:         shipIDs,
+			TotalWeightKg:     roundKg(totalWeight),
+			ExistingCount:     ex.count,
+			ExistingWeightKg:  roundKg(ex.weight),
+			ExistingShipments: ex.shipments,
+			OrderedStops:      stops,
+			TotalDistanceKm:   roundKg(r.TotalDistanceKm),
+			TotalDurationMin:  int(r.TotalDurationMin + 0.5),
+			DepartureMin:      int(departureMin + 0.5),
+			OptimizedBy:       "vrp",
+		})
+	}
+
+	// Mapear Unassigned del solver → UnassignedShipment del plan.
+	for _, u := range sol.Unassigned {
+		sh := shipByTID[u.NodeID]
+		unassigned = append(unassigned, model.UnassignedShipment{
+			TrackingID:  u.NodeID,
+			Destination: lastMileDestLabel,
+			Reason:      string(u.Reason),
+			WeightKg:    sh.WeightKg,
+			Priority:    sh.Priority,
+		})
+	}
+
+	// Distribuir envíos sin coords como paradas unsequenced en la ruta más
+	// liviana que tenga capacidad. Si no hay rutas (todo quedó unassigned)
+	// o todas están al tope, van al unassigned con razón de capacidad.
+	for _, sh := range withoutCoords {
+		best := -1
+		for i := range out {
+			a := &out[i]
+			drv := vrpDriverByID(vrpDrivers, a.DriverID)
+			projCount := len(a.Shipments) + a.ExistingCount + 1
+			projWeight := a.TotalWeightKg + a.ExistingWeightKg + sh.WeightKg
+			if projCount > drv.MaxShipments {
+				continue
+			}
+			if projWeight > drv.MaxWeightKg {
+				continue
+			}
+			if best == -1 || out[i].TotalDurationMin < out[best].TotalDurationMin {
+				best = i
+			}
+		}
+		if best == -1 {
+			unassigned = append(unassigned, model.UnassignedShipment{
+				TrackingID:  sh.TrackingID,
+				Destination: lastMileDestLabel,
+				Reason:      "sin_capacidad_en_choferes",
+				WeightKg:    sh.WeightKg,
+				Priority:    sh.Priority,
+			})
+			continue
+		}
+		a := &out[best]
+		seq := len(a.OrderedStops) + 1
+		a.OrderedStops = append(a.OrderedStops, model.RouteStop{
+			TrackingID:  sh.TrackingID,
+			Sequence:    seq,
+			ArrivalMin:  -1,
+			Unsequenced: true,
+			TimeWindow:  string(sh.TimeWindow),
+			WeightKg:    sh.WeightKg,
+		})
+		a.Shipments = append(a.Shipments, sh.TrackingID)
+		a.TotalWeightKg = roundKg(a.TotalWeightKg + sh.WeightKg)
+	}
+
+	return out, unassigned, blocked
+}
+
+// buildDurationMatrix construye una matriz NxN (depot + entregas) con tiempos
+// en segundos y distancias en metros. Intenta OSRM si hay cliente; si falla
+// o no hay cliente, usa Haversine con factor de detour 1.3 y velocidad media
+// urbana de 30 km/h.
+func (s *RoutingService) buildDurationMatrix(depot vrp.Coord, deliveries []vrp.Coord) ([][]float64, [][]float64) {
+	all := make([]vrp.Coord, 0, len(deliveries)+1)
+	all = append(all, depot)
+	all = append(all, deliveries...)
+
+	if s.osrmClient != nil {
+		osrmCoords := make([]osrm.Coord, len(all))
+		for i, c := range all {
+			osrmCoords[i] = osrm.Coord{Lat: c.Lat, Lon: c.Lon}
+		}
+		d, dt, err := s.osrmClient.DurationMatrix(osrmCoords)
+		if err == nil {
+			return d, dt
+		}
+		log.Printf("[routing] OSRM falló, fallback a Haversine: %v", err)
+	}
+	return haversineMatrix(all)
+}
+
+// haversineMatrix arma una matriz NxN con distancias Haversine (con factor
+// de detour 1.3 para aproximar el desvío de calles vs línea recta) y duración
+// asumiendo 30 km/h promedio. Diagonal en cero.
+func haversineMatrix(coords []vrp.Coord) ([][]float64, [][]float64) {
+	// detourFactor: las calles no son líneas rectas. 1.3 ≈ 30% más de recorrido
+	// que la distancia Haversine en zonas urbanas argentinas típicas.
+	// avgSpeedKmH: velocidad media puerta-a-puerta para vehículos urbanos en CABA
+	// con tráfico moderado. Con OSRM activo este valor no se usa.
+	const detourFactor = 1.3
+	const avgSpeedKmH = 25.0
+	n := len(coords)
+	dur := make([][]float64, n)
+	dist := make([][]float64, n)
+	for i := 0; i < n; i++ {
+		dur[i] = make([]float64, n)
+		dist[i] = make([]float64, n)
+		for j := 0; j < n; j++ {
+			if i == j {
+				continue
+			}
+			km := ml.HaversineKm(coords[i].Lat, coords[i].Lon, coords[j].Lat, coords[j].Lon) * detourFactor
+			dist[i][j] = km * 1000
+			dur[i][j] = km / avgSpeedKmH * 3600
+		}
+	}
+	return dur, dist
+}
+
+func vrpDriverByID(drivers []vrp.Driver, id string) vrp.Driver {
+	for _, d := range drivers {
+		if d.ID == id {
+			return d
+		}
+	}
+	return vrp.Driver{}
 }

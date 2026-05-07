@@ -470,7 +470,7 @@ export function ShipmentList() {
                         <span className="text-slate-600">{corr(s, "destination_city", s.recipient.address.city)}</span>
                       </td>
                       <td className={tdClass}>
-                        <span className="tabular-nums">{corr(s, "weight_kg", s.weight_kg)} kg</span>
+                        <span className="tabular-nums whitespace-nowrap">{corr(s, "weight_kg", s.weight_kg)} kg</span>
                       </td>
                       <td className={tdClass}><PriorityBadge priority={s.priority} /></td>
                       <td className={tdClass}>

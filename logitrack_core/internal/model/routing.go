@@ -19,6 +19,12 @@ const (
 // delivery_failed). Los caps de la config se chequean contra el total
 // (existente + nuevos), para no exceder el peso ni la cantidad acumulando
 // entre múltiples Apply consecutivos.
+//
+// Cuando el solver de VRP corre exitosamente, OrderedStops contiene la
+// secuencia óptima de paradas con tiempos estimados, Shipments preserva
+// el mismo orden, y OptimizedBy = "vrp". Si el solver fallea (depot sin
+// coords, error inesperado) se cae al greedy clásico y OptimizedBy = "greedy"
+// — en ese caso OrderedStops puede venir vacío.
 type LastMileAssignment struct {
 	DriverID         string   `json:"driver_id"`
 	DriverName       string   `json:"driver_name,omitempty"`
@@ -26,6 +32,32 @@ type LastMileAssignment struct {
 	TotalWeightKg    float64  `json:"total_weight_kg"`
 	ExistingCount    int      `json:"existing_count"`
 	ExistingWeightKg float64  `json:"existing_weight_kg"`
+	// Tracking IDs de envíos que el chofer ya tenía en su ruta del día
+	// (out_for_delivery / delivery_failed). Útil para que la UI los muestre
+	// en la card del chofer junto con los nuevos.
+	ExistingShipments []string `json:"existing_shipments,omitempty"`
+
+	// Campos VRP (omitidos si el plan se generó con greedy).
+	OrderedStops     []RouteStop `json:"ordered_stops,omitempty"`
+	TotalDistanceKm  float64     `json:"total_distance_km,omitempty"`
+	TotalDurationMin int         `json:"total_duration_min,omitempty"`
+	DepartureMin     int         `json:"departure_min,omitempty"` // base para arrival_min, en min desde medianoche
+	OptimizedBy      string      `json:"optimized_by,omitempty"`  // "vrp" | "greedy"
+}
+
+// RouteStop es una parada dentro de una ruta optimizada por VRP.
+//
+// Sequence es 1-based (la primera parada del día es 1). ArrivalMin es el
+// delta en minutos desde DepartureMin (definido en LastMileAssignment) hasta
+// la llegada al cliente. Si Unsequenced=true (envío sin coordenadas), ArrivalMin
+// es -1 — el chofer atiende esa parada al final de la ruta sin tiempo estimado.
+type RouteStop struct {
+	TrackingID  string  `json:"tracking_id"`
+	Sequence    int     `json:"sequence"`
+	ArrivalMin  int     `json:"arrival_min"`
+	Unsequenced bool    `json:"unsequenced,omitempty"`
+	TimeWindow  string  `json:"time_window,omitempty"`
+	WeightKg    float64 `json:"weight_kg"`
 }
 
 // InterBranchAssignment es un despacho de un vehículo a una sucursal destino.
@@ -45,6 +77,9 @@ type InterBranchAssignment struct {
 	TotalWeightKg     float64      `json:"total_weight_kg"`
 	CapacityKg        float64      `json:"capacity_kg"`
 	ExistingWeightKg  float64      `json:"existing_weight_kg"`
+	// Tracking IDs de envíos ya cargados en el vehículo (status loaded) que
+	// la UI puede listar junto con los nuevos.
+	ExistingShipments []string `json:"existing_shipments,omitempty"`
 }
 
 // UnassignedShipment es un envío que el algoritmo no pudo rutear, con motivo.
@@ -72,6 +107,10 @@ type DriverLoad struct {
 	DriverName       string  `json:"driver_name,omitempty"`
 	ExistingCount    int     `json:"existing_count"`
 	ExistingWeightKg float64 `json:"existing_weight_kg"`
+	// Tracking IDs ya en ruta del día (espejo de ExistingCount). Le sirve
+	// al cliente para mostrar los envíos previos cuando se promueve este
+	// chofer a card de asignación al asignarle algo nuevo.
+	ExistingShipments []string `json:"existing_shipments,omitempty"`
 }
 
 // VehicleLoad reporta la carga ya asignada a un vehículo del pool. Se exporta
@@ -82,6 +121,9 @@ type VehicleLoad struct {
 	LicensePlate     string  `json:"license_plate"`
 	CapacityKg       float64 `json:"capacity_kg"`
 	ExistingWeightKg float64 `json:"existing_weight_kg"`
+	// Tracking IDs ya cargados en el vehículo (status loaded). El cliente
+	// los lista en la card si el operador asigna manualmente algo nuevo.
+	ExistingShipments []string `json:"existing_shipments,omitempty"`
 }
 
 // RoutingPlan es el plan sugerido devuelto por GeneratePlan.
