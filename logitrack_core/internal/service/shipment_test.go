@@ -734,13 +734,6 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 		setup func(ts testSetup) string
 	}{
 		{
-			name: "draft",
-			setup: func(ts testSetup) string {
-				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
-				return d.TrackingID
-			},
-		},
-		{
 			name: "delivered",
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
@@ -834,6 +827,13 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 		name  string
 		setup func(ts testSetup) string
 	}{
+		{
+			name: "draft",
+			setup: func(ts testSetup) string {
+				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
+				return d.TrackingID
+			},
+		},
 		{
 			name: "at_origin_hub",
 			setup: func(ts testSetup) string {
