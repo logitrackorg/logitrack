@@ -58,8 +58,11 @@ src/
 | `/vehicles/:plate/assign` | VehicleAssignment | supervisor, admin |
 | `/vehicles/available` | AvailableVehicles | supervisor, manager, admin |
 | `/branches` | BranchList | operator, supervisor, manager, admin |
+| `/routing` | Routing (plan diario inteligente) | operator, supervisor |
+| `/routing-config` | RoutingConfig | admin |
 | `/ml-config` | MLConfig | admin |
 | `/system-config` | SystemConfig | admin |
+| `/pricing-config` | PricingConfig | admin |
 
 ## Shipment status update rules
 

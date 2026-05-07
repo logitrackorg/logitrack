@@ -107,6 +107,18 @@ func RunMigrations(db *sql.DB) error {
 			END IF;
 		END $$;
 
+		CREATE TABLE IF NOT EXISTS routing_config (
+			id                       INTEGER PRIMARY KEY DEFAULT 1,
+			sla_force_horizon_hours  INTEGER       NOT NULL DEFAULT 24,
+			priority_force_threshold NUMERIC(4,3)  NOT NULL DEFAULT 0.750,
+			min_fill_rate            NUMERIC(4,3)  NOT NULL DEFAULT 0.400,
+			max_shipments_per_driver INTEGER       NOT NULL DEFAULT 15,
+			max_weight_kg_per_driver NUMERIC(10,2) NOT NULL DEFAULT 150
+		);
+		INSERT INTO routing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE routing_config DROP COLUMN IF EXISTS respect_fragile_spread;
+		ALTER TABLE routing_config DROP COLUMN IF EXISTS express_max_hours_in_branch;
+
 		CREATE TABLE IF NOT EXISTS shipment_incidents (
 			id            VARCHAR(50)  PRIMARY KEY,
 			tracking_id   VARCHAR(50)  NOT NULL,

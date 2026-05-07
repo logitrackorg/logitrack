@@ -135,6 +135,27 @@ func (r *eventSourcedShipmentRepository) ApplyCorrections(cmd CorrectCmd) (model
 	return r.projection.Get(cmd.TrackingID)
 }
 
+func (r *eventSourcedShipmentRepository) ExtendETA(cmd ExtendETACmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventShipmentETAExtended,
+		Payload: model.ShipmentETAExtendedPayload{
+			OldETA:    cmd.OldETA,
+			NewETA:    cmd.NewETA,
+			AddedDays: cmd.AddedDays,
+			Reason:    cmd.Reason,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
 func (r *eventSourcedShipmentRepository) CancelShipment(cmd CancelCmd) (model.Shipment, error) {
 	event := model.DomainEvent{
 		ID:         uuid.NewString(),

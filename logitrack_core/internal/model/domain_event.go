@@ -16,15 +16,20 @@ type DomainEvent struct {
 
 // DomainEvent type constants
 const (
-	EventShipmentCreated   = "shipment_created"
-	EventDraftSaved        = "draft_saved"
-	EventDraftUpdated      = "draft_updated"
-	EventDraftConfirmed    = "draft_confirmed"
-	EventStatusChanged     = "status_changed"
-	EventShipmentCorrected = "shipment_corrected"
-	EventShipmentCancelled = "shipment_cancelled"
-	EventIncidentReported  = "incident_reported"
+	EventShipmentCreated     = "shipment_created"
+	EventDraftSaved          = "draft_saved"
+	EventDraftUpdated        = "draft_updated"
+	EventDraftConfirmed      = "draft_confirmed"
+	EventStatusChanged       = "status_changed"
+	EventShipmentCorrected   = "shipment_corrected"
+	EventShipmentCancelled   = "shipment_cancelled"
+	EventIncidentReported    = "incident_reported"
+	EventShipmentETAExtended = "shipment_eta_extended"
 )
+
+// ReturnETAExtraDays is added to the estimated_delivery_at when a shipment
+// becomes a return (counter-shipment from cancellation, or rejection/no_entregado).
+const ReturnETAExtraDays = 10
 
 // Payload types — each event type carries its own typed payload.
 
@@ -73,4 +78,14 @@ type ShipmentCancelledPayload struct {
 type IncidentReportedPayload struct {
 	IncidentType IncidentType
 	Description  string
+}
+
+// ShipmentETAExtendedPayload registra una extensión de la fecha estimada de entrega.
+// Se emite cuando un envío pasa a estar en retorno (cancelación que generó contra-envío,
+// rechazo del destinatario, o no retiro del mostrador).
+type ShipmentETAExtendedPayload struct {
+	OldETA    *time.Time
+	NewETA    time.Time
+	AddedDays int
+	Reason    string
 }
