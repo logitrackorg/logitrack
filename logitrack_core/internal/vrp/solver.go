@@ -288,17 +288,16 @@ func routeRespectsWindows(idxs []int, p Problem) bool {
 
 // respectsWindow chequea si una hora absoluta de llegada cae dentro de
 // la ventana del envío y antes del fin del día.
+// Envíos con ventana flexible no tienen restricción de horario: pueden
+// asignarse en cualquier momento del día operativo.
 func respectsWindow(tw model.TimeWindow, absArrivalMin, dayEndMin float64) bool {
-	if absArrivalMin > dayEndMin {
-		return false
-	}
 	const noon = 12.0 * 60.0
 	switch tw {
 	case model.TimeWindowMorning:
-		return absArrivalMin <= noon
+		return absArrivalMin <= noon && absArrivalMin <= dayEndMin
 	case model.TimeWindowAfternoon:
-		return absArrivalMin >= noon
-	default: // flexible o vacío
+		return absArrivalMin >= noon && absArrivalMin <= dayEndMin
+	default: // flexible o vacío — sin restricción de franja horaria
 		return true
 	}
 }

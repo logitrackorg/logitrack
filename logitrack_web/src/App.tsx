@@ -23,6 +23,7 @@ import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
 import { AccessLog } from "./pages/AccessLog";
 import { UserProfile } from "./pages/UserProfile";
+import { DraftList } from "./pages/DraftList";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -199,6 +200,12 @@ function AppRoutes() {
           <Route path="/new" element={
             <ProtectedRoute roles={["operator", "supervisor"]}>
               <NewShipment />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/drafts" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <DraftList />
             </ProtectedRoute>
           } />
 

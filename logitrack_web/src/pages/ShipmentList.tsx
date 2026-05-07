@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter } from "lucide-react";
+import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter, FileText } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
@@ -222,13 +222,33 @@ export function ShipmentList() {
         icon={<Package className="w-5 h-5" />}
         actions={
           hasRole("operator", "supervisor") ? (
-            <button
-              onClick={() => navigate("/new")}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Nuevo envío
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Drafts button with badge */}
+              {(() => {
+                const draftCount = shipments.filter((s) => s.status === "draft").length;
+                return (
+                  <button
+                    onClick={() => navigate("/drafts")}
+                    className="relative inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-semibold transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Borradores
+                    {draftCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
+                        {draftCount > 99 ? "99+" : draftCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()}
+              <button
+                onClick={() => navigate("/new")}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo envío
+              </button>
+            </div>
           ) : undefined
         }
       />
@@ -470,7 +490,10 @@ export function ShipmentList() {
                         <span className="text-slate-600">{corr(s, "destination_city", s.recipient.address.city)}</span>
                       </td>
                       <td className={tdClass}>
-                        <span className="tabular-nums whitespace-nowrap">{corr(s, "weight_kg", s.weight_kg)} kg</span>
+                        {s.status === "draft" && (!s.weight_kg || s.weight_kg <= 0)
+                          ? <span className="text-slate-400 text-xs italic">Sin definir</span>
+                          : <span className="tabular-nums whitespace-nowrap">{corr(s, "weight_kg", s.weight_kg)} kg</span>
+                        }
                       </td>
                       <td className={tdClass}><PriorityBadge priority={s.priority} /></td>
                       <td className={tdClass}>

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, PackagePlus, AlertTriangle, FileText, ChevronRight, X, AlertCircle, MapPin, Tag, User, UserCheck, Box } from "lucide-react";
+import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
-import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
 import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
@@ -343,33 +342,21 @@ export function NewShipment() {
       )}
 
       {drafts.length > 0 && (
-        <Card className="mb-5">
-          <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
-            <FileText className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-900">Borradores guardados</span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">{drafts.length}</span>
+        <button
+          type="button"
+          onClick={() => navigate("/drafts")}
+          className="w-full mb-5 flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer group"
+        >
+          <div className="flex items-center gap-2.5">
+            <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-sm font-semibold text-amber-900">
+              Tenés {drafts.length} {drafts.length === 1 ? "borrador guardado" : "borradores guardados"}
+            </span>
           </div>
-          <div className="divide-y divide-slate-100">
-            {drafts.map((d) => (
-              <button
-                type="button"
-                key={d.tracking_id}
-                onClick={() => navigate(`/shipments/${d.tracking_id}`)}
-                className="w-full flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-semibold text-slate-900 truncate">{d.sender?.name || "Sin nombre"}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                    <span className="text-slate-700 truncate">{d.recipient?.name || "Sin nombre"}</span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-slate-400">{fmtDateTime(d.created_at)}</p>
-                </div>
-                <span className="text-xs font-semibold text-[#2563eb] group-hover:underline shrink-0">Retomar →</span>
-              </button>
-            ))}
-          </div>
-        </Card>
+          <span className="text-xs font-semibold text-amber-700 group-hover:underline shrink-0">
+            Ver borradores →
+          </span>
+        </button>
       )}
 
       <form onSubmit={handleSubmit} className="grid gap-5">
