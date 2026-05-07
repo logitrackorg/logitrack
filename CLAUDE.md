@@ -188,7 +188,7 @@ Non-destructive edits. Stored in `Shipment.Corrections` (typed struct, `*field` 
 
 Correctable fields: all sender/recipient/address fields + `special_instructions` + `time_window`.
 
-**Non-correctable fields** (locked at creation/confirmation): `weight_kg`, `package_type`, `is_fragile`, `shipment_type`. These all feed into the price, and the price is immutable, so editing them post-confirmation would create a mismatch between what was charged and what was committed.
+**Non-correctable fields** (locked at creation/confirmation): `weight_kg`, `package_type`, `is_fragile`, `shipment_type`. The price is immutable post-confirmation; editing these fields would create a mismatch between what was charged and what was committed. Note: `package_type` does not affect the price calculation but remains locked as part of the delivery contract.
 
 **Directional restriction on `time_window` corrections**: only allowed when the new window has equal or lower restrictiveness/surcharge. `flexible → morning|afternoon` is rejected (would raise the underlying price commitment); `morning ↔ afternoon` is allowed (same tier, same price); anything `→ flexible` is allowed.
 
@@ -245,9 +245,14 @@ Rule-based pricing engine with admin-editable config (singleton table `pricing_c
 
 Formula:
 ```
-subtotal = (base_fare + cost_per_km × distance_km) × packageMultiplier × shipmentMultiplier + weight_surcharge
-total    = subtotal + subtotal × time_window_surcharge_rate + subtotal × fragile_surcharge_rate
+subtotal = (base_fare + cost_per_km × distance_km) × shipmentMultiplier + weight_surcharge + last_mile_surcharge
+total    = subtotal × time_window_multiplier × fragile_multiplier
 ```
+
+- `last_mile_surcharge` only applies when `delivery_method == ultima_milla`.
+- `time_window_multiplier` applies to `morning` and `afternoon`; `flexible` uses 1.0 (no recargo).
+- Package type (`envelope`/`box`) **no afecta el precio** — solo es un dato descriptivo del envío.
+- All multipliers must be ≥ 1. All flat amounts must be ≥ 0.
 
 Distance uses real lat/lng from `Address.Latitude/Longitude` via `ml.HaversineKm`, falling back to `ml.ComputeDistance` by province if either side lacks coords.
 
@@ -255,22 +260,21 @@ Default config (all editable from `/admin/pricing`):
 
 | Param | Default |
 |---|---|
-| `base_fare` | 1500 |
-| `cost_per_km` | 25 |
-| `weight_surcharge_mid` (5–25 kg) | 500 |
-| `weight_surcharge_high` (>25 kg) | 1500 |
-| `package_envelope_multiplier` | 0.7 |
-| `package_box_multiplier` | 1.0 |
+| `base_fare` | 10000 |
+| `cost_per_km` | 100 |
+| `weight_surcharge_mid` (5–25 kg) | 5000 |
+| `weight_surcharge_high` (>25 kg) | 25000 |
+| `last_mile_surcharge` | 5000 |
 | `shipment_express_multiplier` | 1.5 |
-| `time_window_restrictive_surcharge` | 0.10 |
-| `fragile_surcharge` | 0.20 |
+| `time_window_restrictive_multiplier` | 1.10 |
+| `fragile_multiplier` | 1.20 |
 
-`time_window_restrictive_surcharge` applies to `morning` and `afternoon` (both restrict to a specific half-day). `flexible` has no surcharge.
+**UI rule**: la ventana horaria (`time_window`) se oculta en el form de nuevo envío cuando el método de entrega es `retiro_sucursal`, y se resetea a `flexible` automáticamente. Solo aplica para `ultima_milla`.
 
 Endpoints:
 - `POST /pricing/quote` — operator/supervisor (used by the New Shipment form). Returns `{ total, currency, breakdown }` without persisting.
 - `GET /pricing/config` — admin only.
-- `PATCH /pricing/config` — admin only. Validates that values are non-negative and that the express multiplier is ≥ 1.
+- `PATCH /pricing/config` — admin only. Validates: flat amounts ≥ 0, all multipliers ≥ 1.
 
 ### Adding a new endpoint
 
