@@ -1,5 +1,9 @@
 lockfileVersion: '9.0'
 
+onlyBuiltDependencies:
+  - esbuild
+  - msw
+
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
