@@ -1,0 +1,22 @@
+logitrack_web/eslint.config.js
+  s_f78a6dfd49d806::t_2a96cd2261948e 22-23,25
+  s_f78a6dfd49d806::t_fc374eee3f3e85 24
+logitrack_web/src/pages/PricingConfig.tsx
+  s_f78a6dfd49d806::t_62037a1b99fb9c 18-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "4fb9a4e7dbe614375fa54a7b54b65397c5fb965b",
+  "prompts": {},
+  "sessions": {
+    "s_f78a6dfd49d806": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5f92b35-2c3c-443e-aeef-f37a7d60f326",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
