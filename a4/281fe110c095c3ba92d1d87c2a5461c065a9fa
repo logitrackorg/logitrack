@@ -1,0 +1,213 @@
+logitrack_web/src/pages/AdminUsers.tsx
+  3510060d8b03cb21 2,9-10,211-225,227-242,246-250,256-259,263-265,267,269-273
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_ca2b2497144419::t_34d9f87c1fefc8 62
+  3510060d8b03cb21 3,7,30-31,49,52,54-55,58,60-61,67-89,91-101,106,108-110
+  s_ca2b2497144419::t_2edc02e329e98d 6
+logitrack_core/internal/seed/seed.go
+  3510060d8b03cb21 11,86,452-458
+logitrack_web/src/pages/VehicleList.tsx
+  s_ca2b2497144419::t_3c64ebdfc7cd17 230,235-237,239-241,247,257-258
+  s_ca2b2497144419::t_1487de1ed15558 63-65
+  3510060d8b03cb21 3,8,324-330,333,335-336,338-340
+  s_ca2b2497144419::t_b934a6a03ca22d 908-962
+logitrack_core/internal/repository/inmemory.go
+  3510060d8b03cb21 483-506
+docs/manual-precio-envios.md
+  3510060d8b03cb21 1-188
+logitrack_web/src/components/ui/section.tsx
+  3510060d8b03cb21 1-35
+logitrack_web/src/pages/PublicTracking.tsx
+  s_ca2b2497144419::t_82b8b50fc2b59d 264
+  s_ca2b2497144419::t_f0d9cfa973183c 7
+logitrack_web/src/api/shipments.ts
+  3510060d8b03cb21 62-70,72-76,109-111
+  s_87004e9c1b042a::t_ed92e235908b5f 71
+logitrack_core/internal/repository/pricing_config.go
+  s_87004e9c1b042a::t_017de5a0e77e3f 47-50,53
+  s_87004e9c1b042a::t_4655e7794ad235 54
+  s_87004e9c1b042a::t_5b9aae76aceaef 27,32
+  s_87004e9c1b042a::t_9e63c81fae5908 43-46
+  3510060d8b03cb21 1-25,28-30,33-42,51-52,55-57
+  s_87004e9c1b042a::t_eebcfd765d49d8 26,31
+logitrack_core/internal/service/shipment_test.go
+  3510060d8b03cb21 42,1537-1625
+logitrack_web/src/components/ui/stat-card.tsx
+  3510060d8b03cb21 1-49
+logitrack_web/src/pages/BranchList.tsx
+  3510060d8b03cb21 2,8-9,101-117,120-147,150-152,154-157,160,162,223
+logitrack_core/internal/service/shipment.go
+  3510060d8b03cb21 114,131-149,260,486-495,504-505,808-814,819,1148-1171
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_87004e9c1b042a::t_f2d2964dead022 1908-1910
+  s_ca2b2497144419::t_6a6dd0601ec637 58,61
+  s_ca2b2497144419::t_f6c9de8bf6a907 1175
+  3510060d8b03cb21 3,25,523-530,532,537-539,542-543,545-550,556-559,563-568,575-582,588-590,687,921,923-927,1815-1907,1911-1950,2045-2047
+  s_ca2b2497144419::t_3bf3a82de4706b 21
+  s_ca2b2497144419::t_94c1fc8dc27383 540
+logitrack_web/src/pages/ShipmentList.tsx
+  s_ca2b2497144419::t_cef842dc22d753 368
+  s_ca2b2497144419::t_77f2ff7a28d960 478
+  s_ca2b2497144419::t_267b01ebd332fe 10
+  s_ca2b2497144419::t_93cd3e7c602997 215
+  3510060d8b03cb21 3,12-13,84-86,218-234,237-292,294-295,297-341,345-346,348,350,354-355,360-361,366-367,372-373,380-382,384-387,389-394,397-399,404-477,479-487,489-495,497,502-505,509,514-515,521-523,531,535-536,542-544,553-558,562-564,566-567,569-571,576-578,586,589-590,601-602
+  s_ca2b2497144419::t_ca40a4274caaa6 293,296
+logitrack_core/internal/db/migrate.go
+  s_87004e9c1b042a::t_5f7791d41323f9 92
+  s_87004e9c1b042a::t_c2ed26cbc860ff 79,85-87
+  3510060d8b03cb21 60-62,78,88-89,93
+  s_87004e9c1b042a::t_12137bd33e8974 80-84
+  s_87004e9c1b042a::t_24008afc44f1e4 94-109
+  s_87004e9c1b042a::t_07223ca47081b4 90-91
+logitrack_web/src/components/ui/card.tsx
+  3510060d8b03cb21 1-53
+logitrack_web/src/App.tsx
+  3510060d8b03cb21 18,69-71,186,192,221-226
+docs/specs/00-indice.md
+  3510060d8b03cb21 45
+logitrack_core/internal/model/domain_event.go
+  3510060d8b03cb21 49-50
+logitrack_web/src/pages/BulkUpload.tsx
+  3510060d8b03cb21 3,7,359,362,364-365,368-372
+logitrack_web/CLAUDE.md
+  s_ca2b2497144419::t_d5b29b478cc5ee 79-89,103
+  s_ca2b2497144419::t_a96f2e2ce51502 90-102
+logitrack_web/src/pages/VehicleAssignment.tsx
+  3510060d8b03cb21 2,6,141-146
+logitrack_core/internal/service/pricing_test.go
+  s_87004e9c1b042a::t_f7db62fed411f7 106-108
+  s_87004e9c1b042a::t_f58669f42ad95f 65-66
+  3510060d8b03cb21 1-64,67-83,85-105,109-232,235-242
+  s_87004e9c1b042a::t_73dd82ec8313df 233-234
+  s_87004e9c1b042a::t_2a708a4db053f5 84
+logitrack_web/src/utils/shipmentStatus.ts
+  s_ca2b2497144419::t_7fcfe4d6f4b627 1-18
+logitrack_web/src/pages/OrganizationConfig.tsx
+  3510060d8b03cb21 2-3,5-6,8-9,11,14,45,54-62,65-70,73-80,82-86,89-112,114-117,121-130,132-137,139-144,146-154,158-159
+logitrack_web/src/pages/VehicleStatus.tsx
+  3510060d8b03cb21 2,7,172-177
+logitrack_web/src/pages/MLConfig.tsx
+  3510060d8b03cb21 2,4,177-181
+logitrack_web/src/pages/AccessLog.tsx
+  3510060d8b03cb21 2,5-6,14-17,84-129,132-134,144,147,149-151,158-159,161-165,169-182,185,190,206
+docs/specs/US-080-precio-envio.md
+  3510060d8b03cb21 1-180
+logitrack_core/internal/repository/shipment.go
+  3510060d8b03cb21 54-55
+logitrack_core/internal/handler/pricing.go
+  3510060d8b03cb21 1-79
+logitrack_web/src/components/ui/page-header.tsx
+  3510060d8b03cb21 1-45
+logitrack_core/cmd/server/main.go
+  3510060d8b03cb21 54-57,60,94,131-142,144-145,149,151-152,154,156,158-160,162-194,198-199,201-202,210-213,215-216,219,226-230
+logitrack_web/src/pages/PricingConfig.tsx
+  s_87004e9c1b042a::t_be536186121e94 14
+  3510060d8b03cb21 1-13,15-17,23,26-158
+  s_87004e9c1b042a::t_59b9ad97dc91c9 24-25
+  s_87004e9c1b042a::t_685eba432abc65 18-22
+logitrack_web/src/pages/UserProfile.tsx
+  3510060d8b03cb21 3,6,65-77
+logitrack_core/internal/model/shipment.go
+  3510060d8b03cb21 117-121
+logitrack_core/internal/repository/shipment_es.go
+  3510060d8b03cb21 79-80
+logitrack_web/src/pages/DriverRoute.tsx
+  s_ca2b2497144419::t_189857aa47819c 184,288
+  s_ca2b2497144419::t_39efc653a4ead5 7
+  3510060d8b03cb21 3,8-9,17-20,23-25,104,108-121,147-154,157-170,175,178,180-182,185,194-207,213-229,231,234-242,245-248,252-254,257,270-287,291-296,298-299,301-303,305-306,309-311,313-314,317,319-342,344-374
+CLAUDE.md
+  s_ca2b2497144419::t_9bbfd3861ce1f4 123-128,131,135
+  s_ca2b2497144419::t_3c18420527baf0 129-130,132-134
+  3510060d8b03cb21 157-169,171,189-193,233,242-274
+logitrack_web/src/pages/Dashboard.tsx
+  s_ca2b2497144419::t_9542145874a196 163
+  s_ca2b2497144419::t_bd080868f49be3 9
+  s_ca2b2497144419::t_237a9dc4c5978d 279
+  3510060d8b03cb21 3,10-17,19-20,22-32,46-48,111-115,117-162,164-181,184-214,220,222,228,238,241-249,251-278,280-287,292-294,317,321,330-333,336-337,341,346-347,371-372,382,394,415,425-427
+  s_ca2b2497144419::t_ad36a887280e4b 18,21
+logitrack_web/src/api/pricing.ts
+  3510060d8b03cb21 1-19,21-35,37,40-58
+  s_87004e9c1b042a::t_e05af5ddf5c6a0 36
+  s_87004e9c1b042a::t_46fe811947e305 38-39
+  s_87004e9c1b042a::t_9e3af1e8b1784f 20
+logitrack_web/src/pages/NewShipment.tsx
+  3510060d8b03cb21 3,11-13,82-84,101-122,124-146,314-331,334-341,346-352,354-366,368-369,372,375,378,437,496,501-504,538-540,550,581-597,602-610,614-623,632-635,639,641-644,650,652,658,663,665,675-682,684-689,699-728,732-757,760-763,767,772-777,780-786,793,795-801,807,812-813,820-828
+  s_87004e9c1b042a::t_bde01e4b8d3898 123
+  s_87004e9c1b042a::t_b01028569b4d9c 598-601
+  s_87004e9c1b042a::t_b58e91ee10856c 729-731
+  s_87004e9c1b042a::t_5160593f406cce 571-578
+logitrack_core/internal/projection/shipment.go
+  3510060d8b03cb21 54-62
+logitrack_core/internal/model/pricing.go
+  s_87004e9c1b042a::t_db69d413640217 11-14,16-18
+  s_87004e9c1b042a::t_fb8d9d5851650b 40
+  3510060d8b03cb21 1-10,19-22,31-39,41-53,57,59,61-69
+  s_87004e9c1b042a::t_02e1d8cb085ce0 15
+  s_87004e9c1b042a::t_655a4a4dab8844 54-56,58,60
+  s_87004e9c1b042a::t_bd0c3f4adace23 23,25-27
+  s_87004e9c1b042a::t_aa196ff05cfb1e 24
+  s_87004e9c1b042a::t_4bb77f5ead7ec9 28-30
+logitrack_core/internal/handler/vehicle.go
+  3510060d8b03cb21 25-26
+logitrack_core/internal/projection/postgres_shipment.go
+  3510060d8b03cb21 48-51,58-61,65,72-75,78,225-231,237-240,252-254,279-282,292,315-316,330-331,370-371,522-524,535,550-561,601-603,614,626-637,679-685
+logitrack_web/src/pages/AvailableVehicles.tsx
+  3510060d8b03cb21 2,6,55-60
+docs/manual-precio-envios.txt
+  ai_agent 1-188
+logitrack_core/internal/service/pricing.go
+  3510060d8b03cb21 1-53,58-64,73-87,94,97,99-100,105-110,112-152,154-155,158,161-163
+  s_87004e9c1b042a::t_132f8f7b506a7c 65-72
+  s_87004e9c1b042a::t_28bca50a9e1d5d 54-57
+  s_87004e9c1b042a::t_92c8bc85e25834 159-160
+  s_87004e9c1b042a::t_2ca31e96026b19 156-157
+  s_87004e9c1b042a::t_6da7375afda84e 88-93
+  s_87004e9c1b042a::t_dbfa96a2f52790 153
+  s_87004e9c1b042a::t_8c91d087c72518 95-96,98,101-104
+  s_87004e9c1b042a::t_e30a74615ccead 111
+logitrack_web/src/pages/SystemConfig.tsx
+  3510060d8b03cb21 2-5,8-9,39-40,52-57,59-116,119-124,126-131,133,135-137,139,141-152
+logitrack_web/src/components/ui/gradient-card.tsx
+  3510060d8b03cb21 1-70
+logitrack_web/src/components/StatusBadge.tsx
+  s_ca2b2497144419::t_26a206ca16150f 9
+  s_ca2b2497144419::t_c92e2a306291f9 6
+  s_ca2b2497144419::t_28ef313ef5f8d3 23-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "a4281fe110c095c3ba92d1d87c2a5461c065a9fa",
+  "prompts": {
+    "3510060d8b03cb21": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffe6bc35-ad8f-4b56-8b16-7bfa796966cf",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>",
+      "total_additions": 5971,
+      "total_deletions": 1782,
+      "accepted_lines": 3461,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_87004e9c1b042a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "262ff1ff-0ece-49dd-a19e-a4c5c9fb30a6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_ca2b2497144419": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "512c918e-35b5-4e5a-a0c4-8389a642348b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
