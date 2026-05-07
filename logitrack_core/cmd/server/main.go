@@ -113,9 +113,9 @@ func main() {
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
 
-	// OSRM es opcional. Sin OSRM_URL el cliente queda nil y el VRP usa
-	// Haversine para la matriz de tiempos.
-	osrmClient := osrm.NewClient(os.Getenv("OSRM_URL"))
+	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
+	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
+	osrmClient := osrm.NewClient("https://router.project-osrm.org")
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, osrmClient)
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
