@@ -915,6 +915,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return model.Shipment{}, err
 	}
 	cancellable := map[model.Status]bool{
+		model.StatusDraft:          true,
 		model.StatusAtOriginHub:    true,
 		model.StatusAtHub:          true,
 		model.StatusReadyForPickup: true,
@@ -938,8 +939,8 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return model.Shipment{}, err
 	}
 
-	// Shipments already in ready_for_return are being returned — no counter-shipment needed.
-	if shipment.Status == model.StatusReadyForReturn {
+	// Drafts and ready_for_return shipments need no counter-shipment.
+	if shipment.Status == model.StatusDraft || shipment.Status == model.StatusReadyForReturn {
 		_, _ = s.commentSvc.AddComment(trackingID, username, fmt.Sprintf("[Cancelación] %s", reason))
 		return updated, nil
 	}
