@@ -1,0 +1,20 @@
+CLAUDE.md
+  s_87004e9c1b042a::t_3a1a0fcbe22761 248-249,252-256,263-267,269-270,272,277
+  s_87004e9c1b042a::t_ba611bb660df7f 191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "b8d43e716b020c7509b7f588475b5d07758c48d8",
+  "prompts": {},
+  "sessions": {
+    "s_87004e9c1b042a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "262ff1ff-0ece-49dd-a19e-a4c5c9fb30a6",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
