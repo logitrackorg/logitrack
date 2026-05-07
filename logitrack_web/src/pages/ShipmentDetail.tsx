@@ -343,6 +343,17 @@ export function ShipmentDetail() {
     }
   };
 
+  const handleDiscardDraft = async () => {
+    if (!trackingId) return;
+    try {
+      await shipmentApi.cancelShipment(trackingId, "Borrador descartado por el usuario");
+      navigate("/drafts", { replace: true });
+    } catch {
+      // silently ignore — navigate away anyway if draft is gone
+      navigate("/drafts", { replace: true });
+    }
+  };
+
   const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStatus || !trackingId) return;
@@ -629,6 +640,7 @@ export function ShipmentDetail() {
           onChange={setDraftForm}
           onSave={handleSaveDraftChanges}
           onConfirm={handleConfirmDraft}
+          onDiscard={handleDiscardDraft}
           saving={savingDraft}
           confirming={confirming}
           saveError={saveDraftError}
@@ -1380,11 +1392,12 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, saveError, confirmError, createdAt, draftId }: {
+function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, confirming, saveError, confirmError, createdAt, draftId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onSave: () => void;
   onConfirm: () => void;
+  onDiscard: () => void;
   saving: boolean;
   confirming: boolean;
   saveError: string;
@@ -1393,6 +1406,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
   draftId: string;
 }) {
   const isMobile = useIsMobile();
+  const [discardConfirm, setDiscardConfirm] = useState(false);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
     onChange({ ...form, sender: { ...form.sender, [field]: value } });
@@ -1603,7 +1617,24 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
         </p>
         {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
-        <div style={{ display: "flex", gap: 10 }}>
+        {discardConfirm ? (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
+            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#991b1b" }}>
+              ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={onDiscard} disabled={saving || confirming}
+                style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
+                Sí, descartar
+              </button>
+              <button onClick={() => setDiscardConfirm(false)}
+                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button onClick={onSave} disabled={saving || confirming}
             style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             {saving ? "Guardando..." : "Guardar cambios"}
@@ -1611,6 +1642,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, saving, confirming, 
           <button onClick={onConfirm} disabled={saving || confirming}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
             {confirming ? "Confirmando..." : "Confirmar envío"}
+          </button>
+          <button onClick={() => setDiscardConfirm(true)} disabled={saving || confirming || discardConfirm}
+            style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
+            Descartar borrador
           </button>
         </div>
       </div>
