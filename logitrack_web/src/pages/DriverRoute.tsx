@@ -360,7 +360,8 @@ function ShipmentCard({
   const isFailed = shipment.status === "delivery_failed";
   const isDelivered = shipment.status === "delivered";
 
-  const tw = shipment.time_window;
+  const cor = shipment.corrections ?? {};
+  const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
   const twTone = timeWindowTone(tw);
   const fragile = !!shipment.is_fragile;
   const attempts = shipment.delivery_attempts ?? 0;

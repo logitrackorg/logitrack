@@ -135,7 +135,8 @@ export function DriverShipmentDetail() {
 
   const { name, phone, fullAddress, street, city, province, postal, specialInstructions } =
     recipientView(shipment);
-  const tw = shipment.time_window;
+  const cor = shipment.corrections ?? {};
+  const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
   const twTone = timeWindowTone(tw);
   const fragile = !!shipment.is_fragile;
   const attempts = shipment.delivery_attempts ?? 0;
@@ -145,9 +146,10 @@ export function DriverShipmentDetail() {
   const isDelivered = shipment.status === "delivered";
   const isFailed = shipment.status === "delivery_failed";
 
-  const cor = shipment.corrections ?? {};
   const packageType = cor.package_type ?? shipment.package_type;
   const weightKg = cor.weight_kg ?? String(shipment.weight_kg);
+  const senderName = cor.sender_name ?? shipment.sender.name;
+  const senderPhone = cor.sender_phone ?? shipment.sender.phone;
 
   return (
     <div className="pb-32">
@@ -314,9 +316,9 @@ export function DriverShipmentDetail() {
               Remitente
             </p>
           </div>
-          <p className="text-sm font-semibold text-slate-900">{shipment.sender.name}</p>
-          {shipment.sender.phone && (
-            <p className="text-xs text-slate-500 mt-0.5">{shipment.sender.phone}</p>
+          <p className="text-sm font-semibold text-slate-900">{senderName}</p>
+          {senderPhone && (
+            <p className="text-xs text-slate-500 mt-0.5">{senderPhone}</p>
           )}
         </Card>
 

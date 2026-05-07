@@ -47,6 +47,32 @@ export function ShipmentInfoModal({
   const statusLabel = shipmentStatusLabelOverride(shipment);
   const branchOf = (id?: string) => (id ? branchLabelById(id, branches) : "—");
 
+  // Aplicar correcciones: los campos originales nunca se modifican; las
+  // correcciones se guardan aparte y deben prevalecer al mostrar el envío.
+  const cor = shipment.corrections ?? {};
+  const senderName = cor.sender_name ?? shipment.sender.name;
+  const senderDni = cor.sender_dni ?? shipment.sender.dni;
+  const senderPhone = cor.sender_phone ?? shipment.sender.phone;
+  const senderEmail = cor.sender_email ?? shipment.sender.email;
+  const senderAddress = {
+    street: cor.origin_street ?? shipment.sender.address.street,
+    city: cor.origin_city ?? shipment.sender.address.city,
+    province: cor.origin_province ?? shipment.sender.address.province,
+    postal_code: cor.origin_postal_code ?? shipment.sender.address.postal_code,
+  };
+  const recipientName = cor.recipient_name ?? shipment.recipient.name;
+  const recipientDni = cor.recipient_dni ?? shipment.recipient.dni;
+  const recipientPhone = cor.recipient_phone ?? shipment.recipient.phone;
+  const recipientEmail = cor.recipient_email ?? shipment.recipient.email;
+  const recipientAddress = {
+    street: cor.destination_street ?? shipment.recipient.address.street,
+    city: cor.destination_city ?? shipment.recipient.address.city,
+    province: cor.destination_province ?? shipment.recipient.address.province,
+    postal_code: cor.destination_postal_code ?? shipment.recipient.address.postal_code,
+  };
+  const specialInstructions = cor.special_instructions ?? shipment.special_instructions;
+  const timeWindow = cor.time_window ?? shipment.time_window;
+
   return (
     <div
       className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4"
@@ -87,11 +113,11 @@ export function ShipmentInfoModal({
               tone="rose"
             />
           )}
-          {shipment.special_instructions && (
+          {specialInstructions && (
             <Banner
               icon={<FileText className="w-4 h-4" />}
               title="Instrucciones especiales"
-              description={shipment.special_instructions}
+              description={specialInstructions}
               tone="amber"
             />
           )}
@@ -102,7 +128,7 @@ export function ShipmentInfoModal({
             <KV label="Tipo de paquete" value={PACKAGE_LABELS[shipment.package_type] ?? shipment.package_type} />
             <KV label="Frágil" value={shipment.is_fragile ? "Sí" : "No"} />
             <KV label="Tipo de envío" value={SHIPMENT_TYPE_LABELS[shipment.shipment_type ?? ""] ?? "—"} />
-            <KV label="Ventana horaria" value={TIME_WINDOW_LABELS[shipment.time_window ?? ""] ?? "—"} />
+            <KV label="Ventana horaria" value={TIME_WINDOW_LABELS[timeWindow ?? ""] ?? "—"} />
             <KV label="Método de entrega" value={DELIVERY_METHOD_LABELS[shipment.delivery_method ?? ""] ?? "—"} />
             {shipment.delivery_attempts !== undefined && shipment.delivery_attempts > 0 && (
               <KV label="Intentos de entrega" value={String(shipment.delivery_attempts)} />
@@ -111,20 +137,20 @@ export function ShipmentInfoModal({
 
           {/* Remitente */}
           <Section icon={<UserIcon className="w-4 h-4" />} title="Remitente">
-            <KV label="Nombre" value={shipment.sender.name} />
-            <KV label="DNI" value={shipment.sender.dni} />
-            <KV label="Teléfono" value={shipment.sender.phone} />
-            {shipment.sender.email && <KV label="Email" value={shipment.sender.email} />}
-            <KV label="Dirección" value={formatAddress(shipment.sender.address)} fullRow />
+            <KV label="Nombre" value={senderName} />
+            <KV label="DNI" value={senderDni} />
+            <KV label="Teléfono" value={senderPhone} />
+            {senderEmail && <KV label="Email" value={senderEmail} />}
+            <KV label="Dirección" value={formatAddress(senderAddress)} fullRow />
           </Section>
 
           {/* Destinatario */}
           <Section icon={<UserIcon className="w-4 h-4" />} title="Destinatario">
-            <KV label="Nombre" value={shipment.recipient.name} />
-            <KV label="DNI" value={shipment.recipient.dni} />
-            <KV label="Teléfono" value={shipment.recipient.phone} />
-            {shipment.recipient.email && <KV label="Email" value={shipment.recipient.email} />}
-            <KV label="Dirección" value={formatAddress(shipment.recipient.address)} fullRow />
+            <KV label="Nombre" value={recipientName} />
+            <KV label="DNI" value={recipientDni} />
+            <KV label="Teléfono" value={recipientPhone} />
+            {recipientEmail && <KV label="Email" value={recipientEmail} />}
+            <KV label="Dirección" value={formatAddress(recipientAddress)} fullRow />
           </Section>
 
           {/* Ruta */}
