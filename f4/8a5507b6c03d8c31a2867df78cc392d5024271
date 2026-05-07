@@ -1,0 +1,9 @@
+logitrack_web/pnpm-lock.yaml
+  ai_agent 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "f48a5507b6c03d8c31a2867df78cc392d5024271",
+  "prompts": {}
+}
