@@ -4,7 +4,6 @@ import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
-import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
 import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
