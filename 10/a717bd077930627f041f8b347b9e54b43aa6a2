@@ -1,0 +1,29 @@
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_eab9bc496fe360::t_6f8ae0aff60c52 138-139,151-152
+  s_eab9bc496fe360::t_e692a21de68687 319-321
+logitrack_web/src/pages/DriverRoute.tsx
+  s_eab9bc496fe360::t_47c08509a453c8 363-364
+logitrack_web/src/components/ShipmentInfoModal.tsx
+  s_eab9bc496fe360::t_739f653be50b1d 50-57,62-67,72-75
+  s_eab9bc496fe360::t_c480e88a4f7923 116,120
+  s_eab9bc496fe360::t_5706269d271923 131
+  s_eab9bc496fe360::t_791795b5478cb1 58-61
+  s_eab9bc496fe360::t_6ce42139e2a288 68-71
+  s_eab9bc496fe360::t_bf3ba6d4eb1180 140-144,149-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "10a717bd077930627f041f8b347b9e54b43aa6a2",
+  "prompts": {},
+  "sessions": {
+    "s_eab9bc496fe360": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e14723e2-6ddc-490e-ae33-dce9357d8c2b",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
