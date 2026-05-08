@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/osrm"
@@ -59,7 +60,7 @@ const lastMileDestLabel = "(última milla)"
 
 func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model.RoutingPlan, error) {
 	cfg := s.cfgSvc.Get()
-	now := time.Now().UTC()
+	now := clock.Now().UTC()
 
 	plan := model.RoutingPlan{
 		BranchID:       branchID,
@@ -223,7 +224,7 @@ func (s *RoutingService) binPackLastMile(
 	blocked []model.BlockedDriver,
 ) ([]model.LastMileAssignment, []model.UnassignedShipment, []model.BlockedDriver) {
 	allDrivers := s.authRepo.ListByRole(model.RoleDriver, branchID)
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 
 	var drivers []model.User
 	for _, d := range allDrivers {
@@ -513,7 +514,7 @@ func (s *RoutingService) dispatchInterBranch(
 
 func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model.ApplyPlanRequest, username string) (model.ApplyPlanResponse, error) {
 	plan := req.Plan
-	today := model.NewDateOnly(time.Now().UTC())
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	// Inicializamos como empty (no nil) para que el JSON siempre serialice
 	// como `[]` y no como `null` — el frontend asume array.
 	items := make([]model.ApplyResultItem, 0)
@@ -1058,7 +1059,10 @@ func (s *RoutingService) lastMileVRP(
 
 	// DepartureMin: si el operador genera el plan después de las 8:00, las
 	// horas estimadas tienen que partir de la hora actual, no de las 8:00.
-	departureMin := float64(now.Hour()*60 + now.Minute())
+	// Calculamos en hora local de Argentina (no UTC), porque "8:00" se refiere
+	// a wall-clock local del operador.
+	local := now.In(clock.LocalTZ)
+	departureMin := float64(local.Hour()*60 + local.Minute())
 	if departureMin < 8*60 {
 		departureMin = 8 * 60
 	}

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -224,7 +224,7 @@ func (r *postgresAuthRepository) SaveToken(token string, user model.User) {
 		INSERT INTO tokens (token, user_id, username, role, created_at)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (token) DO NOTHING`,
-		token, user.ID, user.Username, string(user.Role), time.Now(),
+		token, user.ID, user.Username, string(user.Role), clock.Now(),
 	)
 }
 
@@ -396,7 +396,7 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 	args = append(args, update.UpdatedBy)
 	argIdx++
 	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argIdx))
-	args = append(args, time.Now())
+	args = append(args, clock.Now())
 	argIdx++
 
 	args = append(args, id)

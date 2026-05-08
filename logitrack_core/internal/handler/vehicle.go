@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -98,7 +98,7 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 		CapacityKg:     req.CapacityKg,
 		Status:         model.VehicleStatusAvailable,
 		AssignedBranch: &branchID,
-		UpdatedAt:      time.Now(),
+		UpdatedAt:      clock.Now(),
 	}
 
 	if err := h.repo.Add(vehicle); err != nil {

@@ -3,8 +3,8 @@ package repository
 import (
 	"database/sql"
 	"strings"
-	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 )
 
@@ -140,7 +140,7 @@ func (r *postgresBranchRepository) Create(branch model.Branch) error {
 		return ErrDuplicateBranchName
 	}
 
-	now := time.Now()
+	now := clock.Now()
 	_, err := r.db.Exec(`
 		INSERT INTO branches (id, name, street, city, province, postal_code, status, created_at, updated_at, max_capacity, latitude, longitude)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -181,14 +181,14 @@ func (r *postgresBranchRepository) Update(id string, branch model.Branch) error 
 			latitude = $8, longitude = $9
 		WHERE id = $10
 	`, branch.Name, branch.Address.Street, branch.Address.City, branch.Address.Province,
-		branch.Address.PostalCode, branch.MaxCapacity, time.Now(),
+		branch.Address.PostalCode, branch.MaxCapacity, clock.Now(),
 		branch.Latitude, branch.Longitude, id)
 	return err
 }
 
 func (r *postgresBranchRepository) UpdateStatus(id string, status model.BranchStatus, username string) error {
 	res, err := r.db.Exec(`UPDATE branches SET status = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
-		status, time.Now(), username, id)
+		status, clock.Now(), username, id)
 	if err != nil {
 		return err
 	}
@@ -204,10 +204,10 @@ func (r *postgresBranchRepository) Add(branch model.Branch) {
 		branch.Status = model.BranchStatusActive
 	}
 	if branch.CreatedAt.IsZero() {
-		branch.CreatedAt = time.Now()
+		branch.CreatedAt = clock.Now()
 	}
 	if branch.UpdatedAt.IsZero() {
-		branch.UpdatedAt = time.Now()
+		branch.UpdatedAt = clock.Now()
 	}
 	_ = r.Create(branch)
 }

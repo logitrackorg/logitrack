@@ -87,6 +87,7 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
+	clockHandler := handler.NewClockHandler()
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
@@ -233,6 +234,11 @@ func main() {
 	// System config — admin only
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
+
+	// System clock override — admin only, in-memory only (testing).
+	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
+	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
+	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
