@@ -1115,6 +1115,8 @@ func isValidTransition(from, to model.Status) bool {
 			model.StatusRedeliveryScheduled,
 			model.StatusReadyForPickup,
 			model.StatusRechazado,
+			model.StatusLost,
+			model.StatusDestroyed,
 		},
 		model.StatusRedeliveryScheduled: {
 			model.StatusOutForDelivery,

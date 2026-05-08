@@ -552,7 +552,7 @@ export function ShipmentDetail() {
           <PriorityBadge priority={shipment.priority} />
         </div>
         <div className="flex items-center gap-2">
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "draft" && shipment.status !== "delivered" && shipment.status !== "returned" && shipment.status !== "cancelled" && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin", "operator") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={openCorrectionModal}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
@@ -1146,11 +1146,7 @@ export function ShipmentDetail() {
                   setReportingIncident(true);
                   setIncidentError("");
                   try {
-                    const terminalStatus = TERMINAL_INCIDENT_STATUS[incidentType];
                     await shipmentApi.reportIncident(trackingId, incidentType, incidentDescription.trim());
-                    if (terminalStatus) {
-                      await shipmentApi.updateStatus(trackingId, { status: terminalStatus, location: "", notes: incidentDescription.trim() });
-                    }
                     setShowIncidentModal(false);
                     const [incs, s] = await Promise.all([
                       shipmentApi.getIncidents(trackingId),
