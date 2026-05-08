@@ -218,11 +218,10 @@ var argentineCities = map[string][2]float64{
 	"pirane":   {-25.7313, -59.1089},
 }
 
-var normalizer = transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-
 // normalizeCity removes accents and lowercases a city name for lookup.
 func normalizeCity(city string) string {
-	result, _, _ := transform.String(normalizer, strings.ToLower(strings.TrimSpace(city)))
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	result, _, _ := transform.String(t, strings.ToLower(strings.TrimSpace(city)))
 	return result
 }
 

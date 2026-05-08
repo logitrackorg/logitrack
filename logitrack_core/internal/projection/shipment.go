@@ -50,6 +50,16 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		draft.TrackingID = payload.NewTrackingID
 		draft.Status = model.StatusAtOriginHub
 		draft.UpdatedAt = event.Timestamp
+		draft.EstimatedDeliveryAt = payload.EstimatedDeliveryAt // *time.Time, nil for drafts
+		if payload.Price != nil {
+			draft.Price = payload.Price
+		}
+		if payload.PriceBreakdown != nil {
+			draft.PriceBreakdown = payload.PriceBreakdown
+		}
+		if draft.PriceCurrency == "" {
+			draft.PriceCurrency = model.CurrencyARS
+		}
 		delete(p.shipments, payload.OldTrackingID)
 		p.shipments[payload.NewTrackingID] = draft
 
@@ -109,6 +119,17 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		}
 		shipment.HasIncident = true
 		shipment.IncidentType = payload.IncidentType
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentETAExtended:
+		payload := event.Payload.(model.ShipmentETAExtendedPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		newETA := payload.NewETA
+		shipment.EstimatedDeliveryAt = &newETA
 		shipment.UpdatedAt = event.Timestamp
 		p.shipments[event.TrackingID] = shipment
 	}

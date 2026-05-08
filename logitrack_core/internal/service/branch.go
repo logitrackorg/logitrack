@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -74,6 +75,13 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		maxCap = 50
 	}
 
+	lat, lng := req.Latitude, req.Longitude
+	if lat == nil {
+		if gLat, gLng, _ := geo.GeocodeBranch(req.City, req.Province); gLat != 0 || gLng != 0 {
+			lat, lng = &gLat, &gLng
+		}
+	}
+
 	branch := model.Branch{
 		ID:   id,
 		Name: req.Name,
@@ -86,6 +94,8 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		Province:    req.Province,
 		Status:      model.BranchStatusActive,
 		MaxCapacity: maxCap,
+		Latitude:    lat,
+		Longitude:   lng,
 	}
 
 	if err := s.repo.Create(branch); err != nil {
@@ -133,6 +143,13 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 		maxCap = branch.MaxCapacity
 	}
 
+	updateLat, updateLng := req.Latitude, req.Longitude
+	if updateLat == nil {
+		if gLat, gLng, _ := geo.GeocodeBranch(req.City, req.Province); gLat != 0 || gLng != 0 {
+			updateLat, updateLng = &gLat, &gLng
+		}
+	}
+
 	update := model.Branch{
 		Name: req.Name,
 		Address: model.Address{
@@ -143,6 +160,8 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 		},
 		Province:    req.Province,
 		MaxCapacity: maxCap,
+		Latitude:    updateLat,
+		Longitude:   updateLng,
 	}
 
 	if err := s.repo.Update(id, update); err != nil {

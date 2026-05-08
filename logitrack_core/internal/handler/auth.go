@@ -3,10 +3,10 @@ package handler
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -32,7 +32,7 @@ func (h *AuthHandler) log(username, userID string, event model.AccessEventType) 
 		Username:  username,
 		UserID:    userID,
 		EventType: event,
-		Timestamp: time.Now(),
+		Timestamp: clock.Now(),
 	})
 }
 

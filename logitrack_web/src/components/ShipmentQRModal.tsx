@@ -20,58 +20,44 @@ const ShipmentQRModal: React.FC<Props> = ({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const content = printRef.current?.innerHTML || '';
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR - ${trackingId}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              min-height: 100vh;
-              margin: 0;
-              padding: 20px;
-            }
-            .qr-print-container {
-              text-align: center;
-            }
-            .qr-image {
-              width: 256px;
-              height: 256px;
-              border: 1px solid #eee;
-              padding: 8px;
-            }
-            .tracking-number {
-              font-size: 24px;
-              font-weight: bold;
-              font-family: 'Courier New', monospace;
-              letter-spacing: 2px;
-              margin-top: 16px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="qr-print-container">
-            ${content}
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              window.onafterprint = function() {
-                window.close();
-              };
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
+    const doc = printWindow.document;
+    doc.title = 'QR - ' + trackingId.replace(/[<>"'&]/g, '');
+
+    const style = doc.createElement('style');
+    style.textContent = `
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
+      }
+      .qr-print-container { text-align: center; }
+      .qr-image { width: 256px; height: 256px; border: 1px solid #eee; padding: 8px; }
+      .tracking-number {
+        font-size: 24px;
+        font-weight: bold;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 2px;
+        margin-top: 16px;
+      }
+      .tracking-url { font-size: 11px; color: #666; margin-top: 8px; word-break: break-all; }
+    `;
+    doc.head.appendChild(style);
+
+    const container = doc.createElement('div');
+    container.className = 'qr-print-container';
+    container.appendChild(printRef.current!.cloneNode(true));
+    doc.body.appendChild(container);
+
+    printWindow.onload = () => {
+      printWindow.print();
+      printWindow.onafterprint = () => printWindow.close();
+    };
+    printWindow.focus();
+    printWindow.print();
   };
 
   const handleDownload = () => {

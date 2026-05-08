@@ -162,7 +162,6 @@ func (s *MLService) PredictFromShipment(shipment model.Shipment) *model.Priority
 		string(shipment.PackageType),
 		shipment.WeightKg,
 		shipment.IsFragile,
-		shipment.ColdChain,
 	)
 }
 
@@ -184,14 +183,13 @@ func (s *MLService) PredictFromCreateRequest(req model.CreateShipmentRequest) *m
 		string(req.PackageType),
 		req.WeightKg,
 		req.IsFragile,
-		req.ColdChain,
 	)
 }
 
 func (s *MLService) predict(
 	originProvince, destProvince, shipmentType, timeWindow, packageType string,
 	weightKg float64,
-	isFragile, coldChain bool,
+	isFragile bool,
 ) *model.PriorityPrediction {
 	s.mu.RLock()
 	forest := s.forest
@@ -205,9 +203,6 @@ func (s *MLService) predict(
 	distance := ComputeDistance(originProvince, destProvince)
 	restrictionCount := 0.0
 	if isFragile {
-		restrictionCount++
-	}
-	if coldChain {
 		restrictionCount++
 	}
 	volume := ComputeVolumeScore(packageType, weightKg)

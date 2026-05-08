@@ -3,9 +3,9 @@ package repository
 import (
 	"database/sql"
 	"strings"
-	"time"
 
 	"github.com/lib/pq"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 )
 
@@ -38,6 +38,9 @@ func NewPostgresVehicleRepository(db *sql.DB) VehicleRepository {
 		// Migrate existing single-shipment data into the array column
 		`UPDATE vehicles SET assigned_shipments = ARRAY[assigned_shipment]
 		 WHERE assigned_shipment IS NOT NULL AND (assigned_shipments IS NULL OR assigned_shipments = '{}')`,
+		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_latitude    DOUBLE PRECISION`,
+		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_longitude   DOUBLE PRECISION`,
+		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`,
 	} {
 		if _, err := db.Exec(migration); err != nil {
 			panic("vehicle migration failed: " + err.Error())
@@ -48,7 +51,8 @@ func NewPostgresVehicleRepository(db *sql.DB) VehicleRepository {
 }
 
 // scanVehicle reads a row with columns: id, license_plate, type, capacity_kg, status,
-// assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by
+// assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by,
+// current_latitude, current_longitude, location_updated_at
 func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	var v model.Vehicle
 	var capacityKg float64
@@ -57,9 +61,12 @@ func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	var assignedShipments pq.StringArray
 	var assignedBranch sql.NullString
 	var destinationBranch sql.NullString
+	var currentLat, currentLng sql.NullFloat64
+	var locationUpdatedAt sql.NullTime
 
 	err := scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status,
-		&assignedShipments, &assignedBranch, &destinationBranch, &updatedAt, &updatedBy)
+		&assignedShipments, &assignedBranch, &destinationBranch, &updatedAt, &updatedBy,
+		&currentLat, &currentLng, &locationUpdatedAt)
 	if err != nil {
 		return model.Vehicle{}, err
 	}
@@ -80,11 +87,21 @@ func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	if updatedBy.Valid {
 		v.UpdatedBy = updatedBy.String
 	}
+	if currentLat.Valid {
+		v.CurrentLatitude = &currentLat.Float64
+	}
+	if currentLng.Valid {
+		v.CurrentLongitude = &currentLng.Float64
+	}
+	if locationUpdatedAt.Valid {
+		v.LocationUpdatedAt = &locationUpdatedAt.Time
+	}
 	return v, nil
 }
 
 const vehicleSelectCols = `id, license_plate, type, capacity_kg, status,
-	assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by`
+	assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by,
+	current_latitude, current_longitude, location_updated_at`
 
 func (r *postgresVehicleRepository) List() []model.Vehicle {
 	rows, err := r.db.Query(`SELECT ` + vehicleSelectCols + ` FROM vehicles ORDER BY id`)
@@ -115,7 +132,7 @@ func (r *postgresVehicleRepository) Add(vehicle model.Vehicle) error {
 		INSERT INTO vehicles (license_plate, type, capacity_kg, status, assigned_branch, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
-	`, vehicle.LicensePlate, vehicle.Type, vehicle.CapacityKg, vehicle.Status, assignedBranch, time.Now()).Scan(&id)
+	`, vehicle.LicensePlate, vehicle.Type, vehicle.CapacityKg, vehicle.Status, assignedBranch, clock.Now()).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return ErrDuplicateLicensePlate
@@ -148,13 +165,13 @@ func (r *postgresVehicleRepository) GetByLicensePlate(licensePlate string) (mode
 
 func (r *postgresVehicleRepository) UpdateStatus(id string, status model.VehicleStatus) error {
 	_, err := r.db.Exec(`UPDATE vehicles SET status = $1, updated_at = $2 WHERE id = $3`,
-		status, time.Now(), id)
+		status, clock.Now(), id)
 	return err
 }
 
 func (r *postgresVehicleRepository) UpdateStatusByUser(id string, status model.VehicleStatus, username string) error {
 	_, err := r.db.Exec(`UPDATE vehicles SET status = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
-		status, time.Now(), username, id)
+		status, clock.Now(), username, id)
 	return err
 }
 
@@ -163,7 +180,7 @@ func (r *postgresVehicleRepository) AddShipment(id string, trackingID string) er
 		UPDATE vehicles
 		SET assigned_shipments = array_append(COALESCE(assigned_shipments, '{}'), $1), updated_at = $2
 		WHERE id = $3 AND NOT ($1 = ANY(COALESCE(assigned_shipments, '{}')))
-	`, trackingID, time.Now(), id)
+	`, trackingID, clock.Now(), id)
 	return err
 }
 
@@ -172,13 +189,13 @@ func (r *postgresVehicleRepository) RemoveShipment(id string, trackingID string)
 		UPDATE vehicles
 		SET assigned_shipments = array_remove(assigned_shipments, $1), updated_at = $2
 		WHERE id = $3
-	`, trackingID, time.Now(), id)
+	`, trackingID, clock.Now(), id)
 	return err
 }
 
 func (r *postgresVehicleRepository) ClearShipments(id string) error {
 	_, err := r.db.Exec(`UPDATE vehicles SET assigned_shipments = NULL, updated_at = $1 WHERE id = $2`,
-		time.Now(), id)
+		clock.Now(), id)
 	return err
 }
 
@@ -188,7 +205,7 @@ func (r *postgresVehicleRepository) AssignBranch(id string, branchID *string) er
 		val = *branchID
 	}
 	_, err := r.db.Exec(`UPDATE vehicles SET assigned_branch = $1, updated_at = $2 WHERE id = $3`,
-		val, time.Now(), id)
+		val, clock.Now(), id)
 	return err
 }
 
@@ -198,6 +215,14 @@ func (r *postgresVehicleRepository) SetDestinationBranch(id string, branchID *st
 		val = *branchID
 	}
 	_, err := r.db.Exec(`UPDATE vehicles SET destination_branch = $1, updated_at = $2 WHERE id = $3`,
-		val, time.Now(), id)
+		val, clock.Now(), id)
+	return err
+}
+
+func (r *postgresVehicleRepository) UpdateLocation(id string, lat, lng float64) error {
+	_, err := r.db.Exec(
+		`UPDATE vehicles SET current_latitude = $1, current_longitude = $2, location_updated_at = $3 WHERE id = $4`,
+		lat, lng, clock.Now(), id,
+	)
 	return err
 }

@@ -72,9 +72,12 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 		TrackingID: cmd.DraftID,
 		EventType:  model.EventDraftConfirmed,
 		Payload: model.DraftConfirmedPayload{
-			OldTrackingID: cmd.DraftID,
-			NewTrackingID: cmd.NewTrackingID,
-			Prediction:    cmd.Prediction,
+			OldTrackingID:       cmd.DraftID,
+			NewTrackingID:       cmd.NewTrackingID,
+			Prediction:          cmd.Prediction,
+			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
+			Price:               cmd.Price,
+			PriceBreakdown:      cmd.PriceBreakdown,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -117,11 +120,33 @@ func (r *eventSourcedShipmentRepository) ApplyCorrections(cmd CorrectCmd) (model
 		TrackingID: cmd.TrackingID,
 		EventType:  model.EventShipmentCorrected,
 		Payload: model.ShipmentCorrectedPayload{
-			Status:      cmd.Status,
-			Corrections: cmd.Corrections,
-			Prediction:  cmd.Prediction,
+			Status:        cmd.Status,
+			Corrections:   cmd.Corrections,
+			Prediction:    cmd.Prediction,
+			FinalBranchID: cmd.FinalBranchID,
 		},
 		ChangedBy: cmd.Username,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) ExtendETA(cmd ExtendETACmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventShipmentETAExtended,
+		Payload: model.ShipmentETAExtendedPayload{
+			OldETA:    cmd.OldETA,
+			NewETA:    cmd.NewETA,
+			AddedDays: cmd.AddedDays,
+			Reason:    cmd.Reason,
+		},
+		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
 	}
 	if err := r.store.Append(event); err != nil {
@@ -202,13 +227,14 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 
 	case model.EventDraftConfirmed:
 		from := model.StatusDraft
+		payload := de.Payload.(model.DraftConfirmedPayload)
 		return model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
 			ToStatus:   model.StatusAtOriginHub,
 			ChangedBy:  de.ChangedBy,
-			Notes:      "Envío confirmado",
+			Notes:      fmt.Sprintf("Confirmado desde borrador %s", payload.OldTrackingID),
 			Timestamp:  de.Timestamp,
 		}, true
 

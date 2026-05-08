@@ -39,6 +39,7 @@ func newSetup() testSetup {
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := NewIncidentService(incidentRepo, shipmentRepo, eventStore, proj)
 	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
+	svc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository()))
 	return testSetup{svc, commentSvc, incidentSvc, shipmentRepo, commentRepo, incidentRepo}
 }
 
@@ -319,8 +320,8 @@ func TestSaveDraft_PartialDataIsAllowed(t *testing.T) {
 	if ship.Status != model.StatusDraft {
 		t.Errorf("status = %s, want draft", ship.Status)
 	}
-	if !strings.HasPrefix(ship.TrackingID, "DRAFT-") {
-		t.Errorf("tracking_id = %q, want DRAFT- prefix", ship.TrackingID)
+	if !strings.HasPrefix(ship.TrackingID, "BORRADOR-") {
+		t.Errorf("tracking_id = %q, want BORRADOR- prefix", ship.TrackingID)
 	}
 }
 
@@ -733,13 +734,6 @@ func TestCancelShipment_NonCancellableStates(t *testing.T) {
 		setup func(ts testSetup) string
 	}{
 		{
-			name: "draft",
-			setup: func(ts testSetup) string {
-				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
-				return d.TrackingID
-			},
-		},
-		{
 			name: "delivered",
 			setup: func(ts testSetup) string {
 				ship := mustCreate(t, ts)
@@ -834,6 +828,13 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 		setup func(ts testSetup) string
 	}{
 		{
+			name: "draft",
+			setup: func(ts testSetup) string {
+				d, _ := ts.svc.SaveDraft(model.SaveDraftRequest{})
+				return d.TrackingID
+			},
+		},
+		{
 			name: "at_origin_hub",
 			setup: func(ts testSetup) string {
 				return mustCreate(t, ts).TrackingID
@@ -851,7 +852,12 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 		{
 			name: "ready_for_pickup",
 			setup: func(ts testSetup) string {
-				ship := mustCreate(t, ts)
+				req := defaultCreateReq()
+				req.DeliveryMethod = model.DeliveryMethodBranchPickup
+				ship, err := ts.svc.Create(req)
+				if err != nil {
+					t.Fatalf("create with branch_pickup: %v", err)
+				}
 				toInTransit(t, ts, ship.TrackingID)
 				toAtHub(t, ts, ship.TrackingID)
 				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
@@ -1128,7 +1134,7 @@ func seedShipmentAt(t *testing.T, ts testSetup, createdAt time.Time) model.Shipm
 		CurrentLocation:     "br-caba",
 		CreatedAt:           createdAt,
 		UpdatedAt:           createdAt,
-		EstimatedDeliveryAt: createdAt.AddDate(0, 0, 7),
+		EstimatedDeliveryAt: func() *time.Time { t := createdAt.AddDate(0, 0, 7); return &t }(),
 	}
 	created, err := ts.shipmentRepo.Create(repository.CreateShipmentCmd{
 		Shipment:  s,
@@ -1338,8 +1344,8 @@ func TestGetByTrackingID_Draft(t *testing.T) {
 	if result.Status != model.StatusDraft {
 		t.Errorf("status = %q, want draft", result.Status)
 	}
-	if !strings.HasPrefix(result.TrackingID, "DRAFT-") {
-		t.Errorf("tracking_id = %q, want DRAFT- prefix", result.TrackingID)
+	if !strings.HasPrefix(result.TrackingID, "BORRADOR-") {
+		t.Errorf("tracking_id = %q, want BORRADOR- prefix", result.TrackingID)
 	}
 }
 
@@ -1525,6 +1531,95 @@ func TestList_CancelledShipmentIncluded(t *testing.T) {
 	}
 	if !found {
 		t.Error("cancelled shipment not found in List result")
+	}
+}
+
+// ─── Pricing on Create / ConfirmDraft ────────────────────────────────────────
+
+func TestCreate_AssignsPriceAndBreakdown(t *testing.T) {
+	ts := newSetup()
+	ship := mustCreate(t, ts)
+	if ship.Price == nil || *ship.Price <= 0 {
+		t.Errorf("price should be set on create, got %v", ship.Price)
+	}
+	if ship.PriceBreakdown == nil {
+		t.Fatal("price breakdown should be set on create")
+	}
+	if ship.PriceCurrency != "ARS" {
+		t.Errorf("currency = %q, want ARS", ship.PriceCurrency)
+	}
+}
+
+func TestConfirmDraft_AssignsPrice(t *testing.T) {
+	ts := newSetup()
+	draft, err := ts.svc.SaveDraft(model.SaveDraftRequest{
+		Sender: defaultSender(), Recipient: defaultRecipient(),
+		WeightKg: 4.0, PackageType: model.PackageBox,
+	})
+	if err != nil {
+		t.Fatalf("save draft: %v", err)
+	}
+	confirmed, err := ts.svc.ConfirmDraft(draft.TrackingID, "operator")
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if confirmed.Price == nil || *confirmed.Price <= 0 {
+		t.Errorf("price should be set after confirm, got %v", confirmed.Price)
+	}
+}
+
+// ─── Correction directional validation ───────────────────────────────────────
+
+func TestCorrectShipment_TimeWindow_FlexibleToRestrictive_Rejected(t *testing.T) {
+	ts := newSetup()
+	// Create with flexible window (default).
+	ship := mustCreate(t, ts)
+	if ship.TimeWindow != model.TimeWindowFlexible {
+		t.Fatalf("seed assumption broken: window = %s", ship.TimeWindow)
+	}
+
+	cases := []model.TimeWindow{model.TimeWindowMorning, model.TimeWindowAfternoon}
+	for _, tw := range cases {
+		t.Run(string(tw), func(t *testing.T) {
+			twCopy := tw
+			_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+				Corrections: model.ShipmentCorrections{TimeWindow: &twCopy},
+			})
+			if err == nil || !strings.Contains(err.Error(), "ventana horaria") {
+				t.Errorf("expected restrictive direction error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCorrectShipment_TimeWindow_RestrictiveToFlexible_Allowed(t *testing.T) {
+	ts := newSetup()
+	req := defaultCreateReq()
+	req.TimeWindow = model.TimeWindowMorning
+	ship, err := ts.svc.Create(req)
+	if err != nil {
+		t.Fatalf("create with morning: %v", err)
+	}
+	flex := model.TimeWindowFlexible
+	_, err = ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+		Corrections: model.ShipmentCorrections{TimeWindow: &flex},
+	})
+	if err != nil {
+		t.Errorf("morning → flexible should be allowed, got: %v", err)
+	}
+}
+
+func TestCorrectShipment_TimeWindow_BetweenRestrictive_Allowed(t *testing.T) {
+	ts := newSetup()
+	req := defaultCreateReq()
+	req.TimeWindow = model.TimeWindowMorning
+	ship, _ := ts.svc.Create(req)
+	pm := model.TimeWindowAfternoon
+	_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
+		Corrections: model.ShipmentCorrections{TimeWindow: &pm},
+	})
+	if err != nil {
+		t.Errorf("morning ↔ afternoon (same tier) should be allowed, got: %v", err)
 	}
 }
 

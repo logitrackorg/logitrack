@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft, UserCog } from "lucide-react";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
 import { toast } from "../utils/toast";
+import { PageHeader } from "../components/ui/page-header";
 
 export function UserProfile() {
   const navigate = useNavigate();
@@ -60,23 +62,19 @@ export function UserProfile() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 600, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: "none",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            padding: "8px 16px",
-            cursor: "pointer",
-            marginBottom: 16,
-          }}
-        >
-          ← Volver
-        </button>
-        <h1>Perfil de Usuario</h1>
-      </div>
+    <div className="p-6 max-w-2xl mx-auto">
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Volver
+      </button>
+      <PageHeader
+        title="Perfil de usuario"
+        description="Tus datos personales y configuración de seguridad"
+        icon={<UserCog className="w-5 h-5" />}
+      />
 
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
         <div style={{ flex: "0 0 240px", minWidth: 220 }}>

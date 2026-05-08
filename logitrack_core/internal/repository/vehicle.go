@@ -23,4 +23,5 @@ type VehicleRepository interface {
 	ClearShipments(id string) error
 	AssignBranch(id string, branchID *string) error
 	SetDestinationBranch(id string, branchID *string) error
+	UpdateLocation(id string, lat, lng float64) error
 }

@@ -30,7 +30,6 @@ var (
 var PackageBaseSize = map[string]float64{
 	"envelope": 1,
 	"box":      5,
-	"pallet":   15,
 }
 
 // Dataset generation constants.

@@ -33,7 +33,7 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 061 | Cambio de estado de vehículo | Implementada (sin spec) |
 | 062 | Consulta de vehículos disponibles | Implementada (sin spec) |
 | 063 | Asignación de vehículo a envío / sucursal | Implementada (sin spec) |
-| 012b | Inicio y fin de viaje de vehículo (pre_transit → in_transit → at_branch) | Implementada (sin spec) |
+| 012b | Inicio y fin de viaje de vehículo (loaded → in_transit → at_hub) | Implementada (sin spec) |
 | 070 | Crear sucursal (admin) | Implementada (sin spec) |
 | 071 | Editar datos de sucursal (admin, solo activas) | Implementada (sin spec) |
 | 072 | Cambiar estado de sucursal (supervisor / admin) | Implementada (sin spec) |
@@ -42,6 +42,9 @@ Las specs son la fuente de verdad. La implementación debe satisfacer todos los 
 | 074 | [Exportar listado de envíos a CSV](./US-074-exportar-csv.md) | Implementada |
 | 067 | [Registrar intento fallido de entrega](./US-067-intento-fallido.md) | Parcialmente implementada |
 | 068 | [Registrar entrega exitosa](./US-068-entrega-exitosa.md) | Implementada |
+| 080 | [Precio del envío](./US-080-precio-envio.md) | Implementada |
+| 081–088 | [Nuevas funcionalidades: geolocalización, fecha estimada, borradores, tipo de envío](./US-081-088-nuevas-funcionalidades.md) | Implementada |
+| 089–099 | [Ruteo inteligente diario](./US-089-099-ruteo-inteligente.md) | Implementada |
 
 ## Convenciones
 

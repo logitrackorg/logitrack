@@ -41,9 +41,10 @@ export type ShipmentStatus =
   | "cancelled"
   | "lost"
   | "destroyed";
-export type PackageType = "envelope" | "box" | "pallet";
+export type PackageType = "envelope" | "box";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
+export type DeliveryMethod = "ultima_milla" | "retiro_sucursal";
 export type Priority = "alta" | "media" | "baja";
 
 export interface PriorityFactorDetail {
@@ -58,6 +59,21 @@ export interface Address {
   city: string;
   province: string;
   postal_code?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface PriceBreakdown {
+  base_fare: number;
+  distance_km: number;
+  distance_cost: number;
+  weight_surcharge: number;
+  last_mile_surcharge: number;
+  shipment_multiplier: number;
+  time_window_surplus: number;
+  fragile_surplus: number;
+  subtotal: number;
+  total: number;
 }
 
 export interface Shipment {
@@ -70,18 +86,19 @@ export interface Shipment {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   priority?: Priority;
   priority_score?: number;
   priority_confidence?: number;
   priority_factors?: Record<string, PriorityFactorDetail>;
   receiving_branch_id?: string;
   origin_branch_id?: string;
+  final_branch_id?: string;
   current_location?: string; // branch ID of current location
   status: ShipmentStatus;
   created_at: string;
   updated_at: string;
-  estimated_delivery_at: string;
+  estimated_delivery_at: string | null;
   delivered_at?: string;
   corrections?: Record<string, string>;
   has_incident?: boolean;
@@ -89,6 +106,9 @@ export interface Shipment {
   parent_shipment_id?: string;
   delivery_attempts?: number;
   is_returning?: boolean;
+  price?: number;
+  price_breakdown?: PriceBreakdown;
+  price_currency?: string;
 }
 
 export interface ShipmentEvent {
@@ -120,7 +140,7 @@ export interface CreateShipmentPayload {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   receiving_branch_id: string;
   created_by?: string;
 }
@@ -135,7 +155,7 @@ export interface SaveDraftPayload {
   special_instructions?: string;
   shipment_type?: ShipmentType;
   time_window?: TimeWindow;
-  cold_chain?: boolean;
+  delivery_method?: DeliveryMethod;
   receiving_branch_id?: string;
   created_by?: string;
 }

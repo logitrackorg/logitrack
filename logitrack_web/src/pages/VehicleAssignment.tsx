@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
+import { Link2 } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleStatusResponse } from "../api/vehicles";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
+import { PageHeader } from "../components/ui/page-header";
 
 const vehicleTypeLabels: Record<string, string> = {
   motocicleta: "Motocicleta",
@@ -136,8 +138,12 @@ export function VehicleAssignment() {
   };
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 24, fontSize: 24 }}>Asignar vehículo a envío</h1>
+    <div className="p-6 max-w-[1000px] mx-auto">
+      <PageHeader
+        title="Asignar vehículo a envío"
+        description="Cargá un envío en un vehículo disponible para iniciar el viaje"
+        icon={<Link2 className="w-5 h-5" />}
+      />
 
       {/* Available vehicles list */}
       <div style={{ marginBottom: 24 }}>
