@@ -1,0 +1,19 @@
+version: 1
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm install -g pnpm
+            - cd logitrack_web && pnpm install --frozen-lockfile
+        build:
+          commands:
+            - cd logitrack_web && pnpm run build
+      artifacts:
+        baseDirectory: logitrack_web/dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - logitrack_web/node_modules/**/*
+    appRoot: logitrack_web
