@@ -5,15 +5,15 @@ applications:
         preBuild:
           commands:
             - npm install -g pnpm
-            - cd logitrack_web && pnpm install --frozen-lockfile
+            - pnpm install --frozen-lockfile
         build:
           commands:
-            - cd logitrack_web && pnpm run build
+            - pnpm run build
       artifacts:
-        baseDirectory: logitrack_web/dist
+        baseDirectory: dist
         files:
           - '**/*'
       cache:
         paths:
-          - logitrack_web/node_modules/**/*
+          - node_modules/**/*
     appRoot: logitrack_web
