@@ -251,11 +251,10 @@ func main() {
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
 
-	// Zones — read: all authenticated; write: supervisor + admin
-	canManageZones := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
-	protected.POST("/zones", canManageZones, zoneHandler.Create)
-	protected.PATCH("/zones/:id", canManageZones, zoneHandler.Update)
+	protected.POST("/zones", adminOnly, zoneHandler.Create)
+	protected.PATCH("/zones/:id", adminOnly, zoneHandler.Update)
 	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
 
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
