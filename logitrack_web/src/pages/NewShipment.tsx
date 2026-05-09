@@ -151,18 +151,11 @@ export function NewShipment() {
   // Auto-save draft — debounced 800ms on any form change.
   // Requires at least one meaningful field to avoid creating empty drafts.
   useEffect(() => {
-    const hasAnyData =
-      form.weight_kg > 0 ||
-      !!form.sender.name ||
-      !!form.sender.phone ||
-      !!form.sender.dni ||
-      !!form.recipient.name ||
-      !!form.recipient.phone ||
-      !!form.recipient.dni ||
-      !!form.sender.address.street ||
-      !!form.recipient.address.street;
+    // Require at minimum both DNIs before creating a draft
+    const hasMinimumData =
+      form.sender.dni.length >= 7 && form.recipient.dni.length >= 7;
 
-    if (!hasAnyData) return;
+    if (!hasMinimumData) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
