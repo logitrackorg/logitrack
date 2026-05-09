@@ -541,16 +541,14 @@ export function NewShipment() {
                 value={form.weight_kg === 0 ? "" : form.weight_kg}
                 onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
             </Field>
-            <Field label="Tipo de paquete *">
+            <Field
+              label="Tipo de paquete *"
+              error={form.package_type === "envelope" && form.weight_kg > 5 ? "Máximo 5 kg para sobre" : undefined}
+            >
               <select style={input} required value={form.package_type}
                 onChange={(e) => set("package_type", e.target.value as PackageType)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-              {form.package_type === "envelope" && form.weight_kg > 5 && (
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#ef4444" }}>
-                  Un sobre no puede superar 5 kg. Cambiá a Caja para este peso.
-                </p>
-              )}
             </Field>
           </Row2>
           <Row2>
@@ -800,10 +798,15 @@ function Row2({ children }: { children: React.ReactNode }) {
   return <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>{children}</div>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
   return (
     <div className="grid gap-1.5">
-      {label && <label className="text-xs font-semibold text-slate-700">{label}</label>}
+      {label && (
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-slate-700">{label}</label>
+          {error && <span className="text-[11px] font-medium text-red-500 leading-tight">{error}</span>}
+        </div>
+      )}
       {children}
     </div>
   );
