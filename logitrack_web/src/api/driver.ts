@@ -37,7 +37,22 @@ export interface DriverRoute {
 export interface DriverRouteResponse {
   route: DriverRoute;
   shipments: Shipment[];
+  waypoints?: Array<{
+    sequence: number;
+    tracking_id: string;
+    latitude: number;
+    longitude: number;
+    name: string;
+    address: string;
+    status: string;
+  }>;
+  origin?: {
+    latitude: number;
+    longitude: number;
+    name: string;
+  };
 }
+
 
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),

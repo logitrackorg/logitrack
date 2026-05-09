@@ -225,6 +225,20 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by TEXT NOT NULL DEFAULT '';
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 		CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users(email) WHERE email IS NOT NULL AND email <> '';
+
+		CREATE TABLE IF NOT EXISTS zones (
+			id          UUID PRIMARY KEY,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			polygon     JSONB NOT NULL,
+			active      BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		ALTER TABLE zones DROP COLUMN IF EXISTS severity;
+
+		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS risky_zone_surcharge REAL NOT NULL DEFAULT 5000;
 	`)
 	return err
 }

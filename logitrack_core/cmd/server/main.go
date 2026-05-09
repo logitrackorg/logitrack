@@ -56,6 +56,12 @@ func main() {
 	pricingSvc := service.NewPricingService(pricingConfigRepo)
 	pricingHandler := handler.NewPricingHandler(pricingSvc)
 
+	zoneRepo := repository.NewPostgresZoneRepository(database)
+	zoneSvc := service.NewZoneService(zoneRepo)
+	zoneHandler := handler.NewZoneHandler(zoneSvc)
+	pricingSvc.SetZoneService(zoneSvc)
+	seed.LoadZones(zoneRepo)
+
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
@@ -108,7 +114,7 @@ func main() {
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -244,6 +250,12 @@ func main() {
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Zones — read: all authenticated; write: admin only
+	protected.GET("/zones", authenticated, zoneHandler.List)
+	protected.POST("/zones", adminOnly, zoneHandler.Create)
+	protected.PATCH("/zones/:id", adminOnly, zoneHandler.Update)
+	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
 
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)

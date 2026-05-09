@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2 } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -22,7 +22,8 @@ import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
-import { formatCurrencyARS } from "../api/pricing";
+import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
@@ -98,8 +99,6 @@ export function ShipmentDetail() {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
   const [draftForm, setDraftForm] = useState<SaveDraftPayload | null>(null);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [saveDraftError, setSaveDraftError] = useState("");
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
@@ -140,6 +139,10 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
+  // Auto-save draft state
+  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -291,22 +294,24 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
-  const handleSaveDraftChanges = async () => {
-    if (!trackingId || !draftForm) return;
-    if (!draftForm.sender.name) { setSaveDraftError("El nombre del remitente es obligatorio."); return; }
-    if (!draftForm.recipient.name) { setSaveDraftError("El nombre del destinatario es obligatorio."); return; }
-    setSavingDraft(true);
-    setSaveDraftError("");
-    try {
-      await shipmentApi.updateDraft(trackingId, draftForm);
-      navigate("/?status=draft");
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setSaveDraftError(msg ?? "No se pudieron guardar los cambios.");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
+  // Auto-save draft changes — debounced 800ms whenever draftForm changes
+  useEffect(() => {
+    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
+    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
+    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
+    draftAutoSaveTimer.current = setTimeout(async () => {
+      setDraftAutoSaveStatus('saving');
+      try {
+        await shipmentApi.updateDraft(trackingId, draftForm);
+        setDraftAutoSaveStatus('saved');
+        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
+      } catch {
+        setDraftAutoSaveStatus('error');
+      }
+    }, 800);
+    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftForm]);
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -638,13 +643,11 @@ export function ShipmentDetail() {
         <DraftEditForm
           form={draftForm}
           onChange={setDraftForm}
-          onSave={handleSaveDraftChanges}
           onConfirm={handleConfirmDraft}
           onDiscard={handleDiscardDraft}
-          saving={savingDraft}
           confirming={confirming}
-          saveError={saveDraftError}
           confirmError={confirmError}
+          autoSaveStatus={draftAutoSaveStatus}
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
         />
@@ -1354,6 +1357,10 @@ const TIME_WINDOWS = [
   { value: "morning",   label: "Mañana (8-12)" },
   { value: "afternoon", label: "Tarde (12-18)" },
 ];
+const DELIVERY_METHODS = [
+  { value: "ultima_milla",    label: "Última milla (entrega a domicilio)" },
+  { value: "retiro_sucursal", label: "Retiro en sucursal" },
+];
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
@@ -1388,16 +1395,14 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, confirming, saveError, confirmError, createdAt, draftId }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
-  onSave: () => void;
   onConfirm: () => void;
   onDiscard: () => void;
-  saving: boolean;
   confirming: boolean;
-  saveError: string;
   confirmError: string;
+  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
 }) {
@@ -1419,6 +1424,48 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
   const [recipientNameError, setRecipientNameError] = useState("");
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Live pricing quote
+  const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const weightKg = form.weight_kg ?? 0;
+    const packageType = form.package_type ?? "box";
+    const hasMinData =
+      weightKg > 0 &&
+      !!form.package_type &&
+      !!form.sender.address.province &&
+      !!form.recipient.address.province;
+    if (!hasMinData) { setQuote(null); return; }
+    if (quoteTimer.current) clearTimeout(quoteTimer.current);
+    quoteTimer.current = setTimeout(async () => {
+      setQuoteLoading(true);
+      try {
+        const q = await pricingApi.quote({
+          weight_kg: weightKg,
+          package_type: packageType,
+          shipment_type: form.shipment_type ?? "normal",
+          time_window: form.time_window ?? "flexible",
+          is_fragile: form.is_fragile,
+          delivery_method: form.delivery_method ?? "ultima_milla",
+          origin: form.sender.address,
+          destination: form.recipient.address,
+        });
+        setQuote(q);
+      } catch {
+        setQuote(null);
+      } finally {
+        setQuoteLoading(false);
+      }
+    }, 400);
+    return () => { if (quoteTimer.current) clearTimeout(quoteTimer.current); };
+  }, [
+    form.weight_kg, form.package_type, form.shipment_type,
+    form.time_window, form.is_fragile, form.delivery_method,
+    form.sender.address, form.recipient.address,
+  ]);
 
   const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
   const validateNameField = (name: string) =>
@@ -1476,6 +1523,8 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
       }, 400);
     }
   };
+
+  const envelopeOverweight = (form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5;
 
   const applyRecipientSuggestion = () => {
     if (!recipientSuggestion) return;
@@ -1570,8 +1619,10 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Paquete</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Peso (kg) *">
-            <input style={inp} type="number" step="0.1" min="0.1" required value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
+          <DField label="Peso (kg) *" error={envelopeOverweight ? "Un sobre no puede superar 5 kg; usá una caja" : undefined}>
+            <input style={{ ...inp, borderColor: envelopeOverweight ? "#ef4444" : undefined }}
+              type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
+              onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
           </DField>
           <DField label="Tipo de paquete *">
             <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
@@ -1588,6 +1639,11 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
               {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </DField>
+          <DField label="Método de entrega" style={{ gridColumn: "1 / -1" }}>
+            <select style={inp} value={form.delivery_method ?? "ultima_milla"} onChange={(e) => set("delivery_method", e.target.value)}>
+              {DELIVERY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </DField>
           <DField label="" style={{ gridColumn: "1 / -1" }}>
             <div style={{ display: "flex", gap: 20 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
@@ -1602,16 +1658,66 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
         </div>
       </fieldset>
 
+      {/* Cotización */}
+      {(quote || quoteLoading) && (
+        <GradientCard tone="brand">
+          <div className="flex items-start gap-3 mb-3">
+            <GradientCardIcon><Tag className="w-5 h-5" /></GradientCardIcon>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <GradientCardLabel>Cotización del envío</GradientCardLabel>
+                {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
+              </div>
+              {quote ? (
+                <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+              ) : (
+                <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
+              )}
+            </div>
+          </div>
+          {quote && (
+            <>
+              <div className="grid gap-1.5 text-xs pt-3 border-t border-white/15">
+                <div className="flex justify-between items-center"><span className="text-white/75">Tarifa base</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.base_fare)}</span></div>
+                <div className="flex justify-between items-center"><span className="text-white/75">Distancia ({quote.breakdown.distance_km.toFixed(1)} km)</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.distance_cost)}</span></div>
+                {quote.breakdown.weight_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo por peso</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.weight_surcharge)}</span></div>}
+                {quote.breakdown.last_mile_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Entrega a domicilio</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.last_mile_surcharge)}</span></div>}
+                {quote.breakdown.shipment_multiplier !== 1 && <div className="flex justify-between items-center"><span className="text-white/75">Tipo de envío</span><span className="font-semibold tabular-nums">× {quote.breakdown.shipment_multiplier.toFixed(2)}</span></div>}
+                {quote.breakdown.time_window_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo ventana horaria</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.time_window_surplus)}</span></div>}
+                {quote.breakdown.fragile_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo frágil</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.fragile_surplus)}</span></div>}
+              </div>
+              <p className="mt-3 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+            </>
+          )}
+        </GradientCard>
+      )}
+
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
+          {autoSaveStatus === 'saving' && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#92400e" }}>
+              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
+              Guardando…
+            </span>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#16a34a" }}>
+              <Check style={{ width: 13, height: 13 }} />
+              Guardado
+            </span>
+          )}
+          {autoSaveStatus === 'error' && (
+            <span style={{ fontSize: 12, color: "#ef4444" }}>Error al guardar</span>
+          )}
+        </div>
         <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
-          Guardá los cambios antes de confirmar. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+          Los cambios se guardan automáticamente. Al confirmar el envío ingresará al sistema logístico.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
-        {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
         {discardConfirm ? (
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
@@ -1619,7 +1725,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
               ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={onDiscard} disabled={saving || confirming}
+              <button onClick={onDiscard} disabled={confirming}
                 style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
                 Sí, descartar
               </button>
@@ -1631,15 +1737,12 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onSave} disabled={saving || confirming}
-            style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            {saving ? "Guardando..." : "Guardar cambios"}
-          </button>
-          <button onClick={onConfirm} disabled={saving || confirming}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
+          <button onClick={onConfirm}
+            disabled={confirming || envelopeOverweight}
+            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
             {confirming ? "Confirmando..." : "Confirmar envío"}
           </button>
-          <button onClick={() => setDiscardConfirm(true)} disabled={saving || confirming || discardConfirm}
+          <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
             style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
             Descartar borrador
           </button>
@@ -1649,10 +1752,15 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
   );
 }
 
-function DField({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+function DField({ label, children, style, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; error?: string }) {
   return (
     <div style={{ display: "grid", gap: 4, position: "relative", ...style }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
+      {label && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
+          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "#ef4444", lineHeight: 1.2 }}>{error}</span>}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -1938,6 +2046,9 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
               )}
               {breakdown.last_mile_surcharge > 0 && (
                 <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
+              )}
+              {breakdown.risky_zone_surcharge > 0 && (
+                <PriceRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
               )}
               {breakdown.shipment_multiplier !== 1 && (
                 <PriceRow label="Tipo de envío" value={`× ${breakdown.shipment_multiplier.toFixed(2)}`} />
