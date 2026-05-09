@@ -1,0 +1,253 @@
+.map-view-container {
+  position: relative;
+  height: calc(100vh - 200px);
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.map-canvas {
+  height: 100%;
+  width: 100%;
+}
+
+.map-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 2px dashed #cbd5e1;
+}
+
+/* Info Panel */
+.map-info-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  max-width: 180px;
+}
+
+.info-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.info-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.2;
+}
+
+/* Custom Markers */
+.custom-marker {
+  width: 36px;
+  height: 36px;
+  border-radius: 50% 50% 50% 0;
+  background: #f97316;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.custom-marker:hover {
+  transform: rotate(-45deg) scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.custom-marker.delivered {
+  background: #22c55e;
+}
+
+.custom-marker.failed {
+  background: #ef4444;
+}
+
+.custom-marker.completed {
+  opacity: 0.8;
+}
+
+.marker-number {
+  transform: rotate(45deg);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Popup Styles */
+.marker-popup {
+  font-family: system-ui, -apple-system, sans-serif;
+  min-width: 200px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
+.popup-sequence {
+  color: #1e3a5f;
+  font-size: 13px;
+}
+
+.status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.delivered {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.popup-name {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.popup-address {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.popup-address svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.popup-button {
+  width: 100%;
+  padding: 8px 12px;
+  background: #1e3a5f;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.popup-button:hover {
+  background: #2d5a8f;
+}
+
+/* Loading Overlay */
+.map-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 20px 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2000;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #f97316;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .map-info-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    top: auto;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+
+  .info-card {
+    flex: 1;
+    min-width: calc(50% - 4px);
+  }
+  
+  .info-value {
+    font-size: 14px;
+  }
+}
+
+/* Fix Leaflet Popup */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 14px;
+}
+
+.leaflet-popup-tip {
+  background: white;
+}

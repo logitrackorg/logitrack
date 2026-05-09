@@ -19,6 +19,7 @@ import {
 import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
+import { MapView } from "../components/ui/MapView";
 import { BottomSheet } from "../components/ui/bottom-sheet";
 import {
   FAILED_REASONS,
@@ -41,6 +42,8 @@ export function DriverRoute() {
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
 
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
   const [failedShipment, setFailedShipment] = useState<Shipment | null>(null);
@@ -53,6 +56,7 @@ export function DriverRoute() {
   const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
+ // const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
   const load = () =>
     driverApi
@@ -155,6 +159,7 @@ export function DriverRoute() {
     : sortCompletedShipments(completedList);
 
   const canAct = routeStatus === "en_curso";
+  const waypoints = data?.waypoints ?? [];
 
   return (
     <div className="pb-32">
@@ -173,6 +178,33 @@ export function DriverRoute() {
                 </p>
               </div>
             </div>
+
+            {/*  Toggle Lista/Mapa */}
+            {canAct && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
+                    ? 'bg-[#1e3a5f] text-white'
+                    : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  Lista
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
+                    ? 'bg-[#1e3a5f] text-white'
+                    : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Mapa
+                </button>
+              </div>
+            )}
+
             <RouteStatusPill status={routeStatus} />
           </div>
 
@@ -232,32 +264,42 @@ export function DriverRoute() {
           </Card>
         )}
 
-        {visibleList.length === 0 ? (
-          <Card className="p-8 text-center">
-            {tab === "pendientes" ? (
-              <>
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-slate-900">¡Todo listo por ahora!</p>
-                <p className="mt-1 text-xs text-slate-500">No quedan entregas pendientes.</p>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">Aún no completaste ninguna entrega.</p>
-            )}
-          </Card>
+        {/*  Renderizado condicional Lista o Mapa */}
+        {viewMode === 'map' ? (
+          <MapView
+            waypoints={waypoints}
+            onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+          />
         ) : (
-          <div className="grid gap-3">
-            {visibleList.map((shipment, idx) => (
-              <ShipmentCard
-                key={shipment.tracking_id}
-                shipment={shipment}
-                order={tab === "pendientes" ? idx + 1 : undefined}
-                canAct={canAct && tab === "pendientes"}
-                onDeliver={() => setDeliverShipment(shipment)}
-                onFailed={() => setFailedShipment(shipment)}
-                onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
-              />
-            ))}
-          </div>
+          <>
+            {visibleList.length === 0 ? (
+              <Card className="p-8 text-center">
+                {tab === "pendientes" ? (
+                  <>
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-slate-900">¡Todo listo por ahora!</p>
+                    <p className="mt-1 text-xs text-slate-500">No quedan entregas pendientes.</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Aún no completaste ninguna entrega.</p>
+                )}
+              </Card>
+            ) : (
+              <div className="grid gap-3">
+                {visibleList.map((shipment, idx) => (
+                  <ShipmentCard
+                    key={shipment.tracking_id}
+                    shipment={shipment}
+                    order={tab === "pendientes" ? idx + 1 : undefined}
+                    canAct={canAct && tab === "pendientes"}
+                    onDeliver={() => setDeliverShipment(shipment)}
+                    onFailed={() => setFailedShipment(shipment)}
+                    onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -328,9 +370,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${
-        active ? "text-[#1e3a5f]" : "text-slate-500 hover:text-slate-700"
-      }`}
+      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[#1e3a5f]" : "text-slate-500 hover:text-slate-700"
+        }`}
     >
       {children}
       {active && (
@@ -627,11 +668,10 @@ function FailedSheet({
             <button
               key={r.id}
               onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
-                active
-                  ? "border-rose-500 bg-rose-50 text-rose-800"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${active
+                ? "border-rose-500 bg-rose-50 text-rose-800"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
             >
               {r.label}
             </button>
@@ -738,9 +778,8 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
               onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
               className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-3"
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                delivered ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-              }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${delivered ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                }`}>
                 {delivered ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
               </div>
               <div className="min-w-0 flex-1">

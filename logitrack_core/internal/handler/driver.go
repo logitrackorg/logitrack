@@ -25,7 +25,30 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "no tenés una ruta asignada para hoy"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"route": route, "shipments": shipments})
+
+	// Generar waypoints desde los shipments
+	waypoints := make([]map[string]interface{}, 0)
+	for i, shipment := range shipments {
+		// Solo incluir envíos pendientes de entrega
+		if shipment.Status == "out_for_delivery" {
+			waypoint := map[string]interface{}{
+				"sequence":     i + 1,
+				"tracking_id":  shipment.TrackingID,
+				"latitude":     shipment.Recipient.Address.Latitude,
+				"longitude":    shipment.Recipient.Address.Longitude,
+				"name":         shipment.Recipient.Name,
+				"address":      shipment.Recipient.Address.Street + ", " + shipment.Recipient.Address.City,
+				"status":       shipment.Status,
+			}
+			waypoints = append(waypoints, waypoint)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"route":     route,
+		"shipments": shipments,
+		"waypoints": waypoints,
+	})
 }
 
 // StartRoute transitions the driver's today route from pendiente → en_curso.
