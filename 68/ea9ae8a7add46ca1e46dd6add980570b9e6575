@@ -1,0 +1,27 @@
+logitrack_web/src/components/ui/MapView.tsx
+  s_71332fd5cdd921::t_082cd489d84e74 289-294,296
+  s_71332fd5cdd921::t_b32311c4b6fce3 209,213,217-218
+  s_71332fd5cdd921::t_55335a14eb1ed7 97,99,101
+  s_71332fd5cdd921::t_cf734d0a9e0c02 210,219-220
+  s_71332fd5cdd921::t_5f7f2c68fffcbc 360-365,367
+  s_71332fd5cdd921::t_cdf0f3f8005631 366,368-386
+  s_71332fd5cdd921::t_a6f72ce9c0f6e7 211-212,214-216
+logitrack_web/src/components/ui/NextStopCard.tsx
+  s_71332fd5cdd921::t_f5662d5aec3ff5 101-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "68ea9ae8a7add46ca1e46dd6add980570b9e6575",
+  "prompts": {},
+  "sessions": {
+    "s_71332fd5cdd921": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5e28696-30f9-48d9-aac2-ab9e1add6498",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
