@@ -1619,13 +1619,10 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
       <fieldset style={fsStyle}>
         <legend style={legStyle}>Paquete</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Peso (kg) *">
-            <input style={{ ...inp, borderColor: (form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5 ? "#ef4444" : undefined }}
+          <DField label="Peso (kg) *" error={envelopeOverweight ? "Un sobre no puede superar 5 kg; usá una caja" : undefined}>
+            <input style={{ ...inp, borderColor: envelopeOverweight ? "#ef4444" : undefined }}
               type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
               onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
-            {(form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5 && (
-              <span style={{ color: "#ef4444", fontSize: 12 }}>Un sobre no puede superar 5 kg; para envíos de mayor peso usá una caja</span>
-            )}
           </DField>
           <DField label="Tipo de paquete *">
             <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
@@ -1755,10 +1752,15 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   );
 }
 
-function DField({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+function DField({ label, children, style, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; error?: string }) {
   return (
     <div style={{ display: "grid", gap: 4, position: "relative", ...style }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
+      {label && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
+          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "#ef4444", lineHeight: 1.2 }}>{error}</span>}
+        </div>
+      )}
       {children}
     </div>
   );
