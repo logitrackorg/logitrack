@@ -1,0 +1,131 @@
+logitrack_core/internal/db/migrate.go
+  s_71332fd5cdd921::t_7d848e053cc9be 228-238,240-241
+  s_71332fd5cdd921::t_1898769f548f88 239
+logitrack_core/cmd/server/main.go
+  s_71332fd5cdd921::t_77f04fac10121e 259
+  s_71332fd5cdd921::t_e662526621f670 254-258,260
+  s_71332fd5cdd921::t_6ed09ae7e7122d 59-62,64
+  s_71332fd5cdd921::t_3a2ab7529fada8 63
+logitrack_core/internal/service/zone.go
+  s_71332fd5cdd921::t_5fc4c081305216 1-28,30-68,70-83,92-121,123-130
+  s_71332fd5cdd921::t_53ad892f9de265 84-88
+  s_71332fd5cdd921::t_22a02b449fdd5f 29,69,89-91,122
+logitrack_web/src/pages/DriverRoute.tsx
+  s_71332fd5cdd921::t_f17a93ef967428 28
+  s_71332fd5cdd921::t_8a42b81f76249b 200-202
+  s_71332fd5cdd921::t_6190a8561e5e93 331
+  s_71332fd5cdd921::t_2b1e951737d78f 70
+  s_71332fd5cdd921::t_d09a7e0501245a 320-330,332
+  s_71332fd5cdd921::t_a181c3db337538 203-204
+  s_71332fd5cdd921::t_9315d2de1b4a30 49
+  s_71332fd5cdd921::t_974ba96179aeec 24,27
+logitrack_web/src/pages/ZoneManagement.tsx
+  s_71332fd5cdd921::t_f952975fc911da 4-6,13,23-27,31-34,40,42-45,47-48,73-74,76-77,79-83,100,102-104,107,109,113,128-148,155,157-172,181-189,192-193,197-198,202,206-215,221,225-226,232,234,238-244,252-260,267,281-299,302,304-305,314,317,319,326-356,360-377,381,384-389,392,397-398,402,404-410,417,425-426,428,431,433,448-452,458,470,480,489-506,509,513,524-563
+  s_71332fd5cdd921::t_279327a6f88597 7,75,78,86-87,95-97,101,223-224,403,412,461-462,464-466
+  s_71332fd5cdd921::t_b9a1c5fc839216 1-3,8-12,14-22,28-30,35-39,41,46,49-72,84-85,88-94,98-99,105-106,108,110-112,114-127,149-154,156,173-180,190-191,194-196,199-201,203-205,216-220,222,227-231,233,235-237,245-251,261-266,268-280,300-301,303,306-313,315-316,318,320-325,357-359,378-380,382-383,390-391,393-396,399-401,411,413-416,418-424,427,429-430,432,434-447,453-457,459-460,463,467-469,471-479,481-488,507-508,510-512,514-523,564-571
+logitrack_web/src/App.tsx
+  s_71332fd5cdd921::t_0a780ee0be6402 27
+  s_71332fd5cdd921::t_a39eead8e166bc 258-263
+  s_71332fd5cdd921::t_d9148d3420f60a 67-69
+logitrack_core/internal/repository/pricing_config.go
+  s_71332fd5cdd921::t_a6665c17c343d6 26,31,48-51,54
+logitrack_web/src/api/shipments.ts
+  s_71332fd5cdd921::t_6e3595fec5c04d 72
+logitrack_core/internal/model/pricing.go
+  s_71332fd5cdd921::t_794f7281c2c2e7 16,29
+  s_71332fd5cdd921::t_15231ecc224a66 43
+logitrack_web/src/pages/NewShipment.tsx
+  s_71332fd5cdd921::t_a522f2fc36d502 719-721
+logitrack_web/src/api/zones.ts
+  s_71332fd5cdd921::t_060b71b0f917df 70-74
+  s_71332fd5cdd921::t_756e4c816212af 1-65,67-69,75
+  s_71332fd5cdd921::t_f1cb1ef8a7278b 66
+logitrack_web/src/components/ui/ZoneAlert.tsx
+  s_71332fd5cdd921::t_c0b96c489e99f8 1
+  s_71332fd5cdd921::t_f92781e2e9c044 2-17,19-26
+  s_71332fd5cdd921::t_fdf694f9766117 18
+logitrack_core/internal/seed/seed.go
+  s_71332fd5cdd921::t_4ef2c3526567c9 228-249
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_71332fd5cdd921::t_06c61663525b39 1942-1944
+logitrack_core/internal/handler/zone.go
+  s_71332fd5cdd921::t_90e7b5abf8b3ae 1-60,62,64-68
+  s_71332fd5cdd921::t_c27919ba053c26 61,63
+logitrack_web/src/utils/pointInPolygon.ts
+  s_71332fd5cdd921::t_cccd6cc0d2707d 19-20
+  s_71332fd5cdd921::t_ce7a2a8457f0ee 1-18,21
+logitrack_web/src/api/pricing.ts
+  s_71332fd5cdd921::t_2c8da901353cfd 37
+logitrack_core/internal/service/pricing.go
+  s_71332fd5cdd921::t_93f8fea01971d3 48,51
+  s_71332fd5cdd921::t_9c6cb0f234906c 49-50,52
+  s_71332fd5cdd921::t_ce2b1138b12551 75-83
+  s_71332fd5cdd921::t_f4fd4bba84d338 18-19,26-27
+  s_71332fd5cdd921::t_b61da4b427c3db 104-109
+  s_71332fd5cdd921::t_d5d7a6b5a67306 128
+  s_71332fd5cdd921::t_680fdc26a7afbc 170-171
+logitrack_core/internal/seed/zone_seed.go
+  s_71332fd5cdd921::t_d5e2f5ca3f1a73 1-53,55-65,81-86
+  s_71332fd5cdd921::t_b9ca7c4dac2dce 54
+  s_3590b68ca091e9::t_eba139d9d5a5e1 66-80
+logitrack_web/src/components/ui/MapView.tsx
+  s_71332fd5cdd921::t_5edd1d74b49af7 139-146,149-154,156-162
+  s_71332fd5cdd921::t_7791cb7b6c5b83 82
+  s_71332fd5cdd921::t_53901aad4a8cfd 90
+  s_71332fd5cdd921::t_64ac303914a9da 18
+  s_71332fd5cdd921::t_59fc7a3399e52b 56
+  s_3590b68ca091e9::t_c848c6213a49bd 361-362,364
+  s_3590b68ca091e9::t_7e5d336b68b7f7 374-376
+  s_71332fd5cdd921::t_c17e69f16633fd 19
+  s_71332fd5cdd921::t_17d9c7ba5c51e4 147-148,155
+  s_71332fd5cdd921::t_8e18e76eb806c1 127
+  s_3590b68ca091e9::t_c3713b6aa3f684 403
+logitrack_core/internal/repository/zone.go
+  s_71332fd5cdd921::t_6a12e3a53c5794 10
+  s_71332fd5cdd921::t_352a76d5570348 11
+  s_71332fd5cdd921::t_cfe84825b81de9 1-9,12
+logitrack_web/src/components/ui/MapView.css
+  s_71332fd5cdd921::t_a28050572d3f92 554-556,558-611
+  s_c5cce224d98f3a::t_c0a9063db4ea61 557
+logitrack_core/internal/repository/postgres_zone.go
+  s_71332fd5cdd921::t_434e7a423f1a0e 21,46,60-62,77-79,83-85,106,119
+  s_71332fd5cdd921::t_eb02d9cef5969a 67-71
+  s_71332fd5cdd921::t_c0b6b285d40349 1-20,22-45,47-59,63-66,72-76,80-82,86-105,107-118,120-126
+logitrack_core/internal/model/zone.go
+  s_71332fd5cdd921::t_232b65aa2c5e18 1-10,19-21,25-27,32
+  s_71332fd5cdd921::t_8746695a3661ae 11-18,22-24,28-31
+logitrack_web/src/pages/PricingConfig.tsx
+  s_71332fd5cdd921::t_1ecb13c61a831b 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "87439feea1b0cc49b9be30ef9d8759333d02f310",
+  "prompts": {},
+  "sessions": {
+    "s_3590b68ca091e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3abe71e8-58c3-4b96-85b6-3b66fa37f95c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_71332fd5cdd921": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e5e28696-30f9-48d9-aac2-ab9e1add6498",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_c5cce224d98f3a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c9f5ed0-1c54-4b69-bd76-97099d6beaec",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
