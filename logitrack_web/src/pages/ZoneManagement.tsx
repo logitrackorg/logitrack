@@ -8,7 +8,7 @@ import { zoneApi, ZONE_COLOR, type Zone } from "../api/zones";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as typeof L.Icon.Default.prototype & { _getIconUrl?: unknown })._getIconUrl;
 
 type DrawingMode = "none" | "new" | "edit";
 
