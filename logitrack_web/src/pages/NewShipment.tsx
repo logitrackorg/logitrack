@@ -546,6 +546,11 @@ export function NewShipment() {
                 onChange={(e) => set("package_type", e.target.value as PackageType)}>
                 {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
+              {form.package_type === "envelope" && form.weight_kg > 5 && (
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#ef4444" }}>
+                  Un sobre no puede superar 5 kg. Cambiá a Caja para este peso.
+                </p>
+              )}
             </Field>
           </Row2>
           <Row2>
@@ -657,7 +662,8 @@ export function NewShipment() {
 
         {(() => {
           const atLimit = branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity;
-          const blocked = atLimit && !capacityConfirmed;
+          const envelopeTooHeavy = form.package_type === "envelope" && form.weight_kg > 5;
+          const blocked = (atLimit && !capacityConfirmed) || envelopeTooHeavy;
           return (
             <div className="flex gap-3">
               <button
