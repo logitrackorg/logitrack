@@ -1,0 +1,19 @@
+logitrack_core/.gitignore
+  s_f205434ae3a537::t_fba3b832a4009d 156-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "ccdc5825ccc792831a28120beaacb17d8697a7b3",
+  "prompts": {},
+  "sessions": {
+    "s_f205434ae3a537": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd6efcad-0b6d-411c-9562-4c981781452a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
