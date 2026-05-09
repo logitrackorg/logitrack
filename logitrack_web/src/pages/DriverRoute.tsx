@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -20,15 +20,15 @@ import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
+import { NextStopCard } from "../components/ui/NextStopCard";
 import { BottomSheet } from "../components/ui/bottom-sheet";
+import { useGeolocation } from "../hooks/useGeolocation";
 import {
   FAILED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
   mapsHref,
   recipientView,
-  sortCompletedShipments,
-  sortPendingShipments,
   telHref,
   timeWindowTone,
   waHref,
@@ -41,22 +41,19 @@ export function DriverRoute() {
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
-
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
   const [failedShipment, setFailedShipment] = useState<Shipment | null>(null);
-
   const [recipientDni, setRecipientDni] = useState("");
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
-
   const [submitting, setSubmitting] = useState(false);
   const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
- // const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
   const load = () =>
     driverApi
@@ -132,8 +129,23 @@ export function DriverRoute() {
     }
   };
 
-  if (loading) return <RouteSkeleton />;
+  // Hooks que necesitan estar antes de cualquier return condicional
+  const routePoints = useMemo(() => {
+    const origin = data?.origin;
+    const wps = data?.waypoints ?? [];
+    const pts: Array<{ lat: number; lng: number }> = [];
+    if (origin) pts.push({ lat: origin.latitude, lng: origin.longitude });
+    [...wps].sort((a, b) => a.sequence - b.sequence)
+      .forEach((wp) => pts.push({ lat: wp.latitude, lng: wp.longitude }));
+    return pts;
+  }, [data]);
 
+  const [simActive, setSimActive] = useState(false);
+
+  const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360);
+
+  if (loading) return <RouteSkeleton />;
   if (noRoute) return <NoRouteView />;
   if (!data) return null;
 
@@ -154,12 +166,31 @@ export function DriverRoute() {
     return <RouteCompletedView data={data} today={today} />;
   }
 
-  const visibleList = tab === "pendientes"
-    ? sortPendingShipments(pendingList)
-    : sortCompletedShipments(completedList);
-
   const canAct = routeStatus === "en_curso";
   const waypoints = data?.waypoints ?? [];
+  const origin = data?.origin;
+
+  // Orden de la ruta según los waypoints del mapa
+  const sequenceOf = Object.fromEntries(
+    waypoints.map((wp) => [wp.tracking_id, wp.sequence])
+  );
+  const byRouteOrder = (a: Shipment, b: Shipment) =>
+    (sequenceOf[a.tracking_id] ?? 9999) - (sequenceOf[b.tracking_id] ?? 9999);
+
+  const visibleList = tab === "pendientes"
+    ? [...pendingList].sort(byRouteOrder)
+    : [...completedList].sort(byRouteOrder);
+
+  // Próxima parada pendiente y shipment asociado
+  const allPendingStops = waypoints
+    .filter((wp) => wp.status === "out_for_delivery")
+    .sort((a, b) => a.sequence - b.sequence);
+
+  const nextStop = allPendingStops[0] ?? null;
+
+  const nextShipment = nextStop
+    ? (data?.shipments.find((s) => s.tracking_id === nextStop.tracking_id) ?? null)
+    : null;
 
   return (
     <div className="pb-32">
@@ -205,6 +236,16 @@ export function DriverRoute() {
               </div>
             )}
 
+            {!simActive && simulationMode === "real" && (
+              <button
+                onClick={() => { setSimActive(true); setViewMode('map'); }}
+                title="Activar simulación GPS"
+                className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
+              >
+                🎬
+              </button>
+            )}
+
             <RouteStatusPill status={routeStatus} />
           </div>
 
@@ -217,7 +258,7 @@ export function DriverRoute() {
             </div>
           </div>
 
-          {canAct && (
+          {canAct && viewMode === 'list' && (
             <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
               <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
                 Pendientes
@@ -264,10 +305,15 @@ export function DriverRoute() {
           </Card>
         )}
 
-        {/*  Renderizado condicional Lista o Mapa */}
+        {/* Renderizado condicional Lista o Mapa */}
         {viewMode === 'map' ? (
           <MapView
             waypoints={waypoints}
+            origin={origin}
+            userLocation={userLocation ?? undefined}
+            simulationMode={simulationMode}
+            simulationControls={{ isPaused, pause, play, reset, onExit: () => setSimActive(false) }}
+            onRouteInfoChange={setRouteInfo}
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />
         ) : (
@@ -302,6 +348,19 @@ export function DriverRoute() {
           </>
         )}
       </div>
+
+      {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
+      {viewMode === 'map' && canAct && (
+        <NextStopCard
+          nextStop={nextStop}
+          allPendingStops={allPendingStops}
+          userLocation={userLocation ?? undefined}
+          routeInfo={routeInfo}
+          canAct={canAct}
+          onDeliver={() => nextShipment && setDeliverShipment(nextShipment)}
+          onFailed={() => nextShipment && setFailedShipment(nextShipment)}
+        />
+      )}
 
       {/* Sticky CTA para iniciar ruta */}
       {routeStatus === "pendiente" && (
