@@ -34,6 +34,7 @@ export interface PricingConfig {
   weight_surcharge_mid: number;
   weight_surcharge_high: number;
   last_mile_surcharge: number;
+  risky_zone_surcharge: number;
   shipment_express_multiplier: number;
   time_window_restrictive_multiplier: number;
   fragile_multiplier: number;

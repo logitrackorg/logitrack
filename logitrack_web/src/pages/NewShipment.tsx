@@ -761,6 +761,9 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
             {quote.breakdown.last_mile_surcharge > 0 && (
               <BreakdownRow label="Entrega a domicilio" value={formatCurrencyARS(quote.breakdown.last_mile_surcharge)} />
             )}
+            {quote.breakdown.risky_zone_surcharge > 0 && (
+              <BreakdownRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
+            )}
             {quote.breakdown.shipment_multiplier !== 1 && (
               <BreakdownRow label="Tipo de envío" value={`× ${quote.breakdown.shipment_multiplier.toFixed(2)}`} />
             )}
