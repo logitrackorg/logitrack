@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2 } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -98,8 +98,6 @@ export function ShipmentDetail() {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
   const [draftForm, setDraftForm] = useState<SaveDraftPayload | null>(null);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [saveDraftError, setSaveDraftError] = useState("");
   const [comments, setComments] = useState<ShipmentComment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
@@ -140,6 +138,10 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
+  // Auto-save draft state
+  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -291,22 +293,24 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
-  const handleSaveDraftChanges = async () => {
-    if (!trackingId || !draftForm) return;
-    if (!draftForm.sender.name) { setSaveDraftError("El nombre del remitente es obligatorio."); return; }
-    if (!draftForm.recipient.name) { setSaveDraftError("El nombre del destinatario es obligatorio."); return; }
-    setSavingDraft(true);
-    setSaveDraftError("");
-    try {
-      await shipmentApi.updateDraft(trackingId, draftForm);
-      navigate("/?status=draft");
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setSaveDraftError(msg ?? "No se pudieron guardar los cambios.");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
+  // Auto-save draft changes — debounced 800ms whenever draftForm changes
+  useEffect(() => {
+    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
+    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
+    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
+    draftAutoSaveTimer.current = setTimeout(async () => {
+      setDraftAutoSaveStatus('saving');
+      try {
+        await shipmentApi.updateDraft(trackingId, draftForm);
+        setDraftAutoSaveStatus('saved');
+        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
+      } catch {
+        setDraftAutoSaveStatus('error');
+      }
+    }, 800);
+    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftForm]);
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -638,13 +642,11 @@ export function ShipmentDetail() {
         <DraftEditForm
           form={draftForm}
           onChange={setDraftForm}
-          onSave={handleSaveDraftChanges}
           onConfirm={handleConfirmDraft}
           onDiscard={handleDiscardDraft}
-          saving={savingDraft}
           confirming={confirming}
-          saveError={saveDraftError}
           confirmError={confirmError}
+          autoSaveStatus={draftAutoSaveStatus}
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
         />
@@ -1388,16 +1390,14 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, confirming, saveError, confirmError, createdAt, draftId }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
-  onSave: () => void;
   onConfirm: () => void;
   onDiscard: () => void;
-  saving: boolean;
   confirming: boolean;
-  saveError: string;
   confirmError: string;
+  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
 }) {
@@ -1604,14 +1604,30 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <h2 style={{ fontSize: "1rem", margin: "0 0 8px", color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
+          {autoSaveStatus === 'saving' && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#92400e" }}>
+              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
+              Guardando…
+            </span>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#16a34a" }}>
+              <Check style={{ width: 13, height: 13 }} />
+              Guardado
+            </span>
+          )}
+          {autoSaveStatus === 'error' && (
+            <span style={{ fontSize: 12, color: "#ef4444" }}>Error al guardar</span>
+          )}
+        </div>
         <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
-          Guardá los cambios antes de confirmar. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+          Los cambios se guardan automáticamente. Al confirmar el envío ingresará al sistema logístico.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
-        {saveError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{saveError}</p>}
         {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
         {discardConfirm ? (
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
@@ -1619,7 +1635,7 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
               ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={onDiscard} disabled={saving || confirming}
+              <button onClick={onDiscard} disabled={confirming}
                 style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
                 Sí, descartar
               </button>
@@ -1631,15 +1647,11 @@ function DraftEditForm({ form, onChange, onSave, onConfirm, onDiscard, saving, c
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onSave} disabled={saving || confirming}
-            style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            {saving ? "Guardando..." : "Guardar cambios"}
-          </button>
-          <button onClick={onConfirm} disabled={saving || confirming}
+          <button onClick={onConfirm} disabled={confirming}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
             {confirming ? "Confirmando..." : "Confirmar envío"}
           </button>
-          <button onClick={() => setDiscardConfirm(true)} disabled={saving || confirming || discardConfirm}
+          <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
             style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
             Descartar borrador
           </button>
