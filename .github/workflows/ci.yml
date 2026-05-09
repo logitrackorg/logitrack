@@ -50,8 +50,25 @@ jobs:
           version: latest
           run_install: false
 
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('logitrack_web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile --ignore-scripts
+        run: pnpm install --no-frozen-lockfile --ignore-scripts --registry https://registry.npmmirror.com
+
+      - name: Setup esbuild
+        run: pnpm rebuild esbuild
 
       - name: Lint
         run: pnpm run lint
+
+      - name: Build
+        run: pnpm run build
