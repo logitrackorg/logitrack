@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box } from "lucide-react";
+import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
@@ -81,6 +81,11 @@ export function NewShipment() {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Auto-save draft state
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -142,6 +147,40 @@ export function NewShipment() {
     form.sender.address,
     form.recipient.address,
   ]);
+
+  // Auto-save draft — debounced 800ms on any form change.
+  // Requires at least one meaningful field to avoid creating empty drafts.
+  useEffect(() => {
+    // Require at minimum both DNIs before creating a draft
+    const hasMinimumData =
+      form.sender.dni.length >= 7 && form.recipient.dni.length >= 7;
+
+    if (!hasMinimumData) return;
+
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
+
+    autoSaveTimer.current = setTimeout(async () => {
+      setAutoSaveStatus('saving');
+      try {
+        if (draftId) {
+          await shipmentApi.updateDraft(draftId, form);
+        } else {
+          const saved = await shipmentApi.saveDraft(form);
+          setDraftId(saved.tracking_id);
+        }
+        setAutoSaveStatus('saved');
+        savedResetTimer.current = setTimeout(() => setAutoSaveStatus('idle'), 3000);
+      } catch {
+        setAutoSaveStatus('error');
+      }
+    }, 800);
+
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
 
   const set = (field: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -283,27 +322,19 @@ export function NewShipment() {
     setLoading(true);
     setError("");
     try {
-      const shipment = await shipmentApi.create(form);
-      navigate(`/shipments/${shipment.tracking_id}`);
+      // If a draft was auto-saved, update it with the latest data then confirm it;
+      // otherwise create from scratch
+      if (draftId) {
+        await shipmentApi.updateDraft(draftId, form);
+        const shipment = await shipmentApi.confirmDraft(draftId, user?.username ?? "");
+        navigate(`/shipments/${shipment.tracking_id}`);
+      } else {
+        const shipment = await shipmentApi.create(form);
+        navigate(`/shipments/${shipment.tracking_id}`);
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(msg ?? "No se pudo crear el envío. Por favor, intentá de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    if (!form.sender.name) { setError("El nombre del remitente es obligatorio para guardar un borrador."); return; }
-    if (!form.recipient.name) { setError("El nombre del destinatario es obligatorio para guardar un borrador."); return; }
-    setLoading(true);
-    setError("");
-    try {
-      const shipment = await shipmentApi.saveDraft(form);
-      navigate(`/shipments/${shipment.tracking_id}`);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? "No se pudo guardar el borrador. Por favor, intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -323,8 +354,25 @@ export function NewShipment() {
         <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
           <PackagePlus className="w-5 h-5" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
+            {autoSaveStatus === 'saving' && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Guardando…
+              </span>
+            )}
+            {autoSaveStatus === 'saved' && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
+                <Check className="w-3.5 h-3.5" />
+                Guardado
+              </span>
+            )}
+            {autoSaveStatus === 'error' && (
+              <span className="text-xs text-rose-500">Error al guardar</span>
+            )}
+          </div>
           <p className="mt-1 text-sm text-slate-500">Completá los datos para registrar un envío en el sistema</p>
         </div>
       </div>
@@ -663,19 +711,12 @@ export function NewShipment() {
           const envelopeTooHeavy = form.package_type === "envelope" && form.weight_kg > 5;
           const blocked = (atLimit && !capacityConfirmed) || envelopeTooHeavy;
           return (
-            <div className="flex gap-3">
-              <button
-                type="button"
-                disabled={loading || blocked}
-                onClick={handleSaveDraft}
-                className="flex-1 h-11 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-sm font-semibold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
-              >
-                {loading ? "Guardando…" : "Guardar borrador"}
-              </button>
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-slate-400 text-center">Los cambios se guardan automáticamente</p>
               <button
                 type="submit"
                 disabled={loading || blocked}
-                className="flex-1 h-11 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="w-full h-11 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 {loading ? "Creando…" : "Crear envío"}
               </button>
