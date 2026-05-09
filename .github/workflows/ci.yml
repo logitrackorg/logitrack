@@ -62,7 +62,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install --ignore-scripts --registry https://registry.npmmirror.com
+        run: pnpm install --no-frozen-lockfile --ignore-scripts --registry https://registry.npmmirror.com
 
       - name: Setup esbuild
         run: pnpm rebuild esbuild

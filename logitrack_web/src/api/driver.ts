@@ -37,15 +37,20 @@ export interface DriverRoute {
 export interface DriverRouteResponse {
   route: DriverRoute;
   shipments: Shipment[];
-  waypoints?: Array<{      
-    sequence: number;      
-    tracking_id: string;   
-    latitude: number;      
-    longitude: number;     
-    name: string;          
+  waypoints?: Array<{
+    sequence: number;
+    tracking_id: string;
+    latitude: number;
+    longitude: number;
+    name: string;
     address: string;
-    status: string;        
+    status: string;
   }>;
+  origin?: {
+    latitude: number;
+    longitude: number;
+    name: string;
+  };
 }
 
 

@@ -381,16 +381,17 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 		// ─────────────────────────────────────────────────────────────────────
 		// 5) Estado operativo en otras sucursales (variedad para dashboard)
 		// ─────────────────────────────────────────────────────────────────────
-		// Out for delivery — chofer_caba (ID 5) tiene este envío en su ruta de hoy
+		// En sucursal de destino (CABA) — listo para última milla
 		{
 			trackingID:         "LT-DELIVER01",
 			sender:             model.Customer{DNI: "20111222", Name: "Tech Store SA", Phone: "543329550012", Address: model.Address{Street: "Av. San Martín 150", City: "San Pedro", Province: "Buenos Aires", PostalCode: "B2930", Latitude: fPtr(-33.6785), Longitude: fPtr(-59.6667)}},
-			recipient:          model.Customer{DNI: "30123456", Name: "Marcela Suárez", Phone: "541144332211", Address: model.Address{Street: "Larrea 1450", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1117", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)}},
+			recipient:          model.Customer{DNI: "30123456", Name: "Marcela Suárez", Phone: "541144332211", Address: model.Address{Street: "Larrea 1450", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1117", Latitude: fPtr(-34.5877), Longitude: fPtr(-58.3972)}},
 			weightKg:           1.2,
 			packageType:        model.PackageBox,
 			shipmentType:       model.ShipmentTypeNormal,
 			timeWindow:         model.TimeWindowAfternoon,
 			receivingBranchID:  "caba",
+			finalBranchID:      "caba",
 			priority:           "baja",
 			priorityScore:      0.18,
 			priorityConfidence: 0.84,
@@ -399,7 +400,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: model.StatusAtOriginHub, to: model.StatusLoaded, changedBy: "op_caba", location: "caba", notes: "Cargado en AB123CD", hoursAgo: 22},
 				{from: model.StatusLoaded, to: model.StatusInTransit, changedBy: "sup_caba", location: "caba", notes: "Vehículo en circuito interno", hoursAgo: 20},
 				{from: model.StatusInTransit, to: model.StatusAtHub, changedBy: "op_caba", location: "caba", notes: "Llegó a CABA", hoursAgo: 8},
-				{from: model.StatusAtHub, to: model.StatusOutForDelivery, changedBy: "sup_caba", location: "", notes: "Asignado a chofer para reparto", hoursAgo: 1, driverID: "5"},
 			},
 		},
 		// Delivered en CABA (history para dashboard)
