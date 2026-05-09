@@ -13,6 +13,7 @@ type PricingConfig struct {
 	WeightSurchargeMid              float64 `json:"weight_surcharge_mid"`
 	WeightSurchargeHigh             float64 `json:"weight_surcharge_high"`
 	LastMileSurcharge               float64 `json:"last_mile_surcharge"`
+	RiskyZoneSurcharge              float64 `json:"risky_zone_surcharge"`
 	ShipmentExpressMultiplier       float64 `json:"shipment_express_multiplier"`
 	TimeWindowRestrictiveMultiplier float64 `json:"time_window_restrictive_multiplier"`
 	FragileMultiplier               float64 `json:"fragile_multiplier"`
@@ -25,6 +26,7 @@ func DefaultPricingConfig() PricingConfig {
 		WeightSurchargeMid:              5000,
 		WeightSurchargeHigh:             25000,
 		LastMileSurcharge:               5000,
+		RiskyZoneSurcharge:              5000,
 		ShipmentExpressMultiplier:       1.2,
 		TimeWindowRestrictiveMultiplier: 1.05,
 		FragileMultiplier:               1.20,
@@ -38,6 +40,7 @@ type PriceBreakdown struct {
 	DistanceCost       float64 `json:"distance_cost"`
 	WeightSurcharge    float64 `json:"weight_surcharge"`
 	LastMileSurcharge  float64 `json:"last_mile_surcharge"`
+	RiskyZoneSurcharge float64 `json:"risky_zone_surcharge"`
 	ShipmentMultiplier float64 `json:"shipment_multiplier"`
 	TimeWindowSurplus  float64 `json:"time_window_surplus"`
 	FragileSurplus     float64 `json:"fragile_surplus"`
