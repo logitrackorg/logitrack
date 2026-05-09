@@ -1357,6 +1357,10 @@ const TIME_WINDOWS = [
   { value: "morning",   label: "Mañana (8-12)" },
   { value: "afternoon", label: "Tarde (12-18)" },
 ];
+const DELIVERY_METHODS = [
+  { value: "ultima_milla",    label: "Última milla (entrega a domicilio)" },
+  { value: "retiro_sucursal", label: "Retiro en sucursal" },
+];
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
@@ -1520,6 +1524,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     }
   };
 
+  const envelopeOverweight = (form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5;
+
   const applyRecipientSuggestion = () => {
     if (!recipientSuggestion) return;
     onChange({
@@ -1614,7 +1620,12 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
         <legend style={legStyle}>Paquete</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
           <DField label="Peso (kg) *">
-            <input style={inp} type="number" step="0.1" min="0.1" required value={form.weight_kg || ""} onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
+            <input style={{ ...inp, borderColor: (form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5 ? "#ef4444" : undefined }}
+              type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
+              onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
+            {(form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5 && (
+              <span style={{ color: "#ef4444", fontSize: 12 }}>Un sobre no puede superar 5 kg; para envíos de mayor peso usá una caja</span>
+            )}
           </DField>
           <DField label="Tipo de paquete *">
             <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
@@ -1629,6 +1640,11 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           <DField label="Ventana horaria">
             <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
               {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </DField>
+          <DField label="Método de entrega" style={{ gridColumn: "1 / -1" }}>
+            <select style={inp} value={form.delivery_method ?? "ultima_milla"} onChange={(e) => set("delivery_method", e.target.value)}>
+              {DELIVERY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </DField>
           <DField label="" style={{ gridColumn: "1 / -1" }}>
@@ -1724,8 +1740,9 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onConfirm} disabled={confirming}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
+          <button onClick={onConfirm}
+            disabled={confirming || envelopeOverweight}
+            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
             {confirming ? "Confirmando..." : "Confirmar envío"}
           </button>
           <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
