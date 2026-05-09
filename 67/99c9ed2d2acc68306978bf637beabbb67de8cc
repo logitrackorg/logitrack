@@ -1,0 +1,85 @@
+logitrack_web/android/app/src/main/res/values/strings.xml
+  s_abe7dfb7f11fe1::t_36ec425cb61525 1-7
+logitrack_web/android/app/src/main/res/drawable/ic_launcher_background.xml
+  ai_agent 1-170
+logitrack_web/android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java
+  ai_agent 1-26
+logitrack_web/android/gradlew.bat
+  ai_agent 1-94
+logitrack_web/android/settings.gradle
+  ai_agent 1-5
+logitrack_web/android/app/.gitignore
+  ai_agent 1-2
+logitrack_web/android/app/src/test/java/com/getcapacitor/myapp/ExampleUnitTest.java
+  ai_agent 1-18
+logitrack_core/coverage.out
+  s_d3a8aa1d73adbf::t_73fb87a52ffcec 2-3111
+logitrack_web/android/.gitignore
+  ai_agent 1-101
+logitrack_web/android/app/proguard-rules.pro
+  ai_agent 1-21
+logitrack_web/android/build.gradle
+  ai_agent 1-29
+logitrack_web/android/app/src/main/res/xml/file_paths.xml
+  ai_agent 1-5
+logitrack_web/android/gradlew
+  ai_agent 1-251
+logitrack_web/android/app/src/main/AndroidManifest.xml
+  ai_agent 1-41
+logitrack_web/android/app/src/main/res/values/styles.xml
+  ai_agent 1-22
+logitrack_web/android/app/src/main/res/layout/activity_main.xml
+  ai_agent 1-12
+logitrack_web/android/gradle/wrapper/gradle-wrapper.properties
+  ai_agent 1-7
+logitrack_web/pnpm-lock.yaml
+  ai_agent 11-19,249-261,545-580,1597-1599,1617-1619,1691-1694,1750-1753,1757-1760,1778-1780,1786-1789,1794-1797,1814-1816,1848-1851,1893-1896,1988-1991,2033-2036,2210-2212,2285-2288,2344-2347,2435-2438,2450-2454,2523-2526,2686-2689,2758-2765,2788-2792,2851-2854,2874-2876,2908-2911,2918-2920,2936-2939,3067-3070,3098-3102,3119-3121,3125-3131,3199-3202,3211-3214,3234-3236,3283-3289,3316-3319,3381-3384,3499-3510,3518-3521,3530-3532,3562-3565,3764-3793,4001-4080,5087-5090,5109-5110,5218-5219,5269-5270,5273-5274,5296-5297,5300-5301,5316-5319,5341-5342,5370-5371,5406-5407,5467-5468,5500-5503,5761-5764,5835-5841,5892-5897,5969-5970,5977-5978,6017-6020,6136-6137,6191-6196,6228-6243,6298-6303,6335-6336,6360-6364,6369-6370,6379-6384,6548-6553,6577-6581,6629-6630,6633-6636,6757-6762,6767-6768,6787-6790,6825-6836,6860-6861,6918-6919,6994-7002,7007-7008,7021-7024
+logitrack_web/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+  ai_agent 1-5
+logitrack_web/capacitor.config.ts
+  s_abe7dfb7f11fe1::t_875d3e71526086 1-9
+logitrack_web/android/app/src/main/java/com/logitrack/driver/MainActivity.java
+  s_abe7dfb7f11fe1::t_36ec425cb61525 1-5
+logitrack_web/android/app/src/main/res/values/ic_launcher_background.xml
+  ai_agent 1-4
+logitrack_web/android/gradle.properties
+  ai_agent 1-22
+logitrack_web/android/app/capacitor.build.gradle
+  s_abe7dfb7f11fe1::t_36ec425cb61525 1-19
+logitrack_web/android/app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+  ai_agent 1-34
+logitrack_web/android/variables.gradle
+  ai_agent 1-16
+logitrack_web/package.json
+  s_abe7dfb7f11fe1::t_5411c14d0a00f4 13-15,31-34
+logitrack_web/android/app/build.gradle
+  s_abe7dfb7f11fe1::t_36ec425cb61525 1-54
+logitrack_web/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+  ai_agent 1-5
+logitrack_web/android/capacitor.settings.gradle
+  s_abe7dfb7f11fe1::t_36ec425cb61525 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "6799c9ed2d2acc68306978bf637beabbb67de8cc",
+  "prompts": {},
+  "sessions": {
+    "s_abe7dfb7f11fe1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ab281794-ee94-47a4-a764-e087bf2695c4",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_d3a8aa1d73adbf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f603a4dd-fa2c-4f63-99c5-82cc51cbb788",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
