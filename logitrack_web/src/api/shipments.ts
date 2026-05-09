@@ -69,6 +69,7 @@ export interface PriceBreakdown {
   distance_cost: number;
   weight_surcharge: number;
   last_mile_surcharge: number;
+  risky_zone_surcharge: number;
   shipment_multiplier: number;
   time_window_surplus: number;
   fragile_surplus: number;

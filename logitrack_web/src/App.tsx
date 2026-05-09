@@ -24,6 +24,7 @@ import { BulkUpload } from "./pages/BulkUpload";
 import { AccessLog } from "./pages/AccessLog";
 import { UserProfile } from "./pages/UserProfile";
 import { DraftList } from "./pages/DraftList";
+import { ZoneManagement } from "./pages/ZoneManagement";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -62,6 +63,9 @@ function Nav() {
       )}
       {hasRole("operator", "supervisor") && (
         <NavLink to="/routing" style={navStyle}>Ruteo</NavLink>
+      )}
+      {hasRole("supervisor", "admin") && (
+        <NavLink to="/zones" style={navStyle}>Zonas</NavLink>
       )}
       {hasRole("operator", "supervisor") && (
         <NavLink to="/bulk-upload" style={navStyle}>Importar CSV</NavLink>
@@ -248,6 +252,12 @@ function AppRoutes() {
           <Route path="/routing-config" element={
             <ProtectedRoute roles={["admin"]}>
               <RoutingConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/zones" element={
+            <ProtectedRoute roles={["supervisor", "admin"]}>
+              <ZoneManagement />
             </ProtectedRoute>
           } />
 

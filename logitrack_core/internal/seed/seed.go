@@ -225,6 +225,28 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			},
 		},
 
+		// Última milla a destino en zona peligrosa (José L. Suárez) — recargo aplicado
+		{
+			trackingID:         "LT-LM00007",
+			sender:             model.Customer{DNI: "27998877", Name: "Mariano Ruiz", Phone: "541144112233", Email: "mariano.ruiz@email.com", Address: model.Address{Street: "Av. Corrientes 2400", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1046", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)}},
+			recipient:          model.Customer{DNI: "33445566", Name: "Sandra Pereyra", Phone: "541166778800", Address: model.Address{Street: "Av. San Martín 4500", City: "José León Suárez", Province: "Buenos Aires", PostalCode: "B1655", Latitude: fPtr(-34.535), Longitude: fPtr(-58.560)}},
+			weightKg:           3.2,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowAfternoon,
+			receivingBranchID:  "caba",
+			finalBranchID:      "caba",
+			priority:           "media",
+			priorityScore:      0.55,
+			priorityConfidence: 0.78,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado", hoursAgo: 18},
+				{from: model.StatusAtOriginHub, to: model.StatusLoaded, changedBy: "op_caba", location: "caba", notes: "Cargado para circuito interno", hoursAgo: 14},
+				{from: model.StatusLoaded, to: model.StatusInTransit, changedBy: "sup_caba", location: "caba", notes: "En tránsito", hoursAgo: 10},
+				{from: model.StatusInTransit, to: model.StatusAtHub, changedBy: "op_caba", location: "caba", notes: "Llegó a CABA, listo para última milla", hoursAgo: 4},
+			},
+		},
+
 		// ─────────────────────────────────────────────────────────────────────
 		// 2) Inter-sucursal CABA → Córdoba (consolidación, sum ≈ 400 kg)
 		// ─────────────────────────────────────────────────────────────────────

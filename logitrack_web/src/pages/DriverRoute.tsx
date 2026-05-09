@@ -21,8 +21,11 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
+import { ZoneAlert } from "../components/ui/ZoneAlert";
 import { BottomSheet } from "../components/ui/bottom-sheet";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { zoneApi, type Zone } from "../api/zones";
+import { isInDangerZone } from "../utils/pointInPolygon";
 import {
   FAILED_REASONS,
   TIME_WINDOW_HOURS,
@@ -43,6 +46,7 @@ export function DriverRoute() {
   const [noRoute, setNoRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -63,6 +67,7 @@ export function DriverRoute() {
       .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
 
   const handleStartRoute = async () => {
     setStartingRoute(true);
@@ -192,6 +197,11 @@ export function DriverRoute() {
     ? (data?.shipments.find((s) => s.tracking_id === nextStop.tracking_id) ?? null)
     : null;
 
+  // Zonas peligrosas donde está el chofer actualmente
+  const activeDangerZones = userLocation
+    ? zones.filter((z) => z.active && isInDangerZone(userLocation.lat, userLocation.lng, [z]))
+    : [];
+
   return (
     <div className="pb-32">
       {/* Header sticky con progreso y tabs */}
@@ -307,15 +317,19 @@ export function DriverRoute() {
 
         {/* Renderizado condicional Lista o Mapa */}
         {viewMode === 'map' ? (
-          <MapView
-            waypoints={waypoints}
-            origin={origin}
-            userLocation={userLocation ?? undefined}
-            simulationMode={simulationMode}
-            simulationControls={{ isPaused, pause, play, reset, onExit: () => setSimActive(false) }}
-            onRouteInfoChange={setRouteInfo}
-            onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
-          />
+          <>
+            <MapView
+              waypoints={waypoints}
+              origin={origin}
+              userLocation={userLocation ?? undefined}
+              simulationMode={simulationMode}
+              simulationControls={{ isPaused, pause, play, reset, onExit: () => setSimActive(false) }}
+              zones={zones}
+              onRouteInfoChange={setRouteInfo}
+              onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+            />
+            <ZoneAlert zones={activeDangerZones} />
+          </>
         ) : (
           <>
             {visibleList.length === 0 ? (

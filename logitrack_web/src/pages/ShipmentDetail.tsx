@@ -1939,6 +1939,9 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
               {breakdown.last_mile_surcharge > 0 && (
                 <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
               )}
+              {breakdown.risky_zone_surcharge > 0 && (
+                <PriceRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
+              )}
               {breakdown.shipment_multiplier !== 1 && (
                 <PriceRow label="Tipo de envío" value={`× ${breakdown.shipment_multiplier.toFixed(2)}`} />
               )}

@@ -56,6 +56,12 @@ func main() {
 	pricingSvc := service.NewPricingService(pricingConfigRepo)
 	pricingHandler := handler.NewPricingHandler(pricingSvc)
 
+	zoneRepo := repository.NewPostgresZoneRepository(database)
+	zoneSvc := service.NewZoneService(zoneRepo)
+	zoneHandler := handler.NewZoneHandler(zoneSvc)
+	pricingSvc.SetZoneService(zoneSvc)
+	seed.LoadZones(zoneRepo)
+
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
@@ -244,6 +250,13 @@ func main() {
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Zones — read: all authenticated; write: supervisor + admin
+	canManageZones := middleware.RequireRoles(model.RoleSupervisor, model.RoleAdmin)
+	protected.GET("/zones", authenticated, zoneHandler.List)
+	protected.POST("/zones", canManageZones, zoneHandler.Create)
+	protected.PATCH("/zones/:id", canManageZones, zoneHandler.Update)
+	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
 
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)

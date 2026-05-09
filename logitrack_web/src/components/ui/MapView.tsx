@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import "./MapView.css";
 import type { GeoMode } from "../../hooks/useGeolocation";
+import type { Zone } from "../../api/zones";
+import { ZONE_COLOR } from "../../api/zones";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -51,6 +53,7 @@ interface MapViewProps {
     reset: () => void;
     onExit?: () => void;
   };
+  zones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
   onWaypointClick: (trackingId: string) => void;
 }
@@ -76,6 +79,7 @@ export function MapView({
   userLocation,
   simulationMode,
   simulationControls,
+  zones = [],
   onRouteInfoChange,
   onWaypointClick,
 }: MapViewProps) {
@@ -83,6 +87,7 @@ export function MapView({
   const mapInstance = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
   const userMarkerLayer = useRef<L.LayerGroup | null>(null);
+  const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const doneRouteLayer = useRef<L.Polyline | null>(null);
   const pendingRouteLayer = useRef<L.Polyline | null>(null);
   // Geometría completa de la ruta (origin → todas las paradas) para split local
@@ -119,6 +124,7 @@ export function MapView({
     }).addTo(map);
 
     mapInstance.current = map;
+    zonesLayerRef.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
     userMarkerLayer.current = L.layerGroup().addTo(map);
 
@@ -129,6 +135,30 @@ export function MapView({
       }
     };
   }, []);
+
+  // Renderizar zonas peligrosas como polígonos coloreados
+  useEffect(() => {
+    const layer = zonesLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    zones.filter((z) => z.active).forEach((z) => {
+      const latLngs = z.polygon.map((p) => [p.lat, p.lng] as [number, number]);
+      const poly = L.polygon(latLngs, {
+        color: ZONE_COLOR.stroke,
+        fillColor: ZONE_COLOR.stroke,
+        fillOpacity: 0.18,
+        weight: 1.5,
+        opacity: 0.7,
+      });
+      poly.bindPopup(`
+        <div style="font-family:system-ui;min-width:140px">
+          <p style="font-weight:700;font-size:13px;margin:0 0 3px">⚠️ ${z.name}</p>
+          ${z.description ? `<p style="font-size:11px;color:#64748b;margin:0">${z.description}</p>` : ""}
+        </div>
+      `);
+      poly.addTo(layer!);
+    });
+  }, [zones]);
 
   // Actualizar marcadores de entrega cuando cambian los waypoints
   useEffect(() => {
@@ -328,9 +358,10 @@ export function MapView({
       const toCoord = (wp: Waypoint) => `${wp.longitude},${wp.latitude}`;
       const originCoord = origin ? `${origin.longitude},${origin.latitude}` : null;
 
-      // Ruta completa: origin → todas las paradas en orden (para split local en simulación)
+      // Ruta completa: origin solo en simulación (driver parte de la sucursal);
+      // en modo normal el polyline conecta solo las paradas de entrega.
       const fullPoints: string[] = [];
-      if (originCoord) fullPoints.push(originCoord);
+      if (originCoord && simulationModeRef.current === "simulate") fullPoints.push(originCoord);
       sorted.forEach((wp) => fullPoints.push(toCoord(wp)));
 
       // Leer userLocation actual (no de closure, sino del ref)
@@ -340,7 +371,9 @@ export function MapView({
       const gpsCoord = currentLocation ? `${currentLocation.lng},${currentLocation.lat}` : null;
       const pendingAnchor =
         gpsCoord ??
-        (completed.length > 0 ? toCoord(completed[completed.length - 1]) : originCoord);
+        (completed.length > 0
+          ? toCoord(completed[completed.length - 1])
+          : simulationModeRef.current === "simulate" ? originCoord : null);
       const pendingPoints: string[] = [];
       if (pendingAnchor) pendingPoints.push(pendingAnchor);
       pending.forEach((wp) => pendingPoints.push(toCoord(wp)));
@@ -367,8 +400,7 @@ export function MapView({
         // GPS real o sin GPS: dibujar gris (debajo) + naranja (encima)
         if (completed.length > 0) {
           const donePoints: string[] = [];
-          const originCoordForDone = origin ? `${origin.longitude},${origin.latitude}` : null;
-          if (originCoordForDone) donePoints.push(originCoordForDone);
+          // Fuera de simulación: el tramo completado conecta solo las paradas (sin sucursal de origen)
           completed.forEach((wp) => donePoints.push(toCoord(wp)));
           const doneResult = await fetchOsrm(donePoints);
           if (doneResult) {
