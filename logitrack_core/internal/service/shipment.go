@@ -54,6 +54,15 @@ func validateName(name, field string) error {
 	return nil
 }
 
+// validatePackageWeight rejects the combination of envelope (sobre) with weight above
+// the mid-weight threshold. Envelopes are only allowed up to WeightTierMidLowKg (5 kg).
+func validatePackageWeight(pt model.PackageType, weightKg float64) error {
+	if pt == model.PackageEnvelope && weightKg > model.WeightTierMidLowKg {
+		return fmt.Errorf("un sobre no puede superar %.0f kg; para envíos de mayor peso usá una caja", model.WeightTierMidLowKg)
+	}
+	return nil
+}
+
 // resolveDeliveryMethod validates input and applies the default (ultima_milla) when empty.
 func resolveDeliveryMethod(m model.DeliveryMethod) (model.DeliveryMethod, error) {
 	switch m {
@@ -206,6 +215,9 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
+	}
+	if err := validatePackageWeight(req.PackageType, req.WeightKg); err != nil {
+		return model.Shipment{}, err
 	}
 	now := clock.Now().UTC()
 	currentLocation := s.locationToBranchID(req.Sender.Address.City)
@@ -476,6 +488,9 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		draft.DeliveryMethod = model.DeliveryMethodLastMile
 	}
 	if err := s.validateLastMileReachable(draft.DeliveryMethod, draft.Recipient, draft.FinalBranchID); err != nil {
+		return model.Shipment{}, err
+	}
+	if err := validatePackageWeight(draft.PackageType, draft.WeightKg); err != nil {
 		return model.Shipment{}, err
 	}
 
