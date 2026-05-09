@@ -98,21 +98,19 @@ export function NextStopCard({
         )}
       </div>
 
-      {/* Ruta completa */}
-      {allPendingStops.length > 1 && (
-        <a
-          href={fullRouteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="nsc-full-route"
-        >
-          <Map className="w-3.5 h-3.5 shrink-0" />
-          Abrir ruta completa en Google Maps
-          {truncated && (
-            <span className="text-[10px] text-slate-400 ml-1">(primeras 9 paradas)</span>
-          )}
-        </a>
-      )}
+      {/* Ruta completa en Google Maps */}
+      <a
+        href={fullRouteUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="nsc-full-route"
+      >
+        <Map className="w-3.5 h-3.5 shrink-0" />
+        Abrir ruta completa en Google Maps
+        {truncated && (
+          <span className="text-[10px] text-slate-400 ml-1">(primeras 9 paradas)</span>
+        )}
+      </a>
     </div>
   );
 }

@@ -94,9 +94,11 @@ export function MapView({
     position: { lat: number; lng: number } | null;
     time: number;
   }>({ waypointsKey: "", position: null, time: 0 });
-  // Ref para leer userLocation actual dentro de fetchRoute (evita stale closure)
+  // Refs para leer valores actuales dentro de fetchRoute (evita stale closures)
   const userLocationRef = useRef(userLocation);
+  const simulationModeRef = useRef(simulationMode);
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
+  useEffect(() => { simulationModeRef.current = simulationMode; }, [simulationMode]);
 
   const [loading, setLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
@@ -204,6 +206,18 @@ export function MapView({
     }
   }, [userLocation]);
 
+  // Al cambiar de modo (entrar/salir simulación), resetear el dibujo de la ruta
+  useEffect(() => {
+    if (!mapInstance.current) return;
+
+    // Borrar ruta vieja siempre que cambia el modo
+    if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
+    if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
+
+    // Disparar fetchRoute para redibujar correctamente según el nuevo modo
+    fetchRoute();
+  }, [simulationMode]);
+
   const createMarker = (wp: Waypoint) => {
     const isCompleted = wp.status === "delivered" || wp.status === "delivery_failed";
     const isFailed = wp.status === "delivery_failed";
@@ -272,8 +286,14 @@ export function MapView({
 
   // Corta la polilínea almacenada en el punto más cercano al GPS — sin llamar a OSRM
   const splitRouteAtGps = (gps: { lat: number; lng: number }) => {
+    if (!mapInstance.current) return;
+
+    // Limpiar siempre, independientemente de si tenemos geometría
+    if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
+    if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
+
     const full = fullRouteGeomRef.current;
-    if (!mapInstance.current || full.length < 2) return;
+    if (full.length < 2) return;
 
     let splitIdx = 0;
     let minDist = Infinity;
@@ -281,9 +301,6 @@ export function MapView({
       const d = haversineKm(gps, { lat, lng });
       if (d < minDist) { minDist = d; splitIdx = i; }
     });
-
-    if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
-    if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
     if (splitIdx > 0) {
       doneRouteLayer.current = L.polyline(full.slice(0, splitIdx + 1), {
@@ -340,28 +357,33 @@ export function MapView({
       // Guardar geometría completa para split local (solo usada en simulación)
       if (fullResult) fullRouteGeomRef.current = fullResult.coords;
 
-      // Dibujar siempre con OSRM done/pending — el split geométrico solo lo hace
-      // el efecto [userLocation] cuando simulationMode === "simulate"
-      if (pendingResult) {
-        pendingRouteLayer.current = L.polyline(pendingResult.coords, {
-          color: "#f97316", weight: 4, opacity: 0.8,
-        }).addTo(mapInstance.current!);
-      } else if (fullResult) {
-        pendingRouteLayer.current = L.polyline(fullResult.coords, {
-          color: "#f97316", weight: 4, opacity: 0.8,
-        }).addTo(mapInstance.current!);
-      }
-
-      // Tramo recorrido (gris) solo si hay paradas completadas
-      if (completed.length > 0) {
-        const donePoints: string[] = [];
-        const originCoordForDone = origin ? `${origin.longitude},${origin.latitude}` : null;
-        if (originCoordForDone) donePoints.push(originCoordForDone);
-        completed.forEach((wp) => donePoints.push(toCoord(wp)));
-        const doneResult = await fetchOsrm(donePoints);
-        if (doneResult) {
-          doneRouteLayer.current = L.polyline(doneResult.coords, {
-            color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+      // En simulación: solo dibujar si ya tenemos posición simulada;
+      // si no, dejar vacío y esperar al primer tick (el efecto [userLocation] dibujará)
+      if (simulationModeRef.current === "simulate") {
+        if (userLocationRef.current) {
+          splitRouteAtGps(userLocationRef.current);
+        }
+      } else {
+        // GPS real o sin GPS: dibujar gris (debajo) + naranja (encima)
+        if (completed.length > 0) {
+          const donePoints: string[] = [];
+          const originCoordForDone = origin ? `${origin.longitude},${origin.latitude}` : null;
+          if (originCoordForDone) donePoints.push(originCoordForDone);
+          completed.forEach((wp) => donePoints.push(toCoord(wp)));
+          const doneResult = await fetchOsrm(donePoints);
+          if (doneResult) {
+            doneRouteLayer.current = L.polyline(doneResult.coords, {
+              color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+            }).addTo(mapInstance.current!);
+          }
+        }
+        if (pendingResult) {
+          pendingRouteLayer.current = L.polyline(pendingResult.coords, {
+            color: "#f97316", weight: 4, opacity: 0.8,
+          }).addTo(mapInstance.current!);
+        } else if (fullResult) {
+          pendingRouteLayer.current = L.polyline(fullResult.coords, {
+            color: "#f97316", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
         }
       }
