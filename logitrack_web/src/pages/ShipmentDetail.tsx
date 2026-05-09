@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -22,7 +22,8 @@ import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
-import { formatCurrencyARS } from "../api/pricing";
+import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
@@ -1420,6 +1421,48 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Live pricing quote
+  const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const weightKg = form.weight_kg ?? 0;
+    const packageType = form.package_type ?? "box";
+    const hasMinData =
+      weightKg > 0 &&
+      !!form.package_type &&
+      !!form.sender.address.province &&
+      !!form.recipient.address.province;
+    if (!hasMinData) { setQuote(null); return; }
+    if (quoteTimer.current) clearTimeout(quoteTimer.current);
+    quoteTimer.current = setTimeout(async () => {
+      setQuoteLoading(true);
+      try {
+        const q = await pricingApi.quote({
+          weight_kg: weightKg,
+          package_type: packageType,
+          shipment_type: form.shipment_type ?? "normal",
+          time_window: form.time_window ?? "flexible",
+          is_fragile: form.is_fragile,
+          delivery_method: form.delivery_method ?? "ultima_milla",
+          origin: form.sender.address,
+          destination: form.recipient.address,
+        });
+        setQuote(q);
+      } catch {
+        setQuote(null);
+      } finally {
+        setQuoteLoading(false);
+      }
+    }, 400);
+    return () => { if (quoteTimer.current) clearTimeout(quoteTimer.current); };
+  }, [
+    form.weight_kg, form.package_type, form.shipment_type,
+    form.time_window, form.is_fragile, form.delivery_method,
+    form.sender.address, form.recipient.address,
+  ]);
+
   const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
   const validateNameField = (name: string) =>
     name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
@@ -1601,6 +1644,40 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           </DField>
         </div>
       </fieldset>
+
+      {/* Cotización */}
+      {(quote || quoteLoading) && (
+        <GradientCard tone="brand">
+          <div className="flex items-start gap-3 mb-3">
+            <GradientCardIcon><Tag className="w-5 h-5" /></GradientCardIcon>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <GradientCardLabel>Cotización del envío</GradientCardLabel>
+                {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
+              </div>
+              {quote ? (
+                <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+              ) : (
+                <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
+              )}
+            </div>
+          </div>
+          {quote && (
+            <>
+              <div className="grid gap-1.5 text-xs pt-3 border-t border-white/15">
+                <div className="flex justify-between items-center"><span className="text-white/75">Tarifa base</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.base_fare)}</span></div>
+                <div className="flex justify-between items-center"><span className="text-white/75">Distancia ({quote.breakdown.distance_km.toFixed(1)} km)</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.distance_cost)}</span></div>
+                {quote.breakdown.weight_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo por peso</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.weight_surcharge)}</span></div>}
+                {quote.breakdown.last_mile_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Entrega a domicilio</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.last_mile_surcharge)}</span></div>}
+                {quote.breakdown.shipment_multiplier !== 1 && <div className="flex justify-between items-center"><span className="text-white/75">Tipo de envío</span><span className="font-semibold tabular-nums">× {quote.breakdown.shipment_multiplier.toFixed(2)}</span></div>}
+                {quote.breakdown.time_window_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo ventana horaria</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.time_window_surplus)}</span></div>}
+                {quote.breakdown.fragile_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo frágil</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.fragile_surplus)}</span></div>}
+              </div>
+              <p className="mt-3 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+            </>
+          )}
+        </GradientCard>
+      )}
 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
