@@ -19,6 +19,7 @@ import {
   type DriverLoad,
   type VehicleLoad,
   type ApplyPlanResponse,
+  type GlobalRoutingPlan,
 } from "../api/routing";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
@@ -181,10 +182,11 @@ function validateMoveToVehicle(
 }
 
 export function Routing() {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const branchId = user?.branch_id ?? "";
 
   const [plan, setPlan] = useState<RoutingPlan | null>(null);
+  const [globalPlan, setGlobalPlan] = useState<GlobalRoutingPlan | null>(null);
   const [originalPlan, setOriginalPlan] = useState<RoutingPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -197,6 +199,7 @@ export function Routing() {
   const [viewingTrackingId, setViewingTrackingId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [dropError, setDropError] = useState("");
+  const canRegenerate = hasRole("manager", "admin");
 
   const openInfo = (trackingId: string) => {
     if (shipments.has(trackingId)) setViewingTrackingId(trackingId);
@@ -219,53 +222,102 @@ export function Routing() {
     }
   }, [branchId]);
 
-  const handleGenerate = async () => {
-    if (!branchId) {
-      setError("Tu usuario no tiene una sucursal asignada.");
-      return;
+  // Carga el plan del día desde el servidor al montar la página.
+  useEffect(() => {
+    void loadTodayPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
+
+  // loadTodayPlan obtiene el plan del día desde el servidor (generado por cron o regenerate).
+  // Extrae el BranchPlan de la sucursal del usuario y lo establece como plan editable.
+  const loadTodayPlan = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const globalPlanRaw = await routingApi.getTodayPlan();
+      setGlobalPlan(globalPlanRaw);
+      // Buscar el plan de la sucursal del usuario (el backend ya lo filtra para op/sup).
+      const branchPlan = globalPlanRaw.branch_plans.find((bp) => bp.branch_id === branchId)
+        ?? globalPlanRaw.branch_plans[0];
+      if (!branchPlan) {
+        setPlan(null);
+        setOriginalPlan(null);
+        return;
+      }
+      await applyBranchPlan(branchPlan.plan);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        // No hay plan todavía — estado vacío esperado.
+        setPlan(null);
+        setOriginalPlan(null);
+        setGlobalPlan(null);
+      } else {
+        const msg =
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          "No se pudo cargar el plan del día.";
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // applyBranchPlan normaliza y establece un RoutingPlan como estado editable.
+  const applyBranchPlan = async (raw: RoutingPlan) => {
+    const newPlan: RoutingPlan = {
+      ...raw,
+      last_mile: raw.last_mile ?? [],
+      inter_branch: raw.inter_branch ?? [],
+      unassigned: raw.unassigned ?? [],
+      blocked_drivers: raw.blocked_drivers ?? [],
+      driver_loads: raw.driver_loads ?? [],
+      vehicle_loads: raw.vehicle_loads ?? [],
+    };
+    const allTids = new Set<string>();
+    newPlan.last_mile.forEach((a) => {
+      a.shipments.forEach((t) => allTids.add(t));
+      a.existing_shipments?.forEach((t) => allTids.add(t));
+    });
+    newPlan.inter_branch.forEach((a) => {
+      a.shipments.forEach((t) => allTids.add(t));
+      a.existing_shipments?.forEach((t) => allTids.add(t));
+    });
+    newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
+    newPlan.driver_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
+    newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
+    const shipMap = new Map<string, Shipment>();
+    const all = await shipmentApi.list({ branch_id: branchId || newPlan.branch_id });
+    all.forEach((s) => {
+      if (allTids.has(s.tracking_id)) shipMap.set(s.tracking_id, s);
+    });
+    setShipments(shipMap);
+    setPlan(newPlan);
+    setOriginalPlan(clonePlan(newPlan));
+  };
+
+  // handleRegenerate llama al backend para regenerar el plan del día (manager/admin).
+  const handleRegenerate = async () => {
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const raw = await routingApi.generate(branchId);
-      // El backend puede devolver null en arrays vacíos — normalizamos para evitar errores
-      const newPlan: RoutingPlan = {
-        ...raw,
-        last_mile: raw.last_mile ?? [],
-        inter_branch: raw.inter_branch ?? [],
-        unassigned: raw.unassigned ?? [],
-        blocked_drivers: raw.blocked_drivers ?? [],
-        driver_loads: raw.driver_loads ?? [],
-        vehicle_loads: raw.vehicle_loads ?? [],
-      };
-      const allTids = new Set<string>();
-      newPlan.last_mile.forEach((a) => {
-        a.shipments.forEach((t) => allTids.add(t));
-        a.existing_shipments?.forEach((t) => allTids.add(t));
-      });
-      newPlan.inter_branch.forEach((a) => {
-        a.shipments.forEach((t) => allTids.add(t));
-        a.existing_shipments?.forEach((t) => allTids.add(t));
-      });
-      newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
-      // También los previos del pool (chofer/vehículo no asignados todavía,
-      // pero con carga existente que vamos a mostrar al promoverlos a card).
-      newPlan.driver_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
-      newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
-      // Hidratar cache de envíos para mostrar peso/prioridad/SLA
-      const shipMap = new Map<string, Shipment>();
-      const all = await shipmentApi.list({ branch_id: branchId });
-      all.forEach((s) => {
-        if (allTids.has(s.tracking_id)) shipMap.set(s.tracking_id, s);
-      });
-      setShipments(shipMap);
-      setPlan(newPlan);
-      setOriginalPlan(clonePlan(newPlan));
+      const globalPlanRaw = await routingApi.regenerate();
+      setGlobalPlan(globalPlanRaw);
+      const branchPlan = globalPlanRaw.branch_plans.find((bp) => bp.branch_id === branchId)
+        ?? globalPlanRaw.branch_plans[0];
+      if (!branchPlan) {
+        setPlan(null);
+        setOriginalPlan(null);
+      } else {
+        await applyBranchPlan(branchPlan.plan);
+        setSuccess("Plan regenerado correctamente.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "No se pudo generar el plan.";
+        "No se pudo regenerar el plan.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -277,11 +329,14 @@ export function Routing() {
   };
 
   const handleApply = async () => {
-    if (!plan || !branchId) return;
+    if (!branchId) return;
     setApplying(true);
     setError("");
     try {
-      const resp = await routingApi.apply(branchId, plan);
+      // Si el plan fue editado (isDirty), envía el plan en el body para que
+      // el servidor use esa versión. Si no, el servidor lee del repositorio.
+      const editedPlan = isDirty && plan ? plan : undefined;
+      const resp = await routingApi.apply(branchId, editedPlan);
       setApplyResult(resp);
     } catch (err: unknown) {
       const msg =
@@ -295,9 +350,9 @@ export function Routing() {
 
   const closeApplyResult = () => {
     setApplyResult(null);
-    setSuccess("Plan aplicado. Regenerando…");
+    setSuccess("Plan aplicado. Recargando…");
     setTimeout(() => setSuccess(""), 2500);
-    handleGenerate();
+    void loadTodayPlan();
   };
 
   // executeMove es la lógica pura de mutación: valida, mueve, devuelve resultado.
@@ -488,37 +543,41 @@ export function Routing() {
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader
         title="Ruteo del día"
-        description={`Plan sugerido para ${branches.find((b) => b.id === branchId)?.name ?? "tu sucursal"}. Revisalo, ajustá lo necesario y aplicá.`}
+        description={
+          globalPlan
+            ? `Plan generado el ${new Date(globalPlan.generated_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${globalPlan.log.total_assigned} asignados · ${globalPlan.log.total_unassigned} sin asignar`
+            : `Plan de ruteo para ${branches.find((b) => b.id === branchId)?.name ?? "tu sucursal"}. Se genera automáticamente a las 08:00.`
+        }
         icon={<RouteIcon className="w-5 h-5" />}
         actions={
-          plan ? (
-            <div className="flex gap-2">
-              {isDirty && (
-                <button
-                  onClick={handleDiscard}
-                  disabled={applying}
-                  className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-                >
-                  Descartar cambios
-                </button>
-              )}
+          <div className="flex gap-2">
+            {isDirty && (
               <button
-                onClick={handleGenerate}
+                onClick={handleDiscard}
+                disabled={applying}
+                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+              >
+                Descartar cambios
+              </button>
+            )}
+            {canRegenerate && (
+              <button
+                onClick={handleRegenerate}
                 disabled={loading || applying}
                 className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                Regenerar
+                Regenerar plan
               </button>
-              <button
-                onClick={handleApply}
-                disabled={applying || loading}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-              >
-                {applying ? "Aplicando…" : "Aplicar plan"}
-              </button>
-            </div>
-          ) : null
+            )}
+            <button
+              onClick={handleApply}
+              disabled={applying || loading || !plan}
+              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            >
+              {applying ? "Aplicando…" : "Aplicar plan"}
+            </button>
+          </div>
         }
       />
 
@@ -547,15 +606,20 @@ export function Routing() {
         <Card className="p-10 text-center">
           <RouteIcon className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-600 mb-4">
-            No hay plan generado todavía. Tocá <strong>Generar plan</strong> para que el sistema sugiera asignaciones para los envíos pendientes en tu sucursal.
+            El plan del día aún no fue generado. Se genera automáticamente a las <strong>08:00</strong>.
+            {canRegenerate
+              ? " Podés generarlo ahora tocando el botón de abajo."
+              : " Contactá a un manager o admin para generarlo manualmente."}
           </p>
-          <button
-            onClick={handleGenerate}
-            disabled={!branchId}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-          >
-            Generar plan
-          </button>
+          {canRegenerate && (
+            <button
+              onClick={handleRegenerate}
+              disabled={!branchId}
+              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            >
+              Generar plan ahora
+            </button>
+          )}
         </Card>
       )}
 
@@ -1241,6 +1305,18 @@ function RouteStopRow({
           {stop.manual && !stop.unsequenced && (
             <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 font-medium">
               Asignado manualmente
+            </span>
+          )}
+          {stop.within_window === false && (
+            <span
+              className="text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 font-medium"
+              title={
+                stop.window_deviation_min != null
+                  ? `${stop.window_deviation_min > 0 ? "+" : ""}${stop.window_deviation_min} min fuera de ventana`
+                  : "Fuera de ventana horaria"
+              }
+            >
+              ⚠ Fuera de ventana {stop.window_deviation_min != null ? `(${stop.window_deviation_min > 0 ? "+" : ""}${stop.window_deviation_min} min)` : ""}
             </span>
           )}
           <TimeWindowChip tw={stop.time_window} />

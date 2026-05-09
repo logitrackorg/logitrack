@@ -80,7 +80,7 @@ func newRoutingSetup() routingTestSetup {
 	// osrmClient nil → el VRP usará Haversine. En tests sin coords reales,
 	// la matriz queda con distancias 0 entre pares y el solver se comporta
 	// como un greedy puro (todos los travel times son 0).
-	routingSvc := NewRoutingService(cfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, nil)
+	routingSvc := NewRoutingService(cfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, nil, nil)
 
 	return routingTestSetup{
 		routingSvc:   routingSvc,

@@ -51,13 +51,21 @@ type LastMileAssignment struct {
 // delta en minutos desde DepartureMin (definido en LastMileAssignment) hasta
 // la llegada al cliente. Si Unsequenced=true (envío sin coordenadas), ArrivalMin
 // es -1 — el chofer atiende esa parada al final de la ruta sin tiempo estimado.
+//
+// WithinWindow indica si el arribo estimado cae dentro de la ventana horaria
+// del envío. Cuando es false (solo posible con EnforceTimeWindows=false en la
+// config), WindowDeviationMin indica cuántos minutos fuera de ventana llegará
+// (positivo = tarde, negativo = temprano). El operador puede quitar el envío
+// antes de aplicar el plan.
 type RouteStop struct {
-	TrackingID  string  `json:"tracking_id"`
-	Sequence    int     `json:"sequence"`
-	ArrivalMin  int     `json:"arrival_min"`
-	Unsequenced bool    `json:"unsequenced,omitempty"`
-	TimeWindow  string  `json:"time_window,omitempty"`
-	WeightKg    float64 `json:"weight_kg"`
+	TrackingID         string  `json:"tracking_id"`
+	Sequence           int     `json:"sequence"`
+	ArrivalMin         int     `json:"arrival_min"`
+	Unsequenced        bool    `json:"unsequenced,omitempty"`
+	TimeWindow         string  `json:"time_window,omitempty"`
+	WeightKg           float64 `json:"weight_kg"`
+	WithinWindow       bool    `json:"within_window"`
+	WindowDeviationMin int     `json:"window_deviation_min,omitempty"`
 }
 
 // InterBranchAssignment es un despacho de un vehículo a una sucursal destino.

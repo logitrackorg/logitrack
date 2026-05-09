@@ -60,6 +60,60 @@ const FIELDS: NumberFieldDef[] = [
     max: 5000,
     format: "kg",
   },
+  {
+    key: "morning_window_start_hour",
+    label: "Inicio ventana mañana (hs)",
+    hint: "Hora desde la cual se puede entregar un envío con ventana 'mañana'.",
+    step: 1,
+    min: 0,
+    max: 23,
+    format: "count",
+  },
+  {
+    key: "morning_window_end_hour",
+    label: "Fin ventana mañana (hs)",
+    hint: "Hora máxima para entregar un envío con ventana 'mañana'. Default: 14.",
+    step: 1,
+    min: 1,
+    max: 24,
+    format: "count",
+  },
+  {
+    key: "afternoon_window_start_hour",
+    label: "Inicio ventana tarde (hs)",
+    hint: "Hora desde la cual se puede entregar un envío con ventana 'tarde'. Default: 12.",
+    step: 1,
+    min: 0,
+    max: 23,
+    format: "count",
+  },
+  {
+    key: "afternoon_window_end_hour",
+    label: "Fin ventana tarde (hs)",
+    hint: "Hora máxima para entregar un envío con ventana 'tarde'. Default: 18.",
+    step: 1,
+    min: 1,
+    max: 24,
+    format: "count",
+  },
+  {
+    key: "service_time_minutes",
+    label: "Tiempo de servicio por parada (min)",
+    hint: "Minutos estimados por entrega (estacionar, entregar, hacer firmar). Default: 10.",
+    step: 1,
+    min: 1,
+    max: 120,
+    format: "count",
+  },
+  {
+    key: "avg_speed_kmh",
+    label: "Velocidad promedio urbana (km/h)",
+    hint: "Velocidad media usada para estimar tiempos de viaje cuando no hay OSRM. Default: 25.",
+    step: 1,
+    min: 5,
+    max: 120,
+    format: "kg",
+  },
 ];
 
 const inputClass =
@@ -121,7 +175,8 @@ export function RoutingConfig() {
   const isDirty =
     draft !== null &&
     config !== null &&
-    FIELDS.some((f) => draft[f.key] !== config[f.key]);
+    (FIELDS.some((f) => draft[f.key] !== config[f.key]) ||
+      draft.enforce_time_windows !== config.enforce_time_windows);
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -144,6 +199,40 @@ export function RoutingConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
+            {/* Toggle ventanas duras/blandas */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Cumplimiento estricto de ventanas horarias</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Si está activo, los envíos cuya hora estimada de llegada cae fuera de su ventana (mañana/tarde) quedan sin asignar.
+                Si está inactivo, se incluyen en la ruta con un aviso para que el operador decida.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer w-fit">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draft?.enforce_time_windows ?? true}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, enforce_time_windows: e.target.checked } : d))
+                    }
+                  />
+                  <div
+                    className={`w-10 h-6 rounded-full transition-colors ${
+                      draft?.enforce_time_windows ? "bg-[#1e3a5f]" : "bg-slate-200"
+                    }`}
+                  />
+                  <div
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                      draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                </div>
+                <span className="text-sm text-slate-700">
+                  {draft?.enforce_time_windows ? "Activo (ventanas duras)" : "Inactivo (ventanas blandas)"}
+                </span>
+              </label>
+            </div>
+
             {FIELDS.map((field) => {
               const value = draft[field.key] as number;
               return (

@@ -28,6 +28,13 @@ export interface RoutingConfig {
   min_fill_rate: number;
   max_shipments_per_driver: number;
   max_weight_kg_per_driver: number;
+  enforce_time_windows: boolean;
+  morning_window_start_hour: number;
+  morning_window_end_hour: number;
+  afternoon_window_start_hour: number;
+  afternoon_window_end_hour: number;
+  service_time_minutes: number;
+  avg_speed_kmh: number;
 }
 
 export type DispatchRule = "sla_forced" | "consolidation";
@@ -40,6 +47,8 @@ export interface RouteStop {
   manual?: boolean;             // cliente-side: el operador lo asignó manualmente (post-VRP)
   time_window?: "morning" | "afternoon" | "flexible" | "";
   weight_kg: number;
+  within_window?: boolean;       // false = arribo fuera de ventana (solo en modo blando); omitido en stops manuales
+  window_deviation_min?: number; // positivo=tarde, negativo=temprano (en minutos)
 }
 
 export interface LastMileAssignment {
@@ -125,13 +134,50 @@ export interface ApplyPlanResponse {
   items: ApplyResultItem[];
 }
 
+export type PlanStatus = "pending" | "applying" | "applied" | "expired";
+
+export interface GlobalPlanLog {
+  total_candidates: number;
+  total_assigned: number;
+  total_unassigned: number;
+  total_branches: number;
+}
+
+export interface BranchPlan {
+  branch_id: string;
+  plan: RoutingPlan;
+}
+
+export interface GlobalRoutingPlan {
+  id: string;
+  plan_date: string;       // YYYY-MM-DD
+  status: PlanStatus;
+  branch_plans: BranchPlan[];
+  generated_at: string;
+  applied_at?: string;
+  applied_by?: string;
+  log: GlobalPlanLog;
+}
+
 export const routingApi = {
-  generate: (branchId: string) =>
-    api.post<RoutingPlan>("/routing/plan", { branch_id: branchId }).then((r) => r.data),
-  apply: (branchId: string, plan: RoutingPlan) =>
+  /** Obtiene el plan del día desde el servidor (generado por cron o regenerate). */
+  getTodayPlan: () =>
+    api.get<GlobalRoutingPlan>("/routing/plan/today").then((r) => r.data),
+
+  /** Regenera el plan del día. Solo manager/admin. */
+  regenerate: () =>
+    api.post<GlobalRoutingPlan>("/routing/regenerate").then((r) => r.data),
+
+  /**
+   * Aplica el plan de ruteo para la sucursal del usuario.
+   * Si `plan` está presente, aplica ese plan editado en cliente (drag-and-drop).
+   * Si no, el servidor lee el plan desde la base de datos.
+   */
+  apply: (branchId: string, plan?: RoutingPlan) =>
     api
-      .post<ApplyPlanResponse>("/routing/apply", { branch_id: branchId, plan })
+      .post<ApplyPlanResponse>("/routing/apply", plan ? { branch_id: branchId, plan } : { branch_id: branchId })
       .then((r) => r.data),
+
   getConfig: () => api.get<RoutingConfig>("/routing/config").then((r) => r.data),
   updateConfig: (cfg: RoutingConfig) =>
     api.patch<RoutingConfig>("/routing/config", cfg).then((r) => r.data),

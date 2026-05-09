@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
@@ -14,9 +16,19 @@ import (
 	"github.com/logitrack/core/internal/vrp"
 )
 
-// RoutingService genera y aplica el plan de ruteo diario para una sucursal.
+// uuidGen es un alias para uuid.NewRandom para facilitar mocking en tests.
+var uuidGen = func() (string, error) {
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
+}
+
+// RoutingService genera y aplica el plan de ruteo diario.
 //
-// El plan vive en memoria del cliente entre Generate y Apply (no se persiste en backend).
+// GeneratePlan genera un plan en memoria para una sucursal (uso interno y legado).
+// GenerateGlobalPlan genera el plan de toda la red y lo persiste en routing_plans.
 // Apply hace validación per-item contra el estado actual antes de mutar — no es transaccional
 // porque shipment, vehicle y route viven en stores distintos.
 type RoutingService struct {
@@ -27,6 +39,7 @@ type RoutingService struct {
 	authRepo     repository.AuthRepository
 	routeSvc     *RouteService
 	shipmentSvc  *ShipmentService
+	planRepo     repository.RoutingPlanRepository
 	osrmClient   *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 }
 
@@ -38,6 +51,7 @@ func NewRoutingService(
 	authRepo repository.AuthRepository,
 	routeSvc *RouteService,
 	shipmentSvc *ShipmentService,
+	planRepo repository.RoutingPlanRepository,
 	osrmClient *osrm.Client,
 ) *RoutingService {
 	return &RoutingService{
@@ -48,6 +62,7 @@ func NewRoutingService(
 		authRepo:     authRepo,
 		routeSvc:     routeSvc,
 		shipmentSvc:  shipmentSvc,
+		planRepo:     planRepo,
 		osrmClient:   osrmClient,
 	}
 }
@@ -1055,7 +1070,7 @@ func (s *RoutingService) lastMileVRP(
 		}
 	}
 
-	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords)
+	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, cfg.AvgSpeedKmh)
 
 	// DepartureMin: si el operador genera el plan después de las 8:00, las
 	// horas estimadas tienen que partir de la hora actual, no de las 8:00.
@@ -1068,18 +1083,19 @@ func (s *RoutingService) lastMileVRP(
 	}
 
 	problem := vrp.Problem{
-		Depot:          vrp.Node{ID: "depot", Coord: depotCoord},
-		Deliveries:     deliveries,
-		Drivers:        vrpDrivers,
-		DurationMatrix: dur,
-		DistanceMatrix: dist,
-		DepartureMin:   departureMin,
-		// 10 minutos por parada: contempla estacionar, salir del vehículo,
-		// llamar al cliente, esperar que abra, entregar y hacer firmar,
-		// y retomar la marcha. Para zonas con porteros/edificios suele ser
-		// más alto; para zonas residenciales rápidas, menos. Promediamos.
-		ServiceTimeMin: 10,
-		DayEndMin:      18 * 60,
+		Depot:                   vrp.Node{ID: "depot", Coord: depotCoord},
+		Deliveries:              deliveries,
+		Drivers:                 vrpDrivers,
+		DurationMatrix:          dur,
+		DistanceMatrix:          dist,
+		DepartureMin:            departureMin,
+		ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
+		DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
+		MorningWindowStartMin:   float64(cfg.MorningWindowStartHour) * 60,
+		MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
+		AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
+		AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
+		EnforceTimeWindows:      cfg.EnforceTimeWindows,
 	}
 
 	sol := vrp.Solve(problem)
@@ -1121,12 +1137,21 @@ func (s *RoutingService) lastMileVRP(
 		totalWeight := 0.0
 		for i, st := range r.Stops {
 			sh := shipByTID[st.NodeID]
+			dev := 0
+			if st.WindowDeviationMin != 0 {
+				dev = int(st.WindowDeviationMin + 0.5)
+				if st.WindowDeviationMin < 0 {
+					dev = int(st.WindowDeviationMin - 0.5)
+				}
+			}
 			stops[i] = model.RouteStop{
-				TrackingID: st.NodeID,
-				Sequence:   i + 1,
-				ArrivalMin: int(st.ArrivalMin + 0.5),
-				TimeWindow: string(sh.TimeWindow),
-				WeightKg:   sh.WeightKg,
+				TrackingID:         st.NodeID,
+				Sequence:           i + 1,
+				ArrivalMin:         int(st.ArrivalMin + 0.5),
+				TimeWindow:         string(sh.TimeWindow),
+				WeightKg:           sh.WeightKg,
+				WithinWindow:       !st.OutOfWindow,
+				WindowDeviationMin: dev,
 			}
 			shipIDs[i] = st.NodeID
 			totalWeight += sh.WeightKg
@@ -1210,9 +1235,9 @@ func (s *RoutingService) lastMileVRP(
 
 // buildDurationMatrix construye una matriz NxN (depot + entregas) con tiempos
 // en segundos y distancias en metros. Intenta OSRM si hay cliente; si falla
-// o no hay cliente, usa Haversine con factor de detour 1.3 y velocidad media
-// urbana de 30 km/h.
-func (s *RoutingService) buildDurationMatrix(depot vrp.Coord, deliveries []vrp.Coord) ([][]float64, [][]float64) {
+// o no hay cliente, usa Haversine con factor de detour 1.3 y la velocidad
+// configurada (avgSpeedKmh). Si avgSpeedKmh <= 0 usa 25 como fallback.
+func (s *RoutingService) buildDurationMatrix(depot vrp.Coord, deliveries []vrp.Coord, avgSpeedKmh float64) ([][]float64, [][]float64) {
 	all := make([]vrp.Coord, 0, len(deliveries)+1)
 	all = append(all, depot)
 	all = append(all, deliveries...)
@@ -1228,19 +1253,19 @@ func (s *RoutingService) buildDurationMatrix(depot vrp.Coord, deliveries []vrp.C
 		}
 		log.Printf("[routing] OSRM falló, fallback a Haversine: %v", err)
 	}
-	return haversineMatrix(all)
+	return haversineMatrix(all, avgSpeedKmh)
 }
 
 // haversineMatrix arma una matriz NxN con distancias Haversine (con factor
 // de detour 1.3 para aproximar el desvío de calles vs línea recta) y duración
-// asumiendo 30 km/h promedio. Diagonal en cero.
-func haversineMatrix(coords []vrp.Coord) ([][]float64, [][]float64) {
+// usando la velocidad configurada. Diagonal en cero.
+func haversineMatrix(coords []vrp.Coord, avgSpeedKmh float64) ([][]float64, [][]float64) {
 	// detourFactor: las calles no son líneas rectas. 1.3 ≈ 30% más de recorrido
 	// que la distancia Haversine en zonas urbanas argentinas típicas.
-	// avgSpeedKmH: velocidad media puerta-a-puerta para vehículos urbanos en CABA
-	// con tráfico moderado. Con OSRM activo este valor no se usa.
 	const detourFactor = 1.3
-	const avgSpeedKmH = 25.0
+	if avgSpeedKmh <= 0 {
+		avgSpeedKmh = 25.0
+	}
 	n := len(coords)
 	dur := make([][]float64, n)
 	dist := make([][]float64, n)
@@ -1253,7 +1278,7 @@ func haversineMatrix(coords []vrp.Coord) ([][]float64, [][]float64) {
 			}
 			km := ml.HaversineKm(coords[i].Lat, coords[i].Lon, coords[j].Lat, coords[j].Lon) * detourFactor
 			dist[i][j] = km * 1000
-			dur[i][j] = km / avgSpeedKmH * 3600
+			dur[i][j] = km / avgSpeedKmh * 3600
 		}
 	}
 	return dur, dist
@@ -1266,4 +1291,193 @@ func vrpDriverByID(drivers []vrp.Driver, id string) vrp.Driver {
 		}
 	}
 	return vrp.Driver{}
+}
+
+// =============================================================================
+// Plan global — genera y persiste el plan de toda la red
+// =============================================================================
+
+// GenerateGlobalPlan genera el plan de ruteo para todas las sucursales activas
+// y lo devuelve en memoria. No persiste. Útil para preview antes de persistir.
+func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalRoutingPlan, error) {
+	now := clock.Now().UTC()
+	local := now.In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	branches := s.branchRepo.List()
+
+	plan := &model.GlobalRoutingPlan{
+		ID:          newUUID(),
+		PlanDate:    planDate,
+		Status:      model.PlanStatusPending,
+		BranchPlans: []model.BranchPlan{},
+		GeneratedAt: now,
+	}
+
+	totalCandidates := 0
+	totalAssigned := 0
+	totalUnassigned := 0
+
+	for _, br := range branches {
+		if br.Status != model.BranchStatusActive {
+			continue
+		}
+		branchPlan, err := s.GeneratePlan(ctx, br.ID)
+		if err != nil {
+			log.Printf("[routing-global] error generando plan para sucursal %s: %v", br.ID, err)
+			continue
+		}
+		plan.BranchPlans = append(plan.BranchPlans, model.BranchPlan{
+			BranchID: br.ID,
+			Plan:     branchPlan,
+		})
+		// Acumular métricas
+		for _, lm := range branchPlan.LastMile {
+			totalAssigned += len(lm.Shipments)
+			totalCandidates += len(lm.Shipments)
+		}
+		for _, ib := range branchPlan.InterBranch {
+			totalAssigned += len(ib.Shipments)
+			totalCandidates += len(ib.Shipments)
+		}
+		totalUnassigned += len(branchPlan.Unassigned)
+		totalCandidates += len(branchPlan.Unassigned)
+	}
+
+	plan.Log = model.GlobalPlanLog{
+		TotalCandidates: totalCandidates,
+		TotalAssigned:   totalAssigned,
+		TotalUnassigned: totalUnassigned,
+		TotalBranches:   len(plan.BranchPlans),
+	}
+
+	return plan, nil
+}
+
+// GenerateAndPersistGlobalPlan genera y persiste el plan del día.
+// Si ya existe un plan para hoy y su status es "applied", no sobreescribe.
+// Llamado por el scheduler a las 08:00 y por el endpoint /routing/regenerate.
+func (s *RoutingService) GenerateAndPersistGlobalPlan(ctx context.Context) (*model.GlobalRoutingPlan, error) {
+	plan, err := s.GenerateGlobalPlan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.planRepo.Upsert(plan); err != nil {
+		return nil, fmt.Errorf("routing global: persistir plan: %w", err)
+	}
+	log.Printf("[routing-global] plan %s generado: %d asignados, %d sin asignar, %d sucursales",
+		plan.PlanDate, plan.Log.TotalAssigned, plan.Log.TotalUnassigned, plan.Log.TotalBranches)
+	return plan, nil
+}
+
+// GetTodayPlan devuelve el plan global del día actual, filtrado por sucursal si el
+// rol del usuario es operator o supervisor. Managers y admins ven el plan completo.
+func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*model.GlobalRoutingPlan, error) {
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	plan, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil {
+		return nil, nil
+	}
+
+	// Operator y supervisor solo ven los items de su sucursal.
+	if userRole == model.RoleOperator || userRole == model.RoleSupervisor {
+		filtered := make([]model.BranchPlan, 0, 1)
+		for _, bp := range plan.BranchPlans {
+			if bp.BranchID == userBranch {
+				filtered = append(filtered, bp)
+				break
+			}
+		}
+		plan.BranchPlans = filtered
+	}
+
+	return plan, nil
+}
+
+// RegenerateTodayPlan regenera y sobreescribe el plan del día, siempre que no
+// esté en status "applied". Solo managers y admins pueden llamar a esto.
+func (s *RoutingService) RegenerateTodayPlan(ctx context.Context) (*model.GlobalRoutingPlan, error) {
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	existing, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil && existing.Status == model.PlanStatusApplied {
+		return nil, fmt.Errorf("el plan de hoy ya fue aplicado y no puede regenerarse")
+	}
+
+	return s.GenerateAndPersistGlobalPlan(ctx)
+}
+
+// ApplyBranchPlan aplica los items del plan global correspondientes a una sucursal.
+// Es el reemplazo de ApplyPlan: en lugar de recibir el plan completo en el body,
+// lo lee desde el repositorio y aplica solo los items de la sucursal del usuario.
+func (s *RoutingService) ApplyBranchPlan(ctx context.Context, branchID string, username string) (model.ApplyPlanResponse, error) {
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	plan, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo leer el plan: %w", err)
+	}
+	if plan == nil {
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para hoy")
+	}
+	if plan.Status == model.PlanStatusApplied {
+		return model.ApplyPlanResponse{}, fmt.Errorf("el plan de hoy ya fue aplicado")
+	}
+
+	// Marcar en applying (lock optimista).
+	if err := s.planRepo.UpdateStatus(planDate, model.PlanStatusApplying); err != nil {
+		return model.ApplyPlanResponse{}, fmt.Errorf("error actualizando estado del plan: %w", err)
+	}
+
+	// Buscar el BranchPlan de esta sucursal.
+	var branchPlan *model.RoutingPlan
+	for i := range plan.BranchPlans {
+		if plan.BranchPlans[i].BranchID == branchID {
+			bp := plan.BranchPlans[i].Plan
+			branchPlan = &bp
+			break
+		}
+	}
+	if branchPlan == nil {
+		_ = s.planRepo.UpdateStatus(planDate, model.PlanStatusPending)
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan para la sucursal %s en el plan de hoy", branchID)
+	}
+
+	// Aplicar usando el flujo existente de ApplyPlan con el plan de la sucursal.
+	req := model.ApplyPlanRequest{
+		BranchID: branchID,
+		Plan:     *branchPlan,
+	}
+	resp, err := s.ApplyPlan(ctx, branchID, req, username)
+	if err != nil {
+		_ = s.planRepo.UpdateStatus(planDate, model.PlanStatusPending)
+		return model.ApplyPlanResponse{}, err
+	}
+
+	// Marcar applied si no hubo errores críticos.
+	if err := s.planRepo.MarkApplied(planDate, username, clock.Now().UTC()); err != nil {
+		log.Printf("[routing-global] advertencia: no se pudo marcar el plan como applied: %v", err)
+	}
+
+	return resp, nil
+}
+
+// newUUID genera un UUID v4 simple sin dependencias externas.
+// Usa google/uuid que ya está en go.mod.
+func newUUID() string {
+	id, err := uuidGen()
+	if err != nil {
+		return fmt.Sprintf("fallback-%d", clock.Now().UnixNano())
+	}
+	return id
 }

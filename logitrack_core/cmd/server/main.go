@@ -13,6 +13,7 @@ import (
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/scheduler"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
 )
@@ -123,8 +124,16 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
-	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, osrmClient)
+	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
+	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
 	routingHandler := handler.NewRoutingHandler(routingSvc)
+
+	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
+	sched := scheduler.New(routingSvc)
+	if err := sched.Start(); err != nil {
+		log.Fatalf("error iniciando scheduler: %v", err)
+	}
+	defer sched.Stop()
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -260,7 +269,8 @@ func main() {
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
-	protected.POST("/routing/plan", shipmentWrite, routingHandler.Generate)
+	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
+	protected.POST("/routing/regenerate", canViewStats, routingHandler.Regenerate)
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 
 	// ML config — admin only

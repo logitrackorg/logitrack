@@ -32,14 +32,19 @@ func makeProblem(deliveries []Node, drivers []Driver, deliveryX []float64) Probl
 		}
 	}
 	return Problem{
-		Depot:          Node{ID: "depot", Coord: Coord{}},
-		Deliveries:     deliveries,
-		Drivers:        drivers,
-		DurationMatrix: dur,
-		DistanceMatrix: dist,
-		DepartureMin:   8 * 60, // 08:00
-		ServiceTimeMin: 5,
-		DayEndMin:      18 * 60, // 18:00
+		Depot:                   Node{ID: "depot", Coord: Coord{}},
+		Deliveries:              deliveries,
+		Drivers:                 drivers,
+		DurationMatrix:          dur,
+		DistanceMatrix:          dist,
+		DepartureMin:            8 * 60, // 08:00
+		ServiceTimeMin:          5,
+		DayEndMin:               18 * 60, // 18:00
+		MorningWindowStartMin:   8 * 60,  // 08:00
+		MorningWindowEndMin:     14 * 60, // 14:00
+		AfternoonWindowStartMin: 12 * 60, // 12:00
+		AfternoonWindowEndMin:   18 * 60, // 18:00
+		EnforceTimeWindows:      true,    // tests asumen ventanas duras (comportamiento original)
 	}
 }
 
@@ -148,11 +153,11 @@ func TestSolve_LoadBalancesAcrossDrivers(t *testing.T) {
 }
 
 func TestSolve_TimeWindowMorningInfeasible(t *testing.T) {
-	// Depot lejos: ida = 5 horas, llegaría a las 13:00 — fuera de morning.
+	// Depot lejos: ida = 7 horas, llegaría a las 15:00 — fuera de morning (08:00-14:00).
 	p := makeProblem(
 		[]Node{{ID: "LT-01", WeightKg: 1, TimeWindow: model.TimeWindowMorning}},
 		[]Driver{{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100}},
-		[]float64{300}, // 300 min = 5h
+		[]float64{420}, // 420 min = 7h → llegada 15:00
 	)
 	sol := Solve(p)
 	if len(sol.Routes) != 0 {
