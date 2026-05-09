@@ -1,0 +1,21 @@
+logitrack_web/src/pages/ZoneManagement.tsx
+  s_861b62af83daf6::t_433fc0d74cee79 11
+logitrack_web/src/components/ui/MapView.tsx
+  s_861b62af83daf6::t_47ab03518180af 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "434513c4e0f1a9e76f10ceef4f05f515a7f1231c",
+  "prompts": {},
+  "sessions": {
+    "s_861b62af83daf6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11d02063-9de1-48c5-b780-1eb6a23435b8",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
