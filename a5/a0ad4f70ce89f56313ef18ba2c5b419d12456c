@@ -1,0 +1,22 @@
+logitrack_core/cmd/server/main.go
+  s_43667bf43ea8b9::t_1c1201a3dbb709 254,256-257
+logitrack_web/src/App.tsx
+  s_43667bf43ea8b9::t_56603b9d61bc8b 67
+  s_43667bf43ea8b9::t_0ebc2d8c627284 259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "a5a0ad4f70ce89f56313ef18ba2c5b419d12456c",
+  "prompts": {},
+  "sessions": {
+    "s_43667bf43ea8b9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9f6cab6-34e1-41a4-981b-efa51c9c56d8",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
