@@ -11,6 +11,7 @@ import {
   routingApi,
   reasonLabel,
   DISPATCH_RULE_LABELS,
+  type RoutingConfig,
   type RoutingPlan,
   type LastMileAssignment,
   type InterBranchAssignment,
@@ -19,6 +20,8 @@ import {
   type DriverLoad,
   type VehicleLoad,
   type ApplyPlanResponse,
+  type GlobalRoutingPlan,
+  type IncomingVehicle,
 } from "../api/routing";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
@@ -51,6 +54,15 @@ function isLastMileShipment(sh: Shipment | undefined, branchId: string): boolean
   if (!sh) return false;
   if (sh.is_returning) return false;
   return sh.final_branch_id === branchId && sh.delivery_method === "ultima_milla";
+}
+
+// hasPendingShipments devuelve true cuando un assignment tiene envíos en su
+// lista actual (shipments) que NO figuran en applied_shipments. Esto detecta
+// envíos agregados via drag-and-drop después de un apply previo: aunque el
+// flag `applied` siga en true, sabemos que hay trabajo nuevo para aplicar.
+function hasPendingShipments(a: { shipments: string[]; applied_shipments?: string[] }): boolean {
+  const applied = new Set(a.applied_shipments ?? []);
+  return a.shipments.some((tid) => !applied.has(tid));
 }
 
 function clonePlan(p: RoutingPlan): RoutingPlan {
@@ -149,15 +161,14 @@ function validateMoveToDriver(
   if (plan.blocked_drivers.some((b) => b.driver_id === driverId)) {
     return { field: "driver", message: "El chofer ya inició su ruta del día — no se le pueden asignar más envíos." };
   }
-  const cfg = plan.config_snapshot;
-  const totals = driverTotals(plan, driverId);
-  if (totals.count + 1 > cfg.max_shipments_per_driver) {
-    return { field: "count", message: `El chofer ya tiene ${totals.count} envíos (máx. ${cfg.max_shipments_per_driver}).` };
+  if (plan.last_mile.some((a) => a.driver_id === driverId && a.route_started)) {
+    return { field: "driver", message: "El chofer ya está en ruta — no se le pueden asignar más envíos." };
   }
-  if (totals.weight + shipment.weight_kg > cfg.max_weight_kg_per_driver) {
+  const totals = driverTotals(plan, driverId);
+  if (totals.weight + shipment.weight_kg > 150) {
     return {
       field: "weight",
-      message: `Excede el peso máximo del chofer (${totals.weight.toFixed(1)} + ${shipment.weight_kg.toFixed(1)} > ${cfg.max_weight_kg_per_driver} kg).`,
+      message: `Excede el peso máximo del chofer (${totals.weight.toFixed(1)} + ${shipment.weight_kg.toFixed(1)} > 150 kg).`,
     };
   }
   return null;
@@ -168,6 +179,9 @@ function validateMoveToVehicle(
   vehicleId: string,
   shipment: Shipment,
 ): ValidationError | null {
+  if (plan.inter_branch.some((a) => a.vehicle_id === vehicleId && a.in_transit)) {
+    return { field: "vehicle", message: "El vehículo ya está en viaje — no se le pueden asignar más envíos." };
+  }
   const totals = vehicleTotals(plan, vehicleId);
   if (!totals) return { field: "vehicle", message: "Vehículo no encontrado en el plan." };
   if (totals.weight + shipment.weight_kg > totals.capacity) {
@@ -181,10 +195,11 @@ function validateMoveToVehicle(
 }
 
 export function Routing() {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const branchId = user?.branch_id ?? "";
 
   const [plan, setPlan] = useState<RoutingPlan | null>(null);
+  const [globalPlan, setGlobalPlan] = useState<GlobalRoutingPlan | null>(null);
   const [originalPlan, setOriginalPlan] = useState<RoutingPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -197,6 +212,8 @@ export function Routing() {
   const [viewingTrackingId, setViewingTrackingId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [dropError, setDropError] = useState("");
+  const canRegenerate = hasRole("operator", "supervisor");
+  const canApply = hasRole("operator", "supervisor");
 
   const openInfo = (trackingId: string) => {
     if (shipments.has(trackingId)) setViewingTrackingId(trackingId);
@@ -219,53 +236,103 @@ export function Routing() {
     }
   }, [branchId]);
 
-  const handleGenerate = async () => {
-    if (!branchId) {
-      setError("Tu usuario no tiene una sucursal asignada.");
-      return;
+  // Carga el plan del día desde el servidor al montar la página.
+  useEffect(() => {
+    void loadTodayPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
+
+  // loadTodayPlan obtiene el plan del día desde el servidor (generado por cron o regenerate).
+  // Extrae el BranchPlan de la sucursal del usuario y lo establece como plan editable.
+  const loadTodayPlan = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const globalPlanRaw = await routingApi.getTodayPlan();
+      setGlobalPlan(globalPlanRaw);
+      // Buscar el plan de la sucursal del usuario (el backend ya lo filtra para op/sup).
+      const branchPlan = globalPlanRaw.branch_plans.find((bp) => bp.branch_id === branchId)
+        ?? globalPlanRaw.branch_plans[0];
+      if (!branchPlan) {
+        setPlan(null);
+        setOriginalPlan(null);
+        return;
+      }
+      await applyBranchPlan(branchPlan.plan);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        // No hay plan todavía — estado vacío esperado.
+        setPlan(null);
+        setOriginalPlan(null);
+        setGlobalPlan(null);
+      } else {
+        const msg =
+          (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+          "No se pudo cargar el plan del día.";
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // applyBranchPlan normaliza y establece un RoutingPlan como estado editable.
+  const applyBranchPlan = async (raw: RoutingPlan) => {
+    const newPlan: RoutingPlan = {
+      ...raw,
+      last_mile: raw.last_mile ?? [],
+      inter_branch: raw.inter_branch ?? [],
+      unassigned: raw.unassigned ?? [],
+      blocked_drivers: raw.blocked_drivers ?? [],
+      driver_loads: raw.driver_loads ?? [],
+      vehicle_loads: raw.vehicle_loads ?? [],
+    };
+    const allTids = new Set<string>();
+    newPlan.last_mile.forEach((a) => {
+      a.shipments.forEach((t) => allTids.add(t));
+      a.existing_shipments?.forEach((t) => allTids.add(t));
+    });
+    newPlan.inter_branch.forEach((a) => {
+      a.shipments.forEach((t) => allTids.add(t));
+      a.existing_shipments?.forEach((t) => allTids.add(t));
+    });
+    newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
+    newPlan.driver_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
+    newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
+    newPlan.incoming_vehicles?.forEach((v) => v.shipments.forEach((t) => allTids.add(t)));
+    const shipMap = new Map<string, Shipment>();
+    const all = await shipmentApi.list({ branch_id: branchId || newPlan.branch_id });
+    all.forEach((s) => {
+      if (allTids.has(s.tracking_id)) shipMap.set(s.tracking_id, s);
+    });
+    setShipments(shipMap);
+    setPlan(newPlan);
+    setOriginalPlan(clonePlan(newPlan));
+  };
+
+  // handleRegenerate llama al backend para regenerar el plan del día (manager/admin).
+  const handleRegenerate = async () => {
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const raw = await routingApi.generate(branchId);
-      // El backend puede devolver null en arrays vacíos — normalizamos para evitar errores
-      const newPlan: RoutingPlan = {
-        ...raw,
-        last_mile: raw.last_mile ?? [],
-        inter_branch: raw.inter_branch ?? [],
-        unassigned: raw.unassigned ?? [],
-        blocked_drivers: raw.blocked_drivers ?? [],
-        driver_loads: raw.driver_loads ?? [],
-        vehicle_loads: raw.vehicle_loads ?? [],
-      };
-      const allTids = new Set<string>();
-      newPlan.last_mile.forEach((a) => {
-        a.shipments.forEach((t) => allTids.add(t));
-        a.existing_shipments?.forEach((t) => allTids.add(t));
-      });
-      newPlan.inter_branch.forEach((a) => {
-        a.shipments.forEach((t) => allTids.add(t));
-        a.existing_shipments?.forEach((t) => allTids.add(t));
-      });
-      newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
-      // También los previos del pool (chofer/vehículo no asignados todavía,
-      // pero con carga existente que vamos a mostrar al promoverlos a card).
-      newPlan.driver_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
-      newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
-      // Hidratar cache de envíos para mostrar peso/prioridad/SLA
-      const shipMap = new Map<string, Shipment>();
-      const all = await shipmentApi.list({ branch_id: branchId });
-      all.forEach((s) => {
-        if (allTids.has(s.tracking_id)) shipMap.set(s.tracking_id, s);
-      });
-      setShipments(shipMap);
-      setPlan(newPlan);
-      setOriginalPlan(clonePlan(newPlan));
+      const globalPlanRaw = await routingApi.regenerate();
+      setGlobalPlan(globalPlanRaw);
+      const branchPlan = globalPlanRaw.branch_plans.find((bp) => bp.branch_id === branchId)
+        ?? globalPlanRaw.branch_plans[0];
+      if (!branchPlan) {
+        setPlan(null);
+        setOriginalPlan(null);
+      } else {
+        await applyBranchPlan(branchPlan.plan);
+        setSuccess("Plan regenerado correctamente.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "No se pudo generar el plan.";
+        "No se pudo regenerar el plan.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -277,11 +344,12 @@ export function Routing() {
   };
 
   const handleApply = async () => {
-    if (!plan || !branchId) return;
+    if (!branchId) return;
     setApplying(true);
     setError("");
     try {
-      const resp = await routingApi.apply(branchId, plan);
+      const editedPlan = isDirty && plan ? plan : undefined;
+      const resp = await routingApi.apply(branchId, editedPlan ? { plan: editedPlan } : undefined);
       setApplyResult(resp);
     } catch (err: unknown) {
       const msg =
@@ -293,11 +361,35 @@ export function Routing() {
     }
   };
 
+  // handleApplyItem aplica solo un vehículo o chofer específico y recarga el plan inline.
+  // Si el plan está dirty (drag-and-drop sin guardar), envía la versión editada al backend
+  // para que sincronice los cambios y aplique el ítem en una sola request.
+  const handleApplyItem = async (opts: { vehicleId?: string; driverId?: string }) => {
+    if (!branchId) return;
+    setApplying(true);
+    setError("");
+    try {
+      const editedPlan = isDirty && plan ? plan : undefined;
+      await routingApi.apply(branchId, { ...opts, plan: editedPlan });
+      await loadTodayPlan();
+      const label = opts.vehicleId ? "Despacho aplicado." : "Ruta aplicada.";
+      setSuccess(label);
+      setTimeout(() => setSuccess(""), 2500);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "No se pudo aplicar el ítem.";
+      setError(msg);
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const closeApplyResult = () => {
     setApplyResult(null);
-    setSuccess("Plan aplicado. Regenerando…");
+    setSuccess("Plan aplicado. Recargando…");
     setTimeout(() => setSuccess(""), 2500);
-    handleGenerate();
+    void loadTodayPlan();
   };
 
   // executeMove es la lógica pura de mutación: valida, mueve, devuelve resultado.
@@ -467,10 +559,7 @@ export function Routing() {
 
   const endDrag = () => setDragging(null);
 
-  const isDirty = useMemo(() => {
-    if (!plan || !originalPlan) return false;
-    return JSON.stringify(plan) !== JSON.stringify(originalPlan);
-  }, [plan, originalPlan]);
+  const isDirty = plan != null && originalPlan != null && JSON.stringify(plan) !== JSON.stringify(originalPlan);
 
   const totals = useMemo(() => {
     if (!plan) return null;
@@ -488,37 +577,43 @@ export function Routing() {
     <div className="p-6 max-w-5xl mx-auto">
       <PageHeader
         title="Ruteo del día"
-        description={`Plan sugerido para ${branches.find((b) => b.id === branchId)?.name ?? "tu sucursal"}. Revisalo, ajustá lo necesario y aplicá.`}
+        description={
+          globalPlan
+            ? `Plan generado el ${new Date(globalPlan.generated_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${globalPlan.log.total_assigned} asignados · ${globalPlan.log.total_unassigned} sin asignar`
+            : `Plan de ruteo para ${branches.find((b) => b.id === branchId)?.name ?? "tu sucursal"}. Se genera automáticamente a las 08:00.`
+        }
         icon={<RouteIcon className="w-5 h-5" />}
         actions={
-          plan ? (
-            <div className="flex gap-2">
-              {isDirty && (
-                <button
-                  onClick={handleDiscard}
-                  disabled={applying}
-                  className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-                >
-                  Descartar cambios
-                </button>
-              )}
+          <div className="flex gap-2">
+            {isDirty && (
               <button
-                onClick={handleGenerate}
+                onClick={handleDiscard}
+                disabled={applying}
+                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+              >
+                Descartar cambios
+              </button>
+            )}
+            {canRegenerate && (
+              <button
+                onClick={handleRegenerate}
                 disabled={loading || applying}
                 className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                Regenerar
+                Regenerar plan
               </button>
+            )}
+            {canApply && (
               <button
                 onClick={handleApply}
-                disabled={applying || loading}
+                disabled={applying || loading || !plan}
                 className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {applying ? "Aplicando…" : "Aplicar plan"}
               </button>
-            </div>
-          ) : null
+            )}
+          </div>
         }
       />
 
@@ -547,15 +642,20 @@ export function Routing() {
         <Card className="p-10 text-center">
           <RouteIcon className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-600 mb-4">
-            No hay plan generado todavía. Tocá <strong>Generar plan</strong> para que el sistema sugiera asignaciones para los envíos pendientes en tu sucursal.
+            El plan del día aún no fue generado. Se genera automáticamente a las <strong>08:00</strong>.
+            {canRegenerate
+              ? " Podés generarlo ahora tocando el botón de abajo."
+              : " Contactá a un manager o admin para generarlo manualmente."}
           </p>
-          <button
-            onClick={handleGenerate}
-            disabled={!branchId}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-          >
-            Generar plan
-          </button>
+          {canRegenerate && (
+            <button
+              onClick={handleRegenerate}
+              disabled={!branchId}
+              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            >
+              Generar plan ahora
+            </button>
+          )}
         </Card>
       )}
 
@@ -568,75 +668,116 @@ export function Routing() {
       {plan && totals && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <SummaryChip label="Asignables" value={totals.assignable} />
-            <SummaryChip label="Sin asignar" value={totals.unassigned} tone={totals.unassigned > 0 ? "warning" : "neutral"} />
-            <SummaryChip label="Despachos" value={totals.dispatches} />
-            <SummaryChip label="Choferes" value={totals.drivers} />
+            <SummaryChip label="Asignados" value={totals.assignable} />
+            <SummaryChip label="Por asignar" value={totals.unassigned} tone={totals.unassigned > 0 ? "warning" : "neutral"} />
+            <SummaryChip label="Salidas inter-sucursal" value={totals.dispatches} />
+            <SummaryChip label="Repartos locales" value={totals.drivers} />
           </div>
 
-          {/* Si el operador está draggeando y no hay sección de "sin asignar"
-              renderizada, mostramos un drop-zone flotante para poder soltar
-              ahí y desasignar. */}
-          {dragging && plan.unassigned.length === 0 && dragging.source.kind !== "unassigned" && (
-            <UnassignedDropZone
-              onDrop={() => handleDrop(dragging.trackingId, dragging.source, { kind: "unassigned" })}
-              onCancel={endDrag}
-            />
-          )}
+          {(() => {
+            const pendingLastMile = plan.last_mile.filter((a) => !a.route_started);
+            const inProgressLastMile = plan.last_mile.filter((a) => a.route_started);
+            const pendingInterBranch = plan.inter_branch.filter((a) => !a.in_transit);
+            const inProgressInterBranch = plan.inter_branch.filter((a) => a.in_transit);
+            const inProgressDriverIds = inProgressLastMile.map((a) => a.driver_id);
+            const inProgressVehicleIds = inProgressInterBranch.map((a) => a.vehicle_id);
 
-          {plan.unassigned.length > 0 && (
-            <UnassignedSection
-              unassigned={plan.unassigned}
-              branches={branches}
-              shipments={shipments}
-              onView={openInfo}
-              dragging={dragging}
-              canAccept={canAcceptDrop({ kind: "unassigned" })}
-              onDragStart={beginDrag}
-              onDragEnd={endDrag}
-              onDropHere={() => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "unassigned" })}
-            />
-          )}
+            return (
+              <>
+                {/* Si el operador está draggeando y no hay sección de "sin asignar"
+                    renderizada, mostramos un drop-zone flotante para poder soltar
+                    ahí y desasignar. */}
+                {dragging && plan.unassigned.length === 0 && dragging.source.kind !== "unassigned" && (
+                  <UnassignedDropZone
+                    onDrop={() => handleDrop(dragging.trackingId, dragging.source, { kind: "unassigned" })}
+                    onCancel={endDrag}
+                  />
+                )}
 
-          {/* Última milla: visible si hay asignaciones O si hay choferes
-              disponibles para asignar (siempre que existan choferes en la sucursal). */}
-          {(plan.last_mile.length > 0 || drivers.length > 0) && (
-            <LastMileSection
-              assignments={plan.last_mile}
-              drivers={drivers}
-              driverLoads={plan.driver_loads}
-              blockedDriverIds={plan.blocked_drivers.map((b) => b.driver_id)}
-              shipments={shipments}
-              onView={openInfo}
-              dragging={dragging}
-              canAcceptDriver={(driverId) => canAcceptDrop({ kind: "driver", id: driverId })}
-              onDragStart={beginDrag}
-              onDragEnd={endDrag}
-              onDropDriver={(driverId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "driver", id: driverId })}
-            />
-          )}
+                {plan.unassigned.length > 0 && (
+                  <UnassignedSection
+                    unassigned={plan.unassigned}
+                    branches={branches}
+                    shipments={shipments}
+                    onView={openInfo}
+                    dragging={dragging}
+                    canAccept={canApply && canAcceptDrop({ kind: "unassigned" })}
+                    onDragStart={canApply ? beginDrag : undefined}
+                    onDragEnd={canApply ? endDrag : undefined}
+                    onDropHere={canApply ? () => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "unassigned" }) : undefined}
+                  />
+                )}
 
-          {/* Inter-sucursal: visible si hay despachos O si hay vehículos en el pool. */}
-          {(plan.inter_branch.length > 0 || plan.vehicle_loads.length > 0) && (
-            <InterBranchSection
-              assignments={plan.inter_branch}
-              vehicleLoads={plan.vehicle_loads}
-              branches={branches}
-              shipments={shipments}
-              onView={openInfo}
-              dragging={dragging}
-              canAcceptVehicle={(vehicleId) => canAcceptDrop({ kind: "vehicle", id: vehicleId })}
-              onDragStart={beginDrag}
-              onDragEnd={endDrag}
-              onDropVehicle={(vehicleId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "vehicle", id: vehicleId })}
-            />
-          )}
+                {/* Última milla: solo envíos pendientes de despacho. */}
+                {(pendingLastMile.length > 0 || drivers.length > 0) && (
+                  <LastMileSection
+                    assignments={pendingLastMile}
+                    excludedDriverIds={inProgressDriverIds}
+                    drivers={drivers}
+                    driverLoads={plan.driver_loads}
+                    blockedDriverIds={plan.blocked_drivers.map((b) => b.driver_id)}
+                    shipments={shipments}
+                    onView={openInfo}
+                    dragging={dragging}
+                    canAcceptDriver={(driverId) => canApply && canAcceptDrop({ kind: "driver", id: driverId })}
+                    onDragStart={canApply ? beginDrag : undefined}
+                    onDragEnd={canApply ? endDrag : undefined}
+                    onDropDriver={canApply ? (driverId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "driver", id: driverId }) : undefined}
+                    onApplyDriver={canApply ? (driverId) => void handleApplyItem({ driverId }) : undefined}
+                    applying={applying}
+                  />
+                )}
 
-          {plan.last_mile.length === 0 && plan.inter_branch.length === 0 && plan.unassigned.length === 0 && (
-            <Card className="p-10 text-center">
-              <p className="text-sm text-slate-500">No hay envíos para rutear desde esta sucursal en este momento.</p>
-            </Card>
-          )}
+                {/* Inter-sucursal: solo despachos aún no iniciados. */}
+                {(pendingInterBranch.length > 0 || plan.vehicle_loads.length > 0) && (
+                  <InterBranchSection
+                    assignments={pendingInterBranch}
+                    excludedVehicleIds={inProgressVehicleIds}
+                    vehicleLoads={plan.vehicle_loads}
+                    branches={branches}
+                    shipments={shipments}
+                    configSnapshot={plan.config_snapshot}
+                    onView={openInfo}
+                    dragging={dragging}
+                    canAcceptVehicle={(vehicleId) => canApply && canAcceptDrop({ kind: "vehicle", id: vehicleId })}
+                    onDragStart={canApply ? beginDrag : undefined}
+                    onDragEnd={canApply ? endDrag : undefined}
+                    onDropVehicle={canApply ? (vehicleId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "vehicle", id: vehicleId }) : undefined}
+                    onApplyVehicle={canApply ? (vehicleId) => void handleApplyItem({ vehicleId }) : undefined}
+                    applying={applying}
+                  />
+                )}
+
+                {/* Salidas en curso: choferes que ya iniciaron ruta y vehículos en viaje. Solo informativo. */}
+                {(inProgressLastMile.length > 0 || inProgressInterBranch.length > 0) && (
+                  <OutgoingInProgressSection
+                    lastMile={inProgressLastMile}
+                    interBranch={inProgressInterBranch}
+                    drivers={drivers}
+                    branches={branches}
+                    shipments={shipments}
+                    onView={openInfo}
+                  />
+                )}
+
+                {/* Vehículos llegando: viajes inter-sucursal con destino esta sucursal. Solo informativo. */}
+                {(plan.incoming_vehicles?.length ?? 0) > 0 && (
+                  <IncomingVehiclesSection
+                    vehicles={plan.incoming_vehicles!}
+                    branches={branches}
+                    shipments={shipments}
+                    onView={openInfo}
+                  />
+                )}
+
+                {plan.last_mile.length === 0 && plan.inter_branch.length === 0 && plan.unassigned.length === 0 && (
+                  <Card className="p-10 text-center">
+                    <p className="text-sm text-slate-500">No hay envíos para rutear desde esta sucursal en este momento.</p>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 
@@ -749,9 +890,9 @@ function UnassignedSection({
   onView?: (trackingId: string) => void;
   dragging: DragState | null;
   canAccept: boolean;
-  onDragStart: (e: React.DragEvent, trackingId: string) => void;
-  onDragEnd: () => void;
-  onDropHere: () => void;
+  onDragStart?: (e: React.DragEvent, trackingId: string) => void;
+  onDragEnd?: () => void;
+  onDropHere?: () => void;
 }) {
   const groupedByReason = useMemo(() => {
     const m = new Map<string, UnassignedShipment[]>();
@@ -782,7 +923,7 @@ function UnassignedSection({
       onDrop={(e: React.DragEvent) => {
         if (!canAccept) return;
         e.preventDefault();
-        onDropHere();
+        onDropHere?.();
       }}
     >
       <CardHeader className="bg-amber-50 rounded-t-xl">
@@ -791,7 +932,7 @@ function UnassignedSection({
           <CardTitle className="text-amber-900">Sin asignar ({unassigned.length})</CardTitle>
         </div>
         <CardDescription>
-          El algoritmo no pudo asignar estos envíos. Arrastrá cualquier envío hasta el chofer o vehículo correspondiente, o tocá "Reasignar" para usar el menú.
+          El algoritmo no pudo asignar estos envíos. Podés arrastrarlos manualmente hasta el chofer o vehículo correspondiente.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-3">
@@ -846,6 +987,7 @@ function UnassignedDropZone({ onDrop, onCancel }: { onDrop: () => void; onCancel
 
 function LastMileSection({
   assignments,
+  excludedDriverIds,
   drivers,
   driverLoads,
   blockedDriverIds,
@@ -856,23 +998,29 @@ function LastMileSection({
   onDragStart,
   onDragEnd,
   onDropDriver,
+  onApplyDriver,
+  applying,
 }: {
   assignments: LastMileAssignment[];
+  excludedDriverIds: string[];
   drivers: UserProfile[];
   driverLoads: DriverLoad[];
   blockedDriverIds: string[];
   shipments: Map<string, Shipment>;
   onView?: (trackingId: string) => void;
   dragging: DragState | null;
-  canAcceptDriver: (driverId: string) => boolean;
-  onDragStart: (e: React.DragEvent, trackingId: string) => void;
-  onDragEnd: () => void;
-  onDropDriver: (driverId: string) => void;
+  canAcceptDriver?: (driverId: string) => boolean;
+  onDragStart?: (e: React.DragEvent, trackingId: string) => void;
+  onDragEnd?: () => void;
+  onDropDriver?: (driverId: string) => void;
+  onApplyDriver?: (driverId: string) => void;
+  applying?: boolean;
 }) {
   // Choferes elegibles que aún no tienen asignación en este plan: drop zones
   // adicionales durante un drag. Sin esto, si todo quedó "sin asignar" no
   // habría adónde tirar los envíos.
-  const assignedIds = new Set(assignments.map((a) => a.driver_id));
+  // excludedDriverIds contiene los choferes ya en ruta — tampoco son pool válido.
+  const assignedIds = new Set([...assignments.map((a) => a.driver_id), ...excludedDriverIds]);
   const blockedIds = new Set(blockedDriverIds);
   const poolDrivers = drivers.filter((d) => !assignedIds.has(d.id) && !blockedIds.has(d.id));
 
@@ -896,10 +1044,12 @@ function LastMileSection({
               shipments={shipments}
               onView={onView}
               dragActive={!!dragging}
-              canAccept={canAcceptDriver(a.driver_id)}
+              canAccept={canAcceptDriver?.(a.driver_id) ?? false}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
-              onDropHere={() => onDropDriver(a.driver_id)}
+              onDropHere={() => onDropDriver?.(a.driver_id)}
+              onApply={!a.route_started && hasPendingShipments(a) && onApplyDriver ? () => onApplyDriver(a.driver_id) : undefined}
+              applying={applying}
             />
           );
         })}
@@ -918,8 +1068,8 @@ function LastMileSection({
               label={d.full_name || d.username}
               sublabel={sublabel}
               dragActive={!!dragging}
-              canAccept={canAcceptDriver(d.id)}
-              onDropHere={() => onDropDriver(d.id)}
+              canAccept={canAcceptDriver?.(d.id) ?? false}
+              onDropHere={() => onDropDriver?.(d.id)}
             />
           );
         })}
@@ -945,7 +1095,7 @@ function PoolDropCard({
   sublabel: string;
   dragActive: boolean;
   canAccept: boolean;
-  onDropHere: () => void;
+  onDropHere?: () => void;
 }) {
   const cls = dragActive
     ? canAccept
@@ -964,7 +1114,7 @@ function PoolDropCard({
       onDrop={(e: React.DragEvent) => {
         if (!canAccept) return;
         e.preventDefault();
-        onDropHere();
+        onDropHere?.();
       }}
     >
       <div className="text-sm font-semibold text-slate-900">{label}</div>
@@ -1002,6 +1152,8 @@ function DriverRouteCard({
   onDragStart,
   onDragEnd,
   onDropHere,
+  onApply,
+  applying,
 }: {
   assignment: LastMileAssignment;
   driverName: string;
@@ -1009,9 +1161,11 @@ function DriverRouteCard({
   onView?: (trackingId: string) => void;
   dragActive: boolean;
   canAccept: boolean;
-  onDragStart: (e: React.DragEvent, trackingId: string) => void;
-  onDragEnd: () => void;
-  onDropHere: () => void;
+  onDragStart?: (e: React.DragEvent, trackingId: string) => void;
+  onDragEnd?: () => void;
+  onDropHere?: () => void;
+  onApply?: () => void;
+  applying?: boolean;
 }) {
   const a = assignment;
   const totalCount = a.shipments.length + a.existing_count;
@@ -1038,22 +1192,62 @@ function DriverRouteCard({
       onDrop={(e: React.DragEvent) => {
         if (!canAccept) return;
         e.preventDefault();
-        onDropHere();
+        onDropHere?.();
       }}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
             <span>{driverName}</span>
+            {assignment.route_started && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                🚚 En ruta
+              </span>
+            )}
+            {!assignment.route_started && assignment.applied && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                ✓ Aplicado
+              </span>
+            )}
+            {!assignment.route_started && !assignment.applied && (assignment.applied_shipments?.length ?? 0) > 0 && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                Parcial · {assignment.applied_shipments?.length}/{assignment.shipments.length}
+              </span>
+            )}
+            {!assignment.route_started && assignment.applied && hasPendingShipments(assignment) && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                + {assignment.shipments.length - (assignment.applied_shipments?.length ?? 0)} sin aplicar
+              </span>
+            )}
           </div>
           {optimized && (
             <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500 tabular-nums flex-wrap">
               {a.departure_min !== undefined && (
-                <span className="inline-flex items-center gap-1">
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800"
+                  title="Hora óptima de salida sugerida por el motor de ruteo para cumplir las ventanas"
+                >
                   <Clock className="w-3 h-3" />
-                  Salida {fmtMinutesAsTime(a.departure_min)}
+                  Salida sugerida {fmtMinutesAsTime(a.departure_min)}
                 </span>
               )}
+              {a.window_coverage !== undefined && a.ordered_stops && (() => {
+                const total = a.ordered_stops.filter((s) => !s.unsequenced && !s.manual).length;
+                const inWindow = Math.round((a.window_coverage ?? 0) * total);
+                const allIn = total > 0 && inWindow === total;
+                return (
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                      allIn
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}
+                    title={allIn ? "Todas las paradas caen dentro de su ventana" : "Algunas paradas caen fuera de ventana"}
+                  >
+                    {inWindow}/{total} en ventana
+                  </span>
+                );
+              })()}
               {a.total_duration_min ? (
                 <span className="inline-flex items-center gap-1">
                   <Clock className="w-3 h-3" />
@@ -1069,12 +1263,21 @@ function DriverRouteCard({
             </div>
           )}
         </div>
-        <div className="text-xs text-slate-500 tabular-nums text-right shrink-0">
+        <div className="text-xs text-slate-500 tabular-nums text-right shrink-0 flex flex-col items-end gap-1">
           <div>{totalCount} envíos · {totalWeight.toFixed(1)} kg</div>
           {a.existing_count > 0 && (
             <div className="text-[11px] text-slate-400">
               {a.shipments.length} nuevos + {a.existing_count} en ruta ({a.existing_weight_kg.toFixed(1)} kg)
             </div>
+          )}
+          {hasPendingShipments(assignment) && onApply && (
+            <button
+              onClick={onApply}
+              disabled={applying}
+              className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer mt-1"
+            >
+              Aplicar ruta
+            </button>
           )}
         </div>
       </div>
@@ -1243,6 +1446,18 @@ function RouteStopRow({
               Asignado manualmente
             </span>
           )}
+          {stop.within_window === false && (
+            <span
+              className="text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 font-medium"
+              title={
+                stop.window_deviation_min != null
+                  ? `${stop.window_deviation_min > 0 ? "+" : ""}${stop.window_deviation_min} min fuera de ventana`
+                  : "Fuera de ventana horaria"
+              }
+            >
+              ⚠ Fuera de ventana {stop.window_deviation_min != null ? `(${stop.window_deviation_min > 0 ? "+" : ""}${stop.window_deviation_min} min)` : ""}
+            </span>
+          )}
           <TimeWindowChip tw={stop.time_window} />
           <span className="text-[11px] text-slate-500 tabular-nums">{stop.weight_kg.toFixed(1)} kg</span>
           {shipment?.priority && <PriorityBadge priority={shipment.priority} />}
@@ -1258,31 +1473,40 @@ function RouteStopRow({
 
 function InterBranchSection({
   assignments,
+  excludedVehicleIds,
   vehicleLoads,
   branches,
   shipments,
+  configSnapshot,
   onView,
   dragging,
   canAcceptVehicle,
   onDragStart,
   onDragEnd,
   onDropVehicle,
+  onApplyVehicle,
+  applying,
 }: {
   assignments: InterBranchAssignment[];
+  excludedVehicleIds: string[];
   vehicleLoads: VehicleLoad[];
   branches: Branch[];
   shipments: Map<string, Shipment>;
+  configSnapshot?: RoutingConfig;
   onView?: (trackingId: string) => void;
   dragging: DragState | null;
-  canAcceptVehicle: (vehicleId: string) => boolean;
-  onDragStart: (e: React.DragEvent, trackingId: string) => void;
-  onDragEnd: () => void;
-  onDropVehicle: (vehicleId: string) => void;
+  canAcceptVehicle?: (vehicleId: string) => boolean;
+  onDragStart?: (e: React.DragEvent, trackingId: string) => void;
+  onDragEnd?: () => void;
+  onDropVehicle?: (vehicleId: string) => void;
+  onApplyVehicle?: (vehicleId: string) => void;
+  applying?: boolean;
 }) {
   const dragActive = !!dragging;
   // Vehículos del pool sin despacho: drop zones extra durante drag para
   // poder asignar manualmente envíos a vehículos que el algoritmo no usó.
-  const dispatchedIds = new Set(assignments.map((a) => a.vehicle_id));
+  // excludedVehicleIds contiene los ya en viaje — no son pool válido.
+  const dispatchedIds = new Set([...assignments.map((a) => a.vehicle_id), ...excludedVehicleIds]);
   const poolVehicles = vehicleLoads.filter((v) => !dispatchedIds.has(v.vehicle_id));
   return (
     <Card className="mb-5">
@@ -1299,7 +1523,7 @@ function InterBranchSection({
         {assignments.map((a) => {
           const totalLoaded = a.total_weight_kg + a.existing_weight_kg;
           const utilPct = a.capacity_kg > 0 ? Math.round((totalLoaded / a.capacity_kg) * 100) : 0;
-          const canAccept = canAcceptVehicle(a.vehicle_id);
+          const canAccept = canAcceptVehicle?.(a.vehicle_id) ?? false;
           const cardClass = dragActive
             ? canAccept
               ? "rounded-lg border-2 border-emerald-400 ring-2 ring-emerald-200 p-3 bg-emerald-50/40"
@@ -1318,16 +1542,47 @@ function InterBranchSection({
               onDrop={(e: React.DragEvent) => {
                 if (!canAccept) return;
                 e.preventDefault();
-                onDropVehicle(a.vehicle_id);
+                onDropVehicle?.(a.vehicle_id);
               }}
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="font-semibold text-slate-900 text-sm">
+                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                   {a.license_plate} → {branchLabelById(a.destination_branch, branches)}
+                  {a.in_transit && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                      🚚 En viaje
+                    </span>
+                  )}
+                  {!a.in_transit && a.applied && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                      ✓ Aplicado
+                    </span>
+                  )}
+                  {!a.in_transit && !a.applied && (a.applied_shipments?.length ?? 0) > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                      Parcial · {a.applied_shipments?.length}/{a.shipments.length}
+                    </span>
+                  )}
+                  {!a.in_transit && a.applied && hasPendingShipments(a) && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                      + {a.shipments.length - (a.applied_shipments?.length ?? 0)} sin aplicar
+                    </span>
+                  )}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.rule === "sla_forced" ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"}`}>
-                  {DISPATCH_RULE_LABELS[a.rule]}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.rule === "sla_forced" ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"}`}>
+                    {DISPATCH_RULE_LABELS[a.rule]}
+                  </span>
+                  {!a.in_transit && hasPendingShipments(a) && onApplyVehicle && (
+                    <button
+                      onClick={() => onApplyVehicle(a.vehicle_id)}
+                      disabled={applying}
+                      className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
+                    >
+                      Aplicar despacho
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="text-xs text-slate-500 tabular-nums mb-2">
                 {a.shipments.length} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
@@ -1340,9 +1595,35 @@ function InterBranchSection({
               <div className="grid gap-2">
                 {a.shipments.map((tid) => {
                   const sh = shipments.get(tid);
-                  // Para envíos en retorno, el destino real es el origen; para el resto, el final.
                   const realTarget = sh?.is_returning ? sh?.origin_branch_id : sh?.final_branch_id;
                   const isPartialTransit = !!realTarget && realTarget !== a.destination_branch;
+
+                  let slaTag: React.ReactNode = null;
+                  if (a.rule === "sla_forced" && sh && configSnapshot) {
+                    const isSlaUrgent =
+                      sh.estimated_delivery_at != null &&
+                      (new Date(sh.estimated_delivery_at).getTime() - Date.now()) / 3600000 <
+                        configSnapshot.sla_force_horizon_hours;
+                    const isPriorityForced =
+                      sh.priority_score != null &&
+                      sh.priority_score >= configSnapshot.priority_force_threshold;
+                    if (isSlaUrgent) {
+                      slaTag = (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium shrink-0">
+                          <Clock className="w-3 h-3" />
+                          SLA crítico
+                        </span>
+                      );
+                    } else if (isPriorityForced) {
+                      slaTag = (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium shrink-0">
+                          <AlertTriangle className="w-3 h-3" />
+                          Prioridad forzada
+                        </span>
+                      );
+                    }
+                  }
+
                   return (
                     <ShipmentChip
                       key={tid}
@@ -1352,11 +1633,14 @@ function InterBranchSection({
                       onDragStart={onDragStart}
                       onDragEnd={onDragEnd}
                       extra={
-                        isPartialTransit && realTarget ? (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 truncate">
-                            Tránsito parcial → {branchLabelById(realTarget, branches)}
-                          </span>
-                        ) : null
+                        <>
+                          {slaTag}
+                          {isPartialTransit && realTarget && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 truncate">
+                              Tránsito parcial → {branchLabelById(realTarget, branches)}
+                            </span>
+                          )}
+                        </>
                       }
                     />
                   );
@@ -1390,8 +1674,8 @@ function InterBranchSection({
             label={v.license_plate}
             sublabel={`Disponible · ${v.existing_weight_kg.toFixed(1)} / ${v.capacity_kg} kg`}
             dragActive={!!dragging}
-            canAccept={canAcceptVehicle(v.vehicle_id)}
-            onDropHere={() => onDropVehicle(v.vehicle_id)}
+            canAccept={canAcceptVehicle?.(v.vehicle_id) ?? false}
+            onDropHere={onDropVehicle ? () => onDropVehicle(v.vehicle_id) : undefined}
           />
         ))}
       </CardContent>
@@ -1445,5 +1729,265 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
         </div>
       </div>
     </div>
+  );
+}
+
+// OutgoingInProgressSection muestra choferes que ya iniciaron ruta y vehículos
+// que ya están en viaje DESDE esta sucursal. Es solo informativo: no hay
+// drag-and-drop ni botones de apply porque ya están en movimiento.
+function OutgoingInProgressSection({
+  lastMile,
+  interBranch,
+  drivers,
+  branches,
+  shipments,
+  onView,
+}: {
+  lastMile: LastMileAssignment[];
+  interBranch: InterBranchAssignment[];
+  drivers: UserProfile[];
+  branches: Branch[];
+  shipments: Map<string, Shipment>;
+  onView?: (trackingId: string) => void;
+}) {
+  const total = lastMile.length + interBranch.length;
+  if (total === 0) return null;
+  return (
+    <Card className="mb-5 border-sky-200">
+      <CardHeader className="bg-sky-50 rounded-t-xl">
+        <CardTitle className="text-sky-900 flex items-center gap-2">
+          <Truck className="w-5 h-5" />
+          Salidas en curso ({total})
+        </CardTitle>
+        <CardDescription>
+          Choferes y vehículos que ya iniciaron viaje desde esta sucursal. Solo informativo — no se puede modificar la asignación.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4 pt-4">
+        {lastMile.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              Choferes en ruta
+            </div>
+            <div className="grid gap-3">
+              {lastMile.map((a) => {
+                const driver = drivers.find((d) => d.id === a.driver_id);
+                const driverName = driver?.full_name ?? a.driver_name ?? a.driver_id;
+                const allShipments = [
+                  ...a.shipments,
+                  ...(a.existing_shipments ?? []).filter((t) => !a.shipments.includes(t)),
+                ];
+                const totalCount = allShipments.length;
+                const totalWeight = a.total_weight_kg + a.existing_weight_kg;
+                return (
+                  <div key={a.driver_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                        <UserIcon className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{driverName}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                          🚚 En ruta
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                        {totalCount} envíos · {totalWeight.toFixed(1)} kg
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                      {allShipments.map((tid) => {
+                        const sh = shipments.get(tid);
+                        const clickable = !!onView && !!sh;
+                        return (
+                          <div
+                            key={tid}
+                            onClick={clickable ? () => onView!(tid) : undefined}
+                            role={clickable ? "button" : undefined}
+                            tabIndex={clickable ? 0 : undefined}
+                            onKeyDown={
+                              clickable
+                                ? (e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      onView!(tid);
+                                    }
+                                  }
+                                : undefined
+                            }
+                            className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                          >
+                            <span className="font-mono text-slate-700">{tid}</span>
+                            {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                            {sh?.priority && <PriorityBadge priority={sh.priority} />}
+                            {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
+                            {sh?.shipment_type === "express" && (
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Express</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {lastMile.length > 0 && interBranch.length > 0 && (
+          <div className="border-t border-slate-100" />
+        )}
+        {interBranch.length > 0 && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+              Vehículos en viaje
+            </div>
+            <div className="grid gap-3">
+              {interBranch.map((a) => {
+                const totalLoaded = a.total_weight_kg + a.existing_weight_kg;
+                const utilPct = a.capacity_kg > 0 ? Math.round((totalLoaded / a.capacity_kg) * 100) : 0;
+                const allShipments = [
+                  ...a.shipments,
+                  ...(a.existing_shipments ?? []).filter((t) => !a.shipments.includes(t)),
+                ];
+                return (
+                  <div key={a.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                        <span>{a.license_plate}</span>
+                        <span className="text-slate-500 font-normal">→</span>
+                        <span>{branchLabelById(a.destination_branch, branches)}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                          🚚 En viaje
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                        {allShipments.length} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                      {allShipments.map((tid) => {
+                        const sh = shipments.get(tid);
+                        const clickable = !!onView && !!sh;
+                        return (
+                          <div
+                            key={tid}
+                            onClick={clickable ? () => onView!(tid) : undefined}
+                            role={clickable ? "button" : undefined}
+                            tabIndex={clickable ? 0 : undefined}
+                            onKeyDown={
+                              clickable
+                                ? (e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      onView!(tid);
+                                    }
+                                  }
+                                : undefined
+                            }
+                            className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                          >
+                            <span className="font-mono text-slate-700">{tid}</span>
+                            {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                            {sh?.priority && <PriorityBadge priority={sh.priority} />}
+                            {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
+                            {sh?.shipment_type === "express" && (
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Express</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// IncomingVehiclesSection muestra vehículos en camino HACIA esta sucursal.
+// Es una vista informativa: no hay drag-and-drop ni botones de apply porque
+// los vehículos están en viaje y no se les puede asignar carga adicional.
+function IncomingVehiclesSection({
+  vehicles,
+  branches,
+  shipments,
+  onView,
+}: {
+  vehicles: IncomingVehicle[];
+  branches: Branch[];
+  shipments: Map<string, Shipment>;
+  onView?: (trackingId: string) => void;
+}) {
+  return (
+    <Card className="border-sky-200">
+      <CardHeader className="bg-sky-50 rounded-t-xl">
+        <CardTitle className="text-sky-900 flex items-center gap-2">
+          <Truck className="w-5 h-5" />
+          Vehículos llegando ({vehicles.length})
+        </CardTitle>
+        <CardDescription>
+          Despachos de otras sucursales en camino hacia acá. Solo informativo —
+          no se les puede modificar ni asignar carga adicional.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4">
+        {vehicles.map((v) => {
+          const utilPct = v.capacity_kg > 0 ? Math.round((v.total_weight_kg / v.capacity_kg) * 100) : 0;
+          return (
+            <div key={v.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                  <span>{v.license_plate}</span>
+                  <span className="text-slate-500 font-normal">desde</span>
+                  <span>{branchLabelById(v.origin_branch, branches)}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                    🚚 En viaje
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                  {v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg ({utilPct}%)
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                {v.shipments.map((tid) => {
+                  const sh = shipments.get(tid);
+                  const clickable = !!onView && !!sh;
+                  return (
+                    <div
+                      key={tid}
+                      onClick={clickable ? () => onView!(tid) : undefined}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onKeyDown={
+                        clickable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onView!(tid);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                    >
+                      <span className="font-mono text-slate-700">{tid}</span>
+                      {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                      {sh?.priority && <PriorityBadge priority={sh.priority} />}
+                      {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
+                      {sh?.shipment_type === "express" && (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Express</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }

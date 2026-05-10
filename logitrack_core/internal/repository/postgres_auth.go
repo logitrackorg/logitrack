@@ -65,6 +65,11 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 			"Av. Rivadavia 3456", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1084",
 		},
 		{
+			"12", "chofer_caba2", "chofer_caba2123", "driver", "caba",
+			"Alexis", "Mac Allister", "alexis.macallister@logitrack.com",
+			"Av. Callao 890", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1023",
+		},
+		{
 			"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba",
 			"Lautaro", "Martínez", "lautaro.martinez@logitrack.com",
 			"Av. Vélez Sársfield 2222", "Córdoba", "Córdoba", "X5010",
@@ -93,6 +98,16 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 			"9", "admin", "admin123", "admin", "",
 			"Vanina", "Correa", "vanina.correa@logitrack.com",
 			"Av. 9 de Julio 123", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1073",
+		},
+		{
+			"13", "op_posadas", "op_posadas123", "operator", "posadas",
+			"Ramiro", "Funes Mori", "ramiro.funesmori@logitrack.com",
+			"Av. Mitre 1500", "Posadas", "Misiones", "N3300",
+		},
+		{
+			"14", "chofer_posadas", "chofer_posadas123", "driver", "posadas",
+			"Lía", "Romero", "lia.romero@logitrack.com",
+			"San Lorenzo 890", "Posadas", "Misiones", "N3301",
 		},
 	}
 	for _, u := range seed {

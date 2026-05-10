@@ -1,252 +1,226 @@
-# Manual de usuario — Ruteo inteligente
+# Ruteo inteligente — Manual de usuario
 
-## Qué es y para qué sirve
+## ¿Qué es el plan de ruteo?
 
-El **Ruteo inteligente** es la pantalla donde, al comienzo del día, el sistema te propone cómo distribuir todos los envíos pendientes de tu sucursal entre tus choferes (entregas a domicilio) y tus vehículos (viajes a otras sucursales). En lugar de armar la operativa envío por envío, generás un plan completo en un click, lo revisás, lo ajustás si hace falta arrastrando envíos, y recién cuando aprobás se aplica.
+Todos los días a las **08:00** el sistema genera automáticamente un plan de despacho para toda la
+red. Cuando entrás a `/ruteo`, el plan ya está listo: no tenés que generarlo vos.
 
-Para los envíos de **última milla** (entregas en tu ciudad), el sistema además calcula la **secuencia óptima de paradas** de cada chofer, estima la hora de llegada a cada cliente y considera las ventanas horarias del envío (mañana / tarde / flexible).
+El plan decide:
+- **Última milla**: qué envíos sale a entregar cada chofer hoy.
+- **Inter-sucursal**: qué vehículo lleva qué envíos a qué sucursal destino.
+- **Sin asignar**: envíos que quedan para otro día, con el motivo explicado.
 
-Vos seguís siendo quien decide. El sistema te muestra una **propuesta** — vos podés mover envíos a mano antes de aplicar.
+---
 
-## Cómo se entra
+## Pantalla de ruteo (`/ruteo`)
 
-1. Login como **operador** o **supervisor**.
-2. En el menú, **"Ruteo"**.
-3. Tocá **"Generar plan"**.
+### Si hay plan generado
 
-El plan se calcula en menos de un segundo. Aparecen 3 secciones (las que aplican):
+La pantalla muestra tres secciones:
 
-- **Sin asignar** — envíos que no entraron en ningún chofer/vehículo.
-- **Última milla** — un card por chofer de tu sucursal, con la secuencia ordenada de paradas.
-- **Despachos a otras sucursales** — un card por vehículo de tu sucursal, con los envíos que viajan.
-
-## Cómo arma el plan
-
-### Paso 1 — Junta los envíos pendientes en tu sucursal
-
-Solo entran al plan los envíos que están físicamente en tu sucursal (estado `at_hub`, `at_origin_hub` o `redelivery_scheduled`). Quedan afuera automáticamente:
-
-- Los terminales (entregados, cancelados, devueltos, perdidos, destruidos).
-- Los que ya están en algún vehículo o ruta de chofer.
-- Los de **retiro en sucursal** (el cliente los pasa a buscar — no necesitan ruteo).
-
-### Paso 2 — Separa última milla de inter-sucursal
-
-- **Última milla**: envíos cuya sucursal final es la tuya y son entrega a domicilio. Se reparten entre tus choferes y se ordenan en una secuencia óptima.
-- **Inter-sucursal**: envíos que tienen que viajar a otra sucursal. Se agrupan por destino y se asignan a vehículos.
-- **Devoluciones** (envíos rechazados o no retirados que vuelven al remitente): siempre van por inter-sucursal con destino la sucursal de origen del envío original.
-
-### Paso 3 — Última milla: VRP con secuencia óptima
-
-Para los envíos de última milla, el sistema resuelve un **Vehicle Routing Problem** simplificado:
-
-1. **Carga las coordenadas** del depósito (tu sucursal) y de cada dirección de entrega.
-2. **Calcula tiempos de viaje** entre todos los puntos. Si está disponible OSRM (rutas reales por calle), lo usa; si no, usa distancia Haversine × 1.3 (factor de detour) con velocidad media de 25 km/h.
-3. **Construye una ruta inicial por chofer** con un algoritmo de "vecino más cercano" — siempre elige la próxima parada más cercana que respete las ventanas horarias y la capacidad del chofer.
-4. **Optimiza intercambiando segmentos** (algoritmo 2-opt) — prueba revertir tramos de la ruta para ver si reducen el tiempo total. Acepta el cambio solo si las ventanas siguen cumpliéndose.
-5. **Devuelve cada ruta ordenada** con tiempos estimados de llegada por parada (calculados desde la hora de salida + tiempos de viaje + 10 min por parada para estacionar/entregar).
-
-Reglas de capacidad por chofer (configurables):
-
-- Tope de cantidad: 15 envíos por chofer.
-- Tope de peso: 150 kg por chofer.
-- Carga existente cuenta: si el chofer ya tiene 3 envíos en `out_for_delivery` de un Apply previo, esos se descuentan de su capacidad disponible.
-
-Ventanas horarias **hard**: si un envío tiene ventana "Mañana" y el sistema no puede llegar antes del mediodía (por distancia o porque el plan se generó tarde), va a **Sin asignar** con motivo "No se puede cumplir la ventana horaria del envío".
-
-Si un envío no tiene coordenadas (algo falló al geocodificar), se appendea al final de la ruta del chofer menos cargado con badge ámbar **"Sin coordenadas"** y arrival "—". El chofer decide el orden de esa parada en campo.
-
-### Paso 4 — Inter-sucursal: 3 reglas para decidir si despachar o esperar
-
-Para cada destino con envíos pendientes, el sistema evalúa en orden:
-
-**Regla 1 — SLA crítico (forzar despacho)**
-
-Si **alguno** de los envíos a ese destino cumple cualquiera de:
-
-- Su fecha estimada de entrega cae dentro de las próximas 24 horas (configurable).
-- Su `priority_score` supera 0.75 (configurable).
-
-→ **Despacha** aunque el vehículo vaya casi vacío. Aparece como *"SLA crítico"* en el card.
-
-**Regla 2 — Consolidación**
-
-Si la suma de pesos al destino es **≥ 40%** de la capacidad del vehículo más grande disponible.
-
-→ **Despacha**. Aparece como *"Consolidación"*.
-
-**Regla 3 — Esperar**
-
-Si no se cumple ninguna → **NO despacha**. Los envíos van a **Sin asignar** con motivo "Esperando consolidación con otros envíos al mismo destino".
-
-### Paso 5 — Elige el vehículo óptimo
-
-- **El vehículo más chico que cubra el peso total** (minimiza desperdicio de capacidad).
-- Si **ninguno cubre todo**: usa el más grande disponible y bin-packea por prioridad. El sobrante va a **Sin asignar** con motivo "Excede capacidad del vehículo más grande".
-
-### Paso 6 — Piggyback
-
-Para cada envío que quedó **Sin asignar** por motivo inter-sucursal, el sistema mira los despachos ya armados. Si encuentra uno cuyo destino esté **estrictamente más cerca** del destino final del envío que tu sucursal actual, y el vehículo tiene capacidad → lo suma a esa carga. Si hay varios candidatos, elige el que más acerca el envío.
-
-**Ejemplo (datos del seed)**: estás en CABA, tenés 2 envíos chicos a Mendoza (20 kg total) que solos no llegan al mínimo de consolidación. Pero tenés un despacho a Córdoba ya armado. Como Córdoba (~470 km de Mendoza) está más cerca de Mendoza que CABA (~1075 km), los envíos a Mendoza **se suben al camión que va a Córdoba**. Aparecen con badge naranja **"Tránsito parcial → MEND-01"**. Cuando el camión llega a Córdoba, los descargan y el operador local los reroutea al día siguiente.
-
-## Cómo leer la pantalla del plan
-
-**Resumen arriba** (4 chips): asignables, sin asignar, despachos, choferes.
-
-### Sección "Sin asignar"
-
-Card con borde ámbar. Envíos agrupados por motivo. Cada chip muestra peso, prioridad, badges (Frágil, Express, Devolución). Hacés click para abrir el modal de detalle del envío.
-
-### Sección "Última milla"
-
-Un card por chofer. El header muestra:
-
-- Nombre del chofer.
-- Hora de salida estimada.
-- Duración total estimada de la ruta.
-- Distancia total recorrida.
-- Cantidad y peso totales (nuevos + ya en ruta).
-
-Adentro, **lista numerada de paradas** en el orden óptimo:
-
-- Número 1, 2, 3... (orden de visita).
-- Tracking ID.
-- Hora estimada de llegada (`HH:MM`).
-- Badge de ventana horaria (Mañana cyan / Tarde violeta / Flexible gris).
-- Peso, prioridad, badges de Frágil / Express si aplica.
-
-Si el chofer ya tiene envíos en `out_for_delivery` de antes, abajo aparece una sección **"Ya en su ruta del día"** listándolos con badge celeste **"En ruta"**. Esos no son draggables — el chofer ya los tiene.
-
-Choferes que todavía no tienen envíos asignados aparecen como **cards punteados** con sublabel "Sin envíos asignados" (o "X envíos en ruta · Y kg pendientes" si tiene carga previa).
-
-### Sección "Despachos a otras sucursales"
-
-Un card por vehículo. El header muestra:
-
-- Patente → sucursal destino.
-- Badge de la regla (*"SLA crítico"* en rojo o *"Consolidación"* en celeste).
-- Carga: `380.0 / 800 kg (47%)`.
-
-Adentro, lista de envíos. Los que viajan de paso (piggyback) muestran badge naranja **"Tránsito parcial → [sucursal final]"**.
-
-Si el vehículo ya tiene envíos cargados (status `loaded`) de antes, abajo aparece sección **"Ya cargado en el vehículo"** con badge índigo **"Ya cargado"**.
-
-Vehículos disponibles sin despacho aparecen como **cards punteados** con sublabel "Disponible · X / Y kg".
-
-## Cómo ajustar el plan: drag & drop
-
-Para mover un envío:
-
-1. **Hacé click sostenido** sobre cualquier envío de cualquier sección.
-2. **Arrastralo** sobre un chofer o vehículo del plan.
-3. Mientras arrastrás:
-   - Los **destinos válidos** se resaltan con borde **verde** y mensaje "Soltá acá para asignar".
-   - Los **destinos inválidos** se atenúan al 60% (no aceptan).
-4. **Soltá** sobre el destino verde y el envío se mueve.
-
-### Reglas que el sistema valida automáticamente
-
-| Caso | Resultado |
+| Sección | Qué muestra |
 |---|---|
-| Envío de última milla → chofer | OK si hay capacidad |
-| Envío de última milla → vehículo inter-sucursal | Bloqueado (no tiene sentido) |
-| Envío inter-sucursal → vehículo | OK si hay capacidad |
-| Envío inter-sucursal → chofer | Bloqueado |
-| Cualquier envío → "Sin asignar" | OK |
-| Sobre el chofer/vehículo de origen | No-op |
-| Excede peso o cantidad del destino | Bloqueado, aparece toast con el motivo |
-| Chofer con ruta del día ya iniciada | Ni siquiera aparece como destino |
-| Vehículo en viaje, en mantenimiento o inactivo | Ni siquiera aparece como destino |
+| **Última milla** | Una card por chofer con sus envíos ordenados, hora estimada por parada y peso total. |
+| **Inter-sucursal** | Una card por vehículo con los envíos que va a llevar, destino y regla de despacho. |
+| **Sin asignar** | Envíos que el algoritmo no pudo rutear hoy, con el motivo. |
 
-Cuando un drop falla por validación, aparece un **toast rojo arriba del listado** durante 4 segundos con el motivo exacto.
+El encabezado muestra cuándo se generó el plan y el resumen global (asignados / sin asignar).
 
-### Drop a "Sin asignar"
+### Si no hay plan todavía
 
-Si la sección "Sin asignar" no existe en este plan (porque no había envíos sin asignar), apenas empezás a arrastrar aparece un placeholder ámbar punteado **"Soltá acá para mover el envío a Sin asignar"**.
+Si el servidor estaba caído a las 08:00 o es un día sin actividad previa, la pantalla muestra:
 
-### Si soltás sobre un chofer/vehículo del pool sin asignaciones previas
+> *"El plan del día aún no fue generado. Se genera automáticamente a las 08:00."*
 
-El card se "promueve" automáticamente: pasa de placeholder punteado a card normal con el envío adentro. Si el chofer/vehículo ya tenía envíos previos en su ruta/carga, los vas a ver listados abajo con badges "En ruta" / "Ya cargado".
+Un manager o admin puede generarlo manualmente con el botón **Generar plan ahora**.
 
-### Para volver al plan original
+---
 
-Si hiciste cambios y querés descartarlos, tocá **"Descartar cambios"** arriba.
+## Entender las cards de última milla
 
-## Ver detalle de un envío
+Cada card de chofer muestra:
 
-**Hacé click izquierdo** sobre cualquier envío para abrir un **modal de información** (solo lectura, sin acciones):
+- **Nombre del chofer** y total de envíos + kg nuevos.
+- **Carga preexistente** (si el chofer ya tenía envíos en su ruta del día anterior).
+- **Salida sugerida**: hora óptima de arranque calculada por el motor para que el máximo de paradas caiga dentro de su ventana. Aparece como chip ámbar en el encabezado de la card (ej. `🕐 Salida sugerida 11:00`).
+- **Indicador de cobertura de ventana**: chip al lado de la salida sugerida con formato `X/Y en ventana`. Verde si todas las paradas caen en ventana, rosa si alguna queda fuera.
+- **Secuencia de paradas** numeradas con hora estimada de llegada.
 
-- Datos del envío: peso, tipo de paquete, frágil, tipo de envío (normal/express), ventana horaria, método de entrega, intentos.
-- Datos del remitente: nombre, DNI, teléfono, dirección.
-- Datos del destinatario: nombre, DNI, teléfono, email, dirección.
-- Ruta: sucursal de origen, recepción, destino final, ubicación actual.
-- Tiempos: creado, actualizado, ETA, entregado.
-- Banners contextuales: si es devolución, tiene incidente reportado, o tiene instrucciones especiales.
+> La salida sugerida es **informativa**: el chofer arranca cuando toca "Iniciar ruta". El sistema nunca propone un horario anterior al actual — si son las 12:45 cuando se genera el plan, la salida más temprana posible es 12:45 o el siguiente entero.
 
-Para cerrar: click fuera del modal o botón "Cerrar" abajo.
+### Badges en cada parada
 
-## Cómo se aplica el plan
+| Badge | Significado |
+|---|---|
+| `🕐 09:45` | Hora estimada de llegada a esa dirección. |
+| `Mañana` / `Tarde` / `Flexible` | Ventana horaria pedida por el destinatario. |
+| `Sin coordenadas` | El envío no tiene dirección geolocalizada; el chofer lo atiende al final de la ruta. |
+| `Asignado manualmente` | El operador lo movió de lugar con drag-and-drop. |
+| `⚠ Fuera de ventana (+45 min)` | El envío llegará tarde a su ventana. Solo aparece cuando las ventanas están en **modo blando** (ver más abajo). |
 
-Tocá **"Aplicar plan"**. Lo que pasa:
+---
 
-1. Por cada envío del plan, el sistema valida que su estado actual sigue siendo válido (puede haber cambiado mientras vos editabas — ej. otro operador lo asignó manualmente, el chofer arrancó la ruta, etc.).
-2. **Última milla**: el envío pasa a `out_for_delivery` y se agrega a la ruta del chofer del día, **en el orden de la secuencia VRP**.
-3. **Inter-sucursal**: el vehículo queda en estado `en_carga` con destino seteado. **El viaje no arranca todavía**.
-4. Te muestra un resumen: **"X aplicados, Y fallidos"**. Cada fallo aparece con el motivo en español (ej. "El estado del envío cambió a loaded", "El vehículo cambió de estado y no está disponible").
-5. Al cerrar el resumen, el plan se regenera con el estado actualizado.
+## La salida sugerida en `/driver/route`
 
-## Cómo arrancar los viajes después
+Cuando el plan se aplica, la hora sugerida queda persistida en la ruta del chofer.
+El chofer la ve al entrar a su pantalla, en el card amarillo "Ruta sin iniciar":
 
-Aplicar el plan **no inicia los viajes** — solo deja todo cargado y listo. Cuando el chofer / vehículo está físicamente listo, vas a **Flota** (`/vehicles`), seleccionás el vehículo y tocás **"Iniciar viaje"**. Como el destino ya quedó seteado por el plan, el modal te muestra solo una **confirmación** del destino — confirmás y el viaje arranca.
+> 🕐 **Salida sugerida: 11:00**
 
-## Cómo se manejan las devoluciones
+Es una recomendación, no un bloqueo: el chofer puede tocar "Iniciar ruta" antes o después.
+Si el chofer arranca después de la sugerencia, las horas estimadas por parada se desplazan
+proporcionalmente.
 
-Cuando un envío vuelve al remitente:
+---
 
-- El sistema **extiende su fecha estimada de entrega 10 días** automáticamente, para reflejar el viaje de regreso. Queda en el historial como evento auditable.
-- En el plan, el envío aparece con badge naranja **"Devolución a remitente"** y se trata como inter-sucursal con destino la sucursal de **origen** del envío original.
-- Las devoluciones **no se asignan a choferes de última milla** — solo viajan en vehículos hasta llegar a su sucursal de origen, donde el operador local cierra el ciclo marcándolas como "devueltas" con DNI del remitente.
+## Ventanas horarias: modo duro vs modo blando
 
-## Casos especiales
+El admin configura si las ventanas son **duras** o **blandas** desde `/admin/config-ruteo`.
 
-### Generaste el plan tarde
+| Modo | Qué pasa con un envío fuera de ventana |
+|---|---|
+| **Duro** (default) | Queda en "Sin asignar" con motivo `ventana_horaria_inviable`. No sale en la ruta. |
+| **Blando** | Sale en la ruta del chofer con el badge naranja `⚠ Fuera de ventana`. Vos decidís si lo sacás. |
 
-Si tocás "Generar plan" a las 14:00, el sistema usa **la hora actual como hora de salida** (no las 8:00). Las horas estimadas de llegada parten de las 14:00. Si un envío tiene ventana "Mañana" y ya pasó el mediodía, queda en "Sin asignar" con motivo "ventana horaria inviable".
+### Cómo sacar un envío en modo blando
 
-### Chofer con ruta iniciada
+Si ves el badge naranja y querés sacarlo de la ruta:
+1. Hacé **drag** del chip del envío desde la card del chofer.
+2. Soltalo en la zona **Sin asignar** (aparece resaltada en azul mientras arrastrás).
+3. El envío queda sin asignar por hoy y el cron lo reevalúa mañana a las 08:00.
 
-Si el chofer ya tocó "Iniciar ruta" en su app, no podés sumarle más envíos. El plan **lo excluye automáticamente** de los choferes elegibles y aparece como `blocked_driver` con motivo "Ruta ya iniciada". No vas a ver el card en la pantalla.
+---
 
-### Vehículo en viaje
+## Editar el plan antes de aplicar
 
-Vehículos en estado `en_transito`, `mantenimiento` o `inactivo` no aparecen como destinos posibles. Solo `disponible` y `en_carga`.
+El plan que ves es una **sugerencia**. Podés ajustarlo con drag-and-drop antes de aplicar.
 
-### Ningún envío entra al VRP
+### Mover envíos entre choferes
 
-Si el depósito o todos los envíos no tienen coordenadas, el sistema cae al algoritmo greedy clásico (mismo bin-packing pero sin secuencia ordenada). En la práctica esto no debería pasar porque el geocoder se ejecuta automáticamente al crear cada envío.
+1. Agarrá el chip del envío desde la card de un chofer.
+2. Soltalo en la card de otro chofer.
+3. El sistema valida capacidad y muestra un error si el chofer está al tope.
 
-### Apply parcialmente exitoso
+### Mover envíos entre vehículos
 
-Si algunos envíos fallan al aplicarse (drift de estado), el modal te muestra cada falla con su motivo. Los que sí aplicaron se aplican; los demás se quedan como estaban. Después de cerrar el modal, el plan se regenera y vas a ver el estado actualizado.
+1. Agarrá el chip desde la card del vehículo.
+2. Soltalo en otro vehículo.
+3. Se valida que el peso total no exceda la capacidad del vehículo destino.
 
-## Configuración (admin)
+### Envíos de "Sin asignar" a chofer o vehículo
 
-El admin puede ajustar los parámetros del algoritmo desde **Config. ruteo** (`/routing-config`):
+1. Agarrá el chip desde la lista "Sin asignar".
+2. Soltalo en la card del chofer (si es última milla) o del vehículo (si es inter-sucursal).
 
-| Parámetro | Default | Para qué sirve |
+### Descartar cambios
+
+Si editaste y querés volver al plan original: botón **Descartar cambios** en el encabezado.
+
+---
+
+## Aplicar el plan
+
+Una vez que el plan está como querés:
+
+1. Clic en **Aplicar plan**.
+2. El sistema procesa ítem por ítem. Si alguno tuvo un cambio de estado entre que se generó y se aplicó (drift), ese ítem falla y te muestra el motivo. El resto se aplica igual.
+3. Al cerrar el resumen, la pantalla recarga el plan actualizado.
+
+### Después de aplicar
+
+- Los envíos de última milla pasan a `out_for_delivery` y aparecen en la ruta del chofer.
+- Los envíos inter-sucursal pasan a `loaded` y el vehículo queda en `en_carga`.
+- Los envíos que fallaron por drift quedan en su estado anterior — podés reasignarlos manualmente.
+
+---
+
+## Regenerar el plan (manager / admin)
+
+Si necesitás volver a calcular el plan del día (por ejemplo, llegaron muchos envíos nuevos):
+
+1. Hacé clic en **Regenerar plan** (visible solo para manager y admin).
+2. El sistema recalcula usando los envíos y vehículos disponibles en ese momento.
+3. **Importante**: si ya aplicaste parte del plan, el nuevo plan no deshace lo que ya se procesó —
+   solo recalcula los envíos que todavía están pendientes.
+
+---
+
+## Configuración de ruteo (`/admin/config-ruteo`) — Admin
+
+La pantalla agrupa parámetros en tres bloques:
+
+### 1. Reglas del despachador
+
+| Campo | Qué controla | Default |
 |---|---|---|
-| Horizonte SLA (h) | 24 | Cuán cerca tiene que estar la fecha estimada para forzar despacho. |
-| Umbral prioridad | 0.75 | Score sobre el cual se fuerza despacho. |
-| Tasa mínima de carga | 40% | % del vehículo más grande que hay que llenar para consolidar. |
-| Envíos máx. por chofer | 15 | Tope de cantidad por ruta de chofer. |
-| Peso máx. por chofer (kg) | 150 | Tope de peso por ruta de chofer. |
+| Horizonte SLA (h) | Si un envío vence en menos de N horas, fuerza despacho aunque el vehículo esté vacío. | 24 h |
+| Umbral de prioridad | Si el score de prioridad supera este valor, fuerza despacho. | 0.75 |
+| Tasa mínima de carga | % de capacidad del camión más grande que debe llenarse para consolidar. | 40% |
+| **Ventanas duras / blandas** | Si está activo: los envíos fuera de ventana no salen en ruta. Si no: salen con aviso. | Blandas |
 
-Los cambios se aplican a partir del próximo plan generado. Los ya aplicados no se recalculan.
+### 2. Ventanas operativas
 
-## Limitaciones a tener en cuenta
+Editor visual con un **timeline interactivo 0–24h**. Las dos barras (Mañana en ámbar,
+Tarde en violeta) se pueden arrastrar para mover el rango entero o estirar desde los
+bordes para redimensionar. El snap es a horas enteras. Los inputs numéricos debajo del
+timeline son una alternativa equivalente.
 
-- **Un solo hop por defecto**: el algoritmo asume que un vehículo va directo del origen al destino. Cuando geográficamente no es así, la regla de piggyback ayuda a encadenar tramos. Vos siempre podés mover envíos a mano si conocés mejor la ruta real.
-- **Capacidad por chofer es por número y peso, no por volumen ni distancia**: si tu operativa tiene zonas muy distantes que requieren rutas separadas, eso lo seguís decidiendo a mano.
-- **Tiempos estimados son aproximados**: con OSRM activo son tiempos reales por calle, sin OSRM son aproximaciones por distancia × velocidad media. En ningún caso predicen tráfico en tiempo real.
-- **El service time (10 min/parada) es un promedio**: en zonas de edificios con porteros puede ser más; en barrios residenciales rápidos, menos.
+| Campo | Default |
+|---|---|
+| Inicio / fin ventana mañana | 08:00 – 14:00 |
+| Inicio / fin ventana tarde | 12:00 – 18:00 |
+
+> Las dos ventanas pueden solaparse (ej. mañana 08–14 y tarde 12–18 — el solapamiento
+> 12–14 es válido y refleja la realidad operativa argentina).
+
+### 3. Estrategia de asignación a choferes
+
+Cómo el motor reparte los envíos entre los choferes disponibles cuando hay más de uno
+en la sucursal.
+
+| Opción | Comportamiento | Cuándo usarla |
+|---|---|---|
+| **Maximizar capacidad** *(default)* | Satura al primer chofer hasta su tope (150 kg) antes de abrir el siguiente. Si el primero no logra cumplir todas las ventanas, abre un chofer más y reasigna. | Para liberar choferes para otras tareas; sucursales chicas; días de poco volumen. |
+| **Balanceado** | Reparte parejo entre todos los choferes disponibles desde el principio. | Para distribuir esfuerzo; cuando hay varios choferes y se prefiere mantenerlos a todos en la calle. |
+
+> El tope de peso por chofer (**150 kg**) es fijo y no se configura desde la UI.
+
+---
+
+## Preguntas frecuentes
+
+**¿A qué hora se genera el plan?**
+A las 08:00, hora de Argentina. Si el servidor estaba caído, el plan no se genera —
+pedile a un manager que lo genere manualmente.
+
+**¿Por qué un envío aparece en "Sin asignar"?**
+El motivo está en la card. Los más comunes:
+- `Esperando consolidación`: hay pocos kilos para ese destino. Si llegan más envíos o
+  cambia la config, se despacha.
+- `Ventana horaria inviable`: el envío no puede llegar a tiempo (modo duro).
+- `Sin choferes disponibles`: todos los choferes de la sucursal ya iniciaron su ruta.
+- `Sin vehículos disponibles`: no hay vehículos en estado disponible en la sucursal.
+
+**¿Puedo aplicar el plan dos veces?**
+Sí, pero el segundo apply solo procesa lo que todavía está pendiente. Lo que ya fue aplicado
+no se modifica.
+
+**¿Qué pasa si edito el plan y después lo aplico?**
+Si editaste (hay cambios), el sistema envía tu versión editada. Si no editaste, lee la
+versión guardada en el servidor.
+
+**¿Por qué la salida sugerida del chofer es 14:00 si normalmente arranca a las 8?**
+Porque ese día la mayoría de sus envíos son de tarde. Salir a las 8 lo haría llegar a esos
+domicilios antes de las 12, fuera de la ventana acordada. El motor probó 8, 9, 10, 11, 12,
+13, 14, ... y eligió el horario que cubre mejor las ventanas. Es una sugerencia: si el
+chofer prefiere salir antes y esperar en la calle, está habilitado.
+
+**¿Por qué dos choferes salen a la calle si la estrategia es "maximizar capacidad"?**
+Porque al primer chofer no le alcanzaba con ningún horario para cumplir las ventanas
+de todos los envíos asignados. El motor abrió un segundo chofer y repartió. Si querés
+saturar al primero aunque algunos envíos queden fuera de ventana, sacá los envíos
+problemáticos a "Sin asignar" antes de aplicar.
+
+**¿La salida sugerida puede ser anterior a la hora actual?**
+No. Si generás el plan a las 12:45, la salida más temprana posible es 12:45. Los horarios
+candidatos pasados se filtran automáticamente.

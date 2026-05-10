@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Route, AlertCircle, CheckCircle2 } from "lucide-react";
-import { routingApi, type RoutingConfig as RoutingConfigType } from "../api/routing";
+import { useEffect, useRef, useState } from "react";
+import { Route, AlertCircle, CheckCircle2, RefreshCw, Clock } from "lucide-react";
+import { routingApi, type RoutingConfig as RoutingConfigType, type GlobalPlanLog, type LastMilePackingStrategy } from "../api/routing";
 import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -11,10 +11,10 @@ interface NumberFieldDef {
   step: number;
   min: number;
   max: number;
-  format: "hours" | "ratio" | "count" | "kg";
+  format: "hours" | "ratio" | "count" | "kg" | "minutes" | "speed";
 }
 
-const FIELDS: NumberFieldDef[] = [
+const DISPATCH_FIELDS: NumberFieldDef[] = [
   {
     key: "sla_force_horizon_hours",
     label: "Horizonte SLA (horas)",
@@ -42,25 +42,14 @@ const FIELDS: NumberFieldDef[] = [
     max: 1,
     format: "ratio",
   },
-  {
-    key: "max_shipments_per_driver",
-    label: "Envíos máximos por chofer",
-    hint: "Tope de envíos asignables a un chofer en su ruta de última milla del día.",
-    step: 1,
-    min: 1,
-    max: 100,
-    format: "count",
-  },
-  {
-    key: "max_weight_kg_per_driver",
-    label: "Peso máximo por chofer (kg)",
-    hint: "Tope de peso total acumulable en la ruta de un chofer.",
-    step: 5,
-    min: 1,
-    max: 5000,
-    format: "kg",
-  },
 ];
+
+const HOUR_KEYS = [
+  "morning_window_start_hour",
+  "morning_window_end_hour",
+  "afternoon_window_start_hour",
+  "afternoon_window_end_hour",
+] as const satisfies ReadonlyArray<keyof RoutingConfigType>;
 
 const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all w-36 tabular-nums";
@@ -75,7 +64,179 @@ function formatHint(value: number, fmt: NumberFieldDef["format"]): string {
       return `${value} envíos`;
     case "kg":
       return `${value} kg`;
+    case "minutes":
+      return `${value} min`;
+    case "speed":
+      return `${value} km/h`;
   }
+}
+
+function fmtHour(h: number): string {
+  return `${String(h).padStart(2, "0")}:00`;
+}
+
+interface WindowTimelineProps {
+  morningStart: number;
+  morningEnd: number;
+  afternoonStart: number;
+  afternoonEnd: number;
+  onMorningChange: (start: number, end: number) => void;
+  onAfternoonChange: (start: number, end: number) => void;
+}
+
+type DragBand = "morning" | "afternoon";
+type DragMode = "move" | "left" | "right";
+
+interface DragState {
+  band: DragBand;
+  mode: DragMode;
+  startX: number;
+  initialStart: number;
+  initialEnd: number;
+  railWidth: number;
+}
+
+// WindowTimeline dibuja un eje 0–24h con las dos ventanas operativas como
+// barras editables: drag del cuerpo mueve el rango, drag de los bordes
+// redimensiona. Snap a horas enteras. Los inputs numéricos debajo del
+// timeline son una alternativa — el componente padre los mantiene en sync.
+function WindowTimeline({
+  morningStart,
+  morningEnd,
+  afternoonStart,
+  afternoonEnd,
+  onMorningChange,
+  onAfternoonChange,
+}: WindowTimelineProps) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  const pct = (h: number) => `${(Math.max(0, Math.min(24, h)) / 24) * 100}%`;
+
+  useEffect(() => {
+    if (!drag) return;
+    const handleMove = (e: MouseEvent) => {
+      const dxPx = e.clientX - drag.startX;
+      // Snap a horas enteras: redondeo a entero.
+      const dxHours = Math.round((dxPx / drag.railWidth) * 24);
+      let newStart = drag.initialStart;
+      let newEnd = drag.initialEnd;
+      const width = drag.initialEnd - drag.initialStart;
+      if (drag.mode === "move") {
+        newStart = drag.initialStart + dxHours;
+        newEnd = drag.initialEnd + dxHours;
+        // Mantiene el ancho cuando topea contra los bordes.
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = width;
+        }
+        if (newEnd > 24) {
+          newEnd = 24;
+          newStart = 24 - width;
+        }
+      } else if (drag.mode === "left") {
+        newStart = drag.initialStart + dxHours;
+        if (newStart < 0) newStart = 0;
+        if (newStart >= newEnd) newStart = newEnd - 1;
+      } else if (drag.mode === "right") {
+        newEnd = drag.initialEnd + dxHours;
+        if (newEnd > 24) newEnd = 24;
+        if (newEnd <= newStart) newEnd = newStart + 1;
+      }
+      if (drag.band === "morning") {
+        if (newStart !== morningStart || newEnd !== morningEnd) {
+          onMorningChange(newStart, newEnd);
+        }
+      } else {
+        if (newStart !== afternoonStart || newEnd !== afternoonEnd) {
+          onAfternoonChange(newStart, newEnd);
+        }
+      }
+    };
+    const handleUp = () => setDrag(null);
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [drag, morningStart, morningEnd, afternoonStart, afternoonEnd, onMorningChange, onAfternoonChange]);
+
+  const startDrag = (e: React.MouseEvent, band: DragBand, mode: DragMode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = railRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const initialStart = band === "morning" ? morningStart : afternoonStart;
+    const initialEnd = band === "morning" ? morningEnd : afternoonEnd;
+    setDrag({
+      band,
+      mode,
+      startX: e.clientX,
+      initialStart,
+      initialEnd,
+      railWidth: rect.width,
+    });
+  };
+
+  const renderBand = (
+    band: DragBand,
+    start: number,
+    end: number,
+    topClass: string,
+    bgClass: string,
+    label: string,
+  ) => {
+    const isDragging = drag?.band === band;
+    return (
+      <div
+        className={`absolute h-5 rounded-md border flex items-center justify-center text-[10px] font-semibold select-none ${topClass} ${bgClass} ${
+          isDragging ? "shadow-md" : ""
+        } ${drag?.mode === "move" && isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ left: pct(start), width: `${((end - start) / 24) * 100}%` }}
+        onMouseDown={(e) => startDrag(e, band, "move")}
+        title={`${label}: ${fmtHour(start)}–${fmtHour(end)}. Arrastrá para mover, los bordes para redimensionar.`}
+      >
+        {/* Handle izquierdo */}
+        <span
+          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-l-md"
+          onMouseDown={(e) => startDrag(e, band, "left")}
+        />
+        {/* Texto + valores */}
+        <span className="pointer-events-none px-1 truncate">
+          {label} {fmtHour(start)}–{fmtHour(end)}
+        </span>
+        {/* Handle derecho */}
+        <span
+          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-black/10 rounded-r-md"
+          onMouseDown={(e) => startDrag(e, band, "right")}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-5">
+      <div ref={railRef} className="relative h-16">
+        {/* Eje */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-slate-200" />
+        {/* Marcas cada 4h */}
+        {[0, 4, 8, 12, 16, 20, 24].map((h) => (
+          <div key={h} className="absolute top-0 h-full pointer-events-none" style={{ left: pct(h) }}>
+            <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-slate-300" />
+            <div className="absolute -bottom-0.5 -translate-x-1/2 text-[10px] font-medium text-slate-500 tabular-nums">
+              {fmtHour(h)}
+            </div>
+          </div>
+        ))}
+        {renderBand("morning", morningStart, morningEnd, "top-1", "bg-amber-200 border-amber-300 text-amber-900", "Mañana")}
+        {renderBand("afternoon", afternoonStart, afternoonEnd, "bottom-6", "bg-indigo-200 border-indigo-300 text-indigo-900", "Tarde")}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
+        Arrastrá las barras para mover el rango. Los bordes (izquierdo/derecho) redimensionan. Snap a horas enteras.
+      </p>
+    </div>
+  );
 }
 
 export function RoutingConfig() {
@@ -85,6 +246,9 @@ export function RoutingConfig() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateResult, setGenerateResult] = useState<GlobalPlanLog | null>(null);
+  const [generateError, setGenerateError] = useState("");
 
   useEffect(() => {
     routingApi
@@ -121,7 +285,27 @@ export function RoutingConfig() {
   const isDirty =
     draft !== null &&
     config !== null &&
-    FIELDS.some((f) => draft[f.key] !== config[f.key]);
+    (DISPATCH_FIELDS.some((f) => draft[f.key] !== config[f.key]) ||
+      HOUR_KEYS.some((k) => draft[k] !== config[k]) ||
+      draft.enforce_time_windows !== config.enforce_time_windows ||
+      draft.last_mile_packing_strategy !== config.last_mile_packing_strategy);
+
+  const handleGenerateGlobal = async () => {
+    setGenerating(true);
+    setGenerateError("");
+    setGenerateResult(null);
+    try {
+      const res = await routingApi.regenerateGlobal();
+      setGenerateResult(res.log);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "No se pudo generar el plan.";
+      setGenerateError(msg);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -144,7 +328,41 @@ export function RoutingConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            {FIELDS.map((field) => {
+            {/* Toggle ventanas duras/blandas */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Cumplimiento estricto de ventanas horarias</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Si está activo, los envíos cuya hora estimada de llegada cae fuera de su ventana (mañana/tarde) quedan sin asignar.
+                Si está inactivo, se incluyen en la ruta con un aviso para que el operador decida.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer w-fit">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draft?.enforce_time_windows ?? true}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, enforce_time_windows: e.target.checked } : d))
+                    }
+                  />
+                  <div
+                    className={`w-10 h-6 rounded-full transition-colors ${
+                      draft?.enforce_time_windows ? "bg-[#1e3a5f]" : "bg-slate-200"
+                    }`}
+                  />
+                  <div
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                      draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                </div>
+                <span className="text-sm text-slate-700">
+                  {draft?.enforce_time_windows ? "Activo (ventanas duras)" : "Inactivo (ventanas blandas)"}
+                </span>
+              </label>
+            </div>
+
+            {DISPATCH_FIELDS.map((field) => {
               const value = draft[field.key] as number;
               return (
                 <div key={field.key} className="grid gap-2">
@@ -184,6 +402,152 @@ export function RoutingConfig() {
               </div>
             )}
 
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ventanas operativas (Fase 3): definir qué horarios son "morning" y "afternoon" */}
+      {!loading && draft && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-[#1e3a5f]" />
+              Ventanas operativas
+            </CardTitle>
+            <CardDescription>
+              Definí los horarios que cuentan como ventana de mañana y de tarde para los envíos.
+              El motor de ruteo prueba distintas horas de salida del chofer dentro de este rango
+              para maximizar las entregas en ventana. Los rangos pueden solaparse.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <WindowTimeline
+              morningStart={draft.morning_window_start_hour}
+              morningEnd={draft.morning_window_end_hour}
+              afternoonStart={draft.afternoon_window_start_hour}
+              afternoonEnd={draft.afternoon_window_end_hour}
+              onMorningChange={(start, end) =>
+                setDraft((d) =>
+                  d ? { ...d, morning_window_start_hour: start, morning_window_end_hour: end } : d,
+                )
+              }
+              onAfternoonChange={(start, end) =>
+                setDraft((d) =>
+                  d ? { ...d, afternoon_window_start_hour: start, afternoon_window_end_hour: end } : d,
+                )
+              }
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-amber-900">Mañana — desde</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  step={1}
+                  value={draft.morning_window_start_hour}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, morning_window_start_hour: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-amber-900">Mañana — hasta</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={1}
+                  value={draft.morning_window_end_hour}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, morning_window_end_hour: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-indigo-900">Tarde — desde</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  step={1}
+                  value={draft.afternoon_window_start_hour}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, afternoon_window_start_hour: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-semibold text-indigo-900">Tarde — hasta</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={1}
+                  value={draft.afternoon_window_end_hour}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, afternoon_window_end_hour: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Estrategia de asignación a choferes */}
+      {!loading && draft && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Estrategia de asignación a choferes</CardTitle>
+            <CardDescription>
+              Cómo el motor reparte los envíos entre los choferes disponibles cuando hay más
+              de uno en la sucursal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Modo</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                <strong>Maximizar capacidad:</strong> satura el primer chofer hasta su tope antes de abrir el siguiente.
+                Libera choferes para otras tareas.<br />
+                <strong>Balanceado:</strong> reparte parejo entre todos los choferes disponibles.
+              </p>
+              <div className="grid gap-2">
+                {(
+                  [
+                    { value: "maximize_capacity", label: "Maximizar capacidad" },
+                    { value: "balanced", label: "Balanceado" },
+                  ] as { value: LastMilePackingStrategy; label: string }[]
+                ).map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      draft.last_mile_packing_strategy === opt.value
+                        ? "border-[#1e3a5f] bg-[#1e3a5f]/5"
+                        : "border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="packing_strategy"
+                      value={opt.value}
+                      checked={draft.last_mile_packing_strategy === opt.value}
+                      onChange={() =>
+                        setDraft((d) => (d ? { ...d, last_mile_packing_strategy: opt.value } : d))
+                      }
+                      className="accent-[#1e3a5f]"
+                    />
+                    <span className="text-sm font-semibold text-slate-700">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleSave}
@@ -205,6 +569,47 @@ export function RoutingConfig() {
           </CardContent>
         </Card>
       )}
+
+      {/* Generación manual del plan global — backup por si falla el cron */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Generación manual del plan global</CardTitle>
+          <CardDescription>
+            El plan se genera automáticamente a las 08:00. Usá este botón solo si el cron
+            falló o necesitás forzar una regeneración completa de toda la red.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {generateError && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {generateError}
+            </div>
+          )}
+          {generateResult && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              Plan generado: <strong>{generateResult.total_assigned}</strong> envíos asignados,{" "}
+              <strong>{generateResult.total_unassigned}</strong> sin asignar en{" "}
+              <strong>{generateResult.total_branches}</strong> sucursales.
+            </div>
+          )}
+          <div>
+            <button
+              onClick={handleGenerateGlobal}
+              disabled={generating}
+              className="h-10 px-5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
+              {generating ? "Generando plan…" : "Generar plan global ahora"}
+            </button>
+            <p className="text-xs text-slate-400 mt-2">
+              Sobreescribe el plan del día para todas las sucursales activas.
+              No deshace lo que ya fue aplicado.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -39,11 +39,39 @@ func Solve(p Problem) Solution {
 	return Solution{Routes: routes, Unassigned: unassigned}
 }
 
+// windowBounds extrae los límites de ventana del problema, aplicando defaults
+// si los campos no fueron configurados (valor cero).
+func windowBounds(p Problem) (mStart, mEnd, aStart, aEnd float64) {
+	mStart = p.MorningWindowStartMin
+	if mStart == 0 {
+		mStart = 8 * 60
+	}
+	mEnd = p.MorningWindowEndMin
+	if mEnd == 0 {
+		mEnd = 14 * 60
+	}
+	aStart = p.AfternoonWindowStartMin
+	if aStart == 0 {
+		aStart = 12 * 60
+	}
+	aEnd = p.AfternoonWindowEndMin
+	if aEnd == 0 {
+		aEnd = 18 * 60
+	}
+	return
+}
+
 // nearestNeighbor construye una solución inicial asignando paradas a
 // choferes en orden de carga existente ASC. Para cada chofer, mientras
 // quede capacidad, elige la entrega no asignada de menor tiempo de viaje
 // que respete las ventanas horarias y las capacidades.
+//
+// Modo blando (EnforceTimeWindows=false): tras la pasada principal, los nodos
+// que fallaron solo por ventana se añaden como soft-violations al chofer con
+// menor carga disponible. Quedan marcados con OutOfWindow=true.
 func nearestNeighbor(p Problem) ([]Route, []UnassignedNode) {
+	mStart, mEnd, aStart, aEnd := windowBounds(p)
+
 	type driverState struct {
 		driver       Driver
 		stops        []int   // índices a p.Deliveries
@@ -80,49 +108,101 @@ func nearestNeighbor(p Problem) ([]Route, []UnassignedNode) {
 	// preferimos reportar el problema "duro" (ventana inviable) primero.
 	timeWindowFailed := map[int]bool{}
 
-	// Asignación round-robin chofer-por-chofer: cada chofer agrega su
-	// mejor candidato, después pasamos al siguiente. Esto balancea mejor
-	// las cargas que llenar uno y después otro.
-	for {
-		assignedThisRound := false
-		for _, st := range states {
-			if !canFitMore(st.driver, st.weight, st.count) {
+	// Asignación: estrategia configurable.
+	//   - balanced (default): round-robin chofer-por-chofer. Cada chofer agrega
+	//     su mejor candidato y pasa al siguiente. Distribuye carga parejo.
+	//   - maximize_capacity: satura un chofer (insertando su mejor candidato en
+	//     loop hasta no poder más) antes de abrir el siguiente. Maximiza
+	//     utilización del primero y libera al resto.
+	addBestForDriver := func(st *driverState) bool {
+		if !canFitMore(st.driver, st.weight, st.count) {
+			return false
+		}
+		best := -1
+		bestTravel := 0.0
+		for idx := range remaining {
+			del := p.Deliveries[idx]
+			travelSec := p.DurationMatrix[st.currentNode][idx+1]
+			travelMin := travelSec / 60.0
+			arrival := st.currentTime + travelMin
+			if !respectsWindow(del.TimeWindow, p.DepartureMin+arrival, mStart, mEnd, aStart, aEnd, p.DayEndMin) {
+				timeWindowFailed[idx] = true
 				continue
 			}
-			best := -1
-			bestTravel := 0.0
-			for idx := range remaining {
-				del := p.Deliveries[idx]
-				travelSec := p.DurationMatrix[st.currentNode][idx+1]
-				travelMin := travelSec / 60.0
-				arrival := st.currentTime + travelMin
-				if !respectsWindow(del.TimeWindow, p.DepartureMin+arrival, p.DayEndMin) {
-					timeWindowFailed[idx] = true
-					continue
+			if !nodeFits(st.driver, st.weight, st.count, del.WeightKg) {
+				continue
+			}
+			if best == -1 || travelMin < bestTravel {
+				best = idx
+				bestTravel = travelMin
+			}
+		}
+		if best == -1 {
+			return false
+		}
+		del := p.Deliveries[best]
+		arrival := st.currentTime + bestTravel
+		st.stops = append(st.stops, best)
+		st.weight += del.WeightKg
+		st.count++
+		st.currentTime = arrival + p.ServiceTimeMin
+		st.currentNode = best + 1
+		delete(remaining, best)
+		return true
+	}
+
+	if p.PackingStrategy == model.PackingStrategyMaximizeCapacity {
+		// Saturar driver-por-driver hasta agotar candidatos del chofer actual.
+		for _, st := range states {
+			for addBestForDriver(st) {
+			}
+		}
+	} else {
+		for {
+			assignedThisRound := false
+			for _, st := range states {
+				if addBestForDriver(st) {
+					assignedThisRound = true
 				}
+			}
+			if !assignedThisRound {
+				break
+			}
+		}
+	}
+
+	// Modo blando: agregar los nodos que fallaron solo por ventana al chofer
+	// con menor carga total proyectada. Se marcan como soft violations.
+	if !p.EnforceTimeWindows {
+		// Índices de nodos solo-falló-por-ventana, en orden estable.
+		onlyWindowFail := make([]int, 0)
+		for idx := range remaining {
+			if timeWindowFailed[idx] {
+				onlyWindowFail = append(onlyWindowFail, idx)
+			}
+		}
+		sort.Ints(onlyWindowFail)
+		for _, idx := range onlyWindowFail {
+			del := p.Deliveries[idx]
+			// Elige el chofer con menor carga proyectada que tenga capacidad.
+			var best *driverState
+			for _, st := range states {
 				if !nodeFits(st.driver, st.weight, st.count, del.WeightKg) {
 					continue
 				}
-				if best == -1 || travelMin < bestTravel {
-					best = idx
-					bestTravel = travelMin
+				if best == nil || (st.driver.ExistingWeightKg+st.weight) < (best.driver.ExistingWeightKg+best.weight) {
+					best = st
 				}
 			}
-			if best == -1 {
+			if best == nil {
 				continue
 			}
-			del := p.Deliveries[best]
-			arrival := st.currentTime + bestTravel
-			st.stops = append(st.stops, best)
-			st.weight += del.WeightKg
-			st.count++
-			st.currentTime = arrival + p.ServiceTimeMin
-			st.currentNode = best + 1
-			delete(remaining, best)
-			assignedThisRound = true
-		}
-		if !assignedThisRound {
-			break
+			best.stops = append(best.stops, idx)
+			best.weight += del.WeightKg
+			best.count++
+			// No actualizamos currentNode ni currentTime — el soft stop se
+			// anexa al final de la ruta sin recalcular el vecino más cercano.
+			delete(remaining, idx)
 		}
 	}
 
@@ -140,7 +220,19 @@ func nearestNeighbor(p Problem) ([]Route, []UnassignedNode) {
 		for i, idx := range st.stops {
 			travel := p.DurationMatrix[curNode][idx+1] / 60.0
 			arrival := curTime + travel
-			stops[i] = Stop{NodeID: p.Deliveries[idx].ID, ArrivalMin: arrival}
+			absArrival := p.DepartureMin + arrival
+			tw := p.Deliveries[idx].TimeWindow
+			inWindow := respectsWindow(tw, absArrival, mStart, mEnd, aStart, aEnd, p.DayEndMin)
+			dev := 0.0
+			if !inWindow {
+				dev = calcDeviation(tw, absArrival, mStart, mEnd, aStart, aEnd)
+			}
+			stops[i] = Stop{
+				NodeID:             p.Deliveries[idx].ID,
+				ArrivalMin:         arrival,
+				OutOfWindow:        !inWindow,
+				WindowDeviationMin: dev,
+			}
 			if len(p.DistanceMatrix) > 0 {
 				totalDistKm += p.DistanceMatrix[curNode][idx+1] / 1000.0
 			}
@@ -273,11 +365,12 @@ func totalDuration(idxs []int, p Problem) float64 {
 // routeRespectsWindows verifica que toda la secuencia respete las ventanas
 // horarias hard y el día operativo.
 func routeRespectsWindows(idxs []int, p Problem) bool {
+	mStart, mEnd, aStart, aEnd := windowBounds(p)
 	curNode := 0
 	curTime := 0.0
 	for _, idx := range idxs {
 		curTime += p.DurationMatrix[curNode][idx+1] / 60.0
-		if !respectsWindow(p.Deliveries[idx].TimeWindow, p.DepartureMin+curTime, p.DayEndMin) {
+		if !respectsWindow(p.Deliveries[idx].TimeWindow, p.DepartureMin+curTime, mStart, mEnd, aStart, aEnd, p.DayEndMin) {
 			return false
 		}
 		curTime += p.ServiceTimeMin
@@ -288,40 +381,48 @@ func routeRespectsWindows(idxs []int, p Problem) bool {
 
 // respectsWindow chequea si una hora absoluta de llegada cae dentro de
 // la ventana del envío y antes del fin del día.
-// Envíos con ventana flexible no tienen restricción de horario: pueden
-// asignarse en cualquier momento del día operativo.
-func respectsWindow(tw model.TimeWindow, absArrivalMin, dayEndMin float64) bool {
-	const noon = 12.0 * 60.0
+// Envíos con ventana flexible no tienen restricción de franja horaria.
+func respectsWindow(tw model.TimeWindow, absArrivalMin, mStart, mEnd, aStart, aEnd, dayEndMin float64) bool {
 	switch tw {
 	case model.TimeWindowMorning:
-		return absArrivalMin <= noon && absArrivalMin <= dayEndMin
+		return absArrivalMin >= mStart && absArrivalMin <= mEnd && absArrivalMin <= dayEndMin
 	case model.TimeWindowAfternoon:
-		return absArrivalMin >= noon && absArrivalMin <= dayEndMin
+		return absArrivalMin >= aStart && absArrivalMin <= aEnd && absArrivalMin <= dayEndMin
 	default: // flexible o vacío — sin restricción de franja horaria
 		return true
 	}
 }
 
-// canFitMore: el chofer todavía no llegó al tope.
-func canFitMore(d Driver, newWeight float64, newCount int) bool {
-	if d.ExistingCount+newCount >= d.MaxShipments {
-		return false
+// calcDeviation devuelve los minutos de desvío fuera de ventana.
+// Positivo = llegó tarde, negativo = llegó temprano.
+func calcDeviation(tw model.TimeWindow, absArrivalMin, mStart, mEnd, aStart, aEnd float64) float64 {
+	switch tw {
+	case model.TimeWindowMorning:
+		if absArrivalMin > mEnd {
+			return absArrivalMin - mEnd
+		}
+		if absArrivalMin < mStart {
+			return absArrivalMin - mStart // negativo
+		}
+	case model.TimeWindowAfternoon:
+		if absArrivalMin > aEnd {
+			return absArrivalMin - aEnd
+		}
+		if absArrivalMin < aStart {
+			return absArrivalMin - aStart // negativo
+		}
 	}
-	if d.ExistingWeightKg+newWeight >= d.MaxWeightKg {
-		return false
-	}
-	return true
+	return 0
 }
 
-// nodeFits: agregar este envío específico no rompe los topes.
-func nodeFits(d Driver, currWeight float64, currCount int, addWeight float64) bool {
-	if d.ExistingCount+currCount+1 > d.MaxShipments {
-		return false
-	}
-	if d.ExistingWeightKg+currWeight+addWeight > d.MaxWeightKg {
-		return false
-	}
-	return true
+// canFitMore: el chofer todavía no llegó al tope de peso.
+func canFitMore(d Driver, newWeight float64, _ int) bool {
+	return d.ExistingWeightKg+newWeight < d.MaxWeightKg
+}
+
+// nodeFits: agregar este envío específico no rompe el tope de peso.
+func nodeFits(d Driver, currWeight float64, _ int, addWeight float64) bool {
+	return d.ExistingWeightKg+currWeight+addWeight <= d.MaxWeightKg
 }
 
 func reverseSlice(s []int) {

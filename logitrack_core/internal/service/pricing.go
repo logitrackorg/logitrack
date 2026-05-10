@@ -15,11 +15,16 @@ import (
 // see CLAUDE.md and docs/specs for the immutability rules and which fields are
 // blocked from post-confirmation editing because they would change the price.
 type PricingService struct {
-	repo repository.PricingConfigRepository
+	repo    repository.PricingConfigRepository
+	zoneSvc *ZoneService
 }
 
 func NewPricingService(repo repository.PricingConfigRepository) *PricingService {
 	return &PricingService{repo: repo}
+}
+
+func (s *PricingService) SetZoneService(zoneSvc *ZoneService) {
+	s.zoneSvc = zoneSvc
 }
 
 func (s *PricingService) GetConfig() model.PricingConfig {
@@ -40,6 +45,11 @@ func (s *PricingService) UpdateConfig(cfg model.PricingConfig) (model.PricingCon
 // Used by the /pricing/quote endpoint and during creation flows.
 func (s *PricingService) Quote(input PricingInput) (float64, model.PriceBreakdown) {
 	cfg := s.repo.Get()
+	// Determinar si el destino cae en una zona peligrosa activa
+	if s.zoneSvc != nil && input.DeliveryMethod == model.DeliveryMethodLastMile &&
+		input.Destination.Latitude != nil && input.Destination.Longitude != nil {
+		input.RiskyZone = s.zoneSvc.IsPointInDangerZone(*input.Destination.Latitude, *input.Destination.Longitude)
+	}
 	return computePrice(cfg, input)
 }
 
@@ -62,14 +72,15 @@ func (s *PricingService) CalculateForShipment(shipment model.Shipment) (float64,
 // the shipment model but are decoupled so quoting works before a Shipment exists
 // (e.g. while the user is still filling the New Shipment form).
 type PricingInput struct {
-	WeightKg       float64                `json:"weight_kg"`
-	PackageType    model.PackageType      `json:"package_type"`
-	ShipmentType   model.ShipmentType     `json:"shipment_type"`
-	TimeWindow     model.TimeWindow       `json:"time_window"`
-	IsFragile      bool                   `json:"is_fragile"`
-	DeliveryMethod model.DeliveryMethod   `json:"delivery_method"`
-	Origin         model.Address          `json:"origin"`
-	Destination    model.Address          `json:"destination"`
+	WeightKg       float64              `json:"weight_kg"`
+	PackageType    model.PackageType    `json:"package_type"`
+	ShipmentType   model.ShipmentType   `json:"shipment_type"`
+	TimeWindow     model.TimeWindow     `json:"time_window"`
+	IsFragile      bool                 `json:"is_fragile"`
+	DeliveryMethod model.DeliveryMethod `json:"delivery_method"`
+	Origin         model.Address        `json:"origin"`
+	Destination    model.Address        `json:"destination"`
+	RiskyZone      bool                 `json:"-"` // calculado internamente, no expuesto
 }
 
 func computePrice(cfg model.PricingConfig, in PricingInput) (float64, model.PriceBreakdown) {
@@ -90,7 +101,12 @@ func computePrice(cfg model.PricingConfig, in PricingInput) (float64, model.Pric
 		lastMileSurcharge = cfg.LastMileSurcharge
 	}
 
-	subtotal := (cfg.BaseFare+distanceCost)*shipmentMultiplier + weightSurcharge + lastMileSurcharge
+	riskyZoneSurcharge := 0.0
+	if in.DeliveryMethod == model.DeliveryMethodLastMile && in.RiskyZone {
+		riskyZoneSurcharge = cfg.RiskyZoneSurcharge
+	}
+
+	subtotal := (cfg.BaseFare+distanceCost)*shipmentMultiplier + weightSurcharge + lastMileSurcharge + riskyZoneSurcharge
 
 	timeWindowMult := model.TimeWindowMultiplier(in.TimeWindow, cfg)
 	fragileMult := 1.0
@@ -109,6 +125,7 @@ func computePrice(cfg model.PricingConfig, in PricingInput) (float64, model.Pric
 		DistanceCost:       round2(distanceCost),
 		WeightSurcharge:    round2(weightSurcharge),
 		LastMileSurcharge:  round2(lastMileSurcharge),
+		RiskyZoneSurcharge: round2(riskyZoneSurcharge),
 		ShipmentMultiplier: shipmentMultiplier,
 		TimeWindowSurplus:  round2(timeWindowSurplus),
 		FragileSurplus:     round2(fragileSurplus),
@@ -150,7 +167,8 @@ func round2(v float64) float64 {
 
 func validatePricingConfig(cfg model.PricingConfig) error {
 	if cfg.BaseFare < 0 || cfg.CostPerKm < 0 ||
-		cfg.WeightSurchargeMid < 0 || cfg.WeightSurchargeHigh < 0 || cfg.LastMileSurcharge < 0 {
+		cfg.WeightSurchargeMid < 0 || cfg.WeightSurchargeHigh < 0 ||
+		cfg.LastMileSurcharge < 0 || cfg.RiskyZoneSurcharge < 0 {
 		return fmt.Errorf("los importes no pueden ser negativos")
 	}
 	if cfg.ShipmentExpressMultiplier < 1 {

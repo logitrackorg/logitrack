@@ -43,6 +43,18 @@ type LastMileAssignment struct {
 	TotalDurationMin int         `json:"total_duration_min,omitempty"`
 	DepartureMin     int         `json:"departure_min,omitempty"` // base para arrival_min, en min desde medianoche
 	OptimizedBy      string      `json:"optimized_by,omitempty"`  // "vrp" | "greedy"
+	// WindowCoverage es la fracción de paradas con arribo dentro de ventana
+	// (0.0 a 1.0). 1.0 = todas las paradas en ventana. Permite al frontend
+	// mostrar el indicador "X/Y en ventana" sin recalcular.
+	WindowCoverage float64 `json:"window_coverage,omitempty"`
+	// Estado de aplicación del ítem (se persiste en el plan global).
+	AppliedShipments []string   `json:"applied_shipments,omitempty"`
+	Applied          bool       `json:"applied"`
+	AppliedAt        *time.Time `json:"applied_at,omitempty"`
+	AppliedBy        string     `json:"applied_by,omitempty"`
+	// RouteStarted es runtime-only (no se persiste): indica que el chofer ya
+	// inició su ruta del día. La card se muestra como informativa.
+	RouteStarted bool `json:"route_started,omitempty"`
 }
 
 // RouteStop es una parada dentro de una ruta optimizada por VRP.
@@ -51,13 +63,21 @@ type LastMileAssignment struct {
 // delta en minutos desde DepartureMin (definido en LastMileAssignment) hasta
 // la llegada al cliente. Si Unsequenced=true (envío sin coordenadas), ArrivalMin
 // es -1 — el chofer atiende esa parada al final de la ruta sin tiempo estimado.
+//
+// WithinWindow indica si el arribo estimado cae dentro de la ventana horaria
+// del envío. Cuando es false (solo posible con EnforceTimeWindows=false en la
+// config), WindowDeviationMin indica cuántos minutos fuera de ventana llegará
+// (positivo = tarde, negativo = temprano). El operador puede quitar el envío
+// antes de aplicar el plan.
 type RouteStop struct {
-	TrackingID  string  `json:"tracking_id"`
-	Sequence    int     `json:"sequence"`
-	ArrivalMin  int     `json:"arrival_min"`
-	Unsequenced bool    `json:"unsequenced,omitempty"`
-	TimeWindow  string  `json:"time_window,omitempty"`
-	WeightKg    float64 `json:"weight_kg"`
+	TrackingID         string  `json:"tracking_id"`
+	Sequence           int     `json:"sequence"`
+	ArrivalMin         int     `json:"arrival_min"`
+	Unsequenced        bool    `json:"unsequenced,omitempty"`
+	TimeWindow         string  `json:"time_window,omitempty"`
+	WeightKg           float64 `json:"weight_kg"`
+	WithinWindow       bool    `json:"within_window"`
+	WindowDeviationMin int     `json:"window_deviation_min,omitempty"`
 }
 
 // InterBranchAssignment es un despacho de un vehículo a una sucursal destino.
@@ -80,6 +100,17 @@ type InterBranchAssignment struct {
 	// Tracking IDs de envíos ya cargados en el vehículo (status loaded) que
 	// la UI puede listar junto con los nuevos.
 	ExistingShipments []string `json:"existing_shipments,omitempty"`
+	// Estado de aplicación del ítem (se persiste en el plan global).
+	// AppliedShipments lista los tracking IDs ya aplicados operacionalmente.
+	// Applied = true cuando todos los Shipments actuales están en AppliedShipments.
+	// Esto permite agregar nuevos envíos a un vehículo ya aplicado y aplicarlos.
+	AppliedShipments []string   `json:"applied_shipments,omitempty"`
+	Applied          bool       `json:"applied"`
+	AppliedAt        *time.Time `json:"applied_at,omitempty"`
+	AppliedBy        string     `json:"applied_by,omitempty"`
+	// InTransit es runtime-only (no se persiste): indica que el vehículo ya está
+	// en viaje. La card se muestra como informativa, sin drag-and-drop ni apply.
+	InTransit bool `json:"in_transit,omitempty"`
 }
 
 // UnassignedShipment es un envío que el algoritmo no pudo rutear, con motivo.
@@ -126,18 +157,31 @@ type VehicleLoad struct {
 	ExistingShipments []string `json:"existing_shipments,omitempty"`
 }
 
+// IncomingVehicle es un vehículo de otra sucursal que está llegando con destino a esta.
+// Runtime-only (no persiste en el plan): se computa en GetTodayPlan a partir del
+// estado actual del vehiclehouse para dar visibilidad de qué carga viene en camino.
+type IncomingVehicle struct {
+	VehicleID     string   `json:"vehicle_id"`
+	LicensePlate  string   `json:"license_plate"`
+	OriginBranch  string   `json:"origin_branch"`
+	Shipments     []string `json:"shipments"`
+	TotalWeightKg float64  `json:"total_weight_kg"`
+	CapacityKg    float64  `json:"capacity_kg"`
+}
+
 // RoutingPlan es el plan sugerido devuelto por GeneratePlan.
 // Se transporta cliente-side y se manda completo a ApplyPlan.
 type RoutingPlan struct {
-	BranchID       string                  `json:"branch_id"`
-	GeneratedAt    time.Time               `json:"generated_at"`
-	LastMile       []LastMileAssignment    `json:"last_mile"`
-	InterBranch    []InterBranchAssignment `json:"inter_branch"`
-	Unassigned     []UnassignedShipment    `json:"unassigned"`
-	BlockedDrivers []BlockedDriver         `json:"blocked_drivers"`
-	DriverLoads    []DriverLoad            `json:"driver_loads"`
-	VehicleLoads   []VehicleLoad           `json:"vehicle_loads"`
-	ConfigSnapshot RoutingConfig           `json:"config_snapshot"`
+	BranchID         string                  `json:"branch_id"`
+	GeneratedAt      time.Time               `json:"generated_at"`
+	LastMile         []LastMileAssignment    `json:"last_mile"`
+	InterBranch      []InterBranchAssignment `json:"inter_branch"`
+	IncomingVehicles []IncomingVehicle       `json:"incoming_vehicles,omitempty"` // runtime-only
+	Unassigned       []UnassignedShipment    `json:"unassigned"`
+	BlockedDrivers   []BlockedDriver         `json:"blocked_drivers"`
+	DriverLoads      []DriverLoad            `json:"driver_loads"`
+	VehicleLoads     []VehicleLoad           `json:"vehicle_loads"`
+	ConfigSnapshot   RoutingConfig           `json:"config_snapshot"`
 }
 
 // ApplyPlanRequest es el body del POST /routing/apply.

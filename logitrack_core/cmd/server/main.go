@@ -13,6 +13,7 @@ import (
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/scheduler"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
 )
@@ -55,6 +56,12 @@ func main() {
 	pricingConfigRepo := repository.NewPostgresPricingConfigRepository(database)
 	pricingSvc := service.NewPricingService(pricingConfigRepo)
 	pricingHandler := handler.NewPricingHandler(pricingSvc)
+
+	zoneRepo := repository.NewPostgresZoneRepository(database)
+	zoneSvc := service.NewZoneService(zoneRepo)
+	zoneHandler := handler.NewZoneHandler(zoneSvc)
+	pricingSvc.SetZoneService(zoneSvc)
+	seed.LoadZones(zoneRepo)
 
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
@@ -99,16 +106,16 @@ func main() {
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
-	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
+	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
+	branchHandler := handler.NewBranchHandler(branchSvc)
+	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
-	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
-	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -117,8 +124,16 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
-	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, osrmClient)
+	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
+	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
 	routingHandler := handler.NewRoutingHandler(routingSvc)
+
+	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
+	sched := scheduler.New(routingSvc)
+	if err := sched.Start(); err != nil {
+		log.Fatalf("error iniciando scheduler: %v", err)
+	}
+	defer sched.Stop()
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -245,10 +260,18 @@ func main() {
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
 
+	// Zones — read: all authenticated; write: admin only
+	protected.GET("/zones", authenticated, zoneHandler.List)
+	protected.POST("/zones", adminOnly, zoneHandler.Create)
+	protected.PATCH("/zones/:id", adminOnly, zoneHandler.Update)
+	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
+
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
-	protected.POST("/routing/plan", shipmentWrite, routingHandler.Generate)
+	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
+	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
+	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 
 	// ML config — admin only
@@ -261,11 +284,13 @@ func main() {
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
 	protected.GET("/admin/access-logs", adminOnly, accessLogHandler.List)
 
-	// Public tracking — no auth required
+	// Public tracking — no auth required. Dedicated handlers return a redacted
+	// view (no personal data) and 404 on drafts.
 	publicAPI := api.Group("/public")
-	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetByTrackingID)
-	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetEvents)
+	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetPublicByTrackingID)
+	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetPublicEvents)
 	publicAPI.GET("/branches", branchHandler.List)
+	publicAPI.GET("/stats", shipmentHandler.PublicStats)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 

@@ -111,13 +111,32 @@ func RunMigrations(db *sql.DB) error {
 			id                       INTEGER PRIMARY KEY DEFAULT 1,
 			sla_force_horizon_hours  INTEGER       NOT NULL DEFAULT 24,
 			priority_force_threshold NUMERIC(4,3)  NOT NULL DEFAULT 0.750,
-			min_fill_rate            NUMERIC(4,3)  NOT NULL DEFAULT 0.400,
-			max_shipments_per_driver INTEGER       NOT NULL DEFAULT 15,
-			max_weight_kg_per_driver NUMERIC(10,2) NOT NULL DEFAULT 150
+			min_fill_rate            NUMERIC(4,3)  NOT NULL DEFAULT 0.400
 		);
 		INSERT INTO routing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS respect_fragile_spread;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS express_max_hours_in_branch;
+		ALTER TABLE routing_config DROP COLUMN IF EXISTS max_shipments_per_driver;
+		ALTER TABLE routing_config DROP COLUMN IF EXISTS max_weight_kg_per_driver;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows         BOOLEAN       NOT NULL DEFAULT FALSE;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_start_hour    INTEGER       NOT NULL DEFAULT 8;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_end_hour      INTEGER       NOT NULL DEFAULT 14;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_start_hour  INTEGER       NOT NULL DEFAULT 12;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_end_hour    INTEGER       NOT NULL DEFAULT 18;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS service_time_minutes         INTEGER       NOT NULL DEFAULT 10;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS avg_speed_kmh                NUMERIC(6,2)  NOT NULL DEFAULT 25.0;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS last_mile_packing_strategy   TEXT          NOT NULL DEFAULT 'maximize_capacity';
+
+		CREATE TABLE IF NOT EXISTS routing_plans (
+			id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+			plan_date     DATE         NOT NULL UNIQUE,
+			status        TEXT         NOT NULL DEFAULT 'pending',
+			payload       JSONB        NOT NULL DEFAULT '{}',
+			generated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+			applied_at    TIMESTAMPTZ,
+			applied_by    TEXT,
+			generation_log JSONB       NOT NULL DEFAULT '{}'
+		);
 
 		CREATE TABLE IF NOT EXISTS shipment_incidents (
 			id            VARCHAR(50)  PRIMARY KEY,
@@ -148,8 +167,9 @@ func RunMigrations(db *sql.DB) error {
 			status       TEXT NOT NULL DEFAULT 'pendiente',
 			started_at   TIMESTAMPTZ
 		);
-		ALTER TABLE routes ADD COLUMN IF NOT EXISTS status     TEXT NOT NULL DEFAULT 'pendiente';
-		ALTER TABLE routes ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+		ALTER TABLE routes ADD COLUMN IF NOT EXISTS status               TEXT NOT NULL DEFAULT 'pendiente';
+		ALTER TABLE routes ADD COLUMN IF NOT EXISTS started_at           TIMESTAMPTZ;
+		ALTER TABLE routes ADD COLUMN IF NOT EXISTS suggested_start_time TIMESTAMPTZ;
 		CREATE INDEX IF NOT EXISTS routes_driver_date_idx ON routes(driver_id, date);
 
 		CREATE TABLE IF NOT EXISTS customers (
@@ -225,6 +245,20 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_by TEXT NOT NULL DEFAULT '';
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 		CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users(email) WHERE email IS NOT NULL AND email <> '';
+
+		CREATE TABLE IF NOT EXISTS zones (
+			id          UUID PRIMARY KEY,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			polygon     JSONB NOT NULL,
+			active      BOOLEAN NOT NULL DEFAULT TRUE,
+			created_by  TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		ALTER TABLE zones DROP COLUMN IF EXISTS severity;
+
+		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS risky_zone_surcharge REAL NOT NULL DEFAULT 5000;
 	`)
 	return err
 }

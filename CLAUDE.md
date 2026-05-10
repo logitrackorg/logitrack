@@ -84,6 +84,8 @@ UUID tokens in PostgreSQL `tokens` table. `Authorization: Bearer <token>` requir
 | `op_mendoza` | `op_mendoza123` | operator | mendoza |
 | `sup_mendoza` | `sup_mendoza123` | supervisor | mendoza |
 | `chofer_mendoza` | `chofer_mendoza123` | driver | mendoza |
+| `op_posadas` | `op_posadas123` | operator | posadas |
+| `chofer_posadas` | `chofer_posadas123` | driver | posadas |
 | `gerente` | `gerente123` | manager | — |
 | `admin` | `admin123` | admin | — |
 
@@ -289,8 +291,16 @@ Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de 
 | `sla_force_horizon_hours` | 24 | 1–168 | SLA crítico fuerza despacho. |
 | `priority_force_threshold` | 0.75 | 0–1 | Score que dispara despacho forzado. |
 | `min_fill_rate` | 0.40 | 0.1–1 | % capacidad del vehículo más grande para consolidar. |
-| `max_shipments_per_driver` | 15 | 1–100 | Tope cantidad ruta del chofer. |
-| `max_weight_kg_per_driver` | 150 | 1–5000 | Tope peso ruta del chofer. |
+| `enforce_time_windows` | false | bool | Si true, envíos fuera de ventana quedan unassigned. Si false, se incluyen con warning. |
+| `morning_window_start_hour` | 8 | 0–23 | Hora de inicio (24h) de la ventana "morning". |
+| `morning_window_end_hour` | 14 | 1–24 | Hora de fin de la ventana "morning" (> start). |
+| `afternoon_window_start_hour` | 12 | 0–23 | Hora de inicio de la ventana "afternoon". Puede solapar con morning. |
+| `afternoon_window_end_hour` | 18 | 1–24 | Hora de fin de la ventana "afternoon" (> start). |
+| `service_time_minutes` | 10 | 1–60 | Tiempo de entrega por parada (timbre + firma). |
+| `avg_speed_kmh` | 25 | 5–120 | Velocidad promedio del chofer entre paradas. |
+| `last_mile_packing_strategy` | `maximize_capacity` | `balanced` \| `maximize_capacity` | Estrategia de asignación a choferes. |
+
+Tope de peso por chofer: **150 kg hardcodeado** en `routing.go` (`MaxWeightKg`). No es configurable hoy.
 
 **Flujo del algoritmo** (`GeneratePlan(branchID)`):
 
@@ -298,19 +308,20 @@ Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de 
 2. **Particionar**:
    - Última milla: `final_branch_id == branchID && delivery_method == ultima_milla && status == at_hub && !is_returning`.
    - Inter-sucursal: el resto. Para `is_returning` el destino es `origin_branch_id`; para el resto, `final_branch_id`.
-3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Reparte entre choferes con load-balancing por peso, respetando topes.
-4. **Despacho inter-sucursal por destino** (3 reglas):
+3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Estrategia configurable: `balanced` (load-balancing entre choferes) o `maximize_capacity` (saturar el primer chofer hasta 150 kg antes de abrir el siguiente).
+4. **Scheduling con ventanas (última milla)**: para cada chofer asignado, probar horarios candidatos (cada hora entera entre `morning_window_start_hour` y `afternoon_window_end_hour - 1`). Por cada horario, ejecutar VRP con `departureMin` ajustado y ventanas blandas; elegir el horario con mejor score `(entregas_dentro_de_ventana DESC, espera_total ASC)`. Si ningún horario logra 100% en ventana, abrir un nuevo chofer (si hay disponible) y redistribuir según estrategia. Resultado: `SuggestedStartTime` por chofer + orden óptimo de paradas, persistidos en `Route` al hacer `Apply`.
+5. **Despacho inter-sucursal por destino** (3 reglas):
    - **SLA forced**: alguno cumple `EstimatedDeliveryAt - now < sla_force_horizon_hours` o `priority_score >= priority_force_threshold`.
    - **Consolidación**: `sum(peso) >= min_fill_rate × largest_vehicle_capacity_in_pool`.
    - Sin regla → `unassigned` con motivo `esperando_consolidacion`.
-5. **Selección de vehículo**: el más chico que cubre el peso total. Si ninguno cubre, el más grande con bin-packing por prioridad (excedente a `unassigned` con `sobrepeso_excede_vehiculo`).
-6. **Pasada piggyback**: para cada `unassigned` por motivo de inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino del envío que la sucursal actual (Haversine de lat/lng de branches, fallback a distancia entre provincias). Cualquier mejora cuenta. Elige la mayor.
+6. **Selección de vehículo**: el más chico que cubre el peso total. Si ninguno cubre, el más grande con bin-packing por prioridad (excedente a `unassigned` con `sobrepeso_excede_vehiculo`).
+7. **Pasada piggyback**: para cada `unassigned` por motivo de inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino del envío que la sucursal actual (Haversine de lat/lng de branches, fallback a distancia entre provincias). Cualquier mejora cuenta. Elige la mayor.
 
 **`ApplyPlan`** — per-item best-effort (no transaccional, son 3 stores distintos):
 - Re-fetcheo de cada shipment y vehicle antes de mutar.
 - Drift detectado (estado del shipment cambió, vehículo no disponible, capacidad excedida) → item `failed` con motivo en español, el resto continúa.
 - Inter-sucursal: setea `destination_branch` del vehículo + asigna shipments + transiciona shipment a `loaded` + promueve vehículo a `en_carga`. **NO** hace `start-trip` (sigue manual desde Flota; el modal precarga el destino seteado).
-- Última milla: usa flujo existente `UpdateStatus(out_for_delivery, driver_id)` + `RouteService.AddShipmentToDriverRoute`.
+- Última milla: usa flujo existente `UpdateStatus(out_for_delivery, driver_id)` + `RouteService.AddShipmentToDriverRoute`. Persiste `SuggestedStartTime` y orden óptimo de paradas en la `Route` creada.
 
 Endpoints:
 - `POST /routing/plan` — operator/supervisor (su propia sucursal). Genera plan en memoria.
@@ -432,7 +443,7 @@ Conventional Commits: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style
 
 `seed.Load()` populates on every restart (idempotent):
 
-- **6 branches**: caba, cordoba, mendoza (`activo`); jujuy, posadas (`inactivo`); bariloche (`fuera_de_servicio`). Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
+- **6 branches**: caba, cordoba, mendoza, posadas (`activo`); jujuy (`inactivo`); bariloche (`fuera_de_servicio`). All branches have `MaxCapacity: 200`. Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
 - **Escenario de ruteo en CABA** (al loguearse `op_caba` y tocar "Generar plan" en `/routing`):
   - 6 envíos `at_hub` en CABA con destino final CABA → última milla.
   - 5 envíos `at_origin_hub` en CABA con destino Córdoba (sum 400 kg) → consolida.

@@ -50,10 +50,11 @@ type ShipmentHandler struct {
 	svc        *service.ShipmentService
 	routeSvc   *service.RouteService
 	commentSvc *service.CommentService
+	branchSvc  *service.BranchService
 }
 
-func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService, commentSvc *service.CommentService) *ShipmentHandler {
-	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc}
+func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService, commentSvc *service.CommentService, branchSvc *service.BranchService) *ShipmentHandler {
+	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc, branchSvc: branchSvc}
 }
 
 func (h *ShipmentHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -450,6 +451,86 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, events)
+}
+
+// GetPublicByTrackingID returns a redacted shipment view for the public tracking page.
+// No personal data is exposed (no names, DNI, phone, email, full address). Drafts return 404.
+//
+// @Summary      Public shipment lookup
+// @Description  Public-safe shipment view for end users. Returns 404 for drafts and unknown IDs.
+// @Tags         public
+// @Produce      json
+// @Param        tracking_id  path      string  true  "Shipment tracking ID"
+// @Success      200          {object}  model.PublicShipmentView
+// @Failure      404          {object}  map[string]string
+// @Router       /public/track/{tracking_id} [get]
+func (h *ShipmentHandler) GetPublicByTrackingID(c *gin.Context) {
+	shipment, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
+	if err != nil || shipment.Status == model.StatusDraft {
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+		return
+	}
+	c.JSON(http.StatusOK, shipment.ToPublicView())
+}
+
+// GetPublicEvents returns the redacted event timeline for the public tracking page.
+// Operator usernames and free-form notes are stripped; "edited" events are filtered out
+// since they're internal corrections that don't belong on the public timeline.
+//
+// @Summary      Public event timeline
+// @Description  Public-safe event timeline for end users. Returns 404 for drafts and unknown IDs.
+// @Tags         public
+// @Produce      json
+// @Param        tracking_id  path      string  true  "Shipment tracking ID"
+// @Success      200          {array}   model.PublicShipmentEvent
+// @Failure      404          {object}  map[string]string
+// @Router       /public/track/{tracking_id}/events [get]
+func (h *ShipmentHandler) GetPublicEvents(c *gin.Context) {
+	trackingID := c.Param("tracking_id")
+	shipment, err := h.svc.GetByTrackingID(trackingID)
+	if err != nil || shipment.Status == model.StatusDraft {
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+		return
+	}
+	events, err := h.svc.GetEvents(trackingID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+		return
+	}
+	out := make([]model.PublicShipmentEvent, 0, len(events))
+	for _, ev := range events {
+		if ev.EventType == "edited" {
+			continue
+		}
+		out = append(out, ev.ToPublicEvent())
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// PublicStats returns aggregated, non-personal metrics for the login screen.
+//
+// @Summary      Public stats
+// @Description  Aggregated counters (total confirmed shipments, in-transit, active branches) for the login screen. No personal data, no auth.
+// @Tags         public
+// @Produce      json
+// @Success      200  {object}  model.PublicStats
+// @Failure      500  {object}  map[string]string
+// @Router       /public/stats [get]
+func (h *ShipmentHandler) PublicStats(c *gin.Context) {
+	stats, err := h.svc.Stats(model.ShipmentFilter{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	confirmed := stats.Total - stats.ByStatus[model.StatusDraft]
+	inTransit := stats.ByStatus[model.StatusLoaded] +
+		stats.ByStatus[model.StatusInTransit] +
+		stats.ByStatus[model.StatusOutForDelivery]
+	c.JSON(http.StatusOK, model.PublicStats{
+		TotalShipments: confirmed,
+		InTransit:      inTransit,
+		ActiveBranches: len(h.branchSvc.ListActive()),
+	})
 }
 
 // Search finds shipments by tracking ID or recipient name.
