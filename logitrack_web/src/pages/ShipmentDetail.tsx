@@ -650,6 +650,7 @@ export function ShipmentDetail() {
           autoSaveStatus={draftAutoSaveStatus}
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
+          branches={branches}
         />
       ) : (
         /* ── Read-only info grid ── */
@@ -1396,7 +1397,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
@@ -1406,6 +1407,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
+  branches: Branch[];
 }) {
   const isMobile = useIsMobile();
   const [discardConfirm, setDiscardConfirm] = useState(false);
@@ -1434,10 +1436,14 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   useEffect(() => {
     const weightKg = form.weight_kg ?? 0;
     const packageType = form.package_type ?? "box";
+    const selectedBranch = branches.find((b) => b.id === form.receiving_branch_id);
+    const originAddress = selectedBranch
+      ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
+      : form.sender.address;
     const hasMinData =
       weightKg > 0 &&
       !!form.package_type &&
-      !!form.sender.address.province &&
+      !!originAddress.province &&
       !!form.recipient.address.province;
     if (!hasMinData) { setQuote(null); return; }
     if (quoteTimer.current) clearTimeout(quoteTimer.current);
@@ -1451,7 +1457,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           time_window: form.time_window ?? "flexible",
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method ?? "ultima_milla",
-          origin: form.sender.address,
+          origin: originAddress,
           destination: form.recipient.address,
         });
         setQuote(q);
@@ -1465,7 +1471,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   }, [
     form.weight_kg, form.package_type, form.shipment_type,
     form.time_window, form.is_fragile, form.delivery_method,
-    form.sender.address, form.recipient.address,
+    form.receiving_branch_id, form.sender.address, form.recipient.address,
+    branches,
   ]);
 
   const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;

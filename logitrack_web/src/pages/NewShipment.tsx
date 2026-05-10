@@ -103,9 +103,14 @@ export function NewShipment() {
   }, [form.receiving_branch_id]);
 
   // Live pricing quote — debounced 400ms when relevant fields change.
-  // The quote stays as null when the form lacks the minimum data needed to price.
+  // Origin is the receiving branch address (where the shipment departs from),
+  // falling back to the sender's address if no branch is selected yet.
   useEffect(() => {
-    const hasMinData = form.weight_kg > 0 && !!form.package_type;
+    const selectedBranch = branches.find((b) => b.id === form.receiving_branch_id);
+    const originAddress = selectedBranch
+      ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
+      : form.sender.address;
+    const hasMinData = form.weight_kg > 0 && !!form.package_type && !!originAddress.province && !!form.recipient.address.province;
     if (!hasMinData) {
       setQuote(null);
       return;
@@ -121,7 +126,7 @@ export function NewShipment() {
           time_window: form.time_window,
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method,
-          origin: form.sender.address,
+          origin: originAddress,
           destination: form.recipient.address,
         });
         setQuote(q);
@@ -141,8 +146,10 @@ export function NewShipment() {
     form.time_window,
     form.is_fragile,
     form.delivery_method,
+    form.receiving_branch_id,
     form.sender.address,
     form.recipient.address,
+    branches,
   ]);
 
   // Auto-save draft — debounced 800ms on any form change.
