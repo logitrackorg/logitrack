@@ -19,13 +19,14 @@ func NewPricingHandler(svc *service.PricingService) *PricingHandler {
 // QuoteRequest mirrors PricingInput at the wire level. We keep them separate so
 // internal pricing logic can evolve independently from the public API contract.
 type QuoteRequest struct {
-	WeightKg     float64            `json:"weight_kg"     binding:"required,gt=0"`
-	PackageType  model.PackageType  `json:"package_type"  binding:"required"`
-	ShipmentType model.ShipmentType `json:"shipment_type"`
-	TimeWindow   model.TimeWindow   `json:"time_window"`
-	IsFragile    bool               `json:"is_fragile"`
-	Origin       model.Address      `json:"origin"        binding:"required"`
-	Destination  model.Address      `json:"destination"   binding:"required"`
+	WeightKg       float64              `json:"weight_kg"       binding:"required,gt=0"`
+	PackageType    model.PackageType    `json:"package_type"    binding:"required"`
+	ShipmentType   model.ShipmentType   `json:"shipment_type"`
+	TimeWindow     model.TimeWindow     `json:"time_window"`
+	IsFragile      bool                 `json:"is_fragile"`
+	DeliveryMethod model.DeliveryMethod `json:"delivery_method"`
+	Origin         model.Address        `json:"origin"          binding:"required"`
+	Destination    model.Address        `json:"destination"     binding:"required"`
 }
 
 type QuoteResponse struct {
@@ -48,14 +49,19 @@ func (h *PricingHandler) Quote(c *gin.Context) {
 	if timeWindow == "" {
 		timeWindow = model.TimeWindowFlexible
 	}
+	deliveryMethod := req.DeliveryMethod
+	if deliveryMethod == "" {
+		deliveryMethod = model.DeliveryMethodLastMile
+	}
 	total, breakdown := h.svc.Quote(service.PricingInput{
-		WeightKg:     req.WeightKg,
-		PackageType:  req.PackageType,
-		ShipmentType: shipmentType,
-		TimeWindow:   timeWindow,
-		IsFragile:    req.IsFragile,
-		Origin:       req.Origin,
-		Destination:  req.Destination,
+		WeightKg:       req.WeightKg,
+		PackageType:    req.PackageType,
+		ShipmentType:   shipmentType,
+		TimeWindow:     timeWindow,
+		IsFragile:      req.IsFragile,
+		DeliveryMethod: deliveryMethod,
+		Origin:         req.Origin,
+		Destination:    req.Destination,
 	})
 	c.JSON(http.StatusOK, QuoteResponse{Total: total, Currency: model.CurrencyARS, Breakdown: breakdown})
 }

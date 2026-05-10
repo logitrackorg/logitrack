@@ -16,10 +16,13 @@ func NewRoutingConfigService(repo repository.RoutingConfigRepository) *RoutingCo
 }
 
 func (s *RoutingConfigService) Get() model.RoutingConfig {
-	return s.repo.Get()
+	cfg := s.repo.Get()
+	applyRoutingConfigDefaults(&cfg)
+	return cfg
 }
 
 func (s *RoutingConfigService) Update(cfg model.RoutingConfig) (model.RoutingConfig, error) {
+	applyRoutingConfigDefaults(&cfg)
 	if err := validateRoutingConfig(cfg); err != nil {
 		return model.RoutingConfig{}, err
 	}
@@ -27,6 +30,13 @@ func (s *RoutingConfigService) Update(cfg model.RoutingConfig) (model.RoutingCon
 		return model.RoutingConfig{}, err
 	}
 	return s.repo.Get(), nil
+}
+
+func applyRoutingConfigDefaults(cfg *model.RoutingConfig) {
+	d := model.DefaultRoutingConfig()
+	if cfg.MinFillRate == 0 {
+		cfg.MinFillRate = d.MinFillRate
+	}
 }
 
 func validateRoutingConfig(cfg model.RoutingConfig) error {
@@ -38,12 +48,6 @@ func validateRoutingConfig(cfg model.RoutingConfig) error {
 	}
 	if cfg.MinFillRate < 0.1 || cfg.MinFillRate > 1 {
 		return fmt.Errorf("min_fill_rate debe estar entre 0.1 y 1.0")
-	}
-	if cfg.MaxShipmentsPerDriver < 1 || cfg.MaxShipmentsPerDriver > 100 {
-		return fmt.Errorf("max_shipments_per_driver debe estar entre 1 y 100")
-	}
-	if cfg.MaxWeightKgPerDriver < 1 || cfg.MaxWeightKgPerDriver > 5000 {
-		return fmt.Errorf("max_weight_kg_per_driver debe estar entre 1 y 5000")
 	}
 	return nil
 }

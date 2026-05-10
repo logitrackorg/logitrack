@@ -36,16 +36,20 @@ type Node struct {
 // Driver es un chofer disponible con sus topes y carga preexistente.
 type Driver struct {
 	ID               string
-	MaxShipments     int
 	MaxWeightKg      float64
 	ExistingCount    int     // envíos ya en ruta del día
 	ExistingWeightKg float64 // peso ya en ruta del día
 }
 
 // Stop es una parada dentro de una ruta resuelta.
+// OutOfWindow=true solo ocurre en modo blando (EnforceTimeWindows=false):
+// el envío se incluyó en la ruta aunque su arribo estimado cae fuera de ventana.
+// WindowDeviationMin > 0 = tarde, < 0 = temprano.
 type Stop struct {
-	NodeID     string  // tracking_id del envío
-	ArrivalMin float64 // minutos transcurridos desde la salida del depósito hasta llegar
+	NodeID             string  // tracking_id del envío
+	ArrivalMin         float64 // minutos transcurridos desde la salida del depósito hasta llegar
+	OutOfWindow        bool
+	WindowDeviationMin float64
 }
 
 // Route es la solución para un chofer.
@@ -100,4 +104,15 @@ type Problem struct {
 	// DayEndMin: minutos desde medianoche del fin del día operativo (ej: 18:00).
 	// Sirve como tope absoluto para todas las ventanas.
 	DayEndMin float64
+
+	// Límites de ventanas horarias en minutos desde medianoche.
+	// Si todos son cero se aplican los defaults históricos (noon=12:00 para ambos).
+	MorningWindowStartMin  float64 // default 8*60
+	MorningWindowEndMin    float64 // default 14*60
+	AfternoonWindowStartMin float64 // default 12*60
+	AfternoonWindowEndMin  float64 // default 18*60
+
+	// EnforceTimeWindows=true: ventanas duras — envíos fuera de ventana quedan unassigned.
+	// EnforceTimeWindows=false: ventanas blandas — se incluyen con OutOfWindow=true.
+	EnforceTimeWindows bool
 }

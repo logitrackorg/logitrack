@@ -27,3 +27,22 @@ export const fmtDuration = (min: number): string => {
   const m = total % 60;
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 };
+
+// fmtRelative devuelve un string relativo en español ("hace 5 min", "hace 2 días",
+// "en 3 h", "ahora"). Para fechas alejadas (>30 días) cae a fmtDate.
+export const fmtRelative = (iso: string, now: Date = new Date()): string => {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const diffMs = t - now.getTime();
+  const past = diffMs <= 0;
+  const abs = Math.abs(diffMs);
+  const sec = Math.round(abs / 1000);
+  if (sec < 45) return past ? "hace instantes" : "en instantes";
+  const min = Math.round(sec / 60);
+  if (min < 60) return past ? `hace ${min} min` : `en ${min} min`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return past ? `hace ${hr} h` : `en ${hr} h`;
+  const day = Math.round(hr / 24);
+  if (day < 30) return past ? `hace ${day} día${day === 1 ? "" : "s"}` : `en ${day} día${day === 1 ? "" : "s"}`;
+  return fmtDate(iso);
+};

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Route, AlertCircle, CheckCircle2 } from "lucide-react";
-import { routingApi, type RoutingConfig as RoutingConfigType } from "../api/routing";
+import { Route, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { routingApi, type RoutingConfig as RoutingConfigType, type GlobalPlanLog } from "../api/routing";
 import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -42,24 +42,6 @@ const FIELDS: NumberFieldDef[] = [
     max: 1,
     format: "ratio",
   },
-  {
-    key: "max_shipments_per_driver",
-    label: "Envíos máximos por chofer",
-    hint: "Tope de envíos asignables a un chofer en su ruta de última milla del día.",
-    step: 1,
-    min: 1,
-    max: 100,
-    format: "count",
-  },
-  {
-    key: "max_weight_kg_per_driver",
-    label: "Peso máximo por chofer (kg)",
-    hint: "Tope de peso total acumulable en la ruta de un chofer.",
-    step: 5,
-    min: 1,
-    max: 5000,
-    format: "kg",
-  },
 ];
 
 const inputClass =
@@ -85,6 +67,9 @@ export function RoutingConfig() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generateResult, setGenerateResult] = useState<GlobalPlanLog | null>(null);
+  const [generateError, setGenerateError] = useState("");
 
   useEffect(() => {
     routingApi
@@ -121,7 +106,25 @@ export function RoutingConfig() {
   const isDirty =
     draft !== null &&
     config !== null &&
-    FIELDS.some((f) => draft[f.key] !== config[f.key]);
+    (FIELDS.some((f) => draft[f.key] !== config[f.key]) ||
+      draft.enforce_time_windows !== config.enforce_time_windows);
+
+  const handleGenerateGlobal = async () => {
+    setGenerating(true);
+    setGenerateError("");
+    setGenerateResult(null);
+    try {
+      const res = await routingApi.regenerateGlobal();
+      setGenerateResult(res.log);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "No se pudo generar el plan.";
+      setGenerateError(msg);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -144,6 +147,40 @@ export function RoutingConfig() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
+            {/* Toggle ventanas duras/blandas */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Cumplimiento estricto de ventanas horarias</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Si está activo, los envíos cuya hora estimada de llegada cae fuera de su ventana (mañana/tarde) quedan sin asignar.
+                Si está inactivo, se incluyen en la ruta con un aviso para que el operador decida.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer w-fit">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draft?.enforce_time_windows ?? true}
+                    onChange={(e) =>
+                      setDraft((d) => (d ? { ...d, enforce_time_windows: e.target.checked } : d))
+                    }
+                  />
+                  <div
+                    className={`w-10 h-6 rounded-full transition-colors ${
+                      draft?.enforce_time_windows ? "bg-[#1e3a5f]" : "bg-slate-200"
+                    }`}
+                  />
+                  <div
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                      draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                </div>
+                <span className="text-sm text-slate-700">
+                  {draft?.enforce_time_windows ? "Activo (ventanas duras)" : "Inactivo (ventanas blandas)"}
+                </span>
+              </label>
+            </div>
+
             {FIELDS.map((field) => {
               const value = draft[field.key] as number;
               return (
@@ -205,6 +242,47 @@ export function RoutingConfig() {
           </CardContent>
         </Card>
       )}
+
+      {/* Generación manual del plan global — backup por si falla el cron */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Generación manual del plan global</CardTitle>
+          <CardDescription>
+            El plan se genera automáticamente a las 08:00. Usá este botón solo si el cron
+            falló o necesitás forzar una regeneración completa de toda la red.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          {generateError && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {generateError}
+            </div>
+          )}
+          {generateResult && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              Plan generado: <strong>{generateResult.total_assigned}</strong> envíos asignados,{" "}
+              <strong>{generateResult.total_unassigned}</strong> sin asignar en{" "}
+              <strong>{generateResult.total_branches}</strong> sucursales.
+            </div>
+          )}
+          <div>
+            <button
+              onClick={handleGenerateGlobal}
+              disabled={generating}
+              className="h-10 px-5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
+              {generating ? "Generando plan…" : "Generar plan global ahora"}
+            </button>
+            <p className="text-xs text-slate-400 mt-2">
+              Sobreescribe el plan del día para todas las sucursales activas.
+              No deshace lo que ya fue aplicado.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

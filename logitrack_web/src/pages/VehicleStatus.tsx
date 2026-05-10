@@ -7,7 +7,6 @@ import { Navigate } from "react-router-dom";
 import { PageHeader } from "../components/ui/page-header";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
-  motocicleta: "Motocicleta",
   auto: "Auto",
   furgoneta: "Furgoneta",
   camion: "Camión",

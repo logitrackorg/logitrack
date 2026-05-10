@@ -105,11 +105,7 @@ export function NewShipment() {
   // Live pricing quote — debounced 400ms when relevant fields change.
   // The quote stays as null when the form lacks the minimum data needed to price.
   useEffect(() => {
-    const hasMinData =
-      form.weight_kg > 0 &&
-      !!form.package_type &&
-      !!form.sender.address.province &&
-      !!form.recipient.address.province;
+    const hasMinData = form.weight_kg > 0 && !!form.package_type;
     if (!hasMinData) {
       setQuote(null);
       return;
@@ -144,6 +140,7 @@ export function NewShipment() {
     form.shipment_type,
     form.time_window,
     form.is_fragile,
+    form.delivery_method,
     form.sender.address,
     form.recipient.address,
   ]);
@@ -765,7 +762,10 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
               <BreakdownRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
             )}
             {quote.breakdown.shipment_multiplier !== 1 && (
-              <BreakdownRow label="Tipo de envío" value={`× ${quote.breakdown.shipment_multiplier.toFixed(2)}`} />
+              <BreakdownRow
+                label="Tipo de envío (express)"
+                value={formatCurrencyARS((quote.breakdown.base_fare + quote.breakdown.distance_cost) * (quote.breakdown.shipment_multiplier - 1))}
+              />
             )}
             {quote.breakdown.time_window_surplus > 0 && (
               <BreakdownRow label="Recargo ventana horaria" value={formatCurrencyARS(quote.breakdown.time_window_surplus)} />
@@ -774,7 +774,6 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
               <BreakdownRow label="Recargo frágil" value={formatCurrencyARS(quote.breakdown.fragile_surplus)} />
             )}
           </div>
-          <p className="mt-3 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
         </>
       )}
     </GradientCard>
