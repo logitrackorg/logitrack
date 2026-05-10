@@ -43,6 +43,35 @@ const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
 const validateName = (name: string) =>
   name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function findFinalBranch(recipientAddress: { province?: string; latitude?: number; longitude?: number }, branches: Branch[]): Branch | null {
+  const active = branches.filter(b => b.status === "activo");
+  if (!active.length) return null;
+  if (recipientAddress.latitude != null && recipientAddress.longitude != null) {
+    let best: Branch | null = null;
+    let minDist = Infinity;
+    for (const b of active) {
+      if (b.latitude != null && b.longitude != null) {
+        const d = haversineKm(recipientAddress.latitude!, recipientAddress.longitude!, b.latitude, b.longitude);
+        if (d < minDist) { minDist = d; best = b; }
+      }
+    }
+    if (best) return best;
+  }
+  if (recipientAddress.province) {
+    const match = active.find(b => b.province === recipientAddress.province);
+    if (match) return match;
+  }
+  return null;
+}
+
 const emptyAddress = { street: "", city: "", province: "", postal_code: "" };
 const emptyCustomer = () => ({ dni: "", name: "", phone: "", email: "", address: { ...emptyAddress } });
 
@@ -531,9 +560,11 @@ export function NewShipment() {
           </Row2>
         </Section>
 
-        {/* Sucursal receptora */}
-        <Section title="Sucursal receptora" icon={<MapPin className="w-4 h-4" />}>
-          <Field label="Sucursal *">
+        {/* Sucursales */}
+        <Section title="Sucursales" icon={<MapPin className="w-4 h-4" />}>
+          {/* Sucursal de origen */}
+          <div className="grid gap-1.5">
+            <label className="text-xs font-semibold text-slate-700">Sucursal de origen *</label>
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
@@ -554,7 +585,6 @@ export function NewShipment() {
                       acc[branch.province].push(branch);
                       return acc;
                     }, {} as Record<string, Branch[]>);
-
                     return Object.entries(branchesByProvince)
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([province, provinceBranches]) => (
@@ -582,7 +612,23 @@ export function NewShipment() {
                 })()}
               </>
             )}
-          </Field>
+          </div>
+
+          {/* Sucursal final */}
+          {(() => {
+            const finalBranch = findFinalBranch(form.recipient.address, branches);
+            if (!finalBranch) return null;
+            return (
+              <div className="grid gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Sucursal final</label>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <p className="text-sm font-semibold text-[#1e3a5f]">{finalBranch.name}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
+                  <p className="mt-1.5 text-[11px] text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                </div>
+              </div>
+            );
+          })()}
         </Section>
 
         {/* Paquete */}

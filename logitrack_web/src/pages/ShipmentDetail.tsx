@@ -1397,6 +1397,35 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function findFinalBranch(recipientAddress: { province?: string; latitude?: number; longitude?: number }, branches: Branch[]): Branch | null {
+  const active = branches.filter(b => b.status === "activo");
+  if (!active.length) return null;
+  if (recipientAddress.latitude != null && recipientAddress.longitude != null) {
+    let best: Branch | null = null;
+    let minDist = Infinity;
+    for (const b of active) {
+      if (b.latitude != null && b.longitude != null) {
+        const d = haversineKm(recipientAddress.latitude!, recipientAddress.longitude!, b.latitude, b.longitude);
+        if (d < minDist) { minDist = d; best = b; }
+      }
+    }
+    if (best) return best;
+  }
+  if (recipientAddress.province) {
+    const match = active.find(b => b.province === recipientAddress.province);
+    if (match) return match;
+  }
+  return null;
+}
+
 function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
@@ -1410,6 +1439,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   branches: Branch[];
 }) {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
@@ -1620,6 +1651,52 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
             </select>
           </DField>
           <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
+        </div>
+      </fieldset>
+
+      {/* Sucursales */}
+      <fieldset style={fsStyle}>
+        <legend style={legStyle}>Sucursales</legend>
+        <div style={{ display: "grid", gap: 12 }}>
+          {/* Sucursal de origen */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal de origen *</div>
+            {branchLocked ? (() => {
+              const selected = branches.find(b => b.id === form.receiving_branch_id);
+              return (
+                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
+                  {selected && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>}
+                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Asignada a tu sucursal — no se puede cambiar.</div>
+                </div>
+              );
+            })() : (() => {
+              const selected = branches.find(b => b.id === form.receiving_branch_id);
+              return selected ? (
+                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
+                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "#9ca3af" }}>Sin sucursal asignada</div>
+              );
+            })()}
+          </div>
+          {/* Sucursal final */}
+          {(() => {
+            const finalBranch = findFinalBranch(form.recipient.address, branches);
+            if (!finalBranch) return null;
+            return (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal final</div>
+                <div style={{ border: "1px solid #a7f3d0", background: "#ecfdf5", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{finalBranch.name}</div>
+                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{finalBranch.address.street}, {finalBranch.address.city}</div>
+                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Sucursal más cercana al domicilio del destinatario.</div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </fieldset>
 
