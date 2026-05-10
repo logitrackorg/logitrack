@@ -13,6 +13,7 @@ const TEMPLATE_HEADERS = [
   "recipient_street", "recipient_city", "recipient_province", "recipient_postal_code",
   "weight_kg", "package_type", "shipment_type", "time_window", "delivery_method",
   "is_fragile", "special_instructions", "receiving_branch_id",
+  "recipient_latitude", "recipient_longitude",
 ];
 
 const REQUIRED_HEADERS = [
@@ -193,6 +194,23 @@ function validateRow(
     errors.push("receiving_branch_id es obligatorio");
   }
 
+  // Recipient coordinates (optional)
+  let recipientLat: number | undefined;
+  let recipientLng: number | undefined;
+  if (raw.recipient_latitude) {
+    const v = parseFloat(raw.recipient_latitude);
+    if (isNaN(v) || v < -90 || v > 90) errors.push("recipient_latitude debe ser un número entre -90 y 90");
+    else recipientLat = v;
+  }
+  if (raw.recipient_longitude) {
+    const v = parseFloat(raw.recipient_longitude);
+    if (isNaN(v) || v < -180 || v > 180) errors.push("recipient_longitude debe ser un número entre -180 y 180");
+    else recipientLng = v;
+  }
+  if ((raw.recipient_latitude && !raw.recipient_longitude) || (!raw.recipient_latitude && raw.recipient_longitude)) {
+    errors.push("recipient_latitude y recipient_longitude deben completarse juntos");
+  }
+
   if (errors.length > 0) return { errors };
 
   const payload: CreateShipmentPayload = {
@@ -218,6 +236,8 @@ function validateRow(
         city: raw.recipient_city,
         province: raw.recipient_province,
         postal_code: raw.recipient_postal_code,
+        latitude: recipientLat,
+        longitude: recipientLng,
       },
     },
     weight_kg: weightKg,
@@ -257,8 +277,9 @@ export function BulkUpload() {
       "Av. Corrientes 1234", "Buenos Aires", "Buenos Aires", "C1043",
       "María García", "87654321", "1198765432", "",
       "Calle Falsa 123", "Córdoba", "Córdoba", "X5000",
-      "2.5", "box", "normal", "flexible",
+      "2.5", "box", "normal", "flexible", "ultima_milla",
       "false", "", branchLocked ? branchId : "CDBA-01",
+      "", "",
     ].map((v) => `"${v}"`).join(",");
 
     const csv = TEMPLATE_HEADERS.join(",") + "\n" + sampleRow;

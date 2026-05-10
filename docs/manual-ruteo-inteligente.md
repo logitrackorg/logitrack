@@ -42,7 +42,11 @@ Cada card de chofer muestra:
 
 - **Nombre del chofer** y total de envíos + kg nuevos.
 - **Carga preexistente** (si el chofer ya tenía envíos en su ruta del día anterior).
+- **Salida sugerida**: hora óptima de arranque calculada por el motor para que el máximo de paradas caiga dentro de su ventana. Aparece como chip ámbar en el encabezado de la card (ej. `🕐 Salida sugerida 11:00`).
+- **Indicador de cobertura de ventana**: chip al lado de la salida sugerida con formato `X/Y en ventana`. Verde si todas las paradas caen en ventana, rosa si alguna queda fuera.
 - **Secuencia de paradas** numeradas con hora estimada de llegada.
+
+> La salida sugerida es **informativa**: el chofer arranca cuando toca "Iniciar ruta". El sistema nunca propone un horario anterior al actual — si son las 12:45 cuando se genera el plan, la salida más temprana posible es 12:45 o el siguiente entero.
 
 ### Badges en cada parada
 
@@ -53,6 +57,19 @@ Cada card de chofer muestra:
 | `Sin coordenadas` | El envío no tiene dirección geolocalizada; el chofer lo atiende al final de la ruta. |
 | `Asignado manualmente` | El operador lo movió de lugar con drag-and-drop. |
 | `⚠ Fuera de ventana (+45 min)` | El envío llegará tarde a su ventana. Solo aparece cuando las ventanas están en **modo blando** (ver más abajo). |
+
+---
+
+## La salida sugerida en `/driver/route`
+
+Cuando el plan se aplica, la hora sugerida queda persistida en la ruta del chofer.
+El chofer la ve al entrar a su pantalla, en el card amarillo "Ruta sin iniciar":
+
+> 🕐 **Salida sugerida: 11:00**
+
+Es una recomendación, no un bloqueo: el chofer puede tocar "Iniciar ruta" antes o después.
+Si el chofer arranca después de la sugerencia, las horas estimadas por parada se desplazan
+proporcionalmente.
 
 ---
 
@@ -130,18 +147,43 @@ Si necesitás volver a calcular el plan del día (por ejemplo, llegaron muchos e
 
 ## Configuración de ruteo (`/admin/config-ruteo`) — Admin
 
+La pantalla agrupa parámetros en tres bloques:
+
+### 1. Reglas del despachador
+
 | Campo | Qué controla | Default |
 |---|---|---|
 | Horizonte SLA (h) | Si un envío vence en menos de N horas, fuerza despacho aunque el vehículo esté vacío. | 24 h |
 | Umbral de prioridad | Si el score de prioridad supera este valor, fuerza despacho. | 0.75 |
 | Tasa mínima de carga | % de capacidad del camión más grande que debe llenarse para consolidar. | 40% |
-| Envíos máx. por chofer | Tope de nuevos envíos por chofer en última milla. | 15 |
-| Peso máx. por chofer (kg) | Tope de peso total acumulable por chofer. | 150 kg |
-| **Ventanas duras / blandas** | Si está activo: los envíos fuera de ventana no salen en ruta. Si no: salen con aviso. | Duras (activo) |
-| Inicio / fin ventana mañana | Rango horario de entregas "mañana". | 08:00 – 14:00 |
-| Inicio / fin ventana tarde | Rango horario de entregas "tarde". | 12:00 – 18:00 |
-| Tiempo de servicio (min) | Minutos estimados por entrega (estacionar, entregar, firmar). | 10 min |
-| Velocidad promedio (km/h) | Velocidad usada para estimar tiempos cuando no hay GPS en ruta. | 25 km/h |
+| **Ventanas duras / blandas** | Si está activo: los envíos fuera de ventana no salen en ruta. Si no: salen con aviso. | Blandas |
+
+### 2. Ventanas operativas
+
+Editor visual con un **timeline interactivo 0–24h**. Las dos barras (Mañana en ámbar,
+Tarde en violeta) se pueden arrastrar para mover el rango entero o estirar desde los
+bordes para redimensionar. El snap es a horas enteras. Los inputs numéricos debajo del
+timeline son una alternativa equivalente.
+
+| Campo | Default |
+|---|---|
+| Inicio / fin ventana mañana | 08:00 – 14:00 |
+| Inicio / fin ventana tarde | 12:00 – 18:00 |
+
+> Las dos ventanas pueden solaparse (ej. mañana 08–14 y tarde 12–18 — el solapamiento
+> 12–14 es válido y refleja la realidad operativa argentina).
+
+### 3. Estrategia de asignación a choferes
+
+Cómo el motor reparte los envíos entre los choferes disponibles cuando hay más de uno
+en la sucursal.
+
+| Opción | Comportamiento | Cuándo usarla |
+|---|---|---|
+| **Maximizar capacidad** *(default)* | Satura al primer chofer hasta su tope (150 kg) antes de abrir el siguiente. Si el primero no logra cumplir todas las ventanas, abre un chofer más y reasigna. | Para liberar choferes para otras tareas; sucursales chicas; días de poco volumen. |
+| **Balanceado** | Reparte parejo entre todos los choferes disponibles desde el principio. | Para distribuir esfuerzo; cuando hay varios choferes y se prefiere mantenerlos a todos en la calle. |
+
+> El tope de peso por chofer (**150 kg**) es fijo y no se configura desde la UI.
 
 ---
 
@@ -166,3 +208,19 @@ no se modifica.
 **¿Qué pasa si edito el plan y después lo aplico?**
 Si editaste (hay cambios), el sistema envía tu versión editada. Si no editaste, lee la
 versión guardada en el servidor.
+
+**¿Por qué la salida sugerida del chofer es 14:00 si normalmente arranca a las 8?**
+Porque ese día la mayoría de sus envíos son de tarde. Salir a las 8 lo haría llegar a esos
+domicilios antes de las 12, fuera de la ventana acordada. El motor probó 8, 9, 10, 11, 12,
+13, 14, ... y eligió el horario que cubre mejor las ventanas. Es una sugerencia: si el
+chofer prefiere salir antes y esperar en la calle, está habilitado.
+
+**¿Por qué dos choferes salen a la calle si la estrategia es "maximizar capacidad"?**
+Porque al primer chofer no le alcanzaba con ningún horario para cumplir las ventanas
+de todos los envíos asignados. El motor abrió un segundo chofer y repartió. Si querés
+saturar al primero aunque algunos envíos queden fuera de ventana, sacá los envíos
+problemáticos a "Sin asignar" antes de aplicar.
+
+**¿La salida sugerida puede ser anterior a la hora actual?**
+No. Si generás el plan a las 12:45, la salida más temprana posible es 12:45. Los horarios
+candidatos pasados se filtran automáticamente.

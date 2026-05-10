@@ -32,6 +32,10 @@ export interface DriverRoute {
   created_at: string;
   status: "pendiente" | "en_curso" | "finalizada";
   started_at?: string;
+  // Horario óptimo de salida sugerido por el motor de ruteo. Es informativo:
+  // ayuda al chofer a decidir cuándo arrancar para cumplir las ventanas de
+  // entrega. Si la ruta se creó manualmente queda undefined.
+  suggested_start_time?: string;
 }
 
 export interface DriverRouteResponse {

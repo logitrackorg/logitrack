@@ -1223,11 +1223,31 @@ function DriverRouteCard({
           {optimized && (
             <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500 tabular-nums flex-wrap">
               {a.departure_min !== undefined && (
-                <span className="inline-flex items-center gap-1">
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800"
+                  title="Hora óptima de salida sugerida por el motor de ruteo para cumplir las ventanas"
+                >
                   <Clock className="w-3 h-3" />
-                  Salida {fmtMinutesAsTime(a.departure_min)}
+                  Salida sugerida {fmtMinutesAsTime(a.departure_min)}
                 </span>
               )}
+              {a.window_coverage !== undefined && a.ordered_stops && (() => {
+                const total = a.ordered_stops.filter((s) => !s.unsequenced && !s.manual).length;
+                const inWindow = Math.round((a.window_coverage ?? 0) * total);
+                const allIn = total > 0 && inWindow === total;
+                return (
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
+                      allIn
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}
+                    title={allIn ? "Todas las paradas caen dentro de su ventana" : "Algunas paradas caen fuera de ventana"}
+                  >
+                    {inWindow}/{total} en ventana
+                  </span>
+                );
+              })()}
               {a.total_duration_min ? (
                 <span className="inline-flex items-center gap-1">
                   <Clock className="w-3 h-3" />

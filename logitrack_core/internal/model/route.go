@@ -57,6 +57,12 @@ type Route struct {
 	CreatedAt   time.Time   `json:"created_at"`
 	Status      RouteStatus `json:"status"`
 	StartedAt   *time.Time  `json:"started_at,omitempty"`
+	// SuggestedStartTime es el horario óptimo de salida sugerido por el
+	// motor de ruteo (Fase 3). Solo se setea cuando la ruta se crea desde
+	// el plan generado en /routing — para rutas creadas manualmente queda
+	// nil. El campo es informativo: el chofer arranca cuando toca, pero la
+	// UI le muestra esta hora como recomendación para cumplir ventanas.
+	SuggestedStartTime *time.Time `json:"suggested_start_time,omitempty"`
 }
 
 func (r Route) HasShipment(trackingID string) bool {
