@@ -1,7 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { AlertCircle, ChevronDown, Truck, Package, MapPin } from "lucide-react";
+import { publicTrackingApi, type PublicStats } from "@/api/publicTracking";
+
+const STAT_LABELS: { key: keyof PublicStats; label: string }[] = [
+  { key: "total_shipments", label: "Envíos gestionados" },
+  { key: "in_transit",      label: "En tránsito" },
+  { key: "active_branches", label: "Sucursales activas" },
+];
 
 const TEST_USERS = [
   { u: "op_caba",        p: "op_caba123",        r: "Operador",    branch: "CABA" },
@@ -10,11 +17,14 @@ const TEST_USERS = [
   { u: "sup_cordoba",    p: "sup_cordoba123",      r: "Supervisor",  branch: "Córdoba" },
   { u: "op_mendoza",     p: "op_mendoza123",      r: "Operador",    branch: "Mendoza" },
   { u: "sup_mendoza",    p: "sup_mendoza123",      r: "Supervisor",  branch: "Mendoza" },
+  { u: "op_posadas",     p: "op_posadas123",       r: "Operador",    branch: "Posadas" },
   { u: "gerente",        p: "gerente123",          r: "Gerente",     branch: "" },
   { u: "admin",          p: "admin123",            r: "Admin",       branch: "" },
   { u: "chofer_caba",    p: "chofer_caba123",      r: "Chofer",      branch: "CABA" },
+  { u: "chofer_caba2",   p: "chofer_caba2123",     r: "Chofer",      branch: "CABA" },
   { u: "chofer_cordoba", p: "chofer_cordoba123",   r: "Chofer",      branch: "Córdoba" },
   { u: "chofer_mendoza", p: "chofer_mendoza123",   r: "Chofer",      branch: "Mendoza" },
+  { u: "chofer_posadas", p: "chofer_posadas123",   r: "Chofer",      branch: "Posadas" },
 ];
 
 const ROLE_STYLES: Record<string, string> = {
@@ -37,8 +47,17 @@ export function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showTestUsers, setShowTestUsers] = useState(false);
+  const [stats, setStats] = useState<PublicStats | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    publicTrackingApi.getStats()
+      .then((s) => { if (!cancelled) setStats(s); })
+      .catch(() => { /* el panel muestra "—" si falla */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,13 +129,11 @@ export function Login() {
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10">
-            {[
-              { n: "6",  label: "Sucursales" },
-              { n: "12", label: "Estados" },
-              { n: "5",  label: "Roles" },
-            ].map(({ n, label }) => (
-              <div key={label}>
-                <div className="text-2xl font-bold text-white">{n}</div>
+            {STAT_LABELS.map(({ key, label }) => (
+              <div key={key}>
+                <div className="text-2xl font-bold text-white tabular-nums">
+                  {stats ? stats[key].toLocaleString("es-AR") : "—"}
+                </div>
                 <div className="text-xs text-slate-500 mt-0.5">{label}</div>
               </div>
             ))}

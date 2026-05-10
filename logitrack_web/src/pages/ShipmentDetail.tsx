@@ -890,9 +890,10 @@ export function ShipmentDetail() {
         </div>
       )}
 
-      {/* Event history */}
-      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>
-      {events.length === 0 ? (
+      {/* Event history — hidden for drafts */}
+      {shipment.status !== "draft" && (
+      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>)}
+      {shipment.status !== "draft" && (events.length === 0 ? (
         <p style={{ color: "#6b7280", fontSize: 14 }}>Sin eventos registrados.</p>
       ) : (
         <div style={{ position: "relative", paddingLeft: 24 }}>
@@ -929,7 +930,7 @@ export function ShipmentDetail() {
             </div>
           ))}
         </div>
-      )}
+      ))}
       </div>{/* end maxWidth wrapper */}
       </div>{/* end left column */}
 
@@ -967,7 +968,7 @@ export function ShipmentDetail() {
                     {assignedVehicle.license_plate}
                   </p>
                   <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-                    {assignedVehicle.type === "motocicleta" ? "Motocicleta" : assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
+                    {assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
                   </p>
                 </div>
                 <div style={{
@@ -1220,7 +1221,7 @@ export function ShipmentDetail() {
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
                         <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
-                          {v.type === "motocicleta" ? "Motocicleta" : v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
+                          {v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
                           {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
                           {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>
@@ -1682,11 +1683,10 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
                 <div className="flex justify-between items-center"><span className="text-white/75">Distancia ({quote.breakdown.distance_km.toFixed(1)} km)</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.distance_cost)}</span></div>
                 {quote.breakdown.weight_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo por peso</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.weight_surcharge)}</span></div>}
                 {quote.breakdown.last_mile_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Entrega a domicilio</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.last_mile_surcharge)}</span></div>}
-                {quote.breakdown.shipment_multiplier !== 1 && <div className="flex justify-between items-center"><span className="text-white/75">Tipo de envío</span><span className="font-semibold tabular-nums">× {quote.breakdown.shipment_multiplier.toFixed(2)}</span></div>}
+                {quote.breakdown.shipment_multiplier !== 1 && <div className="flex justify-between items-center"><span className="text-white/75">Tipo de envío (express)</span><span className="font-semibold tabular-nums">{formatCurrencyARS((quote.breakdown.base_fare + quote.breakdown.distance_cost) * (quote.breakdown.shipment_multiplier - 1))}</span></div>}
                 {quote.breakdown.time_window_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo ventana horaria</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.time_window_surplus)}</span></div>}
                 {quote.breakdown.fragile_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo frágil</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.fragile_surplus)}</span></div>}
               </div>
-              <p className="mt-3 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
             </>
           )}
         </GradientCard>
@@ -2051,7 +2051,7 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
                 <PriceRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
               )}
               {breakdown.shipment_multiplier !== 1 && (
-                <PriceRow label="Tipo de envío" value={`× ${breakdown.shipment_multiplier.toFixed(2)}`} />
+                <PriceRow label="Tipo de envío (express)" value={formatCurrencyARS((breakdown.base_fare + breakdown.distance_cost) * (breakdown.shipment_multiplier - 1))} />
               )}
               {breakdown.time_window_surplus > 0 && (
                 <PriceRow label="Recargo ventana horaria" value={formatCurrencyARS(breakdown.time_window_surplus)} />

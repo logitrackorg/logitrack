@@ -61,7 +61,7 @@ function Nav() {
       {hasRole("supervisor", "manager", "admin") && (
         <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
       )}
-      {hasRole("operator", "supervisor") && (
+      {hasRole("operator", "supervisor", "manager") && (
         <NavLink to="/routing" style={navStyle}>Ruteo</NavLink>
       )}
       {hasRole("admin") && (
@@ -244,7 +244,7 @@ function AppRoutes() {
           } />
 
           <Route path="/routing" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <Routing />
             </ProtectedRoute>
           } />

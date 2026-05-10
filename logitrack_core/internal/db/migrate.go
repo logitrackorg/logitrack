@@ -118,6 +118,24 @@ func RunMigrations(db *sql.DB) error {
 		INSERT INTO routing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS respect_fragile_spread;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS express_max_hours_in_branch;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows        BOOLEAN       NOT NULL DEFAULT FALSE;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_start_hour   INTEGER       NOT NULL DEFAULT 8;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_end_hour     INTEGER       NOT NULL DEFAULT 14;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_start_hour INTEGER       NOT NULL DEFAULT 12;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_end_hour   INTEGER       NOT NULL DEFAULT 18;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS service_time_minutes        INTEGER       NOT NULL DEFAULT 10;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS avg_speed_kmh               NUMERIC(6,2)  NOT NULL DEFAULT 25.0;
+
+		CREATE TABLE IF NOT EXISTS routing_plans (
+			id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+			plan_date     DATE         NOT NULL UNIQUE,
+			status        TEXT         NOT NULL DEFAULT 'pending',
+			payload       JSONB        NOT NULL DEFAULT '{}',
+			generated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+			applied_at    TIMESTAMPTZ,
+			applied_by    TEXT,
+			generation_log JSONB       NOT NULL DEFAULT '{}'
+		);
 
 		CREATE TABLE IF NOT EXISTS shipment_incidents (
 			id            VARCHAR(50)  PRIMARY KEY,

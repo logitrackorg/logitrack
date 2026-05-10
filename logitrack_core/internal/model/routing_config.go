@@ -6,8 +6,10 @@ type RoutingConfig struct {
 	SLAForceHorizonHours   int     `json:"sla_force_horizon_hours"`  // forzar despacho si SLA dentro de N horas
 	PriorityForceThreshold float64 `json:"priority_force_threshold"` // forzar despacho si priority_score >= X
 	MinFillRate            float64 `json:"min_fill_rate"`            // % mínimo de capacidad del vehículo más grande para consolidar
-	MaxShipmentsPerDriver  int     `json:"max_shipments_per_driver"` // tope de envíos por chofer en última milla
-	MaxWeightKgPerDriver   float64 `json:"max_weight_kg_per_driver"` // tope de peso por chofer en última milla
+
+	// Si EnforceTimeWindows=true, los envíos fuera de ventana quedan unassigned.
+	// Si EnforceTimeWindows=false, se incluyen en la ruta con un aviso visible.
+	EnforceTimeWindows bool `json:"enforce_time_windows"` // default false (ventanas blandas)
 }
 
 func DefaultRoutingConfig() RoutingConfig {
@@ -15,7 +17,6 @@ func DefaultRoutingConfig() RoutingConfig {
 		SLAForceHorizonHours:   24,
 		PriorityForceThreshold: 0.75,
 		MinFillRate:            0.40,
-		MaxShipmentsPerDriver:  15,
-		MaxWeightKgPerDriver:   150,
+		EnforceTimeWindows:     false,
 	}
 }
