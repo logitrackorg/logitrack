@@ -115,4 +115,9 @@ type Problem struct {
 	// EnforceTimeWindows=true: ventanas duras — envíos fuera de ventana quedan unassigned.
 	// EnforceTimeWindows=false: ventanas blandas — se incluyen con OutOfWindow=true.
 	EnforceTimeWindows bool
+
+	// PackingStrategy controla cómo se reparte la carga entre choferes.
+	// "" o "balanced" → round-robin (comportamiento histórico, distribuye parejo).
+	// "maximize_capacity" → satura un chofer hasta su tope antes de pasar al siguiente.
+	PackingStrategy model.LastMilePackingStrategy
 }

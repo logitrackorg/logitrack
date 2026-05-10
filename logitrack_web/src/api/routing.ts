@@ -22,11 +22,20 @@ api.interceptors.response.use(
   },
 );
 
+export type LastMilePackingStrategy = "balanced" | "maximize_capacity";
+
 export interface RoutingConfig {
   sla_force_horizon_hours: number;
   priority_force_threshold: number;
   min_fill_rate: number;
   enforce_time_windows: boolean;
+  morning_window_start_hour: number;
+  morning_window_end_hour: number;
+  afternoon_window_start_hour: number;
+  afternoon_window_end_hour: number;
+  service_time_minutes: number;
+  avg_speed_kmh: number;
+  last_mile_packing_strategy: LastMilePackingStrategy;
 }
 
 export type DispatchRule = "sla_forced" | "consolidation";
@@ -57,6 +66,7 @@ export interface LastMileAssignment {
   total_duration_min?: number;
   departure_min?: number;        // minutos desde medianoche (base para arrival_min)
   optimized_by?: "vrp" | "greedy";
+  window_coverage?: number;      // 0–1: fracción de paradas dentro de su ventana
   // Estado de aplicación del ítem.
   applied_shipments?: string[];
   applied?: boolean;

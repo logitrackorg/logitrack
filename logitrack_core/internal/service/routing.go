@@ -304,15 +304,30 @@ func (s *RoutingService) binPackLastMile(
 		}
 	}
 
+	maximize := cfg.LastMilePackingStrategy == model.PackingStrategyMaximizeCapacity
 	pickBucket := func(sh model.Shipment) *bucket {
 		var chosen *bucket
 		for _, b := range buckets {
 			if b.existingWeightKg+b.weight+sh.WeightKg > 150 {
 				continue
 			}
-			// Load-balancing por carga total proyectada del chofer.
-			if chosen == nil || (b.existingWeightKg+b.weight) < (chosen.existingWeightKg+chosen.weight) {
+			currLoad := b.existingWeightKg + b.weight
+			if chosen == nil {
 				chosen = b
+				continue
+			}
+			chosenLoad := chosen.existingWeightKg + chosen.weight
+			if maximize {
+				// Saturar el chofer con mayor carga proyectada que aún tenga
+				// capacidad — completa uno antes de abrir el siguiente.
+				if currLoad > chosenLoad {
+					chosen = b
+				}
+			} else {
+				// Load-balancing: el chofer con menor carga proyectada.
+				if currLoad < chosenLoad {
+					chosen = b
+				}
 			}
 		}
 		return chosen
@@ -581,6 +596,13 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				Target:     target,
 				Status:     "applied",
 			})
+		}
+		// Persistir el horario sugerido de salida para que el chofer/supervisor
+		// lo vea en /driver/route. DepartureMin > 0 indica que el motor de
+		// ruteo (VRP scheduler) pudo calcularlo.
+		if asgmt.DepartureMin > 0 {
+			suggestedAt := dateAtMinute(today, asgmt.DepartureMin)
+			_ = s.routeSvc.SetSuggestedStartTime(asgmt.DriverID, today, suggestedAt)
 		}
 	}
 
@@ -1098,22 +1120,22 @@ func (s *RoutingService) lastMileVRP(
 		count, weight := s.routeSvc.PendingLoad(d.ID, today)
 		vrpDrivers[i] = vrp.Driver{
 			ID:               d.ID,
-			MaxWeightKg: 150,
+			MaxWeightKg:      150,
 			ExistingCount:    count,
 			ExistingWeightKg: weight,
 		}
 	}
 
-	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, 25)
+	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, cfg.AvgSpeedKmh)
 
-	// DepartureMin: si el operador genera el plan después de las 8:00, las
-	// horas estimadas tienen que partir de la hora actual, no de las 8:00.
-	// Calculamos en hora local de Argentina (no UTC), porque "8:00" se refiere
-	// a wall-clock local del operador.
+	// DepartureMin: si el operador genera el plan después de morning_window_start,
+	// las horas estimadas parten de la hora actual; si no, parten del inicio
+	// configurado de la ventana morning. Wall-clock local del operador (no UTC).
 	local := now.In(clock.LocalTZ)
 	departureMin := float64(local.Hour()*60 + local.Minute())
-	if departureMin < 8*60 {
-		departureMin = 8 * 60
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+	if departureMin < morningStartMin {
+		departureMin = morningStartMin
 	}
 
 	problem := vrp.Problem{
@@ -1123,16 +1145,98 @@ func (s *RoutingService) lastMileVRP(
 		DurationMatrix:          dur,
 		DistanceMatrix:          dist,
 		DepartureMin:            departureMin,
-		ServiceTimeMin:          10,
-		DayEndMin:               18 * 60,
-		MorningWindowStartMin:   8 * 60,
-		MorningWindowEndMin:     14 * 60,
-		AfternoonWindowStartMin: 12 * 60,
-		AfternoonWindowEndMin:   18 * 60,
+		ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
+		DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
+		MorningWindowStartMin:   morningStartMin,
+		MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
+		AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
+		AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
 		EnforceTimeWindows:      cfg.EnforceTimeWindows,
+		PackingStrategy:         cfg.LastMilePackingStrategy,
 	}
 
-	sol := vrp.Solve(problem)
+	// Index para sub-problems del scheduling (Fase 3): de tracking_id al
+	// índice del shipment en `deliveries` global (necesario para cortar la
+	// matriz de duraciones por chofer).
+	indexByTID := make(map[string]int, len(withCoords))
+	for i, sh := range withCoords {
+		indexByTID[sh.TrackingID] = i
+	}
+
+	// Loop "abrir choferes hasta cubrir ventanas":
+	// - Estrategia maximize_capacity: arranca con 1 chofer; si no logra 100%
+	//   de cobertura de ventana en alguna ruta, agrega un chofer más y vuelve
+	//   a resolver. Hasta cubrir o agotar choferes.
+	// - Estrategia balanced: usa todos los choferes desde el principio (un
+	//   solo pase del solver).
+	activeCount := len(drivers)
+	if cfg.LastMilePackingStrategy == model.PackingStrategyMaximizeCapacity {
+		activeCount = 1
+	}
+
+	type optimizedRoute struct {
+		departure float64
+		route     vrp.Route
+		coverage  float64
+	}
+
+	var sol vrp.Solution
+	var perDriverOpt map[string]optimizedRoute
+	for {
+		if activeCount > len(drivers) {
+			activeCount = len(drivers)
+		}
+
+		p := problem
+		p.Drivers = vrpDrivers[:activeCount]
+		sol = vrp.Solve(p)
+
+		perDriverOpt = make(map[string]optimizedRoute, len(sol.Routes))
+		allCovered := true
+		for _, r := range sol.Routes {
+			tids := make([]string, len(r.Stops))
+			for i, st := range r.Stops {
+				tids[i] = st.NodeID
+			}
+			var maxKg float64 = 150
+			for _, vd := range vrpDrivers {
+				if vd.ID == r.DriverID {
+					maxKg = vd.MaxWeightKg
+					break
+				}
+			}
+			bestDep, bestRoute, cov := s.findBestDepartureForRoute(
+				r.DriverID, maxKg, tids,
+				depotCoord, deliveries, indexByTID,
+				dur, dist, cfg, departureMin,
+			)
+			perDriverOpt[r.DriverID] = optimizedRoute{
+				departure: bestDep,
+				route:     bestRoute,
+				coverage:  cov,
+			}
+			if cov < 1.0 {
+				allCovered = false
+			}
+		}
+
+		if allCovered || activeCount >= len(drivers) {
+			break
+		}
+		activeCount++
+	}
+
+	// Sustituir las routes globales con las optimizadas (mismo set de
+	// shipments por chofer, pero con orden recalculado para el mejor
+	// departure encontrado).
+	for i, r := range sol.Routes {
+		opt, ok := perDriverOpt[r.DriverID]
+		if !ok || opt.coverage == 0 {
+			continue
+		}
+		opt.route.DriverID = r.DriverID
+		sol.Routes[i] = opt.route
+	}
 
 	// Si el solver no produjo nada y nada quedó como unassigned, algo raro
 	// pasó — caemos al greedy para no devolver un plan vacío.
@@ -1192,6 +1296,15 @@ func (s *RoutingService) lastMileVRP(
 		}
 		ex := existingByDriver[r.DriverID]
 		drv := driverByID[r.DriverID]
+		// El bestDeparture per chofer (Fase 3) y la coverage calculada en
+		// el loop de scheduling. Si no hay (chofer sin shipments asignados
+		// o solver degenerado) caemos al departureMin global del problema.
+		dep := departureMin
+		coverage := 0.0
+		if opt, ok := perDriverOpt[r.DriverID]; ok && opt.coverage > 0 {
+			dep = opt.departure
+			coverage = opt.coverage
+		}
 		out = append(out, model.LastMileAssignment{
 			DriverID:          r.DriverID,
 			DriverName:        driverDisplayName(drv),
@@ -1203,8 +1316,9 @@ func (s *RoutingService) lastMileVRP(
 			OrderedStops:      stops,
 			TotalDistanceKm:   roundKg(r.TotalDistanceKm),
 			TotalDurationMin:  int(r.TotalDurationMin + 0.5),
-			DepartureMin:      int(departureMin + 0.5),
+			DepartureMin:      int(dep + 0.5),
 			OptimizedBy:       "vrp",
+			WindowCoverage:    coverage,
 		})
 	}
 
@@ -2010,6 +2124,12 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 				asgmt.AppliedAt = &now
 				asgmt.AppliedBy = username
 			}
+			// Persistir el horario sugerido de salida (Fase 4): el chofer/supervisor
+			// lo verá en /driver/route como recomendación para cumplir ventanas.
+			if asgmt.DepartureMin > 0 {
+				suggestedAt := dateAtMinute(today, asgmt.DepartureMin)
+				_ = s.routeSvc.SetSuggestedStartTime(asgmt.DriverID, today, suggestedAt)
+			}
 		}
 	}
 
@@ -2194,4 +2314,193 @@ func newUUID() string {
 		return fmt.Sprintf("fallback-%d", clock.Now().UnixNano())
 	}
 	return id
+}
+
+// dateAtMinute construye un time.Time absoluto combinando una fecha (DateOnly)
+// con un offset en minutos desde medianoche, en zona horaria local. Útil para
+// convertir el DepartureMin del solver (minutos desde medianoche) en un
+// timestamp persistible como SuggestedStartTime.
+func dateAtMinute(date model.DateOnly, minutesFromMidnight int) time.Time {
+	d := time.Time(date)
+	y, m, day := d.Date()
+	h := minutesFromMidnight / 60
+	min := minutesFromMidnight % 60
+	return time.Date(y, m, day, h, min, 0, 0, clock.LocalTZ)
+}
+
+// candidateDepartures devuelve los horarios candidatos de salida (en minutos
+// desde medianoche) para probar contra cada chofer de última milla.
+//
+// Una hora entera por candidato, desde el inicio de la ventana morning hasta
+// una hora antes del fin de la ventana afternoon (no tiene sentido salir en
+// la última hora porque no podría entregar nada).
+//
+// nowMin es el wall-clock actual (minutos desde medianoche). Filtra los
+// candidates que ya pasaron — sugerir "salir a las 8" cuando son las 12:45
+// es engañoso (el solver simularía una salida ficticia y la cobertura no
+// sería real). Si nowMin no cae en una hora exacta, agrega nowMin mismo
+// como candidate adicional para permitir "salir ya".
+func candidateDepartures(cfg model.RoutingConfig, nowMin float64) []float64 {
+	start := cfg.MorningWindowStartHour
+	end := cfg.AfternoonWindowEndHour - 1
+	if end <= start {
+		return []float64{float64(start) * 60}
+	}
+	// Primer entero >= nowMin (ceil hacia arriba).
+	firstHour := start
+	if nowMin > float64(start)*60 {
+		// Equivalente a ceil(nowMin / 60). Si nowMin == k*60, queda k.
+		firstHour = int((nowMin + 59) / 60)
+	}
+	out := make([]float64, 0, end-firstHour+2)
+	// Permitir "salir ya" si ahora no es hora exacta y estamos dentro del
+	// horario operativo. Esto evita pedirle al chofer que espere 59 minutos
+	// hasta el siguiente entero solo para respetar la grilla.
+	if nowMin > float64(start)*60 && nowMin < float64(end+1)*60 && int(nowMin)%60 != 0 {
+		out = append(out, nowMin)
+	}
+	for h := firstHour; h <= end; h++ {
+		out = append(out, float64(h)*60)
+	}
+	return out
+}
+
+// subMatrix devuelve la sub-matriz que conserva el depot (índice 0) y los
+// índices `indices` de la matriz original (que apuntan a Deliveries[i],
+// donde la fila/col correspondiente en la matriz es i+1).
+//
+// El resultado tiene tamaño (1 + len(indices)) x (1 + len(indices)).
+func subMatrix(m [][]float64, indices []int) [][]float64 {
+	if len(m) == 0 {
+		return nil
+	}
+	n := len(indices) + 1
+	out := make([][]float64, n)
+	for i := range out {
+		out[i] = make([]float64, n)
+	}
+	// Mapping: pos 0 = depot, pos 1..N = indices[0..N-1]+1 en la matriz original.
+	rowsCols := make([]int, n)
+	rowsCols[0] = 0
+	for i, idx := range indices {
+		rowsCols[i+1] = idx + 1
+	}
+	for i := 0; i < n; i++ {
+		for j := 0; j < n; j++ {
+			out[i][j] = m[rowsCols[i]][rowsCols[j]]
+		}
+	}
+	return out
+}
+
+// routeMetrics calcula la cobertura de ventana y el tiempo de espera total
+// de una ruta resuelta:
+//   - coverage = entregas dentro de ventana / total de entregas en la ruta.
+//   - wait = suma de minutos de llegada anticipada a una ventana (cuando el
+//     chofer llegaría antes del inicio de la ventana del envío). Las llegadas
+//     tarde no cuentan como espera (son violaciones puras).
+func routeMetrics(r vrp.Route, totalStops int) (coverage float64, wait float64) {
+	if totalStops == 0 {
+		return 1.0, 0
+	}
+	inWindow := 0
+	for _, st := range r.Stops {
+		if !st.OutOfWindow {
+			inWindow++
+			continue
+		}
+		// Solo "early" suma a wait (deviation negativa).
+		if st.WindowDeviationMin < 0 {
+			wait += -st.WindowDeviationMin
+		}
+	}
+	coverage = float64(inWindow) / float64(totalStops)
+	return
+}
+
+// findBestDepartureForRoute prueba horarios candidatos para un chofer dado
+// (con sus shipments asignados) y devuelve la mejor combinación según el
+// score:
+//   1. mayor cobertura de ventana
+//   2. menor tiempo de espera total (desempate)
+//   3. salida más temprana (desempate final)
+//
+// Construye sub-problems con un solo chofer y los shipments de su ruta,
+// reutilizando la matriz global (indexada por su posición en `deliveries`).
+func (s *RoutingService) findBestDepartureForRoute(
+	driverID string,
+	driverMaxKg float64,
+	routeShipTIDs []string,
+	depotCoord vrp.Coord,
+	deliveries []vrp.Node,
+	indexByTID map[string]int,
+	fullDur, fullDist [][]float64,
+	cfg model.RoutingConfig,
+	nowMin float64,
+) (bestDep float64, bestRoute vrp.Route, bestCoverage float64) {
+	if len(routeShipTIDs) == 0 {
+		return 0, vrp.Route{}, 1.0
+	}
+	indices := make([]int, len(routeShipTIDs))
+	subDeliveries := make([]vrp.Node, len(routeShipTIDs))
+	for i, tid := range routeShipTIDs {
+		idx, ok := indexByTID[tid]
+		if !ok {
+			return 0, vrp.Route{}, 0
+		}
+		indices[i] = idx
+		subDeliveries[i] = deliveries[idx]
+	}
+	subDur := subMatrix(fullDur, indices)
+	subDist := subMatrix(fullDist, indices)
+
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+	candidates := candidateDepartures(cfg, nowMin)
+
+	type result struct {
+		dep      float64
+		route    vrp.Route
+		coverage float64
+		wait     float64
+	}
+	var best *result
+	for _, dep := range candidates {
+		p := vrp.Problem{
+			Depot:                   vrp.Node{ID: "depot", Coord: depotCoord},
+			Deliveries:              subDeliveries,
+			Drivers:                 []vrp.Driver{{ID: driverID, MaxWeightKg: driverMaxKg}},
+			DurationMatrix:          subDur,
+			DistanceMatrix:          subDist,
+			DepartureMin:            dep,
+			ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
+			DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
+			MorningWindowStartMin:   morningStartMin,
+			MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
+			AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
+			AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
+			EnforceTimeWindows:      false, // siempre soft acá: queremos comparar coverages
+			PackingStrategy:         cfg.LastMilePackingStrategy,
+		}
+		sol := vrp.Solve(p)
+		if len(sol.Routes) == 0 {
+			continue
+		}
+		r := sol.Routes[0]
+		cov, wait := routeMetrics(r, len(routeShipTIDs))
+		c := result{dep: dep, route: r, coverage: cov, wait: wait}
+		if best == nil {
+			best = &c
+			continue
+		}
+		// Score: coverage DESC, wait ASC, dep ASC.
+		if c.coverage > best.coverage ||
+			(c.coverage == best.coverage && c.wait < best.wait) ||
+			(c.coverage == best.coverage && c.wait == best.wait && c.dep < best.dep) {
+			best = &c
+		}
+	}
+	if best == nil {
+		return 0, vrp.Route{}, 0
+	}
+	return best.dep, best.route, best.coverage
 }

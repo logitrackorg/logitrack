@@ -43,6 +43,10 @@ type LastMileAssignment struct {
 	TotalDurationMin int         `json:"total_duration_min,omitempty"`
 	DepartureMin     int         `json:"departure_min,omitempty"` // base para arrival_min, en min desde medianoche
 	OptimizedBy      string      `json:"optimized_by,omitempty"`  // "vrp" | "greedy"
+	// WindowCoverage es la fracción de paradas con arribo dentro de ventana
+	// (0.0 a 1.0). 1.0 = todas las paradas en ventana. Permite al frontend
+	// mostrar el indicador "X/Y en ventana" sin recalcular.
+	WindowCoverage float64 `json:"window_coverage,omitempty"`
 	// Estado de aplicación del ítem (se persiste en el plan global).
 	AppliedShipments []string   `json:"applied_shipments,omitempty"`
 	Applied          bool       `json:"applied"`

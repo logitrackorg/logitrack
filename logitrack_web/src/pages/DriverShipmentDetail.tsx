@@ -8,7 +8,6 @@ import {
   Clock,
   MapPin,
   MessageCircle,
-  Navigation,
   Package,
   Phone,
   User,
@@ -22,7 +21,6 @@ import {
   FAILED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
-  mapsHref,
   recipientView,
   telHref,
   timeWindowTone,
@@ -133,7 +131,7 @@ export function DriverShipmentDetail() {
     );
   }
 
-  const { name, phone, fullAddress, street, city, province, postal, specialInstructions } =
+  const { name, phone, street, city, province, postal, specialInstructions } =
     recipientView(shipment);
   const cor = shipment.corrections ?? {};
   const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
@@ -244,7 +242,7 @@ export function DriverShipmentDetail() {
           </div>
 
           {/* Quick actions */}
-          <div className="grid grid-cols-3 gap-2 mt-4">
+          <div className="grid grid-cols-2 gap-2 mt-4">
             <a
               href={telHref(phone)}
               className="inline-flex flex-col items-center justify-center gap-1 h-16 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
@@ -260,15 +258,6 @@ export function DriverShipmentDetail() {
             >
               <MessageCircle className="w-5 h-5" />
               <span className="text-[10px] font-bold uppercase tracking-wider">WhatsApp</span>
-            </a>
-            <a
-              href={mapsHref(fullAddress)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex flex-col items-center justify-center gap-1 h-16 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 cursor-pointer"
-            >
-              <Navigation className="w-5 h-5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Cómo llegar</span>
             </a>
           </div>
 
