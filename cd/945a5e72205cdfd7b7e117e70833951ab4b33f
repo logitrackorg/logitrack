@@ -1,0 +1,115 @@
+logitrack_core/internal/service/routing_config.go
+  s_69b3f57a39d9bf::t_2778bf3fb5f8be 40-59,72-99
+bulk_imports/demo_mendoza.csv
+  s_08b94c39a2b6d5::t_98cfddeff06981 1-51
+logitrack_core/internal/service/routing.go
+  s_69b3f57a39d9bf::t_948699acb3152d 307,314-315,317-330
+  s_69b3f57a39d9bf::t_6a42697f4693da 1158-1180,1183-1210,1212-1239
+  s_69b3f57a39d9bf::t_8251ea985535ba 2333,2337-2343,2349-2362
+  s_69b3f57a39d9bf::t_bd05f4283ab45d 1123,1129,1131-1133,1136-1138,1148-1153
+  s_69b3f57a39d9bf::t_df7cbaa24c759a 1155
+  s_69b3f57a39d9bf::t_7f43c6b7a887ef 2127-2132
+  s_69b3f57a39d9bf::t_553965cac48f87 2318,2331-2332,2334-2336,2344-2348,2363-2438,2440-2457,2459-2506
+  s_69b3f57a39d9bf::t_8a8579239edb55 1299-1307,1319,1321
+  s_69b3f57a39d9bf::t_14a3bc6ced17c2 2319-2330
+  s_69b3f57a39d9bf::t_0fd2c5639abd19 1211
+  s_69b3f57a39d9bf::t_aa3374f2273c3e 600-606
+  s_69b3f57a39d9bf::t_18c97f9c64879b 2439,2458
+CLAUDE.md
+  s_69b3f57a39d9bf::t_1d5cc7b424a321 294-303,311-313,317-318,324
+logitrack_web/src/api/driver.ts
+  s_69b3f57a39d9bf::t_8f8bd60c923654 35-38
+logitrack_core/internal/model/routing_config.go
+  s_69b3f57a39d9bf::t_740ec86c27c3a4 3-14,25-37,42-52
+logitrack_web/src/pages/DriverRoute.tsx
+  s_69b3f57a39d9bf::t_ffc78394113ef8 311-319
+  s_69b3f57a39d9bf::t_a1796a0a177d6b 571
+logitrack_core/internal/repository/routing_config.go
+  s_69b3f57a39d9bf::t_fbebfcc1b80494 24,27-31,36-39,44,54-61,65-68
+logitrack_core/internal/vrp/solver.go
+  s_69b3f57a39d9bf::t_561b57ab9ece29 111-129,132,135-141,143-170
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_69b3f57a39d9bf::t_cfcab0581a0b8e 134
+  s_69b3f57a39d9bf::t_eec5dbbd1028e3 245
+docs/manual-ruteo-inteligente.md
+  s_69b3f57a39d9bf::t_a78d6ae18ab588 211-226
+  s_69b3f57a39d9bf::t_4c54543a20c8bb 150-153,159-186
+  s_69b3f57a39d9bf::t_5c1cb79ac046f3 45-46,49-50,63-72
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_69b3f57a39d9bf::t_304066035e76e6 365
+  s_69b3f57a39d9bf::t_05665602b6fa9d 288
+  s_69b3f57a39d9bf::t_57fb3e92f4e33d 405-428,439-501,503-505,507,510-513,515-550
+  s_69b3f57a39d9bf::t_98f515aa28d4d8 83-84,87-98,100-113,115-217,220,225,232-233,235-237
+  s_69b3f57a39d9bf::t_fc1400f6c44c8b 2-3,14,17,47-52
+  s_69b3f57a39d9bf::t_64003473577a66 289-291
+  s_69b3f57a39d9bf::t_c3b0368e041efe 429-438
+  s_69b3f57a39d9bf::t_277fff0c417e81 1
+  s_69b3f57a39d9bf::t_462fabe599eaa3 67-70,74-82,85-86,99,114,218-219,221-224,226-231,234,238-239
+  s_69b3f57a39d9bf::t_0876fe0c9268b5 502,506,508-509,514
+bulk_imports/demo_cordoba.csv
+  s_08b94c39a2b6d5::t_e0699c2769ed1d 1-51
+logitrack_core/internal/vrp/types.go
+  s_69b3f57a39d9bf::t_3711f1970643a7 118-122
+logitrack_core/internal/model/route.go
+  s_69b3f57a39d9bf::t_1fd6e1479f90eb 60-65
+bulk_imports/demo_caba.csv
+  s_08b94c39a2b6d5::t_e068cad9e8582b 1-51
+logitrack_core/internal/model/routing.go
+  s_69b3f57a39d9bf::t_d899b4a3e72c98 46-49
+logitrack_core/internal/repository/postgres_route.go
+  s_69b3f57a39d9bf::t_ebe43e9e80934d 125-131,133,140,145-151,153,156,159,166-168
+  s_69b3f57a39d9bf::t_e96794e424b472 73,83,90
+  s_69b3f57a39d9bf::t_7a11924cb53376 29-30,32,43-44
+sample_bulk_import.csv
+  s_08b94c39a2b6d5::t_4c35936189a63d 1-4
+  s_08b94c39a2b6d5::t_9bd66bf8163a90 5
+logitrack_web/src/api/routing.ts
+  s_69b3f57a39d9bf::t_d86567c54bced7 25-26,32-38
+  s_69b3f57a39d9bf::t_623e0c7ab0d962 69
+logitrack_core/internal/service/routing_scheduler_test.go
+  s_69b3f57a39d9bf::t_9137d0f0ed135e 1-82
+logitrack_web/src/pages/BulkUpload.tsx
+  s_08b94c39a2b6d5::t_032381530fb476 16
+  s_08b94c39a2b6d5::t_d39b2fe18fb6cf 197-213,239-240
+  s_08b94c39a2b6d5::t_80685448a50114 280
+  s_08b94c39a2b6d5::t_d3c8b6c6b5054a 282
+logitrack_core/internal/db/migrate.go
+  s_69b3f57a39d9bf::t_e835ecc086293e 114,119-128
+  s_69b3f57a39d9bf::t_be13a9ae5901a3 170-172
+logitrack_web/src/api/customers.ts
+  s_08b94c39a2b6d5::t_17e148144e1e02 23-24
+logitrack_core/internal/service/route.go
+  s_69b3f57a39d9bf::t_338a670922d0bc 116-130
+logitrack_web/src/pages/Routing.tsx
+  s_69b3f57a39d9bf::t_5b23a9877daad0 1226-1229,1231,1234-1250
+docs/manual-ruteo-inteligente-tecnico.md
+  s_69b3f57a39d9bf::t_f7454b1aeb1e78 176-178
+  s_69b3f57a39d9bf::t_30da0d9e2a933f 48-70
+  s_69b3f57a39d9bf::t_4a8c1c52f0207c 95-99
+  s_69b3f57a39d9bf::t_a73641fcbb8ca8 109-111,115-118,125-133
+  s_69b3f57a39d9bf::t_d5c313ce6cc7eb 189-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "cd945a5e72205cdfd7b7e117e70833951ab4b33f",
+  "prompts": {},
+  "sessions": {
+    "s_08b94c39a2b6d5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c6bea23-ac13-4968-abb3-0e75ca5ee5de",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_69b3f57a39d9bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "17348878-697a-40dc-9668-5958341b0940",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
