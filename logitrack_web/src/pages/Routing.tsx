@@ -559,10 +559,7 @@ export function Routing() {
 
   const endDrag = () => setDragging(null);
 
-  const isDirty = useMemo(() => {
-    if (!plan || !originalPlan) return false;
-    return JSON.stringify(plan) !== JSON.stringify(originalPlan);
-  }, [plan, originalPlan]);
+  const isDirty = plan != null && originalPlan != null && JSON.stringify(plan) !== JSON.stringify(originalPlan);
 
   const totals = useMemo(() => {
     if (!plan) return null;
