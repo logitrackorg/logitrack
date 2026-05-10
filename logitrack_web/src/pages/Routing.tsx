@@ -11,6 +11,7 @@ import {
   routingApi,
   reasonLabel,
   DISPATCH_RULE_LABELS,
+  type RoutingConfig,
   type RoutingPlan,
   type LastMileAssignment,
   type InterBranchAssignment,
@@ -299,6 +300,7 @@ export function Routing() {
     newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
     newPlan.driver_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
     newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
+    newPlan.incoming_vehicles?.forEach((v) => v.shipments.forEach((t) => allTids.add(t)));
     const shipMap = new Map<string, Shipment>();
     const all = await shipmentApi.list({ branch_id: branchId || newPlan.branch_id });
     all.forEach((s) => {
@@ -737,6 +739,7 @@ export function Routing() {
                     vehicleLoads={plan.vehicle_loads}
                     branches={branches}
                     shipments={shipments}
+                    configSnapshot={plan.config_snapshot}
                     onView={openInfo}
                     dragging={dragging}
                     canAcceptVehicle={(vehicleId) => canApply && canAcceptDrop({ kind: "vehicle", id: vehicleId })}
@@ -932,7 +935,7 @@ function UnassignedSection({
           <CardTitle className="text-amber-900">Sin asignar ({unassigned.length})</CardTitle>
         </div>
         <CardDescription>
-          El algoritmo no pudo asignar estos envíos. Arrastrá cualquier envío hasta el chofer o vehículo correspondiente, o tocá "Reasignar" para usar el menú.
+          El algoritmo no pudo asignar estos envíos. Podés arrastrarlos manualmente hasta el chofer o vehículo correspondiente.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-3">
@@ -1457,6 +1460,7 @@ function InterBranchSection({
   vehicleLoads,
   branches,
   shipments,
+  configSnapshot,
   onView,
   dragging,
   canAcceptVehicle,
@@ -1471,6 +1475,7 @@ function InterBranchSection({
   vehicleLoads: VehicleLoad[];
   branches: Branch[];
   shipments: Map<string, Shipment>;
+  configSnapshot?: RoutingConfig;
   onView?: (trackingId: string) => void;
   dragging: DragState | null;
   canAcceptVehicle?: (vehicleId: string) => boolean;
@@ -1573,9 +1578,35 @@ function InterBranchSection({
               <div className="grid gap-2">
                 {a.shipments.map((tid) => {
                   const sh = shipments.get(tid);
-                  // Para envíos en retorno, el destino real es el origen; para el resto, el final.
                   const realTarget = sh?.is_returning ? sh?.origin_branch_id : sh?.final_branch_id;
                   const isPartialTransit = !!realTarget && realTarget !== a.destination_branch;
+
+                  let slaTag: React.ReactNode = null;
+                  if (a.rule === "sla_forced" && sh && configSnapshot) {
+                    const isSlaUrgent =
+                      sh.estimated_delivery_at != null &&
+                      (new Date(sh.estimated_delivery_at).getTime() - Date.now()) / 3600000 <
+                        configSnapshot.sla_force_horizon_hours;
+                    const isPriorityForced =
+                      sh.priority_score != null &&
+                      sh.priority_score >= configSnapshot.priority_force_threshold;
+                    if (isSlaUrgent) {
+                      slaTag = (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium shrink-0">
+                          <Clock className="w-3 h-3" />
+                          SLA crítico
+                        </span>
+                      );
+                    } else if (isPriorityForced) {
+                      slaTag = (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium shrink-0">
+                          <AlertTriangle className="w-3 h-3" />
+                          Prioridad forzada
+                        </span>
+                      );
+                    }
+                  }
+
                   return (
                     <ShipmentChip
                       key={tid}
@@ -1585,11 +1616,14 @@ function InterBranchSection({
                       onDragStart={onDragStart}
                       onDragEnd={onDragEnd}
                       extra={
-                        isPartialTransit && realTarget ? (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 truncate">
-                            Tránsito parcial → {branchLabelById(realTarget, branches)}
-                          </span>
-                        ) : null
+                        <>
+                          {slaTag}
+                          {isPartialTransit && realTarget && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 truncate">
+                              Tránsito parcial → {branchLabelById(realTarget, branches)}
+                            </span>
+                          )}
+                        </>
                       }
                     />
                   );
@@ -1883,41 +1917,59 @@ function IncomingVehiclesSection({
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 pt-4">
-        {vehicles.map((v) => (
-          <div key={v.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                <span>{v.license_plate}</span>
-                <span className="text-slate-500 font-normal">desde</span>
-                <span>{branchLabelById(v.origin_branch, branches)}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                  🚚 En viaje
-                </span>
+        {vehicles.map((v) => {
+          const utilPct = v.capacity_kg > 0 ? Math.round((v.total_weight_kg / v.capacity_kg) * 100) : 0;
+          return (
+            <div key={v.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                  <span>{v.license_plate}</span>
+                  <span className="text-slate-500 font-normal">desde</span>
+                  <span>{branchLabelById(v.origin_branch, branches)}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
+                    🚚 En viaje
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                  {v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg ({utilPct}%)
+                </div>
               </div>
-              <div className="text-xs text-slate-500 tabular-nums shrink-0">
-                {v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg
+              <div className="grid gap-1.5">
+                {v.shipments.map((tid) => {
+                  const sh = shipments.get(tid);
+                  const clickable = !!onView && !!sh;
+                  return (
+                    <div
+                      key={tid}
+                      onClick={clickable ? () => onView!(tid) : undefined}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onKeyDown={
+                        clickable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onView!(tid);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                    >
+                      <span className="font-mono text-slate-700">{tid}</span>
+                      {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                      {sh?.priority && <PriorityBadge priority={sh.priority} />}
+                      {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
+                      {sh?.shipment_type === "express" && (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Express</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div className="grid gap-1.5">
-              {v.shipments.map((tid) => {
-                const sh = shipments.get(tid);
-                const clickable = !!onView && !!sh;
-                return (
-                  <div
-                    key={tid}
-                    onClick={clickable ? () => onView!(tid) : undefined}
-                    role={clickable ? "button" : undefined}
-                    className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
-                  >
-                    <span className="font-mono text-slate-700">{tid}</span>
-                    {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
-                    {sh?.priority && <PriorityBadge priority={sh.priority} />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );

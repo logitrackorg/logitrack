@@ -275,7 +275,7 @@ func (s *RoutingService) binPackLastMile(
 		return nil, unassigned, blocked
 	}
 
-	sortShipmentsForRouting(queue)
+	sortShipmentsForLastMile(queue)
 
 	type bucket struct {
 		driver            model.User
@@ -435,8 +435,8 @@ func (s *RoutingService) dispatchInterBranch(
 		sortShipmentsForRouting(group)
 
 		poolForDest := vehiclesAcceptingDest(pool, dest, used)
-		largestAvailableCap := largestAvailableCapacity(poolForDest, existingLoad)
 		totalWeight := sumWeights(group)
+		refCap := fillRateCapacity(poolForDest, existingLoad, totalWeight)
 
 		forced := anyForced(group, cfg, now)
 		var rule model.DispatchRule
@@ -444,7 +444,7 @@ func (s *RoutingService) dispatchInterBranch(
 		if forced {
 			rule = model.DispatchRuleSLA
 			shouldDispatch = true
-		} else if largestAvailableCap > 0 && totalWeight >= cfg.MinFillRate*largestAvailableCap {
+		} else if refCap > 0 && totalWeight >= cfg.MinFillRate*refCap {
 			rule = model.DispatchRuleConsolidation
 			shouldDispatch = true
 		}
@@ -715,6 +715,28 @@ func sortShipmentsForRouting(s []model.Shipment) {
 	})
 }
 
+// sortShipmentsForLastMile ordena envíos para última milla priorizando la ventana
+// horaria contratada por el cliente. Orden: time_window (morning>afternoon>flexible),
+// priority_score DESC, created_at ASC, tracking_id ASC. Sort estable para reproducibilidad.
+//
+// La ventana horaria es un compromiso contractual con el destinatario y puede tener
+// recargo (`time_window_multiplier`); por eso queda como criterio primario por encima
+// del score de prioridad. La prioridad sigue ordenando dentro de la misma ventana.
+func sortShipmentsForLastMile(s []model.Shipment) {
+	sort.SliceStable(s, func(i, j int) bool {
+		if r := timeWindowRank(s[i].TimeWindow) - timeWindowRank(s[j].TimeWindow); r != 0 {
+			return r < 0
+		}
+		if s[i].PriorityScore != s[j].PriorityScore {
+			return s[i].PriorityScore > s[j].PriorityScore
+		}
+		if !s[i].CreatedAt.Equal(s[j].CreatedAt) {
+			return s[i].CreatedAt.Before(s[j].CreatedAt)
+		}
+		return s[i].TrackingID < s[j].TrackingID
+	})
+}
+
 func timeWindowRank(tw model.TimeWindow) int {
 	switch tw {
 	case model.TimeWindowMorning:
@@ -753,17 +775,33 @@ func vehiclesAcceptingDest(pool []model.Vehicle, dest string, used map[string]bo
 	return out
 }
 
-// largestAvailableCapacity devuelve la mayor capacidad libre del pool
-// (CapacityKg menos lo ya cargado por planes previos al mismo destino).
-func largestAvailableCapacity(pool []model.Vehicle, existingLoad map[string]float64) float64 {
-	max := 0.0
+// fillRateCapacity devuelve la capacidad del vehículo a usar como referencia para
+// el umbral de consolidación. Usa el más chico cuya capacidad disponible alcance el
+// peso total; si ninguno alcanza, devuelve el de mayor capacidad disponible.
+// Esto evita que un camión grande suba el umbral artificialmente cuando hay un
+// vehículo adecuado al peso del grupo.
+func fillRateCapacity(pool []model.Vehicle, existingLoad map[string]float64, totalWeight float64) float64 {
+	best := 0.0
+	// Buscar el más chico que cubre el peso
 	for _, v := range pool {
 		avail := v.CapacityKg - existingLoad[v.ID]
-		if avail > max {
-			max = avail
+		if avail >= totalWeight {
+			if best == 0.0 || avail < best {
+				best = avail
+			}
 		}
 	}
-	return max
+	if best > 0 {
+		return best
+	}
+	// Si ninguno alcanza, usar el de mayor capacidad disponible
+	for _, v := range pool {
+		avail := v.CapacityKg - existingLoad[v.ID]
+		if avail > best {
+			best = avail
+		}
+	}
+	return best
 }
 
 func sumWeights(shipments []model.Shipment) float64 {

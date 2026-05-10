@@ -106,14 +106,14 @@ func main() {
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
-	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc)
+	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
+	branchHandler := handler.NewBranchHandler(branchSvc)
+	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
-	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
-	branchHandler := handler.NewBranchHandler(branchSvc)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
@@ -284,11 +284,13 @@ func main() {
 	protected.POST("/ml/config/:id/activate", adminOnly, mlConfigHandler.Activate)
 	protected.GET("/admin/access-logs", adminOnly, accessLogHandler.List)
 
-	// Public tracking — no auth required
+	// Public tracking — no auth required. Dedicated handlers return a redacted
+	// view (no personal data) and 404 on drafts.
 	publicAPI := api.Group("/public")
-	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetByTrackingID)
-	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetEvents)
+	publicAPI.GET("/track/:tracking_id", shipmentHandler.GetPublicByTrackingID)
+	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetPublicEvents)
 	publicAPI.GET("/branches", branchHandler.List)
+	publicAPI.GET("/stats", shipmentHandler.PublicStats)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 

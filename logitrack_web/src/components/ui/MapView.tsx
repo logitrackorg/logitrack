@@ -134,6 +134,7 @@ export function MapView({
       }
     });
 
+
     mapInstance.current = map;
     zonesLayerRef.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
@@ -235,6 +236,7 @@ export function MapView({
       mapInstance.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
       setTimeout(() => { programmaticPanRef.current = false; }, 600);
     }
+
 
     // En simulación: split local sin llamar a OSRM
     if (simulationMode === "simulate") {

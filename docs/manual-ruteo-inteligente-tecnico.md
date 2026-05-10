@@ -41,8 +41,10 @@ misma sucursal) vean el mismo plan consistente.
 
 Para envíos que ya llegaron a su sucursal final y deben ser entregados a domicilio:
 
-1. **Ordena** los envíos por prioridad (`alta → media → baja`), luego por ventana horaria
-   (`mañana → tarde → flexible`), luego por fecha de creación.
+1. **Ordena** los envíos por ventana horaria (`mañana → tarde → flexible`), luego por
+   prioridad (`alta → media → baja`), luego por fecha de creación. La ventana es lo
+   primero porque es un compromiso contractual con el destinatario (y puede tener
+   recargo); la prioridad ordena dentro de la misma ventana.
 2. **Distribuye** entre los choferes disponibles, balanceando la carga por peso total.
 3. **Respeta topes**: máximo de envíos por chofer y máximo de kg por chofer (configurables).
 4. **Respeta ventanas horarias**: calcula la hora estimada de llegada a cada parada y verifica
