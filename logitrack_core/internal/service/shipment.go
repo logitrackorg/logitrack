@@ -143,12 +143,36 @@ func (s *ShipmentService) SetPricingService(p *PricingService) {
 }
 
 // applyPrice computes and stamps the price + breakdown onto a shipment in place.
+// Origin is the receiving branch address (where the shipment physically departs from),
+// falling back to the sender's address only if the branch cannot be resolved.
 // No-op when the pricing service has not been wired (e.g. unit tests that don't care).
 func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 	if s.pricingSvc == nil {
 		return
 	}
-	price, breakdown := s.pricingSvc.CalculateForShipment(*shipment)
+	origin := shipment.Sender.Address
+	if shipment.ReceivingBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(shipment.ReceivingBranchID); ok {
+			origin = model.Address{
+				Street:     b.Address.Street,
+				City:       b.Address.City,
+				Province:   b.Province,
+				PostalCode: b.Address.PostalCode,
+				Latitude:   b.Latitude,
+				Longitude:  b.Longitude,
+			}
+		}
+	}
+	price, breakdown := s.pricingSvc.Quote(PricingInput{
+		WeightKg:       shipment.WeightKg,
+		PackageType:    shipment.PackageType,
+		ShipmentType:   shipment.ShipmentType,
+		TimeWindow:     shipment.TimeWindow,
+		IsFragile:      shipment.IsFragile,
+		DeliveryMethod: shipment.DeliveryMethod,
+		Origin:         origin,
+		Destination:    shipment.Recipient.Address,
+	})
 	shipment.Price = &price
 	b := breakdown
 	shipment.PriceBreakdown = &b
