@@ -1,0 +1,58 @@
+logitrack_core/internal/service/pricing.go
+  s_f1353276c85b4e::t_df456127756c25 78-81,86-87
+  s_f1353276c85b4e::t_7470cd7175068b 103-106
+  s_f1353276c85b4e::t_08561aa166bf99 49-65
+  s_f1353276c85b4e::t_bb3594c74bb081 18-20,23-24
+logitrack_web/src/api/branches.ts
+  s_f1353276c85b4e::t_b56d652ab47dbf 20-21
+logitrack_core/internal/service/shipment.go
+  s_f1353276c85b4e::t_e8d118aaa672ef 405-408
+  s_f1353276c85b4e::t_b5bbced567d8d8 345-350
+logitrack_core/cmd/server/main.go
+  s_f1353276c85b4e::t_6d0fe06da533a6 57
+logitrack_core/internal/service/shipment_test.go
+  s_f1353276c85b4e::t_a469dd34554f16 42
+logitrack_web/src/pages/NewShipment.tsx
+  s_f1353276c85b4e::t_9c3438bdf69a5e 328
+  s_f1353276c85b4e::t_6fd55e437b374c 730
+  s_f1353276c85b4e::t_41dcd83e1540ad 132
+  s_f1353276c85b4e::t_2ffe9098b46e54 391
+  s_f1353276c85b4e::t_1e10d21ea3bed8 537-539,589-606
+  s_f1353276c85b4e::t_01dcd854cc53b5 1
+  s_f1353276c85b4e::t_67258ccf66b2e3 11
+  s_f1353276c85b4e::t_d3c25cc07c2ab5 155
+  s_f1353276c85b4e::t_71548083ef5c89 154
+  s_f1353276c85b4e::t_a9f8782958d218 85-89
+  s_f1353276c85b4e::t_3c869f9e891286 133
+logitrack_web/src/utils/nearestBranch.ts
+  s_f1353276c85b4e::t_74f7813c0f5498 1-81
+logitrack_web/src/api/pricing.ts
+  s_f1353276c85b4e::t_ada346ea9e3085 23-24
+logitrack_core/internal/service/pricing_test.go
+  s_f1353276c85b4e::t_a469dd34554f16 12
+logitrack_core/internal/handler/pricing.go
+  s_f1353276c85b4e::t_2adfd9dfe1028d 67-68
+  s_f1353276c85b4e::t_a2c3c3791a7656 30-31
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_f1353276c85b4e::t_a8bb5a75408589 1460-1461
+  s_f1353276c85b4e::t_403e4222a420e3 653-654
+  s_f1353276c85b4e::t_6f993b17cfefcf 1401,1411-1412
+logitrack_core/internal/service/routing_test.go
+  s_f1353276c85b4e::t_a469dd34554f16 71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "a27aec7eee82cdbd3e962e130358203a45afc93b",
+  "prompts": {},
+  "sessions": {
+    "s_f1353276c85b4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1a459e4-60b0-4f67-9e84-691f558e4a96",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
