@@ -108,49 +108,66 @@ func nearestNeighbor(p Problem) ([]Route, []UnassignedNode) {
 	// preferimos reportar el problema "duro" (ventana inviable) primero.
 	timeWindowFailed := map[int]bool{}
 
-	// Asignación round-robin chofer-por-chofer: cada chofer agrega su
-	// mejor candidato, después pasamos al siguiente. Esto balancea mejor
-	// las cargas que llenar uno y después otro.
-	for {
-		assignedThisRound := false
-		for _, st := range states {
-			if !canFitMore(st.driver, st.weight, st.count) {
-				continue
-			}
-			best := -1
-			bestTravel := 0.0
-			for idx := range remaining {
-				del := p.Deliveries[idx]
-				travelSec := p.DurationMatrix[st.currentNode][idx+1]
-				travelMin := travelSec / 60.0
-				arrival := st.currentTime + travelMin
-				if !respectsWindow(del.TimeWindow, p.DepartureMin+arrival, mStart, mEnd, aStart, aEnd, p.DayEndMin) {
-					timeWindowFailed[idx] = true
-					continue
-				}
-				if !nodeFits(st.driver, st.weight, st.count, del.WeightKg) {
-					continue
-				}
-				if best == -1 || travelMin < bestTravel {
-					best = idx
-					bestTravel = travelMin
-				}
-			}
-			if best == -1 {
-				continue
-			}
-			del := p.Deliveries[best]
-			arrival := st.currentTime + bestTravel
-			st.stops = append(st.stops, best)
-			st.weight += del.WeightKg
-			st.count++
-			st.currentTime = arrival + p.ServiceTimeMin
-			st.currentNode = best + 1
-			delete(remaining, best)
-			assignedThisRound = true
+	// Asignación: estrategia configurable.
+	//   - balanced (default): round-robin chofer-por-chofer. Cada chofer agrega
+	//     su mejor candidato y pasa al siguiente. Distribuye carga parejo.
+	//   - maximize_capacity: satura un chofer (insertando su mejor candidato en
+	//     loop hasta no poder más) antes de abrir el siguiente. Maximiza
+	//     utilización del primero y libera al resto.
+	addBestForDriver := func(st *driverState) bool {
+		if !canFitMore(st.driver, st.weight, st.count) {
+			return false
 		}
-		if !assignedThisRound {
-			break
+		best := -1
+		bestTravel := 0.0
+		for idx := range remaining {
+			del := p.Deliveries[idx]
+			travelSec := p.DurationMatrix[st.currentNode][idx+1]
+			travelMin := travelSec / 60.0
+			arrival := st.currentTime + travelMin
+			if !respectsWindow(del.TimeWindow, p.DepartureMin+arrival, mStart, mEnd, aStart, aEnd, p.DayEndMin) {
+				timeWindowFailed[idx] = true
+				continue
+			}
+			if !nodeFits(st.driver, st.weight, st.count, del.WeightKg) {
+				continue
+			}
+			if best == -1 || travelMin < bestTravel {
+				best = idx
+				bestTravel = travelMin
+			}
+		}
+		if best == -1 {
+			return false
+		}
+		del := p.Deliveries[best]
+		arrival := st.currentTime + bestTravel
+		st.stops = append(st.stops, best)
+		st.weight += del.WeightKg
+		st.count++
+		st.currentTime = arrival + p.ServiceTimeMin
+		st.currentNode = best + 1
+		delete(remaining, best)
+		return true
+	}
+
+	if p.PackingStrategy == model.PackingStrategyMaximizeCapacity {
+		// Saturar driver-por-driver hasta agotar candidatos del chofer actual.
+		for _, st := range states {
+			for addBestForDriver(st) {
+			}
+		}
+	} else {
+		for {
+			assignedThisRound := false
+			for _, st := range states {
+				if addBestForDriver(st) {
+					assignedThisRound = true
+				}
+			}
+			if !assignedThisRound {
+				break
+			}
 		}
 	}
 

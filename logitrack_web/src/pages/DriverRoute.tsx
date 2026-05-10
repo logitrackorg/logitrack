@@ -9,7 +9,6 @@ import {
   Clock,
   MapPin,
   MessageCircle,
-  Navigation,
   Package,
   Phone,
   Play,
@@ -30,7 +29,6 @@ import {
   FAILED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
-  mapsHref,
   recipientView,
   telHref,
   timeWindowTone,
@@ -310,6 +308,15 @@ export function DriverRoute() {
                 <p className="mt-0.5 text-xs text-amber-800 leading-relaxed">
                   Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
                 </p>
+                {data.route.suggested_start_time && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-100 border border-amber-300 text-xs font-semibold text-amber-900">
+                    <Clock className="w-3.5 h-3.5" />
+                    Salida sugerida: {new Date(data.route.suggested_start_time).toLocaleTimeString("es-AR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                )}
               </div>
             </div>
           </Card>
@@ -561,7 +568,7 @@ function ShipmentCard({
 
       {!isCompleted && (
         <div className="px-4 pb-4 border-t border-slate-100">
-          <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="grid grid-cols-2 gap-2 mt-3">
             <a
               href={telHref(phone)}
               onClick={(e) => e.stopPropagation()}
@@ -579,16 +586,6 @@ function ShipmentCard({
             >
               <MessageCircle className="w-4 h-4" />
               <span className="text-[10px] font-bold uppercase tracking-wider">WhatsApp</span>
-            </a>
-            <a
-              href={mapsHref(fullAddress)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-700 cursor-pointer"
-            >
-              <Navigation className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Cómo llegar</span>
             </a>
           </div>
 

@@ -20,6 +20,8 @@ export interface Customer {
     city: string;
     province: string;
     postal_code?: string;
+    latitude?: number;
+    longitude?: number;
   };
 }
 

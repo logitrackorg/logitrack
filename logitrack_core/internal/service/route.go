@@ -113,6 +113,21 @@ func (s *RouteService) RemoveShipmentFromTodayRoute(trackingID string) error {
 	return s.repo.RemoveShipmentFromDate(trackingID, today)
 }
 
+// SetSuggestedStartTime persiste el horario óptimo de salida sugerido por el
+// motor de ruteo en la Route del chofer para esa fecha. Si la ruta no existe
+// (todavía no se aplicaron shipments) o ya arrancó, no hace nada.
+func (s *RouteService) SetSuggestedStartTime(driverID string, date model.DateOnly, suggestedAt time.Time) error {
+	route, err := s.repo.GetByDriverAndDate(driverID, date)
+	if err != nil {
+		return nil
+	}
+	if route.Status == model.RouteStatusActive {
+		return nil
+	}
+	route.SuggestedStartTime = &suggestedAt
+	return s.repo.Update(route)
+}
+
 func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID string, status model.Status) error {
 	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
