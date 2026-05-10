@@ -524,14 +524,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	now := clock.Now().UTC()
 
-	var pricePtr *float64
-	var breakdownPtr *model.PriceBreakdown
-	if s.pricingSvc != nil {
-		price, breakdown := s.pricingSvc.CalculateForShipment(draft)
-		pricePtr = &price
-		bd := breakdown
-		breakdownPtr = &bd
-	}
+	s.applyPrice(&draft)
 
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
 		DraftID:             draftID,
@@ -541,8 +534,8 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Timestamp:           now,
 		Prediction:          prediction,
 		EstimatedDeliveryAt: s.estimatedDelivery(now, draft.OriginBranchID, draft.FinalBranchID, string(draft.ShipmentType)),
-		Price:               pricePtr,
-		PriceBreakdown:      breakdownPtr,
+		Price:               draft.Price,
+		PriceBreakdown:      draft.PriceBreakdown,
 	})
 	if err != nil {
 		return model.Shipment{}, err
