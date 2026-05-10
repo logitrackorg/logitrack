@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
@@ -8,6 +8,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
 import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { resolveFinalBranch } from "../utils/nearestBranch";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 
@@ -81,6 +82,11 @@ export function NewShipment() {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finalBranchId = useMemo(
+    () => resolveFinalBranch(form.recipient.address, branches),
+    [form.recipient.address, branches]
+  );
+
   // Auto-save draft state
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -123,6 +129,8 @@ export function NewShipment() {
           delivery_method: form.delivery_method,
           origin: form.sender.address,
           destination: form.recipient.address,
+          origin_branch_id: form.receiving_branch_id || undefined,
+          final_branch_id: finalBranchId || undefined,
         });
         setQuote(q);
       } catch {
@@ -143,6 +151,8 @@ export function NewShipment() {
     form.delivery_method,
     form.sender.address,
     form.recipient.address,
+    form.receiving_branch_id,
+    finalBranchId,
   ]);
 
   // Auto-save draft — debounced 800ms on any form change.
@@ -315,7 +325,7 @@ export function NewShipment() {
     if (!form.recipient.address.postal_code) { setError("El código postal del destinatario es obligatorio."); return; }
     if (/^[a-zA-Z]+$/.test(form.recipient.address.postal_code)) { setError("El código postal del destinatario debe contener al menos un dígito."); return; }
     const branchAtLimit = branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity;
-    if (branchAtLimit && !capacityConfirmed) { setError("La sucursal receptora está al límite de capacidad. Confirmá que querés continuar de todas formas."); return; }
+    if (branchAtLimit && !capacityConfirmed) { setError("La sucursal de origen está al límite de capacidad. Confirmá que querés continuar de todas formas."); return; }
     setLoading(true);
     setError("");
     try {
@@ -378,7 +388,7 @@ export function NewShipment() {
         <div className="flex items-start gap-3 mb-5 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-bold text-amber-900">La sucursal receptora está al límite de capacidad</p>
+            <p className="text-sm font-bold text-amber-900">La sucursal de origen está al límite de capacidad</p>
             <p className="mt-1 text-xs text-amber-800 leading-relaxed">
               Tiene {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés continuar, pero la sucursal estará por encima de su capacidad.
             </p>
@@ -524,9 +534,9 @@ export function NewShipment() {
           </Row2>
         </Section>
 
-        {/* Sucursal receptora */}
-        <Section title="Sucursal receptora" icon={<MapPin className="w-4 h-4" />}>
-          <Field label="Sucursal *">
+        {/* Sucursales */}
+        <Section title="Sucursales" icon={<MapPin className="w-4 h-4" />}>
+          <Field label="Sucursal de origen *">
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
@@ -575,6 +585,25 @@ export function NewShipment() {
                 })()}
               </>
             )}
+          </Field>
+          <Field label="Sucursal final">
+            {(() => {
+              const finalBranch = finalBranchId ? branches.find(b => b.id === finalBranchId) : null;
+              if (finalBranch) {
+                return (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                    <p className="text-sm font-semibold text-emerald-900">{finalBranch.name}</p>
+                    <p className="text-xs text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
+                    <p className="mt-1.5 text-[11px] text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-xs text-slate-500">Se asigna automáticamente al guardar el borrador, según el domicilio del destinatario.</p>
+                </div>
+              );
+            })()}
           </Field>
         </Section>
 
@@ -698,7 +727,7 @@ export function NewShipment() {
               className="mt-0.5 shrink-0 accent-amber-600"
             />
             <span className="text-sm font-semibold text-amber-900">
-              Entiendo que la sucursal receptora está al límite de capacidad y quiero crear el envío de todas formas
+              Entiendo que la sucursal de origen está al límite de capacidad y quiero crear el envío de todas formas
             </span>
           </label>
         )}

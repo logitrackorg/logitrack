@@ -15,12 +15,13 @@ import (
 // see CLAUDE.md and docs/specs for the immutability rules and which fields are
 // blocked from post-confirmation editing because they would change the price.
 type PricingService struct {
-	repo    repository.PricingConfigRepository
-	zoneSvc *ZoneService
+	repo       repository.PricingConfigRepository
+	zoneSvc    *ZoneService
+	branchRepo repository.BranchRepository
 }
 
-func NewPricingService(repo repository.PricingConfigRepository) *PricingService {
-	return &PricingService{repo: repo}
+func NewPricingService(repo repository.PricingConfigRepository, branchRepo repository.BranchRepository) *PricingService {
+	return &PricingService{repo: repo, branchRepo: branchRepo}
 }
 
 func (s *PricingService) SetZoneService(zoneSvc *ZoneService) {
@@ -45,6 +46,23 @@ func (s *PricingService) UpdateConfig(cfg model.PricingConfig) (model.PricingCon
 // Used by the /pricing/quote endpoint and during creation flows.
 func (s *PricingService) Quote(input PricingInput) (float64, model.PriceBreakdown) {
 	cfg := s.repo.Get()
+	// Resolve branch coordinates for distance calculation when branch IDs are provided.
+	if s.branchRepo != nil {
+		if input.OriginBranchID != "" {
+			if b, ok := s.branchRepo.GetByID(input.OriginBranchID); ok && b.Latitude != nil && b.Longitude != nil {
+				input.Origin.Latitude = b.Latitude
+				input.Origin.Longitude = b.Longitude
+				input.Origin.Province = b.Province
+			}
+		}
+		if input.FinalBranchID != "" {
+			if b, ok := s.branchRepo.GetByID(input.FinalBranchID); ok && b.Latitude != nil && b.Longitude != nil {
+				input.Destination.Latitude = b.Latitude
+				input.Destination.Longitude = b.Longitude
+				input.Destination.Province = b.Province
+			}
+		}
+	}
 	// Determinar si el destino cae en una zona peligrosa activa
 	if s.zoneSvc != nil && input.DeliveryMethod == model.DeliveryMethodLastMile &&
 		input.Destination.Latitude != nil && input.Destination.Longitude != nil {
@@ -57,14 +75,16 @@ func (s *PricingService) Quote(input PricingInput) (float64, model.PriceBreakdow
 // have a fully-formed Shipment in hand (e.g. seed loading or post-creation hooks).
 func (s *PricingService) CalculateForShipment(shipment model.Shipment) (float64, model.PriceBreakdown) {
 	return s.Quote(PricingInput{
-		WeightKg:     shipment.WeightKg,
-		PackageType:  shipment.PackageType,
-		ShipmentType: shipment.ShipmentType,
-		TimeWindow:   shipment.TimeWindow,
+		WeightKg:       shipment.WeightKg,
+		PackageType:    shipment.PackageType,
+		ShipmentType:   shipment.ShipmentType,
+		TimeWindow:     shipment.TimeWindow,
 		IsFragile:      shipment.IsFragile,
 		DeliveryMethod: shipment.DeliveryMethod,
 		Origin:         shipment.Sender.Address,
 		Destination:    shipment.Recipient.Address,
+		OriginBranchID: shipment.OriginBranchID,
+		FinalBranchID:  shipment.FinalBranchID,
 	})
 }
 
@@ -80,7 +100,10 @@ type PricingInput struct {
 	DeliveryMethod model.DeliveryMethod `json:"delivery_method"`
 	Origin         model.Address        `json:"origin"`
 	Destination    model.Address        `json:"destination"`
-	RiskyZone      bool                 `json:"-"` // calculado internamente, no expuesto
+	// When provided, branch coordinates override Origin/Destination for distance.
+	OriginBranchID string `json:"origin_branch_id"`
+	FinalBranchID  string `json:"final_branch_id"`
+	RiskyZone      bool   `json:"-"` // calculado internamente, no expuesto
 }
 
 func computePrice(cfg model.PricingConfig, in PricingInput) (float64, model.PriceBreakdown) {

@@ -27,6 +27,8 @@ type QuoteRequest struct {
 	DeliveryMethod model.DeliveryMethod `json:"delivery_method"`
 	Origin         model.Address        `json:"origin"          binding:"required"`
 	Destination    model.Address        `json:"destination"     binding:"required"`
+	OriginBranchID string               `json:"origin_branch_id"`
+	FinalBranchID  string               `json:"final_branch_id"`
 }
 
 type QuoteResponse struct {
@@ -62,6 +64,8 @@ func (h *PricingHandler) Quote(c *gin.Context) {
 		DeliveryMethod: deliveryMethod,
 		Origin:         req.Origin,
 		Destination:    req.Destination,
+		OriginBranchID: req.OriginBranchID,
+		FinalBranchID:  req.FinalBranchID,
 	})
 	c.JSON(http.StatusOK, QuoteResponse{Total: total, Currency: model.CurrencyARS, Breakdown: breakdown})
 }

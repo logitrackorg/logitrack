@@ -54,7 +54,7 @@ func main() {
 	customerRepo := repository.NewPostgresCustomerRepository(database)
 
 	pricingConfigRepo := repository.NewPostgresPricingConfigRepository(database)
-	pricingSvc := service.NewPricingService(pricingConfigRepo)
+	pricingSvc := service.NewPricingService(pricingConfigRepo, branchRepo)
 	pricingHandler := handler.NewPricingHandler(pricingSvc)
 
 	zoneRepo := repository.NewPostgresZoneRepository(database)

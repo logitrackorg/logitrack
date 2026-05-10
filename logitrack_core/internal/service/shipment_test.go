@@ -39,7 +39,7 @@ func newSetup() testSetup {
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := NewIncidentService(incidentRepo, shipmentRepo, eventStore, proj)
 	svc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
-	svc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository()))
+	svc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository(), nil))
 	return testSetup{svc, commentSvc, incidentSvc, shipmentRepo, commentRepo, incidentRepo}
 }
 

@@ -68,7 +68,7 @@ func newRoutingSetup() routingTestSetup {
 	commentRepo := repository.NewInMemoryCommentRepository()
 	commentSvc := NewCommentService(commentRepo, shipmentRepo)
 	shipmentSvc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, nil)
-	shipmentSvc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository()))
+	shipmentSvc.SetPricingService(NewPricingService(repository.NewInMemoryPricingConfigRepository(), nil))
 
 	vehicleRepo := repository.NewInMemoryVehicleRepository()
 	routeRepo := repository.NewInMemoryRouteRepository()

@@ -650,6 +650,8 @@ export function ShipmentDetail() {
           autoSaveStatus={draftAutoSaveStatus}
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
+          originBranchId={shipment.origin_branch_id}
+          finalBranchId={shipment.final_branch_id}
         />
       ) : (
         /* ── Read-only info grid ── */
@@ -1396,7 +1398,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, originBranchId, finalBranchId }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
@@ -1406,6 +1408,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
+  originBranchId?: string;
+  finalBranchId?: string;
 }) {
   const isMobile = useIsMobile();
   const [discardConfirm, setDiscardConfirm] = useState(false);
@@ -1453,6 +1457,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           delivery_method: form.delivery_method ?? "ultima_milla",
           origin: form.sender.address,
           destination: form.recipient.address,
+          origin_branch_id: originBranchId,
+          final_branch_id: finalBranchId,
         });
         setQuote(q);
       } catch {

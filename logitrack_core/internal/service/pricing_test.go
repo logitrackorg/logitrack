@@ -9,7 +9,7 @@ import (
 )
 
 func newPricingSvc() *PricingService {
-	return NewPricingService(repository.NewInMemoryPricingConfigRepository())
+	return NewPricingService(repository.NewInMemoryPricingConfigRepository(), nil)
 }
 
 func fPtr(f float64) *float64 { return &f }

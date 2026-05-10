@@ -20,6 +20,8 @@ export interface QuoteRequest {
   delivery_method?: string;
   origin: Address;
   destination: Address;
+  origin_branch_id?: string;
+  final_branch_id?: string;
 }
 
 export interface QuoteResponse {

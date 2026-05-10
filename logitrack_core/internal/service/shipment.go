@@ -342,11 +342,12 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		TimeWindow:          timeWindow,
 		DeliveryMethod:      deliveryMethod,
 		ReceivingBranchID:   req.ReceivingBranchID,
-		OriginBranchID:  req.ReceivingBranchID,
-		Status:          model.StatusDraft,
-		CurrentLocation: currentLocation,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		OriginBranchID:      req.ReceivingBranchID,
+		FinalBranchID:       s.resolveFinalBranch(req.Recipient),
+		Status:              model.StatusDraft,
+		CurrentLocation:     currentLocation,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 		// EstimatedDeliveryAt is intentionally left as zero — it will be
 		// calculated with definitive data at the moment of confirmation.
 	}
@@ -401,6 +402,10 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	existing.TimeWindow = req.TimeWindow
 	existing.DeliveryMethod = deliveryMethod
 	existing.ReceivingBranchID = req.ReceivingBranchID
+	if req.ReceivingBranchID != "" {
+		existing.OriginBranchID = req.ReceivingBranchID
+	}
+	existing.FinalBranchID = s.resolveFinalBranch(req.Recipient)
 	existing.UpdatedAt = clock.Now().UTC()
 	// Prefer branch ID derived from receiving branch; fall back to origin city lookup.
 	if req.ReceivingBranchID != "" {
