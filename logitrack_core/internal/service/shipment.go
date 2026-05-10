@@ -308,6 +308,10 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 }
 
 func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment, error) {
+	req.Sender.DNI = strings.TrimSpace(req.Sender.DNI)
+	req.Recipient.DNI = strings.TrimSpace(req.Recipient.DNI)
+	req.Sender.Name = strings.TrimSpace(req.Sender.Name)
+	req.Recipient.Name = strings.TrimSpace(req.Recipient.Name)
 	if req.Sender.DNI != "" {
 		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
@@ -325,12 +329,12 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
-		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Sender.Email), "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	if req.Recipient.Email != "" {
-		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Recipient.Email), "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
@@ -378,6 +382,10 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 }
 
 func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest) (model.Shipment, error) {
+	req.Sender.DNI = strings.TrimSpace(req.Sender.DNI)
+	req.Recipient.DNI = strings.TrimSpace(req.Recipient.DNI)
+	req.Sender.Name = strings.TrimSpace(req.Sender.Name)
+	req.Recipient.Name = strings.TrimSpace(req.Recipient.Name)
 	if req.Sender.DNI != "" {
 		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
@@ -395,12 +403,12 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
-		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Sender.Email), "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	if req.Recipient.Email != "" {
-		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Recipient.Email), "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
