@@ -18,14 +18,17 @@ const (
 // milla e inter-sucursal. El apply es por sucursal — operator/supervisor
 // solo aplican los items de su propia sucursal.
 type GlobalRoutingPlan struct {
-	ID          string       `json:"id"`
-	PlanDate    string       `json:"plan_date"`             // YYYY-MM-DD
-	Status      PlanStatus   `json:"status"`
-	BranchPlans []BranchPlan `json:"branch_plans"`
-	GeneratedAt time.Time    `json:"generated_at"`
-	AppliedAt   *time.Time   `json:"applied_at,omitempty"`
-	AppliedBy   string       `json:"applied_by,omitempty"`
-	Log         GlobalPlanLog `json:"log"`
+	ID              string       `json:"id"`
+	PlanDate        string       `json:"plan_date"`             // YYYY-MM-DD
+	Status          PlanStatus   `json:"status"`
+	BranchPlans     []BranchPlan `json:"branch_plans"`
+	GeneratedAt     time.Time    `json:"generated_at"`
+	AppliedAt       *time.Time   `json:"applied_at,omitempty"`
+	AppliedBy       string       `json:"applied_by,omitempty"`
+	Log             GlobalPlanLog `json:"log"`
+	// AppliedBranches lista las sucursales que ya completaron su apply.
+	// Cuando todas las sucursales del plan están en esta lista, el plan pasa a "applied".
+	AppliedBranches []string `json:"applied_branches"`
 }
 
 // BranchPlan agrupa el plan de una sucursal dentro del GlobalRoutingPlan.

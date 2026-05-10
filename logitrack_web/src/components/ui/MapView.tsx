@@ -107,6 +107,11 @@ export function MapView({
 
   const [loading, setLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
+  const [followMode, setFollowMode] = useState(false);
+  const followModeRef = useRef(false);
+  const programmaticPanRef = useRef(false);
+
+  useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
   // Inicializar mapa
   useEffect(() => {
@@ -122,6 +127,12 @@ export function MapView({
       attribution: "© OpenStreetMap contributors",
       maxZoom: 19,
     }).addTo(map);
+
+    map.on("dragstart", () => {
+      if (!programmaticPanRef.current) {
+        setFollowMode(false);
+      }
+    });
 
     mapInstance.current = map;
     zonesLayerRef.current = L.layerGroup().addTo(map);
@@ -217,6 +228,13 @@ export function MapView({
       iconAnchor: [16, 16],
     });
     L.marker([userLocation.lat, userLocation.lng], { icon }).addTo(userMarkerLayer.current!);
+
+    // Modo seguimiento: centrar el mapa en la posición del chofer
+    if (followModeRef.current) {
+      programmaticPanRef.current = true;
+      mapInstance.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+      setTimeout(() => { programmaticPanRef.current = false; }, 600);
+    }
 
     // En simulación: split local sin llamar a OSRM
     if (simulationMode === "simulate") {
@@ -492,14 +510,22 @@ export function MapView({
         </div>
       )}
 
-      {/* Botón centrar en mi posición */}
+      {/* Botón seguimiento / centrar */}
       {userLocation && (
         <button
-          className="recenter-btn"
-          onClick={() => mapInstance.current?.flyTo([userLocation.lat, userLocation.lng], 16)}
-          title="Centrar en mi posición"
+          className={`recenter-btn${followMode ? " recenter-btn--active" : ""}`}
+          onClick={() => {
+            const next = !followMode;
+            setFollowMode(next);
+            if (next) {
+              programmaticPanRef.current = true;
+              mapInstance.current?.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
+              setTimeout(() => { programmaticPanRef.current = false; }, 600);
+            }
+          }}
+          title={followMode ? "Desactivar seguimiento" : "Seguir mi posición"}
         >
-          <Crosshair className="w-4 h-4" />
+          {followMode ? <Navigation className="w-4 h-4" /> : <Crosshair className="w-4 h-4" />}
         </button>
       )}
 

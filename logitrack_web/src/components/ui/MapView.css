@@ -319,6 +319,16 @@
   background: #f1f5f9;
 }
 
+.recenter-btn--active {
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.4);
+}
+
+.recenter-btn--active:hover {
+  background: #1d4ed8;
+}
+
 /* ── Banner de simulación ── */
 .sim-banner {
   position: absolute;

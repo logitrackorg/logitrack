@@ -307,10 +307,7 @@ func (s *RoutingService) binPackLastMile(
 	pickBucket := func(sh model.Shipment) *bucket {
 		var chosen *bucket
 		for _, b := range buckets {
-			if b.existingCount+len(b.shipments) >= cfg.MaxShipmentsPerDriver {
-				continue
-			}
-			if b.existingWeightKg+b.weight+sh.WeightKg > cfg.MaxWeightKgPerDriver {
+			if b.existingWeightKg+b.weight+sh.WeightKg > 150 {
 				continue
 			}
 			// Load-balancing por carga total proyectada del chofer.
@@ -1063,14 +1060,13 @@ func (s *RoutingService) lastMileVRP(
 		count, weight := s.routeSvc.PendingLoad(d.ID, today)
 		vrpDrivers[i] = vrp.Driver{
 			ID:               d.ID,
-			MaxShipments:     cfg.MaxShipmentsPerDriver,
-			MaxWeightKg:      cfg.MaxWeightKgPerDriver,
+			MaxWeightKg: 150,
 			ExistingCount:    count,
 			ExistingWeightKg: weight,
 		}
 	}
 
-	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, cfg.AvgSpeedKmh)
+	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, 25)
 
 	// DepartureMin: si el operador genera el plan después de las 8:00, las
 	// horas estimadas tienen que partir de la hora actual, no de las 8:00.
@@ -1089,12 +1085,12 @@ func (s *RoutingService) lastMileVRP(
 		DurationMatrix:          dur,
 		DistanceMatrix:          dist,
 		DepartureMin:            departureMin,
-		ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
-		DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
-		MorningWindowStartMin:   float64(cfg.MorningWindowStartHour) * 60,
-		MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
-		AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
-		AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
+		ServiceTimeMin:          10,
+		DayEndMin:               18 * 60,
+		MorningWindowStartMin:   8 * 60,
+		MorningWindowEndMin:     14 * 60,
+		AfternoonWindowStartMin: 12 * 60,
+		AfternoonWindowEndMin:   18 * 60,
 		EnforceTimeWindows:      cfg.EnforceTimeWindows,
 	}
 
@@ -1194,11 +1190,7 @@ func (s *RoutingService) lastMileVRP(
 		for i := range out {
 			a := &out[i]
 			drv := vrpDriverByID(vrpDrivers, a.DriverID)
-			projCount := len(a.Shipments) + a.ExistingCount + 1
 			projWeight := a.TotalWeightKg + a.ExistingWeightKg + sh.WeightKg
-			if projCount > drv.MaxShipments {
-				continue
-			}
 			if projWeight > drv.MaxWeightKg {
 				continue
 			}
@@ -1372,9 +1364,15 @@ func (s *RoutingService) GenerateAndPersistGlobalPlan(ctx context.Context) (*mod
 
 // GetTodayPlan devuelve el plan global del día actual, filtrado por sucursal si el
 // rol del usuario es operator o supervisor. Managers y admins ven el plan completo.
+//
+// Adicionalmente filtra cards de choferes que ya iniciaron su ruta del día y
+// vehículos que ya están en tránsito: no aportan a la operativa actual y los
+// envíos pendientes (no aplicados) se mueven a "Sin asignar" para que el
+// operador pueda reasignarlos vía drag-and-drop o regenerar.
 func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*model.GlobalRoutingPlan, error) {
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
+	today := model.NewDateOnly(local)
 
 	plan, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
@@ -1396,11 +1394,102 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 		plan.BranchPlans = filtered
 	}
 
+	// Marcar cards de chofer/vehículo en marcha como informativas (runtime-only).
+	// Sus envíos pendientes (no aplicados) van a "Sin asignar" para que el
+	// operador pueda reasignarlos. Los aplicados se quedan en la card.
+	allVehicles := s.vehicleRepo.List()
+	for i := range plan.BranchPlans {
+		bp := &plan.BranchPlans[i]
+
+		for j := range bp.Plan.LastMile {
+			lm := &bp.Plan.LastMile[j]
+			if err := s.routeSvc.CanAssignToRoute(lm.DriverID, today); err != nil {
+				bp.Plan.Unassigned = append(bp.Plan.Unassigned, s.movePendingToUnassigned(lm.Shipments, lm.AppliedShipments, lastMileDestLabel, "chofer_inicio_ruta")...)
+				lm.RouteStarted = true
+				lm.Shipments = append([]string(nil), lm.AppliedShipments...) // solo muestra los que efectivamente lleva
+			}
+		}
+
+		for j := range bp.Plan.InterBranch {
+			ib := &bp.Plan.InterBranch[j]
+			v, ok := s.vehicleRepo.GetByID(ib.VehicleID)
+			if ok && v.Status == model.VehicleStatusInTransit {
+				bp.Plan.Unassigned = append(bp.Plan.Unassigned, s.movePendingToUnassigned(ib.Shipments, ib.AppliedShipments, ib.DestinationBranch, "vehiculo_en_viaje")...)
+				ib.InTransit = true
+				ib.Shipments = append([]string(nil), ib.AppliedShipments...)
+			}
+		}
+
+		// Vehículos entrantes: de otras sucursales en tránsito hacia esta.
+		incoming := make([]model.IncomingVehicle, 0)
+		for _, v := range allVehicles {
+			if v.Status != model.VehicleStatusInTransit {
+				continue
+			}
+			if v.DestinationBranch == nil || *v.DestinationBranch != bp.BranchID {
+				continue
+			}
+			origin := ""
+			if v.AssignedBranch != nil {
+				origin = *v.AssignedBranch
+			}
+			weight := 0.0
+			tids := append([]string(nil), v.AssignedShipments...)
+			for _, tid := range tids {
+				if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+					weight += sh.WeightKg
+				}
+			}
+			incoming = append(incoming, model.IncomingVehicle{
+				VehicleID:     v.ID,
+				LicensePlate:  v.LicensePlate,
+				OriginBranch:  origin,
+				Shipments:     tids,
+				TotalWeightKg: weight,
+				CapacityKg:    v.CapacityKg,
+			})
+		}
+		bp.Plan.IncomingVehicles = incoming
+	}
+
 	return plan, nil
 }
 
-// RegenerateTodayPlan regenera y sobreescribe el plan del día, siempre que no
-// esté en status "applied". Solo managers y admins pueden llamar a esto.
+// movePendingToUnassigned construye UnassignedShipment para los envíos que están
+// en `shipments` pero no en `applied` — los aplicados ya están con el chofer/vehículo
+// en marcha y no se mueven, los pendientes vuelven a la lista para reasignar.
+func (s *RoutingService) movePendingToUnassigned(shipments, applied []string, destination, reason string) []model.UnassignedShipment {
+	appliedSet := make(map[string]bool, len(applied))
+	for _, tid := range applied {
+		appliedSet[tid] = true
+	}
+	out := make([]model.UnassignedShipment, 0)
+	for _, tid := range shipments {
+		if appliedSet[tid] {
+			continue
+		}
+		sh, err := s.shipmentRepo.GetByTrackingID(tid)
+		if err != nil {
+			out = append(out, model.UnassignedShipment{
+				TrackingID:  tid,
+				Destination: destination,
+				Reason:      reason,
+			})
+			continue
+		}
+		out = append(out, model.UnassignedShipment{
+			TrackingID:  tid,
+			Destination: destination,
+			Reason:      reason,
+			WeightKg:    sh.WeightKg,
+			Priority:    sh.Priority,
+		})
+	}
+	return out
+}
+
+// RegenerateTodayPlan regenera y sobreescribe el plan global del día.
+// Solo managers y admins deben llamar a esto. No sobreescribe si status == applied.
 func (s *RoutingService) RegenerateTodayPlan(ctx context.Context) (*model.GlobalRoutingPlan, error) {
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
@@ -1416,60 +1505,647 @@ func (s *RoutingService) RegenerateTodayPlan(ctx context.Context) (*model.Global
 	return s.GenerateAndPersistGlobalPlan(ctx)
 }
 
-// ApplyBranchPlan aplica los items del plan global correspondientes a una sucursal.
-// Es el reemplazo de ApplyPlan: en lugar de recibir el plan completo en el body,
-// lo lee desde el repositorio y aplica solo los items de la sucursal del usuario.
-func (s *RoutingService) ApplyBranchPlan(ctx context.Context, branchID string, username string) (model.ApplyPlanResponse, error) {
+// RegenerateBranchPlan regenera el plan solo para una sucursal y actualiza
+// el BranchPlan correspondiente dentro del GlobalRoutingPlan persistido.
+// Si no existe plan para hoy, crea uno nuevo con solo esa sucursal.
+// Operadores y supervisores usan este método restringido a su propia sucursal.
+func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID string) (*model.GlobalRoutingPlan, error) {
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
 
-	plan, err := s.planRepo.GetByDate(planDate)
+	// Generar el plan fresco para esta sucursal.
+	branchPlan, err := s.GeneratePlan(ctx, branchID)
 	if err != nil {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo leer el plan: %w", err)
-	}
-	if plan == nil {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para hoy")
-	}
-	if plan.Status == model.PlanStatusApplied {
-		return model.ApplyPlanResponse{}, fmt.Errorf("el plan de hoy ya fue aplicado")
+		return nil, fmt.Errorf("error generando plan para sucursal %s: %w", branchID, err)
 	}
 
-	// Marcar en applying (lock optimista).
-	if err := s.planRepo.UpdateStatus(planDate, model.PlanStatusApplying); err != nil {
-		return model.ApplyPlanResponse{}, fmt.Errorf("error actualizando estado del plan: %w", err)
+	// Leer el plan global del día (puede no existir todavía).
+	global, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return nil, err
 	}
 
-	// Buscar el BranchPlan de esta sucursal.
-	var branchPlan *model.RoutingPlan
-	for i := range plan.BranchPlans {
-		if plan.BranchPlans[i].BranchID == branchID {
-			bp := plan.BranchPlans[i].Plan
-			branchPlan = &bp
+	if global == nil {
+		// No hay plan global aún — crear uno con solo esta sucursal.
+		global = &model.GlobalRoutingPlan{
+			ID:          mustNewUUID(),
+			PlanDate:    planDate,
+			Status:      model.PlanStatusPending,
+			BranchPlans: []model.BranchPlan{},
+			GeneratedAt: clock.Now().UTC(),
+		}
+	}
+
+	// Reemplazar o agregar el BranchPlan de esta sucursal.
+	found := false
+	for i := range global.BranchPlans {
+		if global.BranchPlans[i].BranchID == branchID {
+			global.BranchPlans[i].Plan = branchPlan
+			found = true
 			break
 		}
 	}
-	if branchPlan == nil {
-		_ = s.planRepo.UpdateStatus(planDate, model.PlanStatusPending)
-		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan para la sucursal %s en el plan de hoy", branchID)
+	if !found {
+		global.BranchPlans = append(global.BranchPlans, model.BranchPlan{
+			BranchID: branchID,
+			Plan:     branchPlan,
+		})
 	}
 
-	// Aplicar usando el flujo existente de ApplyPlan con el plan de la sucursal.
-	req := model.ApplyPlanRequest{
-		BranchID: branchID,
-		Plan:     *branchPlan,
+	// Recalcular métricas globales.
+	total, assigned, unassigned := 0, 0, 0
+	for _, bp := range global.BranchPlans {
+		for _, lm := range bp.Plan.LastMile {
+			assigned += len(lm.Shipments)
+		}
+		for _, ib := range bp.Plan.InterBranch {
+			assigned += len(ib.Shipments)
+		}
+		unassigned += len(bp.Plan.Unassigned)
 	}
-	resp, err := s.ApplyPlan(ctx, branchID, req, username)
+	total = assigned + unassigned
+	global.Log = model.GlobalPlanLog{
+		TotalCandidates: total,
+		TotalAssigned:   assigned,
+		TotalUnassigned: unassigned,
+		TotalBranches:   len(global.BranchPlans),
+	}
+
+	if err := s.planRepo.Upsert(global); err != nil {
+		return nil, fmt.Errorf("error persistiendo plan: %w", err)
+	}
+
+	log.Printf("[routing-global] sucursal %s regenerada: %d asignados, %d sin asignar",
+		branchID, assigned-unassigned, unassigned)
+
+	// Enriquecer branchPlan en memoria con los vehículos en tránsito hacia esta
+	// sucursal — lo mismo que hace GetTodayPlan pero sin releer de DB, evitando
+	// problemas con el ON CONFLICT que protege planes ya applied.
+	allVehicles := s.vehicleRepo.List()
+	incoming := make([]model.IncomingVehicle, 0)
+	for _, v := range allVehicles {
+		if v.Status != model.VehicleStatusInTransit {
+			continue
+		}
+		if v.DestinationBranch == nil || *v.DestinationBranch != branchID {
+			continue
+		}
+		origin := ""
+		if v.AssignedBranch != nil {
+			origin = *v.AssignedBranch
+		}
+		weight := 0.0
+		tids := append([]string(nil), v.AssignedShipments...)
+		for _, tid := range tids {
+			if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+				weight += sh.WeightKg
+			}
+		}
+		incoming = append(incoming, model.IncomingVehicle{
+			VehicleID:     v.ID,
+			LicensePlate:  v.LicensePlate,
+			OriginBranch:  origin,
+			Shipments:     tids,
+			TotalWeightKg: weight,
+			CapacityKg:    v.CapacityKg,
+		})
+	}
+	branchPlan.IncomingVehicles = incoming
+
+	filtered := &model.GlobalRoutingPlan{
+		ID:          global.ID,
+		PlanDate:    global.PlanDate,
+		Status:      global.Status,
+		GeneratedAt: global.GeneratedAt,
+		AppliedAt:   global.AppliedAt,
+		AppliedBy:   global.AppliedBy,
+		Log:         global.Log,
+		BranchPlans: []model.BranchPlan{{BranchID: branchID, Plan: branchPlan}},
+	}
+	return filtered, nil
+}
+
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// allApplied devuelve true cuando todos los envíos de `shipments` están en `applied`.
+func allApplied(shipments, applied []string) bool {
+	if len(shipments) == 0 {
+		return false
+	}
+	done := make(map[string]bool, len(applied))
+	for _, tid := range applied {
+		done[tid] = true
+	}
+	for _, tid := range shipments {
+		if !done[tid] {
+			return false
+		}
+	}
+	return true
+}
+
+func mustNewUUID() string {
+	id, err := uuidGen()
 	if err != nil {
-		_ = s.planRepo.UpdateStatus(planDate, model.PlanStatusPending)
-		return model.ApplyPlanResponse{}, err
+		return fmt.Sprintf("fallback-%d", clock.Now().UnixNano())
+	}
+	return id
+}
+
+// SaveEditedPlanForBranch mergea un plan editado en cliente (drag-and-drop)
+// sobre el plan persistido para la sucursal indicada. Preserva AppliedShipments
+// del DB filtrándolos a los Shipments actuales del plan editado: si un envío
+// ya estaba aplicado y sigue presente en el assignment, mantiene su flag;
+// si fue movido a otro lugar, se quita de la lista de aplicados.
+// El usuario no puede des-aplicar items — solo agregar nuevos pendientes.
+func (s *RoutingService) SaveEditedPlanForBranch(branchID string, edited *model.RoutingPlan) error {
+	if edited == nil {
+		return nil
+	}
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	global, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return err
+	}
+	if global == nil {
+		return fmt.Errorf("no hay plan generado para hoy")
 	}
 
-	// Marcar applied si no hubo errores críticos.
-	if err := s.planRepo.MarkApplied(planDate, username, clock.Now().UTC()); err != nil {
-		log.Printf("[routing-global] advertencia: no se pudo marcar el plan como applied: %v", err)
+	bpIdx := -1
+	for i := range global.BranchPlans {
+		if global.BranchPlans[i].BranchID == branchID {
+			bpIdx = i
+			break
+		}
+	}
+	if bpIdx == -1 {
+		return fmt.Errorf("no hay plan para la sucursal %s", branchID)
 	}
 
+	// Snapshot de AppliedShipments desde DB antes de sobreescribir.
+	dbAppliedByVehicle := map[string][]string{}
+	for _, ib := range global.BranchPlans[bpIdx].Plan.InterBranch {
+		dbAppliedByVehicle[ib.VehicleID] = ib.AppliedShipments
+	}
+	dbAppliedByDriver := map[string][]string{}
+	for _, lm := range global.BranchPlans[bpIdx].Plan.LastMile {
+		dbAppliedByDriver[lm.DriverID] = lm.AppliedShipments
+	}
+
+	// Sobreescribir el plan de la sucursal con el editado.
+	global.BranchPlans[bpIdx].Plan = *edited
+
+	// Restaurar AppliedShipments preservando solo los que siguen en Shipments.
+	for i := range global.BranchPlans[bpIdx].Plan.InterBranch {
+		ib := &global.BranchPlans[bpIdx].Plan.InterBranch[i]
+		ib.AppliedShipments = filterToCurrent(dbAppliedByVehicle[ib.VehicleID], ib.Shipments)
+		ib.Applied = allApplied(ib.Shipments, ib.AppliedShipments)
+	}
+	for i := range global.BranchPlans[bpIdx].Plan.LastMile {
+		lm := &global.BranchPlans[bpIdx].Plan.LastMile[i]
+		lm.AppliedShipments = filterToCurrent(dbAppliedByDriver[lm.DriverID], lm.Shipments)
+		lm.Applied = allApplied(lm.Shipments, lm.AppliedShipments)
+	}
+
+	return s.planRepo.Upsert(global)
+}
+
+// filterToCurrent devuelve los elementos de `applied` que aún están en `current`.
+func filterToCurrent(applied, current []string) []string {
+	if len(applied) == 0 {
+		return nil
+	}
+	currentSet := make(map[string]bool, len(current))
+	for _, tid := range current {
+		currentSet[tid] = true
+	}
+	out := make([]string, 0, len(applied))
+	for _, tid := range applied {
+		if currentSet[tid] {
+			out = append(out, tid)
+		}
+	}
+	return out
+}
+
+// ApplyPlanItems aplica ítems del plan persistido con granularidad configurable:
+//   - vehicleID != "" → aplica solo ese despacho inter-sucursal
+//   - driverID  != "" → aplica solo esa ruta de última milla
+//   - ambos vacíos    → aplica todos los ítems pendientes de la sucursal
+//
+// Si edited != nil, primero mergea esos cambios en DB (preservando AppliedShipments)
+// y después aplica. Esto permite que el operador modifique el plan vía drag-and-drop
+// y aplique solo el ítem afectado en una sola request.
+func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, edited *model.RoutingPlan, vehicleID, driverID, username string) (model.ApplyPlanResponse, error) {
+	if edited != nil {
+		if err := s.SaveEditedPlanForBranch(branchID, edited); err != nil {
+			return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo sincronizar el plan editado: %w", err)
+		}
+	}
+
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	global, err := s.planRepo.GetByDate(planDate)
+	if err != nil {
+		return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo leer el plan: %w", err)
+	}
+	if global == nil {
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para hoy")
+	}
+
+	// Encontrar el BranchPlan de la sucursal.
+	bpIdx := -1
+	for i := range global.BranchPlans {
+		if global.BranchPlans[i].BranchID == branchID {
+			bpIdx = i
+			break
+		}
+	}
+	if bpIdx == -1 {
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan para la sucursal %s", branchID)
+	}
+
+	bp := &global.BranchPlans[bpIdx]
+	now := clock.Now().UTC()
+	items := make([]model.ApplyResultItem, 0)
+
+	// --- Inter-sucursal ---
+	for i := range bp.Plan.InterBranch {
+		asgmt := &bp.Plan.InterBranch[i]
+		if vehicleID != "" && asgmt.VehicleID != vehicleID {
+			continue
+		}
+		if driverID != "" {
+			continue
+		}
+
+		// Calcular qué envíos de este assignment aún no fueron aplicados.
+		alreadyApplied := make(map[string]bool, len(asgmt.AppliedShipments))
+		for _, tid := range asgmt.AppliedShipments {
+			alreadyApplied[tid] = true
+		}
+		pending := make([]string, 0)
+		for _, tid := range asgmt.Shipments {
+			if !alreadyApplied[tid] {
+				pending = append(pending, tid)
+			}
+		}
+		if len(pending) == 0 {
+			continue // todos los envíos actuales ya fueron aplicados
+		}
+
+		target := "vehicle:" + asgmt.LicensePlate
+		v, ok := s.vehicleRepo.GetByID(asgmt.VehicleID)
+		if !ok {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "vehiculo_no_encontrado"))
+			}
+			continue
+		}
+		if v.AssignedBranch == nil || *v.AssignedBranch != branchID {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "vehiculo_no_pertenece_a_sucursal"))
+			}
+			continue
+		}
+		if v.Status != model.VehicleStatusAvailable && v.Status != model.VehicleStatusLoading {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "vehiculo_no_disponible"))
+			}
+			continue
+		}
+		if v.DestinationBranch != nil && *v.DestinationBranch != asgmt.DestinationBranch {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "vehiculo_destino_diferente"))
+			}
+			continue
+		}
+		if v.DestinationBranch == nil {
+			dest := asgmt.DestinationBranch
+			if err := s.vehicleRepo.SetDestinationBranch(v.ID, &dest); err != nil {
+				for _, tid := range pending {
+					items = append(items, failedItem(tid, target, "error_seteando_destino"))
+				}
+				continue
+			}
+		}
+
+		currentLoad := 0.0
+		for _, tid := range v.AssignedShipments {
+			if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+				currentLoad += sh.WeightKg
+			}
+		}
+
+		anyApplied := false
+		for _, tid := range pending {
+			sh, err := s.shipmentRepo.GetByTrackingID(tid)
+			if err != nil {
+				items = append(items, failedItem(tid, target, "envio_no_encontrado"))
+				continue
+			}
+			if sh.ReceivingBranchID != branchID {
+				items = append(items, failedItem(tid, target, "envio_no_pertenece_a_sucursal"))
+				continue
+			}
+			if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub {
+				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
+				continue
+			}
+			if currentLoad+sh.WeightKg > v.CapacityKg {
+				items = append(items, failedItem(tid, target, "capacidad_excedida"))
+				continue
+			}
+			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
+			if _, err := s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
+				Status:    model.StatusLoaded,
+				ChangedBy: username,
+				Location:  branchID,
+				Notes:     "Cargado en " + v.LicensePlate + " vía planificador de ruteo",
+			}); err != nil {
+				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
+			currentLoad += sh.WeightKg
+			anyApplied = true
+			asgmt.AppliedShipments = append(asgmt.AppliedShipments, tid)
+			items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
+		}
+
+		if anyApplied {
+			if v.Status == model.VehicleStatusAvailable {
+				_ = s.vehicleRepo.UpdateStatusByUser(v.ID, model.VehicleStatusLoading, username)
+			}
+			// Applied = true solo cuando todos los envíos actuales están aplicados.
+			asgmt.Applied = allApplied(asgmt.Shipments, asgmt.AppliedShipments)
+			if asgmt.Applied {
+				asgmt.AppliedAt = &now
+				asgmt.AppliedBy = username
+			}
+		}
+	}
+
+	// --- Última milla ---
+	today := model.NewDateOnly(now.In(clock.LocalTZ))
+	for i := range bp.Plan.LastMile {
+		asgmt := &bp.Plan.LastMile[i]
+		if driverID != "" && asgmt.DriverID != driverID {
+			continue
+		}
+		if vehicleID != "" {
+			continue
+		}
+
+		alreadyApplied := make(map[string]bool, len(asgmt.AppliedShipments))
+		for _, tid := range asgmt.AppliedShipments {
+			alreadyApplied[tid] = true
+		}
+		pending := make([]string, 0)
+		for _, tid := range asgmt.Shipments {
+			if !alreadyApplied[tid] {
+				pending = append(pending, tid)
+			}
+		}
+		if len(pending) == 0 {
+			continue
+		}
+
+		target := "driver:" + asgmt.DriverID
+		if err := s.routeSvc.CanAssignToRoute(asgmt.DriverID, today); err != nil {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "ruta_ya_iniciada"))
+			}
+			continue
+		}
+
+		anyApplied := false
+		for _, tid := range pending {
+			sh, err := s.shipmentRepo.GetByTrackingID(tid)
+			if err != nil {
+				items = append(items, failedItem(tid, target, "envio_no_encontrado"))
+				continue
+			}
+			if sh.ReceivingBranchID != branchID {
+				items = append(items, failedItem(tid, target, "envio_no_pertenece_a_sucursal"))
+				continue
+			}
+			if sh.Status != model.StatusAtHub && sh.Status != model.StatusRedeliveryScheduled {
+				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
+				continue
+			}
+			if _, err := s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
+				Status:    model.StatusOutForDelivery,
+				ChangedBy: username,
+				DriverID:  asgmt.DriverID,
+				Notes:     "Asignado vía planificador de ruteo",
+			}); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
+			_ = s.routeSvc.RemoveShipmentFromTodayRoute(tid)
+			if err := s.routeSvc.AddShipmentToDriverRoute(asgmt.DriverID, tid, today); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
+			anyApplied = true
+			asgmt.AppliedShipments = append(asgmt.AppliedShipments, tid)
+			items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
+		}
+
+		if anyApplied {
+			asgmt.Applied = allApplied(asgmt.Shipments, asgmt.AppliedShipments)
+			if asgmt.Applied {
+				asgmt.AppliedAt = &now
+				asgmt.AppliedBy = username
+			}
+		}
+	}
+
+	// Determinar si toda la sucursal quedó aplicada.
+	branchFullyApplied := true
+	for _, ib := range bp.Plan.InterBranch {
+		if !ib.Applied {
+			branchFullyApplied = false
+			break
+		}
+	}
+	if branchFullyApplied {
+		for _, lm := range bp.Plan.LastMile {
+			if !lm.Applied {
+				branchFullyApplied = false
+				break
+			}
+		}
+	}
+	if branchFullyApplied {
+		alreadyInList := false
+		for _, b := range global.AppliedBranches {
+			if b == branchID {
+				alreadyInList = true
+				break
+			}
+		}
+		if !alreadyInList {
+			global.AppliedBranches = append(global.AppliedBranches, branchID)
+		}
+	}
+
+	// El plan global pasa a "applied" solo cuando todas las sucursales aplicaron.
+	allBranchesApplied := len(global.AppliedBranches) == len(global.BranchPlans) && len(global.BranchPlans) > 0
+	if allBranchesApplied {
+		global.Status = model.PlanStatusApplied
+		t := now
+		global.AppliedAt = &t
+		global.AppliedBy = username
+	}
+
+	// Persistir el plan actualizado.
+	if err := s.planRepo.Upsert(global); err != nil {
+		log.Printf("[routing-global] advertencia: no se pudo persistir estado del plan: %v", err)
+	}
+
+	resp := model.ApplyPlanResponse{Items: items}
+	for _, it := range items {
+		if it.Status == "applied" {
+			resp.AppliedCount++
+		} else {
+			resp.FailedCount++
+		}
+	}
 	return resp, nil
+}
+
+// ApplyBranchPlan aplica todos los ítems pendientes de una sucursal.
+// Wrapper de conveniencia sobre ApplyPlanItems.
+func (s *RoutingService) ApplyBranchPlan(ctx context.Context, branchID, username string) (model.ApplyPlanResponse, error) {
+	return s.ApplyPlanItems(ctx, branchID, nil, "", "", username)
+}
+
+// SyncAppliedItems actualiza el estado Applied de los ítems del plan persistido
+// cuando se usó el flujo legacy (plan editado enviado en body). Se llama en
+// background después del apply — es best-effort, un fallo no afecta la operativa.
+func (s *RoutingService) SyncAppliedItems(branchID string, applied *model.RoutingPlan, username string) error {
+	if applied == nil {
+		return nil
+	}
+	local := clock.Now().In(clock.LocalTZ)
+	planDate := local.Format("2006-01-02")
+
+	global, err := s.planRepo.GetByDate(planDate)
+	if err != nil || global == nil {
+		return err
+	}
+
+	now := clock.Now().UTC()
+	bpIdx := -1
+	for i := range global.BranchPlans {
+		if global.BranchPlans[i].BranchID == branchID {
+			bpIdx = i
+			break
+		}
+	}
+	if bpIdx == -1 {
+		return nil
+	}
+
+	bp := &global.BranchPlans[bpIdx]
+
+	// Marcar como applied los envíos de vehículos que estaban en el plan aplicado.
+	appliedVehicleShipments := map[string][]string{} // vehicleID → []trackingID
+	for _, ib := range applied.InterBranch {
+		appliedVehicleShipments[ib.VehicleID] = ib.Shipments
+	}
+	for i := range bp.Plan.InterBranch {
+		ib := &bp.Plan.InterBranch[i]
+		tids, ok := appliedVehicleShipments[ib.VehicleID]
+		if !ok {
+			continue
+		}
+		for _, tid := range tids {
+			if !contains(ib.AppliedShipments, tid) {
+				ib.AppliedShipments = append(ib.AppliedShipments, tid)
+			}
+		}
+		ib.Applied = allApplied(ib.Shipments, ib.AppliedShipments)
+		if ib.Applied {
+			ib.AppliedAt = &now
+			ib.AppliedBy = username
+		}
+	}
+
+	// Marcar como applied los envíos de choferes que estaban en el plan aplicado.
+	appliedDriverShipments := map[string][]string{} // driverID → []trackingID
+	for _, lm := range applied.LastMile {
+		appliedDriverShipments[lm.DriverID] = lm.Shipments
+	}
+	for i := range bp.Plan.LastMile {
+		lm := &bp.Plan.LastMile[i]
+		tids, ok := appliedDriverShipments[lm.DriverID]
+		if !ok {
+			continue
+		}
+		for _, tid := range tids {
+			if !contains(lm.AppliedShipments, tid) {
+				lm.AppliedShipments = append(lm.AppliedShipments, tid)
+			}
+		}
+		lm.Applied = allApplied(lm.Shipments, lm.AppliedShipments)
+		if lm.Applied {
+			lm.AppliedAt = &now
+			lm.AppliedBy = username
+		}
+	}
+
+	// Verificar si la sucursal quedó completamente aplicada.
+	branchDone := true
+	for _, ib := range bp.Plan.InterBranch {
+		if !ib.Applied {
+			branchDone = false
+			break
+		}
+	}
+	if branchDone {
+		for _, lm := range bp.Plan.LastMile {
+			if !lm.Applied {
+				branchDone = false
+				break
+			}
+		}
+	}
+	if branchDone {
+		alreadyIn := false
+		for _, b := range global.AppliedBranches {
+			if b == branchID {
+				alreadyIn = true
+				break
+			}
+		}
+		if !alreadyIn {
+			global.AppliedBranches = append(global.AppliedBranches, branchID)
+		}
+	}
+
+	if len(global.AppliedBranches) == len(global.BranchPlans) && len(global.BranchPlans) > 0 {
+		global.Status = model.PlanStatusApplied
+		global.AppliedAt = &now
+		global.AppliedBy = username
+	}
+
+	return s.planRepo.Upsert(global)
 }
 
 // newUUID genera un UUID v4 simple sin dependencias externas.

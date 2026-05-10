@@ -27,7 +27,7 @@ func makeProblem(deliveries []Node, drivers []Driver, deliveryX []float64) Probl
 			if d < 0 {
 				d = -d
 			}
-			dur[i][j] = d * 60   // 1 unidad x = 1 minuto
+			dur[i][j] = d * 60    // 1 unidad x = 1 minuto
 			dist[i][j] = d * 1000 // 1 unidad x = 1 km
 		}
 	}
@@ -37,21 +37,21 @@ func makeProblem(deliveries []Node, drivers []Driver, deliveryX []float64) Probl
 		Drivers:                 drivers,
 		DurationMatrix:          dur,
 		DistanceMatrix:          dist,
-		DepartureMin:            8 * 60, // 08:00
+		DepartureMin:            8 * 60,  // 08:00
 		ServiceTimeMin:          5,
 		DayEndMin:               18 * 60, // 18:00
 		MorningWindowStartMin:   8 * 60,  // 08:00
 		MorningWindowEndMin:     14 * 60, // 14:00
 		AfternoonWindowStartMin: 12 * 60, // 12:00
 		AfternoonWindowEndMin:   18 * 60, // 18:00
-		EnforceTimeWindows:      true,    // tests asumen ventanas duras (comportamiento original)
+		EnforceTimeWindows:      true,    // tests asumen ventanas duras
 	}
 }
 
 func TestSolve_SingleDriverSingleDelivery(t *testing.T) {
 	p := makeProblem(
 		[]Node{{ID: "LT-01", WeightKg: 5, TimeWindow: model.TimeWindowFlexible}},
-		[]Driver{{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100}},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
 		[]float64{2},
 	)
 	sol := Solve(p)
@@ -103,7 +103,7 @@ func TestSolve_TwoOptFixesOrder(t *testing.T) {
 			{ID: "LT-03", WeightKg: 1, TimeWindow: model.TimeWindowFlexible},
 			{ID: "LT-02", WeightKg: 1, TimeWindow: model.TimeWindowFlexible},
 		},
-		[]Driver{{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100}},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
 		[]float64{4, 1, 3, 2},
 	)
 	sol := Solve(p)
@@ -136,8 +136,8 @@ func TestSolve_LoadBalancesAcrossDrivers(t *testing.T) {
 			{ID: "LT-04", WeightKg: 10, TimeWindow: model.TimeWindowFlexible},
 		},
 		[]Driver{
-			{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100},
-			{ID: "drv2", MaxShipments: 10, MaxWeightKg: 100},
+			{ID: "drv1", MaxWeightKg: 9999},
+			{ID: "drv2", MaxWeightKg: 9999},
 		},
 		[]float64{1, 2, 3, 4},
 	)
@@ -156,7 +156,7 @@ func TestSolve_TimeWindowMorningInfeasible(t *testing.T) {
 	// Depot lejos: ida = 7 horas, llegaría a las 15:00 — fuera de morning (08:00-14:00).
 	p := makeProblem(
 		[]Node{{ID: "LT-01", WeightKg: 1, TimeWindow: model.TimeWindowMorning}},
-		[]Driver{{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100}},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
 		[]float64{420}, // 420 min = 7h → llegada 15:00
 	)
 	sol := Solve(p)
@@ -168,8 +168,8 @@ func TestSolve_TimeWindowMorningInfeasible(t *testing.T) {
 	}
 }
 
-func TestSolve_DriverCapacityCap(t *testing.T) {
-	// Chofer max_shipments=2, 4 envíos disponibles → 2 unassigned por capacidad.
+func TestSolve_DriverWeightCap(t *testing.T) {
+	// Chofer con max_weight=15 kg, 4 envíos de 5 kg → caben 3 (15 kg), 1 queda sin asignar.
 	p := makeProblem(
 		[]Node{
 			{ID: "LT-01", WeightKg: 5, TimeWindow: model.TimeWindowFlexible},
@@ -177,18 +177,18 @@ func TestSolve_DriverCapacityCap(t *testing.T) {
 			{ID: "LT-03", WeightKg: 5, TimeWindow: model.TimeWindowFlexible},
 			{ID: "LT-04", WeightKg: 5, TimeWindow: model.TimeWindowFlexible},
 		},
-		[]Driver{{ID: "drv1", MaxShipments: 2, MaxWeightKg: 100}},
+		[]Driver{{ID: "drv1", MaxWeightKg: 15}},
 		[]float64{1, 2, 3, 4},
 	)
 	sol := Solve(p)
 	if len(sol.Routes) != 1 {
 		t.Fatalf("expected 1 route, got %d", len(sol.Routes))
 	}
-	if len(sol.Routes[0].Stops) != 2 {
-		t.Errorf("expected 2 stops (capacity cap), got %d", len(sol.Routes[0].Stops))
+	if len(sol.Routes[0].Stops) != 3 {
+		t.Errorf("expected 3 stops (weight cap 15 kg), got %d", len(sol.Routes[0].Stops))
 	}
-	if len(sol.Unassigned) != 2 {
-		t.Errorf("expected 2 unassigned, got %d", len(sol.Unassigned))
+	if len(sol.Unassigned) != 1 {
+		t.Errorf("expected 1 unassigned, got %d", len(sol.Unassigned))
 	}
 	for _, u := range sol.Unassigned {
 		if u.Reason != ReasonNoDriverCapacity {
@@ -198,16 +198,16 @@ func TestSolve_DriverCapacityCap(t *testing.T) {
 }
 
 func TestSolve_ExistingLoadConsidered(t *testing.T) {
-	// Chofer con carga existente alta no debería recibir nuevos envíos
-	// si supera el cap de peso.
+	// drv1 ya tiene 90 kg existentes (cap 100 kg) → solo puede tomar 1 envío de 5 kg más.
+	// drv2 sin carga existente → toma el resto.
 	p := makeProblem(
 		[]Node{
 			{ID: "LT-01", WeightKg: 50, TimeWindow: model.TimeWindowFlexible},
 			{ID: "LT-02", WeightKg: 50, TimeWindow: model.TimeWindowFlexible},
 		},
 		[]Driver{
-			{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100, ExistingWeightKg: 90}, // solo entra 1 si pesa <=10
-			{ID: "drv2", MaxShipments: 10, MaxWeightKg: 100},
+			{ID: "drv1", MaxWeightKg: 100, ExistingWeightKg: 90},
+			{ID: "drv2", MaxWeightKg: 9999},
 		},
 		[]float64{1, 2},
 	)
@@ -227,7 +227,7 @@ func TestSolve_DepartureTimePropagates(t *testing.T) {
 	// Si DepartureMin = 14:00 (840), un envío morning siempre falla.
 	p := makeProblem(
 		[]Node{{ID: "LT-01", WeightKg: 1, TimeWindow: model.TimeWindowMorning}},
-		[]Driver{{ID: "drv1", MaxShipments: 10, MaxWeightKg: 100}},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
 		[]float64{1},
 	)
 	p.DepartureMin = 14 * 60

@@ -183,24 +183,21 @@ func addAvailableVehicle(t *testing.T, ts routingTestSetup, plate, branchID stri
 // GeneratePlan — última milla
 // =============================================================================
 
-func TestGeneratePlan_LastMile_RespetaCapsPorChofer(t *testing.T) {
+func TestGeneratePlan_LastMile_RespetaCapPesoPorChofer(t *testing.T) {
 	ts := newRoutingSetup()
 	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
 
-	// Tighten config: max 2 envíos / 10 kg per driver
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
-		SLAForceHorizonHours:    24,
-		PriorityForceThreshold:  0.99, // disable to avoid forced
-		MinFillRate:             0.40,
-		MaxShipmentsPerDriver:   2,
-		MaxWeightKgPerDriver:    10,
+		SLAForceHorizonHours:   24,
+		PriorityForceThreshold: 0.99,
+		MinFillRate:            0.40,
 	}); err != nil {
 		t.Fatalf("update cfg: %v", err)
 	}
 
-	// 4 envíos entrantes a CABA desde Córdoba (last-mile en CABA)
+	// 4 envíos de 40 kg = 160 kg total → excede cap de 150 kg, 1 queda sin asignar
 	for i := 0; i < 4; i++ {
-		createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
+		createInboundShip(t, ts, 40, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
 
 	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
@@ -211,19 +208,14 @@ func TestGeneratePlan_LastMile_RespetaCapsPorChofer(t *testing.T) {
 	if len(plan.LastMile) != 1 {
 		t.Fatalf("expected 1 driver assignment, got %d", len(plan.LastMile))
 	}
-	if got := len(plan.LastMile[0].Shipments); got != 2 {
-		t.Errorf("expected 2 shipments per driver (cap), got %d", got)
+	if got := len(plan.LastMile[0].Shipments); got != 3 {
+		t.Errorf("expected 3 shipments (cap peso 150 kg), got %d", got)
 	}
-	if got := plan.LastMile[0].TotalWeightKg; got > 10 {
+	if got := plan.LastMile[0].TotalWeightKg; got > 150 {
 		t.Errorf("driver weight exceeded: %.2f kg", got)
 	}
-	if len(plan.Unassigned) != 2 {
-		t.Errorf("expected 2 unassigned (over cap), got %d", len(plan.Unassigned))
-	}
-	for _, u := range plan.Unassigned {
-		if u.Reason != "sin_capacidad_en_choferes" {
-			t.Errorf("unexpected unassigned reason: %s", u.Reason)
-		}
+	if len(plan.Unassigned) != 1 {
+		t.Errorf("expected 1 unassigned (over cap), got %d", len(plan.Unassigned))
 	}
 }
 
@@ -273,8 +265,6 @@ func TestGeneratePlan_InterBranch_SLA_DespachaAunBajoFillRate(t *testing.T) {
 		SLAForceHorizonHours:    24,
 		PriorityForceThreshold:  0.0, // cualquier score dispara
 		MinFillRate:             0.40,
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -300,8 +290,6 @@ func TestGeneratePlan_InterBranch_BajoFillRate_VaAUnassigned(t *testing.T) {
 		SLAForceHorizonHours:    1,    // SLA muy corto, no fuerza
 		PriorityForceThreshold:  0.99, // imposible de alcanzar
 		MinFillRate:             0.40,
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -334,8 +322,6 @@ func TestGeneratePlan_InterBranch_EligeMenorVehiculoQueCubre(t *testing.T) {
 		SLAForceHorizonHours:    1,
 		PriorityForceThreshold:  0.99,
 		MinFillRate:             0.10, // bajo para forzar consolidación
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -366,8 +352,6 @@ func TestGeneratePlan_InterBranch_BinPackEnMayorCuandoNingunoCubre(t *testing.T)
 		SLAForceHorizonHours:    1,
 		PriorityForceThreshold:  0.99,
 		MinFillRate:             0.10,
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -454,8 +438,6 @@ func TestGeneratePlan_Piggyback_AcercaEnvioHuerfanoAlDestino(t *testing.T) {
 		SLAForceHorizonHours:    1,
 		PriorityForceThreshold:  0.99,
 		MinFillRate:             0.10, // bajo, para que Córdoba consolide con poco
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -499,8 +481,6 @@ func TestGeneratePlan_Piggyback_RespetaCapacidadDelVehiculo(t *testing.T) {
 		SLAForceHorizonHours:    1,
 		PriorityForceThreshold:  0.99,
 		MinFillRate:             0.10,
-		MaxShipmentsPerDriver:   15,
-		MaxWeightKgPerDriver:    150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -536,8 +516,6 @@ func TestGeneratePlan_Returning_RuteaHaciaOrigen(t *testing.T) {
 		SLAForceHorizonHours:   1,
 		PriorityForceThreshold: 0.0, // dispara siempre por priority
 		MinFillRate:            0.10,
-		MaxShipmentsPerDriver:  15,
-		MaxWeightKgPerDriver:   150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -599,7 +577,6 @@ func TestGeneratePlan_OrdenDeterministico(t *testing.T) {
 	addAvailableVehicle(t, ts, "AB123CD", "br-caba", 1000)
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours: 1, PriorityForceThreshold: 0.0,
-		MinFillRate: 0.10, MaxShipmentsPerDriver: 15, MaxWeightKgPerDriver: 150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -639,7 +616,6 @@ func TestApplyPlan_DriftEstadoShipment_FallaItem(t *testing.T) {
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours: 1, PriorityForceThreshold: 0.0,
-		MinFillRate: 0.10, MaxShipmentsPerDriver: 15, MaxWeightKgPerDriver: 150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -675,7 +651,6 @@ func TestApplyPlan_DriftEstadoVehiculo_FallaShipmentsDelVehiculo(t *testing.T) {
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours: 1, PriorityForceThreshold: 0.0,
-		MinFillRate: 0.10, MaxShipmentsPerDriver: 15, MaxWeightKgPerDriver: 150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -711,7 +686,6 @@ func TestApplyPlan_HappyPath_VehiculoQuedaEnCarga(t *testing.T) {
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours: 1, PriorityForceThreshold: 0.0,
-		MinFillRate: 0.10, MaxShipmentsPerDriver: 15, MaxWeightKgPerDriver: 150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -759,11 +733,6 @@ func TestRoutingConfigService_Update_ValidaRangos(t *testing.T) {
 		name string
 		cfg  model.RoutingConfig
 	}{
-		{"sla_too_low", model.RoutingConfig{SLAForceHorizonHours: 0, PriorityForceThreshold: 0.5, MinFillRate: 0.5, MaxShipmentsPerDriver: 10, MaxWeightKgPerDriver: 100}},
-		{"sla_too_high", model.RoutingConfig{SLAForceHorizonHours: 200, PriorityForceThreshold: 0.5, MinFillRate: 0.5, MaxShipmentsPerDriver: 10, MaxWeightKgPerDriver: 100}},
-		{"priority_negative", model.RoutingConfig{SLAForceHorizonHours: 24, PriorityForceThreshold: -0.1, MinFillRate: 0.5, MaxShipmentsPerDriver: 10, MaxWeightKgPerDriver: 100}},
-		{"min_fill_zero", model.RoutingConfig{SLAForceHorizonHours: 24, PriorityForceThreshold: 0.5, MinFillRate: 0.0, MaxShipmentsPerDriver: 10, MaxWeightKgPerDriver: 100}},
-		{"max_shipments_zero", model.RoutingConfig{SLAForceHorizonHours: 24, PriorityForceThreshold: 0.5, MinFillRate: 0.5, MaxShipmentsPerDriver: 0, MaxWeightKgPerDriver: 100}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -908,8 +877,6 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 		SLAForceHorizonHours:   24,
 		PriorityForceThreshold: 0.99,
 		MinFillRate:            0.40,
-		MaxShipmentsPerDriver:  10,
-		MaxWeightKgPerDriver:   20, // tope agresivo
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}
@@ -931,9 +898,9 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 		t.Fatalf("apply1: %v", err)
 	}
 
-	// Nuevos envíos llegan al hub. Volvemos a generar plan: el chofer ya tiene
-	// 15 kg en ruta — solo entra 1 más (5 kg) hasta llegar al cap de 20 kg.
-	for i := 0; i < 3; i++ {
+	// Nuevos envíos llegan al hub. El chofer ya tiene 3 en ruta.
+	// Con cap de 15 count, entran 12 más → enviamos 5, esperamos 5 asignados.
+	for i := 0; i < 5; i++ {
 		createInboundShip(t, ts, 5, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
 	plan2, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
@@ -945,24 +912,14 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 		t.Fatalf("plan2 expected 1 last-mile assignment, got %d", len(plan2.LastMile))
 	}
 	asg := plan2.LastMile[0]
-	if len(asg.Shipments) != 1 {
-		t.Errorf("expected 1 NEW shipment (cap deja 5 kg libres), got %d", len(asg.Shipments))
+	if len(asg.Shipments) != 5 {
+		t.Errorf("expected 5 NEW shipments asignados, got %d", len(asg.Shipments))
 	}
 	if asg.ExistingCount != 3 {
 		t.Errorf("expected existing_count=3, got %d", asg.ExistingCount)
 	}
 	if asg.ExistingWeightKg != 15 {
 		t.Errorf("expected existing_weight=15, got %f", asg.ExistingWeightKg)
-	}
-	// 2 envíos no entran porque sumarían 25 > 20.
-	overCap := 0
-	for _, u := range plan2.Unassigned {
-		if u.Reason == "sin_capacidad_en_choferes" {
-			overCap++
-		}
-	}
-	if overCap != 2 {
-		t.Errorf("expected 2 unassigned por cap, got %d (plan=%+v)", overCap, plan2.Unassigned)
 	}
 }
 
@@ -995,7 +952,6 @@ func TestGeneratePlan_InterBranch_RespetaCargaExistenteDelVehiculo(t *testing.T)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours: 1, PriorityForceThreshold: 0.0,
-		MinFillRate: 0.10, MaxShipmentsPerDriver: 15, MaxWeightKgPerDriver: 150,
 	}); err != nil {
 		t.Fatalf("cfg: %v", err)
 	}

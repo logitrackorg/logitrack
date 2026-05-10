@@ -36,7 +36,6 @@ type Node struct {
 // Driver es un chofer disponible con sus topes y carga preexistente.
 type Driver struct {
 	ID               string
-	MaxShipments     int
 	MaxWeightKg      float64
 	ExistingCount    int     // envíos ya en ruta del día
 	ExistingWeightKg float64 // peso ya en ruta del día

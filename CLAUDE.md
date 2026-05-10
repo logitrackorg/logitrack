@@ -84,6 +84,8 @@ UUID tokens in PostgreSQL `tokens` table. `Authorization: Bearer <token>` requir
 | `op_mendoza` | `op_mendoza123` | operator | mendoza |
 | `sup_mendoza` | `sup_mendoza123` | supervisor | mendoza |
 | `chofer_mendoza` | `chofer_mendoza123` | driver | mendoza |
+| `op_posadas` | `op_posadas123` | operator | posadas |
+| `chofer_posadas` | `chofer_posadas123` | driver | posadas |
 | `gerente` | `gerente123` | manager | — |
 | `admin` | `admin123` | admin | — |
 
@@ -432,7 +434,7 @@ Conventional Commits: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `style
 
 `seed.Load()` populates on every restart (idempotent):
 
-- **6 branches**: caba, cordoba, mendoza (`activo`); jujuy, posadas (`inactivo`); bariloche (`fuera_de_servicio`). Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
+- **6 branches**: caba, cordoba, mendoza, posadas (`activo`); jujuy (`inactivo`); bariloche (`fuera_de_servicio`). All branches have `MaxCapacity: 200`. Name format: `XXXX-NN` (e.g. `CDBA-01`, `CORD-01`).
 - **Escenario de ruteo en CABA** (al loguearse `op_caba` y tocar "Generar plan" en `/routing`):
   - 6 envíos `at_hub` en CABA con destino final CABA → última milla.
   - 5 envíos `at_origin_hub` en CABA con destino Córdoba (sum 400 kg) → consolida.

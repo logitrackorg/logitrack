@@ -270,7 +270,8 @@ func main() {
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
-	protected.POST("/routing/regenerate", canViewStats, routingHandler.Regenerate)
+	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
+	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 
 	// ML config — admin only

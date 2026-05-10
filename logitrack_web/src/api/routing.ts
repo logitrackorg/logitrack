@@ -26,15 +26,7 @@ export interface RoutingConfig {
   sla_force_horizon_hours: number;
   priority_force_threshold: number;
   min_fill_rate: number;
-  max_shipments_per_driver: number;
-  max_weight_kg_per_driver: number;
   enforce_time_windows: boolean;
-  morning_window_start_hour: number;
-  morning_window_end_hour: number;
-  afternoon_window_start_hour: number;
-  afternoon_window_end_hour: number;
-  service_time_minutes: number;
-  avg_speed_kmh: number;
 }
 
 export type DispatchRule = "sla_forced" | "consolidation";
@@ -65,6 +57,13 @@ export interface LastMileAssignment {
   total_duration_min?: number;
   departure_min?: number;        // minutos desde medianoche (base para arrival_min)
   optimized_by?: "vrp" | "greedy";
+  // Estado de aplicación del ítem.
+  applied_shipments?: string[];
+  applied?: boolean;
+  applied_at?: string;
+  applied_by?: string;
+  // Runtime-only: el chofer ya inició su ruta del día — card informativa.
+  route_started?: boolean;
 }
 
 export interface InterBranchAssignment {
@@ -77,6 +76,13 @@ export interface InterBranchAssignment {
   capacity_kg: number;
   existing_weight_kg: number;    // ya cargado en el vehículo
   existing_shipments?: string[]; // tracking IDs ya cargados en el vehículo (status loaded)
+  // Estado de aplicación del ítem.
+  applied_shipments?: string[];
+  applied?: boolean;
+  applied_at?: string;
+  applied_by?: string;
+  // Runtime-only: el vehículo ya está en viaje — card informativa.
+  in_transit?: boolean;
 }
 
 export interface UnassignedShipment {
@@ -109,11 +115,21 @@ export interface VehicleLoad {
   existing_shipments?: string[];
 }
 
+export interface IncomingVehicle {
+  vehicle_id: string;
+  license_plate: string;
+  origin_branch: string;
+  shipments: string[];
+  total_weight_kg: number;
+  capacity_kg: number;
+}
+
 export interface RoutingPlan {
   branch_id: string;
   generated_at: string;
   last_mile: LastMileAssignment[];
   inter_branch: InterBranchAssignment[];
+  incoming_vehicles?: IncomingVehicle[];
   unassigned: UnassignedShipment[];
   blocked_drivers: BlockedDriver[];
   driver_loads: DriverLoad[];
@@ -164,18 +180,29 @@ export const routingApi = {
   getTodayPlan: () =>
     api.get<GlobalRoutingPlan>("/routing/plan/today").then((r) => r.data),
 
-  /** Regenera el plan del día. Solo manager/admin. */
+  /** Regenera el plan del día para la sucursal del usuario (operator/supervisor). */
   regenerate: () =>
     api.post<GlobalRoutingPlan>("/routing/regenerate").then((r) => r.data),
 
+  /** Genera el plan global de toda la red. Solo admin. Devuelve métricas. */
+  regenerateGlobal: () =>
+    api.post<{ plan_date: string; status: string; log: GlobalPlanLog; generated_at: string }>("/routing/regenerate/global").then((r) => r.data),
+
   /**
-   * Aplica el plan de ruteo para la sucursal del usuario.
-   * Si `plan` está presente, aplica ese plan editado en cliente (drag-and-drop).
-   * Si no, el servidor lee el plan desde la base de datos.
+   * Aplica el plan de ruteo con granularidad configurable:
+   * - `vehicleId` → solo ese despacho inter-sucursal
+   * - `driverId`  → solo esa ruta de última milla
+   * - ninguno     → todos los ítems pendientes de la sucursal
+   * - `plan`      → plan editado en cliente (drag-and-drop, legacy)
    */
-  apply: (branchId: string, plan?: RoutingPlan) =>
+  apply: (branchId: string, opts?: { plan?: RoutingPlan; vehicleId?: string; driverId?: string }) =>
     api
-      .post<ApplyPlanResponse>("/routing/apply", plan ? { branch_id: branchId, plan } : { branch_id: branchId })
+      .post<ApplyPlanResponse>("/routing/apply", {
+        branch_id: branchId,
+        ...(opts?.plan ? { plan: opts.plan } : {}),
+        ...(opts?.vehicleId ? { vehicle_id: opts.vehicleId } : {}),
+        ...(opts?.driverId ? { driver_id: opts.driverId } : {}),
+      })
       .then((r) => r.data),
 
   getConfig: () => api.get<RoutingConfig>("/routing/config").then((r) => r.data),
@@ -194,6 +221,8 @@ export const REASON_LABELS: Record<string, string> = {
   esperando_consolidacion: "Esperando consolidación con otros envíos al mismo destino",
   sobrepeso_excede_vehiculo: "Excede capacidad del vehículo más grande",
   ruta_ya_iniciada: "El chofer ya inició su ruta del día",
+  chofer_inicio_ruta: "El chofer ya está en ruta — reasignalo a otro o regenerá",
+  vehiculo_en_viaje: "El vehículo ya está en viaje — reasignalo a otro o regenerá",
   ventana_horaria_inviable: "No se puede cumplir la ventana horaria del envío",
   // Apply
   envio_no_encontrado: "Envío no encontrado",

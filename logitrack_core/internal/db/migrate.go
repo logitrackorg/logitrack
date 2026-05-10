@@ -118,7 +118,7 @@ func RunMigrations(db *sql.DB) error {
 		INSERT INTO routing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS respect_fragile_spread;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS express_max_hours_in_branch;
-		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows        BOOLEAN       NOT NULL DEFAULT TRUE;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows        BOOLEAN       NOT NULL DEFAULT FALSE;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_start_hour   INTEGER       NOT NULL DEFAULT 8;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_end_hour     INTEGER       NOT NULL DEFAULT 14;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_start_hour INTEGER       NOT NULL DEFAULT 12;

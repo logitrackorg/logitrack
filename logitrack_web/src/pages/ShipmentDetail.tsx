@@ -966,7 +966,7 @@ export function ShipmentDetail() {
                     {assignedVehicle.license_plate}
                   </p>
                   <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-                    {assignedVehicle.type === "motocicleta" ? "Motocicleta" : assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
+                    {assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
                   </p>
                 </div>
                 <div style={{
@@ -1219,7 +1219,7 @@ export function ShipmentDetail() {
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
                         <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
-                          {v.type === "motocicleta" ? "Motocicleta" : v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
+                          {v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
                           {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
                           {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>

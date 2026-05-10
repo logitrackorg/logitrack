@@ -10,11 +10,14 @@ const TEST_USERS = [
   { u: "sup_cordoba",    p: "sup_cordoba123",      r: "Supervisor",  branch: "Córdoba" },
   { u: "op_mendoza",     p: "op_mendoza123",      r: "Operador",    branch: "Mendoza" },
   { u: "sup_mendoza",    p: "sup_mendoza123",      r: "Supervisor",  branch: "Mendoza" },
+  { u: "op_posadas",     p: "op_posadas123",       r: "Operador",    branch: "Posadas" },
   { u: "gerente",        p: "gerente123",          r: "Gerente",     branch: "" },
   { u: "admin",          p: "admin123",            r: "Admin",       branch: "" },
   { u: "chofer_caba",    p: "chofer_caba123",      r: "Chofer",      branch: "CABA" },
+  { u: "chofer_caba2",   p: "chofer_caba2123",     r: "Chofer",      branch: "CABA" },
   { u: "chofer_cordoba", p: "chofer_cordoba123",   r: "Chofer",      branch: "Córdoba" },
   { u: "chofer_mendoza", p: "chofer_mendoza123",   r: "Chofer",      branch: "Mendoza" },
+  { u: "chofer_posadas", p: "chofer_posadas123",   r: "Chofer",      branch: "Posadas" },
 ];
 
 const ROLE_STYLES: Record<string, string> = {

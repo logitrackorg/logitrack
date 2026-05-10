@@ -398,26 +398,14 @@ func calcDeviation(tw model.TimeWindow, absArrivalMin, mStart, mEnd, aStart, aEn
 	return 0
 }
 
-// canFitMore: el chofer todavía no llegó al tope.
-func canFitMore(d Driver, newWeight float64, newCount int) bool {
-	if d.ExistingCount+newCount >= d.MaxShipments {
-		return false
-	}
-	if d.ExistingWeightKg+newWeight >= d.MaxWeightKg {
-		return false
-	}
-	return true
+// canFitMore: el chofer todavía no llegó al tope de peso.
+func canFitMore(d Driver, newWeight float64, _ int) bool {
+	return d.ExistingWeightKg+newWeight < d.MaxWeightKg
 }
 
-// nodeFits: agregar este envío específico no rompe los topes.
-func nodeFits(d Driver, currWeight float64, currCount int, addWeight float64) bool {
-	if d.ExistingCount+currCount+1 > d.MaxShipments {
-		return false
-	}
-	if d.ExistingWeightKg+currWeight+addWeight > d.MaxWeightKg {
-		return false
-	}
-	return true
+// nodeFits: agregar este envío específico no rompe el tope de peso.
+func nodeFits(d Driver, currWeight float64, _ int, addWeight float64) bool {
+	return d.ExistingWeightKg+currWeight+addWeight <= d.MaxWeightKg
 }
 
 func reverseSlice(s []int) {

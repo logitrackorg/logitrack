@@ -30,6 +30,13 @@ func NewPostgresRoutingPlanRepository(db *sql.DB) RoutingPlanRepository {
 	return &postgresRoutingPlanRepository{db: db}
 }
 
+// planPayload es la estructura que se persiste en la columna payload JSONB.
+// Incluye BranchPlans (con los applied flags de cada ítem) y AppliedBranches.
+type planPayload struct {
+	BranchPlans     []model.BranchPlan `json:"branch_plans"`
+	AppliedBranches []string           `json:"applied_branches"`
+}
+
 func (r *postgresRoutingPlanRepository) GetByDate(date string) (*model.GlobalRoutingPlan, error) {
 	var plan model.GlobalRoutingPlan
 	var payloadJSON, logJSON []byte
@@ -58,9 +65,22 @@ func (r *postgresRoutingPlanRepository) GetByDate(date string) (*model.GlobalRou
 	}
 	plan.AppliedBy = appliedBy.String
 
-	if err := json.Unmarshal(payloadJSON, &plan.BranchPlans); err != nil {
-		return nil, fmt.Errorf("routing_plans payload unmarshal: %w", err)
+	// Intentar deserializar con el formato nuevo (planPayload).
+	// Si falla o el campo branch_plans no existe, intentar con el formato legacy ([]BranchPlan).
+	var pp planPayload
+	if err := json.Unmarshal(payloadJSON, &pp); err == nil && pp.BranchPlans != nil {
+		plan.BranchPlans = pp.BranchPlans
+		plan.AppliedBranches = pp.AppliedBranches
+	} else {
+		// Formato legacy: el payload era directamente []BranchPlan.
+		if err2 := json.Unmarshal(payloadJSON, &plan.BranchPlans); err2 != nil {
+			return nil, fmt.Errorf("routing_plans payload unmarshal: %w", err2)
+		}
 	}
+	if plan.AppliedBranches == nil {
+		plan.AppliedBranches = []string{}
+	}
+
 	if err := json.Unmarshal(logJSON, &plan.Log); err != nil {
 		return nil, fmt.Errorf("routing_plans log unmarshal: %w", err)
 	}
@@ -69,7 +89,14 @@ func (r *postgresRoutingPlanRepository) GetByDate(date string) (*model.GlobalRou
 }
 
 func (r *postgresRoutingPlanRepository) Upsert(plan *model.GlobalRoutingPlan) error {
-	payloadJSON, err := json.Marshal(plan.BranchPlans)
+	pp := planPayload{
+		BranchPlans:     plan.BranchPlans,
+		AppliedBranches: plan.AppliedBranches,
+	}
+	if pp.AppliedBranches == nil {
+		pp.AppliedBranches = []string{}
+	}
+	payloadJSON, err := json.Marshal(pp)
 	if err != nil {
 		return fmt.Errorf("routing_plans payload marshal: %w", err)
 	}
@@ -82,10 +109,10 @@ func (r *postgresRoutingPlanRepository) Upsert(plan *model.GlobalRoutingPlan) er
 		INSERT INTO routing_plans (id, plan_date, status, payload, generated_at, generation_log)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (plan_date) DO UPDATE SET
-			id           = EXCLUDED.id,
-			status       = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.status ELSE EXCLUDED.status END,
-			payload      = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.payload ELSE EXCLUDED.payload END,
-			generated_at = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.generated_at ELSE EXCLUDED.generated_at END,
+			id             = EXCLUDED.id,
+			status         = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.status ELSE EXCLUDED.status END,
+			payload        = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.payload ELSE EXCLUDED.payload END,
+			generated_at   = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.generated_at ELSE EXCLUDED.generated_at END,
 			generation_log = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.generation_log ELSE EXCLUDED.generation_log END`,
 		plan.ID, plan.PlanDate, string(plan.Status),
 		payloadJSON, plan.GeneratedAt, logJSON,

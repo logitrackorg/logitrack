@@ -14,7 +14,6 @@ const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracki
 const tdClass = "px-4 py-3 text-slate-700";
 
 const vehicleTypeLabels: Record<VehicleType, string> = {
-  motocicleta: "Motocicleta",
   auto: "Auto",
   furgoneta: "Furgoneta",
   camion: "Camión",
