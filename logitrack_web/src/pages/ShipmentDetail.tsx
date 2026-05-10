@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
 import {
@@ -23,6 +23,7 @@ import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { resolveFinalBranch } from "../utils/nearestBranch";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -652,6 +653,7 @@ export function ShipmentDetail() {
           draftId={shipment.tracking_id}
           originBranchId={shipment.origin_branch_id}
           finalBranchId={shipment.final_branch_id}
+          branches={branches}
         />
       ) : (
         /* ── Read-only info grid ── */
@@ -1398,7 +1400,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, originBranchId, finalBranchId }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, originBranchId, finalBranchId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
@@ -1410,8 +1412,13 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   draftId: string;
   originBranchId?: string;
   finalBranchId?: string;
+  branches: Branch[];
 }) {
   const isMobile = useIsMobile();
+  const computedFinalBranchId = useMemo(
+    () => resolveFinalBranch(form.recipient.address, branches) || finalBranchId || "",
+    [form.recipient.address, branches, finalBranchId]
+  );
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
@@ -1458,7 +1465,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           origin: form.sender.address,
           destination: form.recipient.address,
           origin_branch_id: originBranchId,
-          final_branch_id: finalBranchId,
+          final_branch_id: computedFinalBranchId || undefined,
         });
         setQuote(q);
       } catch {
@@ -1661,6 +1668,40 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           </DField>
           <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
             <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='ej: "Mantener vertical"' />
+          </DField>
+        </div>
+      </fieldset>
+
+      {/* Sucursales */}
+      <fieldset style={fsStyle}>
+        <legend style={legStyle}>Sucursales</legend>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+          <DField label="Sucursal de origen">
+            {(() => {
+              const b = originBranchId ? branches.find(x => x.id === originBranchId) : null;
+              return b ? (
+                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 12px" }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#1e3a5f" }}>{b.name}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{b.address.street}, {b.address.city}</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "#9ca3af", padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>No asignada</div>
+              );
+            })()}
+          </DField>
+          <DField label="Sucursal final">
+            {(() => {
+              const b = computedFinalBranchId ? branches.find(x => x.id === computedFinalBranchId) : null;
+              return b ? (
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 12px" }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: "#14532d" }}>{b.name}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{b.address.street}, {b.address.city}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Más cercana al domicilio del destinatario.</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "#9ca3af", padding: "8px 12px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8 }}>Se asigna al guardar el borrador.</div>
+              );
+            })()}
           </DField>
         </div>
       </fieldset>
