@@ -269,7 +269,8 @@ export function NewShipment() {
     setRecipientNameError(validateName(name));
   };
 
-  const handleSenderDNI = (dni: string) => {
+  const handleSenderDNI = (raw: string) => {
+    const dni = raw.trim();
     setSender("dni", dni);
     setSenderSuggestion(null);
     if (senderDNITimer.current) clearTimeout(senderDNITimer.current);
@@ -301,7 +302,8 @@ export function NewShipment() {
     setSenderSuggestion(null);
   };
 
-  const handleRecipientDNI = (dni: string) => {
+  const handleRecipientDNI = (raw: string) => {
+    const dni = raw.trim();
     setRecipient("dni", dni);
     setRecipientSuggestion(null);
     if (recipientDNITimer.current) clearTimeout(recipientDNITimer.current);

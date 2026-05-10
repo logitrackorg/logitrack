@@ -1519,7 +1519,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     setRecipientNameError(validateNameField(name));
   };
 
-  const handleSenderDNI = (dni: string) => {
+  const handleSenderDNI = (raw: string) => {
+    const dni = raw.trim();
     setSender("dni", dni);
     setSenderSuggestion(null);
     if (senderDNITimer.current) clearTimeout(senderDNITimer.current);
@@ -1551,7 +1552,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     setSenderSuggestion(null);
   };
 
-  const handleRecipientDNI = (dni: string) => {
+  const handleRecipientDNI = (raw: string) => {
+    const dni = raw.trim();
     setRecipient("dni", dni);
     setRecipientSuggestion(null);
     if (recipientDNITimer.current) clearTimeout(recipientDNITimer.current);
