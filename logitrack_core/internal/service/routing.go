@@ -2352,6 +2352,10 @@ func candidateDepartures(cfg model.RoutingConfig, nowMin float64) []float64 {
 		// Equivalente a ceil(nowMin / 60). Si nowMin == k*60, queda k.
 		firstHour = int((nowMin + 59) / 60)
 	}
+	// Si nowMin superó el fin de la ventana operativa no hay candidatos válidos.
+	if firstHour > end {
+		return []float64{}
+	}
 	capHint := end - firstHour + 2
 	if capHint < 0 {
 		capHint = 0

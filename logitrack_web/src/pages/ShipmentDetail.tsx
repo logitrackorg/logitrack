@@ -510,6 +510,7 @@ export function ShipmentDetail() {
   if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
+  const isAtDestinationBranch = shipment.status === "at_hub" && shipment.current_location === shipment.final_branch_id;
   const deliveryMethod = shipment.delivery_method ?? "ultima_milla";
   const nextStatuses = TRANSITIONS[shipment.status].filter(
     (s) => s !== "ready_for_return" || (shipment.is_returning && isAtOriginBranch)
@@ -528,6 +529,10 @@ export function ShipmentDetail() {
       if (deliveryMethod === "retiro_sucursal" && s === "out_for_delivery") return false;
       return true;
     }
+  ).filter(
+    // No mostrar "Enviar a sucursal" si el envío ya está en la sucursal de destino.
+    // Esto permite retornos a origen (current_location === origin_branch_id).
+    (s) => s !== "loaded" || !isAtDestinationBranch
   );
   const fmt = fmtDateTime;
   const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>

@@ -306,18 +306,26 @@ export function VehicleList() {
     loadVehicles();
   };
 
-  const handleAddShipment = async () => {
+const handleAddShipment = async () => {
     if (!loadModalVehicle || !loadInput.trim()) return;
     const trackingId = `LT-${loadInput.trim().toUpperCase()}`;
     setLoadBusy(true);
     setLoadError("");
     try {
+      // Validar que el envío no esté en la sucursal de destino
+      const shipment = await shipmentApi.get(trackingId);
+      if (shipment.status === "at_hub" && shipment.current_location === shipment.final_branch_id) {
+        setLoadError("El envío ya está en la sucursal de destino y no puede reenviarse a otra sucursal.");
+        setLoadBusy(false);
+        return;
+      }
       const updated = await vehicleApi.assignToShipment(loadModalVehicle.license_plate, { tracking_id: trackingId });
       setLoadAdded(updated.assigned_shipments ?? []);
       setLoadModalVehicle(prev => prev ? { ...prev, assigned_shipments: updated.assigned_shipments, status: updated.status } : prev);
       setLoadInput("");
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const err = e as { response?: { data?: { error?: string } } };
+      const msg = err.response?.data?.error;
       setLoadError(msg ?? "No se pudo agregar el envío.");
     } finally {
       setLoadBusy(false);
