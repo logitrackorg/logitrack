@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { systemConfigApi } from "../api/systemConfig";
+import { clockApi } from "../api/clock";
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
@@ -16,12 +17,12 @@ const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
 
 /** Returns a human-readable label for the time remaining until a draft expires. */
-function formatTimeLeft(createdAt: string, retentionDays: number): {
+function formatTimeLeft(createdAt: string, retentionDays: number, nowMs: number): {
   label: string;
   urgent: boolean; // true when ≤ 2 days left
 } {
   const expiresAt = new Date(new Date(createdAt).getTime() + retentionDays * 24 * 60 * 60 * 1000);
-  const msLeft = expiresAt.getTime() - Date.now();
+  const msLeft = expiresAt.getTime() - nowMs;
 
   if (msLeft <= 0) return { label: "Vencido", urgent: true };
 
@@ -39,6 +40,7 @@ export function DraftList() {
   const [drafts, setDrafts] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(false);
   const [retentionDays, setRetentionDays] = useState<number>(7);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("oldest");
   const navigate = useNavigate();
@@ -49,10 +51,13 @@ export function DraftList() {
     Promise.all([
       shipmentApi.list().then((all) => (all ?? []).filter((s) => s.status === "draft")),
       systemConfigApi.get().catch(() => null),
+      clockApi.get().catch(() => null),
     ])
-      .then(([draftList, cfg]) => {
+      .then(([draftList, cfg, clock]) => {
         setDrafts(draftList);
         if (cfg?.draft_retention_days) setRetentionDays(cfg.draft_retention_days);
+        // Use the server clock (may be overridden for testing) as "now"
+        setNowMs(clock?.system_now ? new Date(clock.system_now).getTime() : Date.now());
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -161,7 +166,7 @@ export function DraftList() {
           </div>
           <div className="divide-y divide-slate-100">
             {filtered.map((d) => {
-              const { label: timeLabel, urgent } = formatTimeLeft(d.created_at, retentionDays);
+              const { label: timeLabel, urgent } = formatTimeLeft(d.created_at, retentionDays, nowMs);
               return (
                 <button
                   key={d.tracking_id}
