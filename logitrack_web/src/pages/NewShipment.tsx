@@ -211,7 +211,6 @@ export function NewShipment() {
       }
     }, 1000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form]);
 
   const set = (field: string, value: unknown) =>

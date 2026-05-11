@@ -40,7 +40,7 @@ export function DraftList() {
   const [drafts, setDrafts] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(false);
   const [retentionDays, setRetentionDays] = useState<number>(7);
-  const [nowMs, setNowMs] = useState<number>(Date.now());
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("oldest");
   const navigate = useNavigate();
@@ -71,7 +71,6 @@ export function DraftList() {
     const onVisible = () => { if (document.visibilityState === "visible") fetchClock(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const expiresAtMs = (d: { created_at: string }) =>
