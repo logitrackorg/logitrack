@@ -21,7 +21,7 @@ type RoutingConfig struct {
 
 	// Si EnforceTimeWindows=true, los envíos fuera de ventana quedan unassigned.
 	// Si EnforceTimeWindows=false, se incluyen en la ruta con un aviso visible.
-	EnforceTimeWindows bool `json:"enforce_time_windows"` // default false (ventanas blandas)
+	EnforceTimeWindows bool `json:"enforce_time_windows"` // default true (ventanas duras)
 
 	// Definición admin-editable de las ventanas operativas.
 	MorningWindowStartHour   int `json:"morning_window_start_hour"`
@@ -42,7 +42,7 @@ func DefaultRoutingConfig() RoutingConfig {
 		SLAForceHorizonHours:     24,
 		PriorityForceThreshold:   0.75,
 		MinFillRate:              0.40,
-		EnforceTimeWindows:       false,
+		EnforceTimeWindows:       true,
 		MorningWindowStartHour:   8,
 		MorningWindowEndHour:     14,
 		AfternoonWindowStartHour: 12,
