@@ -1,0 +1,39 @@
+logitrack_core/internal/service/shipment.go
+  s_83a3099a972287::t_d8e8f9b892737d 732-735
+logitrack_core/internal/repository/postgres_event_store.go
+  s_83a3099a972287::t_59b13964bdaa14 180-182
+logitrack_core/cmd/server/main.go
+  s_96947b4004e678::t_11eef329100134 182,187
+logitrack_core/internal/projection/postgres_shipment.go
+  s_83a3099a972287::t_a0342fcc6031e2 107-108
+logitrack_core/internal/service/route.go
+  s_83a3099a972287::t_1b8b486817089b 197-200,211
+  s_83a3099a972287::t_358da77bb93db7 87-90,98,196,206-210,212-213,245
+  s_83a3099a972287::t_daf9374e295e84 91,95,99
+logitrack_core/internal/service/routing.go
+  s_83a3099a972287::t_51c72fec898954 2355-2358
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "2a08e764f7345e155a2db746dc3f257cd9f82e56",
+  "prompts": {},
+  "sessions": {
+    "s_83a3099a972287": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddfee5-febe-44c3-9143-0039c0254f11",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_96947b4004e678": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3193cfc0-62d4-4f4a-b472-ee494164e123",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
