@@ -46,6 +46,11 @@ export function DraftList() {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
 
+  const fetchClock = () =>
+    clockApi.get()
+      .then((c) => setNowMs(new Date(c.system_now).getTime()))
+      .catch(() => setNowMs(Date.now()));
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -61,6 +66,12 @@ export function DraftList() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Re-sync the clock whenever the tab regains focus (e.g. after setting override in another tab)
+    const onVisible = () => { if (document.visibilityState === "visible") fetchClock(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = drafts

@@ -257,8 +257,9 @@ func main() {
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
 
-	// System clock override — admin only, in-memory only (testing).
-	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
+	// System clock override — GET is open to all authenticated users (read-only, safe).
+	// PATCH/DELETE are admin-only (mutations).
+	protected.GET("/admin/clock", clockHandler.Get)
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
 
