@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -139,10 +139,7 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
-  // Auto-save draft state
-  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -294,24 +291,7 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
-  // Auto-save draft changes — debounced 800ms whenever draftForm changes
-  useEffect(() => {
-    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
-    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
-    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
-    draftAutoSaveTimer.current = setTimeout(async () => {
-      setDraftAutoSaveStatus('saving');
-      try {
-        await shipmentApi.updateDraft(trackingId, draftForm);
-        setDraftAutoSaveStatus('saved');
-        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
-      } catch {
-        setDraftAutoSaveStatus('error');
-      }
-    }, 800);
-    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftForm]);
+
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -652,7 +632,7 @@ export function ShipmentDetail() {
           onDiscard={handleDiscardDraft}
           confirming={confirming}
           confirmError={confirmError}
-          autoSaveStatus={draftAutoSaveStatus}
+
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
           branches={branches}
@@ -1431,14 +1411,13 @@ function findFinalBranch(recipientAddress: { province?: string; latitude?: numbe
   return null;
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, branches }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, createdAt, draftId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
   onDiscard: () => void;
   confirming: boolean;
   confirmError: string;
-  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
   branches: Branch[];
@@ -1447,6 +1426,30 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   const { user } = useAuth();
   const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
   const [discardConfirm, setDiscardConfirm] = useState(false);
+
+  // Auto-save: debounced 1 s after every form change
+  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
+  const [autoSaveError, setAutoSaveError] = useState("");
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      setAutoSaveStatus("saving");
+      setAutoSaveError("");
+      try {
+        await shipmentApi.updateDraft(draftId, form);
+        setAutoSaveStatus("saved");
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        setAutoSaveError(msg ?? "No se pudieron guardar los cambios.");
+        setAutoSaveStatus("error");
+      }
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
     onChange({ ...form, sender: { ...form.sender, [field]: value } });
@@ -1805,26 +1808,27 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-          {autoSaveStatus === 'saving' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#92400e" }}>
-              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
-              Guardando…
+          {/* Auto-save status */}
+          {autoSaveStatus === "saving" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#78350f" }}>
+              <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
             </span>
           )}
-          {autoSaveStatus === 'saved' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#16a34a" }}>
-              <Check style={{ width: 13, height: 13 }} />
-              Guardado
+          {autoSaveStatus === "saved" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#15803d" }}>
+              <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
             </span>
           )}
-          {autoSaveStatus === 'error' && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>Error al guardar</span>
+          {autoSaveStatus === "error" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#dc2626" }}>
+              <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
+            </span>
           )}
         </div>
-        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar el envío ingresará al sistema logístico.
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
