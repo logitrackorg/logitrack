@@ -129,7 +129,7 @@ func (h *ShipmentHandler) SaveDraft(c *gin.Context) {
 	}
 	shipment, err := h.svc.SaveDraft(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, shipment)

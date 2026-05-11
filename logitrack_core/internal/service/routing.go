@@ -2356,7 +2356,11 @@ func candidateDepartures(cfg model.RoutingConfig, nowMin float64) []float64 {
 	if firstHour > end {
 		return []float64{}
 	}
-	out := make([]float64, 0, end-firstHour+2)
+	capHint := end - firstHour + 2
+	if capHint < 0 {
+		capHint = 0
+	}
+	out := make([]float64, 0, capHint)
 	// Permitir "salir ya" si ahora no es hora exacta y estamos dentro del
 	// horario operativo. Esto evita pedirle al chofer que espere 59 minutos
 	// hasta el siguiente entero solo para respetar la grilla.
