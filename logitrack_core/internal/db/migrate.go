@@ -259,6 +259,26 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE zones DROP COLUMN IF EXISTS severity;
 
 		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS risky_zone_surcharge REAL NOT NULL DEFAULT 5000;
+
+		-- Draft lifecycle: new system_config columns
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS draft_retention_days INTEGER NOT NULL DEFAULT 7;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS draft_purge_days     INTEGER NOT NULL DEFAULT 30;
+		UPDATE system_config SET draft_retention_days = 7, draft_purge_days = 30 WHERE id = 1 AND draft_retention_days = 0;
+
+		-- Draft lifecycle: track PII purge timestamp on the projection
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS pii_purged_at TIMESTAMPTZ;
+
+		-- Draft lifecycle: audit trail (CA-03)
+		CREATE TABLE IF NOT EXISTS draft_audit_log (
+			id           TEXT PRIMARY KEY,
+			tracking_id  TEXT NOT NULL,
+			action       TEXT NOT NULL,
+			performed_by TEXT NOT NULL DEFAULT 'system',
+			timestamp    TIMESTAMPTZ NOT NULL,
+			details      JSONB NOT NULL DEFAULT '{}'
+		);
+		CREATE INDEX IF NOT EXISTS draft_audit_tracking_idx  ON draft_audit_log(tracking_id);
+		CREATE INDEX IF NOT EXISTS draft_audit_timestamp_idx ON draft_audit_log(timestamp DESC);
 	`)
 	return err
 }

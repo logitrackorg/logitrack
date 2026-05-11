@@ -25,6 +25,9 @@ const (
 	EventShipmentCancelled   = "shipment_cancelled"
 	EventIncidentReported    = "incident_reported"
 	EventShipmentETAExtended = "shipment_eta_extended"
+	EventDraftExpired        = "draft_expired"
+	EventDraftPIIPurged      = "draft_pii_purged"
+	EventDraftPIISuppressed  = "draft_pii_suppressed"
 )
 
 // ReturnETAExtraDays is added to the estimated_delivery_at when a shipment

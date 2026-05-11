@@ -560,6 +560,26 @@ export function NewShipment() {
                 onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
+          {/* CA-05: Privacy notice — shown once the operator starts filling in recipient data */}
+          {(form.recipient.name || form.recipient.dni) && (
+            <div style={{
+              marginTop: 8,
+              padding: "10px 14px",
+              borderRadius: 8,
+              border: "1px solid #e0f2fe",
+              background: "#f0f9ff",
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+            }}>
+              <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+              <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+                Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
+                <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
+                Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* Sucursales */}

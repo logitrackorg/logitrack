@@ -22,6 +22,7 @@ const (
 	StatusCancelled           Status = "cancelled"            // cancelado — terminal
 	StatusLost                Status = "lost"                 // extraviado — terminal
 	StatusDestroyed           Status = "destroyed"            // daño total — terminal
+	StatusExpired             Status = "expired"              // borrador expirado — solo visible en auditoría
 )
 
 type PackageType string

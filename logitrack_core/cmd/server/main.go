@@ -96,6 +96,12 @@ func main() {
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
 	clockHandler := handler.NewClockHandler()
 
+	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
+	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
+	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
+	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
+	draftScheduler.Start()
+
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
 	routingCfgHandler := handler.NewRoutingConfigHandler(routingCfgSvc)
@@ -255,6 +261,13 @@ func main() {
 	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
+
+	// Draft lifecycle / compliance (Ley 25.326) — admin only
+	protected.GET("/admin/compliance/audit", adminOnly, draftLifecycleHandler.GetAuditLog)
+	protected.GET("/admin/compliance/drafts", adminOnly, draftLifecycleHandler.FindByDNI)
+	protected.POST("/admin/compliance/suppress", adminOnly, draftLifecycleHandler.Suppress)
+	protected.POST("/admin/compliance/expire-drafts", adminOnly, draftLifecycleHandler.TriggerExpiration)
+	protected.POST("/admin/compliance/purge-pii", adminOnly, draftLifecycleHandler.TriggerPurge)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
