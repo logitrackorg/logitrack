@@ -729,8 +729,10 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			updated = extended
 		}
 
-		// Derive hub location from the last at_hub/at_origin_hub event
-		autoLocation := ""
+		// Derive hub location from the last at_hub/at_origin_hub event.
+		// Falls back to the shipment's current_location for shipments seeded directly
+		// as at_hub (no StatusChanged event in history).
+		autoLocation := updated.CurrentLocation
 		if evs, _ := s.repo.GetEvents(trackingID); len(evs) > 0 {
 			for i := len(evs) - 1; i >= 0; i-- {
 				if evs[i].ToStatus == model.StatusAtHub || evs[i].ToStatus == model.StatusAtOriginHub {

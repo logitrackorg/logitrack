@@ -84,20 +84,19 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 		_, err = s.repo.Create(newRoute)
 		return err
 	}
-	if route.Status == model.RouteStatusActive {
-		return fmt.Errorf("la ruta ya está iniciada, no se pueden agregar nuevos envíos")
-	}
-	if route.Status == model.RouteStatusFinished {
-		// Nueva tanda de envíos después de una ruta finalizada — reabre para que el chofer la inicie de nuevo.
-		// Purge shipments that are already in a terminal delivery state so they don't bleed into the new batch.
-		active := route.ShipmentIDs[:0]
+	if route.Status == model.RouteStatusActive || route.Status == model.RouteStatusFinished {
+		// Si la ruta está activa o finalizada, verificar si el chofer tiene envíos activos.
+		// Una ruta "activa" sin envíos pendientes (out_for_delivery / delivery_failed) significa
+		// que el chofer ya terminó su lote aunque no se haya auto-cerrado la ruta todavía.
+		// Si no se puede buscar un envío, se trata como pendiente (conservador).
 		for _, sid := range route.ShipmentIDs {
 			sh, err := s.shipmentRepo.GetByTrackingID(sid)
 			if err != nil || isDriverActiveStatus(sh.Status) {
-				active = append(active, sid)
+				return fmt.Errorf("la ruta ya está iniciada, no se pueden agregar nuevos envíos")
 			}
 		}
-		route.ShipmentIDs = active
+		// Sin envíos pendientes: purgar y reabrir como pending para la nueva tanda.
+		route.ShipmentIDs = route.ShipmentIDs[:0]
 		route.Status = model.RouteStatusPending
 		route.StartedAt = nil
 	}
@@ -194,14 +193,24 @@ func (s *RouteService) PendingShipments(driverID string, date model.DateOnly) []
 	return out
 }
 
-// CanAssignToRoute returns an error if the driver already has an active route for the given date.
+// CanAssignToRoute returns an error if the driver has an active route with pending shipments for the given date.
+// A route is considered "busy" only if it is active AND has shipments physically with the driver
+// (out_for_delivery or delivery_failed). An active route with no such shipments means the driver
+// already finished their batch — the system just hasn't auto-closed it yet.
+// If a shipment cannot be fetched, it is treated as pending (conservative).
 func (s *RouteService) CanAssignToRoute(driverID string, date model.DateOnly) error {
 	route, err := s.repo.GetByDriverAndDate(driverID, date)
 	if err != nil {
 		return nil // no route yet — assignment will create one
 	}
-	if route.Status == model.RouteStatusActive {
-		return fmt.Errorf("la ruta del chofer ya está iniciada, no se pueden agregar nuevos envíos")
+	if route.Status != model.RouteStatusActive {
+		return nil
+	}
+	for _, sid := range route.ShipmentIDs {
+		sh, err := s.shipmentRepo.GetByTrackingID(sid)
+		if err != nil || isDriverActiveStatus(sh.Status) {
+			return fmt.Errorf("la ruta del chofer ya está iniciada, no se pueden agregar nuevos envíos")
+		}
 	}
 	return nil
 }
@@ -233,7 +242,7 @@ func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
 func (s *RouteService) CheckAndFinalizeRoute(driverID string) {
 	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	route, err := s.repo.GetByDriverAndDate(driverID, today)
-	if err != nil || route.Status != model.RouteStatusActive || len(route.ShipmentIDs) == 0 {
+	if err != nil || route.Status != model.RouteStatusActive {
 		return
 	}
 	for _, id := range route.ShipmentIDs {
