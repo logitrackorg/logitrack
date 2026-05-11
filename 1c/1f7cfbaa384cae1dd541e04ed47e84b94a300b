@@ -1,0 +1,32 @@
+logitrack_core/internal/model/routing_config.go
+  s_4a685db5a54b1e::t_a39996625dc5d9 45
+  s_4a685db5a54b1e::t_ae008291cc53fe 24
+logitrack_core/internal/db/migrate.go
+  s_4a685db5a54b1e::t_13078e05516c1a 121-122
+docs/propuesta-mejoras-producto.md
+  s_05e4161cde9611::t_e98496515a3bb7 1-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "1c1f7cfbaa384cae1dd541e04ed47e84b94a300b",
+  "prompts": {},
+  "sessions": {
+    "s_05e4161cde9611": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a9f8fc4-3607-44dc-a6df-b1cf5bc4c8bf",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_4a685db5a54b1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6ef98710-5520-4647-9f2a-44a3c1ca69ba",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
