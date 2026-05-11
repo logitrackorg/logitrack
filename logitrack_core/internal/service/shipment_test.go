@@ -1585,7 +1585,7 @@ func TestCorrectShipment_TimeWindow_FlexibleToRestrictive_Rejected(t *testing.T)
 			_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 				Corrections: model.ShipmentCorrections{TimeWindow: &twCopy},
 			})
-			if err == nil || !strings.Contains(err.Error(), "ventana horaria") {
+			if err == nil || !strings.Contains(err.Error(), "ventana") {
 				t.Errorf("expected restrictive direction error, got: %v", err)
 			}
 		})

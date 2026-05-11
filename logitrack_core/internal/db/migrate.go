@@ -118,7 +118,8 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS express_max_hours_in_branch;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS max_shipments_per_driver;
 		ALTER TABLE routing_config DROP COLUMN IF EXISTS max_weight_kg_per_driver;
-		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows         BOOLEAN       NOT NULL DEFAULT FALSE;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS enforce_time_windows         BOOLEAN       NOT NULL DEFAULT TRUE;
+		UPDATE routing_config SET enforce_time_windows = TRUE WHERE id = 1 AND enforce_time_windows = FALSE;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_start_hour    INTEGER       NOT NULL DEFAULT 8;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS morning_window_end_hour      INTEGER       NOT NULL DEFAULT 14;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS afternoon_window_start_hour  INTEGER       NOT NULL DEFAULT 12;
