@@ -74,7 +74,15 @@ export function DraftList() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = drafts
+  const expiresAtMs = (d: { created_at: string }) =>
+    new Date(d.created_at).getTime() + retentionDays * 24 * 60 * 60 * 1000;
+
+  // Hide drafts that have already passed their expiration window according to
+  // the server clock. The nightly job will eventually flip them to 'expired'
+  // in the DB, but in the meantime they should be invisible to operators.
+  const visibleDrafts = drafts.filter((d) => expiresAtMs(d) > nowMs);
+
+  const filtered = visibleDrafts
     .filter((d) => {
       const q = query.trim().toLowerCase();
       if (q.length < 2) return true;
@@ -162,7 +170,7 @@ export function DraftList() {
         <Card className="p-10 text-center">
           <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-500">
-            {drafts.length === 0
+            {visibleDrafts.length === 0
               ? "No hay borradores guardados."
               : "No se encontraron borradores con ese criterio de búsqueda."}
           </p>
