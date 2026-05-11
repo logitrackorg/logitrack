@@ -271,6 +271,11 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
+		// Expired drafts are invisible to everyone except admins.
+		if shipment.Status == model.StatusExpired && user.Role != model.RoleAdmin {
+			c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+			return
+		}
 		if operatorReadForbidden(c, user, shipment) {
 			return
 		}
