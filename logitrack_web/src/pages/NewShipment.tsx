@@ -358,9 +358,9 @@ export function NewShipment() {
     try {
       // If a draft was auto-saved, update it with the latest data then confirm it;
       // otherwise create from scratch
-      if (draftId) {
-        await shipmentApi.updateDraft(draftId, form);
-        const shipment = await shipmentApi.confirmDraft(draftId, user?.username ?? "");
+      if (draftIdRef.current) {
+        await shipmentApi.updateDraft(draftIdRef.current, form);
+        const shipment = await shipmentApi.confirmDraft(draftIdRef.current, user?.username ?? "");
         navigate(`/shipments/${shipment.tracking_id}`);
       } else {
         const shipment = await shipmentApi.create(form);
