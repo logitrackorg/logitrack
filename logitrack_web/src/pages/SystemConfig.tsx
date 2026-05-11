@@ -158,6 +158,7 @@ export function SystemConfig() {
           <p className="text-sm text-slate-500">Cargando…</p>
         </Card>
       ) : draft && (
+        <>
         <Card>
           <CardHeader>
             <CardTitle>Intentos de entrega</CardTitle>
@@ -363,6 +364,7 @@ export function SystemConfig() {
             </div>
           </CardContent>
         </Card>
+        </>
       )}
 
       <Card>
