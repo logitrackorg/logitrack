@@ -104,7 +104,8 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		if payload.ToStatus == model.StatusNoEntregado || payload.ToStatus == model.StatusRechazado {
 			_, err := p.db.Exec(`
 				UPDATE shipments
-				SET status = $1, updated_at = $2, is_returning = TRUE
+				SET status = $1, updated_at = $2, is_returning = TRUE,
+				    final_branch_id = origin_branch_id
 				WHERE tracking_id = $3`,
 				string(payload.ToStatus), event.Timestamp, event.TrackingID,
 			)
