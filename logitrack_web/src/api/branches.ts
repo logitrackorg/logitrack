@@ -17,6 +17,8 @@ export interface Branch {
   province: string;
   status: "activo" | "inactivo" | "fuera_de_servicio";
   max_capacity: number;
+  latitude?: number;
+  longitude?: number;
   created_at: string;
   updated_at: string;
   updated_by?: string;

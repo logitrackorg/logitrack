@@ -143,12 +143,36 @@ func (s *ShipmentService) SetPricingService(p *PricingService) {
 }
 
 // applyPrice computes and stamps the price + breakdown onto a shipment in place.
+// Origin is the receiving branch address (where the shipment physically departs from),
+// falling back to the sender's address only if the branch cannot be resolved.
 // No-op when the pricing service has not been wired (e.g. unit tests that don't care).
 func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 	if s.pricingSvc == nil {
 		return
 	}
-	price, breakdown := s.pricingSvc.CalculateForShipment(*shipment)
+	origin := shipment.Sender.Address
+	if shipment.ReceivingBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(shipment.ReceivingBranchID); ok {
+			origin = model.Address{
+				Street:     b.Address.Street,
+				City:       b.Address.City,
+				Province:   b.Province,
+				PostalCode: b.Address.PostalCode,
+				Latitude:   b.Latitude,
+				Longitude:  b.Longitude,
+			}
+		}
+	}
+	price, breakdown := s.pricingSvc.Quote(PricingInput{
+		WeightKg:       shipment.WeightKg,
+		PackageType:    shipment.PackageType,
+		ShipmentType:   shipment.ShipmentType,
+		TimeWindow:     shipment.TimeWindow,
+		IsFragile:      shipment.IsFragile,
+		DeliveryMethod: shipment.DeliveryMethod,
+		Origin:         origin,
+		Destination:    shipment.Recipient.Address,
+	})
 	shipment.Price = &price
 	b := breakdown
 	shipment.PriceBreakdown = &b
@@ -284,6 +308,10 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 }
 
 func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment, error) {
+	req.Sender.DNI = strings.TrimSpace(req.Sender.DNI)
+	req.Recipient.DNI = strings.TrimSpace(req.Recipient.DNI)
+	req.Sender.Name = strings.TrimSpace(req.Sender.Name)
+	req.Recipient.Name = strings.TrimSpace(req.Recipient.Name)
 	if req.Sender.DNI != "" {
 		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
@@ -301,12 +329,12 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
-		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Sender.Email), "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	if req.Recipient.Email != "" {
-		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Recipient.Email), "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
@@ -354,6 +382,10 @@ func (s *ShipmentService) SaveDraft(req model.SaveDraftRequest) (model.Shipment,
 }
 
 func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest) (model.Shipment, error) {
+	req.Sender.DNI = strings.TrimSpace(req.Sender.DNI)
+	req.Recipient.DNI = strings.TrimSpace(req.Recipient.DNI)
+	req.Sender.Name = strings.TrimSpace(req.Sender.Name)
+	req.Recipient.Name = strings.TrimSpace(req.Recipient.Name)
 	if req.Sender.DNI != "" {
 		if err := validateDNI(req.Sender.DNI, "sender_dni"); err != nil {
 			return model.Shipment{}, err
@@ -371,12 +403,12 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 		return model.Shipment{}, err
 	}
 	if req.Sender.Email != "" {
-		if err := validateEmail(req.Sender.Email, "sender_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Sender.Email), "sender_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
 	if req.Recipient.Email != "" {
-		if err := validateEmail(req.Recipient.Email, "recipient_email"); err != nil {
+		if err := validateEmail(strings.TrimSpace(req.Recipient.Email), "recipient_email"); err != nil {
 			return model.Shipment{}, err
 		}
 	}
@@ -500,14 +532,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	now := clock.Now().UTC()
 
-	var pricePtr *float64
-	var breakdownPtr *model.PriceBreakdown
-	if s.pricingSvc != nil {
-		price, breakdown := s.pricingSvc.CalculateForShipment(draft)
-		pricePtr = &price
-		bd := breakdown
-		breakdownPtr = &bd
-	}
+	s.applyPrice(&draft)
 
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
 		DraftID:             draftID,
@@ -517,8 +542,8 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Timestamp:           now,
 		Prediction:          prediction,
 		EstimatedDeliveryAt: s.estimatedDelivery(now, draft.OriginBranchID, draft.FinalBranchID, string(draft.ShipmentType)),
-		Price:               pricePtr,
-		PriceBreakdown:      breakdownPtr,
+		Price:               draft.Price,
+		PriceBreakdown:      draft.PriceBreakdown,
 	})
 	if err != nil {
 		return model.Shipment{}, err
