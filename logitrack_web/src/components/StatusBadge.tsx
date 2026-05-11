@@ -18,6 +18,7 @@ const config: Record<ShipmentStatus, { label: string; bg: string }> = {
   cancelled:             { label: "Cancelado",             bg: "#b91c1c" },
   lost:                  { label: "Extraviado",            bg: "#374151" },
   destroyed:             { label: "Daño total",            bg: "#111827" },
+  expired:               { label: "Borrador expirado",     bg: "#6b7280" },
 };
 
 export function StatusBadge({ status, label }: { status: ShipmentStatus; label?: string }) {

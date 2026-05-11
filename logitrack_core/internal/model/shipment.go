@@ -280,6 +280,7 @@ type ShipmentFilter struct {
 	DateFrom          *time.Time // inclusive lower bound on created_at
 	DateTo            *time.Time // inclusive upper bound on created_at (end of day)
 	ReceivingBranchID string     // if non-empty, only shipments with this branch
+	IncludeExpired    bool       // if true, also return expired drafts (supervisor/manager only)
 }
 
 // CorrectShipmentRequest carries typed field corrections.

@@ -816,7 +816,10 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
             {loading && <span className="text-[11px] text-white/70">Calculando…</span>}
           </div>
           {quote ? (
-            <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+            <>
+              <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+              <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+            </>
           ) : (
             <p className="mt-1 text-sm text-white/80">
               Completá peso, tipo de paquete y direcciones para ver la cotización.

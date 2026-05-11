@@ -51,6 +51,7 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   cancelled:            [],
   lost:                 [],
   destroyed:            [],
+  expired:              [],
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -71,6 +72,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   cancelled:            "Cancelado",
   lost:                 "Extraviado",
   destroyed:            "Daño total",
+  expired:              "Borrador expirado",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -1784,7 +1786,10 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
                 {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
               </div>
               {quote ? (
-                <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                <>
+                  <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                  <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+                </>
               ) : (
                 <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
               )}
@@ -1925,7 +1930,7 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
     at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
     redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
     delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
-    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937",
+    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
   };
 
   const solidLine = (color = "#e5e7eb") => (

@@ -3,9 +3,9 @@ package service
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -33,7 +33,7 @@ func NewDraftLifecycleService(
 // Intended to be called by the nightly scheduler.
 func (s *DraftLifecycleService) RunExpirationJob() {
 	cfg := s.configSvc.Get()
-	cutoff := time.Now().UTC().AddDate(0, 0, -cfg.DraftRetentionDays)
+	cutoff := clock.Now().UTC().AddDate(0, 0, -cfg.DraftRetentionDays)
 
 	ids, err := s.repo.ExpireDrafts(cutoff)
 	if err != nil {
@@ -52,7 +52,7 @@ func (s *DraftLifecycleService) RunExpirationJob() {
 			TrackingID:  id,
 			Action:      model.DraftAuditExpired,
 			PerformedBy: "system",
-			Timestamp:   time.Now().UTC(),
+			Timestamp:   clock.Now().UTC(),
 			Details: map[string]string{
 				"retention_days": fmt.Sprintf("%d", cfg.DraftRetentionDays),
 			},
@@ -64,7 +64,7 @@ func (s *DraftLifecycleService) RunExpirationJob() {
 // the configured purge window. Intended to be called by the nightly scheduler.
 func (s *DraftLifecycleService) RunPurgeJob() {
 	cfg := s.configSvc.Get()
-	purgeCutoff := time.Now().UTC().AddDate(0, 0, -cfg.DraftPurgeDays)
+	purgeCutoff := clock.Now().UTC().AddDate(0, 0, -cfg.DraftPurgeDays)
 
 	ids, err := s.repo.PurgeDraftPII(purgeCutoff)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *DraftLifecycleService) RunPurgeJob() {
 			TrackingID:  id,
 			Action:      model.DraftAuditPIIPurged,
 			PerformedBy: "system",
-			Timestamp:   time.Now().UTC(),
+			Timestamp:   clock.Now().UTC(),
 			Details: map[string]string{
 				"purge_days": fmt.Sprintf("%d", cfg.DraftPurgeDays),
 			},
@@ -115,7 +115,7 @@ func (s *DraftLifecycleService) SuppressByDNI(dni, performedBy string) (int, err
 			TrackingID:  d.TrackingID,
 			Action:      model.DraftAuditSuppressed,
 			PerformedBy: performedBy,
-			Timestamp:   time.Now().UTC(),
+			Timestamp:   clock.Now().UTC(),
 			Details:     map[string]string{"dni": dni},
 		})
 		suppressed++

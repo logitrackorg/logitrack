@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter, FileText } from "lucide-react";
+import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter, FileText, Clock } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
@@ -65,7 +65,7 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
   URL.revokeObjectURL(url);
 }
 
-type StatusFilter = ShipmentStatus | "active" | "";
+type StatusFilter = ShipmentStatus | "active" | "expired" | "";
 
 const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 
@@ -117,19 +117,40 @@ export function ShipmentList() {
 
   const dateRangeInvalid = !!(dateFrom && dateTo && dateTo < dateFrom);
 
-  const load = async () => {
+  // Track whether the last server fetch included expired drafts, to detect
+  // when a statusFilter change requires a new server request.
+  const loadedWithExpiredRef = useRef(statusFilter === "expired");
+
+  const load = async (withExpired: boolean) => {
     setLoading(true);
     setSelected(new Set());
     try {
-      const data = await shipmentApi.list();
+      const params = withExpired ? { include_expired: "true" } : undefined;
+      const data = await shipmentApi.list(params);
       setShipments(data ?? []);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
+  useEffect(() => {
+    const withExpired = statusFilter === "expired";
+    loadedWithExpiredRef.current = withExpired;
+    load(withExpired);
+    branchApi.listActive().then(setBranches).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reload from server when toggling to/from the expired-drafts view, since
+  // expired items are excluded by default and need a separate server param.
+  useEffect(() => {
+    const wantExpired = statusFilter === "expired";
+    if (wantExpired !== loadedWithExpiredRef.current) {
+      loadedWithExpiredRef.current = wantExpired;
+      load(wantExpired);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   const localDate = (iso: string) => {
     const d = new Date(iso);
@@ -137,6 +158,9 @@ export function ShipmentList() {
   };
 
   const filtered = shipments.filter((s) => {
+    // Expired drafts are never shown outside the explicit "expired" filter,
+    // even if the server returned them (e.g. during a filter transition).
+    if (statusFilter !== "expired" && s.status === "expired") return false;
     if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
     if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
     if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
@@ -205,7 +229,7 @@ export function ShipmentList() {
       setBulkResult(result);
       setBulkConfirm(null);
       setSelected(new Set());
-      await load();
+      await load(loadedWithExpiredRef.current);
     } finally {
       setBulkLoading(false);
     }
@@ -326,6 +350,9 @@ export function ShipmentList() {
             <option value="lost">Extraviados</option>
             <option value="destroyed">Daño total</option>
             <option value="draft">Borrador</option>
+            {hasRole("supervisor", "manager") && (
+              <option value="expired">Borradores expirados</option>
+            )}
           </select>
 
           {isOperator ? (
@@ -368,6 +395,16 @@ export function ShipmentList() {
           </p>
         )}
       </Card>
+
+      {/* Expired-drafts notice */}
+      {statusFilter === "expired" && (
+        <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-xl border border-slate-300 bg-slate-100 text-sm text-slate-700">
+          <Clock className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
+          <span>
+            Mostrando borradores expirados. Son visibles solo para supervisores y gerentes hasta que se eliminen los datos personales (según configuración en <strong>Configuración del sistema</strong>).
+          </span>
+        </div>
+      )}
 
       {/* Bulk action toolbar */}
       {canBulk && selected.size > 0 && (

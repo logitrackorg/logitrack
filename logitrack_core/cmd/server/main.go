@@ -94,13 +94,18 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
-	clockHandler := handler.NewClockHandler()
-
 	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
 	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
 	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
+
+	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
+	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
+	clockHandler := handler.NewClockHandler(func() {
+		draftLifecycleSvc.RunExpirationJob()
+		draftLifecycleSvc.RunPurgeJob()
+	})
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)

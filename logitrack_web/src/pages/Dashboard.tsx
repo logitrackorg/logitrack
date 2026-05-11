@@ -30,6 +30,7 @@ const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "s
   cancelled:            { label: "Cancelados",                  tone: "danger" },
   lost:                 { label: "Extraviados",                 tone: "danger" },
   destroyed:            { label: "Daño total",                  tone: "danger" },
+  expired:              { label: "Borrador expirado",           tone: "default" },
 };
 
 function toDateInput(d: Date): string {

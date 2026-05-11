@@ -243,6 +243,11 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	} else if branchID := c.Query("branch_id"); branchID != "" {
 		filter.ReceivingBranchID = branchID
 	}
+	// Only supervisor and manager may request expired drafts.
+	if c.Query("include_expired") == "true" &&
+		(user.Role == model.RoleSupervisor || user.Role == model.RoleManager) {
+		filter.IncludeExpired = true
+	}
 	shipments, err := h.svc.List(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
