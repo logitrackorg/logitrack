@@ -702,7 +702,13 @@ export function ShipmentDetail() {
                   <InfoRowEx {...pkgVal} label="Tipo" />
                   {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
                   {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
-                  {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
+                  {(cor.time_window ?? shipment.time_window) && (() => {
+                    const tw = cor.time_window ?? shipment.time_window;
+                    const twLabel = tw === "morning" ? "Mañana" : tw === "afternoon" ? "Tarde" : "Flexible";
+                    return cor.time_window
+                      ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
+                      : <InfoRow label="Ventana horaria" value={twLabel} />;
+                  })()}
                   <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />

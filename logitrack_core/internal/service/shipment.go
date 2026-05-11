@@ -1221,10 +1221,12 @@ func effectiveTimeWindow(s model.Shipment) model.TimeWindow {
 // commitment — downgrades are fine because the customer already paid more.
 func (s *ShipmentService) validateCorrectionDirection(current model.Shipment, c model.ShipmentCorrections) error {
 	if c.TimeWindow != nil {
-		from := effectiveTimeWindow(current)
 		to := *c.TimeWindow
-		if model.IsTimeWindowRestrictive(to) && !model.IsTimeWindowRestrictive(from) {
-			return fmt.Errorf("no se puede cambiar la ventana horaria a una más restrictiva (el precio quedaría por debajo del compromiso ya cobrado)")
+		// Use the original time_window (pre-corrections) as the reference. This allows
+		// reverting a restrictive→flexible correction back to the original restrictive value,
+		// while still blocking flexible→restrictive moves for shipments that started as flexible.
+		if model.IsTimeWindowRestrictive(to) && !model.IsTimeWindowRestrictive(current.TimeWindow) {
+			return fmt.Errorf("este envío fue creado con ventana flexible y su precio no incluye recargo por horario; no es posible asignarle una ventana restringida")
 		}
 	}
 	return nil
