@@ -579,7 +579,7 @@ export function Routing() {
         title="Ruteo del día"
         description={
           globalPlan
-            ? `Plan generado el ${new Date(globalPlan.generated_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · ${globalPlan.log.total_assigned} asignados · ${globalPlan.log.total_unassigned} sin asignar`
+            ? undefined
             : `Plan de ruteo para ${branches.find((b) => b.id === branchId)?.name ?? "tu sucursal"}. Se genera automáticamente a las 08:00.`
         }
         icon={<RouteIcon className="w-5 h-5" />}

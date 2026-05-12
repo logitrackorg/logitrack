@@ -580,7 +580,7 @@ export function ShipmentDetail() {
               Incidencia
             </button>
           )}
-          {hasRole("supervisor", "admin") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("operator", "supervisor") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-sm font-semibold text-rose-700 cursor-pointer transition-colors"

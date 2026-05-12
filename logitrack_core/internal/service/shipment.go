@@ -273,6 +273,11 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		prediction = s.mlClient.PredictFromCreateRequest(req)
 	}
 
+	// Cuando origen == destino el envío ya está en su hub final al crearse.
+	initialStatus := model.StatusAtOriginHub
+	if finalBranchID == req.ReceivingBranchID {
+		initialStatus = model.StatusAtHub
+	}
 	shipment := model.Shipment{
 		TrackingID:          generateTrackingID(),
 		Sender:              req.Sender,
@@ -287,7 +292,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		DeliveryMethod:      deliveryMethod,
 		ReceivingBranchID:   req.ReceivingBranchID,
 		OriginBranchID:      req.ReceivingBranchID,
-		Status:              model.StatusAtOriginHub,
+		Status:              initialStatus,
 		CurrentLocation:     currentLocation,
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -549,8 +554,24 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		return model.Shipment{}, err
 	}
 	setPriority(&confirmed, prediction)
-
 	s.upsertParties(confirmed)
+
+	// Auto-transición: origen == destino → el envío ya está en su hub final.
+	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
+		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: confirmed.TrackingID,
+			FromStatus: model.StatusAtOriginHub,
+			ToStatus:   model.StatusAtHub,
+			Location:   confirmed.OriginBranchID,
+			ChangedBy:  changedBy,
+			Notes:      "Sucursal de origen es la sucursal de destino — envío disponible para última milla",
+			Timestamp:  time.Now().UTC(),
+		})
+		if autoErr == nil {
+			return autoUpdated, nil
+		}
+	}
+
 	return confirmed, nil
 }
 

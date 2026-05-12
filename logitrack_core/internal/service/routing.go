@@ -451,7 +451,7 @@ func (s *RoutingService) dispatchInterBranch(
 
 		poolForDest := vehiclesAcceptingDest(pool, dest, used)
 		totalWeight := sumWeights(group)
-		refCap := fillRateCapacity(poolForDest, existingLoad, totalWeight)
+		refCap := fillRateCapacity(poolForDest, existingLoad, totalWeight, cfg.MinFillRate)
 
 		forced := anyForced(group, cfg, now)
 		var rule model.DispatchRule
@@ -490,7 +490,7 @@ func (s *RoutingService) dispatchInterBranch(
 			continue
 		}
 
-		chosen, included, excluded := selectAndPack(poolForDest, existingLoad, group)
+		chosen, included, excluded := selectAndPack(poolForDest, existingLoad, group, cfg.MinFillRate)
 		if chosen == nil {
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
@@ -798,32 +798,55 @@ func vehiclesAcceptingDest(pool []model.Vehicle, dest string, used map[string]bo
 }
 
 // fillRateCapacity devuelve la capacidad del vehículo a usar como referencia para
-// el umbral de consolidación. Usa el más chico cuya capacidad disponible alcance el
-// peso total; si ninguno alcanza, devuelve el de mayor capacidad disponible.
-// Esto evita que un camión grande suba el umbral artificialmente cuando hay un
-// vehículo adecuado al peso del grupo.
-func fillRateCapacity(pool []model.Vehicle, existingLoad map[string]float64, totalWeight float64) float64 {
-	best := 0.0
-	// Buscar el más chico que cubre el peso
+// el umbral de consolidación.
+//
+//  1. Si hay vehículo que cubre todo el load y alcanza min_fill_rate de
+//     utilización, devuelve el más chico (preferimos despachar todo junto).
+//  2. Si ningún vehículo que cubre alcanza el fill rate (caso de camión
+//     sobredimensionado), cae al de mayor utilización efectiva (load capado a
+//     su capacidad / capacidad), con desempate por mayor capacidad disponible.
+//
+// Ejemplo (1): 250 kg con pool [100, 600, 2000] @ 10% → 600 cubre y rinde 42%
+// → devuelve 600.
+// Ejemplo (2): 1051 kg con pool [500, 800, 5000] @ 40% → solo 5000 cubre pero
+// rinde 21% (< 40%) → fallback max-util → 800 (mismo 100% que 500, más grande).
+func fillRateCapacity(pool []model.Vehicle, existingLoad map[string]float64, totalWeight, minFillRate float64) float64 {
+	if totalWeight <= 0 {
+		return 0
+	}
+	bestCap := 0.0
 	for _, v := range pool {
 		avail := v.CapacityKg - existingLoad[v.ID]
-		if avail >= totalWeight {
-			if best == 0.0 || avail < best {
-				best = avail
-			}
+		if avail <= 0 || avail < totalWeight {
+			continue
+		}
+		if totalWeight/avail < minFillRate {
+			continue
+		}
+		if bestCap == 0 || avail < bestCap {
+			bestCap = avail
 		}
 	}
-	if best > 0 {
-		return best
+	if bestCap > 0 {
+		return bestCap
 	}
-	// Si ninguno alcanza, usar el de mayor capacidad disponible
+	bestUtil := -1.0
 	for _, v := range pool {
 		avail := v.CapacityKg - existingLoad[v.ID]
-		if avail > best {
-			best = avail
+		if avail <= 0 {
+			continue
+		}
+		load := totalWeight
+		if load > avail {
+			load = avail
+		}
+		util := load / avail
+		if util > bestUtil || (util == bestUtil && avail > bestCap) {
+			bestUtil = util
+			bestCap = avail
 		}
 	}
-	return best
+	return bestCap
 }
 
 func sumWeights(shipments []model.Shipment) float64 {
@@ -834,49 +857,71 @@ func sumWeights(shipments []model.Shipment) float64 {
 	return total
 }
 
-// selectAndPack elige el vehículo y bin-packea sobre la capacidad DISPONIBLE
-// (CapacityKg menos la carga ya asignada). Esto evita que aplicar el plan
-// varias veces seguidas sobrecargue al mismo vehículo.
+// selectAndPack elige el vehículo y bin-packea sobre la capacidad DISPONIBLE.
+// Usa el mismo criterio que fillRateCapacity para mantenerse coherente con la
+// referencia del umbral de consolidación:
 //
-// 1) si algún vehículo tiene capacidad disponible suficiente para toda la suma → el más chico que cubra
-// 2) si ninguno cubre → el de mayor capacidad disponible, bin-pack por prioridad desc, sobrante a excluded.
-func selectAndPack(pool []model.Vehicle, existingLoad map[string]float64, shipments []model.Shipment) (*model.Vehicle, []model.Shipment, []model.Shipment) {
+//  1. Más chico que cubre todo el load y alcanza min_fill_rate.
+//  2. Fallback: mayor utilización efectiva, desempate por mayor capacidad.
+//
+// Si el vehículo elegido no cubre el total, bin-pack por prioridad desc y el
+// excedente queda en excluded (`sobrepeso_excede_vehiculo`).
+func selectAndPack(pool []model.Vehicle, existingLoad map[string]float64, shipments []model.Shipment, minFillRate float64) (*model.Vehicle, []model.Shipment, []model.Shipment) {
 	if len(pool) == 0 || len(shipments) == 0 {
 		return nil, nil, nil
 	}
 	total := sumWeights(shipments)
-
 	avail := func(v *model.Vehicle) float64 { return v.CapacityKg - existingLoad[v.ID] }
 
-	// Intentar el de menor capacidad disponible que cubra todo
-	var smallest *model.Vehicle
+	var chosen *model.Vehicle
 	for i := range pool {
 		v := &pool[i]
-		if avail(v) >= total {
-			if smallest == nil || avail(v) < avail(smallest) {
-				smallest = v
-			}
+		a := avail(v)
+		if a < total {
+			continue
+		}
+		if total/a < minFillRate {
+			continue
+		}
+		if chosen == nil || a < avail(chosen) {
+			chosen = v
 		}
 	}
-	if smallest != nil {
+	if chosen != nil {
 		out := make([]model.Shipment, len(shipments))
 		copy(out, shipments)
-		return smallest, out, nil
+		return chosen, out, nil
 	}
 
-	// Ninguno cubre — usar el de mayor capacidad disponible y bin-pack
-	largest := &pool[0]
+	chosenUtil := -1.0
 	for i := range pool {
-		if avail(&pool[i]) > avail(largest) {
-			largest = &pool[i]
+		v := &pool[i]
+		a := avail(v)
+		if a <= 0 {
+			continue
+		}
+		load := total
+		if load > a {
+			load = a
+		}
+		util := load / a
+		if chosen == nil || util > chosenUtil || (util == chosenUtil && a > avail(chosen)) {
+			chosen = v
+			chosenUtil = util
 		}
 	}
-	if avail(largest) <= 0 {
-		// No hay espacio en ningún vehículo
+	if chosen == nil {
 		return nil, nil, nil
 	}
+
+	cap := avail(chosen)
+	if cap >= total {
+		out := make([]model.Shipment, len(shipments))
+		copy(out, shipments)
+		return chosen, out, nil
+	}
+
 	used := 0.0
-	cap := avail(largest)
 	var included, excluded []model.Shipment
 	for _, sh := range shipments {
 		if used+sh.WeightKg <= cap {
@@ -886,7 +931,7 @@ func selectAndPack(pool []model.Vehicle, existingLoad map[string]float64, shipme
 			excluded = append(excluded, sh)
 		}
 	}
-	return largest, included, excluded
+	return chosen, included, excluded
 }
 
 func failedItem(trackingID, target, reason string) model.ApplyResultItem {
@@ -1236,6 +1281,28 @@ func (s *RoutingService) lastMileVRP(
 		}
 		opt.route.DriverID = r.DriverID
 		sol.Routes[i] = opt.route
+	}
+
+	// En modo duro (EnforceTimeWindows=true), el sub-solver de scheduling usa
+	// soft mode para comparar coberturas, lo que puede marcar como OutOfWindow
+	// paradas que sí eran válidas al departure inicial. Si quedaron marcadas
+	// así en la ruta optimizada, hay que sacarlas de la ruta y pasarlas a
+	// Unassigned con ReasonTimeWindowInfeasible.
+	if cfg.EnforceTimeWindows {
+		for i := range sol.Routes {
+			kept := sol.Routes[i].Stops[:0]
+			for _, st := range sol.Routes[i].Stops {
+				if st.OutOfWindow {
+					sol.Unassigned = append(sol.Unassigned, vrp.UnassignedNode{
+						NodeID: st.NodeID,
+						Reason: vrp.ReasonTimeWindowInfeasible,
+					})
+				} else {
+					kept = append(kept, st)
+				}
+			}
+			sol.Routes[i].Stops = kept
+		}
 	}
 
 	// Si el solver no produjo nada y nada quedó como unassigned, algo raro
@@ -1685,6 +1752,25 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 			Status:      model.PlanStatusPending,
 			BranchPlans: []model.BranchPlan{},
 			GeneratedAt: clock.Now().UTC(),
+		}
+	} else {
+		// Si la sucursal ya había aplicado, sacarla de AppliedBranches: los envíos
+		// aplicados ya transicionaron de estado, el plan regenerado trae solo los
+		// envíos nuevos elegibles (bulk imports, drafts confirmados, etc.) y debe
+		// poder aplicarse de nuevo.
+		filtered := global.AppliedBranches[:0]
+		for _, b := range global.AppliedBranches {
+			if b != branchID {
+				filtered = append(filtered, b)
+			}
+		}
+		global.AppliedBranches = filtered
+		// Si el plan global había quedado en applied porque todas las sucursales
+		// del plan ya aplicaron, revertir a pending: ahora hay algo nuevo para aplicar.
+		if global.Status == model.PlanStatusApplied {
+			global.Status = model.PlanStatusPending
+			global.AppliedAt = nil
+			global.AppliedBy = ""
 		}
 	}
 
