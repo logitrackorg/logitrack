@@ -1,0 +1,19 @@
+logitrack_web/eslint.config.js
+  s_aa1cc0fd9921f2::t_fafd6d0994de54 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "e7b5e1c33f7adc576aafbc8ce4ba0246e5416fa1",
+  "prompts": {},
+  "sessions": {
+    "s_aa1cc0fd9921f2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac77fb73-8944-4ebd-98ed-42c4f4f8d5d5",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
