@@ -110,10 +110,10 @@ func (r *postgresRoutingPlanRepository) Upsert(plan *model.GlobalRoutingPlan) er
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (plan_date) DO UPDATE SET
 			id             = EXCLUDED.id,
-			status         = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.status ELSE EXCLUDED.status END,
-			payload        = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.payload ELSE EXCLUDED.payload END,
-			generated_at   = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.generated_at ELSE EXCLUDED.generated_at END,
-			generation_log = CASE WHEN routing_plans.status = 'applied' THEN routing_plans.generation_log ELSE EXCLUDED.generation_log END`,
+			status         = EXCLUDED.status,
+			payload        = EXCLUDED.payload,
+			generated_at   = EXCLUDED.generated_at,
+			generation_log = EXCLUDED.generation_log`,
 		plan.ID, plan.PlanDate, string(plan.Status),
 		payloadJSON, plan.GeneratedAt, logJSON,
 	)
