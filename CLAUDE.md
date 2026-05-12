@@ -196,7 +196,7 @@ Correctable fields: all sender/recipient/address fields + `special_instructions`
 
 **Directional restriction on `time_window` corrections**: only allowed when the new window has equal or lower restrictiveness/surcharge. `flexible → morning|afternoon` is rejected (would raise the underlying price commitment); `morning ↔ afternoon` is allowed (same tier, same price); anything `→ flexible` is allowed.
 
-### Cancellation (`POST /shipments/:tracking_id/cancel` — supervisor + admin)
+### Cancellation (`POST /shipments/:tracking_id/cancel` — operator + supervisor)
 
 `reason` required (400 if empty). Blocked on `pending` and terminal states. Auto-adds `[Cancelación] <reason>` comment.
 
