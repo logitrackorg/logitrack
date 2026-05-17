@@ -58,7 +58,15 @@ export interface DriverRouteResponse {
 }
 
 
+export interface CheckInPayload {
+  driver_id: string;
+  horas_sueno: number;
+  kss_level: number;
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
+  submitCheckin: (payload: CheckInPayload) =>
+    api.post("/driver/checkin", payload).then((r) => r.data),
 };

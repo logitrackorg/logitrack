@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
@@ -9,6 +11,22 @@ import (
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
 )
+
+// checkinStore holds one KSS check-in per (driverID, date) in memory.
+var (
+	checkinMu    sync.Mutex
+	checkinStore = map[string]checkinRecord{}
+)
+
+type checkinRecord struct {
+	DriverID   string    `json:"driver_id"`
+	Date       string    `json:"date"`
+	HorasSueno int       `json:"horas_sueno"`
+	KSSLevel   int       `json:"kss_level"`
+	RecordedAt time.Time `json:"recorded_at"`
+}
+
+func checkinKey(driverID, date string) string { return driverID + "|" + date }
 
 type DriverHandler struct {
 	routeSvc   *service.RouteService
@@ -79,4 +97,37 @@ func (h *DriverHandler) StartRoute(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"route": route})
+}
+
+// SubmitCheckin records (or overwrites) the KSS fatigue check-in for today.
+func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
+	var body struct {
+		DriverID   string `json:"driver_id"`
+		HorasSueno int    `json:"horas_sueno"`
+		KSSLevel   int    `json:"kss_level"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+	if body.HorasSueno < 0 || body.HorasSueno > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
+		return
+	}
+	if body.KSSLevel < 1 || body.KSSLevel > 9 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 9"})
+		return
+	}
+	today := time.Now().Format("2006-01-02")
+	rec := checkinRecord{
+		DriverID:   body.DriverID,
+		Date:       today,
+		HorasSueno: body.HorasSueno,
+		KSSLevel:   body.KSSLevel,
+		RecordedAt: time.Now(),
+	}
+	checkinMu.Lock()
+	checkinStore[checkinKey(body.DriverID, today)] = rec
+	checkinMu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
 }

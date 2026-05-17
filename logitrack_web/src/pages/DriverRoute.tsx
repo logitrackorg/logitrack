@@ -16,6 +16,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { driverApi, type DriverRouteResponse } from "../api/driver";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -39,6 +41,23 @@ type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // La jornada arranca a las 08:00. La clave incluye driver_id + fecha de jornada
+  // para que cada chofer tenga su propio registro y no colisionen en dispositivos compartidos.
+  const jornadaKey = (() => {
+    if (!user) return null;
+    const now = new Date();
+    // Si son antes de las 8am, la jornada vigente es la del día anterior
+    const jornada = new Date(now);
+    if (now.getHours() < 8) jornada.setDate(jornada.getDate() - 1);
+    return `kss_checkin_${user.id}_${jornada.toDateString()}`;
+  })();
+
+  const [checkInDone, setCheckInDone] = useState(() => {
+    if (!jornadaKey) return false;
+    return localStorage.getItem(jornadaKey) === "done";
+  });
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
@@ -147,6 +166,18 @@ export function DriverRoute() {
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360);
+
+  if (!checkInDone && user && jornadaKey) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        onDone={() => {
+          localStorage.setItem(jornadaKey, "done");
+          setCheckInDone(true);
+        }}
+      />
+    );
+  }
 
   if (loading) return <RouteSkeleton />;
   if (noRoute) return <NoRouteView />;
