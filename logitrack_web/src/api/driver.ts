@@ -64,9 +64,33 @@ export interface CheckInPayload {
   kss_level: number;
 }
 
+export interface VoiceMetrics {
+  pitch_mean: number;
+  pitch_range: number;
+  energy_rms: number;
+  speech_rate: number;
+  pause_ratio: number;
+}
+
+export interface VoiceUploadResult {
+  ok: boolean;
+  voice_metrics: VoiceMetrics;
+  drift_score: number | null; // null on first upload (no baseline yet)
+  baseline: VoiceMetrics | null;
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
   submitCheckin: (payload: CheckInPayload) =>
     api.post("/driver/checkin", payload).then((r) => r.data),
+  getControlPhrase: () =>
+    api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
+  uploadVoice: (audioBlob: Blob) => {
+    const form = new FormData();
+    form.append("audio", audioBlob, "checkin.webm");
+    return api.post<VoiceUploadResult>("/driver/voice-upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
 };

@@ -235,6 +235,8 @@ func main() {
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
+	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
+	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 
 	// Users — list drivers (operator, supervisor) for shipment assignment
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)

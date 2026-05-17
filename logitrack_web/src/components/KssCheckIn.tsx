@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Moon, SkipForward, Send } from "lucide-react";
 import { driverApi } from "../api/driver";
+import { VoiceCheckIn } from "./VoiceCheckIn";
 
 const KSS_LEVELS = [
   { value: 1, label: "Extremadamente alerta" },
@@ -27,6 +28,7 @@ interface Props {
 }
 
 export function KssCheckIn({ driverId, onDone }: Props) {
+  const [step, setStep] = useState<"kss" | "voice">("kss");
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(5);
   const [submitting, setSubmitting] = useState(false);
@@ -42,13 +44,19 @@ export function KssCheckIn({ driverId, onDone }: Props) {
     setError("");
     try {
       await driverApi.submitCheckin({ driver_id: driverId, horas_sueno: horasNum, kss_level: kss });
-      onDone();
+      // Advance to the voice step instead of calling onDone directly.
+      setStep("voice");
     } catch {
       setError("No se pudo registrar el check-in. Intentá de nuevo.");
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Render the voice step as a full replacement of this screen.
+  if (step === "voice") {
+    return <VoiceCheckIn onDone={onDone} />;
+  }
 
   return (
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
