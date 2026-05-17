@@ -37,98 +37,57 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		id, username, password, role, branchID string
 		firstName, lastName, email             string
 		street, city, province, postalCode     string
+		driverType                             string
 	}
 	seed := []seedUser{
-		{
-			"1", "op_caba", "op_caba123", "operator", "caba",
-			"Lionel", "Messi", "lionel.messi@logitrack.com",
-			"Av. Corrientes 1234", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043",
-		},
-		{
-			"2", "sup_caba", "sup_caba123", "supervisor", "caba",
-			"Yamila", "Rodríguez", "yamila.rodriguez@logitrack.com",
-			"Av. Santa Fe 567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1059",
-		},
-		{
-			"3", "op_cordoba", "op_cordoba123", "operator", "cordoba",
-			"Julián", "Álvarez", "julian.alvarez@logitrack.com",
-			"Av. Colón 890", "Córdoba", "Córdoba", "X5000",
-		},
-		{
-			"4", "sup_cordoba", "sup_cordoba123", "supervisor", "cordoba",
-			"Estefanía", "Banini", "estefania.banini@logitrack.com",
-			"Bv. San Juan 1111", "Córdoba", "Córdoba", "X5001",
-		},
-		{
-			"5", "chofer_caba", "chofer_caba123", "driver", "caba",
-			"Rodrigo", "De Paul", "rodrigo.depaul@logitrack.com",
-			"Av. Rivadavia 3456", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1084",
-		},
-		{
-			"12", "chofer_caba2", "chofer_caba2123", "driver", "caba",
-			"Alexis", "Mac Allister", "alexis.macallister@logitrack.com",
-			"Av. Callao 890", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1023",
-		},
-		{
-			"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba",
-			"Lautaro", "Martínez", "lautaro.martinez@logitrack.com",
-			"Av. Vélez Sársfield 2222", "Córdoba", "Córdoba", "X5010",
-		},
-		{
-			"11", "chofer_mendoza", "chofer_mendoza123", "driver", "mendoza",
-			"Florencia", "Bonsegundo", "florencia.bonsegundo@logitrack.com",
-			"Av. San Martín 789", "Mendoza", "Mendoza", "M5500",
-		},
-		{
-			"6", "op_mendoza", "op_mendoza123", "operator", "mendoza",
-			"Ángel", "Di María", "angel.dimaria@logitrack.com",
-			"Calle Las Heras 456", "Mendoza", "Mendoza", "M5501",
-		},
-		{
-			"7", "sup_mendoza", "sup_mendoza123", "supervisor", "mendoza",
-			"Mariana", "Larroquette", "mariana.larroquette@logitrack.com",
-			"Av. Mitre 321", "Mendoza", "Mendoza", "M5502",
-		},
-		{
-			"8", "gerente", "gerente123", "manager", "",
-			"Emiliano", "Martínez", "emiliano.martinez@logitrack.com",
-			"Av. Del Libertador 4567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1426",
-		},
-		{
-			"9", "admin", "admin123", "admin", "",
-			"Vanina", "Correa", "vanina.correa@logitrack.com",
-			"Av. 9 de Julio 123", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1073",
-		},
+		{"1", "op_caba", "op_caba123", "operator", "caba", "Lionel", "Messi", "lionel.messi@logitrack.com", "Av. Corrientes 1234", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043", ""},
+		{"2", "sup_caba", "sup_caba123", "supervisor", "caba", "Yamila", "Rodríguez", "yamila.rodriguez@logitrack.com", "Av. Santa Fe 567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1059", ""},
+		{"3", "op_cordoba", "op_cordoba123", "operator", "cordoba", "Julián", "Álvarez", "julian.alvarez@logitrack.com", "Av. Colón 890", "Córdoba", "Córdoba", "X5000", ""},
+		{"4", "sup_cordoba", "sup_cordoba123", "supervisor", "cordoba", "Estefanía", "Banini", "estefania.banini@logitrack.com", "Bv. San Juan 1111", "Córdoba", "Córdoba", "X5001", ""},
+		{"5", "chofer_caba", "chofer_caba123", "driver", "caba", "Rodrigo", "De Paul", "rodrigo.depaul@logitrack.com", "Av. Rivadavia 3456", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1084", "ultima_milla"},
+		{"12", "chofer_caba2", "chofer_caba2123", "driver", "caba", "Alexis", "Mac Allister", "alexis.macallister@logitrack.com", "Av. Callao 890", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1023", "ultima_milla"},
+		{"10", "chofer_cordoba", "chofer_cordoba123", "driver", "cordoba", "Lautaro", "Martínez", "lautaro.martinez@logitrack.com", "Av. Vélez Sársfield 2222", "Córdoba", "Córdoba", "X5010", "ultima_milla"},
+		{"11", "chofer_mendoza", "chofer_mendoza123", "driver", "mendoza", "Florencia", "Bonsegundo", "florencia.bonsegundo@logitrack.com", "Av. San Martín 789", "Mendoza", "Mendoza", "M5500", "ultima_milla"},
+		{"6", "op_mendoza", "op_mendoza123", "operator", "mendoza", "Ángel", "Di María", "angel.dimaria@logitrack.com", "Calle Las Heras 456", "Mendoza", "Mendoza", "M5501", ""},
+		{"7", "sup_mendoza", "sup_mendoza123", "supervisor", "mendoza", "Mariana", "Larroquette", "mariana.larroquette@logitrack.com", "Av. Mitre 321", "Mendoza", "Mendoza", "M5502", ""},
+		{"8", "gerente", "gerente123", "manager", "", "Emiliano", "Martínez", "emiliano.martinez@logitrack.com", "Av. Del Libertador 4567", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1426", ""},
+		{"9", "admin", "admin123", "admin", "", "Vanina", "Correa", "vanina.correa@logitrack.com", "Av. 9 de Julio 123", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1073", ""},
 		{
 			"13", "op_posadas", "op_posadas123", "operator", "posadas",
 			"Ramiro", "Funes Mori", "ramiro.funesmori@logitrack.com",
-			"Av. Mitre 1500", "Posadas", "Misiones", "N3300",
+			"Av. Mitre 1500", "Posadas", "Misiones", "N3300", "",
 		},
 		{
 			"14", "chofer_posadas", "chofer_posadas123", "driver", "posadas",
 			"Lía", "Romero", "lia.romero@logitrack.com",
-			"San Lorenzo 890", "Posadas", "Misiones", "N3301",
+			"San Lorenzo 890", "Posadas", "Misiones", "N3301", "ultima_milla",
 		},
+		{"15", "chofer_inter_1", "chofer_inter_1_123", "driver", "", "Gabriel", "Batistuta", "gabriel.batistuta@logitrack.com", "Av. Corrientes 2000", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043", "intersucursal"},
+		{"16", "chofer_inter_2", "chofer_inter_2_123", "driver", "", "Sergio", "Agüero", "sergio.aguero@logitrack.com", "Av. Colón 1500", "Córdoba", "Córdoba", "X5000", "intersucursal"},
 	}
 	for _, u := range seed {
 		addrJSON, _ := json.Marshal(map[string]string{
 			"street": u.street, "city": u.city, "province": u.province, "postal_code": u.postalCode,
 		})
-		// Hash the password using bcrypt
+		dt := u.driverType
+		if dt == "" && u.role == "driver" {
+			dt = "ultima_milla"
+		}
 		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
 		db.Exec(`
-			INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
-			VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)
+			INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address, driver_type)
+			VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9, NULLIF($10,''))
 			ON CONFLICT (username) DO UPDATE
-				SET password   = EXCLUDED.password,
-				    role       = EXCLUDED.role,
-				    branch_id  = EXCLUDED.branch_id,
-				    first_name = EXCLUDED.first_name,
-				    last_name  = EXCLUDED.last_name,
-				    email      = EXCLUDED.email,
-				    address    = EXCLUDED.address`,
+				SET password    = EXCLUDED.password,
+				    role        = EXCLUDED.role,
+				    branch_id   = EXCLUDED.branch_id,
+				    first_name  = EXCLUDED.first_name,
+				    last_name   = EXCLUDED.last_name,
+				    email       = EXCLUDED.email,
+				    address     = EXCLUDED.address,
+				    driver_type = EXCLUDED.driver_type`,
 			u.id, u.username, string(hashedPassword), u.role, u.branchID,
-			u.firstName, u.lastName, u.email, addrJSON,
+			u.firstName, u.lastName, u.email, addrJSON, dt,
 		)
 	}
 
@@ -138,10 +97,10 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 func scanUser(scan func(...any) error) (model.User, error) {
 	var u model.User
 	var role, status string
-	var branchID, email, firstName, lastName, updatedBy sql.NullString
+	var branchID, email, firstName, lastName, updatedBy, driverType sql.NullString
 	var updatedAt sql.NullTime
 	var addressJSON []byte
-	if err := scan(&u.ID, &u.Username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt); err != nil {
+	if err := scan(&u.ID, &u.Username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType); err != nil {
 		return model.User{}, err
 	}
 	u.Role = model.Role(role)
@@ -165,6 +124,9 @@ func scanUser(scan func(...any) error) (model.User, error) {
 		t := updatedAt.Time
 		u.UpdatedAt = &t
 	}
+	if driverType.Valid && driverType.String != "" {
+		u.DriverType = model.DriverType(driverType.String)
+	}
 	if len(addressJSON) > 0 {
 		var addr model.Address
 		if err := json.Unmarshal(addressJSON, &addr); err == nil {
@@ -175,21 +137,21 @@ func scanUser(scan func(...any) error) (model.User, error) {
 }
 
 const (
-	userSelectCols        = `id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at`
-	userSelectColsAliased = `u.id, u.username, u.first_name, u.last_name, u.email, u.role, u.branch_id, u.status, u.address, u.updated_by, u.updated_at`
+	userSelectCols        = `id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type`
+	userSelectColsAliased = `u.id, u.username, u.first_name, u.last_name, u.email, u.role, u.branch_id, u.status, u.address, u.updated_by, u.updated_at, u.driver_type`
 )
 
 var ErrAccountInactive = fmt.Errorf("account_inactive")
 
 func (r *postgresAuthRepository) FindUser(username, password string) (model.User, error) {
 	var id, role, status, firstName, lastName, passwordHash string
-	var email, addressJSON, branchID, updatedBy sql.NullString
+	var email, addressJSON, branchID, updatedBy, driverType sql.NullString
 	var updatedAt sql.NullTime
 	row := r.db.QueryRow(
-		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, password FROM users WHERE username = $1`,
+		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type, password FROM users WHERE username = $1`,
 		username,
 	)
-	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &passwordHash)
+	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType, &passwordHash)
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
@@ -220,6 +182,9 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 	}
 	if updatedAt.Valid {
 		u.UpdatedAt = &updatedAt.Time
+	}
+	if driverType.Valid && driverType.String != "" {
+		u.DriverType = model.DriverType(driverType.String)
 	}
 	if addressJSON.Valid && len(addressJSON.String) > 0 {
 		var addr model.Address
@@ -327,11 +292,15 @@ func (r *postgresAuthRepository) CreateUser(cmd UserCreate) (model.User, error) 
 	if err != nil {
 		return model.User{}, err
 	}
+	dt := string(cmd.DriverType)
+	if dt == "" && cmd.Role == model.RoleDriver {
+		dt = string(model.DriverTypeLastMile)
+	}
 	_, err = r.db.Exec(
-		`INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address)
-		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9)`,
+		`INSERT INTO users (id, username, password, role, branch_id, status, first_name, last_name, email, address, driver_type)
+		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), 'activo', $6, $7, $8, $9, NULLIF($10,''))`,
 		id, cmd.Username, string(hashedPassword), string(cmd.Role), cmd.BranchID,
-		cmd.FirstName, cmd.LastName, cmd.Email, addrJSON,
+		cmd.FirstName, cmd.LastName, cmd.Email, addrJSON, dt,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "users_email_key") || (strings.Contains(err.Error(), "unique") && strings.Contains(err.Error(), "email")) {
@@ -401,6 +370,11 @@ func (r *postgresAuthRepository) UpdateUser(id string, update UserUpdate) (model
 			args = append(args, addrJSON)
 			argIdx++
 		}
+	}
+	if update.DriverType != nil {
+		setClauses = append(setClauses, fmt.Sprintf("driver_type = NULLIF($%d,'')", argIdx))
+		args = append(args, string(*update.DriverType))
+		argIdx++
 	}
 
 	if len(setClauses) == 0 {

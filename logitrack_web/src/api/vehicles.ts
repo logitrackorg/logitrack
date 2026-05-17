@@ -12,11 +12,13 @@ api.interceptors.request.use((config) => {
 
 export type VehicleType = "auto" | "furgoneta" | "camion";
 export type VehicleStatus = "disponible" | "en_carga" | "mantenimiento" | "en_transito" | "inactivo";
+export type VehicleMode = "ultima_milla" | "inter_sucursal";
 
 export interface Vehicle {
   id: string;
   license_plate: string;
   type: VehicleType;
+  mode: VehicleMode;
   capacity_kg: number;
   status: VehicleStatus;
   assigned_shipments?: string[] | null;
@@ -27,6 +29,7 @@ export interface Vehicle {
 export interface CreateVehicleRequest {
   license_plate: string;
   type: VehicleType;
+  mode: VehicleMode;
   capacity_kg: number;
   branch_id: string;
 }
@@ -35,6 +38,7 @@ export interface VehicleStatusResponse {
   id: string;
   license_plate: string;
   type: VehicleType;
+  mode: VehicleMode;
   capacity_kg: number;
   status: VehicleStatus;
   status_label: string;
@@ -106,4 +110,8 @@ export const vehicleApi = {
     api.get<VehicleStatusResponse>(`/vehicles/by-shipment/${trackingId}`).then((r) => r.data),
   unassignShipment: (plate: string, trackingId: string) =>
     api.delete<AssignVehicleResponse>(`/vehicles/by-plate/${plate}/shipments/${trackingId}`).then((r) => r.data),
+  getQR: (plate: string) =>
+    api.get<{ vehicle_id: string; license_plate: string; qr_token: string; qr_png_base64: string }>(
+      `/vehicles/by-plate/${plate}/qr`
+    ).then((r) => r.data),
 };

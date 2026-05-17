@@ -26,19 +26,15 @@ func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) b
 }
 
 // operatorReadForbidden returns true (and writes 403) when an operator tries to read a shipment
-// that neither belongs to their branch nor is in_transit toward it.
+// that they have no business viewing. Hoy retorna SIEMPRE false: operator puede leer
+// cualquier envío (mismo nivel que supervisor) porque el ruteo inteligente puede
+// referenciar envíos cross-branch (pickups) que el operator necesita inspeccionar
+// para evaluar el plan. La restricción de ESCRITURA (`branchForbidden`) se mantiene.
 func operatorReadForbidden(c *gin.Context, user model.User, shipment model.Shipment) bool {
-	if user.Role != model.RoleOperator || user.BranchID == "" {
-		return false
-	}
-	if shipment.ReceivingBranchID == user.BranchID {
-		return false
-	}
-	if shipment.Status == model.StatusInTransit && shipment.CurrentLocation == user.BranchID {
-		return false
-	}
-	c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
-	return true
+	_ = c
+	_ = user
+	_ = shipment
+	return false
 }
 
 // CancelRequest is the body for cancelling a shipment.

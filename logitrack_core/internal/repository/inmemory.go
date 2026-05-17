@@ -340,6 +340,30 @@ func (r *inMemoryVehicleRepository) UpdateLocation(id string, lat, lng float64) 
 	return nil
 }
 
+func (r *inMemoryVehicleRepository) SyncMode(licensePlate string, mode model.VehicleMode) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, v := range r.vehicles {
+		if v.LicensePlate == licensePlate {
+			v.Mode = mode
+			r.vehicles[id] = v
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *inMemoryVehicleRepository) GetByQRToken(token string) (model.Vehicle, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, v := range r.vehicles {
+		if v.QRToken == token {
+			return v, true
+		}
+	}
+	return model.Vehicle{}, false
+}
+
 // ── InMemory RouteRepository ──────────────────────────────────────────────────
 
 type inMemoryRouteRepository struct {

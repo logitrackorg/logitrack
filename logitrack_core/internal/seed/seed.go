@@ -46,113 +46,165 @@ func strPtr(s string) *string { return &s }
 
 func LoadVehicles(repo repository.VehicleRepository) {
 	vehicles := []model.Vehicle{
-		// ── CABA ──────────────────────────────────────────────────────────────
+		// ── CABA — 2 furgonetas inter-sucursal, 2 autos última milla ──────────
 		{
-			LicensePlate:     "AB123CD",
+			LicensePlate:     "AB100IS",
 			Type:             model.VehicleTypeVan,
-			CapacityKg:       800,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("caba"),
 			CurrentLatitude:  fPtr(-34.6037),
 			CurrentLongitude: fPtr(-58.3816),
 		},
 		{
-			LicensePlate:     "GH234IJ",
-			Type:             model.VehicleTypeTruck,
-			CapacityKg:       5000,
+			LicensePlate:     "AB200IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("caba"),
 			CurrentLatitude:  fPtr(-34.6037),
 			CurrentLongitude: fPtr(-58.3816),
 		},
 		{
-			LicensePlate:     "KL567MN",
+			LicensePlate:     "AB100UM",
 			Type:             model.VehicleTypeCar,
-			CapacityKg:       500,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("caba"),
 			CurrentLatitude:  fPtr(-34.6037),
 			CurrentLongitude: fPtr(-58.3816),
 		},
-		// ── Córdoba ───────────────────────────────────────────────────────────
 		{
-			LicensePlate:     "EF456GH",
-			Type:             model.VehicleTypeTruck,
-			CapacityKg:       5000,
-			Status:           model.VehicleStatusAvailable,
-			AssignedBranch:   strPtr("cordoba"),
-			CurrentLatitude:  fPtr(-31.4201),
-			CurrentLongitude: fPtr(-64.1888),
-		},
-		{
-			LicensePlate:     "OP890QR",
-			Type:             model.VehicleTypeVan,
-			CapacityKg:       800,
-			Status:           model.VehicleStatusAvailable,
-			AssignedBranch:   strPtr("cordoba"),
-			CurrentLatitude:  fPtr(-31.4201),
-			CurrentLongitude: fPtr(-64.1888),
-		},
-		{
-			LicensePlate:     "ST123UV",
+			LicensePlate:     "AB200UM",
 			Type:             model.VehicleTypeCar,
-			CapacityKg:       500,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("caba"),
+			CurrentLatitude:  fPtr(-34.6037),
+			CurrentLongitude: fPtr(-58.3816),
+		},
+		// ── Córdoba — 2 furgonetas inter-sucursal, 2 autos última milla ───────
+		{
+			LicensePlate:     "CO100IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("cordoba"),
 			CurrentLatitude:  fPtr(-31.4201),
 			CurrentLongitude: fPtr(-64.1888),
 		},
-		// ── Mendoza ───────────────────────────────────────────────────────────
 		{
-			LicensePlate:     "WX456YZ",
+			LicensePlate:     "CO200IS",
 			Type:             model.VehicleTypeVan,
-			CapacityKg:       800,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
-			AssignedBranch:   strPtr("mendoza"),
-			CurrentLatitude:  fPtr(-32.8908),
-			CurrentLongitude: fPtr(-68.8272),
+			AssignedBranch:   strPtr("cordoba"),
+			CurrentLatitude:  fPtr(-31.4201),
+			CurrentLongitude: fPtr(-64.1888),
 		},
 		{
-			LicensePlate:     "CD789EF",
-			Type:             model.VehicleTypeTruck,
-			CapacityKg:       3000,
-			Status:           model.VehicleStatusAvailable,
-			AssignedBranch:   strPtr("mendoza"),
-			CurrentLatitude:  fPtr(-32.8908),
-			CurrentLongitude: fPtr(-68.8272),
-		},
-		{
-			LicensePlate:     "GH012IJ",
+			LicensePlate:     "CO100UM",
 			Type:             model.VehicleTypeCar,
-			CapacityKg:       500,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("cordoba"),
+			CurrentLatitude:  fPtr(-31.4201),
+			CurrentLongitude: fPtr(-64.1888),
+		},
+		{
+			LicensePlate:     "CO200UM",
+			Type:             model.VehicleTypeCar,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("cordoba"),
+			CurrentLatitude:  fPtr(-31.4201),
+			CurrentLongitude: fPtr(-64.1888),
+		},
+		// ── Mendoza — 2 furgonetas inter-sucursal, 2 autos última milla ───────
+		{
+			LicensePlate:     "ME100IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("mendoza"),
 			CurrentLatitude:  fPtr(-32.8908),
 			CurrentLongitude: fPtr(-68.8272),
 		},
-		// ── Posadas ───────────────────────────────────────────────────────────
 		{
-			LicensePlate:     "KL345MN",
+			LicensePlate:     "ME200IS",
 			Type:             model.VehicleTypeVan,
-			CapacityKg:       600,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("mendoza"),
+			CurrentLatitude:  fPtr(-32.8908),
+			CurrentLongitude: fPtr(-68.8272),
+		},
+		{
+			LicensePlate:     "ME100UM",
+			Type:             model.VehicleTypeCar,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("mendoza"),
+			CurrentLatitude:  fPtr(-32.8908),
+			CurrentLongitude: fPtr(-68.8272),
+		},
+		{
+			LicensePlate:     "ME200UM",
+			Type:             model.VehicleTypeCar,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("mendoza"),
+			CurrentLatitude:  fPtr(-32.8908),
+			CurrentLongitude: fPtr(-68.8272),
+		},
+		// ── Posadas — 2 furgonetas inter-sucursal, 2 autos última milla ───────
+		{
+			LicensePlate:     "PO100IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("posadas"),
 			CurrentLatitude:  fPtr(-27.3671),
 			CurrentLongitude: fPtr(-55.8965),
 		},
 		{
-			LicensePlate:     "OP678QR",
-			Type:             model.VehicleTypeTruck,
-			CapacityKg:       3000,
+			LicensePlate:     "PO200IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("posadas"),
 			CurrentLatitude:  fPtr(-27.3671),
 			CurrentLongitude: fPtr(-55.8965),
 		},
 		{
-			LicensePlate:     "ST901UV",
+			LicensePlate:     "PO100UM",
 			Type:             model.VehicleTypeCar,
-			CapacityKg:       500,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("posadas"),
+			CurrentLatitude:  fPtr(-27.3671),
+			CurrentLongitude: fPtr(-55.8965),
+		},
+		{
+			LicensePlate:     "PO200UM",
+			Type:             model.VehicleTypeCar,
+			Mode:             model.VehicleModeLastMile,
+			CapacityKg:       350,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("posadas"),
 			CurrentLatitude:  fPtr(-27.3671),
@@ -163,6 +215,12 @@ func LoadVehicles(repo repository.VehicleRepository) {
 		err := repo.Add(v)
 		if err != nil && err != repository.ErrDuplicateLicensePlate {
 			panic("failed to seed vehicle " + v.LicensePlate + ": " + err.Error())
+		}
+		// Sincronizar el modo idempotentemente: aunque el vehículo ya exista en DB
+		// (por arranques previos o migraciones que lo hayan tocado), garantizamos
+		// que el seed deja el modo canónico configurado acá.
+		if err := repo.SyncMode(v.LicensePlate, v.Mode); err != nil {
+			panic("failed to sync mode for " + v.LicensePlate + ": " + err.Error())
 		}
 	}
 }
@@ -421,6 +479,40 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado en CABA", hoursAgo: 4},
 			},
 		},
+		{
+			trackingID:         "LT-CB00006",
+			sender:             model.Customer{DNI: "31223344", Name: "Importadora del Sur", Phone: "541122887766", Email: "logistica@impsur.com", Address: model.Address{Street: "Av. del Libertador 5000", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1426", Latitude: fPtr(-34.5639), Longitude: fPtr(-58.4502)}},
+			recipient:          model.Customer{DNI: "29776688", Name: "Mayorista Centro Córdoba", Phone: "543514778833", Email: "ventas@mayoristacentro.com.ar", Address: model.Address{Street: "Av. Colón 2400", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4090), Longitude: fPtr(-64.2154)}},
+			weightKg:           220,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "caba",
+			finalBranchID:      "cordoba",
+			priority:           "media",
+			priorityScore:      0.55,
+			priorityConfidence: 0.78,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado en CABA", hoursAgo: 3},
+			},
+		},
+		{
+			trackingID:         "LT-CB00007",
+			sender:             model.Customer{DNI: "30556677", Name: "Distribuidora Norte", Phone: "541133224488", Address: model.Address{Street: "Av. General Paz 1200", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1407", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.4900)}},
+			recipient:          model.Customer{DNI: "28991100", Name: "Logística Mediterránea SA", Phone: "543514665544", Email: "compras@logmed.com.ar", Address: model.Address{Street: "Av. Sabattini 3500", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4287), Longitude: fPtr(-64.1568)}},
+			weightKg:           160,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "caba",
+			finalBranchID:      "cordoba",
+			priority:           "baja",
+			priorityScore:      0.28,
+			priorityConfidence: 0.72,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_caba", location: "caba", notes: "Envío registrado en CABA", hoursAgo: 2},
+			},
+		},
 
 		// ─────────────────────────────────────────────────────────────────────
 		// 3) Inter-sucursal CABA → Mendoza (espera + piggyback en Córdoba)
@@ -635,6 +727,88 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			priorityConfidence: 0.76,
 			events: []eventSeed{
 				{from: "", to: model.StatusAtOriginHub, changedBy: "op_posadas", location: "posadas", notes: "Envío registrado en Posadas", hoursAgo: 10},
+			},
+		},
+
+		// ─────────────────────────────────────────────────────────────────────
+		// 6) Inter-sucursal Córdoba → Mendoza (consolidación cross-branch)
+		//
+		// Estos envíos van en at_origin_hub en Córdoba con destino Mendoza.
+		// Al correr el plan global, Córdoba intenta consolidarlos en un despacho
+		// propio (760 kg total, 760/1500 = 51% > 40%) — consolida.
+		// Cuando CABA arma su multi-hop CABA → Córdoba → Mendoza (porque tiene
+		// LT-MZ00001/LT-MZ00002), `consolidateCrossBranchDispatches` absorbe el
+		// dispatch de Córdoba dentro del camión de CABA: el operador ve 1 solo
+		// vehículo haciendo el viaje en vez de 2.
+		// ─────────────────────────────────────────────────────────────────────
+		{
+			trackingID:         "LT-CDB00010",
+			sender:             model.Customer{DNI: "30887766", Name: "Aceitera del Centro", Phone: "543514110099", Email: "envios@aceiteradelcentro.com", Address: model.Address{Street: "Av. Vélez Sarsfield 800", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4232), Longitude: fPtr(-64.1812)}},
+			recipient:          model.Customer{DNI: "27554411", Name: "Mercado Central Mendoza", Phone: "542614001188", Email: "compras@mcmza.com.ar", Address: model.Address{Street: "Av. Las Tipas 1450", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8272)}},
+			weightKg:           180,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "cordoba",
+			finalBranchID:      "mendoza",
+			priority:           "media",
+			priorityScore:      0.48,
+			priorityConfidence: 0.76,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado en Córdoba", hoursAgo: 9},
+			},
+		},
+		{
+			trackingID:         "LT-CDB00011",
+			sender:             model.Customer{DNI: "29445500", Name: "Industrias Sierras", Phone: "543514998800", Address: model.Address{Street: "Bv. Las Heras 250", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4135), Longitude: fPtr(-64.1820)}},
+			recipient:          model.Customer{DNI: "28992233", Name: "Construcciones Andinas SA", Phone: "542614223377", Email: "logistica@construandinas.com", Address: model.Address{Street: "Calle San Martín 900", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8895), Longitude: fPtr(-68.8350)}},
+			weightKg:           200,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "cordoba",
+			finalBranchID:      "mendoza",
+			priority:           "alta",
+			priorityScore:      0.62,
+			priorityConfidence: 0.80,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado en Córdoba", hoursAgo: 7},
+			},
+		},
+		{
+			trackingID:         "LT-CDB00012",
+			sender:             model.Customer{DNI: "31660033", Name: "Vinos del Suquía", Phone: "543514889977", Email: "ventas@vinosdelsuquia.com", Address: model.Address{Street: "Av. Recta Martinolli 4500", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.3852), Longitude: fPtr(-64.2308)}},
+			recipient:          model.Customer{DNI: "30443322", Name: "Vinoteca Cuyana", Phone: "542614778822", Email: "pedidos@vinotecacuyana.com.ar", Address: model.Address{Street: "Av. Sarmiento 600", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8420)}},
+			weightKg:           220,
+			packageType:        model.PackageBox,
+			specialInstr:       "Manipular con cuidado — botellas",
+			isFragile:          true,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "cordoba",
+			finalBranchID:      "mendoza",
+			priority:           "media",
+			priorityScore:      0.52,
+			priorityConfidence: 0.74,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado en Córdoba", hoursAgo: 6},
+			},
+		},
+		{
+			trackingID:         "LT-CDB00013",
+			sender:             model.Customer{DNI: "27887700", Name: "Maquinarias del Plata", Phone: "543514557799", Address: model.Address{Street: "Av. Colón 2100", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4068), Longitude: fPtr(-64.2152)}},
+			recipient:          model.Customer{DNI: "29110022", Name: "Maquinarias Cuyo SRL", Phone: "542614110055", Email: "compras@maqcuyo.com.ar", Address: model.Address{Street: "Av. Acceso Sur 1200", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.9168), Longitude: fPtr(-68.8312)}},
+			weightKg:           160,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "cordoba",
+			finalBranchID:      "mendoza",
+			priority:           "baja",
+			priorityScore:      0.32,
+			priorityConfidence: 0.70,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado en Córdoba", hoursAgo: 5},
 			},
 		},
 	}

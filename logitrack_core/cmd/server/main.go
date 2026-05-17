@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -124,9 +125,33 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
+	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
+	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
+	interBranchTripSvc.SetRouteService(routeSvc)
+	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
+	vehicleHandler.SetTripService(interBranchTripSvc)
+
 	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
+	routingSvc.SetInterBranchTripService(interBranchTripSvc)
+
+	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
+	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
+	// del grafo de sucursales.
+	branchGraphRepo := repository.NewPostgresBranchGraphRepository(database)
+	branchGraphSvc := service.NewBranchGraphService(branchGraphRepo, branchRepo)
+	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
+	routingSvc.SetBranchGraphService(branchGraphSvc)
+	shipmentSvc.SetBranchGraphService(branchGraphSvc)
+
 	routingHandler := handler.NewRoutingHandler(routingSvc)
+
+	// Generar plan global al arrancar para que el plan del día esté disponible
+	// desde el primer request, sin esperar el cron de las 08:00.
+	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
+		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	}
+	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)
@@ -234,6 +259,25 @@ func main() {
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
+
+	// Inter-branch trips — driver self-service + operator/supervisor receive
+	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
+	protected.POST("/inter-branch-trips/:id/start", driverOnly, interBranchTripHandler.StartTrip)
+	protected.GET("/inter-branch-trips/:id", shipmentRead, interBranchTripHandler.GetTripByID)
+	protected.GET("/inter-branch-trips/:id/qr", shipmentDetailRead, interBranchTripHandler.GetTripQR)
+	protected.POST("/inter-branch-trips/:id/scan/finish", shipmentWrite, interBranchTripHandler.FinishByScan)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/unload", shipmentWrite, interBranchTripHandler.ConfirmUnload)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/load", shipmentWrite, interBranchTripHandler.ConfirmLoad)
+	protected.POST("/inter-branch-trips/:id/assign-driver", shipmentWrite, interBranchTripHandler.AssignDriver)
+	protected.POST("/inter-branch-trips/:id/cancel", middleware.RequireRoles(model.RoleSupervisor), interBranchTripHandler.Cancel)
+	protected.GET("/inter-branch-trips", shipmentRead, interBranchTripHandler.ListByBranch)
+	// QR-based vehicle claim (driver) and close (operator/supervisor)
+	protected.POST("/trips/claim-by-qr", driverOnly, interBranchTripHandler.ClaimByVehicleQR)
+	protected.POST("/trips/close-by-qr", shipmentWrite, interBranchTripHandler.CloseByVehicleQR)
+
+	// Vehicle QR management
+	canViewVehicleQR := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	protected.GET("/vehicles/by-plate/:plate/qr", canViewVehicleQR, vehicleHandler.GetVehicleQR)
 
 	// Users — list drivers (operator, supervisor) for shipment assignment
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)

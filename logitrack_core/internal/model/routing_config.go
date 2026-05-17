@@ -35,6 +35,9 @@ type RoutingConfig struct {
 
 	// Estrategia de asignación de envíos a choferes.
 	LastMilePackingStrategy LastMilePackingStrategy `json:"last_mile_packing_strategy"`
+
+	// FleetProjectionHorizonHours is a WIP param: window for projected-dispatch logic.
+	FleetProjectionHorizonHours int `json:"fleet_projection_horizon_hours"`
 }
 
 func DefaultRoutingConfig() RoutingConfig {

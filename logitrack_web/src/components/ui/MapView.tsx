@@ -52,6 +52,8 @@ interface MapViewProps {
     play: () => void;
     reset: () => void;
     onExit?: () => void;
+    speedMultiplier?: number;
+    onCycleSpeed?: () => void;
   };
   zones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
@@ -502,6 +504,11 @@ export function MapView({
               <button onClick={simulationControls.reset} className="sim-btn">
                 <RotateCcw className="w-3 h-3" /> Reiniciar
               </button>
+              {simulationControls.onCycleSpeed && (
+                <button onClick={simulationControls.onCycleSpeed} className="sim-btn" title="Cambiar velocidad de simulación">
+                  ⚡ x{simulationControls.speedMultiplier ?? 1}
+                </button>
+              )}
               {simulationControls.onExit && (
                 <button onClick={simulationControls.onExit} className="sim-btn sim-btn-exit">
                   ✕ Salir

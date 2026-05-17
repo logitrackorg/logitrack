@@ -322,7 +322,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
+		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -337,7 +337,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
+		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments WHERE 1=1`
 	args := []interface{}{}
 	i := 1
@@ -377,7 +377,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
+		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments
 		WHERE LOWER(tracking_id) LIKE $1
 		   OR LOWER(sender->>'name') LIKE $1
@@ -531,6 +531,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		price               sql.NullFloat64
 		priceBreakdownJSON  []byte
 		priceCurrency       string
+		reservedForTripID   sql.NullString
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -541,13 +542,16 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-		&price, &priceBreakdownJSON, &priceCurrency,
+		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
 	}
 	if err != nil {
 		return model.Shipment{}, err
+	}
+	if reservedForTripID.Valid {
+		s.ReservedForTripID = &reservedForTripID.String
 	}
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
@@ -610,6 +614,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			price               sql.NullFloat64
 			priceBreakdownJSON  []byte
 			priceCurrency       string
+			reservedForTripID   sql.NullString
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -620,10 +625,13 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-			&price, &priceBreakdownJSON, &priceCurrency,
+			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if reservedForTripID.Valid {
+			s.ReservedForTripID = &reservedForTripID.String
 		}
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
@@ -691,4 +699,23 @@ func nullableFloat(f *float64) interface{} {
 		return nil
 	}
 	return *f
+}
+
+// ReserveForTrip marca el envío como reservado para un trip multi-hop.
+// Atómico: solo reserva si el envío no está ya reservado.
+func (p *PostgresShipmentProjection) ReserveForTrip(trackingID, tripID string) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET reserved_for_trip_id = $1 WHERE tracking_id = $2 AND reserved_for_trip_id IS NULL`,
+		tripID, trackingID,
+	)
+	return err
+}
+
+// ReleaseFromTrip libera la reserva del envío.
+func (p *PostgresShipmentProjection) ReleaseFromTrip(trackingID string) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET reserved_for_trip_id = NULL WHERE tracking_id = $1`,
+		trackingID,
+	)
+	return err
 }

@@ -260,6 +260,43 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE zones DROP COLUMN IF EXISTS severity;
 
 		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS risky_zone_surcharge REAL NOT NULL DEFAULT 5000;
+
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_type VARCHAR(50);
+		ALTER TABLE users ALTER COLUMN driver_type DROP NOT NULL;
+
+		CREATE TABLE IF NOT EXISTS inter_branch_trips (
+			id                    TEXT PRIMARY KEY,
+			driver_id             TEXT,
+			vehicle_id            TEXT NOT NULL,
+			license_plate         TEXT NOT NULL,
+			origin_branch_id      TEXT NOT NULL,
+			destination_branch_id TEXT NOT NULL,
+			shipment_ids          JSONB NOT NULL DEFAULT '[]',
+			status                TEXT NOT NULL DEFAULT 'pendiente',
+			total_weight_kg       NUMERIC(10,3) NOT NULL DEFAULT 0,
+			created_by            TEXT NOT NULL DEFAULT '',
+			created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			started_at            TIMESTAMPTZ,
+			completed_at          TIMESTAMPTZ,
+			finished_by_user_id   TEXT
+		);
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_driver_idx ON inter_branch_trips(driver_id) WHERE driver_id IS NOT NULL;
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_dest_idx   ON inter_branch_trips(destination_branch_id);
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_status_idx ON inter_branch_trips(status);
+
+		-- Required by vehicle QR token generation
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		-- QR-based vehicle claim flow (vehicle columns are migrated in postgres_vehicle.go)
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'inter_branch';
+		ALTER TABLE inter_branch_trips ALTER COLUMN destination_branch_id DROP NOT NULL;
+		CREATE UNIQUE INDEX IF NOT EXISTS trips_one_active_per_vehicle
+			ON inter_branch_trips(vehicle_id) WHERE status IN ('pendiente','en_transito');
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS stops JSONB NOT NULL DEFAULT '[]'::jsonb;
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS current_stop_index INTEGER NOT NULL DEFAULT 0;
+
+		-- Cross-branch pickup: reserva del envío para un trip multi-hop
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS reserved_for_trip_id TEXT;
+		CREATE INDEX IF NOT EXISTS shipments_reserved_for_trip_idx ON shipments(reserved_for_trip_id) WHERE reserved_for_trip_id IS NOT NULL;
 	`)
 	return err
 }
