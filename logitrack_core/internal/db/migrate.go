@@ -317,6 +317,20 @@ func RunMigrations(db *sql.DB) error {
 		-- Cross-branch pickup: reserva del envío para un trip multi-hop
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS reserved_for_trip_id TEXT;
 		CREATE INDEX IF NOT EXISTS shipments_reserved_for_trip_idx ON shipments(reserved_for_trip_id) WHERE reserved_for_trip_id IS NOT NULL;
+
+		-- Notification center (US: Centro de notificaciones in-app + Envío recibido en sucursal)
+		CREATE TABLE IF NOT EXISTS notifications (
+			id          TEXT PRIMARY KEY,
+			user_id     TEXT NOT NULL,
+			type        TEXT NOT NULL,
+			title       TEXT NOT NULL,
+			body        TEXT NOT NULL,
+			resource_id TEXT NOT NULL DEFAULT '',
+			read_at     TIMESTAMPTZ,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+		CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
 	`)
 	return err
 }

@@ -125,6 +125,11 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+
+	notifRepo := repository.NewPostgresNotificationRepository(database)
+	notifSvc := service.NewNotificationService(notifRepo)
+	notifHandler := handler.NewNotificationHandler(notifSvc)
+	shipmentSvc.SetNotificationService(notifSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -342,6 +347,9 @@ func main() {
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Notifications — all authenticated roles
+	notifHandler.RegisterRoutes(protected, authenticated)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
