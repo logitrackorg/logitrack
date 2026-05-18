@@ -46,11 +46,42 @@ export function NotificationBell() {
     }
   }, []);
 
-  // Initial load and poll every 30 seconds
+  // SSE: push updates in real time. Falls back to 60-second polling if the
+  // connection drops or the browser doesn't support EventSource.
   useEffect(() => {
-    fetchCount();
-    const interval = setInterval(fetchCount, 30_000);
-    return () => clearInterval(interval);
+    fetchCount(); // initial load
+
+    const token = localStorage.getItem("token");
+    const base = import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1";
+    const url = `${base}/notifications/stream?token=${encodeURIComponent(token ?? "")}`;
+
+    let es: EventSource | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const startSSE = () => {
+      es = new EventSource(url);
+      es.addEventListener("notification", () => fetchCount());
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        // If SSE fails, fall back to polling every 60 s
+        if (!pollInterval) {
+          pollInterval = setInterval(fetchCount, 60_000);
+        }
+      };
+    };
+
+    if (typeof EventSource !== "undefined" && token) {
+      startSSE();
+    } else {
+      // No EventSource support — use polling only
+      pollInterval = setInterval(fetchCount, 60_000);
+    }
+
+    return () => {
+      es?.close();
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [fetchCount]);
 
   // Close panel on outside click

@@ -10,14 +10,25 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
+// Pusher is satisfied by the SSE hub; using an interface avoids an import cycle.
+type Pusher interface {
+	Push(userID string)
+}
+
 // NotificationService handles creation and retrieval of in-app notifications.
 type NotificationService struct {
 	repo repository.NotificationRepository
+	hub  Pusher
 }
 
 // NewNotificationService creates a new NotificationService.
 func NewNotificationService(repo repository.NotificationRepository) *NotificationService {
 	return &NotificationService{repo: repo}
+}
+
+// SetHub wires in the SSE hub so that new notifications are pushed in real time.
+func (s *NotificationService) SetHub(hub Pusher) {
+	s.hub = hub
 }
 
 // statusLabel returns a human-readable label for the given shipment status.
@@ -77,6 +88,8 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 		}
 		if err := s.repo.Create(n); err != nil {
 			log.Printf("[NotificationService] Create notification error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
 		}
 	}
 }

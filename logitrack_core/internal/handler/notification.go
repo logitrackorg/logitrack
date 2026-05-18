@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,26 +11,74 @@ import (
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
+	"github.com/logitrack/core/internal/sse"
 )
 
 // NotificationHandler handles HTTP requests for the notification center.
 type NotificationHandler struct {
 	svc *service.NotificationService
+	hub *sse.Hub
 }
 
 // NewNotificationHandler creates a new NotificationHandler.
-func NewNotificationHandler(svc *service.NotificationService) *NotificationHandler {
-	return &NotificationHandler{svc: svc}
+func NewNotificationHandler(svc *service.NotificationService, hub *sse.Hub) *NotificationHandler {
+	return &NotificationHandler{svc: svc, hub: hub}
 }
 
-// RegisterRoutes registers notification routes under the given router group.
-// auth is the authentication middleware (all roles).
+// RegisterRoutes registers the standard (header-authenticated) notification routes.
 func (h *NotificationHandler) RegisterRoutes(r *gin.RouterGroup, auth gin.HandlerFunc) {
 	g := r.Group("/notifications", auth)
 	g.GET("", h.List)
 	g.GET("/unread-count", h.UnreadCount)
 	g.PATCH("/read-all", h.MarkAllRead)
 	g.PATCH("/:id/read", h.MarkRead)
+}
+
+// RegisterStreamRoute registers the SSE stream endpoint on a router group that
+// does NOT inherit the header-only Auth middleware (e.g. the public api group).
+// sseAuth validates the token from either the Authorization header or ?token=.
+func (h *NotificationHandler) RegisterStreamRoute(r *gin.RouterGroup, sseAuth gin.HandlerFunc) {
+	r.GET("/notifications/stream", sseAuth, h.Stream)
+}
+
+// Stream keeps the connection open and pushes a "notification" event whenever
+// a new notification is created for the authenticated user.
+// A keep-alive ping is sent every 30 s to prevent proxy timeouts.
+func (h *NotificationHandler) Stream(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	client := &sse.Client{
+		UserID: user.ID,
+		Ch:     make(chan struct{}, 4),
+	}
+	h.hub.Register(client)
+	defer h.hub.Unregister(client)
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no") // disable nginx/caddy buffering
+	c.Writer.WriteHeader(http.StatusOK)
+
+	// Initial ping to confirm connection is live.
+	fmt.Fprintf(c.Writer, "event: ping\ndata: ok\n\n")
+	c.Writer.Flush()
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-client.Ch:
+			fmt.Fprintf(c.Writer, "event: notification\ndata: {}\n\n")
+			c.Writer.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(c.Writer, "event: ping\ndata: ok\n\n")
+			c.Writer.Flush()
+		case <-c.Request.Context().Done():
+			return
+		}
+	}
 }
 
 // List returns a paginated list of notifications for the authenticated user.
