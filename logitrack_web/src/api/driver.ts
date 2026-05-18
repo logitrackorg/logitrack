@@ -79,6 +79,14 @@ export interface VoiceUploadResult {
   baseline: VoiceMetrics | null;
 }
 
+// US4: Tactile event capture
+export interface TouchEventPayload {
+  tracking_id: string;
+  action: "entregado" | "no_entregado";
+  reaction_time_ms: number;
+  misfires: number;
+}
+
 // US6: PVT (Psychomotor Vigilance Task)
 export interface PVTPayload {
   latencia_promedio_ms: number;
@@ -104,6 +112,10 @@ export const driverApi = {
    *  El gate queda suprimido 3 horas; el salto queda en el historial. */
   skipCheckin: () =>
     api.post<{ ok: boolean }>("/driver/checkin/skip").then((r) => r.data),
+  /** Registra en segundo plano un evento táctil de entrega (US4).
+   *  Se llama de forma asíncrona — la UI no espera la respuesta. */
+  submitTouchEvent: (payload: TouchEventPayload) =>
+    api.post<{ ok: boolean }>("/driver/touch-events", payload).then((r) => r.data),
   /** Envía el resultado del minijuego PVT (US6). Opcional — el backend acepta
    *  la llamada incluso si no hay un KSS registrado en el día. */
   submitPVT: (payload: PVTPayload) =>

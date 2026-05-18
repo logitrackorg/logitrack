@@ -242,6 +242,47 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
 }
 
+// ── US4: Tactile event capture ────────────────────────────────────────────────
+
+// SubmitTouchEvent records a delivery interaction event (reaction time +
+// misfire count) captured in the driver's delivery management view.
+// Called asynchronously by the frontend — the UI does NOT wait for this response.
+func (h *DriverHandler) SubmitTouchEvent(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	var body struct {
+		TrackingID     string `json:"tracking_id"`
+		Action         string `json:"action"`
+		ReactionTimeMs int64  `json:"reaction_time_ms"`
+		Misfires       int    `json:"misfires"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+
+	today := todayAR()
+	rec, _ := h.checkinRepo.Get(user.ID, today)
+	rec.DriverID = user.ID
+	rec.Date = today
+	if rec.RecordedAt.IsZero() {
+		rec.RecordedAt = time.Now()
+	}
+	rec.TouchEvents = append(rec.TouchEvents, model.TouchEventRecord{
+		TrackingID:     body.TrackingID,
+		Action:         body.Action,
+		ReactionTimeMs: body.ReactionTimeMs,
+		Misfires:       body.Misfires,
+		RecordedAt:     time.Now(),
+	})
+
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el evento"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // ── US6: PVT (Psychomotor Vigilance Task) ─────────────────────────────────────
 
 // SubmitPVT receives the reaction-time mini-game results and persists them in

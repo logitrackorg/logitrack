@@ -36,6 +36,22 @@ type DriverCheckin struct {
 	// PVTMetrics holds the optional psychomotor vigilance task result (US6).
 	// Nil when the driver skipped or did not complete the PVT mini-game.
 	PVTMetrics *PVTResult `json:"pvt_metrics,omitempty"`
+
+	// TouchEvents accumulates tactile interaction records captured during
+	// delivery management (US4). Appended for each "Entregar"/"No Entregado"
+	// action taken during the day.
+	TouchEvents []TouchEventRecord `json:"touch_events,omitempty"`
+}
+
+// TouchEventRecord captures a single delivery interaction event:
+// how quickly the driver pressed an action button and how many taps
+// missed the target first.
+type TouchEventRecord struct {
+	TrackingID     string    `json:"tracking_id"`
+	Action         string    `json:"action"`           // "entregado" | "no_entregado"
+	ReactionTimeMs int64     `json:"reaction_time_ms"` // ms from card render to button press
+	Misfires       int       `json:"misfires"`         // taps that missed the action buttons
+	RecordedAt     time.Time `json:"recorded_at"`
 }
 
 // PVTResult contains the objective psychomotor metrics captured by the

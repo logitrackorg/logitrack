@@ -244,7 +244,8 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
-	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT) // US6: PVT mini-game
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent) // US4: tactile events
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 
