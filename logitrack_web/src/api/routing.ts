@@ -24,6 +24,14 @@ api.interceptors.response.use(
 
 export type LastMilePackingStrategy = "balanced" | "maximize_capacity";
 
+export type RouteMode = "ventanas" | "segura" | "costo";
+
+export interface RecomputeLastMileRequest {
+  vehicle_id: string;
+  shipment_ids: string[];
+  mode: RouteMode;
+}
+
 export interface RoutingConfig {
   sla_force_horizon_hours: number;
   priority_force_threshold: number;
@@ -52,6 +60,11 @@ export interface RouteStop {
   window_deviation_min?: number; // positivo=tarde, negativo=temprano (en minutos)
 }
 
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 export interface LastMileAssignment {
   vehicle_id: string;
   license_plate: string;
@@ -69,6 +82,14 @@ export interface LastMileAssignment {
   applied_by?: string;
   // Runtime-only: el vehículo ya está en viaje — card informativa.
   in_transit?: boolean;
+  // Campos VRP: presentes cuando el scheduler pudo optimizar el orden de paradas.
+  suggested_departure_min?: number; // minutos desde medianoche (hora local)
+  ordered_stops?: RouteStop[];
+  window_coverage?: number;         // 0.0 – 1.0
+  route_mode?: RouteMode;
+  // Geometría real del trayecto (vía calles, OSRM). Cuando está presente, el
+  // mapa la usa para dibujar la polyline. Ausente → fallback a líneas rectas.
+  polyline_coords?: LatLng[];
 }
 
 export interface AssignmentStop {
@@ -253,6 +274,10 @@ export const routingApi = {
   getConfig: () => api.get<RoutingConfig>("/routing/config").then((r) => r.data),
   updateConfig: (cfg: RoutingConfig) =>
     api.patch<RoutingConfig>("/routing/config", cfg).then((r) => r.data),
+
+  /** Recalcula el orden de paradas y horario sugerido para una asignación de última milla. */
+  recomputeLastMile: (req: RecomputeLastMileRequest) =>
+    api.post<LastMileAssignment>("/routing/last-mile/recompute", req).then((r) => r.data),
 };
 
 // Diccionario de etiquetas para los códigos de razón devueltos por el backend.

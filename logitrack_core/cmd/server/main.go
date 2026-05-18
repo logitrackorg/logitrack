@@ -7,10 +7,12 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
@@ -27,6 +29,12 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
+	// Carga .env si existe (silenciosamente lo ignora si no está). Útil para
+	// configurar localmente vars como ORS_API_KEY sin tener que exportarlas
+	// en cada sesión de shell. En producción las vars vienen del entorno
+	// directamente y .env no existe.
+	_ = godotenv.Load()
+
 	// PostgreSQL connection
 	database, err := db.NewDB(
 		getenv("DB_HOST", "localhost"),
@@ -125,6 +133,15 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
+	// OpenRouteService — opcional. Cuando hay ORS_API_KEY se usa para el modo
+	// segura (avoid_polygons nativo). Sin la key, segura cae al fallback de
+	// OSRM con waypoints de bordeado.
+	orsClient := ors.NewClient(os.Getenv("ORS_BASE_URL"), os.Getenv("ORS_API_KEY"))
+	if orsClient != nil {
+		log.Printf("[routing] OpenRouteService HABILITADO — modo segura usará avoid_polygons nativo")
+	} else {
+		log.Printf("[routing] OpenRouteService DESHABILITADO (sin ORS_API_KEY) — modo segura usará fallback OSRM + waypoints")
+	}
 	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
 	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
 	interBranchTripSvc.SetRouteService(routeSvc)
@@ -134,6 +151,8 @@ func main() {
 	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
+	routingSvc.SetZoneService(zoneSvc)
+	routingSvc.SetORSClient(orsClient)
 
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
@@ -318,6 +337,7 @@ func main() {
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
+	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)

@@ -22,6 +22,8 @@ import {
 } from "../api/routing";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
+import { EditDriverStopsModal } from "../components/EditDriverStopsModal";
+import { ReviewInterBranchModal } from "../components/ReviewInterBranchModal";
 
 type Source =
   | { kind: "driver"; id: string }
@@ -209,6 +211,11 @@ export function Routing({ mode }: RoutingProps = {}) {
   const [activeTabState, setActiveTab] = useState<"last_mile" | "inter_branch">(mode ?? "last_mile");
   // Si mode está forzado por la prop, ignorar el state interno
   const activeTab = mode ?? activeTabState;
+  // Modal "Editar paradas" (última milla)
+  const [editingStopsVehicleId, setEditingStopsVehicleId] = useState<string | null>(null);
+  // Modal "Revisar despacho" (inter-sucursal)
+  const [reviewingDispatchVehicleId, setReviewingDispatchVehicleId] = useState<string | null>(null);
+
   // Modal "Agregar parada"
   const [addStopVehicleId, setAddStopVehicleId] = useState<string | null>(null);
   const [addStopBranchId, setAddStopBranchId] = useState("");
@@ -359,12 +366,17 @@ export function Routing({ mode }: RoutingProps = {}) {
   };
 
   const handleApply = async () => {
-    if (!branchId) return;
+    if (!branchId || !plan) return;
     setApplying(true);
     setError("");
     try {
-      const editedPlan = isDirty && plan ? plan : undefined;
-      const resp = await routingApi.apply(branchId, editedPlan ? { plan: editedPlan } : undefined);
+      // Solo enviar la sección del tab activo; la otra queda con array vacío
+      // para que el backend no toque esos envíos.
+      const tabPlan: typeof plan =
+        activeTab === "last_mile"
+          ? { ...plan, inter_branch: [] }
+          : { ...plan, last_mile: [] };
+      const resp = await routingApi.apply(branchId, { plan: tabPlan });
       setApplyResult(resp);
     } catch (err: unknown) {
       const msg =
@@ -377,15 +389,14 @@ export function Routing({ mode }: RoutingProps = {}) {
   };
 
   // handleApplyItem aplica solo un vehículo o chofer específico y recarga el plan inline.
-  // Si el plan está dirty (drag-and-drop sin guardar), envía la versión editada al backend
-  // para que sincronice los cambios y aplique el ítem en una sola request.
+  // Siempre envía el plan actual del módulo para que el backend aplique exactamente
+  // los envíos visibles en pantalla, sin tomar envíos extra del plan persistido.
   const handleApplyItem = async (opts: { vehicleId?: string; driverId?: string }) => {
-    if (!branchId) return;
+    if (!branchId || !plan) return;
     setApplying(true);
     setError("");
     try {
-      const editedPlan = isDirty && plan ? plan : undefined;
-      await routingApi.apply(branchId, { ...opts, plan: editedPlan });
+      await routingApi.apply(branchId, { ...opts, plan });
       await loadTodayPlan();
       const label = opts.vehicleId ? "Despacho aplicado." : "Ruta aplicada.";
       setSuccess(label);
@@ -395,6 +406,33 @@ export function Routing({ mode }: RoutingProps = {}) {
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
         "No se pudo aplicar el ítem.";
       setError(msg);
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleApplyWithReorder = async (vehicleId: string, orderedTids: string[], routeMode?: import("../api/routing").RouteMode) => {
+    if (!plan || !branchId) return;
+    setApplying(true);
+    setError("");
+    try {
+      const editedPlan = clonePlan(plan);
+      const asgmt = editedPlan.last_mile.find((a) => a.vehicle_id === vehicleId);
+      if (asgmt) {
+        asgmt.shipments = orderedTids;
+        if (routeMode) asgmt.route_mode = routeMode;
+      }
+      await routingApi.apply(branchId, { vehicleId, plan: editedPlan });
+      setEditingStopsVehicleId(null);
+      await loadTodayPlan();
+      setSuccess("Ruta aplicada.");
+      setTimeout(() => setSuccess(""), 2500);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "No se pudo aplicar la ruta.";
+      setError(msg);
+      throw err;
     } finally {
       setApplying(false);
     }
@@ -900,7 +938,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                         onDragStart={canApply ? beginDrag : undefined}
                         onDragEnd={canApply ? endDrag : undefined}
                         onDropVehicle={canApply ? (vehicleId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "driver", id: vehicleId }) : undefined}
-                        onApplyVehicle={canApply ? (vehicleId) => void handleApplyItem({ vehicleId }) : undefined}
+                        onEditStops={canApply ? (vehicleId) => setEditingStopsVehicleId(vehicleId) : undefined}
                         onRemoveShipment={canApply ? unassignShipment : undefined}
                         applying={applying}
                       />
@@ -964,7 +1002,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                         onDragStart={canApply ? beginDrag : undefined}
                         onDragEnd={canApply ? endDrag : undefined}
                         onDropVehicle={canApply ? (vehicleId) => dragging && handleDrop(dragging.trackingId, dragging.source, { kind: "vehicle", id: vehicleId }) : undefined}
-                        onApplyVehicle={canApply ? (vehicleId) => void handleApplyItem({ vehicleId }) : undefined}
+                        onApplyVehicle={canApply ? (vehicleId) => setReviewingDispatchVehicleId(vehicleId) : undefined}
                         onRemoveShipment={canApply ? unassignShipment : undefined}
                         onAddStop={canApply ? openAddStop : undefined}
                         onRemoveStop={canApply ? removeStop : undefined}
@@ -1022,6 +1060,54 @@ export function Routing({ mode }: RoutingProps = {}) {
           onClose={closeInfo}
         />
       )}
+
+      {editingStopsVehicleId && plan && (() => {
+        const assignment = plan.last_mile.find((a) => a.vehicle_id === editingStopsVehicleId);
+        if (!assignment) return null;
+        const branch = branches.find((b) => b.id === branchId);
+        const branchCoords =
+          branch?.latitude != null && branch?.longitude != null
+            ? { lat: branch.latitude, lng: branch.longitude }
+            : null;
+        return (
+          <EditDriverStopsModal
+            assignment={assignment}
+            shipmentMap={shipments}
+            branchCoords={branchCoords}
+            config={plan.config_snapshot}
+            onClose={() => setEditingStopsVehicleId(null)}
+            onApply={(orderedTids, routeMode) => handleApplyWithReorder(editingStopsVehicleId, orderedTids, routeMode)}
+          />
+        );
+      })()}
+
+      {/* Modal: Revisar despacho inter-sucursal */}
+      {reviewingDispatchVehicleId && plan && (() => {
+        const assignment = plan.inter_branch.find((a) => a.vehicle_id === reviewingDispatchVehicleId);
+        if (!assignment) return null;
+        return (
+          <ReviewInterBranchModal
+            assignment={assignment}
+            originBranchId={branchId}
+            branches={branches}
+            shipments={shipments}
+            applying={applying}
+            onClose={() => setReviewingDispatchVehicleId(null)}
+            onConfirm={(editedStops) => {
+              // Aplicar las paradas editadas al plan local antes de despachar
+              setPlan((prev) => {
+                if (!prev) return prev;
+                const next = clonePlan(prev);
+                const d = next.inter_branch.find((x) => x.vehicle_id === reviewingDispatchVehicleId);
+                if (d) d.additional_stops = editedStops.length > 0 ? editedStops : undefined;
+                return next;
+              });
+              setReviewingDispatchVehicleId(null);
+              void handleApplyItem({ vehicleId: reviewingDispatchVehicleId });
+            }}
+          />
+        );
+      })()}
 
       {/* Modal: Agregar parada al despacho multi-hop */}
       {addStopVehicleId && plan && (() => {
@@ -1390,7 +1476,7 @@ function LastMileSection({
   onDragStart,
   onDragEnd,
   onDropVehicle,
-  onApplyVehicle,
+  onEditStops,
   onRemoveShipment,
   applying,
 }: {
@@ -1404,7 +1490,7 @@ function LastMileSection({
   onDragStart?: (e: React.DragEvent, trackingId: string) => void;
   onDragEnd?: () => void;
   onDropVehicle?: (vehicleId: string) => void;
-  onApplyVehicle?: (vehicleId: string) => void;
+  onEditStops?: (vehicleId: string) => void;
   onRemoveShipment?: (trackingId: string) => void;
   applying?: boolean;
 }) {
@@ -1433,7 +1519,7 @@ function LastMileSection({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onDropHere={() => onDropVehicle?.(a.vehicle_id)}
-            onApply={!a.in_transit && hasPendingShipments(a) && onApplyVehicle ? () => onApplyVehicle(a.vehicle_id) : undefined}
+            onEditStops={!a.in_transit && hasPendingShipments(a) && onEditStops ? () => onEditStops(a.vehicle_id) : undefined}
             onRemoveShipment={!a.in_transit ? onRemoveShipment : undefined}
             applying={applying}
           />
@@ -1517,7 +1603,7 @@ function DriverRouteCard({
   onDragStart,
   onDragEnd,
   onDropHere,
-  onApply,
+  onEditStops,
   onRemoveShipment,
   applying,
 }: {
@@ -1530,7 +1616,7 @@ function DriverRouteCard({
   onDragStart?: (e: React.DragEvent, trackingId: string) => void;
   onDragEnd?: () => void;
   onDropHere?: () => void;
-  onApply?: () => void;
+  onEditStops?: () => void;
   onRemoveShipment?: (trackingId: string) => void;
   applying?: boolean;
 }) {
@@ -1565,6 +1651,12 @@ function DriverRouteCard({
         <div className="min-w-0">
           <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
             <span>{driverName}</span>
+            {assignment.suggested_departure_min != null && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Salida sugerida: {String(Math.floor(assignment.suggested_departure_min / 60)).padStart(2, "0")}:{String(assignment.suggested_departure_min % 60).padStart(2, "0")}
+              </span>
+            )}
             {assignment.in_transit && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
                 🚚 En viaje
@@ -1594,14 +1686,16 @@ function DriverRouteCard({
               + {a.existing_weight_kg.toFixed(1)} kg ya cargados
             </div>
           )}
-          {hasPendingShipments(assignment) && onApply && (
-            <button
-              onClick={onApply}
-              disabled={applying}
-              className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer mt-1"
-            >
-              Aplicar ruta
-            </button>
+          {hasPendingShipments(assignment) && onEditStops && (
+            <div className="flex gap-1 mt-1 flex-wrap justify-end">
+              <button
+                onClick={onEditStops}
+                disabled={applying}
+                className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
+              >
+                Aplicar
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1756,8 +1850,26 @@ function InterBranchSection({
       </CardHeader>
       <CardContent className="grid gap-4">
         {assignments.map((a) => {
-          const totalLoaded = a.total_weight_kg + a.existing_weight_kg;
+          const pickupSet = new Set<string>([
+            ...(a.primary_pickup_shipments ?? []),
+            ...(a.additional_stops ?? []).flatMap((s) => s.pickup_shipments ?? []),
+          ]);
+          const pickupWeight = (a.primary_pickup_weight_kg ?? 0) +
+            (a.additional_stops ?? []).reduce((sum, st) => sum + (st.pickup_weight_kg ?? 0), 0);
+          const originShipmentCount = a.shipments.filter((tid) => !pickupSet.has(tid)).length;
+          const totalLoaded = a.total_weight_kg - pickupWeight + a.existing_weight_kg;
           const utilPct = a.capacity_kg > 0 ? Math.round((totalLoaded / a.capacity_kg) * 100) : 0;
+          // "bajan en ruta": envíos de origen descargados en paradas intermedias (no la final)
+          const additionalStops = a.additional_stops ?? [];
+          let bajanCount = 0;
+          let bajanWeight = 0;
+          if (additionalStops.length > 0) {
+            const finalStopSet = new Set(additionalStops[additionalStops.length - 1].shipments);
+            const bajanList = a.shipments.filter((tid) => !finalStopSet.has(tid) && !pickupSet.has(tid));
+            bajanCount = bajanList.length;
+            bajanWeight = bajanList.reduce((sum, tid) => sum + (shipments.get(tid)?.weight_kg ?? 0), 0);
+          }
+          const netDiff = pickupWeight - bajanWeight;
           const canAccept = canAcceptVehicle?.(a.vehicle_id) ?? false;
           const rejection = dragActive && !canAccept ? vehicleRejectionReason?.(a.vehicle_id) ?? null : null;
           const cardClass = dragActive
@@ -1855,13 +1967,19 @@ function InterBranchSection({
                       disabled={applying}
                       className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
                     >
-                      Aplicar despacho
+                      Aplicar
                     </button>
                   )}
                 </div>
               </div>
               <div className="text-xs text-slate-500 tabular-nums mb-2">
-                {a.shipments.length} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
+                {originShipmentCount} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
+                {(bajanCount > 0 || pickupSet.size > 0) && (
+                  <span className="ml-1 text-[11px] text-slate-400">
+                    en ruta:{bajanCount > 0 && ` bajan ${bajanCount} (−${bajanWeight.toFixed(1)} kg)`}{bajanCount > 0 && pickupSet.size > 0 && " ·"}{pickupSet.size > 0 && ` suben ${pickupSet.size} (+${pickupWeight.toFixed(1)} kg)`}
+                    {" "}({netDiff >= 0 ? `+${netDiff.toFixed(1)}` : `−${Math.abs(netDiff).toFixed(1)}`} kg neto)
+                  </span>
+                )}
                 {a.existing_weight_kg > 0 && (
                   <span className="ml-1 text-[11px] text-slate-400">
                     (incluye {a.existing_weight_kg.toFixed(1)} kg ya cargados)
@@ -2141,12 +2259,29 @@ function OutgoingInProgressSection({
             </div>
             <div className="grid gap-3">
               {interBranch.map((a) => {
-                const totalLoaded = a.total_weight_kg + a.existing_weight_kg;
+                const pickupSetG = new Set<string>([
+                  ...(a.primary_pickup_shipments ?? []),
+                  ...(a.additional_stops ?? []).flatMap((s) => s.pickup_shipments ?? []),
+                ]);
+                const pickupWeightG = (a.primary_pickup_weight_kg ?? 0) +
+                  (a.additional_stops ?? []).reduce((sum, st) => sum + (st.pickup_weight_kg ?? 0), 0);
+                const totalLoaded = a.total_weight_kg - pickupWeightG + a.existing_weight_kg;
                 const utilPct = a.capacity_kg > 0 ? Math.round((totalLoaded / a.capacity_kg) * 100) : 0;
                 const allShipments = [
                   ...a.shipments,
                   ...(a.existing_shipments ?? []).filter((t) => !a.shipments.includes(t)),
                 ];
+                const originShipmentCountG = allShipments.filter((t) => !pickupSetG.has(t)).length;
+                const additionalStopsG = a.additional_stops ?? [];
+                let bajanCountG = 0;
+                let bajanWeightG = 0;
+                if (additionalStopsG.length > 0) {
+                  const finalStopSetG = new Set(additionalStopsG[additionalStopsG.length - 1].shipments);
+                  const bajanListG = a.shipments.filter((tid) => !finalStopSetG.has(tid) && !pickupSetG.has(tid));
+                  bajanCountG = bajanListG.length;
+                  bajanWeightG = bajanListG.reduce((sum, tid) => sum + (shipments.get(tid)?.weight_kg ?? 0), 0);
+                }
+                const netDiffG = pickupWeightG - bajanWeightG;
                 return (
                   <div key={a.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -2159,7 +2294,13 @@ function OutgoingInProgressSection({
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 tabular-nums shrink-0">
-                        {allShipments.length} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
+                        {originShipmentCountG} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
+                        {(bajanCountG > 0 || pickupSetG.size > 0) && (
+                          <span className="ml-1 text-[11px] text-slate-400">
+                            en ruta:{bajanCountG > 0 && ` bajan ${bajanCountG} (−${bajanWeightG.toFixed(1)} kg)`}{bajanCountG > 0 && pickupSetG.size > 0 && " ·"}{pickupSetG.size > 0 && ` suben ${pickupSetG.size} (+${pickupWeightG.toFixed(1)} kg)`}
+                            {" "}({netDiffG >= 0 ? `+${netDiffG.toFixed(1)}` : `−${Math.abs(netDiffG).toFixed(1)}`} kg neto)
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="grid gap-1.5">

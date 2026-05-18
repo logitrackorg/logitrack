@@ -11,6 +11,7 @@ import (
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/vrp"
@@ -41,8 +42,10 @@ type RoutingService struct {
 	shipmentSvc     *ShipmentService
 	planRepo        repository.RoutingPlanRepository
 	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
+	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
 	graphSvc        *BranchGraphService // nullable; used for stale-replan
+	zoneSvc         *ZoneService        // nullable; needed for safe-route mode
 }
 
 func NewRoutingService(
@@ -71,6 +74,14 @@ func NewRoutingService(
 
 func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) {
 	s.interBranchTripSvc = svc
+}
+
+func (s *RoutingService) SetZoneService(svc *ZoneService) {
+	s.zoneSvc = svc
+}
+
+func (s *RoutingService) SetORSClient(c *ors.Client) {
+	s.orsClient = c
 }
 
 const lastMileDestLabel = "(última milla)"
@@ -167,6 +178,8 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 
 	// 2) Última milla — asignar a vehículos de modo ultima_milla
 	plan.LastMile, plan.Unassigned = s.binPackLastMileVehicles(lastMileQ, branchID, plan.Unassigned)
+	// Optimizar orden de paradas y horario de salida sugerido por VRP.
+	s.scheduleLastMileAssignments(plan.LastMile, branchID, shipmentByTID, cfg, now, model.RouteModeVentanas)
 
 	// 3) Inter-sucursal — solo vehículos de modo inter_sucursal
 	availableVehicles, existingVehicleLoad := s.filterAvailableVehiclesForMode(branchID, model.VehicleModeInterBranch)
@@ -305,6 +318,299 @@ func (s *RoutingService) filterAvailableVehiclesForMode(branchID string, mode mo
 		}
 	}
 	return out, existing
+}
+
+// scheduleLastMileAssignments optimiza el orden de paradas y calcula el horario
+// de salida sugerido para cada asignación de última milla usando el VRP scheduler.
+// Mutates each assignment in-place: rellena SuggestedDepartureMin, OrderedStops
+// y WindowCoverage, y reordena Shipments para que coincida con el orden óptimo.
+// Si el branch no tiene coordenadas o faltan coords de destinatarios, se omite
+// silenciosamente y la asignación queda sin cambios.
+func (s *RoutingService) scheduleLastMileAssignments(
+	assignments []model.LastMileAssignment,
+	branchID string,
+	shipByTID map[string]model.Shipment,
+	cfg model.RoutingConfig,
+	now time.Time,
+	mode model.RouteMode,
+) {
+	if len(assignments) == 0 {
+		return
+	}
+
+	depot, ok := s.branchRepo.GetByID(branchID)
+	if !ok || depot.Latitude == nil || depot.Longitude == nil {
+		return
+	}
+	depotCoord := vrp.Coord{Lat: *depot.Latitude, Lon: *depot.Longitude}
+
+	// DepartureMin base: hora actual si es después del inicio de ventana morning,
+	// si no, el inicio de ventana morning configurado.
+	local := now.In(clock.LocalTZ)
+	departureMin := float64(local.Hour()*60 + local.Minute())
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+	if departureMin < morningStartMin {
+		departureMin = morningStartMin
+	}
+
+	// Para modo segura: cargar zonas activas una sola vez (fuera del loop).
+	// Si zoneSvc no está inyectado o no hay zonas, segura se comporta igual que ventanas.
+	var activeZones []model.Zone
+	if mode == model.RouteModeSegura && s.zoneSvc != nil {
+		activeZones, _ = s.zoneSvc.List(false) // false = solo activas
+	}
+
+	for i := range assignments {
+		a := &assignments[i]
+
+		// Construir nodos VRP solo para envíos con coordenadas.
+		// tidsWithCoords son los únicos que pasan al solver; los sin coords van
+		// al final como unsequenced.
+		var nodes []vrp.Node
+		var coords []vrp.Coord
+		var tidsWithCoords []string
+		indexByTID := map[string]int{}
+		for _, tid := range a.Shipments {
+			sh, ok := shipByTID[tid]
+			if !ok || sh.Recipient.Address.Latitude == nil || sh.Recipient.Address.Longitude == nil {
+				continue
+			}
+			c := vrp.Coord{Lat: *sh.Recipient.Address.Latitude, Lon: *sh.Recipient.Address.Longitude}
+			indexByTID[tid] = len(nodes)
+			nodes = append(nodes, vrp.Node{
+				ID:         tid,
+				Coord:      c,
+				WeightKg:   sh.WeightKg,
+				TimeWindow: sh.TimeWindow,
+			})
+			coords = append(coords, c)
+			tidsWithCoords = append(tidsWithCoords, tid)
+		}
+		if len(nodes) == 0 {
+			continue
+		}
+
+		dur, dist := s.buildDurationMatrix(depotCoord, coords, cfg.AvgSpeedKmh)
+
+		// Para modo segura: copiar la matriz y aplicar penalizaciones por zona.
+		// Las zonas se pasan ya resueltas (nil en otros modos).
+		effectiveDur := dur
+		if mode == model.RouteModeSegura && len(activeZones) > 0 {
+			effectiveDur = copyMatrix(dur)
+			// coords para la matriz: [depot] + deliveries
+			allCoords := make([]vrp.Coord, 0, len(coords)+1)
+			allCoords = append(allCoords, depotCoord)
+			allCoords = append(allCoords, coords...)
+			applyZonePenaltiesToMatrix(effectiveDur, allCoords, activeZones)
+		}
+
+		var bestDep float64
+		var bestRoute vrp.Route
+		var coverage float64
+
+		if mode == model.RouteModeCosto {
+			bestDep, bestRoute, coverage = s.findCostOptimalDeparture(
+				a.VehicleID, a.CapacityKg, tidsWithCoords,
+				depotCoord, nodes, indexByTID,
+				dur, dist, cfg, departureMin,
+			)
+		} else {
+			// ventanas y segura usan el mismo scoring; la diferencia está en la matriz.
+			bestDep, bestRoute, coverage = s.findBestDepartureForRoute(
+				a.VehicleID, a.CapacityKg, tidsWithCoords,
+				depotCoord, nodes, indexByTID,
+				effectiveDur, dist, cfg, departureMin,
+			)
+		}
+		if coverage == 0 || len(bestRoute.Stops) == 0 {
+			continue
+		}
+
+		// Reordenar Shipments y construir OrderedStops según el orden VRP.
+		stops := make([]model.RouteStop, 0, len(bestRoute.Stops))
+		shipIDs := make([]string, 0, len(bestRoute.Stops))
+		for idx, st := range bestRoute.Stops {
+			sh := shipByTID[st.NodeID]
+			dev := 0
+			if st.WindowDeviationMin != 0 {
+				dev = int(st.WindowDeviationMin + 0.5)
+				if st.WindowDeviationMin < 0 {
+					dev = int(st.WindowDeviationMin - 0.5)
+				}
+			}
+			stops = append(stops, model.RouteStop{
+				TrackingID:         st.NodeID,
+				Sequence:           idx + 1,
+				ArrivalMin:         int(st.ArrivalMin + 0.5),
+				TimeWindow:         string(sh.TimeWindow),
+				WeightKg:           sh.WeightKg,
+				WithinWindow:       !st.OutOfWindow,
+				WindowDeviationMin: dev,
+			})
+			shipIDs = append(shipIDs, st.NodeID)
+		}
+		// Agregar envíos sin coordenadas al final (unsequenced).
+		seqSet := map[string]bool{}
+		for _, tid := range shipIDs {
+			seqSet[tid] = true
+		}
+		for _, tid := range a.Shipments {
+			if !seqSet[tid] {
+				shipIDs = append(shipIDs, tid)
+				stops = append(stops, model.RouteStop{
+					TrackingID:  tid,
+					Sequence:    len(stops) + 1,
+					ArrivalMin:  -1,
+					Unsequenced: true,
+				})
+			}
+		}
+
+		a.Shipments = shipIDs
+		a.OrderedStops = stops
+		// Para segura y costo el horario no influye en el orden (el orden lo
+		// determina la matriz de penalty/distancia). Por defecto sugerimos 8am
+		// — el operador puede ajustar manual si quiere ganar cobertura de
+		// ventana. Para ventanas el horario SÍ es la métrica clave, así que
+		// usamos el horario óptimo que devolvió el solver.
+		if mode == model.RouteModeSegura || mode == model.RouteModeCosto {
+			a.SuggestedDepartureMin = int(morningStartMin)
+		} else {
+			a.SuggestedDepartureMin = int(bestDep + 0.5)
+		}
+		a.WindowCoverage = coverage
+		a.RouteMode = mode.Normalize()
+		// Geometría real del trayecto vía OSRM (sigue calles, no líneas rectas).
+		// Para segura intercala waypoints de bordeado para que OSRM rutee
+		// alrededor de las zonas peligrosas en vez de cruzarlas.
+		a.PolylineCoords = s.computeRoadPolyline(depotCoord, a.Shipments, shipByTID, activeZones, mode)
+	}
+}
+
+// computeRoadPolyline devuelve la geometría real del trayecto (vía calles)
+// que parte del depósito, pasa por todas las paradas en orden y vuelve al
+// depósito.
+//
+// Estrategia por modo:
+//   - segura + ORS configurado: ORS Directions con avoid_polygons = zonas
+//     activas → ORS rutea genuinamente alrededor de cada zona.
+//   - segura + solo OSRM: OSRM con waypoints de bordeado intercalados (mejor
+//     esfuerzo; OSRM puede aún cortar si hay calles que atraviesan la zona).
+//   - ventanas / costo: OSRM directo entre paradas (líneas rectas → calles).
+//
+// Devuelve nil si no hay routing engine configurado o si la llamada falla;
+// el frontend cae a líneas rectas en ese caso.
+func (s *RoutingService) computeRoadPolyline(
+	depotCoord vrp.Coord,
+	shipmentTIDs []string,
+	shipByTID map[string]model.Shipment,
+	activeZones []model.Zone,
+	mode model.RouteMode,
+) []model.LatLng {
+	// Construir la lista plana de paradas: depot → cada shipment con coords → depot.
+	type latLon struct{ Lat, Lon float64 }
+	var stops []latLon
+	stops = append(stops, latLon{depotCoord.Lat, depotCoord.Lon})
+	for _, tid := range shipmentTIDs {
+		sh, ok := shipByTID[tid]
+		if !ok || sh.Recipient.Address.Latitude == nil || sh.Recipient.Address.Longitude == nil {
+			continue
+		}
+		stops = append(stops, latLon{*sh.Recipient.Address.Latitude, *sh.Recipient.Address.Longitude})
+	}
+	stops = append(stops, latLon{depotCoord.Lat, depotCoord.Lon})
+
+	if len(stops) < 2 {
+		return nil
+	}
+
+	// Path A: ORS con avoid_polygons para modo segura, arco por arco.
+	//
+	// Hacer una sola llamada con todos los stops falla si alguno cae fuera
+	// de la cobertura del grafo ORS (p.ej. suburbios del GBA). Con routing
+	// por arco, si ORS no puede conectar un par específico cae al fallback
+	// de OSRM solo para ese arco, y el resto del recorrido sigue usando ORS.
+	if mode == model.RouteModeSegura && s.orsClient != nil && len(activeZones) > 0 {
+		polys := make([]ors.Polygon, 0, len(activeZones))
+		for _, z := range activeZones {
+			ring := make([]ors.Coord, len(z.Polygon))
+			for i, p := range z.Polygon {
+				ring[i] = ors.Coord{Lat: p.Lat, Lon: p.Lng}
+			}
+			polys = append(polys, ors.Polygon{Coords: ring})
+		}
+
+		var polyline []model.LatLng
+		orsArcs, osrmArcs := 0, 0
+		for i := 1; i < len(stops); i++ {
+			prev, curr := stops[i-1], stops[i]
+			arcCoords := []ors.Coord{
+				{Lat: prev.Lat, Lon: prev.Lon},
+				{Lat: curr.Lat, Lon: curr.Lon},
+			}
+			geom, err := s.orsClient.Route(arcCoords, polys)
+			if err != nil {
+				// ORS falló en este arco — usar OSRM con bypass waypoints.
+				osrmArcs++
+				prevVrp := vrp.Coord{Lat: prev.Lat, Lon: prev.Lon}
+				currVrp := vrp.Coord{Lat: curr.Lat, Lon: curr.Lon}
+				oCoords := []osrm.Coord{{Lat: prev.Lat, Lon: prev.Lon}}
+				for _, wp := range computeBypassWaypoints(prevVrp, currVrp, activeZones) {
+					oCoords = append(oCoords, osrm.Coord{Lat: wp.Lat, Lon: wp.Lon})
+				}
+				oCoords = append(oCoords, osrm.Coord{Lat: curr.Lat, Lon: curr.Lon})
+				if r, e2 := s.osrmClient.Route(oCoords); e2 == nil {
+					for j, c := range r {
+						if j == 0 && len(polyline) > 0 {
+							continue
+						}
+						polyline = append(polyline, model.LatLng{Lat: c.Lat, Lng: c.Lon})
+					}
+				}
+				continue
+			}
+			orsArcs++
+			for j, c := range geom {
+				if j == 0 && len(polyline) > 0 {
+					continue // evitar duplicar el punto de unión entre arcos
+				}
+				polyline = append(polyline, model.LatLng{Lat: c.Lat, Lng: c.Lon})
+			}
+		}
+		if len(polyline) > 0 {
+			log.Printf("[routing] mode=segura engine=ORS+OSRM arcos_ors=%d arcos_osrm_fallback=%d puntos_polyline=%d",
+				orsArcs, osrmArcs, len(polyline))
+			return polyline
+		}
+	}
+
+	// Path B: OSRM Route. Para segura intercalamos los waypoints de bordeado
+	// (mejor esfuerzo, fallback cuando ORS no está disponible).
+	if s.osrmClient == nil {
+		return nil
+	}
+	coords := []osrm.Coord{{Lat: stops[0].Lat, Lon: stops[0].Lon}}
+	for i := 1; i < len(stops); i++ {
+		prev := vrp.Coord{Lat: stops[i-1].Lat, Lon: stops[i-1].Lon}
+		curr := vrp.Coord{Lat: stops[i].Lat, Lon: stops[i].Lon}
+		if mode == model.RouteModeSegura && len(activeZones) > 0 {
+			for _, wp := range computeBypassWaypoints(prev, curr, activeZones) {
+				coords = append(coords, osrm.Coord{Lat: wp.Lat, Lon: wp.Lon})
+			}
+		}
+		coords = append(coords, osrm.Coord{Lat: curr.Lat, Lon: curr.Lon})
+	}
+	routeCoords, err := s.osrmClient.Route(coords)
+	if err != nil {
+		log.Printf("[routing] OSRM Route falló (cayendo a líneas rectas en cliente): %v", err)
+		return nil
+	}
+	log.Printf("[routing] mode=%s engine=OSRM waypoints_enviados=%d puntos_polyline=%d", mode, len(coords), len(routeCoords))
+	out := make([]model.LatLng, len(routeCoords))
+	for i, c := range routeCoords {
+		out[i] = model.LatLng{Lat: c.Lat, Lng: c.Lon}
+	}
+	return out
 }
 
 // binPackLastMileVehicles assigns last-mile shipments to ultima_milla vehicles.
@@ -2938,6 +3244,56 @@ func (s *RoutingService) ApplyBranchPlan(ctx context.Context, branchID, username
 	return s.ApplyPlanItems(ctx, branchID, nil, "", "", username)
 }
 
+// RecomputeLastMileAssignment recalcula el orden de paradas y el horario de
+// salida sugerido para una asignación de última milla según el modo indicado.
+// No muta el plan persistido — solo devuelve la asignación recalculada para
+// que el operador la revise en el modal antes de aplicar.
+func (s *RoutingService) RecomputeLastMileAssignment(ctx context.Context, branchID string, req model.RecomputeLastMileRequest) (model.LastMileAssignment, error) {
+	mode := req.Mode.Normalize()
+	if !req.Mode.IsValid() {
+		return model.LastMileAssignment{}, fmt.Errorf("modo de ruta inválido: %q", req.Mode)
+	}
+
+	vehicle, ok := s.vehicleRepo.GetByID(req.VehicleID)
+	if !ok {
+		return model.LastMileAssignment{}, fmt.Errorf("vehículo no encontrado: %s", req.VehicleID)
+	}
+	if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != branchID {
+		return model.LastMileAssignment{}, fmt.Errorf("el vehículo no pertenece a la sucursal")
+	}
+
+	// Cargar los envíos solicitados.
+	shipByTID := make(map[string]model.Shipment, len(req.ShipmentIDs))
+	for _, tid := range req.ShipmentIDs {
+		sh, err := s.shipmentRepo.GetByTrackingID(tid)
+		if err != nil {
+			return model.LastMileAssignment{}, fmt.Errorf("envío no encontrado: %s", tid)
+		}
+		shipByTID[tid] = sh
+	}
+
+	a := model.LastMileAssignment{
+		VehicleID:    req.VehicleID,
+		LicensePlate: vehicle.LicensePlate,
+		CapacityKg:   vehicle.CapacityKg,
+		Shipments:    append([]string(nil), req.ShipmentIDs...),
+	}
+
+	cfg := s.cfgSvc.Get()
+	// Para el recompute usamos el inicio de la ventana morning como referencia
+	// en lugar de la hora actual. Así el operador puede recalcular a cualquier
+	// hora del día (incluso de noche) y siempre obtiene un plan con candidatos
+	// de salida válidos. La hora de inicio que devuelve el VRP igual refleja
+	// el horario óptimo dentro de la ventana operativa.
+	local := clock.Now().In(clock.LocalTZ)
+	morningStart := time.Date(local.Year(), local.Month(), local.Day(),
+		cfg.MorningWindowStartHour, 0, 0, 0, clock.LocalTZ).UTC()
+	assignments := []model.LastMileAssignment{a}
+	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, morningStart, mode)
+
+	return assignments[0], nil
+}
+
 // SyncAppliedItems actualiza el estado Applied de los ítems del plan persistido
 // cuando se usó el flujo legacy (plan editado enviado en body). Se llama en
 // background después del apply — es best-effort, un fallo no afecta la operativa.
@@ -3118,6 +3474,16 @@ func candidateDepartures(cfg model.RoutingConfig, nowMin float64) []float64 {
 	return out
 }
 
+// copyMatrix returns a deep copy of a square float64 matrix.
+func copyMatrix(m [][]float64) [][]float64 {
+	out := make([][]float64, len(m))
+	for i, row := range m {
+		out[i] = make([]float64, len(row))
+		copy(out[i], row)
+	}
+	return out
+}
+
 // subMatrix devuelve la sub-matriz que conserva el depot (índice 0) y los
 // índices `indices` de la matriz original (que apuntan a Deliveries[i],
 // donde la fila/col correspondiente en la matriz es i+1).
@@ -3256,6 +3622,183 @@ func (s *RoutingService) findBestDepartureForRoute(
 		return 0, vrp.Route{}, 0
 	}
 	return best.dep, best.route, best.coverage
+}
+
+// findCostOptimalDeparture implements the "costo" routing mode:
+//  1. Runs VRP once with EnforceTimeWindows=false to get the min-distance stop order.
+//  2. Keeps that order fixed and probes candidate departure hours, recomputing
+//     per-stop window compliance. Picks the departure that maximises in-window coverage
+//     (ties broken by least early-arrival wait, then earliest departure).
+//
+// Unlike findBestDepartureForRoute, the stop order does NOT change between probes.
+// Stops that end up outside their window are included with WithinWindow=false so the
+// operator can review them in the modal.
+func (s *RoutingService) findCostOptimalDeparture(
+	driverID string,
+	driverMaxKg float64,
+	routeShipTIDs []string,
+	depotCoord vrp.Coord,
+	deliveries []vrp.Node,
+	indexByTID map[string]int,
+	fullDur, fullDist [][]float64,
+	cfg model.RoutingConfig,
+	nowMin float64,
+) (bestDep float64, bestRoute vrp.Route, bestCoverage float64) {
+	if len(routeShipTIDs) == 0 {
+		return 0, vrp.Route{}, 1.0
+	}
+	indices := make([]int, len(routeShipTIDs))
+	subDeliveries := make([]vrp.Node, len(routeShipTIDs))
+	for i, tid := range routeShipTIDs {
+		idx, ok := indexByTID[tid]
+		if !ok {
+			return 0, vrp.Route{}, 0
+		}
+		indices[i] = idx
+		subDeliveries[i] = deliveries[idx]
+	}
+	subDur := subMatrix(fullDur, indices)
+	subDist := subMatrix(fullDist, indices)
+
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+
+	// NN+2-opt es heurístico — no encuentra el óptimo global. Diferentes
+	// "starting contexts" (departure, restricciones de ventana) llevan a
+	// diferentes óptimos locales. Para encontrar la ruta de mínima distancia
+	// real, exploramos varios candidatos y nos quedamos con el de menor
+	// distancia. Como costo NO impone ventanas, cualquier ruta válida en otro
+	// contexto sigue siendo válida para costo.
+	flexDeliveries := make([]vrp.Node, len(subDeliveries))
+	for i, d := range subDeliveries {
+		flexDeliveries[i] = d
+		flexDeliveries[i].TimeWindow = model.TimeWindowFlexible
+	}
+
+	makeProblem := func(deps []vrp.Node, dep float64) vrp.Problem {
+		return vrp.Problem{
+			Depot:                   vrp.Node{ID: "depot", Coord: depotCoord},
+			Deliveries:              deps,
+			Drivers:                 []vrp.Driver{{ID: driverID, MaxWeightKg: driverMaxKg}},
+			DurationMatrix:          subDur,
+			DistanceMatrix:          subDist,
+			DepartureMin:            dep,
+			ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
+			DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
+			MorningWindowStartMin:   morningStartMin,
+			MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
+			AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
+			AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
+			EnforceTimeWindows:      false,
+			PackingStrategy:         cfg.LastMilePackingStrategy,
+		}
+	}
+
+	// Candidatos a evaluar:
+	//   - 1 con ventanas flexibles a morningStart (NN+2-opt sin restricciones)
+	//   - N con ventanas reales en cada hora candidata (mismo set que ventanas)
+	var fixedRoute vrp.Route
+	bestDistance := -1.0
+	tryRoute := func(p vrp.Problem) {
+		sol := vrp.Solve(p)
+		if len(sol.Routes) == 0 || len(sol.Routes[0].Stops) == 0 {
+			return
+		}
+		r := sol.Routes[0]
+		if bestDistance < 0 || r.TotalDistanceKm < bestDistance {
+			bestDistance = r.TotalDistanceKm
+			fixedRoute = r
+		}
+	}
+
+	tryRoute(makeProblem(flexDeliveries, morningStartMin))
+	for _, dep := range candidateDepartures(cfg, nowMin) {
+		tryRoute(makeProblem(subDeliveries, dep))
+	}
+
+	if bestDistance < 0 {
+		return 0, vrp.Route{}, 0
+	}
+
+	// Build NodeID → TimeWindow lookup.
+	twByID := make(map[string]model.TimeWindow, len(subDeliveries))
+	for _, d := range subDeliveries {
+		twByID[d.ID] = d.TimeWindow
+	}
+
+	morningEndMin := float64(cfg.MorningWindowEndHour) * 60
+	afternoonStartMin := float64(cfg.AfternoonWindowStartHour) * 60
+	afternoonEndMin := float64(cfg.AfternoonWindowEndHour) * 60
+
+	type result struct {
+		dep      float64
+		route    vrp.Route
+		coverage float64
+		wait     float64
+	}
+	var best *result
+
+	candidates := candidateDepartures(cfg, nowMin)
+	for _, dep := range candidates {
+		inWindow := 0
+		totalWait := 0.0
+		updatedStops := make([]vrp.Stop, len(fixedRoute.Stops))
+		for i, st := range fixedRoute.Stops {
+			tw := twByID[st.NodeID]
+			abs := dep + st.ArrivalMin
+			outside, dev := costWindowCheck(tw, abs, morningStartMin, morningEndMin, afternoonStartMin, afternoonEndMin)
+			if !outside {
+				inWindow++
+			} else if dev < 0 { // arrived early → real wait until window opens
+				totalWait += -dev
+			}
+			updatedStops[i] = vrp.Stop{
+				NodeID:             st.NodeID,
+				ArrivalMin:         st.ArrivalMin,
+				OutOfWindow:        outside,
+				WindowDeviationMin: dev,
+			}
+		}
+		cov := float64(inWindow) / float64(len(fixedRoute.Stops))
+		r := vrp.Route{
+			DriverID:         fixedRoute.DriverID,
+			Stops:            updatedStops,
+			TotalDurationMin: fixedRoute.TotalDurationMin,
+			TotalDistanceKm:  fixedRoute.TotalDistanceKm,
+		}
+		c := &result{dep: dep, route: r, coverage: cov, wait: totalWait}
+		if best == nil ||
+			c.coverage > best.coverage ||
+			(c.coverage == best.coverage && c.wait < best.wait) ||
+			(c.coverage == best.coverage && c.wait == best.wait && c.dep < best.dep) {
+			best = c
+		}
+	}
+	if best == nil {
+		return 0, vrp.Route{}, 0
+	}
+	return best.dep, best.route, best.coverage
+}
+
+// costWindowCheck returns (outside, deviationMin) for the cost-mode window simulation.
+// deviationMin > 0 = late, < 0 = early. Flexible windows are always in-window.
+func costWindowCheck(tw model.TimeWindow, absArrMin, mStart, mEnd, aStart, aEnd float64) (outside bool, devMin float64) {
+	switch tw {
+	case model.TimeWindowMorning:
+		if absArrMin < mStart {
+			return true, absArrMin - mStart
+		}
+		if absArrMin > mEnd {
+			return true, absArrMin - mEnd
+		}
+	case model.TimeWindowAfternoon:
+		if absArrMin < aStart {
+			return true, absArrMin - aStart
+		}
+		if absArrMin > aEnd {
+			return true, absArrMin - aEnd
+		}
+	}
+	return false, 0
 }
 
 // runStaleReplan re-evaluates shipments stuck at a branch beyond staleHours.

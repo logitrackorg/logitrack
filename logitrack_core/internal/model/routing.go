@@ -11,6 +11,46 @@ const (
 	DispatchRuleManual        DispatchRule = "manual"
 )
 
+// RouteMode controla el criterio que usa el scheduler de última milla al elegir
+// orden de paradas y horario de salida.
+//
+//   - RouteModeVentanas (default): maximiza entregas dentro de su ventana horaria.
+//     El orden surge del VRP corriendo nearest-neighbor + 2-opt y se prueban distintos
+//     horarios de salida; gana el que tiene mejor cobertura de ventana.
+//   - RouteModeSegura: igual a Ventanas pero penaliza arcos cuyo segmento recto
+//     atraviesa una zona peligrosa activa, forzando al VRP a bordearla
+//     (salvo cuando la entrega cae dentro de la zona).
+//   - RouteModeCosto: minimiza la duración total. El orden se fija con una pasada
+//     única del VRP en modo blando (sin importar ventanas) y luego se desplaza
+//     el horario de salida para que caigan dentro de ventana la mayor cantidad
+//     posible de paradas. Las que igual quedan afuera se aplican con warning.
+type RouteMode string
+
+const (
+	RouteModeVentanas RouteMode = "ventanas"
+	RouteModeSegura   RouteMode = "segura"
+	RouteModeCosto    RouteMode = "costo"
+)
+
+// IsValid devuelve true si rm es alguno de los modos soportados.
+// Se acepta también el cero-value (string vacío) y se trata como Ventanas para
+// retrocompatibilidad con planes generados antes de existir el campo.
+func (rm RouteMode) IsValid() bool {
+	switch rm {
+	case "", RouteModeVentanas, RouteModeSegura, RouteModeCosto:
+		return true
+	}
+	return false
+}
+
+// Normalize devuelve el modo, mapeando el cero-value a Ventanas.
+func (rm RouteMode) Normalize() RouteMode {
+	if rm == "" {
+		return RouteModeVentanas
+	}
+	return rm
+}
+
 // LastMileAssignment agrupa los envíos que el algoritmo asignó a un vehículo
 // de última milla. El chofer se auto-asigna escaneando el QR del vehículo.
 //
@@ -39,6 +79,32 @@ type LastMileAssignment struct {
 	AppliedBy        string     `json:"applied_by,omitempty"`
 	// InTransit es runtime-only: indica que el vehículo ya está en viaje.
 	InTransit bool `json:"in_transit,omitempty"`
+
+	// Campos VRP — seteados cuando el scheduler pudo optimizar el orden de
+	// paradas. SuggestedDepartureMin es minutos desde medianoche (hora local).
+	// OrderedStops comparte el mismo orden que Shipments con ETAs precalculadas.
+	// Omitidos cuando no hay coordenadas suficientes para correr VRP.
+	SuggestedDepartureMin int         `json:"suggested_departure_min,omitempty"`
+	OrderedStops          []RouteStop `json:"ordered_stops,omitempty"`
+	WindowCoverage        float64     `json:"window_coverage,omitempty"`
+
+	// RouteMode es el criterio con el que se generaron OrderedStops y
+	// SuggestedDepartureMin. Vacío en planes legacy → se interpreta como Ventanas.
+	RouteMode RouteMode `json:"route_mode,omitempty"`
+
+	// PolylineCoords es la geometría real del trayecto a lo largo de las calles
+	// (no líneas rectas) según el OSRM Route API. Cuando está presente, el
+	// cliente la usa para dibujar la polyline del viaje en el mapa.
+	// Ausente si OSRM no está disponible o falla — el cliente debe caer al
+	// fallback de Haversine.
+	PolylineCoords []LatLng `json:"polyline_coords,omitempty"`
+}
+
+// LatLng es una coordenada geográfica simple usada para serializar geometrías
+// de trayectos al frontend.
+type LatLng struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
 }
 
 // RouteStop es una parada dentro de una ruta optimizada por VRP.
@@ -177,6 +243,14 @@ type RoutingPlan struct {
 	Unassigned       []UnassignedShipment    `json:"unassigned"`
 	VehicleLoads     []VehicleLoad           `json:"vehicle_loads"`
 	ConfigSnapshot   RoutingConfig           `json:"config_snapshot"`
+}
+
+// RecomputeLastMileRequest es el body del POST /routing/last-mile/recompute.
+// Devuelve un LastMileAssignment con el orden y horario optimizado para el modo solicitado.
+type RecomputeLastMileRequest struct {
+	VehicleID   string    `json:"vehicle_id" binding:"required"`
+	ShipmentIDs []string  `json:"shipment_ids" binding:"required"`
+	Mode        RouteMode `json:"mode" binding:"required"`
 }
 
 // ApplyPlanRequest es el body del POST /routing/apply.
