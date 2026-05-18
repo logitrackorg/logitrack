@@ -15,7 +15,7 @@ import { StatCard } from "../components/ui/stat-card";
 const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "success" | "warning" | "danger" | "info" }> = {
   draft:                { label: "Borradores",                  tone: "default" },
   at_origin_hub:        { label: "En sucursal de origen",       tone: "warning" },
-  loaded:               { label: "Enviar a sucursal",           tone: "info" },
+  loaded:               { label: "Cargado en vehículo",          tone: "info" },
   in_transit:           { label: "En tránsito",                 tone: "info" },
   at_hub:               { label: "En sucursal",                 tone: "info" },
   out_for_delivery:     { label: "Última milla",                tone: "warning" },
@@ -161,7 +161,7 @@ export function Dashboard() {
         <StatCard
           label="En curso"
           value={inProgress}
-          hint="Enviar a sucursal + en tránsito + última milla"
+          hint="Cargado en vehículo + en tránsito + última milla"
           icon={<Truck className="w-4 h-4" />}
           tone="info"
         />

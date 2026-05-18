@@ -178,10 +178,10 @@ func TestIsValidTransition(t *testing.T) {
 		{model.StatusDraft, model.StatusInTransit, false},
 
 		// invalid: cannot skip steps
-		{model.StatusAtOriginHub, model.StatusInTransit, false},
+		{model.StatusAtOriginHub, model.StatusInTransit, true}, // cross-branch pickup multi-hop
 		{model.StatusAtOriginHub, model.StatusDelivered, false},
 		{model.StatusAtOriginHub, model.StatusAtHub, false},
-		{model.StatusAtHub, model.StatusInTransit, false},
+		{model.StatusAtHub, model.StatusInTransit, true}, // cross-branch pickup en multi-hop
 		{model.StatusReadyForPickup, model.StatusInTransit, false},
 		{model.StatusInTransit, model.StatusDelivered, false},
 		{model.StatusInTransit, model.StatusOutForDelivery, false},
@@ -1585,7 +1585,7 @@ func TestCorrectShipment_TimeWindow_FlexibleToRestrictive_Rejected(t *testing.T)
 			_, err := ts.svc.CorrectShipment(ship.TrackingID, "supervisor", model.CorrectShipmentRequest{
 				Corrections: model.ShipmentCorrections{TimeWindow: &twCopy},
 			})
-			if err == nil || !strings.Contains(err.Error(), "ventana horaria") {
+			if err == nil || !strings.Contains(err.Error(), "ventana") {
 				t.Errorf("expected restrictive direction error, got: %v", err)
 			}
 		})

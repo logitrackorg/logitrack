@@ -13,6 +13,7 @@ type VehicleRepository interface {
 	Add(vehicle model.Vehicle) error
 	GetByID(id string) (model.Vehicle, bool)
 	GetByLicensePlate(licensePlate string) (model.Vehicle, bool)
+	GetByQRToken(token string) (model.Vehicle, bool)
 	UpdateStatus(id string, status model.VehicleStatus) error
 	UpdateStatusByUser(id string, status model.VehicleStatus, username string) error
 	// AddShipment appends a tracking ID to the vehicle's assigned shipments list.
@@ -24,4 +25,8 @@ type VehicleRepository interface {
 	AssignBranch(id string, branchID *string) error
 	SetDestinationBranch(id string, branchID *string) error
 	UpdateLocation(id string, lat, lng float64) error
+	// SyncMode fuerza el modo del vehículo por patente. Idempotente. Usado por
+	// el seed para garantizar que los vehículos de la red queden con su modo
+	// correcto independientemente de migraciones previas o estado de la DB.
+	SyncMode(licensePlate string, mode model.VehicleMode) error
 }

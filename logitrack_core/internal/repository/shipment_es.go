@@ -191,6 +191,15 @@ func (r *eventSourcedShipmentRepository) Stats(filter model.ShipmentFilter) (mod
 	return r.projection.Stats(filter)
 }
 
+func (r *eventSourcedShipmentRepository) RecordPathPlanned(_ PathPlannedCmd) error { return nil }
+func (r *eventSourcedShipmentRepository) SetPalletID(_, _ string) error           { return nil }
+func (r *eventSourcedShipmentRepository) ReserveForTrip(trackingID, tripID string) error {
+	return r.projection.ReserveForTrip(trackingID, tripID)
+}
+func (r *eventSourcedShipmentRepository) ReleaseFromTrip(trackingID string) error {
+	return r.projection.ReleaseFromTrip(trackingID)
+}
+
 // GetEvents transforms DomainEvents from the store into ShipmentEvent (API format).
 // draft_saved and draft_updated events are excluded — they are not part of the
 // public event history.

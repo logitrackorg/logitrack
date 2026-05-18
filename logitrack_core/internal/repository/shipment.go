@@ -19,6 +19,14 @@ type ShipmentRepository interface {
 	ApplyCorrections(cmd CorrectCmd) (model.Shipment, error)
 	CancelShipment(cmd CancelCmd) (model.Shipment, error)
 	ExtendETA(cmd ExtendETACmd) (model.Shipment, error)
+	// RecordPathPlanned persists a planned multi-hop path for stale-replan tracking (WIP).
+	RecordPathPlanned(cmd PathPlannedCmd) error
+	// SetPalletID associates a pallet identifier with a shipment (WIP).
+	SetPalletID(trackingID, palletID string) error
+	// ReserveForTrip marca el envío como reservado por un trip multi-hop (pickup cross-branch).
+	ReserveForTrip(trackingID, tripID string) error
+	// ReleaseFromTrip libera la reserva del envío.
+	ReleaseFromTrip(trackingID string) error
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
@@ -93,4 +101,14 @@ type ExtendETACmd struct {
 	Reason     string
 	ChangedBy  string
 	Timestamp  time.Time
+}
+
+// PathPlannedCmd records a planned routing path for a shipment (stale-replan feature, WIP).
+type PathPlannedCmd struct {
+	TrackingID      string
+	PlannedPath     []string
+	NextHopBranchID string
+	HopIndex        int
+	PathRevision    int
+	Reason          string
 }

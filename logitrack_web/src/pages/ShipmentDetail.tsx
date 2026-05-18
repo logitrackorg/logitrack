@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+<<<<<<< HEAD
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle } from "lucide-react";
+=======
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, Truck } from "lucide-react";
+>>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
 import {
   shipmentApi,
   type Shipment,
@@ -31,6 +35,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
+import { tripsApi, type InterBranchTrip } from '../api/routing';
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
@@ -57,7 +62,7 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:                "Borrador",
   at_origin_hub:        "En sucursal de origen",
-  loaded:               "Enviar a sucursal",
+  loaded:               "Cargado en vehículo",
   in_transit:           "En tránsito",
   at_hub:               "En sucursal",
   out_for_delivery:     "Última milla",
@@ -141,7 +146,15 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
+<<<<<<< HEAD
 
+=======
+  const [reservedTrip, setReservedTrip] = useState<InterBranchTrip | null>(null);
+  // Auto-save draft state
+  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+>>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -293,7 +306,36 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
+<<<<<<< HEAD
 
+=======
+  useEffect(() => {
+    if (shipment?.reserved_for_trip_id) {
+      tripsApi.getByID(shipment.reserved_for_trip_id).then(setReservedTrip).catch(() => setReservedTrip(null));
+    } else {
+      setReservedTrip(null);
+    }
+  }, [shipment?.reserved_for_trip_id]);
+
+  // Auto-save draft changes — debounced 800ms whenever draftForm changes
+  useEffect(() => {
+    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
+    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
+    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
+    draftAutoSaveTimer.current = setTimeout(async () => {
+      setDraftAutoSaveStatus('saving');
+      try {
+        await shipmentApi.updateDraft(trackingId, draftForm);
+        setDraftAutoSaveStatus('saved');
+        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
+      } catch {
+        setDraftAutoSaveStatus('error');
+      }
+    }, 800);
+    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftForm]);
+>>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -512,7 +554,7 @@ export function ShipmentDetail() {
       return true;
     }
   ).filter(
-    // No mostrar "Enviar a sucursal" si el envío ya está en la sucursal de destino.
+    // No mostrar "Cargado en vehículo" si el envío ya está en la sucursal de destino.
     // Esto permite retornos a origen (current_location === origin_branch_id).
     (s) => s !== "loaded" || !isAtDestinationBranch
   );
@@ -562,7 +604,7 @@ export function ShipmentDetail() {
               Incidencia
             </button>
           )}
-          {hasRole("supervisor", "admin") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("operator", "supervisor") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-sm font-semibold text-rose-700 cursor-pointer transition-colors"
@@ -591,6 +633,21 @@ export function ShipmentDetail() {
         <div className="flex items-center gap-2.5 mb-4 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50">
           <Undo2 className="w-4 h-4 text-violet-700 shrink-0" />
           <p className="text-sm text-violet-900">Este envío está en <strong>modo devolución</strong></p>
+        </div>
+      )}
+
+      {/* Banner: reservado para pickup por vehículo de otra sucursal */}
+      {reservedTrip && (
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50">
+          <Truck className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
+          <div className="text-sm text-sky-900">
+            <p className="font-semibold">Reservado para pickup por vehículo en tránsito</p>
+            <p className="text-sky-700 mt-0.5">
+              Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
+              <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
+              No requiere acción de esta sucursal.
+            </p>
+          </div>
         </div>
       )}
 
@@ -684,7 +741,13 @@ export function ShipmentDetail() {
                   <InfoRowEx {...pkgVal} label="Tipo" />
                   {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
                   {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
-                  {shipment.time_window && <InfoRow label="Ventana horaria" value={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} />}
+                  {(cor.time_window ?? shipment.time_window) && (() => {
+                    const tw = cor.time_window ?? shipment.time_window;
+                    const twLabel = tw === "morning" ? "Mañana" : tw === "afternoon" ? "Tarde" : "Flexible";
+                    return cor.time_window
+                      ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
+                      : <InfoRow label="Ventana horaria" value={twLabel} />;
+                  })()}
                   <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />
@@ -1172,7 +1235,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Enviar a sucursal</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargar en vehículo</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>

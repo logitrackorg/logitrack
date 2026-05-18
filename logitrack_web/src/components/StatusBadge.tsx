@@ -3,7 +3,7 @@ import type { ShipmentStatus } from "../api/shipments";
 const config: Record<ShipmentStatus, { label: string; bg: string }> = {
   draft:                 { label: "Borrador",              bg: "#9ca3af" },
   at_origin_hub:         { label: "En sucursal origen",    bg: "#f59e0b" },
-  loaded:                { label: "Enviar a sucursal",     bg: "#06b6d4" },
+  loaded:                { label: "Cargado en vehículo",   bg: "#06b6d4" },
   in_transit:            { label: "En tránsito",           bg: "#3b82f6" },
   at_hub:                { label: "En sucursal",           bg: "#8b5cf6" },
   out_for_delivery:      { label: "Última milla",          bg: "#f97316" },

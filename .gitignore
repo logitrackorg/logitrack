@@ -44,3 +44,4 @@ pnpm-debug.log*
 !.env.example
 opencode.json
 /logitrack_web/.kiro
+.claude/settings.local.json

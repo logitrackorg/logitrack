@@ -33,10 +33,6 @@ export function timeWindowTone(tw?: TimeWindow): {
   }
 }
 
-export function telHref(phone: string): string {
-  return `tel:${phone.replace(/\s+/g, "")}`;
-}
-
 // WhatsApp deeplink. AR-friendly: si el número viene como 54+area+nro
 // (12 dígitos, sin el 9 de móvil), inserta "9" después de "54" para que
 // wa.me lo entienda como móvil argentino.
@@ -48,6 +44,37 @@ export function waHref(phone: string): string {
   }
   return `https://wa.me/${normalized}`;
 }
+
+export function waHrefWithText(phone: string, text: string): string {
+  return `${waHref(phone)}?text=${encodeURIComponent(text)}`;
+}
+
+// Mensajes rápidos que ofrece el botón de WhatsApp del chofer. El texto
+// final se construye con el nombre del destinatario y el tracking ID.
+export const WA_QUICK_MESSAGES: ReadonlyArray<{
+  id: string;
+  label: string;
+  build: (recipientName: string, trackingId: string) => string;
+}> = [
+  {
+    id: "en_camino",
+    label: "Estoy en camino",
+    build: (name, tracking) =>
+      `Hola ${name}, soy de LogiTrack. Estoy en camino con tu envío ${tracking}. ¡Te aviso cuando llegue!`,
+  },
+  {
+    id: "en_la_puerta",
+    label: "Estoy en la puerta",
+    build: (name, tracking) =>
+      `Hola ${name}, soy de LogiTrack. Ya estoy en la puerta con tu envío ${tracking}.`,
+  },
+  {
+    id: "coordinar_horario",
+    label: "Coordinar otro horario",
+    build: (name, tracking) =>
+      `Hola ${name}, soy de LogiTrack. Necesito coordinar otro horario para entregarte tu envío ${tracking}. ¿Cuándo podés recibirme?`,
+  },
+];
 
 export function mapsHref(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
@@ -101,7 +128,6 @@ export function recipientView(shipment: Shipment) {
 export const FAILED_REASONS: { id: string; label: string }[] = [
   { id: "ausente", label: "Ausente" },
   { id: "direccion_incorrecta", label: "Dirección incorrecta" },
-  { id: "rechazado", label: "Rechazado" },
   { id: "sin_acceso", label: "Sin acceso" },
   { id: "otro", label: "Otro" },
 ];

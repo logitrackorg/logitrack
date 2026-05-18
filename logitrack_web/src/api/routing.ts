@@ -24,6 +24,14 @@ api.interceptors.response.use(
 
 export type LastMilePackingStrategy = "balanced" | "maximize_capacity";
 
+export type RouteMode = "ventanas" | "segura" | "costo";
+
+export interface RecomputeLastMileRequest {
+  vehicle_id: string;
+  shipment_ids: string[];
+  mode: RouteMode;
+}
+
 export interface RoutingConfig {
   sla_force_horizon_hours: number;
   priority_force_threshold: number;
@@ -38,7 +46,7 @@ export interface RoutingConfig {
   last_mile_packing_strategy: LastMilePackingStrategy;
 }
 
-export type DispatchRule = "sla_forced" | "consolidation";
+export type DispatchRule = "sla_forced" | "consolidation" | "manual";
 
 export interface RouteStop {
   tracking_id: string;
@@ -52,40 +60,61 @@ export interface RouteStop {
   window_deviation_min?: number; // positivo=tarde, negativo=temprano (en minutos)
 }
 
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 export interface LastMileAssignment {
-  driver_id: string;
+  vehicle_id: string;
+  license_plate: string;
+  capacity_kg: number;
+  driver_id?: string;
   driver_name?: string;
-  shipments: string[];           // tracking IDs nuevos (en el orden de ordered_stops)
-  total_weight_kg: number;       // peso de los NUEVOS envíos
-  existing_count: number;        // ya en ruta del día
+  shipments: string[];
+  total_weight_kg: number;
   existing_weight_kg: number;
-  existing_shipments?: string[]; // tracking IDs ya en out_for_delivery / delivery_failed
-  // Campos VRP (presentes solo cuando OptimizedBy=vrp).
-  ordered_stops?: RouteStop[];
-  total_distance_km?: number;
-  total_duration_min?: number;
-  departure_min?: number;        // minutos desde medianoche (base para arrival_min)
-  optimized_by?: "vrp" | "greedy";
-  window_coverage?: number;      // 0–1: fracción de paradas dentro de su ventana
+  existing_shipments?: string[];
   // Estado de aplicación del ítem.
   applied_shipments?: string[];
   applied?: boolean;
   applied_at?: string;
   applied_by?: string;
-  // Runtime-only: el chofer ya inició su ruta del día — card informativa.
-  route_started?: boolean;
+  // Runtime-only: el vehículo ya está en viaje — card informativa.
+  in_transit?: boolean;
+  // Campos VRP: presentes cuando el scheduler pudo optimizar el orden de paradas.
+  suggested_departure_min?: number; // minutos desde medianoche (hora local)
+  ordered_stops?: RouteStop[];
+  window_coverage?: number;         // 0.0 – 1.0
+  route_mode?: RouteMode;
+  // Geometría real del trayecto (vía calles, OSRM). Cuando está presente, el
+  // mapa la usa para dibujar la polyline. Ausente → fallback a líneas rectas.
+  polyline_coords?: LatLng[];
+}
+
+export interface AssignmentStop {
+  branch_id: string;
+  shipments: string[];
+  total_weight_kg: number;
+  pickup_shipments?: string[];
+  pickup_weight_kg?: number;
 }
 
 export interface InterBranchAssignment {
   vehicle_id: string;
   license_plate: string;
-  destination_branch: string;
+  destination_branch: string;    // primera parada (primary)
   rule: DispatchRule;
-  shipments: string[];           // tracking IDs nuevos
-  total_weight_kg: number;       // peso de los NUEVOS envíos
+  shipments: string[];           // todos los tracking IDs (primary + additional)
+  total_weight_kg: number;       // peso total (todas las paradas)
   capacity_kg: number;
-  existing_weight_kg: number;    // ya cargado en el vehículo
-  existing_shipments?: string[]; // tracking IDs ya cargados en el vehículo (status loaded)
+  existing_weight_kg: number;
+  existing_shipments?: string[];
+  // Multi-hop: paradas adicionales (hops 2 y 3). Máximo 2.
+  additional_stops?: AssignmentStop[];
+  // Pickups cross-branch en la primary stop (envíos at_hub que se recogen al pasar)
+  primary_pickup_shipments?: string[];
+  primary_pickup_weight_kg?: number;
   // Estado de aplicación del ítem.
   applied_shipments?: string[];
   applied?: boolean;
@@ -103,23 +132,10 @@ export interface UnassignedShipment {
   priority: string;
 }
 
-export interface BlockedDriver {
-  driver_id: string;
-  driver_name?: string;
-  reason: string;
-}
-
-export interface DriverLoad {
-  driver_id: string;
-  driver_name?: string;
-  existing_count: number;
-  existing_weight_kg: number;
-  existing_shipments?: string[];
-}
-
 export interface VehicleLoad {
   vehicle_id: string;
   license_plate: string;
+  mode: "ultima_milla" | "inter_sucursal";
   capacity_kg: number;
   existing_weight_kg: number;
   existing_shipments?: string[];
@@ -141,8 +157,6 @@ export interface RoutingPlan {
   inter_branch: InterBranchAssignment[];
   incoming_vehicles?: IncomingVehicle[];
   unassigned: UnassignedShipment[];
-  blocked_drivers: BlockedDriver[];
-  driver_loads: DriverLoad[];
   vehicle_loads: VehicleLoad[];
   config_snapshot: RoutingConfig;
 }
@@ -174,6 +188,47 @@ export interface BranchPlan {
   plan: RoutingPlan;
 }
 
+export interface EmptyMoveSuggestion {
+  vehicle_id: string;
+  license_plate: string;
+  capacity_kg: number;
+  from_branch_id: string;
+  to_branch_id: string;
+  distance_km: number;
+  unserved_shipments: number;
+  reason: string;
+}
+
+export interface ConsolidationDispatch {
+  from_branch_id: string;
+  vehicle_id: string;
+  license_plate: string;
+  total_weight_kg: number;
+  capacity_kg: number;
+}
+
+export interface ConsolidationOpportunity {
+  destination_branch_id: string;
+  dispatches: ConsolidationDispatch[];
+  total_weight_kg: number;
+  avg_fill_rate_pct: number;
+}
+
+export interface NetworkMetrics {
+  total_shipments_assigned: number;
+  total_shipments_unassigned: number;
+  total_vehicles_dispatched: number;
+  idle_vehicles_count: number;
+  avg_vehicle_utilization_pct: number;
+  branches_with_unserved_demand: number;
+}
+
+export interface NetworkInsights {
+  empty_moves?: EmptyMoveSuggestion[];
+  consolidation_opportunities?: ConsolidationOpportunity[];
+  metrics?: NetworkMetrics;
+}
+
 export interface GlobalRoutingPlan {
   id: string;
   plan_date: string;       // YYYY-MM-DD
@@ -183,6 +238,7 @@ export interface GlobalRoutingPlan {
   applied_at?: string;
   applied_by?: string;
   log: GlobalPlanLog;
+  insights?: NetworkInsights;
 }
 
 export const routingApi = {
@@ -218,6 +274,10 @@ export const routingApi = {
   getConfig: () => api.get<RoutingConfig>("/routing/config").then((r) => r.data),
   updateConfig: (cfg: RoutingConfig) =>
     api.patch<RoutingConfig>("/routing/config", cfg).then((r) => r.data),
+
+  /** Recalcula el orden de paradas y horario sugerido para una asignación de última milla. */
+  recomputeLastMile: (req: RecomputeLastMileRequest) =>
+    api.post<LastMileAssignment>("/routing/last-mile/recompute", req).then((r) => r.data),
 };
 
 // Diccionario de etiquetas para los códigos de razón devueltos por el backend.
@@ -233,6 +293,9 @@ export const REASON_LABELS: Record<string, string> = {
   ruta_ya_iniciada: "El chofer ya inició su ruta del día",
   chofer_inicio_ruta: "El chofer ya está en ruta — reasignalo a otro o regenerá",
   vehiculo_en_viaje: "El vehículo ya está en viaje — reasignalo a otro o regenerá",
+  consolidado_en_viaje_multi_hop: "Consolidado en un viaje multi-hop que pasa por este destino",
+  tramo_subutilizado: "El tramo final no alcanza el % mínimo de carga — esperando más envíos",
+  sin_vehiculos_ultima_milla_disponibles: "No hay vehículos de última milla disponibles",
   ventana_horaria_inviable: "No se puede cumplir la ventana horaria del envío",
   // Apply
   envio_no_encontrado: "Envío no encontrado",
@@ -258,4 +321,29 @@ export function reasonLabel(code: string): string {
 export const DISPATCH_RULE_LABELS: Record<DispatchRule, string> = {
   sla_forced: "SLA crítico",
   consolidation: "Consolidación",
+  manual: "Asignación manual",
+};
+
+export interface InterBranchTrip {
+  id: string;
+  kind: "inter_branch" | "last_mile";
+  vehicle_id: string;
+  license_plate: string;
+  origin_branch_id: string;
+  destination_branch_id?: string;
+  shipment_ids: string[];
+  status: "pendiente" | "en_transito" | "completado" | "cancelado";
+  stops?: {
+    branch_id: string;
+    shipment_ids: string[];
+    pickup_shipment_ids?: string[];
+    completed_at?: string;
+  }[];
+  created_at: string;
+  started_at?: string;
+}
+
+export const tripsApi = {
+  getByID: (id: string) =>
+    api.get<InterBranchTrip>(`/inter-branch-trips/${id}`).then((r) => r.data),
 };

@@ -111,6 +111,7 @@ export interface Shipment {
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
+  reserved_for_trip_id?: string;
 }
 
 export interface ShipmentEvent {
