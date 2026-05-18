@@ -8,7 +8,7 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
-const checkinFilePath = "checkins.json"
+const checkinFilePath = "data/checkins.json"
 
 // checkinFile is the on-disk structure: a map of "driverID|YYYY-MM-DD" → DriverCheckin.
 type checkinFile = map[string]model.DriverCheckin
@@ -21,6 +21,7 @@ type CheckinRepository struct {
 }
 
 func NewCheckinRepository() *CheckinRepository {
+	_ = os.MkdirAll("data", 0o755)
 	return &CheckinRepository{path: checkinFilePath}
 }
 

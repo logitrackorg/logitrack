@@ -54,10 +54,8 @@ export function DriverRoute() {
     return `kss_checkin_${user.id}_${jornada.toDateString()}`;
   })();
 
-  const [checkInDone, setCheckInDone] = useState(() => {
-    if (!jornadaKey) return false;
-    return localStorage.getItem(jornadaKey) === "done";
-  });
+  // null = verificando contra backend, true = hecho, false = pendiente
+  const [checkInDone, setCheckInDone] = useState<boolean | null>(null);
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
@@ -75,6 +73,31 @@ export function DriverRoute() {
   const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
+
+  // Verifica contra el backend si el check-in ya fue completado hoy.
+  // localStorage se usa solo como cache optimista; el backend es fuente de verdad.
+  // Esto garantiza que un reset de base de datos invalide el estado persistido en el browser.
+  useEffect(() => {
+    if (!jornadaKey) {
+      setCheckInDone(true);
+      return;
+    }
+    driverApi.getTodayCheckin()
+      .then(() => {
+        localStorage.setItem(jornadaKey, "done");
+        setCheckInDone(true);
+      })
+      .catch((err: { response?: { status?: number } }) => {
+        if (err?.response?.status === 404) {
+          // El backend no tiene registro → limpiar cache stale y mostrar modal.
+          localStorage.removeItem(jornadaKey);
+          setCheckInDone(false);
+        } else {
+          // Error de red o 5xx → confiar en localStorage como fallback.
+          setCheckInDone(localStorage.getItem(jornadaKey) === "done");
+        }
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () =>
     driverApi
@@ -166,6 +189,9 @@ export function DriverRoute() {
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360);
+
+  // Mientras se verifica contra el backend, mostrar skeleton para evitar flash del modal.
+  if (checkInDone === null) return <RouteSkeleton />;
 
   if (!checkInDone && user && jornadaKey) {
     return (

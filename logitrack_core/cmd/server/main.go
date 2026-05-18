@@ -234,6 +234,7 @@ func main() {
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
+	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)

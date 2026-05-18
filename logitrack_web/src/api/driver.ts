@@ -82,6 +82,8 @@ export interface VoiceUploadResult {
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
+  getTodayCheckin: () =>
+    api.get<{ ok: boolean }>("/driver/checkin/today").then((r) => r.data),
   submitCheckin: (payload: CheckInPayload) =>
     api.post("/driver/checkin", payload).then((r) => r.data),
   getControlPhrase: () =>

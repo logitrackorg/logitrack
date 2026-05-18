@@ -95,12 +95,32 @@ func (h *DriverHandler) StartRoute(c *gin.Context) {
 
 // ── US1: KSS check-in ─────────────────────────────────────────────────────────
 
+// todayAR returns the current date in Argentina Standard Time (ART = UTC-3).
+// Docker containers run in UTC; using a fixed-offset zone avoids depending on
+// tzdata being installed in the image.
+func todayAR() string {
+	return time.Now().In(time.FixedZone("ART", -3*60*60)).Format("2006-01-02")
+}
+
+// GetTodayCheckin returns the authenticated driver's check-in for today.
+// Returns 404 when no check-in has been recorded yet for today.
+func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
 // SubmitCheckin records (or overwrites) the KSS fatigue check-in for today.
 func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
 	var body struct {
-		DriverID   string `json:"driver_id"`
-		HorasSueno int    `json:"horas_sueno"`
-		KSSLevel   int    `json:"kss_level"`
+		HorasSueno int `json:"horas_sueno"`
+		KSSLevel   int `json:"kss_level"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
@@ -115,13 +135,13 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		return
 	}
 
-	today := time.Now().Format("2006-01-02")
+	today := todayAR()
 
 	// Preserve existing voice data if the driver already uploaded audio today.
-	existing, _ := h.checkinRepo.Get(body.DriverID, today)
+	existing, _ := h.checkinRepo.Get(user.ID, today)
 
 	rec := model.DriverCheckin{
-		DriverID:      body.DriverID,
+		DriverID:      user.ID,
 		Date:          today,
 		HorasSueno:    body.HorasSueno,
 		KSSLevel:      body.KSSLevel,
@@ -176,7 +196,7 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 	// Extract the 5 acoustic features from the raw audio bytes.
 	current := extractVoiceMetrics(audioData)
 
-	today := time.Now().Format("2006-01-02")
+	today := todayAR()
 
 	// Load today's check-in (may or may not exist yet).
 	rec, _ := h.checkinRepo.Get(user.ID, today)
