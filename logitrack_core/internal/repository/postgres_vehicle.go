@@ -1,13 +1,21 @@
 package repository
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"strings"
 
 	"github.com/lib/pq"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 )
+
+func generateQRToken() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 // postgresVehicleRepository persists vehicles in PostgreSQL.
 type postgresVehicleRepository struct {
@@ -41,9 +49,30 @@ func NewPostgresVehicleRepository(db *sql.DB) VehicleRepository {
 		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_latitude    DOUBLE PRECISION`,
 		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS current_longitude   DOUBLE PRECISION`,
 		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS location_updated_at TIMESTAMPTZ`,
+		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS qr_token TEXT`,
+		`ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'inter_sucursal'`,
+		`UPDATE vehicles SET mode = 'ultima_milla' WHERE type IN ('furgoneta','auto') AND mode = 'inter_sucursal'`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS vehicles_qr_token_idx ON vehicles(qr_token) WHERE qr_token IS NOT NULL`,
 	} {
 		if _, err := db.Exec(migration); err != nil {
 			panic("vehicle migration failed: " + err.Error())
+		}
+	}
+
+	// Backfill qr_token for existing vehicles that don't have one yet (Go-side, no pgcrypto needed).
+	rows, err := db.Query(`SELECT id FROM vehicles WHERE qr_token IS NULL`)
+	if err == nil {
+		defer rows.Close()
+		var ids []string
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil {
+				ids = append(ids, id)
+			}
+		}
+		for _, id := range ids {
+			token := generateQRToken()
+			_, _ = db.Exec(`UPDATE vehicles SET qr_token = $1 WHERE id = $2 AND qr_token IS NULL`, token, id)
 		}
 	}
 
@@ -52,7 +81,7 @@ func NewPostgresVehicleRepository(db *sql.DB) VehicleRepository {
 
 // scanVehicle reads a row with columns: id, license_plate, type, capacity_kg, status,
 // assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by,
-// current_latitude, current_longitude, location_updated_at
+// current_latitude, current_longitude, location_updated_at, qr_token, mode
 func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	var v model.Vehicle
 	var capacityKg float64
@@ -63,10 +92,12 @@ func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	var destinationBranch sql.NullString
 	var currentLat, currentLng sql.NullFloat64
 	var locationUpdatedAt sql.NullTime
+	var qrToken sql.NullString
+	var mode sql.NullString
 
 	err := scan(&v.ID, &v.LicensePlate, &v.Type, &capacityKg, &v.Status,
 		&assignedShipments, &assignedBranch, &destinationBranch, &updatedAt, &updatedBy,
-		&currentLat, &currentLng, &locationUpdatedAt)
+		&currentLat, &currentLng, &locationUpdatedAt, &qrToken, &mode)
 	if err != nil {
 		return model.Vehicle{}, err
 	}
@@ -96,12 +127,18 @@ func scanVehicle(scan func(...any) error) (model.Vehicle, error) {
 	if locationUpdatedAt.Valid {
 		v.LocationUpdatedAt = &locationUpdatedAt.Time
 	}
+	if qrToken.Valid {
+		v.QRToken = qrToken.String
+	}
+	if mode.Valid {
+		v.Mode = model.VehicleMode(mode.String)
+	}
 	return v, nil
 }
 
 const vehicleSelectCols = `id, license_plate, type, capacity_kg, status,
 	assigned_shipments, assigned_branch, destination_branch, updated_at, updated_by,
-	current_latitude, current_longitude, location_updated_at`
+	current_latitude, current_longitude, location_updated_at, qr_token, mode`
 
 func (r *postgresVehicleRepository) List() []model.Vehicle {
 	rows, err := r.db.Query(`SELECT ` + vehicleSelectCols + ` FROM vehicles ORDER BY id`)
@@ -127,12 +164,19 @@ func (r *postgresVehicleRepository) Add(vehicle model.Vehicle) error {
 	if vehicle.AssignedBranch != nil {
 		assignedBranch = *vehicle.AssignedBranch
 	}
+	if vehicle.QRToken == "" {
+		vehicle.QRToken = generateQRToken()
+	}
+	mode := string(vehicle.Mode)
+	if mode == "" {
+		mode = string(model.VehicleModeInterBranch)
+	}
 
 	err := r.db.QueryRow(`
-		INSERT INTO vehicles (license_plate, type, capacity_kg, status, assigned_branch, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO vehicles (license_plate, type, capacity_kg, status, assigned_branch, updated_at, qr_token, mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-	`, vehicle.LicensePlate, vehicle.Type, vehicle.CapacityKg, vehicle.Status, assignedBranch, clock.Now()).Scan(&id)
+	`, vehicle.LicensePlate, vehicle.Type, vehicle.CapacityKg, vehicle.Status, assignedBranch, clock.Now(), vehicle.QRToken, mode).Scan(&id)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return ErrDuplicateLicensePlate
@@ -140,6 +184,23 @@ func (r *postgresVehicleRepository) Add(vehicle model.Vehicle) error {
 		return err
 	}
 	return nil
+}
+
+func (r *postgresVehicleRepository) SyncMode(licensePlate string, mode model.VehicleMode) error {
+	_, err := r.db.Exec(
+		`UPDATE vehicles SET mode = $1 WHERE UPPER(license_plate) = UPPER($2)`,
+		string(mode), licensePlate,
+	)
+	return err
+}
+
+func (r *postgresVehicleRepository) GetByQRToken(token string) (model.Vehicle, bool) {
+	row := r.db.QueryRow(`SELECT `+vehicleSelectCols+` FROM vehicles WHERE qr_token = $1`, token)
+	v, err := scanVehicle(row.Scan)
+	if err != nil {
+		return model.Vehicle{}, false
+	}
+	return v, true
 }
 
 func (r *postgresVehicleRepository) GetByID(id string) (model.Vehicle, bool) {

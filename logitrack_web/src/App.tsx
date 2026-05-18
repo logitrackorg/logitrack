@@ -10,13 +10,13 @@ import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
 import { DriverRoute } from "./pages/DriverRoute";
+import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { PricingConfig } from "./pages/PricingConfig";
-import { Routing } from "./pages/Routing";
 import { RoutingConfig } from "./pages/RoutingConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
@@ -25,6 +25,11 @@ import { AccessLog } from "./pages/AccessLog";
 import { UserProfile } from "./pages/UserProfile";
 import { DraftList } from "./pages/DraftList";
 import { ZoneManagement } from "./pages/ZoneManagement";
+import DriverScanVehicle from "./pages/DriverScanVehicle";
+import { Repartos } from "./pages/Repartos";
+import OperatorTripReception from "./pages/OperatorTripReception";
+import { InterSucursal } from "./pages/InterSucursal";
+import { InterBranchTripsList } from "./pages/InterBranchTripsList";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -62,7 +67,13 @@ function Nav() {
         <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager") && (
-        <NavLink to="/routing" style={navStyle}>Ruteo</NavLink>
+        <NavLink to="/repartos" style={navStyle}>Repartos</NavLink>
+      )}
+      {hasRole("operator", "supervisor", "manager") && (
+        <NavLink to="/inter-sucursal" style={navStyle}>Inter-sucursal</NavLink>
+      )}
+      {hasRole("operator", "supervisor", "manager") && (
+        <NavLink to="/viajes" style={navStyle}>Viajes</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/zones" style={navStyle}>Zonas</NavLink>
@@ -118,6 +129,8 @@ function DriverNav() {
   const isMobile = useIsMobile();
   if (!user) return null;
 
+  const isInterBranch = user.driver_type === "intersucursal";
+
   return (
     <nav style={{
       background: "#1e3a5f", color: "#fff",
@@ -127,7 +140,11 @@ function DriverNav() {
       minHeight: 52,
     }}>
       <span style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: 1 }}>LogiTrack</span>
-      <NavLink to="/driver/route" style={navStyle}>Mi ruta</NavLink>
+      {isInterBranch ? (
+        <NavLink to="/driver/trip" style={navStyle}>Mi viaje</NavLink>
+      ) : (
+        <NavLink to="/driver/route" style={navStyle}>Mi ruta</NavLink>
+      )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
         {isMobile ? (
@@ -137,7 +154,7 @@ function DriverNav() {
             <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
             {" · "}
             <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
-              Chofer
+              {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
             </span>
           </span>
         )}
@@ -154,6 +171,9 @@ function AppRoutes() {
   const { user } = useAuth();
 
   if (user?.role === "driver") {
+    const isInterBranch = user.driver_type === "intersucursal";
+    const defaultPath = isInterBranch ? "/driver/scan" : "/driver/route";
+
     return (
       <>
         <DriverNav />
@@ -164,12 +184,22 @@ function AppRoutes() {
                 <DriverRoute />
               </ProtectedRoute>
             } />
+            <Route path="/driver/trip" element={
+              <ProtectedRoute roles={["driver"]}>
+                <DriverInterBranchTrip />
+              </ProtectedRoute>
+            } />
+            <Route path="/driver/scan" element={
+              <ProtectedRoute roles={["driver"]}>
+                <DriverScanVehicle />
+              </ProtectedRoute>
+            } />
             <Route path="/shipments/:trackingId" element={
               <ProtectedRoute roles={["driver"]}>
                 <DriverShipmentDetail />
               </ProtectedRoute>
             } />
-            <Route path="*" element={<Navigate to="/driver/route" replace />} />
+            <Route path="*" element={<Navigate to={defaultPath} replace />} />
           </Routes>
         </main>
       </>
@@ -198,6 +228,12 @@ function AppRoutes() {
           <Route path="/shipments/:trackingId" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentDetail />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/inter-branch-trips/:id/recepcion" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <OperatorTripReception />
             </ProtectedRoute>
           } />
 
@@ -243,11 +279,27 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
 
-          <Route path="/routing" element={
+          <Route path="/repartos" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <Routing />
+              <Repartos />
             </ProtectedRoute>
           } />
+
+          <Route path="/inter-sucursal" element={
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+              <InterSucursal />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/viajes" element={
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+              <InterBranchTripsList />
+            </ProtectedRoute>
+          } />
+
+          {/* Legacy redirects */}
+          <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
+          <Route path="/operations/trips" element={<Navigate to="/viajes" replace />} />
 
           <Route path="/routing-config" element={
             <ProtectedRoute roles={["admin"]}>

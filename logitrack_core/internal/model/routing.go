@@ -8,53 +8,103 @@ type DispatchRule string
 const (
 	DispatchRuleSLA           DispatchRule = "sla_forced"
 	DispatchRuleConsolidation DispatchRule = "consolidation"
+	DispatchRuleManual        DispatchRule = "manual"
 )
 
-// LastMileAssignment agrupa los envíos que el algoritmo asignó a un chofer
-// para entrega de última milla en su ruta del día.
+// RouteMode controla el criterio que usa el scheduler de última milla al elegir
+// orden de paradas y horario de salida.
+//
+//   - RouteModeVentanas (default): maximiza entregas dentro de su ventana horaria.
+//     El orden surge del VRP corriendo nearest-neighbor + 2-opt y se prueban distintos
+//     horarios de salida; gana el que tiene mejor cobertura de ventana.
+//   - RouteModeSegura: igual a Ventanas pero penaliza arcos cuyo segmento recto
+//     atraviesa una zona peligrosa activa, forzando al VRP a bordearla
+//     (salvo cuando la entrega cae dentro de la zona).
+//   - RouteModeCosto: minimiza la duración total. El orden se fija con una pasada
+//     única del VRP en modo blando (sin importar ventanas) y luego se desplaza
+//     el horario de salida para que caigan dentro de ventana la mayor cantidad
+//     posible de paradas. Las que igual quedan afuera se aplican con warning.
+type RouteMode string
+
+const (
+	RouteModeVentanas RouteMode = "ventanas"
+	RouteModeSegura   RouteMode = "segura"
+	RouteModeCosto    RouteMode = "costo"
+)
+
+// IsValid devuelve true si rm es alguno de los modos soportados.
+// Se acepta también el cero-value (string vacío) y se trata como Ventanas para
+// retrocompatibilidad con planes generados antes de existir el campo.
+func (rm RouteMode) IsValid() bool {
+	switch rm {
+	case "", RouteModeVentanas, RouteModeSegura, RouteModeCosto:
+		return true
+	}
+	return false
+}
+
+// Normalize devuelve el modo, mapeando el cero-value a Ventanas.
+func (rm RouteMode) Normalize() RouteMode {
+	if rm == "" {
+		return RouteModeVentanas
+	}
+	return rm
+}
+
+// LastMileAssignment agrupa los envíos que el algoritmo asignó a un vehículo
+// de última milla. El chofer se auto-asigna escaneando el QR del vehículo.
 //
 // Shipments y TotalWeightKg corresponden únicamente a los envíos NUEVOS que
-// este plan agrega al chofer. ExistingCount/ExistingWeightKg reflejan la carga
-// pendiente que ya tenía asignada en su ruta del día (out_for_delivery /
-// delivery_failed). Los caps de la config se chequean contra el total
-// (existente + nuevos), para no exceder el peso ni la cantidad acumulando
-// entre múltiples Apply consecutivos.
-//
-// Cuando el solver de VRP corre exitosamente, OrderedStops contiene la
-// secuencia óptima de paradas con tiempos estimados, Shipments preserva
-// el mismo orden, y OptimizedBy = "vrp". Si el solver fallea (depot sin
-// coords, error inesperado) se cae al greedy clásico y OptimizedBy = "greedy"
-// — en ese caso OrderedStops puede venir vacío.
+// este plan agrega al vehículo. ExistingWeightKg refleja la carga que el
+// vehículo ya tenía asignada (status loaded). Los caps se chequean contra el
+// total (existente + nuevos) para no exceder la capacidad acumulando entre
+// múltiples Apply consecutivos.
 type LastMileAssignment struct {
-	DriverID         string   `json:"driver_id"`
-	DriverName       string   `json:"driver_name,omitempty"`
-	Shipments        []string `json:"shipments"` // tracking IDs nuevos
-	TotalWeightKg    float64  `json:"total_weight_kg"`
-	ExistingCount    int      `json:"existing_count"`
-	ExistingWeightKg float64  `json:"existing_weight_kg"`
-	// Tracking IDs de envíos que el chofer ya tenía en su ruta del día
-	// (out_for_delivery / delivery_failed). Útil para que la UI los muestre
-	// en la card del chofer junto con los nuevos.
-	ExistingShipments []string `json:"existing_shipments,omitempty"`
+	VehicleID    string  `json:"vehicle_id"`
+	LicensePlate string  `json:"license_plate"`
+	CapacityKg   float64 `json:"capacity_kg"`
+	// Chofer asignado al vehículo (opcional: puede pre-asignarse en el plan o
+	// auto-asignarse cuando el chofer escanea el QR del vehículo).
+	DriverID   *string `json:"driver_id,omitempty"`
+	DriverName string  `json:"driver_name,omitempty"`
 
-	// Campos VRP (omitidos si el plan se generó con greedy).
-	OrderedStops     []RouteStop `json:"ordered_stops,omitempty"`
-	TotalDistanceKm  float64     `json:"total_distance_km,omitempty"`
-	TotalDurationMin int         `json:"total_duration_min,omitempty"`
-	DepartureMin     int         `json:"departure_min,omitempty"` // base para arrival_min, en min desde medianoche
-	OptimizedBy      string      `json:"optimized_by,omitempty"`  // "vrp" | "greedy"
-	// WindowCoverage es la fracción de paradas con arribo dentro de ventana
-	// (0.0 a 1.0). 1.0 = todas las paradas en ventana. Permite al frontend
-	// mostrar el indicador "X/Y en ventana" sin recalcular.
-	WindowCoverage float64 `json:"window_coverage,omitempty"`
+	Shipments         []string `json:"shipments"`
+	TotalWeightKg     float64  `json:"total_weight_kg"`
+	ExistingWeightKg  float64  `json:"existing_weight_kg"`
+	ExistingShipments []string `json:"existing_shipments,omitempty"`
 	// Estado de aplicación del ítem (se persiste en el plan global).
 	AppliedShipments []string   `json:"applied_shipments,omitempty"`
 	Applied          bool       `json:"applied"`
 	AppliedAt        *time.Time `json:"applied_at,omitempty"`
 	AppliedBy        string     `json:"applied_by,omitempty"`
-	// RouteStarted es runtime-only (no se persiste): indica que el chofer ya
-	// inició su ruta del día. La card se muestra como informativa.
-	RouteStarted bool `json:"route_started,omitempty"`
+	// InTransit es runtime-only: indica que el vehículo ya está en viaje.
+	InTransit bool `json:"in_transit,omitempty"`
+
+	// Campos VRP — seteados cuando el scheduler pudo optimizar el orden de
+	// paradas. SuggestedDepartureMin es minutos desde medianoche (hora local).
+	// OrderedStops comparte el mismo orden que Shipments con ETAs precalculadas.
+	// Omitidos cuando no hay coordenadas suficientes para correr VRP.
+	SuggestedDepartureMin int         `json:"suggested_departure_min,omitempty"`
+	OrderedStops          []RouteStop `json:"ordered_stops,omitempty"`
+	WindowCoverage        float64     `json:"window_coverage,omitempty"`
+
+	// RouteMode es el criterio con el que se generaron OrderedStops y
+	// SuggestedDepartureMin. Vacío en planes legacy → se interpreta como Ventanas.
+	RouteMode RouteMode `json:"route_mode,omitempty"`
+
+	// PolylineCoords es la geometría real del trayecto a lo largo de las calles
+	// (no líneas rectas) según el OSRM Route API. Cuando está presente, el
+	// cliente la usa para dibujar la polyline del viaje en el mapa.
+	// Ausente si OSRM no está disponible o falla — el cliente debe caer al
+	// fallback de Haversine.
+	PolylineCoords []LatLng `json:"polyline_coords,omitempty"`
+}
+
+// LatLng es una coordenada geográfica simple usada para serializar geometrías
+// de trayectos al frontend.
+type LatLng struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
 }
 
 // RouteStop es una parada dentro de una ruta optimizada por VRP.
@@ -78,6 +128,13 @@ type RouteStop struct {
 	WeightKg           float64 `json:"weight_kg"`
 	WithinWindow       bool    `json:"within_window"`
 	WindowDeviationMin int     `json:"window_deviation_min,omitempty"`
+}
+
+// BackhaulPlan describes return-trip shipments piggybacked on an outbound vehicle (WIP).
+type BackhaulPlan struct {
+	Shipments     []string `json:"shipments"`
+	TotalWeightKg float64  `json:"total_weight_kg"`
+	FillRatePct   float64  `json:"fill_rate_pct"`
 }
 
 // InterBranchAssignment es un despacho de un vehículo a una sucursal destino.
@@ -111,7 +168,29 @@ type InterBranchAssignment struct {
 	// InTransit es runtime-only (no se persiste): indica que el vehículo ya está
 	// en viaje. La card se muestra como informativa, sin drag-and-drop ni apply.
 	InTransit bool `json:"in_transit,omitempty"`
+	// Backhaul is a WIP feature: return-trip shipments on the same vehicle.
+	Backhaul *BackhaulPlan `json:"backhaul,omitempty"`
+	// Multi-hop: paradas adicionales después de la primera. Máximo 2 (total 3 stops).
+	AdditionalStops []AssignmentStop `json:"additional_stops,omitempty"`
+	// Cross-branch pickups en la PRIMARY stop (envíos at_hub en la sucursal
+	// destino primario que se recogen al pasar y siguen viaje a alguna additional stop).
+	PrimaryPickupShipments []string `json:"primary_pickup_shipments,omitempty"`
+	PrimaryPickupWeightKg  float64  `json:"primary_pickup_weight_kg,omitempty"`
 }
+
+// AssignmentStop representa una parada adicional dentro de un dispatch multi-hop.
+// Shipments son envíos a descargar (dropoff). PickupShipments son envíos en estado
+// at_hub en BranchID que el vehículo recogerá al pasar (cross-branch pickup).
+type AssignmentStop struct {
+	BranchID        string   `json:"branch_id"`
+	Shipments       []string `json:"shipments"`        // dropoffs
+	TotalWeightKg   float64  `json:"total_weight_kg"`  // peso de los dropoffs
+	PickupShipments []string `json:"pickup_shipments,omitempty"`
+	PickupWeightKg  float64  `json:"pickup_weight_kg,omitempty"`
+}
+
+// MaxTripStops es el tope de paradas por viaje multi-hop (incluyendo la primaria).
+const MaxTripStops = 3
 
 // UnassignedShipment es un envío que el algoritmo no pudo rutear, con motivo.
 type UnassignedShipment struct {
@@ -122,51 +201,35 @@ type UnassignedShipment struct {
 	Priority    string  `json:"priority"`
 }
 
-// BlockedDriver es un chofer al que no se le puede asignar más envíos por el momento.
-// Hoy aplica solo a choferes que ya iniciaron su ruta del día.
-type BlockedDriver struct {
-	DriverID   string `json:"driver_id"`
-	DriverName string `json:"driver_name,omitempty"`
-	Reason     string `json:"reason"`
-}
-
-// DriverLoad reporta la carga pendiente actual de un chofer no bloqueado.
-// Se exporta para que el cliente valide el cap correcto al reasignar manualmente
-// a un chofer que el algoritmo no usó (no aparece en LastMile).
-type DriverLoad struct {
-	DriverID         string  `json:"driver_id"`
-	DriverName       string  `json:"driver_name,omitempty"`
-	ExistingCount    int     `json:"existing_count"`
-	ExistingWeightKg float64 `json:"existing_weight_kg"`
-	// Tracking IDs ya en ruta del día (espejo de ExistingCount). Le sirve
-	// al cliente para mostrar los envíos previos cuando se promueve este
-	// chofer a card de asignación al asignarle algo nuevo.
-	ExistingShipments []string `json:"existing_shipments,omitempty"`
-}
-
 // VehicleLoad reporta la carga ya asignada a un vehículo del pool. Se exporta
 // para que el cliente valide la capacidad disponible al reasignar manualmente
 // a un vehículo que el algoritmo no usó.
 type VehicleLoad struct {
-	VehicleID        string  `json:"vehicle_id"`
-	LicensePlate     string  `json:"license_plate"`
-	CapacityKg       float64 `json:"capacity_kg"`
-	ExistingWeightKg float64 `json:"existing_weight_kg"`
+	VehicleID        string          `json:"vehicle_id"`
+	LicensePlate     string          `json:"license_plate"`
+	Mode             VehicleModeEnum `json:"mode"` // ultima_milla | inter_sucursal
+	CapacityKg       float64         `json:"capacity_kg"`
+	ExistingWeightKg float64         `json:"existing_weight_kg"`
 	// Tracking IDs ya cargados en el vehículo (status loaded). El cliente
 	// los lista en la card si el operador asigna manualmente algo nuevo.
 	ExistingShipments []string `json:"existing_shipments,omitempty"`
 }
 
+// VehicleModeEnum mirrors model.VehicleMode for use in routing structs.
+type VehicleModeEnum = string
+
 // IncomingVehicle es un vehículo de otra sucursal que está llegando con destino a esta.
+// EstimatedArrivalAt is a WIP field for projected-dispatch logic.
 // Runtime-only (no persiste en el plan): se computa en GetTodayPlan a partir del
 // estado actual del vehiclehouse para dar visibilidad de qué carga viene en camino.
 type IncomingVehicle struct {
-	VehicleID     string   `json:"vehicle_id"`
-	LicensePlate  string   `json:"license_plate"`
-	OriginBranch  string   `json:"origin_branch"`
-	Shipments     []string `json:"shipments"`
-	TotalWeightKg float64  `json:"total_weight_kg"`
-	CapacityKg    float64  `json:"capacity_kg"`
+	VehicleID          string     `json:"vehicle_id"`
+	LicensePlate       string     `json:"license_plate"`
+	OriginBranch       string     `json:"origin_branch"`
+	Shipments          []string   `json:"shipments"`
+	TotalWeightKg      float64    `json:"total_weight_kg"`
+	CapacityKg         float64    `json:"capacity_kg"`
+	EstimatedArrivalAt *time.Time `json:"estimated_arrival_at,omitempty"` // WIP: projected-dispatch
 }
 
 // RoutingPlan es el plan sugerido devuelto por GeneratePlan.
@@ -178,10 +241,16 @@ type RoutingPlan struct {
 	InterBranch      []InterBranchAssignment `json:"inter_branch"`
 	IncomingVehicles []IncomingVehicle       `json:"incoming_vehicles,omitempty"` // runtime-only
 	Unassigned       []UnassignedShipment    `json:"unassigned"`
-	BlockedDrivers   []BlockedDriver         `json:"blocked_drivers"`
-	DriverLoads      []DriverLoad            `json:"driver_loads"`
 	VehicleLoads     []VehicleLoad           `json:"vehicle_loads"`
 	ConfigSnapshot   RoutingConfig           `json:"config_snapshot"`
+}
+
+// RecomputeLastMileRequest es el body del POST /routing/last-mile/recompute.
+// Devuelve un LastMileAssignment con el orden y horario optimizado para el modo solicitado.
+type RecomputeLastMileRequest struct {
+	VehicleID   string    `json:"vehicle_id" binding:"required"`
+	ShipmentIDs []string  `json:"shipment_ids" binding:"required"`
+	Mode        RouteMode `json:"mode" binding:"required"`
 }
 
 // ApplyPlanRequest es el body del POST /routing/apply.

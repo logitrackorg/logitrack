@@ -122,6 +122,58 @@ type ShipmentService struct {
 	mlClient     *MLService
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
+	graphSvc     *BranchGraphService // WIP: multi-hop path recording
+}
+
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService) { s.graphSvc = g }
+
+// ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
+func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
+	return s.repo.ReleaseFromTrip(trackingID)
+}
+
+// maybeRecordPath is a WIP feature: records a planned multi-hop path when a shipment moves.
+func (s *ShipmentService) maybeRecordPath(sh model.Shipment, reason string) {
+	if s.graphSvc == nil || s.repo == nil {
+		return
+	}
+	if sh.FinalBranchID == "" || sh.ReceivingBranchID == sh.FinalBranchID {
+		return
+	}
+
+	inPath := false
+	for _, b := range sh.PlannedPath {
+		if b == sh.ReceivingBranchID {
+			inPath = true
+			break
+		}
+	}
+
+	var path []string
+	var hopIdx int
+	if reason == "hop_advance" && len(sh.PlannedPath) > 0 && inPath {
+		path = sh.PlannedPath
+		hopIdx = sh.HopIndex + 1
+	} else {
+		// Fresh computation from current location
+		path = s.graphSvc.ShortestPath(sh.ReceivingBranchID, sh.FinalBranchID)
+		hopIdx = 0
+	}
+	if len(path) < 2 {
+		return
+	}
+	nextHop := ""
+	if hopIdx+1 < len(path) {
+		nextHop = path[hopIdx+1]
+	}
+	_ = s.repo.RecordPathPlanned(repository.PathPlannedCmd{
+		TrackingID:      sh.TrackingID,
+		PlannedPath:     path,
+		NextHopBranchID: nextHop,
+		HopIndex:        hopIdx,
+		PathRevision:    sh.PathRevision + 1,
+		Reason:          reason,
+	})
 }
 
 func NewShipmentService(
@@ -579,7 +631,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if req.Status == model.StatusDeliveryFailed && strings.TrimSpace(req.Notes) == "" {
 		return model.Shipment{}, fmt.Errorf("las notas son obligatorias para fallo de entrega")
 	}
-	if req.Status == model.StatusOutForDelivery && strings.TrimSpace(req.DriverID) == "" {
+	if req.Status == model.StatusOutForDelivery && strings.TrimSpace(req.DriverID) == "" && !req.SystemTransition {
 		return model.Shipment{}, fmt.Errorf("el driver_id es obligatorio al pasar a estado de reparto")
 	}
 	current, err := s.repo.GetByTrackingID(trackingID)
@@ -689,9 +741,11 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
-	// Auto-derive location from prior events when needed
+	// Auto-derive location from prior events SOLO si el caller no proveyó uno.
+	// Para viajes multi-hop, ConfirmUnload/CloseByVehicleQR pasan la sucursal del
+	// operador explícitamente — no hay que pisarla con el destino final que puso Start.
 	location := req.Location
-	if req.Status == model.StatusAtHub && current.Status == model.StatusInTransit {
+	if location == "" && req.Status == model.StatusAtHub && current.Status == model.StatusInTransit {
 		events, _ := s.repo.GetEvents(trackingID)
 		for i := len(events) - 1; i >= 0; i-- {
 			if events[i].ToStatus == model.StatusInTransit {
@@ -700,7 +754,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 	}
-	if req.Status == model.StatusAtHub && current.Status == model.StatusDeliveryFailed {
+	if location == "" && req.Status == model.StatusAtHub && current.Status == model.StatusDeliveryFailed {
 		events, _ := s.repo.GetEvents(trackingID)
 		for i := len(events) - 1; i >= 0; i-- {
 			if events[i].ToStatus == model.StatusAtHub || events[i].ToStatus == model.StatusAtOriginHub {
@@ -1146,14 +1200,16 @@ func isValidTransition(from, to model.Status) bool {
 		model.StatusDraft: {}, // draft transitions only via ConfirmDraft
 		model.StatusAtOriginHub: {
 			model.StatusLoaded,
+			model.StatusInTransit, // cross-branch pickup en un trip multi-hop que pasa por el origen
 			model.StatusReadyForReturn,
 			model.StatusLost,
 			model.StatusDestroyed,
 		},
 		model.StatusLoaded: {
 			model.StatusInTransit,
-			model.StatusAtOriginHub, // unassign at origin
-			model.StatusAtHub,       // unassign at intermediate hub
+			model.StatusOutForDelivery, // last-mile: driver starts trip
+			model.StatusAtOriginHub,    // unassign at origin
+			model.StatusAtHub,          // unassign at intermediate hub
 		},
 		model.StatusInTransit: {
 			model.StatusAtHub,
@@ -1162,6 +1218,7 @@ func isValidTransition(from, to model.Status) bool {
 			model.StatusDestroyed,
 		},
 		model.StatusAtHub: {
+			model.StatusInTransit, // cross-branch pickup en un trip multi-hop
 			model.StatusLoaded,
 			model.StatusOutForDelivery,
 			model.StatusReadyForPickup,
@@ -1183,6 +1240,7 @@ func isValidTransition(from, to model.Status) bool {
 		},
 		model.StatusRedeliveryScheduled: {
 			model.StatusOutForDelivery,
+			model.StatusLoaded, // re-assigned to vehicle via last-mile plan
 		},
 		model.StatusReadyForPickup: {
 			model.StatusDelivered,

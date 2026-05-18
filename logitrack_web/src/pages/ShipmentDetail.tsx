@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, Truck } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -31,6 +31,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
+import { tripsApi, type InterBranchTrip } from '../api/routing';
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
@@ -56,7 +57,7 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:                "Borrador",
   at_origin_hub:        "En sucursal de origen",
-  loaded:               "Enviar a sucursal",
+  loaded:               "Cargado en vehículo",
   in_transit:           "En tránsito",
   at_hub:               "En sucursal",
   out_for_delivery:     "Última milla",
@@ -139,6 +140,7 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
+  const [reservedTrip, setReservedTrip] = useState<InterBranchTrip | null>(null);
   // Auto-save draft state
   const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,6 +295,14 @@ export function ShipmentDetail() {
       setBranchCapacity(null);
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
+
+  useEffect(() => {
+    if (shipment?.reserved_for_trip_id) {
+      tripsApi.getByID(shipment.reserved_for_trip_id).then(setReservedTrip).catch(() => setReservedTrip(null));
+    } else {
+      setReservedTrip(null);
+    }
+  }, [shipment?.reserved_for_trip_id]);
 
   // Auto-save draft changes — debounced 800ms whenever draftForm changes
   useEffect(() => {
@@ -530,7 +540,7 @@ export function ShipmentDetail() {
       return true;
     }
   ).filter(
-    // No mostrar "Enviar a sucursal" si el envío ya está en la sucursal de destino.
+    // No mostrar "Cargado en vehículo" si el envío ya está en la sucursal de destino.
     // Esto permite retornos a origen (current_location === origin_branch_id).
     (s) => s !== "loaded" || !isAtDestinationBranch
   );
@@ -609,6 +619,21 @@ export function ShipmentDetail() {
         <div className="flex items-center gap-2.5 mb-4 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50">
           <Undo2 className="w-4 h-4 text-violet-700 shrink-0" />
           <p className="text-sm text-violet-900">Este envío está en <strong>modo devolución</strong></p>
+        </div>
+      )}
+
+      {/* Banner: reservado para pickup por vehículo de otra sucursal */}
+      {reservedTrip && (
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50">
+          <Truck className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
+          <div className="text-sm text-sky-900">
+            <p className="font-semibold">Reservado para pickup por vehículo en tránsito</p>
+            <p className="text-sky-700 mt-0.5">
+              Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
+              <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
+              No requiere acción de esta sucursal.
+            </p>
+          </div>
         </div>
       )}
 
@@ -1196,7 +1221,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Enviar a sucursal</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargar en vehículo</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>

@@ -310,7 +310,7 @@ export function ShipmentList() {
             <option value="active">Activos</option>
             <option value="">Todos</option>
             <option value="at_origin_hub">En sucursal de origen</option>
-            <option value="loaded">Enviar a sucursal</option>
+            <option value="loaded">Cargado en vehículo</option>
             <option value="in_transit">En tránsito</option>
             <option value="at_hub">En sucursal</option>
             <option value="out_for_delivery">Última milla</option>

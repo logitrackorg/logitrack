@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
@@ -26,6 +29,12 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
+	// Carga .env si existe (silenciosamente lo ignora si no está). Útil para
+	// configurar localmente vars como ORS_API_KEY sin tener que exportarlas
+	// en cada sesión de shell. En producción las vars vienen del entorno
+	// directamente y .env no existe.
+	_ = godotenv.Load()
+
 	// PostgreSQL connection
 	database, err := db.NewDB(
 		getenv("DB_HOST", "localhost"),
@@ -124,9 +133,44 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
+	// OpenRouteService — opcional. Cuando hay ORS_API_KEY se usa para el modo
+	// segura (avoid_polygons nativo). Sin la key, segura cae al fallback de
+	// OSRM con waypoints de bordeado.
+	orsClient := ors.NewClient(os.Getenv("ORS_BASE_URL"), os.Getenv("ORS_API_KEY"))
+	if orsClient != nil {
+		log.Printf("[routing] OpenRouteService HABILITADO — modo segura usará avoid_polygons nativo")
+	} else {
+		log.Printf("[routing] OpenRouteService DESHABILITADO (sin ORS_API_KEY) — modo segura usará fallback OSRM + waypoints")
+	}
+	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
+	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
+	interBranchTripSvc.SetRouteService(routeSvc)
+	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
+	vehicleHandler.SetTripService(interBranchTripSvc)
+
 	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
+	routingSvc.SetInterBranchTripService(interBranchTripSvc)
+	routingSvc.SetZoneService(zoneSvc)
+	routingSvc.SetORSClient(orsClient)
+
+	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
+	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
+	// del grafo de sucursales.
+	branchGraphRepo := repository.NewPostgresBranchGraphRepository(database)
+	branchGraphSvc := service.NewBranchGraphService(branchGraphRepo, branchRepo)
+	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
+	routingSvc.SetBranchGraphService(branchGraphSvc)
+	shipmentSvc.SetBranchGraphService(branchGraphSvc)
+
 	routingHandler := handler.NewRoutingHandler(routingSvc)
+
+	// Generar plan global al arrancar para que el plan del día esté disponible
+	// desde el primer request, sin esperar el cron de las 08:00.
+	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
+		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	}
+	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)
@@ -235,6 +279,25 @@ func main() {
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 
+	// Inter-branch trips — driver self-service + operator/supervisor receive
+	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
+	protected.POST("/inter-branch-trips/:id/start", driverOnly, interBranchTripHandler.StartTrip)
+	protected.GET("/inter-branch-trips/:id", shipmentRead, interBranchTripHandler.GetTripByID)
+	protected.GET("/inter-branch-trips/:id/qr", shipmentDetailRead, interBranchTripHandler.GetTripQR)
+	protected.POST("/inter-branch-trips/:id/scan/finish", shipmentWrite, interBranchTripHandler.FinishByScan)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/unload", shipmentWrite, interBranchTripHandler.ConfirmUnload)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/load", shipmentWrite, interBranchTripHandler.ConfirmLoad)
+	protected.POST("/inter-branch-trips/:id/assign-driver", shipmentWrite, interBranchTripHandler.AssignDriver)
+	protected.POST("/inter-branch-trips/:id/cancel", middleware.RequireRoles(model.RoleSupervisor), interBranchTripHandler.Cancel)
+	protected.GET("/inter-branch-trips", shipmentRead, interBranchTripHandler.ListByBranch)
+	// QR-based vehicle claim (driver) and close (operator/supervisor)
+	protected.POST("/trips/claim-by-qr", driverOnly, interBranchTripHandler.ClaimByVehicleQR)
+	protected.POST("/trips/close-by-qr", shipmentWrite, interBranchTripHandler.CloseByVehicleQR)
+
+	// Vehicle QR management
+	canViewVehicleQR := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	protected.GET("/vehicles/by-plate/:plate/qr", canViewVehicleQR, vehicleHandler.GetVehicleQR)
+
 	// Users — list drivers (operator, supervisor) for shipment assignment
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
 	protected.GET("/users/me", authenticated, userHandler.GetMe)
@@ -274,6 +337,7 @@ func main() {
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
+	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
