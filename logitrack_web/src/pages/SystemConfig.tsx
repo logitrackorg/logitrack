@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Settings, AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw } from "lucide-react";
+import { Settings, AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
 import { PageHeader } from "../components/ui/page-header";
@@ -139,8 +139,11 @@ export function SystemConfig() {
   }, [tick, clockState]);
 
   const isDirty =
-    draft !== null && config !== null &&
-    draft.max_delivery_attempts !== config.max_delivery_attempts;
+    draft !== null && config !== null && (
+      draft.max_delivery_attempts !== config.max_delivery_attempts ||
+      draft.draft_retention_days  !== config.draft_retention_days  ||
+      draft.draft_purge_days      !== config.draft_purge_days
+    );
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-5">
@@ -155,6 +158,7 @@ export function SystemConfig() {
           <p className="text-sm text-slate-500">Cargando…</p>
         </Card>
       ) : draft && (
+        <>
         <Card>
           <CardHeader>
             <CardTitle>Intentos de entrega</CardTitle>
@@ -244,6 +248,123 @@ export function SystemConfig() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Draft lifecycle */}
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-slate-500" />
+              <CardTitle>Ciclo de vida de borradores (Ley 25.326)</CardTitle>
+            </div>
+            <CardDescription>
+              Define por cuántos días los borradores permanecen activos y cuándo se purgan los datos personales conforme a la normativa de protección de datos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Draft retention days */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                Vigencia del borrador (días)
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_retention_days: Math.max(1, d.draft_retention_days - 1) } : d
+                    )
+                  }
+                  disabled={draft.draft_retention_days <= 1}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Minus className="w-4 h-4 text-slate-700" />
+                </button>
+                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  {draft.draft_retention_days}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_retention_days: Math.min(365, d.draft_retention_days + 1) } : d
+                    )
+                  }
+                  disabled={draft.draft_retention_days >= 365}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-slate-700" />
+                </button>
+                <input
+                  type="range"
+                  min={1}
+                  max={30}
+                  value={draft.draft_retention_days}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_retention_days: Number(e.target.value) } : d
+                    )
+                  }
+                  className="w-32 accent-[#1e3a5f]"
+                />
+              </div>
+              <p className="text-xs text-slate-400">
+                Transcurrido este período el borrador pasa a "Expirado" y deja de ser visible para operadores.
+              </p>
+            </div>
+
+            {/* Draft purge days */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                Retención tras expiración (días)
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_purge_days: Math.max(1, d.draft_purge_days - 1) } : d
+                    )
+                  }
+                  disabled={draft.draft_purge_days <= 1}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Minus className="w-4 h-4 text-slate-700" />
+                </button>
+                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  {draft.draft_purge_days}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_purge_days: Math.min(1825, d.draft_purge_days + 1) } : d
+                    )
+                  }
+                  disabled={draft.draft_purge_days >= 1825}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-slate-700" />
+                </button>
+                <input
+                  type="range"
+                  min={1}
+                  max={180}
+                  value={draft.draft_purge_days}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      d ? { ...d, draft_purge_days: Number(e.target.value) } : d
+                    )
+                  }
+                  className="w-32 accent-[#1e3a5f]"
+                />
+              </div>
+              <p className="text-xs text-slate-400">
+                Días después de expirar hasta que se eliminan nombre, DNI, email, teléfono y dirección de forma irreversible.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        </>
       )}
 
       <Card>

@@ -110,11 +110,14 @@ export function NewShipment() {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Auto-save draft state
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
+  const [autoSaveError, setAutoSaveError] = useState("");
+  const draftIdRef = useRef<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -181,38 +184,33 @@ export function NewShipment() {
     branches,
   ]);
 
-  // Auto-save draft — debounced 800ms on any form change.
-  // Requires at least one meaningful field to avoid creating empty drafts.
+  // Auto-save: fires 1 s after the last change, as long as both DNIs are present.
   useEffect(() => {
-    // Require at minimum both DNIs before creating a draft
-    const hasMinimumData =
-      form.sender.dni.length >= 7 && form.recipient.dni.length >= 7;
-
-    if (!hasMinimumData) return;
+    const senderDni = form.sender.dni.trim();
+    const recipientDni = form.recipient.dni.trim();
+    if (senderDni.length < 7 || recipientDni.length < 7) return;
 
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    if (savedResetTimer.current) clearTimeout(savedResetTimer.current);
-
     autoSaveTimer.current = setTimeout(async () => {
-      setAutoSaveStatus('saving');
+      setAutoSaveStatus("saving");
+      setAutoSaveError("");
       try {
-        if (draftId) {
-          await shipmentApi.updateDraft(draftId, form);
+        if (draftIdRef.current) {
+          await shipmentApi.updateDraft(draftIdRef.current, form);
         } else {
           const saved = await shipmentApi.saveDraft(form);
-          setDraftId(saved.tracking_id);
+          draftIdRef.current = saved.tracking_id;
+          // Refresh draft count in the banner
+          setDrafts((prev) => [...prev, saved]);
         }
-        setAutoSaveStatus('saved');
-        savedResetTimer.current = setTimeout(() => setAutoSaveStatus('idle'), 3000);
-      } catch {
-        setAutoSaveStatus('error');
+        setAutoSaveStatus("saved");
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        setAutoSaveError(msg ?? "No se pudo guardar el borrador.");
+        setAutoSaveStatus("error");
       }
-    }, 800);
-
-    return () => {
-      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [form]);
 
   const set = (field: string, value: unknown) =>
@@ -359,9 +357,9 @@ export function NewShipment() {
     try {
       // If a draft was auto-saved, update it with the latest data then confirm it;
       // otherwise create from scratch
-      if (draftId) {
-        await shipmentApi.updateDraft(draftId, form);
-        const shipment = await shipmentApi.confirmDraft(draftId, user?.username ?? "");
+      if (draftIdRef.current) {
+        await shipmentApi.updateDraft(draftIdRef.current, form);
+        const shipment = await shipmentApi.confirmDraft(draftIdRef.current, user?.username ?? "");
         navigate(`/shipments/${shipment.tracking_id}`);
       } else {
         const shipment = await shipmentApi.create(form);
@@ -389,26 +387,30 @@ export function NewShipment() {
         <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
           <PackagePlus className="w-5 h-5" />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
-            {autoSaveStatus === 'saving' && (
+            {/* Auto-save status indicator */}
+            {autoSaveStatus === "saving" && (
               <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Guardando…
+                <Loader2 className="w-3 h-3 animate-spin" />Guardando borrador…
               </span>
             )}
-            {autoSaveStatus === 'saved' && (
+            {autoSaveStatus === "saved" && (
               <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600">
-                <Check className="w-3.5 h-3.5" />
-                Guardado
+                <Check className="w-3 h-3" />Borrador guardado
               </span>
             )}
-            {autoSaveStatus === 'error' && (
-              <span className="text-xs text-rose-500">Error al guardar</span>
+            {autoSaveStatus === "error" && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-rose-500">
+                <AlertCircle className="w-3 h-3" />{autoSaveError || "Error al guardar"}
+              </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-500">Completá los datos para registrar un envío en el sistema</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Completá los datos para registrar un envío.{" "}
+            <span className="text-slate-400">El borrador se guarda automáticamente al ingresar el DNI del remitente y del destinatario.</span>
+          </p>
         </div>
       </div>
 
@@ -445,7 +447,9 @@ export function NewShipment() {
       <form onSubmit={handleSubmit} className="grid gap-5">
 
         {/* Remitente */}
-        <Section title="Remitente" icon={<User className="w-4 h-4" />}>
+        <Section title="Remitente" icon={<User className="w-4 h-4" />}
+          subtitle="El DNI del remitente y del destinatario son necesarios para el guardado automático del borrador."
+        >
           <Row2>
             <Field label="DNI *">
               <div style={{ position: "relative" }}>
@@ -560,6 +564,26 @@ export function NewShipment() {
                 onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" />
             </Field>
           </Row2>
+          {/* CA-05: Privacy notice — shown once the operator starts filling in recipient data */}
+          {(form.recipient.name || form.recipient.dni) && (
+            <div style={{
+              marginTop: 8,
+              padding: "10px 14px",
+              borderRadius: 8,
+              border: "1px solid #e0f2fe",
+              background: "#f0f9ff",
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+            }}>
+              <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+              <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+                Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
+                <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
+                Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* Sucursales */}
@@ -791,7 +815,10 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
             {loading && <span className="text-[11px] text-white/70">Calculando…</span>}
           </div>
           {quote ? (
-            <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+            <>
+              <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+              <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+            </>
           ) : (
             <p className="mt-1 text-sm text-white/80">
               Completá peso, tipo de paquete y direcciones para ver la cotización.
@@ -879,12 +906,15 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   );
 }
 
-function Section({ title, children, icon }: { title: string; children: React.ReactNode; icon?: React.ReactNode }) {
+function Section({ title, subtitle, children, icon }: { title: string; subtitle?: string; children: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="flex items-center gap-2 border-b border-slate-100">
-        {icon && <span className="text-slate-500">{icon}</span>}
-        <CardTitle>{title}</CardTitle>
+      <CardHeader className="flex items-start gap-2 border-b border-slate-100">
+        {icon && <span className="text-slate-500 mt-0.5">{icon}</span>}
+        <div>
+          <CardTitle>{title}</CardTitle>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+        </div>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">{children}</CardContent>
     </Card>

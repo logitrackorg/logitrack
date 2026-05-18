@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -104,6 +104,7 @@ export function MapView({
   // Refs para leer valores actuales dentro de fetchRoute (evita stale closures)
   const userLocationRef = useRef(userLocation);
   const simulationModeRef = useRef(simulationMode);
+  const fetchRouteRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
   useEffect(() => { userLocationRef.current = userLocation; }, [userLocation]);
   useEffect(() => { simulationModeRef.current = simulationMode; }, [simulationMode]);
 
@@ -207,13 +208,14 @@ export function MapView({
     // Ajustar vista
     const allPoints: [number, number][] = waypoints.map((wp) => [wp.latitude, wp.longitude]);
     if (origin) allPoints.push([origin.latitude, origin.longitude]);
-    if (userLocation) allPoints.push([userLocation.lat, userLocation.lng]);
+    const curLoc = userLocationRef.current;
+    if (curLoc) allPoints.push([curLoc.lat, curLoc.lng]);
     mapInstance.current.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50] });
 
     // Fetch inmediato cuando cambian waypoints (entrega confirmada, etc.)
     const waypointsKey = waypoints.map((w) => `${w.tracking_id}:${w.status}`).join(",");
-    lastFetchRef.current = { waypointsKey, position: userLocation ?? null, time: Date.now() };
-    fetchRoute();
+    lastFetchRef.current = { waypointsKey, position: userLocationRef.current ?? null, time: Date.now() };
+    fetchRouteRef.current();
   }, [waypoints, origin]);
 
   // Actualizar marcador GPS del chofer (debounced reroute)
@@ -241,7 +243,7 @@ export function MapView({
 
 
     // En simulación: split local sin llamar a OSRM
-    if (simulationMode === "simulate") {
+    if (simulationModeRef.current === "simulate") {
       splitRouteAtGps(userLocation);
       return;
     }
@@ -254,7 +256,7 @@ export function MapView({
 
     if (distMoved || timePassed) {
       lastFetchRef.current = { ...last, position: userLocation, time: now };
-      fetchRoute();
+      fetchRouteRef.current();
     }
   }, [userLocation]);
 
@@ -267,7 +269,7 @@ export function MapView({
     if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
     // Disparar fetchRoute para redibujar correctamente según el nuevo modo
-    fetchRoute();
+    fetchRouteRef.current();
   }, [simulationMode]);
 
   const createMarker = (wp: Waypoint) => {
@@ -454,6 +456,7 @@ export function MapView({
       setLoading(false);
     }
   };
+  useLayoutEffect(() => { fetchRouteRef.current = fetchRoute; });
 
   // Event listener para clicks en popups
   useEffect(() => {

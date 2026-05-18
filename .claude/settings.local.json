@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__atlassian__editJiraIssue",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "PowerShell($data = Get-Content \"C:\\\\Users\\\\usuario\\\\.claude\\\\projects\\\\C--Users-usuario-Desktop-logitrack\\\\ffe7699c-04c0-4caa-acd0-099fcc7ebdd9\\\\tool-results\\\\mcp-atlassian-searchJiraIssuesUsingJql-1778245968183.txt\" | ConvertFrom-Json; Write-Host \"Total:\" $data.issues.totalCount; $data.issues.nodes | ForEach-Object { $_.key })",
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__atlassian__searchConfluenceUsingCql",
+      "mcp__atlassian__getConfluenceSpaces",
+      "mcp__atlassian__search",
+      "mcp__atlassian__getJiraIssue",
+      "mcp__atlassian__getIssueLinkTypes",
+      "mcp__atlassian__createJiraIssue",
+      "mcp__atlassian__createIssueLink",
+      "Bash(go test *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

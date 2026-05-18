@@ -239,6 +239,11 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	} else if branchID := c.Query("branch_id"); branchID != "" {
 		filter.ReceivingBranchID = branchID
 	}
+	// Only supervisor and manager may request expired drafts.
+	if c.Query("include_expired") == "true" &&
+		(user.Role == model.RoleSupervisor || user.Role == model.RoleManager) {
+		filter.IncludeExpired = true
+	}
 	shipments, err := h.svc.List(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -267,6 +272,11 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
+		// Expired drafts are invisible to everyone except admins.
+		if shipment.Status == model.StatusExpired && user.Role != model.RoleAdmin {
+			c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+			return
+		}
 		if operatorReadForbidden(c, user, shipment) {
 			return
 		}

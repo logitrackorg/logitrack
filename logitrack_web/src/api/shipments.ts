@@ -40,7 +40,8 @@ export type ShipmentStatus =
   | "returned"
   | "cancelled"
   | "lost"
-  | "destroyed";
+  | "destroyed"
+  | "expired";
 export type PackageType = "envelope" | "box";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
@@ -204,7 +205,7 @@ export interface UpdateStatusPayload {
 }
 
 export const shipmentApi = {
-  list: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
+  list: (params?: { date_from?: string; date_to?: string; branch_id?: string; include_expired?: string }) =>
     api.get<Shipment[]>("/shipments", { params }).then((r) => r.data),
   get: (trackingId: string) =>
     api.get<Shipment>(`/shipments/${trackingId}`).then((r) => r.data),

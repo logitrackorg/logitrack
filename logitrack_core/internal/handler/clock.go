@@ -11,9 +11,27 @@ import (
 // ClockHandler expone endpoints admin para inspeccionar y manipular el reloj
 // global del sistema (testing). Sin servicio dedicado: delega directo al
 // paquete clock.
-type ClockHandler struct{}
+//
+// afterOverride, si se provee, se ejecuta en una goroutine cada vez que el
+// override cambia (set o clear). Se usa para correr los jobs de ciclo de vida
+// de borradores con el nuevo reloj.
+type ClockHandler struct {
+	afterOverride func()
+}
 
-func NewClockHandler() *ClockHandler { return &ClockHandler{} }
+func NewClockHandler(afterOverride ...func()) *ClockHandler {
+	h := &ClockHandler{}
+	if len(afterOverride) > 0 {
+		h.afterOverride = afterOverride[0]
+	}
+	return h
+}
+
+func (h *ClockHandler) triggerAfter() {
+	if h.afterOverride != nil {
+		go h.afterOverride()
+	}
+}
 
 type clockState struct {
 	SystemNow string `json:"system_now"`
@@ -59,10 +77,12 @@ func (h *ClockHandler) Set(c *gin.Context) {
 		return
 	}
 	clock.SetOverride(target)
+	h.triggerAfter()
 	c.JSON(http.StatusOK, currentState())
 }
 
 func (h *ClockHandler) Clear(c *gin.Context) {
 	clock.ClearOverride()
+	h.triggerAfter()
 	c.JSON(http.StatusOK, currentState())
 }

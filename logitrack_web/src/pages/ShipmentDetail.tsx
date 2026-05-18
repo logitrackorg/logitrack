@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, Truck } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -52,6 +52,7 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   cancelled:            [],
   lost:                 [],
   destroyed:            [],
+  expired:              [],
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -72,6 +73,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   cancelled:            "Cancelado",
   lost:                 "Extraviado",
   destroyed:            "Daño total",
+  expired:              "Borrador expirado",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -141,10 +143,6 @@ export function ShipmentDetail() {
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
   const [reservedTrip, setReservedTrip] = useState<InterBranchTrip | null>(null);
-  // Auto-save draft state
-  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -303,25 +301,6 @@ export function ShipmentDetail() {
       setReservedTrip(null);
     }
   }, [shipment?.reserved_for_trip_id]);
-
-  // Auto-save draft changes — debounced 800ms whenever draftForm changes
-  useEffect(() => {
-    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
-    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
-    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
-    draftAutoSaveTimer.current = setTimeout(async () => {
-      setDraftAutoSaveStatus('saving');
-      try {
-        await shipmentApi.updateDraft(trackingId, draftForm);
-        setDraftAutoSaveStatus('saved');
-        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
-      } catch {
-        setDraftAutoSaveStatus('error');
-      }
-    }, 800);
-    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftForm]);
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -677,7 +656,7 @@ export function ShipmentDetail() {
           onDiscard={handleDiscardDraft}
           confirming={confirming}
           confirmError={confirmError}
-          autoSaveStatus={draftAutoSaveStatus}
+
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
           branches={branches}
@@ -1462,14 +1441,13 @@ function findFinalBranch(recipientAddress: { province?: string; latitude?: numbe
   return null;
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, branches }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, createdAt, draftId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
   onDiscard: () => void;
   confirming: boolean;
   confirmError: string;
-  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
   branches: Branch[];
@@ -1478,6 +1456,30 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   const { user } = useAuth();
   const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
   const [discardConfirm, setDiscardConfirm] = useState(false);
+
+  // Auto-save: debounced 1 s after every form change
+  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
+  const [autoSaveError, setAutoSaveError] = useState("");
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      setAutoSaveStatus("saving");
+      setAutoSaveError("");
+      try {
+        await shipmentApi.updateDraft(draftId, form);
+        setAutoSaveStatus("saved");
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        setAutoSaveError(msg ?? "No se pudieron guardar los cambios.");
+        setAutoSaveStatus("error");
+      }
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
     onChange({ ...form, sender: { ...form.sender, [field]: value } });
@@ -1690,6 +1692,26 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           </DField>
           <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
         </div>
+        {/* CA-05: Privacy notice — shown once the operator has entered recipient data */}
+        {(form.recipient.name || form.recipient.dni) && (
+          <div style={{
+            marginTop: 10,
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid #e0f2fe",
+            background: "#f0f9ff",
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+            <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+              Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
+              <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
+              Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
+            </p>
+          </div>
+        )}
       </fieldset>
 
       {/* Sucursales */}
@@ -1792,7 +1814,10 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
                 {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
               </div>
               {quote ? (
-                <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                <>
+                  <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                  <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+                </>
               ) : (
                 <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
               )}
@@ -1816,26 +1841,27 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-          {autoSaveStatus === 'saving' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#92400e" }}>
-              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
-              Guardando…
+          {/* Auto-save status */}
+          {autoSaveStatus === "saving" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#78350f" }}>
+              <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
             </span>
           )}
-          {autoSaveStatus === 'saved' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#16a34a" }}>
-              <Check style={{ width: 13, height: 13 }} />
-              Guardado
+          {autoSaveStatus === "saved" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#15803d" }}>
+              <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
             </span>
           )}
-          {autoSaveStatus === 'error' && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>Error al guardar</span>
+          {autoSaveStatus === "error" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#dc2626" }}>
+              <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
+            </span>
           )}
         </div>
-        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar el envío ingresará al sistema logístico.
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
@@ -1932,7 +1958,7 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
     at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
     redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
     delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
-    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937",
+    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
   };
 
   const solidLine = (color = "#e5e7eb") => (

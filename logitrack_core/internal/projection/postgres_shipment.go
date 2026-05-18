@@ -328,7 +328,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 }
 
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
-	query := `
+	selectCols := `
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
@@ -338,7 +338,15 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id
-		FROM shipments WHERE 1=1`
+		FROM shipments WHERE `
+	var statusCond string
+	if filter.IncludeExpired {
+		// Include non-expired + expired that haven't had PII purged yet
+		statusCond = "(status != 'expired' OR (status = 'expired' AND pii_purged_at IS NULL))"
+	} else {
+		statusCond = "status != 'expired'"
+	}
+	query := selectCols + statusCond
 	args := []interface{}{}
 	i := 1
 	if filter.ReceivingBranchID != "" {
@@ -379,11 +387,12 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments
-		WHERE LOWER(tracking_id) LIKE $1
-		   OR LOWER(sender->>'name') LIKE $1
-		   OR LOWER(recipient->>'name') LIKE $1
-		   OR LOWER(sender->'address'->>'city') LIKE $1
-		   OR LOWER(recipient->'address'->>'city') LIKE $1
+		WHERE status != 'expired'
+		  AND (   LOWER(tracking_id) LIKE $1
+		       OR LOWER(sender->>'name') LIKE $1
+		       OR LOWER(recipient->>'name') LIKE $1
+		       OR LOWER(sender->'address'->>'city') LIKE $1
+		       OR LOWER(recipient->'address'->>'city') LIKE $1)
 		ORDER BY tracking_id ASC`, q)
 	if err != nil {
 		return nil, err
@@ -406,9 +415,9 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	var rows *sql.Rows
 	var err error
 	if branchFilter != "" {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE receiving_branch_id = $1`, branchFilter)
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
 	} else {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments`)
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired'`)
 	}
 	if err != nil {
 		return model.Stats{}, err

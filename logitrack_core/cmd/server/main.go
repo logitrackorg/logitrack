@@ -103,7 +103,18 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
-	clockHandler := handler.NewClockHandler()
+	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
+	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
+	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
+	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
+	draftScheduler.Start()
+
+	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
+	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
+	clockHandler := handler.NewClockHandler(func() {
+		draftLifecycleSvc.RunExpirationJob()
+		draftLifecycleSvc.RunPurgeJob()
+	})
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
@@ -314,10 +325,18 @@ func main() {
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
 
-	// System clock override — admin only, in-memory only (testing).
-	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
+	// System clock override — GET is open to all authenticated users (read-only, safe).
+	// PATCH/DELETE are admin-only (mutations).
+	protected.GET("/admin/clock", clockHandler.Get)
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
+
+	// Draft lifecycle / compliance (Ley 25.326) — admin only
+	protected.GET("/admin/compliance/audit", adminOnly, draftLifecycleHandler.GetAuditLog)
+	protected.GET("/admin/compliance/drafts", adminOnly, draftLifecycleHandler.FindByDNI)
+	protected.POST("/admin/compliance/suppress", adminOnly, draftLifecycleHandler.Suppress)
+	protected.POST("/admin/compliance/expire-drafts", adminOnly, draftLifecycleHandler.TriggerExpiration)
+	protected.POST("/admin/compliance/purge-pii", adminOnly, draftLifecycleHandler.TriggerPurge)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
