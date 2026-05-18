@@ -26,6 +26,7 @@ import { UserProfile } from "./pages/UserProfile";
 import { DraftList } from "./pages/DraftList";
 import { ZoneManagement } from "./pages/ZoneManagement";
 import { FatigueConfig } from "./pages/FatigueConfig";
+import { SupervisorFatigue } from "./pages/SupervisorFatigue";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -52,6 +53,9 @@ function Nav() {
 
       {hasRole("supervisor", "manager") && (
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
+      )}
+      {hasRole("supervisor", "manager") && (
+        <NavLink to="/supervisor/fatigue" style={navStyle}>Fatiga</NavLink>
       )}
       {!hasRole("admin") && (
         <NavLink to="/" end style={navStyle}>Envíos</NavLink>
@@ -262,6 +266,12 @@ function AppRoutes() {
           <Route path="/fatigue-config" element={
             <ProtectedRoute roles={["admin"]}>
               <FatigueConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/supervisor/fatigue" element={
+            <ProtectedRoute roles={["supervisor", "manager"]}>
+              <SupervisorFatigue />
             </ProtectedRoute>
           } />
 

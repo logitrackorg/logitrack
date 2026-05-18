@@ -20,6 +20,10 @@ type DriverCheckin struct {
 	KSSLevel   int       `json:"kss_level"`   // 1–9
 	RecordedAt time.Time `json:"recorded_at"`
 
+	// Skipped is true when the driver chose to bypass the fatigue gate.
+	// The gate is hidden for 3 hours after a skip (grace period).
+	Skipped bool `json:"skipped,omitempty"`
+
 	// Voice analysis — populated after POST /driver/voice-upload.
 	// Nil when the driver skipped the voice step.
 	VoiceMetrics *VoiceMetrics `json:"voice_metrics,omitempty"`

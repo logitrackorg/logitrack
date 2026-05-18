@@ -104,11 +104,14 @@ func todayAR() string {
 	return time.Now().In(time.FixedZone("ART", -3*60*60)).Format("2006-01-02")
 }
 
+// skipGracePeriod is how long a "saltar" choice suppresses the fatigue gate.
+const skipGracePeriod = 3 * time.Hour
+
 // GetTodayCheckin returns the authenticated driver's check-in for today.
-// Returns 404 when:
+// Returns 404 (gate re-appears) when:
 //   - no check-in has been recorded yet, OR
-//   - an admin reset was triggered after the existing check-in (gate re-opens,
-//     data preserved; driver can redo or skip the check-in).
+//   - an admin reset was triggered after the existing check-in, OR
+//   - the driver had skipped and the 3-hour grace period has elapsed.
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
@@ -116,10 +119,40 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
 		return
 	}
-	// If a reset was triggered after this check-in was recorded, treat it as
-	// "not done" so the fatigue gate re-appears for the driver.
+	// Admin reset: invalidate any check-in recorded before the reset timestamp.
 	if cfg := h.fatigueSvc.Get(); cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "check-in requiere renovación"})
+		return
+	}
+	// Skipped grace period: after 3 h the gate re-appears so the driver is
+	// prompted again — without deleting the skip record from history.
+	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
+		c.JSON(http.StatusNotFound, gin.H{"error": "período de gracia de salto expirado"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
+// SkipCheckin records that the driver deliberately bypassed the fatigue gate.
+// The gate will be suppressed for 3 hours; the skip appears in the driver's history.
+func (h *DriverHandler) SkipCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	today := todayAR()
+
+	// Preserve any previously stored baseline voice data so it isn't wiped by a skip.
+	existing, _ := h.checkinRepo.Get(user.ID, today)
+
+	rec := model.DriverCheckin{
+		DriverID:      user.ID,
+		Date:          today,
+		Skipped:       true,
+		RecordedAt:    time.Now(),
+		VoiceMetrics:  existing.VoiceMetrics,
+		DriftScore:    existing.DriftScore,
+		BaselineVoice: existing.BaselineVoice,
+	}
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el salto"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})

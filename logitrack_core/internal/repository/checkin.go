@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/logitrack/core/internal/model"
@@ -61,9 +62,10 @@ func (r *CheckinRepository) AllForDriver(driverID string) []model.DriverCheckin 
 	if err != nil {
 		return nil
 	}
+	prefix := driverID + "|"
 	var out []model.DriverCheckin
 	for k, v := range records {
-		if len(k) > len(driverID) && k[:len(driverID)] == driverID {
+		if strings.HasPrefix(k, prefix) {
 			out = append(out, v)
 		}
 	}

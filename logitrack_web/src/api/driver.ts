@@ -86,6 +86,10 @@ export const driverApi = {
     api.get<{ ok: boolean }>("/driver/checkin/today").then((r) => r.data),
   submitCheckin: (payload: CheckInPayload) =>
     api.post("/driver/checkin", payload).then((r) => r.data),
+  /** Registra que el chofer eligió saltear el check-in de fatiga.
+   *  El gate queda suprimido 3 horas; el salto queda en el historial. */
+  skipCheckin: () =>
+    api.post<{ ok: boolean }>("/driver/checkin/skip").then((r) => r.data),
   getControlPhrase: () =>
     api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
   uploadVoice: (audioBlob: Blob) => {

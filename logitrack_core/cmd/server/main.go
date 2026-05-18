@@ -103,6 +103,7 @@ func main() {
 	fatigueConfigRepo := repository.NewFatigueConfigRepository()
 	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
 	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc)
+	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
@@ -233,6 +234,7 @@ func main() {
 	// Stats / dashboard — supervisor, manager
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
+	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 
 	// Driver route — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
@@ -240,6 +242,7 @@ func main() {
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
+	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Moon, SkipForward, Send } from "lucide-react";
+import { AlertTriangle, Moon, SkipForward, Send } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 
@@ -34,6 +34,24 @@ export function KssCheckIn({ driverId, onDone }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Estado del modal de confirmación de salto
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+
+  const handleSkipConfirmed = async () => {
+    setSkipping(true);
+    try {
+      await driverApi.skipCheckin();
+    } catch {
+      // Si falla el registro del salto, dejamos pasar de todas formas
+      // para no bloquear al chofer — el error es no crítico.
+    } finally {
+      setSkipping(false);
+      setShowSkipConfirm(false);
+      onDone();
+    }
+  };
+
   const horasNum = parseInt(horasSueno, 10);
   const horasValid = !Number.isNaN(horasNum) && horasNum >= 0 && horasNum <= 10;
   const canSubmit = horasValid && !submitting;
@@ -63,7 +81,7 @@ export function KssCheckIn({ driverId, onDone }: Props) {
       {/* Skip button */}
       <div className="flex justify-end px-4 pt-4">
         <button
-          onClick={onDone}
+          onClick={() => setShowSkipConfirm(true)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
         >
           <SkipForward className="w-3.5 h-3.5" />
@@ -157,6 +175,47 @@ export function KssCheckIn({ driverId, onDone }: Props) {
           </button>
         </div>
       </div>
+
+      {/* ── Modal de confirmación de salto ──────────────────────────── */}
+      {showSkipConfirm && (
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-[#0f2744] border border-slate-600 p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h2 className="text-base font-bold text-white leading-snug">
+                ¿Confirmar saltar el check-in?
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed mb-2">
+              Tu decisión quedará <strong className="text-white">registrada en el historial</strong> y será visible para tu supervisor.
+            </p>
+            <p className="text-sm text-slate-400 leading-relaxed mb-6">
+              Podrás acceder a tu ruta por las próximas{" "}
+              <strong className="text-slate-200">3 horas</strong>. Pasado ese tiempo, el sistema te pedirá completar el check-in nuevamente.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowSkipConfirm(false)}
+                disabled={skipping}
+                className="h-11 rounded-xl border border-slate-600 text-slate-300 text-sm font-semibold hover:bg-slate-700 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                Volver
+              </button>
+              <button
+                onClick={handleSkipConfirmed}
+                disabled={skipping}
+                className="h-11 rounded-xl bg-slate-600 hover:bg-slate-500 active:bg-slate-400 disabled:opacity-50 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+              >
+                {skipping ? "Registrando…" : "Sí, saltear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
