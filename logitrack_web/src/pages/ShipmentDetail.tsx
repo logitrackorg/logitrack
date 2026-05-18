@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-<<<<<<< HEAD
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle } from "lucide-react";
-=======
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, Truck } from "lucide-react";
->>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -146,15 +142,7 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
-<<<<<<< HEAD
-
-=======
   const [reservedTrip, setReservedTrip] = useState<InterBranchTrip | null>(null);
-  // Auto-save draft state
-  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
->>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -306,9 +294,6 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
-<<<<<<< HEAD
-
-=======
   useEffect(() => {
     if (shipment?.reserved_for_trip_id) {
       tripsApi.getByID(shipment.reserved_for_trip_id).then(setReservedTrip).catch(() => setReservedTrip(null));
@@ -316,26 +301,6 @@ export function ShipmentDetail() {
       setReservedTrip(null);
     }
   }, [shipment?.reserved_for_trip_id]);
-
-  // Auto-save draft changes — debounced 800ms whenever draftForm changes
-  useEffect(() => {
-    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
-    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
-    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
-    draftAutoSaveTimer.current = setTimeout(async () => {
-      setDraftAutoSaveStatus('saving');
-      try {
-        await shipmentApi.updateDraft(trackingId, draftForm);
-        setDraftAutoSaveStatus('saved');
-        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
-      } catch {
-        setDraftAutoSaveStatus('error');
-      }
-    }, 800);
-    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftForm]);
->>>>>>> 6459c1a04b5f12f9eaf81de9f173a8763daf26e1
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
