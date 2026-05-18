@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, Package, CheckCheck, X } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
@@ -27,6 +27,7 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const fetchCount = useCallback(async () => {
     try {
@@ -81,6 +82,20 @@ export function NotificationBell() {
     return () => {
       es?.close();
       if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [fetchCount]);
+
+  // Refetch count on SPA navigation (e.g. user marks as read on /notifications
+  // then goes back) and on tab/window focus (coming back from another tab).
+  useEffect(() => { fetchCount(); }, [location.pathname, fetchCount]);
+  useEffect(() => {
+    const onVisibility = () => { if (!document.hidden) fetchCount(); };
+    const onFocus = () => fetchCount();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
     };
   }, [fetchCount]);
 
