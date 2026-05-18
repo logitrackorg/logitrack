@@ -102,7 +102,8 @@ func main() {
 
 	fatigueConfigRepo := repository.NewFatigueConfigRepository()
 	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
-	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc)
+	auditLogRepo := repository.NewAuditLogRepository()
+	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc, auditLogRepo)
 	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
@@ -120,7 +121,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -243,6 +244,7 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT) // US6: PVT mini-game
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 
@@ -271,6 +273,8 @@ func main() {
 	protected.GET("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Get)
 	protected.PUT("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Update)
 	protected.POST("/admin/fatigue-config/reset-checkins", adminOnly, fatigueConfigHandler.ResetCheckins)
+	// Audit logs — strictly GET only. No DELETE/PUT (immutability enforced, AC2).
+	protected.GET("/admin/audit-logs", adminOnly, fatigueConfigHandler.ListAuditLogs)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)

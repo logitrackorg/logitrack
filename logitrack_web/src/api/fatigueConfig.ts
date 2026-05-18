@@ -38,6 +38,22 @@ export interface FatigueConfig {
   last_checkin_reset?: string | null;
 }
 
+// ── Audit logs (US13) ────────────────────────────────────────────────────────
+
+/** Immutable audit record. Naming mirrors MLConfig (created_at / created_by). */
+export interface AuditLog {
+  id: string;
+  created_at: string;   // ISO 8601
+  created_by: string;   // username of the actor (admin or driver)
+  action: "UPDATE_FATIGUE_CONFIG" | "SUBMIT_CHECKIN" | "SKIP_CHECKIN";
+  details: Record<string, unknown>; // JSON snapshot of what changed
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  total: number;
+}
+
 export const fatigueConfigApi = {
   get: () =>
     api.get<FatigueConfig>("/admin/fatigue-config").then((r) => r.data),
@@ -47,4 +63,7 @@ export const fatigueConfigApi = {
    *  Existing check-in data is preserved. */
   resetCheckins: () =>
     api.post<FatigueConfig>("/admin/fatigue-config/reset-checkins").then((r) => r.data),
+  /** Returns all audit records newest-first. Strictly read-only (AC2). */
+  getAuditLogs: () =>
+    api.get<AuditLogsResponse>("/admin/audit-logs").then((r) => r.data),
 };

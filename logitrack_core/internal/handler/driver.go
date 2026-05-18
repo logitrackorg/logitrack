@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"io"
 	"math"
 	"math/rand"
@@ -23,14 +24,21 @@ type DriverHandler struct {
 	branchRepo  repository.BranchRepository
 	checkinRepo *repository.CheckinRepository
 	fatigueSvc  *service.FatigueConfigService
+	auditRepo   *repository.AuditLogRepository
 }
 
-func NewDriverHandler(routeSvc *service.RouteService, branchRepo repository.BranchRepository, fatigueSvc *service.FatigueConfigService) *DriverHandler {
+func NewDriverHandler(
+	routeSvc *service.RouteService,
+	branchRepo repository.BranchRepository,
+	fatigueSvc *service.FatigueConfigService,
+	auditRepo *repository.AuditLogRepository,
+) *DriverHandler {
 	return &DriverHandler{
 		routeSvc:    routeSvc,
 		branchRepo:  branchRepo,
 		checkinRepo: repository.NewCheckinRepository(),
 		fatigueSvc:  fatigueSvc,
+		auditRepo:   auditRepo,
 	}
 }
 
@@ -155,6 +163,22 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el salto"})
 		return
 	}
+
+	// Audit — non-blocking (AC1).
+	if detailsJSON, merr := json.Marshal(struct {
+		DriverID string `json:"driver_id"`
+		Date     string `json:"date"`
+		Skipped  bool   `json:"skipped"`
+	}{rec.DriverID, rec.Date, true}); merr == nil {
+		_ = h.auditRepo.Append(model.AuditLog{
+			ID:        model.NewAuditID(),
+			CreatedAt: time.Now(),
+			CreatedBy: user.Username,
+			Action:    "SKIP_CHECKIN",
+			Details:   json.RawMessage(detailsJSON),
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
 }
 
@@ -198,7 +222,63 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el check-in"})
 		return
 	}
+
+	// Audit — non-blocking (AC1).
+	if detailsJSON, merr := json.Marshal(struct {
+		DriverID   string `json:"driver_id"`
+		Date       string `json:"date"`
+		KSSLevel   int    `json:"kss_level"`
+		HorasSueno int    `json:"horas_sueno"`
+	}{rec.DriverID, rec.Date, rec.KSSLevel, rec.HorasSueno}); merr == nil {
+		_ = h.auditRepo.Append(model.AuditLog{
+			ID:        model.NewAuditID(),
+			CreatedAt: time.Now(),
+			CreatedBy: user.Username,
+			Action:    "SUBMIT_CHECKIN",
+			Details:   json.RawMessage(detailsJSON),
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
+// ── US6: PVT (Psychomotor Vigilance Task) ─────────────────────────────────────
+
+// SubmitPVT receives the reaction-time mini-game results and persists them in
+// the driver's daily check-in record. The endpoint is optional — drivers may
+// skip the PVT entirely (AC1).
+func (h *DriverHandler) SubmitPVT(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	var body struct {
+		LatenciaPromedioMs float64 `json:"latencia_promedio_ms"`
+		Aciertos           int     `json:"aciertos"`
+		Errores            int     `json:"errores"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+
+	today := todayAR()
+	rec, _ := h.checkinRepo.Get(user.ID, today)
+	rec.DriverID = user.ID
+	rec.Date = today
+	if rec.RecordedAt.IsZero() {
+		rec.RecordedAt = time.Now()
+	}
+	rec.PVTMetrics = &model.PVTResult{
+		LatenciaPromedioMs: body.LatenciaPromedioMs,
+		Aciertos:           body.Aciertos,
+		Errores:            body.Errores,
+		RecordedAt:         time.Now(),
+	}
+
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el resultado PVT"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "pvt": rec.PVTMetrics})
 }
 
 // ── US2: Voice check-in ───────────────────────────────────────────────────────

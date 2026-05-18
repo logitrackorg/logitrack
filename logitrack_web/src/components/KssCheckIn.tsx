@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Info, Moon, Shield, SkipForward, Send, X } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { VoiceCheckIn } from "./VoiceCheckIn";
+import { PVTCheckIn } from "./PVTCheckIn";
 
 const KSS_LEVELS = [
   { value: 1, label: "Extremadamente alerta" },
@@ -28,7 +29,7 @@ interface Props {
 }
 
 export function KssCheckIn({ driverId, onDone }: Props) {
-  const [step, setStep] = useState<"kss" | "voice">("kss");
+  const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(5);
   const [submitting, setSubmitting] = useState(false);
@@ -74,9 +75,14 @@ export function KssCheckIn({ driverId, onDone }: Props) {
     }
   };
 
-  // Render the voice step as a full replacement of this screen.
+  // Render voice step — al terminar avanza a PVT (opcional).
   if (step === "voice") {
-    return <VoiceCheckIn onDone={onDone} />;
+    return <VoiceCheckIn onDone={() => setStep("pvt")} />;
+  }
+
+  // Render PVT step — al terminar (con o sin registro) llama onDone.
+  if (step === "pvt") {
+    return <PVTCheckIn driverId={driverId} onDone={onDone} />;
   }
 
   return (

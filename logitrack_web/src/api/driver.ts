@@ -79,6 +79,20 @@ export interface VoiceUploadResult {
   baseline: VoiceMetrics | null;
 }
 
+// US6: PVT (Psychomotor Vigilance Task)
+export interface PVTPayload {
+  latencia_promedio_ms: number;
+  aciertos: number;
+  errores: number;
+}
+
+export interface PVTResult {
+  latencia_promedio_ms: number;
+  aciertos: number;
+  errores: number;
+  recorded_at: string;
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
@@ -90,6 +104,10 @@ export const driverApi = {
    *  El gate queda suprimido 3 horas; el salto queda en el historial. */
   skipCheckin: () =>
     api.post<{ ok: boolean }>("/driver/checkin/skip").then((r) => r.data),
+  /** Envía el resultado del minijuego PVT (US6). Opcional — el backend acepta
+   *  la llamada incluso si no hay un KSS registrado en el día. */
+  submitPVT: (payload: PVTPayload) =>
+    api.post<{ ok: boolean; pvt: PVTResult }>("/driver/pvt-test", payload).then((r) => r.data),
   getControlPhrase: () =>
     api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
   uploadVoice: (audioBlob: Blob) => {

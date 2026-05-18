@@ -32,4 +32,17 @@ type DriverCheckin struct {
 	// BaselineVoice is the running average of all previous VoiceMetrics for this driver.
 	// It is updated every time a new voice sample is successfully processed.
 	BaselineVoice *VoiceMetrics `json:"baseline_voice,omitempty"`
+
+	// PVTMetrics holds the optional psychomotor vigilance task result (US6).
+	// Nil when the driver skipped or did not complete the PVT mini-game.
+	PVTMetrics *PVTResult `json:"pvt_metrics,omitempty"`
+}
+
+// PVTResult contains the objective psychomotor metrics captured by the
+// reaction-time mini-game (Psychomotor Vigilance Task).
+type PVTResult struct {
+	LatenciaPromedioMs float64   `json:"latencia_promedio_ms"` // mean response latency
+	Aciertos           int       `json:"aciertos"`             // correct circle taps
+	Errores            int       `json:"errores"`              // false positives (taps with no stimulus)
+	RecordedAt         time.Time `json:"recorded_at"`
 }

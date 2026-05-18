@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Brain, FlaskConical, RotateCcw } from "lucide-react";
+import { AlertCircle, CheckCircle2, Brain, ChevronDown, ChevronUp, ClipboardList, FlaskConical, RotateCcw } from "lucide-react";
 import {
   fatigueConfigApi,
+  type AuditLog,
   type FatigueConfig as FatigueConfigType,
   type VoiceWeights,
 } from "../api/fatigueConfig";
@@ -48,6 +49,29 @@ export function FatigueConfig() {
   const [resetError, setResetError] = useState("");
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // historial de auditoría (US13)
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[] | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState("");
+
+  const reloadAuditLogs = () => {
+    setAuditLoading(true);
+    setAuditError("");
+    fatigueConfigApi
+      .getAuditLogs()
+      .then((r) => setAuditLogs(r.logs))
+      .catch(() => setAuditError("No se pudo cargar el historial de auditoría."))
+      .finally(() => setAuditLoading(false));
+  };
+
+  const handleToggleAudit = () => {
+    const next = !auditOpen;
+    setAuditOpen(next);
+    // Carga lazy: solo busca la primera vez que se abre.
+    if (next && auditLogs === null) reloadAuditLogs();
+  };
+
   useEffect(() => {
     fatigueConfigApi
       .get()
@@ -70,6 +94,8 @@ export function FatigueConfig() {
       setDraft(updated);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 4000);
+      // Refresca el historial para mostrar el nuevo registro inmediatamente.
+      reloadAuditLogs();
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -451,11 +477,150 @@ export function FatigueConfig() {
           )}
         </div>
       </div>
+
+      {/* ── Historial de auditoría (US13) ──────────────────────────── */}
+      <Card>
+        {/* Encabezado clickeable — igual que el patrón de MLConfig */}
+        <button
+          type="button"
+          onClick={handleToggleAudit}
+          className="w-full flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50/80 transition-colors rounded-xl text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <ClipboardList className="w-4 h-4 text-[#1e3a5f]" />
+            Historial de auditoría
+            {auditLogs !== null && (
+              <span className="ml-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                {auditLogs.length}
+              </span>
+            )}
+          </span>
+          {auditOpen
+            ? <ChevronUp className="w-4 h-4 text-slate-400" />
+            : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+
+        {auditOpen && (
+          <div className="border-t border-slate-100 px-5 pb-5 pt-3">
+            {auditLoading && (
+              <p className="text-sm text-slate-400 py-6 text-center">Cargando historial…</p>
+            )}
+            {auditError && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700 mb-3">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {auditError}
+              </div>
+            )}
+            {!auditLoading && auditLogs !== null && auditLogs.length === 0 && (
+              <p className="text-sm text-slate-400 italic py-6 text-center">
+                Sin registros todavía. Los cambios se irán acumulando aquí.
+              </p>
+            )}
+            {!auditLoading && auditLogs && auditLogs.length > 0 && (
+              <>
+                {/* Tabla read-only — sin botones de edición ni borrado (AC2) */}
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#f9fafb" }}>
+                        <th style={thStyle}>Fecha / hora</th>
+                        <th style={thStyle}>Usuario</th>
+                        <th style={thStyle}>Acción</th>
+                        <th style={thStyle}>Detalles</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditLogs.map((log) => (
+                        <AuditRow key={log.id} log={log} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400 text-center">
+                  Registro de solo lectura — los cambios no pueden editarse ni eliminarse (AC2).
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
 
 // ── sub-componentes ───────────────────────────────────────────────────────────
+
+const thStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  textAlign: "left",
+  fontWeight: 700,
+  fontSize: 11,
+  color: "#6b7280",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "top",
+};
+
+const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "#dbeafe", color: "#1e40af" },
+  SUBMIT_CHECKIN:        { label: "Check-in",       bg: "#dcfce7", color: "#166534" },
+  SKIP_CHECKIN:          { label: "Salteado",        bg: "#ffedd5", color: "#9a3412" },
+};
+
+function formatAuditDate(iso: string): string {
+  return new Date(iso).toLocaleString("es-AR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function AuditRow({ log }: { log: AuditLog }) {
+  const badge = ACTION_BADGE[log.action] ?? { label: log.action, bg: "#f3f4f6", color: "#374151" };
+  const d = log.details;
+
+  let detailText = "—";
+  if (log.action === "UPDATE_FATIGUE_CONFIG" && d.risk_thresholds) {
+    const rt = d.risk_thresholds as { green_max?: number; red_min?: number };
+    detailText = `verde≤${rt.green_max ?? "?"} · rojo≥${rt.red_min ?? "?"} · baseline ${(d.min_baseline_days as number) ?? "?"} días`;
+  } else if (log.action === "SUBMIT_CHECKIN") {
+    detailText = `KSS ${d.kss_level ?? "?"} · ${d.horas_sueno ?? "?"}h sueño`;
+  } else if (log.action === "SKIP_CHECKIN") {
+    detailText = `Fecha ${d.date ?? "?"}`;
+  }
+
+  return (
+    <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "#374151" }}>
+        {formatAuditDate(log.created_at)}
+      </td>
+      <td style={{ ...tdStyle, fontWeight: 600, color: "#111827" }}>
+        {log.created_by}
+      </td>
+      <td style={tdStyle}>
+        <span style={{
+          background: badge.bg,
+          color: badge.color,
+          borderRadius: 4,
+          padding: "2px 8px",
+          fontWeight: 600,
+          fontSize: 11,
+          whiteSpace: "nowrap",
+        }}>
+          {badge.label}
+        </span>
+      </td>
+      <td style={{ ...tdStyle, color: "#6b7280", fontSize: 12 }}>
+        {detailText}
+      </td>
+    </tr>
+  );
+}
 
 function FieldRow({
   label,
