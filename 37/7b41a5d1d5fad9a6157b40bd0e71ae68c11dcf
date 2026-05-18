@@ -1,0 +1,24 @@
+.gitignore
+  s_dcc482c0e7fb31::t_b21a58f0469db0 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "377b41a5d1d5fad9a6157b40bd0e71ae68c11dcf",
+  "prompts": {},
+  "humans": {
+    "h_8566b79e42b0cc": {
+      "author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_dcc482c0e7fb31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82881431-5ae9-400a-9f53-663ffa351603",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
