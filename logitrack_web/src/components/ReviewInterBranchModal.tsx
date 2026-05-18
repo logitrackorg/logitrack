@@ -265,7 +265,6 @@ export function ReviewInterBranchModal({
                 originBranch={originBranch}
                 stops={mapStops}
                 branches={branches}
-                polylineCoords={a.polyline_coords}
               />
             </div>
 
