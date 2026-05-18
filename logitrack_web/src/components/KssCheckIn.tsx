@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Moon, SkipForward, Send } from "lucide-react";
+import { AlertTriangle, Info, Moon, Shield, SkipForward, Send, X } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 
@@ -33,6 +33,9 @@ export function KssCheckIn({ driverId, onDone }: Props) {
   const [kss, setKss] = useState(5);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Estado del modal de consentimiento informado
+  const [showInfo, setShowInfo] = useState(false);
 
   // Estado del modal de confirmación de salto
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
@@ -78,8 +81,16 @@ export function KssCheckIn({ driverId, onDone }: Props) {
 
   return (
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
-      {/* Skip button */}
-      <div className="flex justify-end px-4 pt-4">
+      {/* Barra superior: ícono de info a la izquierda, saltar a la derecha */}
+      <div className="flex items-center justify-between px-4 pt-4">
+        <button
+          onClick={() => setShowInfo(true)}
+          aria-label="Información sobre los datos recopilados"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-blue-300 hover:bg-slate-700/60 transition-colors cursor-pointer"
+        >
+          <Info className="w-4 h-4" />
+        </button>
+
         <button
           onClick={() => setShowSkipConfirm(true)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
@@ -176,6 +187,77 @@ export function KssCheckIn({ driverId, onDone }: Props) {
         </div>
       </div>
 
+      {/* ── Modal de consentimiento informado (Ley 25.326 art. 6) ───── */}
+      {showInfo && (
+        <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[#0d1f38] border border-slate-700 shadow-2xl flex flex-col max-h-[90dvh]">
+            {/* Encabezado */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-700 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm font-bold text-white leading-snug">
+                  Privacidad y datos recopilados
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Contenido scrolleable */}
+            <div className="overflow-y-auto px-5 py-4 space-y-4 text-xs text-slate-300 leading-relaxed">
+              <Section title="¿Qué datos se recopilan?">
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                  <li>Horas de sueño de la noche anterior</li>
+                  <li>Nivel de somnolencia según la Escala KSS (1–9)</li>
+                  <li>Métricas acústicas de voz: tono, energía, velocidad de habla y pausas</li>
+                  <li>Puntaje de desvío vocal respecto a tu línea base personal</li>
+                  <li>Fecha y hora de cada registro</li>
+                </ul>
+              </Section>
+
+              <Section title="¿Con qué finalidad?">
+                <p className="text-slate-400">
+                  Evaluar el riesgo de fatiga antes de iniciar una jornada de conducción, prevenir accidentes derivados de somnolencia y generar registros históricos con fines de seguridad vial y laboral.
+                </p>
+              </Section>
+
+              <Section title="¿Quién tiene acceso?">
+                <ul className="list-disc list-inside space-y-1 text-slate-400">
+                  <li><span className="text-slate-200 font-medium">Vos</span> — podés consultar tu historial completo</li>
+                  <li><span className="text-slate-200 font-medium">El supervisor de tu sucursal</span> — ve el estado del día y el historial de tu sucursal</li>
+                  <li><span className="text-slate-200 font-medium">La administración de la empresa</span> — con fines de gestión de seguridad</li>
+                </ul>
+              </Section>
+
+              <div className="rounded-lg border border-blue-800/50 bg-blue-900/20 px-3 py-2.5">
+                <p className="text-[11px] text-blue-300 font-semibold mb-1">
+                  Ley N.º 25.326 — Art. 6 (Argentina)
+                </p>
+                <p className="text-[11px] text-blue-400 leading-relaxed">
+                  Los datos se recopilan con tu consentimiento expreso, son utilizados exclusivamente para los fines informados y no serán cedidos a terceros sin autorización. Tenés derecho a acceder, rectificar y suprimir tus datos en cualquier momento comunicándote con el responsable del tratamiento.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-slate-700 shrink-0">
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold cursor-pointer transition-colors"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Modal de confirmación de salto ──────────────────────────── */}
       {showSkipConfirm && (
         <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -216,6 +298,15 @@ export function KssCheckIn({ driverId, onDone }: Props) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{title}</p>
+      {children}
     </div>
   );
 }
