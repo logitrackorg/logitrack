@@ -22,13 +22,15 @@ type DriverHandler struct {
 	routeSvc    *service.RouteService
 	branchRepo  repository.BranchRepository
 	checkinRepo *repository.CheckinRepository
+	fatigueSvc  *service.FatigueConfigService
 }
 
-func NewDriverHandler(routeSvc *service.RouteService, branchRepo repository.BranchRepository) *DriverHandler {
+func NewDriverHandler(routeSvc *service.RouteService, branchRepo repository.BranchRepository, fatigueSvc *service.FatigueConfigService) *DriverHandler {
 	return &DriverHandler{
 		routeSvc:    routeSvc,
 		branchRepo:  branchRepo,
 		checkinRepo: repository.NewCheckinRepository(),
+		fatigueSvc:  fatigueSvc,
 	}
 }
 
@@ -103,12 +105,21 @@ func todayAR() string {
 }
 
 // GetTodayCheckin returns the authenticated driver's check-in for today.
-// Returns 404 when no check-in has been recorded yet for today.
+// Returns 404 when:
+//   - no check-in has been recorded yet, OR
+//   - an admin reset was triggered after the existing check-in (gate re-opens,
+//     data preserved; driver can redo or skip the check-in).
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		return
+	}
+	// If a reset was triggered after this check-in was recorded, treat it as
+	// "not done" so the fatigue gate re-appears for the driver.
+	if cfg := h.fatigueSvc.Get(); cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "check-in requiere renovación"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})

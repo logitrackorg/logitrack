@@ -25,6 +25,7 @@ import { AccessLog } from "./pages/AccessLog";
 import { UserProfile } from "./pages/UserProfile";
 import { DraftList } from "./pages/DraftList";
 import { ZoneManagement } from "./pages/ZoneManagement";
+import { FatigueConfig } from "./pages/FatigueConfig";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -72,6 +73,9 @@ function Nav() {
       )}
       {hasRole("admin") && (
         <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
+      )}
+      {hasRole("admin") && (
+        <NavLink to="/fatigue-config" style={navStyle}>Config. fatiga</NavLink>
       )}
       {hasRole("admin") && (
         <NavLink to="/routing-config" style={navStyle}>Config. ruteo</NavLink>
@@ -252,6 +256,12 @@ function AppRoutes() {
           <Route path="/routing-config" element={
             <ProtectedRoute roles={["admin"]}>
               <RoutingConfig />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/fatigue-config" element={
+            <ProtectedRoute roles={["admin"]}>
+              <FatigueConfig />
             </ProtectedRoute>
           } />
 

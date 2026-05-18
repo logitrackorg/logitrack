@@ -100,6 +100,10 @@ func main() {
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
 	routingCfgHandler := handler.NewRoutingConfigHandler(routingCfgSvc)
 
+	fatigueConfigRepo := repository.NewFatigueConfigRepository()
+	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
+	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
@@ -115,7 +119,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -259,6 +263,11 @@ func main() {
 	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
+
+	// Fatigue model configuration — admin only, persisted to data/fatigue_config.json.
+	protected.GET("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Get)
+	protected.PUT("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Update)
+	protected.POST("/admin/fatigue-config/reset-checkins", adminOnly, fatigueConfigHandler.ResetCheckins)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
