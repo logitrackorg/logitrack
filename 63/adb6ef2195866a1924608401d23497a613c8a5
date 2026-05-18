@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "63adb6ef2195866a1924608401d23497a613c8a5",
+  "prompts": {},
+  "humans": {
+    "h_8566b79e42b0cc": {
+      "author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
