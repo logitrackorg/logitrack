@@ -26,10 +26,10 @@ const MAX_DELAY_MS = 3000;
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function latencyInterpretation(avg: number): { text: string; colorClass: string } {
-  if (avg === 0)   return { text: "Sin datos — no hubo aciertos", colorClass: "text-slate-400" };
-  if (avg < 200)   return { text: "Excelente — reflejos muy rápidos",              colorClass: "text-emerald-400" };
-  if (avg < 250)   return { text: "Normal — dentro del rango esperado",            colorClass: "text-blue-400" };
-  if (avg < 300)   return { text: "Leve lentitud — considerá descansar",           colorClass: "text-amber-400" };
+  if (avg === 0)   return { text: "Sin datos — no hubo aciertos",                  colorClass: "text-slate-400" };
+  if (avg < 250)   return { text: "Excelente — reflejos muy rápidos",              colorClass: "text-emerald-400" };
+  if (avg < 350)   return { text: "Normal — dentro del rango esperado",            colorClass: "text-blue-400" };
+  if (avg < 450)   return { text: "Leve lentitud — considerá descansar",           colorClass: "text-amber-400" };
   return             { text: "Lento — se recomienda descansar antes de conducir",  colorClass: "text-rose-400" };
 }
 
@@ -151,15 +151,13 @@ export function PVTCheckIn({ driverId: _driverId, onDone }: Props) {
 
   // ── handlers de interacción ───────────────────────────────────────────────
 
-  /** Toque en la caja sin tocar el círculo → falso positivo cuando no hay estímulo. */
+  /** Toque en la caja:
+   *  - Círculo NO visible → falso positivo (error).
+   *  - Círculo SÍ visible pero fuera de él → toque erróneo (error). */
   const handleBoxPointerDown = () => {
     if (!isPlayingRef.current) return;
-    if (!circleVisible) {
-      errorsRef.current++;
-      setErrorCount(errorsRef.current);
-    }
-    // Tocar la caja cuando el círculo SÍ está visible pero fuera de él:
-    // no penalizamos (el jugador simplemente erró el punto de toque).
+    errorsRef.current++;
+    setErrorCount(errorsRef.current);
   };
 
   /** Toque directo sobre el círculo → acierto con latencia exacta. */

@@ -20,6 +20,13 @@ export interface VoiceMetricsSnapshot {
   pause_ratio: number;
 }
 
+export interface PVTMetricsData {
+  latencia_promedio_ms: number;
+  aciertos: number;
+  errores: number;
+  recorded_at: string;
+}
+
 export interface CheckinRecord {
   driver_id: string;
   date: string;              // YYYY-MM-DD
@@ -30,6 +37,7 @@ export interface CheckinRecord {
   drift_score: number | null;
   has_voice: boolean;
   voice_metrics: VoiceMetricsSnapshot | null;
+  pvt_metrics?: PVTMetricsData | null;
 }
 
 export interface DriverFatigueStatus {
@@ -43,6 +51,7 @@ export interface DriverFatigueStatus {
   horas_sueno: number | null;
   drift_score: number | null;
   has_voice: boolean;
+  pvt_metrics?: PVTMetricsData | null;
   checkin_time: string | null; // ISO timestamp
   history: CheckinRecord[];
 }

@@ -212,7 +212,7 @@ export function VoiceCheckIn({ onDone }: Props) {
                 onClick={onDone}
                 className="mt-5 w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm cursor-pointer transition-colors"
               >
-                Continuar a mi ruta →
+                Continuar
               </button>
             </div>
           )}

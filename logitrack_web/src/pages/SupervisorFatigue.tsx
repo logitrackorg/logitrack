@@ -122,7 +122,7 @@ function HistoryRow({
       {record.skipped ? (
         /* Fila de salto — ocupa las columnas de KSS, descripción, sueño, drift y voz */
         <>
-          <td className="py-2 px-3" colSpan={5}>
+          <td className="py-2 px-3" colSpan={6}>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-bold bg-orange-50 text-orange-700 border-orange-200">
               <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
               Salteado por el chofer
@@ -156,6 +156,19 @@ function HistoryRow({
               <span title="Análisis de voz completado"><Mic className="w-3.5 h-3.5 text-violet-500 mx-auto" /></span>
             ) : (
               <span title="Sin análisis de voz"><MicOff className="w-3.5 h-3.5 text-slate-300 mx-auto" /></span>
+            )}
+          </td>
+          <td className="py-2 px-3 text-center">
+            {record.pvt_metrics ? (
+              <span className={`text-[11px] font-bold tabular-nums ${
+                record.pvt_metrics.latencia_promedio_ms < 250 ? "text-emerald-600" :
+                record.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600" :
+                record.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600" : "text-rose-600"
+              }`}>
+                {record.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-300">—</span>
             )}
           </td>
         </>
@@ -249,6 +262,21 @@ function DriverRow({
           )}
         </td>
 
+        {/* PVT */}
+        <td className="py-3 px-4 text-center">
+          {driver.pvt_metrics ? (
+            <span className={`text-xs font-bold tabular-nums ${
+              driver.pvt_metrics.latencia_promedio_ms < 250 ? "text-emerald-600" :
+              driver.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600" :
+              driver.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600" : "text-rose-600"
+            }`}>
+              {driver.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
+            </span>
+          ) : (
+            <span className="text-xs text-slate-300">—</span>
+          )}
+        </td>
+
         {/* Hora check-in */}
         <td className="py-3 px-4">
           {checkinTimeStr ? (
@@ -277,7 +305,7 @@ function DriverRow({
       {/* Panel de historial expandible */}
       {expanded && (
         <tr>
-          <td colSpan={8} className="bg-slate-50/80 border-t border-slate-100 px-4 py-3">
+          <td colSpan={9} className="bg-slate-50/80 border-t border-slate-100 px-4 py-3">
             {(driver.history ?? []).length === 0 ? (
               <p className="text-xs text-slate-400 italic py-1">
                 Sin historial de check-ins registrado.
@@ -293,6 +321,7 @@ function DriverRow({
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Sueño</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Drift</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Voz</th>
+                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">PVT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -482,7 +511,7 @@ export function SupervisorFatigue() {
                   <tr>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Riesgo</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider min-w-[140px]">Score</th>
+                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider min-w-[140px]">Nivel de riesgo</th>
                     <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">KSS</th>
                     <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       <span title="Horas de sueño"><Moon className="w-3.5 h-3.5 inline" /></span>
@@ -490,6 +519,7 @@ export function SupervisorFatigue() {
                     <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                       <span title="Análisis de voz"><Mic className="w-3.5 h-3.5 inline" /></span>
                     </th>
+                    <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">PVT</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Check-in</th>
                     <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Historial</th>
                   </tr>

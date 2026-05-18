@@ -26,6 +26,7 @@ type DriverFatigueStatus struct {
 	HorasSueno   *int            `json:"horas_sueno"`   // nil when no check-in today
 	DriftScore   *int            `json:"drift_score"`   // nil when no baseline yet
 	HasVoice     bool            `json:"has_voice"`     // whether voice analysis was completed today
+	PVTMetrics   *PVTResult      `json:"pvt_metrics"`   // nil when PVT was not completed today
 	CheckinTime  *time.Time      `json:"checkin_time"`  // nil when no check-in today
 	History      []DriverCheckin `json:"history"`       // last 30 days, newest first
 }

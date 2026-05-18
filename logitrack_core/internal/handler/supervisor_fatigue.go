@@ -98,6 +98,7 @@ func (h *SupervisorFatigueHandler) buildStatus(
 			status.HorasSueno = &horas
 			status.DriftScore = checkin.DriftScore
 			status.HasVoice = checkin.VoiceMetrics != nil
+			status.PVTMetrics = checkin.PVTMetrics
 
 			score, level := fatigueRiskScore(checkin, cfg)
 			status.RiskScore = &score
