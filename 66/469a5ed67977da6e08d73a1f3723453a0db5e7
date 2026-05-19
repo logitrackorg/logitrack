@@ -1,0 +1,30 @@
+logitrack_core/internal/repository/postgres_event_store.go
+  s_00f71e404fc937::t_9822a15d30e652 183-191
+.claude/settings.local.json
+  ai_agent 18-19
+logitrack_core/internal/db/migrate.go
+  ai_agent 345-358
+logitrack_core/cmd/server/main.go
+  ai_agent 23,146-151,377-383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "66469a5ed67977da6e08d73a1f3723453a0db5e7",
+  "prompts": {},
+  "humans": {
+    "h_8566b79e42b0cc": {
+      "author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_00f71e404fc937": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0d686d0a-11ee-45a9-bc7e-bab54e9169af",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
