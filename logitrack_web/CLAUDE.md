@@ -87,7 +87,7 @@ Etiquetas vigentes para estados que fueron renombrados:
 
 | Código | Etiqueta UI |
 |---|---|
-| `loaded` | **Enviar a sucursal** (antes "Cargado") |
+| `loaded` | **Cargado en vehículo** |
 | `out_for_delivery` | **Última milla** (antes "En reparto") |
 
 `PublicTracking.tsx` mantiene su propia redacción amigable para clientes finales ("Cargado y listo para despachar", "En camino a domicilio") y queda fuera de este mapeo (excepto el override del badge — ver abajo).

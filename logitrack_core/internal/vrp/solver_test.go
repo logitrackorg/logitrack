@@ -236,3 +236,77 @@ func TestSolve_DepartureTimePropagates(t *testing.T) {
 		t.Fatalf("expected morning shipment unassigned at 14:00 departure, got %+v", sol.Unassigned)
 	}
 }
+
+// TestTwoOpt_OutOfWindowSetCorrectly valida que la re-simulación de twoOpt
+// setea OutOfWindow en los stops que quedan fuera de ventana.
+//
+// Regresión: antes del fix, twoOpt reconstruía las Stop sin setear OutOfWindow
+// (quedaban false por zero-value), lo que hacía que routeMetrics contara
+// todos los stops como "in window" y findBestDepartureForRoute siempre
+// eligiera el horario más temprano (8am) por tiebreaker dep ASC, ignorando
+// que los envíos no caían en su ventana a esa hora.
+func TestTwoOpt_OutOfWindowSetCorrectly(t *testing.T) {
+	// 4 envíos afternoon en posiciones x=1,2,3,4.
+	// DepartureMin = 8:00 → las llegadas son 8:01, 8:07, 8:13, 8:19,
+	// todas ANTES de AfternoonWindowStart=12:00 → deben quedar OutOfWindow=true.
+	// EnforceTimeWindows=false para que el solver los incluya como soft violations
+	// y 2-opt pueda aplicarse sobre la ruta resultante.
+	p := makeProblem(
+		[]Node{
+			{ID: "LT-04", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-01", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-03", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-02", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+		},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
+		[]float64{4, 1, 3, 2},
+	)
+	p.DepartureMin = 8 * 60
+	p.EnforceTimeWindows = false // soft: se incluyen aunque fuera de ventana
+	sol := Solve(p)
+
+	if len(sol.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(sol.Routes))
+	}
+	r := sol.Routes[0]
+	if len(r.Stops) != 4 {
+		t.Fatalf("expected 4 stops, got %d", len(r.Stops))
+	}
+	// Todos deben ser OutOfWindow porque la llegada (~8:01-8:19) precede a aStart=12:00.
+	for i, s := range r.Stops {
+		if !s.OutOfWindow {
+			t.Errorf("stop %d (%s): expected OutOfWindow=true for afternoon shipment departing at 8am, got false", i, s.NodeID)
+		}
+	}
+}
+
+// TestTwoOpt_OutOfWindowFalseWhenInWindow valida la contraparte: con salida
+// a las 12:00 los mismos envíos afternoon quedan OutOfWindow=false.
+func TestTwoOpt_OutOfWindowFalseWhenInWindow(t *testing.T) {
+	p := makeProblem(
+		[]Node{
+			{ID: "LT-04", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-01", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-03", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+			{ID: "LT-02", WeightKg: 1, TimeWindow: model.TimeWindowAfternoon},
+		},
+		[]Driver{{ID: "drv1", MaxWeightKg: 9999}},
+		[]float64{4, 1, 3, 2},
+	)
+	p.DepartureMin = 12 * 60
+	p.EnforceTimeWindows = true
+	sol := Solve(p)
+
+	if len(sol.Routes) != 1 {
+		t.Fatalf("expected 1 route, got %d", len(sol.Routes))
+	}
+	r := sol.Routes[0]
+	if len(r.Stops) != 4 {
+		t.Fatalf("expected 4 stops, got %d", len(r.Stops))
+	}
+	for i, s := range r.Stops {
+		if s.OutOfWindow {
+			t.Errorf("stop %d (%s): expected OutOfWindow=false for afternoon shipment departing at 12pm, got true", i, s.NodeID)
+		}
+	}
+}

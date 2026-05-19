@@ -30,6 +30,8 @@ const STATUS_BLURBS: Record<ShipmentStatus, string> = {
   cancelled:            "Este envío fue cancelado.",
   lost:                 "Reportamos este envío como extraviado. Estamos en contacto.",
   destroyed:            "El envío sufrió un daño total y no podrá ser entregado.",
+  expired:              "Este borrador ha expirado.",
+  pending_payment:      "Tu envío está pendiente de confirmación de pago.",
 };
 
 interface EventDescription {

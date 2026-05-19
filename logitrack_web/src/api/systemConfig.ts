@@ -11,6 +11,10 @@ client.interceptors.request.use((config) => {
 
 export interface SystemConfig {
   max_delivery_attempts: number;
+  /** Days before a draft is automatically expired (default 7). */
+  draft_retention_days: number;
+  /** Days after expiration before PII is irreversibly anonymized (default 30). */
+  draft_purge_days: number;
 }
 
 export const systemConfigApi = {

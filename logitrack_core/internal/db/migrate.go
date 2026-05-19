@@ -260,6 +260,102 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE zones DROP COLUMN IF EXISTS severity;
 
 		ALTER TABLE pricing_config ADD COLUMN IF NOT EXISTS risky_zone_surcharge REAL NOT NULL DEFAULT 5000;
+
+		-- Draft lifecycle: new system_config columns
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS draft_retention_days INTEGER NOT NULL DEFAULT 7;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS draft_purge_days     INTEGER NOT NULL DEFAULT 30;
+		UPDATE system_config SET draft_retention_days = 7, draft_purge_days = 30 WHERE id = 1 AND draft_retention_days = 0;
+
+		-- Draft lifecycle: track PII purge timestamp on the projection
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS pii_purged_at TIMESTAMPTZ;
+
+		-- Draft lifecycle: audit trail (CA-03)
+		CREATE TABLE IF NOT EXISTS draft_audit_log (
+			id           TEXT PRIMARY KEY,
+			tracking_id  TEXT NOT NULL,
+			action       TEXT NOT NULL,
+			performed_by TEXT NOT NULL DEFAULT 'system',
+			timestamp    TIMESTAMPTZ NOT NULL,
+			details      JSONB NOT NULL DEFAULT '{}'
+		);
+		CREATE INDEX IF NOT EXISTS draft_audit_tracking_idx  ON draft_audit_log(tracking_id);
+		CREATE INDEX IF NOT EXISTS draft_audit_timestamp_idx ON draft_audit_log(timestamp DESC);
+
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS driver_type VARCHAR(50);
+		ALTER TABLE users ALTER COLUMN driver_type DROP NOT NULL;
+
+		CREATE TABLE IF NOT EXISTS inter_branch_trips (
+			id                    TEXT PRIMARY KEY,
+			driver_id             TEXT,
+			vehicle_id            TEXT NOT NULL,
+			license_plate         TEXT NOT NULL,
+			origin_branch_id      TEXT NOT NULL,
+			destination_branch_id TEXT NOT NULL,
+			shipment_ids          JSONB NOT NULL DEFAULT '[]',
+			status                TEXT NOT NULL DEFAULT 'pendiente',
+			total_weight_kg       NUMERIC(10,3) NOT NULL DEFAULT 0,
+			created_by            TEXT NOT NULL DEFAULT '',
+			created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			started_at            TIMESTAMPTZ,
+			completed_at          TIMESTAMPTZ,
+			finished_by_user_id   TEXT
+		);
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_driver_idx ON inter_branch_trips(driver_id) WHERE driver_id IS NOT NULL;
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_dest_idx   ON inter_branch_trips(destination_branch_id);
+		CREATE INDEX IF NOT EXISTS inter_branch_trips_status_idx ON inter_branch_trips(status);
+
+		-- Required by vehicle QR token generation
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		-- QR-based vehicle claim flow (vehicle columns are migrated in postgres_vehicle.go)
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'inter_branch';
+		ALTER TABLE inter_branch_trips ALTER COLUMN destination_branch_id DROP NOT NULL;
+		CREATE UNIQUE INDEX IF NOT EXISTS trips_one_active_per_vehicle
+			ON inter_branch_trips(vehicle_id) WHERE status IN ('pendiente','en_transito');
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS stops JSONB NOT NULL DEFAULT '[]'::jsonb;
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS current_stop_index INTEGER NOT NULL DEFAULT 0;
+
+		-- Cross-branch pickup: reserva del envío para un trip multi-hop
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS reserved_for_trip_id TEXT;
+		CREATE INDEX IF NOT EXISTS shipments_reserved_for_trip_idx ON shipments(reserved_for_trip_id) WHERE reserved_for_trip_id IS NOT NULL;
+
+		-- Mercado Pago: pagos asociados a envíos en pending_payment
+		CREATE TABLE IF NOT EXISTS payments (
+			id               TEXT PRIMARY KEY,
+			tracking_id      TEXT NOT NULL,
+			mp_preference_id TEXT NOT NULL UNIQUE,
+			mp_payment_id    TEXT UNIQUE,
+			init_point       TEXT NOT NULL,
+			amount           NUMERIC(12,2) NOT NULL,
+			currency         TEXT NOT NULL DEFAULT 'ARS',
+			status           TEXT NOT NULL,
+			created_at       TIMESTAMPTZ NOT NULL,
+			approved_at      TIMESTAMPTZ,
+			abandoned_at     TIMESTAMPTZ,
+			abandoned_reason TEXT NOT NULL DEFAULT ''
+		);
+		CREATE INDEX IF NOT EXISTS idx_payments_tracking_id ON payments(tracking_id);
+		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
+
+		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
+		CREATE TABLE IF NOT EXISTS payment_events (
+			mp_payment_id TEXT PRIMARY KEY,
+			received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			raw_payload   JSONB NOT NULL
+		);
+
+		-- Notification center (US: Centro de notificaciones in-app + Envío recibido en sucursal)
+		CREATE TABLE IF NOT EXISTS notifications (
+			id          TEXT PRIMARY KEY,
+			user_id     TEXT NOT NULL,
+			type        TEXT NOT NULL,
+			title       TEXT NOT NULL,
+			body        TEXT NOT NULL,
+			resource_id TEXT NOT NULL DEFAULT '',
+			read_at     TIMESTAMPTZ,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+		CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
 	`)
 	return err
 }

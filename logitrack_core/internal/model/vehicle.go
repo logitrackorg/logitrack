@@ -22,13 +22,23 @@ const (
 	VehicleTypeTruck VehicleType = "camion"
 )
 
+// VehicleMode indicates whether the vehicle is used for last-mile or inter-branch dispatches.
+type VehicleMode string
+
+const (
+	VehicleModeLastMile    VehicleMode = "ultima_milla"
+	VehicleModeInterBranch VehicleMode = "inter_sucursal"
+)
+
 // Vehicle represents a fleet vehicle.
 type Vehicle struct {
 	ID                string        `json:"id"`
 	LicensePlate      string        `json:"license_plate"` // patente
 	Type              VehicleType   `json:"type"`          // tipo
+	Mode              VehicleMode   `json:"mode"`          // ultima_milla | inter_sucursal
 	CapacityKg        float64       `json:"capacity_kg"`   // capacidad en kg
 	Status            VehicleStatus `json:"status"`
+	QRToken           string        `json:"qr_token,omitempty"`
 	UpdatedAt         time.Time     `json:"updated_at"`
 	UpdatedBy         string        `json:"updated_by,omitempty"`         // usuario que realizó el último cambio de estado
 	AssignedShipments []string      `json:"assigned_shipments,omitempty"` // tracking_ids de los envíos asignados
@@ -43,6 +53,7 @@ type Vehicle struct {
 type CreateVehicleRequest struct {
 	LicensePlate string      `json:"license_plate" binding:"required"`
 	Type         VehicleType `json:"type" binding:"required"`
+	Mode         VehicleMode `json:"mode" binding:"required"`
 	CapacityKg   float64     `json:"capacity_kg" binding:"required,gt=0"`
 	BranchID     string      `json:"branch_id" binding:"required"`
 }
@@ -54,7 +65,3 @@ type UpdateVehicleStatusRequest struct {
 	Force  bool          `json:"force,omitempty"` // forzar cambio aunque haya transición incompatible
 }
 
-// StartTripRequest is the request body for starting a trip.
-type StartTripRequest struct {
-	DestinationBranch string `json:"destination_branch" binding:"required"`
-}

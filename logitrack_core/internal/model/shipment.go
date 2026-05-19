@@ -22,6 +22,8 @@ const (
 	StatusCancelled           Status = "cancelled"            // cancelado — terminal
 	StatusLost                Status = "lost"                 // extraviado — terminal
 	StatusDestroyed           Status = "destroyed"            // daño total — terminal
+	StatusExpired             Status = "expired"              // borrador expirado — solo visible en auditoría
+	StatusPendingPayment      Status = "pending_payment"      // esperando confirmación de pago antes de ingresar al flujo operacional
 )
 
 type PackageType string
@@ -119,6 +121,17 @@ type Shipment struct {
 	Price          *float64        `json:"price,omitempty"`
 	PriceBreakdown *PriceBreakdown `json:"price_breakdown,omitempty"`
 	PriceCurrency  string          `json:"price_currency,omitempty"`
+
+	// Multi-hop routing path (WIP — stale-replan feature).
+	PlannedPath     []string `json:"planned_path,omitempty"`      // ordered list of branch IDs
+	NextHopBranchID string   `json:"next_hop_branch_id,omitempty"` // first branch after current
+	HopIndex        int      `json:"hop_index,omitempty"`
+	PathRevision    int      `json:"path_revision,omitempty"`
+
+	// Cross-branch pickup: cuando un trip multi-hop reserva el envío para
+	// recogerlo al pasar por su branch actual. Mientras está reservado, el
+	// envío no aparece en otros planes ni operaciones.
+	ReservedForTripID *string `json:"reserved_for_trip_id,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
@@ -279,6 +292,7 @@ type ShipmentFilter struct {
 	DateFrom          *time.Time // inclusive lower bound on created_at
 	DateTo            *time.Time // inclusive upper bound on created_at (end of day)
 	ReceivingBranchID string     // if non-empty, only shipments with this branch
+	IncludeExpired    bool       // if true, also return expired drafts (supervisor/manager only)
 }
 
 // CorrectShipmentRequest carries typed field corrections.

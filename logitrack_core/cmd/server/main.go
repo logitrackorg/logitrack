@@ -1,21 +1,26 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/mercadopago"
+	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/scheduler"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
+	"github.com/logitrack/core/internal/sse"
 )
 
 func getenv(key, fallback string) string {
@@ -26,6 +31,12 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
+	// Carga .env si existe (silenciosamente lo ignora si no está). Útil para
+	// configurar localmente vars como ORS_API_KEY sin tener que exportarlas
+	// en cada sesión de shell. En producción las vars vienen del entorno
+	// directamente y .env no existe.
+	_ = godotenv.Load()
+
 	// PostgreSQL connection
 	database, err := db.NewDB(
 		getenv("DB_HOST", "localhost"),
@@ -94,7 +105,28 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
-	clockHandler := handler.NewClockHandler()
+	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
+	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
+	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
+	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
+	draftScheduler.Start()
+
+	// Mercado Pago — nil cuando no está configurado (dev sin MP)
+	mpClient := mercadopago.NewClient(
+		os.Getenv("MP_ACCESS_TOKEN"),
+		os.Getenv("MP_WEBHOOK_SECRET"),
+		getenv("MP_NOTIFICATION_URL", ""),
+	)
+	if mpClient == nil {
+		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — pagos deshabilitados")
+	}
+
+	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
+	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
+	clockHandler := handler.NewClockHandler(func() {
+		draftLifecycleSvc.RunExpirationJob()
+		draftLifecycleSvc.RunPurgeJob()
+	})
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
@@ -105,6 +137,18 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+	paymentRepo := repository.NewPostgresPaymentRepository(database)
+	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
+	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
+	paymentScheduler := service.NewPaymentScheduler(paymentSvc)
+	paymentScheduler.Start()
+
+	notifRepo := repository.NewPostgresNotificationRepository(database)
+	notifSvc := service.NewNotificationService(notifRepo)
+	notifHub := sse.NewHub()
+	notifSvc.SetHub(notifHub)
+	notifHandler := handler.NewNotificationHandler(notifSvc, notifHub)
+	shipmentSvc.SetNotificationService(notifSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -124,9 +168,44 @@ func main() {
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
+	// OpenRouteService — opcional. Cuando hay ORS_API_KEY se usa para el modo
+	// segura (avoid_polygons nativo). Sin la key, segura cae al fallback de
+	// OSRM con waypoints de bordeado.
+	orsClient := ors.NewClient(os.Getenv("ORS_BASE_URL"), os.Getenv("ORS_API_KEY"))
+	if orsClient != nil {
+		log.Printf("[routing] OpenRouteService HABILITADO — modo segura usará avoid_polygons nativo")
+	} else {
+		log.Printf("[routing] OpenRouteService DESHABILITADO (sin ORS_API_KEY) — modo segura usará fallback OSRM + waypoints")
+	}
+	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
+	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
+	interBranchTripSvc.SetRouteService(routeSvc)
+	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
+	vehicleHandler.SetTripService(interBranchTripSvc)
+
 	routingPlanRepo := repository.NewPostgresRoutingPlanRepository(database)
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
+	routingSvc.SetInterBranchTripService(interBranchTripSvc)
+	routingSvc.SetZoneService(zoneSvc)
+	routingSvc.SetORSClient(orsClient)
+
+	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
+	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
+	// del grafo de sucursales.
+	branchGraphRepo := repository.NewPostgresBranchGraphRepository(database)
+	branchGraphSvc := service.NewBranchGraphService(branchGraphRepo, branchRepo)
+	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
+	routingSvc.SetBranchGraphService(branchGraphSvc)
+	shipmentSvc.SetBranchGraphService(branchGraphSvc)
+
 	routingHandler := handler.NewRoutingHandler(routingSvc)
+
+	// Generar plan global al arrancar para que el plan del día esté disponible
+	// desde el primer request, sin esperar el cron de las 08:00.
+	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
+		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	}
+	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)
@@ -148,6 +227,7 @@ func main() {
 
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
 	protected := api.Group("")
@@ -207,6 +287,12 @@ func main() {
 	protected.PATCH("/shipments/:tracking_id/draft", shipmentWrite, shipmentHandler.UpdateDraft)
 	protected.POST("/shipments/:tracking_id/confirm", shipmentWrite, shipmentHandler.ConfirmDraft)
 
+	// Payment flow — operator, supervisor
+	protected.POST("/shipments/:tracking_id/request-payment", shipmentWrite, paymentHandler.RequestPayment)
+	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
+	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
+	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
+
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
 	protected.POST("/shipments/:tracking_id/comments", shipmentWrite, commentHandler.AddComment)
@@ -235,6 +321,25 @@ func main() {
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 
+	// Inter-branch trips — driver self-service + operator/supervisor receive
+	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
+	protected.POST("/inter-branch-trips/:id/start", driverOnly, interBranchTripHandler.StartTrip)
+	protected.GET("/inter-branch-trips/:id", shipmentRead, interBranchTripHandler.GetTripByID)
+	protected.GET("/inter-branch-trips/:id/qr", shipmentDetailRead, interBranchTripHandler.GetTripQR)
+	protected.POST("/inter-branch-trips/:id/scan/finish", shipmentWrite, interBranchTripHandler.FinishByScan)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/unload", shipmentWrite, interBranchTripHandler.ConfirmUnload)
+	protected.POST("/inter-branch-trips/:id/stops/:idx/load", shipmentWrite, interBranchTripHandler.ConfirmLoad)
+	protected.POST("/inter-branch-trips/:id/assign-driver", shipmentWrite, interBranchTripHandler.AssignDriver)
+	protected.POST("/inter-branch-trips/:id/cancel", middleware.RequireRoles(model.RoleSupervisor), interBranchTripHandler.Cancel)
+	protected.GET("/inter-branch-trips", shipmentRead, interBranchTripHandler.ListByBranch)
+	// QR-based vehicle claim (driver) and close (operator/supervisor)
+	protected.POST("/trips/claim-by-qr", driverOnly, interBranchTripHandler.ClaimByVehicleQR)
+	protected.POST("/trips/close-by-qr", shipmentWrite, interBranchTripHandler.CloseByVehicleQR)
+
+	// Vehicle QR management
+	canViewVehicleQR := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleAdmin)
+	protected.GET("/vehicles/by-plate/:plate/qr", canViewVehicleQR, vehicleHandler.GetVehicleQR)
+
 	// Users — list drivers (operator, supervisor) for shipment assignment
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
 	protected.GET("/users/me", authenticated, userHandler.GetMe)
@@ -251,15 +356,31 @@ func main() {
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
 
-	// System clock override — admin only, in-memory only (testing).
-	protected.GET("/admin/clock", adminOnly, clockHandler.Get)
+	// System clock override — GET is open to all authenticated users (read-only, safe).
+	// PATCH/DELETE are admin-only (mutations).
+	protected.GET("/admin/clock", clockHandler.Get)
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
+
+	// Draft lifecycle / compliance (Ley 25.326) — admin only
+	protected.GET("/admin/compliance/audit", adminOnly, draftLifecycleHandler.GetAuditLog)
+	protected.GET("/admin/compliance/drafts", adminOnly, draftLifecycleHandler.FindByDNI)
+	protected.POST("/admin/compliance/suppress", adminOnly, draftLifecycleHandler.Suppress)
+	protected.POST("/admin/compliance/expire-drafts", adminOnly, draftLifecycleHandler.TriggerExpiration)
+	protected.POST("/admin/compliance/purge-pii", adminOnly, draftLifecycleHandler.TriggerPurge)
 
 	// Pricing — quote belongs to the shipment-creation flow (operator/supervisor); config is admin-only
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Notifications — standard routes on the protected group.
+	notifHandler.RegisterRoutes(protected, authenticated)
+	// SSE stream is registered on the public api group (not protected) so the
+	// group-level header-only Auth middleware doesn't block EventSource clients.
+	// sseAuth validates the token from ?token= query param as a fallback.
+	sseAuth := middleware.AuthWithQueryParam(authRepo)
+	notifHandler.RegisterStreamRoute(api, sseAuth)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
@@ -274,6 +395,7 @@ func main() {
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
+	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)

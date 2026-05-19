@@ -23,6 +23,12 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 	if cfg.MaxDeliveryAttempts < 1 || cfg.MaxDeliveryAttempts > 10 {
 		return model.SystemConfig{}, fmt.Errorf("max_delivery_attempts debe estar entre 1 y 10")
 	}
+	if cfg.DraftRetentionDays < 1 || cfg.DraftRetentionDays > 365 {
+		return model.SystemConfig{}, fmt.Errorf("draft_retention_days debe estar entre 1 y 365")
+	}
+	if cfg.DraftPurgeDays < 1 || cfg.DraftPurgeDays > 1825 {
+		return model.SystemConfig{}, fmt.Errorf("draft_purge_days debe estar entre 1 y 1825 (5 años)")
+	}
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err
 	}

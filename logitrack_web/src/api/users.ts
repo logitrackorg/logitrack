@@ -19,6 +19,7 @@ export interface UserProfile {
   role: Role;
   branch_id?: string;
   branch_name?: string;
+  driver_type?: string;
 }
 
 export interface ChangePasswordRequest {
@@ -37,6 +38,7 @@ interface RawDriverUser {
   email?: string;
   role: Role;
   branch_id?: string;
+  driver_type?: string;
 }
 
 function toUserProfile(u: RawDriverUser): UserProfile {
@@ -48,6 +50,7 @@ function toUserProfile(u: RawDriverUser): UserProfile {
     email: u.email,
     role: u.role,
     branch_id: u.branch_id,
+    driver_type: u.driver_type,
   };
 }
 

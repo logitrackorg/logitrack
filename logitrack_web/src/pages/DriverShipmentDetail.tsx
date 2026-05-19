@@ -7,9 +7,7 @@ import {
   CheckCircle2,
   Clock,
   MapPin,
-  MessageCircle,
   Package,
-  Phone,
   User,
   XCircle,
 } from "lucide-react";
@@ -17,14 +15,13 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { Card } from "../components/ui/card";
 import { BottomSheet } from "../components/ui/bottom-sheet";
+import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import {
   FAILED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
   recipientView,
-  telHref,
   timeWindowTone,
-  waHref,
 } from "../utils/driverActions";
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -242,30 +239,15 @@ export function DriverShipmentDetail() {
           </div>
 
           {/* Quick actions */}
-          <div className="grid grid-cols-2 gap-2 mt-4">
-            <a
-              href={telHref(phone)}
-              className="inline-flex flex-col items-center justify-center gap-1 h-16 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
-            >
-              <Phone className="w-5 h-5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Llamar</span>
-            </a>
-            <a
-              href={waHref(phone)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex flex-col items-center justify-center gap-1 h-16 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">WhatsApp</span>
-            </a>
+          <div className="mt-4">
+            <WhatsAppQuickButton
+              phone={phone}
+              recipientName={name}
+              trackingId={shipment.tracking_id}
+            />
           </div>
 
-          <p className="mt-3 text-sm text-slate-700 font-medium">
-            <a href={telHref(phone)} className="hover:underline">
-              {phone}
-            </a>
-          </p>
+          <p className="mt-3 text-sm text-slate-700 font-medium">{phone}</p>
         </Card>
 
         {/* Special instructions: prominente */}

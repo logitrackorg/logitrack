@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { paymentApi, type Payment } from "../api/payments";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -31,6 +32,7 @@ import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
+import { tripsApi, type InterBranchTrip } from '../api/routing';
 import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
@@ -51,12 +53,14 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   cancelled:            [],
   lost:                 [],
   destroyed:            [],
+  expired:              [],
+  pending_payment:      [],
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
   draft:                "Borrador",
   at_origin_hub:        "En sucursal de origen",
-  loaded:               "Enviar a sucursal",
+  loaded:               "Cargado en vehículo",
   in_transit:           "En tránsito",
   at_hub:               "En sucursal",
   out_for_delivery:     "Última milla",
@@ -71,6 +75,8 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   cancelled:            "Cancelado",
   lost:                 "Extraviado",
   destroyed:            "Daño total",
+  expired:              "Borrador expirado",
+  pending_payment:      "Pago pendiente",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -139,10 +145,7 @@ export function ShipmentDetail() {
   const [orgConfig, setOrgConfig] = useState<OrganizationConfig | null>(null);
   const [maxDeliveryAttempts, setMaxDeliveryAttempts] = useState(3);
   const [branchCapacity, setBranchCapacity] = useState<BranchCapacity | null>(null);
-  // Auto-save draft state
-  const [draftAutoSaveStatus, setDraftAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const draftAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftSavedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [reservedTrip, setReservedTrip] = useState<InterBranchTrip | null>(null);
 
   const reload = useCallback(async () => {
     if (!trackingId) return;
@@ -294,24 +297,13 @@ export function ShipmentDetail() {
     }
   }, [shipment?.status, shipment?.receiving_branch_id]);
 
-  // Auto-save draft changes — debounced 800ms whenever draftForm changes
   useEffect(() => {
-    if (!trackingId || !draftForm || shipment?.status !== "draft") return;
-    if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current);
-    if (draftSavedResetTimer.current) clearTimeout(draftSavedResetTimer.current);
-    draftAutoSaveTimer.current = setTimeout(async () => {
-      setDraftAutoSaveStatus('saving');
-      try {
-        await shipmentApi.updateDraft(trackingId, draftForm);
-        setDraftAutoSaveStatus('saved');
-        draftSavedResetTimer.current = setTimeout(() => setDraftAutoSaveStatus('idle'), 3000);
-      } catch {
-        setDraftAutoSaveStatus('error');
-      }
-    }, 800);
-    return () => { if (draftAutoSaveTimer.current) clearTimeout(draftAutoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftForm]);
+    if (shipment?.reserved_for_trip_id) {
+      tripsApi.getByID(shipment.reserved_for_trip_id).then(setReservedTrip).catch(() => setReservedTrip(null));
+    } else {
+      setReservedTrip(null);
+    }
+  }, [shipment?.reserved_for_trip_id]);
 
   const handleConfirmDraft = async () => {
     if (!trackingId || !draftForm) return;
@@ -530,7 +522,7 @@ export function ShipmentDetail() {
       return true;
     }
   ).filter(
-    // No mostrar "Enviar a sucursal" si el envío ya está en la sucursal de destino.
+    // No mostrar "Cargado en vehículo" si el envío ya está en la sucursal de destino.
     // Esto permite retornos a origen (current_location === origin_branch_id).
     (s) => s !== "loaded" || !isAtDestinationBranch
   );
@@ -562,7 +554,7 @@ export function ShipmentDetail() {
           <PriorityBadge priority={shipment.priority} />
         </div>
         <div className="flex items-center gap-2">
-          {hasRole("supervisor", "admin", "operator") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin", "operator") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={openCorrectionModal}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
@@ -571,7 +563,7 @@ export function ShipmentDetail() {
               Editar datos
             </button>
           )}
-          {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("operator", "supervisor", "admin") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold text-amber-800 cursor-pointer transition-colors"
@@ -612,6 +604,21 @@ export function ShipmentDetail() {
         </div>
       )}
 
+      {/* Banner: reservado para pickup por vehículo de otra sucursal */}
+      {reservedTrip && (
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50">
+          <Truck className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
+          <div className="text-sm text-sky-900">
+            <p className="font-semibold">Reservado para pickup por vehículo en tránsito</p>
+            <p className="text-sky-700 mt-0.5">
+              Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
+              <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
+              No requiere acción de esta sucursal.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Contador de intentos de entrega */}
       {!shipment.is_returning && (shipment.delivery_attempts ?? 0) > 0 && (() => {
         const attempts = shipment.delivery_attempts ?? 0;
@@ -643,6 +650,13 @@ export function ShipmentDetail() {
         </div>
       )}
 
+      {shipment.status === "pending_payment" && (
+        <PendingPaymentPanel
+          trackingId={shipment.tracking_id}
+          onBackToDraft={() => navigate("/?status=pending")}
+        />
+      )}
+
       {shipment.status === "draft" && draftForm ? (
         /* ── Draft edit form ── */
         <DraftEditForm
@@ -652,7 +666,7 @@ export function ShipmentDetail() {
           onDiscard={handleDiscardDraft}
           confirming={confirming}
           confirmError={confirmError}
-          autoSaveStatus={draftAutoSaveStatus}
+
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
           branches={branches}
@@ -1196,7 +1210,7 @@ export function ShipmentDetail() {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Enviar a sucursal</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargar en vehículo</h2>
               <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
             </div>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
@@ -1437,14 +1451,13 @@ function findFinalBranch(recipientAddress: { province?: string; latitude?: numbe
   return null;
 }
 
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, autoSaveStatus, createdAt, draftId, branches }: {
+function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, createdAt, draftId, branches }: {
   form: SaveDraftPayload;
   onChange: (f: SaveDraftPayload) => void;
   onConfirm: () => void;
   onDiscard: () => void;
   confirming: boolean;
   confirmError: string;
-  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
   createdAt: string;
   draftId: string;
   branches: Branch[];
@@ -1453,6 +1466,30 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   const { user } = useAuth();
   const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
   const [discardConfirm, setDiscardConfirm] = useState(false);
+
+  // Auto-save: debounced 1 s after every form change
+  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
+  const [autoSaveError, setAutoSaveError] = useState("");
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      setAutoSaveStatus("saving");
+      setAutoSaveError("");
+      try {
+        await shipmentApi.updateDraft(draftId, form);
+        setAutoSaveStatus("saved");
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+        setAutoSaveError(msg ?? "No se pudieron guardar los cambios.");
+        setAutoSaveStatus("error");
+      }
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
   const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
   const setSender = (field: string, value: unknown) =>
     onChange({ ...form, sender: { ...form.sender, [field]: value } });
@@ -1665,6 +1702,26 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           </DField>
           <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
         </div>
+        {/* CA-05: Privacy notice — shown once the operator has entered recipient data */}
+        {(form.recipient.name || form.recipient.dni) && (
+          <div style={{
+            marginTop: 10,
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "1px solid #e0f2fe",
+            background: "#f0f9ff",
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+          }}>
+            <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+            <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+              Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
+              <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
+              Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
+            </p>
+          </div>
+        )}
       </fieldset>
 
       {/* Sucursales */}
@@ -1767,7 +1824,10 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
                 {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
               </div>
               {quote ? (
-                <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                <>
+                  <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
+                  <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
+                </>
               ) : (
                 <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
               )}
@@ -1791,26 +1851,27 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
 
       {/* Acciones */}
       <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-          {autoSaveStatus === 'saving' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#92400e" }}>
-              <Loader2 className="animate-spin" style={{ width: 13, height: 13 }} />
-              Guardando…
+          {/* Auto-save status */}
+          {autoSaveStatus === "saving" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#78350f" }}>
+              <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
             </span>
           )}
-          {autoSaveStatus === 'saved' && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#16a34a" }}>
-              <Check style={{ width: 13, height: 13 }} />
-              Guardado
+          {autoSaveStatus === "saved" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#15803d" }}>
+              <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
             </span>
           )}
-          {autoSaveStatus === 'error' && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>Error al guardar</span>
+          {autoSaveStatus === "error" && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#dc2626" }}>
+              <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
+            </span>
           )}
         </div>
-        <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar el envío ingresará al sistema logístico.
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
@@ -1907,7 +1968,8 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
     at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
     redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
     delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
-    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937",
+    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
+    pending_payment: "#d97706",
   };
 
   const solidLine = (color = "#e5e7eb") => (
@@ -2295,6 +2357,117 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             {saving ? "Guardando..." : "Guardar correcciones"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingPaymentPanel({
+  trackingId,
+  onBackToDraft,
+}: {
+  trackingId: string;
+  onBackToDraft: () => void;
+}) {
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [reverting, setReverting] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    paymentApi.get(trackingId).then(setPayment).catch(() => {});
+  }, [trackingId]);
+
+  const handleBackToDraft = async () => {
+    setReverting(true);
+    setError("");
+    try {
+      await paymentApi.backToDraft(trackingId);
+      onBackToDraft();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "No se pudo volver al borrador.");
+      setReverting(false);
+    }
+  };
+
+  return (
+    <div style={{
+      background: "#fffbeb", border: "1px solid #fcd34d",
+      borderRadius: 10, padding: 20, marginBottom: 16,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e", marginBottom: 8 }}>
+        💳 Pago pendiente
+      </div>
+      {payment ? (
+        <>
+          <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>
+            Monto:{" "}
+            <strong>
+              {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
+            </strong>
+          </p>
+          {payment.init_point && (
+            <a
+              href={payment.init_point}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                background: "#009ee3", color: "#fff",
+                borderRadius: 8, padding: "8px 18px",
+                fontWeight: 700, fontSize: 13, textDecoration: "none",
+                marginRight: 10, marginBottom: 8,
+              }}
+            >
+              Abrir link de pago ↗
+            </a>
+          )}
+        </>
+      ) : (
+        <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>Cargando información de pago…</p>
+      )}
+      {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {payment?.simulate_enabled && (
+          <button
+            onClick={async () => {
+              setSimulating(true);
+              setError("");
+              try {
+                const result = await paymentApi.simulateApproved(trackingId);
+                window.location.href = `/shipments/${result.tracking_id}`;
+              } catch (e: unknown) {
+                const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+                setError(msg ?? "Error al simular pago.");
+                setSimulating(false);
+              }
+            }}
+            disabled={simulating}
+            style={{
+              border: "1px dashed #86efac", borderRadius: 8,
+              background: "#f0fdf4", color: "#16a34a",
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "8px 16px",
+              opacity: simulating ? 0.6 : 1,
+            }}
+          >
+            {simulating ? "Procesando…" : "⚡ Simular pago aprobado (demo)"}
+          </button>
+        )}
+        <button
+          onClick={handleBackToDraft}
+          disabled={reverting}
+          style={{
+            border: "1px solid #fcd34d", borderRadius: 8,
+            background: "#fff", color: "#92400e",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            padding: "8px 16px",
+            opacity: reverting ? 0.6 : 1,
+          }}
+        >
+          {reverting ? "Procesando…" : "Volver a borrador"}
+        </button>
       </div>
     </div>
   );

@@ -235,3 +235,31 @@ func (p *ShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, er
 	}
 	return stats, nil
 }
+
+func (p *ShipmentProjection) ReserveForTrip(trackingID, tripID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	if s.ReservedForTripID != nil {
+		return fmt.Errorf("shipment already reserved")
+	}
+	tid := tripID
+	s.ReservedForTripID = &tid
+	p.shipments[trackingID] = s
+	return nil
+}
+
+func (p *ShipmentProjection) ReleaseFromTrip(trackingID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	s.ReservedForTripID = nil
+	p.shipments[trackingID] = s
+	return nil
+}

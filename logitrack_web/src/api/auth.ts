@@ -5,6 +5,7 @@ const api = axios.create({
 });
 
 export type Role = "operator" | "supervisor" | "manager" | "admin" | "driver";
+export type DriverType = "ultima_milla" | "intersucursal";
 export type UserStatus = "activo" | "inactivo";
 
 export interface UserAddress {
@@ -26,6 +27,7 @@ export interface User {
   address?: UserAddress;
   updated_by?: string;
   updated_at?: string;
+  driver_type?: DriverType;
 }
 
 export interface LoginResponse {
