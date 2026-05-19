@@ -1,0 +1,31 @@
+logitrack_core/internal/handler/payment.go
+  s_9dd91c01dbf63e::t_0c3e1cc5983799 158
+  s_9dd91c01dbf63e::t_10e3efb98efdac 6
+  s_9dd91c01dbf63e::t_e9c74bc379a773 142
+  s_9dd91c01dbf63e::t_1f084f9e283b86 125-126,130,134,136-141,143-146
+  s_9dd91c01dbf63e::t_e8f3df3d1f3346 135
+  s_9dd91c01dbf63e::t_12b60e129dc397 165-166,168-176,178,183
+logitrack_core/internal/mercadopago/webhook.go
+  s_9dd91c01dbf63e::t_ef0ba9f600dd60 16-17
+  s_9dd91c01dbf63e::t_d4255578425be0 8
+logitrack_core/internal/repository/payment_pg.go
+  s_9dd91c01dbf63e::t_f09b56ff8874b4 21-22,34
+logitrack_core/internal/db/migrate.go
+  s_9dd91c01dbf63e::t_4fc213fcbb48d1 338-339
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "770fca2d70388214513333db27f85ad992c62ab6",
+  "prompts": {},
+  "sessions": {
+    "s_9dd91c01dbf63e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "613ad6f9-544f-4c12-bb21-46f74cff3163",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
