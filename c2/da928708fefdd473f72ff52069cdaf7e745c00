@@ -1,0 +1,121 @@
+logitrack_web/src/pages/PublicTracking.tsx
+  s_cb514c215c3d62::t_21b6ae22564412 34
+logitrack_core/internal/projection/postgres_shipment.go
+  s_cb514c215c3d62::t_70f045a14a249e 207-219,237-238,241,244-252
+  s_cb514c215c3d62::t_26e6bdaa3cc6f0 220-236,239-240,242
+  s_cb514c215c3d62::t_d0bba9ccc999f8 243
+logitrack_core/internal/handler/payment.go
+  s_cb514c215c3d62::t_529a2521176e80 1-101,123-178
+  s_cb514c215c3d62::t_692659c20dc5c8 102-122
+logitrack_core/cmd/server/main.go
+  s_cb514c215c3d62::t_e1c516e5b0cc3b 283-286,288
+  s_cb514c215c3d62::t_2c91b6e46c7361 15
+  s_cb514c215c3d62::t_721dd65ce86e03 113-122
+  s_cb514c215c3d62::t_017c0d2673bdcb 287
+  s_cb514c215c3d62::t_ea07dd3744a00e 139-144
+  s_cb514c215c3d62::t_ab9fd69509529f 223
+logitrack_core/internal/service/payment_scheduler.go
+  s_cb514c215c3d62::t_c9e475244d33a9 1-44
+logitrack_web/src/pages/Dashboard.tsx
+  s_cb514c215c3d62::t_bf2ffa6f6702af 34
+logitrack_core/internal/db/migrate.go
+  s_cb514c215c3d62::t_c4a4bd112b8f5f 320-344
+logitrack_core/internal/repository/payment_pg.go
+  s_cb514c215c3d62::t_d8e5dcb7a86801 1-171
+logitrack_core/internal/model/shipment.go
+  s_cb514c215c3d62::t_b5bc5b0cfe14e0 26
+logitrack_core/internal/repository/shipment.go
+  s_cb514c215c3d62::t_a106372d707a5b 22-26
+  s_cb514c215c3d62::t_b142771d601365 111-142
+logitrack_web/src/api/payments.ts
+  s_cb514c215c3d62::t_94a4cfc8fac506 38
+  s_cb514c215c3d62::t_ac25882c1cf19d 1-37,39-50,54
+  s_cb514c215c3d62::t_18ba3b159284e4 51-53
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_cb514c215c3d62::t_bd6af52f6bc204 1972
+  s_cb514c215c3d62::t_09a8358f43e4f9 557,566
+  s_cb514c215c3d62::t_da87f293cb0e77 2374
+  s_cb514c215c3d62::t_6b93232790c781 2431,2458-2471
+  s_cb514c215c3d62::t_95d36b8e981d0e 2
+  s_cb514c215c3d62::t_299275c608f953 2433-2457
+  s_cb514c215c3d62::t_e0b2a1fd30137f 57
+  s_cb514c215c3d62::t_82d8786c0eeca9 2432
+  s_cb514c215c3d62::t_65dd0a193c9833 2410-2425
+  s_cb514c215c3d62::t_8d0c0e2c842f17 79
+  s_cb514c215c3d62::t_052aae2d6424d9 2364-2373,2375-2409,2426-2430,2472-2474
+  s_cb514c215c3d62::t_40a7a147cc06ab 653-659
+logitrack_core/internal/service/payment.go
+  s_cb514c215c3d62::t_b76d8c208da492 258-263
+  s_cb514c215c3d62::t_0b144b47fd8b49 41-43,84-92,94-98,106,124
+  s_cb514c215c3d62::t_018fc258dee13f 114-115
+  s_cb514c215c3d62::t_453e31cae90eb1 6,15-18
+  s_cb514c215c3d62::t_51b7985dc871a2 93
+  s_cb514c215c3d62::t_e3544ced39c1af 1-5,7-14,19-40,44-83,99-105,107-113,116-123,125-257,264-296
+logitrack_core/internal/mercadopago/payments.go
+  s_cb514c215c3d62::t_b4bc8a4986a4e7 1-24
+logitrack_web/src/api/shipments.ts
+  s_cb514c215c3d62::t_874642b60e074e 44-45
+logitrack_web/src/pages/ShipmentList.tsx
+  s_cb514c215c3d62::t_f51c345514a8a7 351
+logitrack_core/internal/repository/payment.go
+  s_cb514c215c3d62::t_e98bf97053ebe2 1-21
+logitrack_core/internal/service/payment_simulate.go
+  s_cb514c215c3d62::t_9a28ce1afad489 1-76
+logitrack_core/internal/mercadopago/webhook.go
+  s_cb514c215c3d62::t_73cdb61ad58ff1 1-45
+logitrack_core/internal/repository/shipment_es.go
+  s_cb514c215c3d62::t_36ae65ac6a0a45 194-221,229-235,238-261
+  s_cb514c215c3d62::t_d96796069f9c92 222-228
+  s_cb514c215c3d62::t_5399fb48d64cda 236-237
+  s_cb514c215c3d62::t_ca983d0234b53f 370-407
+logitrack_core/internal/model/payment.go
+  s_cb514c215c3d62::t_d95b3fbc527dfa 1-17,19-25,28
+  s_cb514c215c3d62::t_3440f71d3c0de2 18,26-27
+logitrack_core/internal/service/routing_stale_test.go
+  s_cb514c215c3d62::t_094f5fbec4fc0b 41-49
+logitrack_web/src/components/StatusBadge.tsx
+  s_cb514c215c3d62::t_f8664ce8ada619 5
+logitrack_core/internal/mercadopago/preferences.go
+  s_cb514c215c3d62::t_ff538f90d3e330 1-42
+logitrack_core/internal/model/domain_event.go
+  s_cb514c215c3d62::t_030cff54d021f2 31-33
+  s_cb514c215c3d62::t_62b469cd5c510b 98-104
+  s_cb514c215c3d62::t_968973f9c7ece0 89-97,105-111
+logitrack_web/src/pages/NewShipment.tsx
+  s_cb514c215c3d62::t_3dbfc9459361cc 831
+  s_cb514c215c3d62::t_0cdc9184e73ef7 381
+  s_cb514c215c3d62::t_f25d3a28ad3a42 122-125
+  s_cb514c215c3d62::t_fb447ce9f93eda 365,367
+  s_cb514c215c3d62::t_ba780fd9f243cf 363-364,368-369,371-372,375
+  s_cb514c215c3d62::t_fba98515799657 902,917-918,929-930
+  s_cb514c215c3d62::t_391cd7db4f4e35 903-916,919-928,931-936,938
+  s_cb514c215c3d62::t_278b9433bc94d2 809-830,832-901,937,939-964
+  s_cb514c215c3d62::t_c794667545977d 5
+  s_cb514c215c3d62::t_e206c05ca5c850 802
+logitrack_core/internal/mercadopago/client.go
+  s_cb514c215c3d62::t_6413b024b203e1 1-66
+logitrack_core/internal/service/shipment.go
+  s_cb514c215c3d62::t_5f0be123af6db7 505-508,541,544,547,551,556,561,568,575,578-591
+  s_cb514c215c3d62::t_6f29ea60ea85a1 1209-1210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "c2da928708fefdd473f72ff52069cdaf7e745c00",
+  "prompts": {},
+  "humans": {
+    "h_8566b79e42b0cc": {
+      "author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb514c215c3d62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39290adf-d646-4ba6-9182-25ee0beaa68e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
