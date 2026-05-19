@@ -13,7 +13,9 @@
       "mcp__atlassian__createJiraIssue",
       "mcp__atlassian__createIssueLink",
       "Bash(go test *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(go build *)",
+      "Bash(ssh *)"
     ]
   }
 }

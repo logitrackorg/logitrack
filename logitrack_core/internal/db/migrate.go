@@ -317,6 +317,31 @@ func RunMigrations(db *sql.DB) error {
 		-- Cross-branch pickup: reserva del envío para un trip multi-hop
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS reserved_for_trip_id TEXT;
 		CREATE INDEX IF NOT EXISTS shipments_reserved_for_trip_idx ON shipments(reserved_for_trip_id) WHERE reserved_for_trip_id IS NOT NULL;
+
+		-- Mercado Pago: pagos asociados a envíos en pending_payment
+		CREATE TABLE IF NOT EXISTS payments (
+			id               TEXT PRIMARY KEY,
+			tracking_id      TEXT NOT NULL,
+			mp_preference_id TEXT NOT NULL UNIQUE,
+			mp_payment_id    TEXT UNIQUE,
+			init_point       TEXT NOT NULL,
+			amount           NUMERIC(12,2) NOT NULL,
+			currency         TEXT NOT NULL DEFAULT 'ARS',
+			status           TEXT NOT NULL,
+			created_at       TIMESTAMPTZ NOT NULL,
+			approved_at      TIMESTAMPTZ,
+			abandoned_at     TIMESTAMPTZ,
+			abandoned_reason TEXT NOT NULL DEFAULT ''
+		);
+		CREATE INDEX IF NOT EXISTS idx_payments_tracking_id ON payments(tracking_id);
+		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
+
+		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
+		CREATE TABLE IF NOT EXISTS payment_events (
+			mp_payment_id TEXT PRIMARY KEY,
+			received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			raw_payload   JSONB NOT NULL
+		);
 	`)
 	return err
 }

@@ -38,6 +38,15 @@ func (f *fakeShipmentRepo) CancelShipment(cmd repository.CancelCmd) (model.Shipm
 func (f *fakeShipmentRepo) ExtendETA(cmd repository.ExtendETACmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+func (f *fakeShipmentRepo) RequestPayment(cmd repository.RequestPaymentCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) ConfirmPayment(cmd repository.ConfirmPaymentCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) RevertToDraft(cmd repository.RevertToDraftCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
 func (f *fakeShipmentRepo) RecordPathPlanned(cmd repository.PathPlannedCmd) error {
 	f.recordedPaths = append(f.recordedPaths, cmd)
 	return nil

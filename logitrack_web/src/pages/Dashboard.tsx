@@ -31,6 +31,7 @@ const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "s
   lost:                 { label: "Extraviados",                 tone: "danger" },
   destroyed:            { label: "Daño total",                  tone: "danger" },
   expired:              { label: "Borrador expirado",           tone: "default" },
+  pending_payment:      { label: "Pago pendiente",              tone: "warning" },
 };
 
 function toDateInput(d: Date): string {

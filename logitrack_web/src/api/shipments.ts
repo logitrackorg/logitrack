@@ -41,7 +41,8 @@ export type ShipmentStatus =
   | "cancelled"
   | "lost"
   | "destroyed"
-  | "expired";
+  | "expired"
+  | "pending_payment";
 export type PackageType = "envelope" | "box";
 export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";

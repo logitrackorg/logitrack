@@ -12,6 +12,7 @@ import (
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
@@ -109,6 +110,16 @@ func main() {
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
 
+	// Mercado Pago — nil cuando no está configurado (dev sin MP)
+	mpClient := mercadopago.NewClient(
+		os.Getenv("MP_ACCESS_TOKEN"),
+		os.Getenv("MP_WEBHOOK_SECRET"),
+		getenv("MP_NOTIFICATION_URL", ""),
+	)
+	if mpClient == nil {
+		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — pagos deshabilitados")
+	}
+
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	clockHandler := handler.NewClockHandler(func() {
@@ -125,6 +136,12 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+	paymentRepo := repository.NewPostgresPaymentRepository(database)
+	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
+	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
+	paymentScheduler := service.NewPaymentScheduler(paymentSvc)
+	paymentScheduler.Start()
+
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -203,6 +220,7 @@ func main() {
 
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
 	protected := api.Group("")
@@ -261,6 +279,12 @@ func main() {
 	protected.POST("/shipments/draft", shipmentWrite, shipmentHandler.SaveDraft)
 	protected.PATCH("/shipments/:tracking_id/draft", shipmentWrite, shipmentHandler.UpdateDraft)
 	protected.POST("/shipments/:tracking_id/confirm", shipmentWrite, shipmentHandler.ConfirmDraft)
+
+	// Payment flow — operator, supervisor
+	protected.POST("/shipments/:tracking_id/request-payment", shipmentWrite, paymentHandler.RequestPayment)
+	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
+	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
+	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
