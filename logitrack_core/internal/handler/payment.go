@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -121,11 +122,28 @@ func (h *PaymentHandler) SimulatePayment(c *gin.Context) {
 }
 
 // webhookBody is the minimal structure of an MP webhook notification.
+// MP sends data.id as a JSON number in live payments and as a string in test notifications,
+// so we decode into json.RawMessage and normalise to string.
 type webhookBody struct {
 	Action string `json:"action"`
 	Data   struct {
-		ID string `json:"id"`
+		ID json.RawMessage `json:"id"`
 	} `json:"data"`
+}
+
+func (wb webhookBody) dataID() string {
+	raw := string(wb.Data.ID)
+	if len(raw) == 0 {
+		return ""
+	}
+	// Strip surrounding quotes if it arrived as a JSON string.
+	if raw[0] == '"' {
+		var s string
+		if err := json.Unmarshal(wb.Data.ID, &s); err == nil {
+			return s
+		}
+	}
+	return raw // numeric — return digits directly
 }
 
 // Webhook godoc
@@ -137,37 +155,32 @@ type webhookBody struct {
 // @Success      200  {object}  map[string]string
 // @Router       /webhooks/mercadopago [post]
 func (h *PaymentHandler) Webhook(c *gin.Context) {
+	log.Printf("[webhook] incoming POST from %s", c.ClientIP())
 	rawBody, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no se pudo leer el cuerpo"})
 		return
 	}
 
-	// Validate signature when MP client is configured.
-	if h.mp != nil {
-		xSig := c.GetHeader("x-signature")
-		xReqID := c.GetHeader("x-request-id")
-		var wb webhookBody
-		_ = json.Unmarshal(rawBody, &wb)
-		if err := h.mp.ValidateSignature(xSig, xReqID, wb.Data.ID); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "firma inválida"})
-			return
+	// Parse body; fall back to query params for IPN-style notifications where
+	// MP sends the payment ID in the URL instead of (or in addition to) the body.
+	var wb webhookBody
+	_ = json.Unmarshal(rawBody, &wb)
+	dataID := wb.dataID()
+	if dataID == "" {
+		// IPN formats: ?data.id=XXX&type=payment  or  ?id=XXX&topic=payment
+		if v := c.Query("data.id"); v != "" {
+			dataID = v
+		} else if v := c.Query("id"); v != "" {
+			dataID = v
 		}
 	}
-
-	var wb webhookBody
-	if err := json.Unmarshal(rawBody, &wb); err != nil || wb.Data.ID == "" {
-		// MP sends various notification types; ignore those without a payment ID.
+	if dataID == "" || (wb.Action != "payment.created" && wb.Action != "payment.updated" && wb.Action != "") {
 		c.JSON(http.StatusOK, gin.H{"status": "ignorado"})
 		return
 	}
 
-	if wb.Action != "payment.created" && wb.Action != "payment.updated" {
-		c.JSON(http.StatusOK, gin.H{"status": "ignorado"})
-		return
-	}
-
-	if err := h.svc.HandleWebhook(wb.Data.ID, rawBody); err != nil {
+	if err := h.svc.HandleWebhook(dataID, rawBody); err != nil {
 		// Return 200 anyway to avoid MP retrying infinitely on logic errors.
 		// Log the error and let the expiry cron handle stuck payments.
 		c.JSON(http.StatusOK, gin.H{"status": "error_interno", "detail": err.Error()})

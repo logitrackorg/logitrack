@@ -18,8 +18,8 @@ func NewPostgresPaymentRepository(db *sql.DB) PaymentRepository {
 
 func (r *postgresPaymentRepository) Create(p model.Payment) error {
 	_, err := r.db.Exec(`
-		INSERT INTO payments (id, tracking_id, mp_preference_id, init_point, amount, currency, status, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		INSERT INTO payments (id, tracking_id, original_tracking_id, mp_preference_id, init_point, amount, currency, status, created_at)
+		VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8)`,
 		p.ID, p.TrackingID, p.MPPreferenceID, p.InitPoint,
 		p.Amount, p.Currency, string(p.Status), p.CreatedAt,
 	)
@@ -31,7 +31,7 @@ func (r *postgresPaymentRepository) GetByTrackingID(trackingID string) (model.Pa
 		SELECT id, tracking_id, mp_preference_id, mp_payment_id, init_point,
 		       amount, currency, status, created_at, approved_at, abandoned_at, abandoned_reason
 		FROM payments
-		WHERE tracking_id = $1
+		WHERE (tracking_id = $1 OR original_tracking_id = $1)
 		ORDER BY created_at DESC
 		LIMIT 1`, trackingID)
 	return scanPayment(row)
