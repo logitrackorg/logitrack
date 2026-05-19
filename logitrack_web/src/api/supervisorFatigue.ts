@@ -27,6 +27,14 @@ export interface PVTMetricsData {
   recorded_at: string;
 }
 
+export interface TouchEventRecord {
+  tracking_id: string;
+  action: string;
+  reaction_time_ms: number;
+  misfires: number;
+  recorded_at: string;
+}
+
 export interface CheckinRecord {
   driver_id: string;
   date: string;              // YYYY-MM-DD
@@ -38,6 +46,7 @@ export interface CheckinRecord {
   has_voice: boolean;
   voice_metrics: VoiceMetricsSnapshot | null;
   pvt_metrics?: PVTMetricsData | null;
+  touch_events?: TouchEventRecord[] | null;
 }
 
 export interface DriverFatigueStatus {

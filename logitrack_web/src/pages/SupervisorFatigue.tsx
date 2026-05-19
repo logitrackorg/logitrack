@@ -6,9 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Mic,
-  MicOff,
-  Moon,
   RefreshCw,
   ShieldAlert,
   Users,
@@ -29,19 +26,6 @@ import { fmtDateTime, fmtDateTimeSeconds } from "../utils/date";
 // ── constantes ────────────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 60_000;
-
-const KSS_LABELS: Record<number, string> = {
-  1: "Extremadamente alerta", 2: "Muy alerta", 3: "Alerta",
-  4: "Bastante alerta", 5: "Ni alerta ni somnoliento",
-  6: "Signos leves de somnolencia", 7: "Somnoliento sin esfuerzo",
-  8: "Somnoliento con esfuerzo", 9: "Extremadamente somnoliento",
-};
-
-function kssColor(level: number): string {
-  if (level <= 4) return "text-emerald-600";
-  if (level <= 7) return "text-amber-600";
-  return "text-rose-600";
-}
 
 function kssRangeBadge(level: number): string {
   if (level <= 4) return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -101,71 +85,80 @@ function ScoreBar({
 
 // ── fila de historial ─────────────────────────────────────────────────────────
 
-function HistoryRow({
-  record,
-  greenMax,
-  redMin,
-}: {
-  record: CheckinRecord;
-  greenMax: number;
-  redMin: number;
-}) {
+function HistoryRow({ record }: { record: CheckinRecord }) {
   const [yy, mm, dd] = record.date.split("-");
   const dateLabel = `${dd}/${mm}/${yy}`;
-  const drift = record.drift_score;
+
+  const totalMisfires =
+    record.touch_events && record.touch_events.length > 0
+      ? record.touch_events.reduce((sum, e) => sum + e.misfires, 0)
+      : null;
 
   return (
     <tr className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+      {/* Fecha */}
       <td className="py-2 px-3 text-xs text-slate-600 tabular-nums font-medium whitespace-nowrap">
         {dateLabel}
       </td>
+
       {record.skipped ? (
-        /* Fila de salto — ocupa las columnas de KSS, descripción, sueño, drift y voz */
-        <>
-          <td className="py-2 px-3" colSpan={6}>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-bold bg-orange-50 text-orange-700 border-orange-200">
-              <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-              Salteado por el chofer
-            </span>
-          </td>
-        </>
+        <td className="py-2 px-3" colSpan={5}>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-bold bg-orange-50 text-orange-700 border-orange-200">
+            <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+            Salteado por el chofer
+          </span>
+        </td>
       ) : (
         <>
+          {/* KSS */}
           <td className="py-2 px-3">
             <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${kssRangeBadge(record.kss_level)}`}>
-              KSS {record.kss_level}
+              {record.kss_level}
             </span>
           </td>
-          <td className="py-2 px-3 text-xs tabular-nums">
-            <span className={kssColor(record.kss_level)}>
-              {KSS_LABELS[record.kss_level] ?? `Nivel ${record.kss_level}`}
-            </span>
-          </td>
+
+          {/* Sueño */}
           <td className="py-2 px-3 text-xs tabular-nums text-center text-slate-600">
             {record.horas_sueno}h
           </td>
-          <td className="py-2 px-3 min-w-[100px]">
-            {drift != null ? (
-              <ScoreBar score={drift} greenMax={greenMax} redMin={redMin} />
-            ) : (
-              <span className="text-[11px] text-slate-400 italic">Sin línea base</span>
-            )}
-          </td>
+
+          {/* Score Grabación — drift de voz */}
           <td className="py-2 px-3 text-center">
-            {record.voice_metrics ? (
-              <span title="Análisis de voz completado"><Mic className="w-3.5 h-3.5 text-violet-500 mx-auto" /></span>
+            {record.drift_score != null ? (
+              <span className={`text-[11px] font-bold tabular-nums ${
+                record.drift_score <= 29 ? "text-emerald-600" :
+                record.drift_score < 60  ? "text-amber-600" : "text-rose-600"
+              }`}>
+                {record.drift_score}
+              </span>
             ) : (
-              <span title="Sin análisis de voz"><MicOff className="w-3.5 h-3.5 text-slate-300 mx-auto" /></span>
+              <span className="text-[11px] text-slate-300">—</span>
             )}
           </td>
+
+          {/* PVT — latencia promedio */}
           <td className="py-2 px-3 text-center">
             {record.pvt_metrics ? (
               <span className={`text-[11px] font-bold tabular-nums ${
                 record.pvt_metrics.latencia_promedio_ms < 250 ? "text-emerald-600" :
-                record.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600" :
-                record.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600" : "text-rose-600"
+                record.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600"   :
+                record.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600"  : "text-rose-600"
               }`}>
                 {record.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-300">—</span>
+            )}
+          </td>
+
+          {/* Interacciones táctiles fallidas */}
+          <td className="py-2 px-3 text-center">
+            {totalMisfires !== null ? (
+              <span className={`text-[11px] font-bold tabular-nums ${
+                totalMisfires === 0 ? "text-emerald-600" :
+                totalMisfires <= 3  ? "text-amber-600"   : "text-rose-600"
+              }`}>
+                {totalMisfires}
               </span>
             ) : (
               <span className="text-[11px] text-slate-300">—</span>
@@ -213,71 +206,17 @@ function DriverRow({
           </div>
         </td>
 
-        {/* Semáforo */}
-        <td className="py-3 px-4">
+        {/* Nivel de Riesgo Total — badge + barra de score */}
+        <td className="py-3 px-4 min-w-[160px]">
           <RiskBadge level={driver.risk_level} />
-        </td>
-
-        {/* Score + barra */}
-        <td className="py-3 px-4 min-w-[140px]">
-          {driver.risk_score !== null ? (
-            <ScoreBar score={driver.risk_score} greenMax={greenMax} redMin={redMin} />
-          ) : (
-            <span className="text-xs text-slate-400 italic">—</span>
+          {driver.risk_score !== null && (
+            <div className="mt-2">
+              <ScoreBar score={driver.risk_score} greenMax={greenMax} redMin={redMin} />
+            </div>
           )}
         </td>
 
-        {/* KSS */}
-        <td className="py-3 px-4 text-center">
-          {driver.kss_level !== null ? (
-            <span className={`text-sm font-bold tabular-nums ${kssColor(driver.kss_level)}`}>
-              {driver.kss_level}
-            </span>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* Horas sueño */}
-        <td className="py-3 px-4 text-center">
-          {driver.horas_sueno !== null ? (
-            <span className="text-sm font-semibold tabular-nums text-slate-700">
-              {driver.horas_sueno}h
-            </span>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* Voz */}
-        <td className="py-3 px-4 text-center">
-          {driver.checkin_today ? (
-            driver.has_voice ? (
-              <span title="Voz analizada"><Mic className="w-4 h-4 text-violet-500 mx-auto" /></span>
-            ) : (
-              <span title="Sin análisis de voz"><MicOff className="w-4 h-4 text-slate-300 mx-auto" /></span>
-            )
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* PVT */}
-        <td className="py-3 px-4 text-center">
-          {driver.pvt_metrics ? (
-            <span className={`text-xs font-bold tabular-nums ${
-              driver.pvt_metrics.latencia_promedio_ms < 250 ? "text-emerald-600" :
-              driver.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600" :
-              driver.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600" : "text-rose-600"
-            }`}>
-              {driver.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
-            </span>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* Hora check-in */}
+        {/* Último Check-in */}
         <td className="py-3 px-4">
           {checkinTimeStr ? (
             <span className="text-xs text-slate-500 tabular-nums">{checkinTimeStr}</span>
@@ -305,7 +244,7 @@ function DriverRow({
       {/* Panel de historial expandible */}
       {expanded && (
         <tr>
-          <td colSpan={9} className="bg-slate-50/80 border-t border-slate-100 px-4 py-3">
+          <td colSpan={4} className="bg-slate-50/80 border-t border-slate-100 px-4 py-3">
             {(driver.history ?? []).length === 0 ? (
               <p className="text-xs text-slate-400 italic py-1">
                 Sin historial de check-ins registrado.
@@ -315,13 +254,12 @@ function DriverRow({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 text-left">
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Fecha</th>
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">KSS</th>
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Descripción</th>
+                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Fecha</th>
+                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">KSS</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Sueño</th>
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Drift</th>
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Voz</th>
+                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Score Grabación</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">PVT</th>
+                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Interac. Táctiles Fallidas</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -329,8 +267,6 @@ function DriverRow({
                       <HistoryRow
                         key={rec.date}
                         record={rec}
-                        greenMax={greenMax}
-                        redMin={redMin}
                       />
                     ))}
                   </tbody>
@@ -510,17 +446,8 @@ export function SupervisorFatigue() {
                 <thead className="bg-slate-50">
                   <tr>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Riesgo</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider min-w-[140px]">Nivel de riesgo</th>
-                    <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">KSS</th>
-                    <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      <span title="Horas de sueño"><Moon className="w-3.5 h-3.5 inline" /></span>
-                    </th>
-                    <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      <span title="Análisis de voz"><Mic className="w-3.5 h-3.5 inline" /></span>
-                    </th>
-                    <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">PVT</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Check-in</th>
+                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider min-w-[180px]">Nivel de Riesgo Total</th>
+                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Último Check-in</th>
                     <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Historial</th>
                   </tr>
                 </thead>

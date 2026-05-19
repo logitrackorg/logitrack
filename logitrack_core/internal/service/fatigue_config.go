@@ -17,8 +17,14 @@ func NewFatigueConfigService(repo *repository.FatigueConfigRepository) *FatigueC
 	return &FatigueConfigService{repo: repo}
 }
 
+// Get returns the current config, applying defaults for any zero-value fields.
+// This ensures forward-compatibility when old JSON files (which lacked the new
+// weight/enabled fields) are read — they receive sensible defaults instead of
+// all-zero weights that would break score calculation.
 func (s *FatigueConfigService) Get() model.FatigueConfig {
-	return s.repo.Get()
+	cfg := s.repo.Get()
+	applyFatigueConfigDefaults(&cfg)
+	return cfg
 }
 
 func (s *FatigueConfigService) Update(cfg model.FatigueConfig) (model.FatigueConfig, error) {
@@ -31,12 +37,13 @@ func (s *FatigueConfigService) Update(cfg model.FatigueConfig) (model.FatigueCon
 	if err := s.repo.Update(cfg); err != nil {
 		return model.FatigueConfig{}, err
 	}
-	return s.repo.Get(), nil
+	out := s.repo.Get()
+	applyFatigueConfigDefaults(&out)
+	return out, nil
 }
 
-// ResetCheckins stamps the current time so that any check-in recorded before this
-// moment is treated as "not done" by GetTodayCheckin. The actual check-in data is
-// preserved; drivers can redo (or skip) the gate without losing history.
+// ResetCheckins stamps the current time so that any check-in recorded before
+// this moment is treated as "not done" by GetTodayCheckin.
 func (s *FatigueConfigService) ResetCheckins() (model.FatigueConfig, error) {
 	cfg := s.repo.Get()
 	now := time.Now()
@@ -44,7 +51,32 @@ func (s *FatigueConfigService) ResetCheckins() (model.FatigueConfig, error) {
 	if err := s.repo.Update(cfg); err != nil {
 		return model.FatigueConfig{}, err
 	}
-	return s.repo.Get(), nil
+	out := s.repo.Get()
+	applyFatigueConfigDefaults(&out)
+	return out, nil
+}
+
+// applyFatigueConfigDefaults fills zero-value weight/enabled fields with the
+// package defaults. Called after every read so the service always returns a
+// fully-initialised config regardless of the underlying JSON content.
+func applyFatigueConfigDefaults(cfg *model.FatigueConfig) {
+	d := model.DefaultFatigueConfig()
+
+	if cfg.RiskThresholds.GreenMax == 0 && cfg.RiskThresholds.RedMin == 0 {
+		cfg.RiskThresholds = d.RiskThresholds
+	}
+	// If all weights are zero the file predates this schema version — apply defaults.
+	if cfg.KSSWeight == 0 && cfg.VoiceWeight == 0 &&
+		cfg.TactileWeight == 0 && cfg.PVTWeight == 0 {
+		cfg.KSSWeight = d.KSSWeight
+		cfg.VoiceWeight = d.VoiceWeight
+		cfg.TactileWeight = d.TactileWeight
+		cfg.PVTWeight = d.PVTWeight
+		cfg.KSSEnabled = d.KSSEnabled
+		cfg.VoiceEnabled = d.VoiceEnabled
+		cfg.TactileEnabled = d.TactileEnabled
+		cfg.PVTEnabled = d.PVTEnabled
+	}
 }
 
 func validateFatigueConfig(cfg model.FatigueConfig) error {
@@ -60,36 +92,44 @@ func validateFatigueConfig(cfg model.FatigueConfig) error {
 			cfg.RiskThresholds.GreenMax, cfg.RiskThresholds.RedMin)
 	}
 
-	// ── Voice weights must sum to 1.0 (±0.01 tolerance) ──────────────────────
-	w := cfg.VoiceWeights
-	if w.PitchMean < 0 || w.PitchRange < 0 || w.EnergyRMS < 0 || w.SpeechRate < 0 || w.PauseRatio < 0 {
-		return fmt.Errorf("los pesos de voz no pueden ser negativos")
+	// ── Individual weight range (0–1) ─────────────────────────────────────────
+	weights := map[string]float64{
+		"kss_weight":     cfg.KSSWeight,
+		"voice_weight":   cfg.VoiceWeight,
+		"tactile_weight": cfg.TactileWeight,
+		"pvt_weight":     cfg.PVTWeight,
 	}
-	sum := w.PitchMean + w.PitchRange + w.EnergyRMS + w.SpeechRate + w.PauseRatio
-	if math.Abs(sum-1.0) > 0.01 {
-		return fmt.Errorf("los pesos de voz deben sumar 1.0 (actual: %.4f)", sum)
-	}
-
-	// ── Baseline days ──────────────────────────────────────────────────────────
-	if cfg.MinBaselineDays < 1 || cfg.MinBaselineDays > 90 {
-		return fmt.Errorf("min_baseline_days debe estar entre 1 y 90")
+	for name, w := range weights {
+		if w < 0 || w > 1 {
+			return fmt.Errorf("%s debe estar entre 0.0 y 1.0 (actual: %.4f)", name, w)
+		}
 	}
 
-	// ── KSS scores ─────────────────────────────────────────────────────────────
-	if cfg.KSSScores.KSS14 < 0 {
-		return fmt.Errorf("kss_1_4 no puede ser negativo")
+	// ── Active weights must sum to 1.0 (±0.01) ────────────────────────────────
+	activeSum := 0.0
+	anyEnabled := false
+	if cfg.KSSEnabled {
+		activeSum += cfg.KSSWeight
+		anyEnabled = true
 	}
-	if cfg.KSSScores.KSS57 < 0 {
-		return fmt.Errorf("kss_5_7 no puede ser negativo")
+	if cfg.VoiceEnabled {
+		activeSum += cfg.VoiceWeight
+		anyEnabled = true
 	}
-	if cfg.KSSScores.KSS89 < 0 {
-		return fmt.Errorf("kss_8_9 no puede ser negativo")
+	if cfg.TactileEnabled {
+		activeSum += cfg.TactileWeight
+		anyEnabled = true
 	}
-	if cfg.KSSScores.KSS14 > cfg.KSSScores.KSS57 {
-		return fmt.Errorf("kss_1_4 debe ser menor o igual que kss_5_7")
+	if cfg.PVTEnabled {
+		activeSum += cfg.PVTWeight
+		anyEnabled = true
 	}
-	if cfg.KSSScores.KSS57 > cfg.KSSScores.KSS89 {
-		return fmt.Errorf("kss_5_7 debe ser menor o igual que kss_8_9")
+
+	if anyEnabled && math.Abs(activeSum-1.0) > 0.01 {
+		return fmt.Errorf(
+			"la suma de los pesos de las pruebas activas debe ser 1.0 (actual: %.4f)",
+			activeSum,
+		)
 	}
 
 	return nil

@@ -15,25 +15,21 @@ export interface RiskThresholds {
   red_min: number;
 }
 
-export interface VoiceWeights {
-  pitch_mean: number;
-  pitch_range: number;
-  energy_rms: number;
-  speech_rate: number;
-  pause_ratio: number;
-}
-
-export interface KSSScores {
-  kss_1_4: number;
-  kss_5_7: number;
-  kss_8_9: number;
-}
-
 export interface FatigueConfig {
   risk_thresholds: RiskThresholds;
-  voice_weights: VoiceWeights;
-  min_baseline_days: number;
-  kss_scores: KSSScores;
+
+  // Per-test weights (0.0–1.0). Sum of enabled-test weights must equal 1.0.
+  kss_weight:     number;
+  voice_weight:   number;
+  tactile_weight: number;
+  pvt_weight:     number;
+
+  // Per-test enable flags. Disabled tests are excluded from the composite score.
+  kss_enabled:     boolean;
+  voice_enabled:   boolean;
+  tactile_enabled: boolean;
+  pvt_enabled:     boolean;
+
   /** ISO timestamp; null/absent when no reset has been triggered yet. */
   last_checkin_reset?: string | null;
 }

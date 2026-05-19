@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -122,28 +123,78 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	return status
 }
 
-// fatigueRiskScore computes a composite 0–100 risk score combining the acoustic
-// drift score and the KSS level penalty defined in FatigueConfig, then classifies
-// the result into a DriverRiskLevel colour band.
-func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (score int, level model.DriverRiskLevel) {
-	// KSS → penalty points from config
-	var kssPenalty int
+// normalizeKSS maps the KSS level (1–9) to a fixed 0–100 risk scale.
+// KSS 1–4 = alert (0 risk), KSS 5–7 = moderate (50 risk), KSS 8–9 = high (100 risk).
+// The mapping is hardcoded; the admin no longer configures per-range penalties.
+func normalizeKSS(level int) float64 {
 	switch {
-	case checkin.KSSLevel >= 8:
-		kssPenalty = cfg.KSSScores.KSS89
-	case checkin.KSSLevel >= 5:
-		kssPenalty = cfg.KSSScores.KSS57
+	case level >= 8:
+		return 100
+	case level >= 5:
+		return 50
 	default:
-		kssPenalty = cfg.KSSScores.KSS14
+		return 0
+	}
+}
+
+// fatigueRiskScore computes a weighted composite score (0–100) using the
+// per-test weights and enabled flags from FatigueConfig.
+//
+// Only ENABLED tests contribute to the score. If an enabled test has no data
+// yet (e.g. voice drift requires a baseline), its weight is redistributed
+// proportionally among enabled tests that do have data.
+func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (score int, level model.DriverRiskLevel) {
+	type testData struct {
+		value        float64 // normalised 0–100
+		configWeight float64 // weight from the config
 	}
 
-	// Drift score (0 when no baseline yet — first check-in)
-	drift := 0
-	if checkin.DriftScore != nil {
-		drift = *checkin.DriftScore
+	var parts []testData
+
+	// ── KSS ───────────────────────────────────────────────────────────────────
+	if cfg.KSSEnabled {
+		parts = append(parts, testData{normalizeKSS(checkin.KSSLevel), cfg.KSSWeight})
 	}
 
-	score = drift + kssPenalty
+	// ── Voice drift — already 0–100; only when a baseline exists ─────────────
+	if cfg.VoiceEnabled && checkin.DriftScore != nil {
+		parts = append(parts, testData{float64(*checkin.DriftScore), cfg.VoiceWeight})
+	}
+
+	// ── Touch-event misfires — cap at 10 total (= 100 risk) ──────────────────
+	if cfg.TactileEnabled && len(checkin.TouchEvents) > 0 {
+		total := 0
+		for _, e := range checkin.TouchEvents {
+			total += e.Misfires
+		}
+		parts = append(parts, testData{math.Min(float64(total)*10.0, 100.0), cfg.TactileWeight})
+	}
+
+	// ── PVT latency — 0 ms = 0 risk, ≥ 500 ms = 100 risk ───────────────────
+	if cfg.PVTEnabled && checkin.PVTMetrics != nil {
+		parts = append(parts, testData{math.Min(checkin.PVTMetrics.LatenciaPromedioMs/5.0, 100.0), cfg.PVTWeight})
+	}
+
+	if len(parts) == 0 {
+		// No enabled tests have data — classify as green (no evidence of risk).
+		return 0, model.RiskGreen
+	}
+
+	// Proportional redistribution among the parts that have data.
+	totalWeight := 0.0
+	for _, p := range parts {
+		totalWeight += p.configWeight
+	}
+
+	composite := 0.0
+	for _, p := range parts {
+		composite += (p.configWeight / totalWeight) * p.value
+	}
+
+	score = int(math.Round(composite))
+	if score < 0 {
+		score = 0
+	}
 	if score > 100 {
 		score = 100
 	}

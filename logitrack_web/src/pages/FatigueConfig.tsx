@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Brain, ChevronDown, ChevronUp, ClipboardList, FlaskConical, RotateCcw } from "lucide-react";
+import {
+  AlertCircle,
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  FlaskConical,
+  RotateCcw,
+} from "lucide-react";
 import {
   fatigueConfigApi,
   type AuditLog,
   type FatigueConfig as FatigueConfigType,
-  type VoiceWeights,
 } from "../api/fatigueConfig";
 import { PageHeader } from "../components/ui/page-header";
 import {
@@ -17,43 +25,82 @@ import {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const inputClass =
-  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
-
 function num(v: string, fallback = 0): number {
   const n = parseFloat(v);
   return Number.isNaN(n) ? fallback : n;
 }
 
-function pct(v: number): string {
-  return (v * 100).toFixed(1);
+// Sum of active-test weights, rounded to avoid float noise.
+function activeWeightsSum(draft: FatigueConfigType): number {
+  return Math.round((
+    (draft.kss_enabled     ? draft.kss_weight     : 0) +
+    (draft.voice_enabled   ? draft.voice_weight   : 0) +
+    (draft.tactile_enabled ? draft.tactile_weight : 0) +
+    (draft.pvt_enabled     ? draft.pvt_weight     : 0)
+  ) * 1e4) / 1e4;
 }
 
-/** Suma de los cinco pesos de voz, redondeada a 4 decimales para evitar ruido de punto flotante. */
-function weightsSum(w: VoiceWeights): number {
-  return Math.round((w.pitch_mean + w.pitch_range + w.energy_rms + w.speech_rate + w.pause_ratio) * 1e4) / 1e4;
+// ── test definitions ─────────────────────────────────────────────────────────
+
+interface TestDef {
+  id: "kss" | "voice" | "tactile" | "pvt";
+  label: string;
+  description: string;
+  enabledKey: keyof FatigueConfigType;
+  weightKey:  keyof FatigueConfigType;
 }
+
+const TESTS: TestDef[] = [
+  {
+    id: "kss",
+    label: "Escala KSS",
+    description: "Check-in de somnolencia Karolinska (KSS 1–9). Mapeado internamente: 1-4 = 0, 5-7 = 50, 8-9 = 100.",
+    enabledKey: "kss_enabled",
+    weightKey:  "kss_weight",
+  },
+  {
+    id: "voice",
+    label: "Grabación de voz",
+    description: "Drift acústico respecto a la línea base del chofer (0–100). Requiere historial de voz previo.",
+    enabledKey: "voice_enabled",
+    weightKey:  "voice_weight",
+  },
+  {
+    id: "tactile",
+    label: "Eventos táctiles",
+    description: "Suma de toques erróneos durante la gestión de entregas, normalizada (10+ = 100).",
+    enabledKey: "tactile_enabled",
+    weightKey:  "tactile_weight",
+  },
+  {
+    id: "pvt",
+    label: "PVT — Prueba psicomotriz",
+    description: "Latencia promedio de reacción (0 ms = 0, ≥500 ms = 100). Requiere que el chofer complete el minijuego.",
+    enabledKey: "pvt_enabled",
+    weightKey:  "pvt_weight",
+  },
+];
 
 // ── componente principal ─────────────────────────────────────────────────────
 
 export function FatigueConfig() {
   const [config, setConfig] = useState<FatigueConfigType | null>(null);
-  const [draft, setDraft] = useState<FatigueConfigType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [draft,  setDraft]  = useState<FatigueConfigType | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
+  const [success,  setSuccess]  = useState(false);
 
   // reset de check-ins (testing)
-  const [resetting, setResetting] = useState(false);
-  const [resetError, setResetError] = useState("");
+  const [resetting,    setResetting]    = useState(false);
+  const [resetError,   setResetError]   = useState("");
   const [resetSuccess, setResetSuccess] = useState(false);
 
   // historial de auditoría (US13)
-  const [auditOpen, setAuditOpen] = useState(false);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[] | null>(null);
+  const [auditOpen,    setAuditOpen]    = useState(false);
+  const [auditLogs,    setAuditLogs]    = useState<AuditLog[] | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
-  const [auditError, setAuditError] = useState("");
+  const [auditError,   setAuditError]   = useState("");
 
   const reloadAuditLogs = () => {
     setAuditLoading(true);
@@ -68,17 +115,13 @@ export function FatigueConfig() {
   const handleToggleAudit = () => {
     const next = !auditOpen;
     setAuditOpen(next);
-    // Carga lazy: solo busca la primera vez que se abre.
     if (next && auditLogs === null) reloadAuditLogs();
   };
 
   useEffect(() => {
     fatigueConfigApi
       .get()
-      .then((cfg) => {
-        setConfig(cfg);
-        setDraft(cfg);
-      })
+      .then((cfg) => { setConfig(cfg); setDraft(cfg); })
       .catch(() => setError("No se pudo cargar la configuración."))
       .finally(() => setLoading(false));
   }, []);
@@ -94,7 +137,6 @@ export function FatigueConfig() {
       setDraft(updated);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 4000);
-      // Refresca el historial para mostrar el nuevo registro inmediatamente.
       reloadAuditLogs();
     } catch (err: unknown) {
       const msg =
@@ -112,7 +154,6 @@ export function FatigueConfig() {
     setResetSuccess(false);
     try {
       const updated = await fatigueConfigApi.resetCheckins();
-      // Refresh config so last_checkin_reset timestamp shows in UI immediately.
       setConfig(updated);
       setDraft(updated);
       setResetSuccess(true);
@@ -127,19 +168,20 @@ export function FatigueConfig() {
     }
   };
 
-  const setWeight = (key: keyof VoiceWeights, raw: string) => {
-    if (!draft) return;
-    const v = Math.min(1, Math.max(0, num(raw) / 100));
-    setDraft({ ...draft, voice_weights: { ...draft.voice_weights, [key]: v } });
-  };
+  // ── validation ───────────────────────────────────────────────────────────
 
   const isDirty = draft !== null && config !== null &&
     JSON.stringify(draft) !== JSON.stringify(config);
 
-  // Validación de pesos — 100% ± 1%
-  const wSum = draft ? weightsSum(draft.voice_weights) : 0;
-  const weightsOk = Math.abs(wSum - 1.0) <= 0.01;
-  const canSave = isDirty && weightsOk;
+  const wSum       = draft ? activeWeightsSum(draft) : 0;
+  const noneEnabled = draft
+    ? !draft.kss_enabled && !draft.voice_enabled && !draft.tactile_enabled && !draft.pvt_enabled
+    : false;
+  // Valid when: all disabled (neutral state), OR active weights sum to 100%.
+  const weightsOk  = noneEnabled || Math.abs(wSum - 1.0) <= 0.01;
+  const canSave    = isDirty && weightsOk;
+
+  // ── loading / error states ───────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -162,6 +204,8 @@ export function FatigueConfig() {
     );
   }
 
+  // ── render ───────────────────────────────────────────────────────────────
+
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-5">
       <PageHeader
@@ -175,7 +219,7 @@ export function FatigueConfig() {
         <CardHeader>
           <CardTitle>Umbrales de riesgo</CardTitle>
           <CardDescription>
-            El drift score (0–100) se clasifica en tres zonas según estos límites.
+            El score compuesto (0–100) se clasifica según estos límites.
             Verde ≤ <strong>green_max</strong> · Rojo ≥ <strong>red_min</strong> · Ámbar en el medio.
           </CardDescription>
         </CardHeader>
@@ -183,22 +227,14 @@ export function FatigueConfig() {
           <div className="space-y-4">
             <FieldRow
               label="Límite superior verde (green_max)"
-              hint="Puntuación máxima para mostrar badge verde (sin riesgo). Rango 0–99."
+              hint="Puntuación máxima para badge verde (sin riesgo). Rango 0–99."
             >
               <input
                 type="number"
-                min={0}
-                max={99}
-                step={1}
+                min={0} max={99} step={1}
                 value={draft.risk_thresholds.green_max}
                 onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    risk_thresholds: {
-                      ...draft.risk_thresholds,
-                      green_max: num(e.target.value),
-                    },
-                  })
+                  setDraft({ ...draft, risk_thresholds: { ...draft.risk_thresholds, green_max: num(e.target.value) } })
                 }
                 className={inputClass}
               />
@@ -207,173 +243,55 @@ export function FatigueConfig() {
 
             <FieldRow
               label="Límite inferior rojo (red_min)"
-              hint="Puntuación mínima para mostrar badge rojo (riesgo alto). Debe ser mayor que green_max."
+              hint="Puntuación mínima para badge rojo (riesgo alto). Debe ser mayor que green_max."
             >
               <input
                 type="number"
-                min={1}
-                max={100}
-                step={1}
+                min={1} max={100} step={1}
                 value={draft.risk_thresholds.red_min}
                 onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    risk_thresholds: {
-                      ...draft.risk_thresholds,
-                      red_min: num(e.target.value),
-                    },
-                  })
+                  setDraft({ ...draft, risk_thresholds: { ...draft.risk_thresholds, red_min: num(e.target.value) } })
                 }
                 className={inputClass}
               />
               <ScoreBadge color="rose" label={`≥ ${draft.risk_thresholds.red_min}`} />
             </FieldRow>
 
-            {/* Visualización de las bandas */}
-            <RiskBandBar
-              greenMax={draft.risk_thresholds.green_max}
-              redMin={draft.risk_thresholds.red_min}
-            />
+            <RiskBandBar greenMax={draft.risk_thresholds.green_max} redMin={draft.risk_thresholds.red_min} />
           </div>
         </CardContent>
       </Card>
 
-      {/* ── Pesos de señal de voz ──────────────────────────────────────── */}
+      {/* ── Pruebas activas y pesos ─────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>Pesos de la señal de voz</CardTitle>
+          <CardTitle>Pruebas activas y pesos</CardTitle>
           <CardDescription>
-            Contribución de cada característica acústica al drift score. Deben sumar exactamente 100%.
+            Activá o desactivá cada prueba individualmente y asigná su porcentaje de peso.
+            La suma de los pesos de las pruebas <strong>activas</strong> debe ser exactamente 100%.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {(
-              [
-                { key: "pitch_mean" as const, label: "Tono medio (pitch_mean)", hint: "Frecuencia fundamental promedio — indicador primario de fatiga." },
-                { key: "pitch_range" as const, label: "Rango tonal (pitch_range)", hint: "Variación máx-mín de tono — habla monótona indica somnolencia." },
-                { key: "energy_rms" as const, label: "Energía RMS (energy_rms)", hint: "Amplitud normalizada — energía baja correlaciona con cansancio." },
-                { key: "speech_rate" as const, label: "Velocidad de habla (speech_rate)", hint: "Sílabas por segundo — habla lenta es marcador de fatiga." },
-                { key: "pause_ratio" as const, label: "Ratio de pausas (pause_ratio)", hint: "Fracción de silencio — pausas largas indican carga cognitiva." },
-              ] as const
-            ).map(({ key, label, hint }) => (
-              <FieldRow key={key} label={label} hint={hint}>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={pct(draft.voice_weights[key])}
-                    onChange={(e) => setWeight(key, e.target.value)}
-                    className={inputClass}
-                  />
-                  <span className="text-sm text-slate-500 w-6">%</span>
-                </div>
-              </FieldRow>
-            ))}
+            {TESTS.map((test) => {
+              const enabled = draft[test.enabledKey] as boolean;
+              const weight  = draft[test.weightKey]  as number;
+              return (
+                <TestRow
+                  key={test.id}
+                  label={test.label}
+                  description={test.description}
+                  enabled={enabled}
+                  weight={weight}
+                  onToggle={(v) => setDraft({ ...draft, [test.enabledKey]: v })}
+                  onWeight={(v) => setDraft({ ...draft, [test.weightKey]: v })}
+                />
+              );
+            })}
           </div>
 
-          {/* Indicador de suma de pesos */}
-          <WeightsSumBadge sum={wSum} ok={weightsOk} />
-        </CardContent>
-      </Card>
-
-      {/* ── Días mínimos para baseline ─────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Días mínimos para baseline</CardTitle>
-          <CardDescription>
-            Cantidad de jornadas de check-in necesarias antes de que el sistema compute un drift score
-            significativo. Con menos muestras, se muestra "Sin historial". Rango: 1–90 días.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldRow
-            label="Días mínimos (min_baseline_days)"
-            hint="Default: 10 días."
-          >
-            <input
-              type="number"
-              min={1}
-              max={90}
-              step={1}
-              value={draft.min_baseline_days}
-              onChange={(e) =>
-                setDraft({ ...draft, min_baseline_days: num(e.target.value) })
-              }
-              className={inputClass}
-            />
-          </FieldRow>
-        </CardContent>
-      </Card>
-
-      {/* ── Puntajes KSS ──────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Puntajes de somnolencia KSS</CardTitle>
-          <CardDescription>
-            Penalidad adicional sobre el drift score según el nivel KSS declarado por el chofer.
-            Deben estar en orden no decreciente (kss_1_4 ≤ kss_5_7 ≤ kss_8_9).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <FieldRow
-              label="KSS 1–4 (alerta a moderado)"
-              hint="Ejemplo: 0 puntos (sin penalidad)."
-            >
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={draft.kss_scores.kss_1_4}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    kss_scores: { ...draft.kss_scores, kss_1_4: num(e.target.value) },
-                  })
-                }
-                className={inputClass}
-              />
-            </FieldRow>
-            <FieldRow
-              label="KSS 5–7 (somnolencia moderada)"
-              hint="Ejemplo: 15 puntos."
-            >
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={draft.kss_scores.kss_5_7}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    kss_scores: { ...draft.kss_scores, kss_5_7: num(e.target.value) },
-                  })
-                }
-                className={inputClass}
-              />
-            </FieldRow>
-            <FieldRow
-              label="KSS 8–9 (somnolencia alta)"
-              hint="Ejemplo: 30 puntos."
-            >
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={draft.kss_scores.kss_8_9}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    kss_scores: { ...draft.kss_scores, kss_8_9: num(e.target.value) },
-                  })
-                }
-                className={inputClass}
-              />
-            </FieldRow>
-          </div>
+          {/* Indicador de suma */}
+          <ActiveWeightsBadge sum={wSum} ok={weightsOk} noneEnabled={noneEnabled} />
         </CardContent>
       </Card>
 
@@ -394,24 +312,18 @@ export function FatigueConfig() {
               <p className="text-sm font-semibold text-slate-700">Resetear check-ins del día</p>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 Fuerza que <strong>todos los choferes</strong> vean la puerta de check-in nuevamente,
-                sin importar si ya la completaron hoy. Los datos registrados (KSS, voz, métricas)
-                se preservan y se sobrescriben si el chofer rehace el check-in.
+                sin importar si ya la completaron hoy. Los datos registrados se preservan.
               </p>
               {config?.last_checkin_reset && (
                 <p className="mt-1.5 text-[11px] text-amber-700 font-medium">
                   Último reset:{" "}
                   {new Date(config.last_checkin_reset).toLocaleString("es-AR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit", second: "2-digit",
                   })}
                 </p>
               )}
             </div>
-
             <button
               onClick={handleResetCheckins}
               disabled={resetting}
@@ -421,7 +333,6 @@ export function FatigueConfig() {
               {resetting ? "Reseteando…" : "Resetear ahora"}
             </button>
           </div>
-
           {resetSuccess && (
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -451,10 +362,10 @@ export function FatigueConfig() {
             Configuración guardada correctamente.
           </div>
         )}
-        {!weightsOk && isDirty && (
+        {!weightsOk && isDirty && !noneEnabled && (
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            Los pesos de voz deben sumar 100% antes de guardar (actual: {(wSum * 100).toFixed(1)}%).
+            La suma de los pesos de las pruebas activas debe ser 100% (actual: {(wSum * 100).toFixed(1)}%).
           </div>
         )}
 
@@ -480,7 +391,6 @@ export function FatigueConfig() {
 
       {/* ── Historial de auditoría (US13) ──────────────────────────── */}
       <Card>
-        {/* Encabezado clickeable — igual que el patrón de MLConfig */}
         <button
           type="button"
           onClick={handleToggleAudit}
@@ -495,16 +405,12 @@ export function FatigueConfig() {
               </span>
             )}
           </span>
-          {auditOpen
-            ? <ChevronUp className="w-4 h-4 text-slate-400" />
-            : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          {auditOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </button>
 
         {auditOpen && (
           <div className="border-t border-slate-100 px-5 pb-5 pt-3">
-            {auditLoading && (
-              <p className="text-sm text-slate-400 py-6 text-center">Cargando historial…</p>
-            )}
+            {auditLoading && <p className="text-sm text-slate-400 py-6 text-center">Cargando historial…</p>}
             {auditError && (
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700 mb-3">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -518,7 +424,6 @@ export function FatigueConfig() {
             )}
             {!auditLoading && auditLogs && auditLogs.length > 0 && (
               <>
-                {/* Tabla read-only — sin botones de edición ni borrado (AC2) */}
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
@@ -550,87 +455,120 @@ export function FatigueConfig() {
 
 // ── sub-componentes ───────────────────────────────────────────────────────────
 
-const thStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  textAlign: "left",
-  fontWeight: 700,
-  fontSize: 11,
-  color: "#6b7280",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  whiteSpace: "nowrap",
-};
+const inputClass =
+  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
 
-const tdStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "top",
-};
+// ── Toggle switch ─────────────────────────────────────────────────────────────
 
-const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
-  UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "#dbeafe", color: "#1e40af" },
-  SUBMIT_CHECKIN:        { label: "Check-in",       bg: "#dcfce7", color: "#166534" },
-  SKIP_CHECKIN:          { label: "Salteado",        bg: "#ffedd5", color: "#9a3412" },
-};
-
-function formatAuditDate(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-function AuditRow({ log }: { log: AuditLog }) {
-  const badge = ACTION_BADGE[log.action] ?? { label: log.action, bg: "#f3f4f6", color: "#374151" };
-  const d = log.details;
-
-  let detailText = "—";
-  if (log.action === "UPDATE_FATIGUE_CONFIG" && d.risk_thresholds) {
-    const rt = d.risk_thresholds as { green_max?: number; red_min?: number };
-    detailText = `verde≤${rt.green_max ?? "?"} · rojo≥${rt.red_min ?? "?"} · baseline ${(d.min_baseline_days as number) ?? "?"} días`;
-  } else if (log.action === "SUBMIT_CHECKIN") {
-    detailText = `KSS ${d.kss_level ?? "?"} · ${d.horas_sueno ?? "?"}h sueño`;
-  } else if (log.action === "SKIP_CHECKIN") {
-    detailText = `Fecha ${d.date ?? "?"}`;
-  }
-
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "#374151" }}>
-        {formatAuditDate(log.created_at)}
-      </td>
-      <td style={{ ...tdStyle, fontWeight: 600, color: "#111827" }}>
-        {log.created_by}
-      </td>
-      <td style={tdStyle}>
-        <span style={{
-          background: badge.bg,
-          color: badge.color,
-          borderRadius: 4,
-          padding: "2px 8px",
-          fontWeight: 600,
-          fontSize: 11,
-          whiteSpace: "nowrap",
-        }}>
-          {badge.label}
-        </span>
-      </td>
-      <td style={{ ...tdStyle, color: "#6b7280", fontSize: 12 }}>
-        {detailText}
-      </td>
-    </tr>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
+        checked ? "bg-[#1e3a5f]" : "bg-slate-200"
+      }`}
+      role="switch"
+      aria-checked={checked}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 
-function FieldRow({
+// ── TestRow — one row per fatigue test ────────────────────────────────────────
+
+function TestRow({
   label,
-  hint,
-  children,
+  description,
+  enabled,
+  weight,
+  onToggle,
+  onWeight,
 }: {
   label: string;
-  hint: string;
-  children: React.ReactNode;
+  description: string;
+  enabled: boolean;
+  weight: number;
+  onToggle: (v: boolean) => void;
+  onWeight: (v: number) => void;
 }) {
+  return (
+    <div className={`flex items-start gap-4 px-4 py-3.5 rounded-xl border transition-colors ${
+      enabled ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50/60"
+    }`}>
+      {/* Toggle */}
+      <div className="pt-0.5 shrink-0">
+        <Toggle checked={enabled} onChange={onToggle} />
+      </div>
+
+      {/* Label + description */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold leading-snug ${enabled ? "text-slate-800" : "text-slate-400"}`}>
+          {label}
+        </p>
+        <p className="text-xs text-slate-400 leading-snug mt-0.5">{description}</p>
+      </div>
+
+      {/* Weight input */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(weight * 100)}
+          onChange={(e) => onWeight(Math.min(1, Math.max(0, num(e.target.value) / 100)))}
+          disabled={!enabled}
+          className={`h-10 w-20 px-3 rounded-lg border text-sm tabular-nums text-right focus:outline-none transition-all ${
+            enabled
+              ? "border-slate-200 bg-white text-slate-900 focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
+          }`}
+        />
+        <span className={`text-sm font-medium w-4 ${enabled ? "text-slate-500" : "text-slate-300"}`}>%</span>
+      </div>
+    </div>
+  );
+}
+
+// ── ActiveWeightsBadge ────────────────────────────────────────────────────────
+
+function ActiveWeightsBadge({ sum, ok, noneEnabled }: { sum: number; ok: boolean; noneEnabled: boolean }) {
+  if (noneEnabled) {
+    return (
+      <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
+        <span>Todas las pruebas desactivadas — el score de riesgo no se calculará.</span>
+      </div>
+    );
+  }
+  return (
+    <div className={`mt-4 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-semibold ${
+      ok
+        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+        : "bg-rose-50 border-rose-200 text-rose-700"
+    }`}>
+      {ok ? (
+        <CheckCircle2 className="w-4 h-4 shrink-0" />
+      ) : (
+        <AlertCircle className="w-4 h-4 shrink-0" />
+      )}
+      <span>
+        Suma de pesos activos:{" "}
+        <span className="tabular-nums font-bold">{(sum * 100).toFixed(1)}%</span>
+        {ok ? " ✓ válido" : " — debe ser 100%"}
+      </span>
+    </div>
+  );
+}
+
+// ── FieldRow ──────────────────────────────────────────────────────────────────
+
+function FieldRow({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-start gap-2">
       <div className="flex-1 min-w-0">
@@ -641,6 +579,8 @@ function FieldRow({
     </div>
   );
 }
+
+// ── ScoreBadge ────────────────────────────────────────────────────────────────
 
 function ScoreBadge({ color, label }: { color: "emerald" | "rose"; label: string }) {
   const cls =
@@ -653,6 +593,8 @@ function ScoreBadge({ color, label }: { color: "emerald" | "rose"; label: string
     </span>
   );
 }
+
+// ── RiskBandBar ───────────────────────────────────────────────────────────────
 
 function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number }) {
   const valid = greenMax < redMin && greenMax >= 0 && redMin <= 100;
@@ -672,25 +614,13 @@ function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number })
         Vista previa de bandas
       </p>
       <div className="flex h-5 rounded-full overflow-hidden text-[10px] font-bold">
-        <div
-          className="bg-emerald-400 flex items-center justify-center text-white"
-          style={{ width: `${gPct}%` }}
-          title={`Verde: 0–${greenMax}`}
-        >
+        <div className="bg-emerald-400 flex items-center justify-center text-white" style={{ width: `${gPct}%` }} title={`Verde: 0–${greenMax}`}>
           {gPct >= 8 ? "Verde" : ""}
         </div>
-        <div
-          className="bg-amber-400 flex items-center justify-center text-white"
-          style={{ width: `${aPct}%` }}
-          title={`Ámbar: ${greenMax + 1}–${redMin - 1}`}
-        >
+        <div className="bg-amber-400 flex items-center justify-center text-white" style={{ width: `${aPct}%` }} title={`Ámbar: ${greenMax + 1}–${redMin - 1}`}>
           {aPct >= 8 ? "Ámbar" : ""}
         </div>
-        <div
-          className="bg-rose-500 flex items-center justify-center text-white"
-          style={{ width: `${rPct}%` }}
-          title={`Rojo: ${redMin}–100`}
-        >
+        <div className="bg-rose-500 flex items-center justify-center text-white" style={{ width: `${rPct}%` }} title={`Rojo: ${redMin}–100`}>
           {rPct >= 8 ? "Rojo" : ""}
         </div>
       </div>
@@ -704,51 +634,68 @@ function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number })
   );
 }
 
-function WeightsSumBadge({ sum, ok }: { sum: number; ok: boolean }) {
-  const pctSum = (sum * 100).toFixed(1);
-  return (
-    <div
-      className={`mt-4 flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-semibold ${
-        ok
-          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-          : "bg-rose-50 border-rose-200 text-rose-700"
-      }`}
-    >
-      {ok ? (
-        <CheckCircle2 className="w-4 h-4 shrink-0" />
-      ) : (
-        <AlertCircle className="w-4 h-4 shrink-0" />
-      )}
-      <span>
-        Suma de pesos:{" "}
-        <span className="tabular-nums font-bold">{pctSum}%</span>
-        {ok ? " ✓ válido" : ` — debe ser 100%`}
-      </span>
+// ── Audit log sub-components ──────────────────────────────────────────────────
 
-      {/* Barra de progreso proporcional a cada peso */}
-      {ok && (
-        <div className="ml-auto flex items-center gap-0.5 shrink-0">
-          {(["pitch_mean", "pitch_range", "energy_rms", "speech_rate", "pause_ratio"] as const).map(
-            (k, i) => {
-              const colors = [
-                "bg-violet-500",
-                "bg-blue-500",
-                "bg-sky-500",
-                "bg-teal-500",
-                "bg-emerald-500",
-              ];
-              return (
-                <div
-                  key={k}
-                  title={k}
-                  className={`h-4 rounded-sm ${colors[i]}`}
-                  style={{ width: `${sum > 0 ? 0 : 0}px` }}
-                />
-              );
-            }
-          )}
-        </div>
-      )}
-    </div>
+const thStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  textAlign: "left",
+  fontWeight: 700,
+  fontSize: 11,
+  color: "#6b7280",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "top",
+};
+
+const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "#dbeafe", color: "#1e40af" },
+  SUBMIT_CHECKIN:        { label: "Check-in",        bg: "#dcfce7", color: "#166534" },
+  SKIP_CHECKIN:          { label: "Salteado",         bg: "#ffedd5", color: "#9a3412" },
+};
+
+function formatAuditDate(iso: string): string {
+  return new Date(iso).toLocaleString("es-AR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function AuditRow({ log }: { log: AuditLog }) {
+  const badge = ACTION_BADGE[log.action] ?? { label: log.action, bg: "#f3f4f6", color: "#374151" };
+  const d = log.details;
+
+  let detailText = "—";
+  if (log.action === "UPDATE_FATIGUE_CONFIG" && d.risk_thresholds) {
+    const rt = d.risk_thresholds as { green_max?: number; red_min?: number };
+    const active = (["kss", "voice", "tactile", "pvt"] as const)
+      .filter((k) => d[`${k}_enabled`])
+      .map((k) => `${k}: ${((d[`${k}_weight`] as number ?? 0) * 100).toFixed(0)}%`)
+      .join(" · ");
+    detailText = `verde≤${rt.green_max ?? "?"} · rojo≥${rt.red_min ?? "?"}${active ? ` · [${active}]` : ""}`;
+  } else if (log.action === "SUBMIT_CHECKIN") {
+    detailText = `KSS ${d.kss_level ?? "?"} · ${d.horas_sueno ?? "?"}h sueño`;
+  } else if (log.action === "SKIP_CHECKIN") {
+    detailText = `Fecha ${d.date ?? "?"}`;
+  }
+
+  return (
+    <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "#374151" }}>
+        {formatAuditDate(log.created_at)}
+      </td>
+      <td style={{ ...tdStyle, fontWeight: 600, color: "#111827" }}>{log.created_by}</td>
+      <td style={tdStyle}>
+        <span style={{ background: badge.bg, color: badge.color, borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
+          {badge.label}
+        </span>
+      </td>
+      <td style={{ ...tdStyle, color: "#6b7280", fontSize: 12 }}>{detailText}</td>
+    </tr>
   );
 }
