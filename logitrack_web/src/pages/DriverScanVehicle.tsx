@@ -18,9 +18,33 @@ export default function DriverScanVehicle() {
   const [phase, setPhase] = useState<"scan" | "checkin">("scan");
   const qrRef = useRef<Html5Qrcode | null>(null);
 
+  const CHECKIN_FLAG = "checkinPending";
+
   // Si el chofer ya tiene una ruta activa (last-mile) o un viaje intersucursal
   // activo, mandarlo directo a esa pantalla sin pedirle que vuelva a escanear.
+  // Excepción: si hay un check-in pendiente en curso (persiste tras F5), restaurar
+  // la fase de pruebas de fatiga en lugar de permitir el bypass a la ruta.
   useEffect(() => {
+    if (sessionStorage.getItem(CHECKIN_FLAG) === "1") {
+      // El chofer recargó la página mientras hacía las pruebas de fatiga.
+      // Verificar contra el backend si realmente no completó el check-in.
+      driverApi.getTodayCheckin()
+        .then(() => {
+          // Ya completó → limpiar flag y dejar que la pantalla de escaneo cargue normal.
+          sessionStorage.removeItem(CHECKIN_FLAG);
+        })
+        .catch((err: { response?: { status?: number } }) => {
+          if (err?.response?.status === 404) {
+            // Todavía pendiente → restaurar fase de pruebas sin redirigir a la ruta.
+            setPhase("checkin");
+          } else {
+            // Error de red → limpiar flag, no bloquear al chofer.
+            sessionStorage.removeItem(CHECKIN_FLAG);
+          }
+        });
+      return; // No ejecutar la lógica de auto-redirect mientras hay checkin pendiente.
+    }
+
     driverApi.getRoute().then((data) => {
       const hasPending = data.shipments.some((s) => s.status === "out_for_delivery");
       const hasFailed = data.shipments.some((s) => s.status === "delivery_failed");
@@ -32,7 +56,7 @@ export default function DriverScanVehicle() {
         navigate("/driver/trip", { replace: true });
       }
     }).catch(() => { /* sin trip — quedarse acá */ });
-  }, [navigate]);
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goToRouteOrCheckin = async (successMsg: string) => {
     setSuccess(successMsg);
@@ -44,7 +68,8 @@ export default function DriverScanVehicle() {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 404) {
-        // No check-in yet — show fatigue tests.
+        // No check-in yet — persist flag so un F5 no permite el bypass, luego mostrar pruebas.
+        sessionStorage.setItem(CHECKIN_FLAG, "1");
         setTimeout(() => setPhase("checkin"), 900);
       } else {
         // Network/server error — skip tests and go to route as fallback.
@@ -138,7 +163,10 @@ export default function DriverScanVehicle() {
     return (
       <KssCheckIn
         driverId={user.id}
-        onDone={() => navigate("/driver/route")}
+        onDone={() => {
+          sessionStorage.removeItem(CHECKIN_FLAG);
+          navigate("/driver/route");
+        }}
       />
     );
   }
