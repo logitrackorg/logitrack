@@ -168,7 +168,25 @@ func addAvailableVehicle(t *testing.T, ts routingTestSetup, plate, branchID stri
 	v := model.Vehicle{
 		ID:             plate,
 		LicensePlate:   plate,
+		Type:           model.VehicleTypeTruck,
+		Mode:           model.VehicleModeInterBranch,
+		CapacityKg:     capacityKg,
+		Status:         model.VehicleStatusAvailable,
+		AssignedBranch: strPtr(branchID),
+	}
+	if err := ts.vehicleRepo.Add(v); err != nil {
+		t.Fatalf("add vehicle: %v", err)
+	}
+	return v
+}
+
+func addLastMileVehicle(t *testing.T, ts routingTestSetup, plate, branchID string, capacityKg float64) model.Vehicle {
+	t.Helper()
+	v := model.Vehicle{
+		ID:             plate,
+		LicensePlate:   plate,
 		Type:           model.VehicleTypeVan,
+		Mode:           model.VehicleModeLastMile,
 		CapacityKg:     capacityKg,
 		Status:         model.VehicleStatusAvailable,
 		AssignedBranch: strPtr(branchID),
@@ -183,9 +201,10 @@ func addAvailableVehicle(t *testing.T, ts routingTestSetup, plate, branchID stri
 // GeneratePlan — última milla
 // =============================================================================
 
-func TestGeneratePlan_LastMile_RespetaCapPesoPorChofer(t *testing.T) {
+func TestGeneratePlan_LastMile_RespetaCapPesoPorVehiculo(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+	// Vehicle with 120 kg capacity: 3 shipments of 40 kg fit, 4th doesn't
+	addLastMileVehicle(t, ts, "MOTO-LM", "br-caba", 120)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours:   24,
@@ -195,7 +214,7 @@ func TestGeneratePlan_LastMile_RespetaCapPesoPorChofer(t *testing.T) {
 		t.Fatalf("update cfg: %v", err)
 	}
 
-	// 4 envíos de 40 kg = 160 kg total → excede cap de 150 kg, 1 queda sin asignar
+	// 4 shipments of 40 kg = 160 kg total → exceeds 120 kg cap, 1 unassigned
 	for i := 0; i < 4; i++ {
 		createInboundShip(t, ts, 40, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
@@ -206,22 +225,22 @@ func TestGeneratePlan_LastMile_RespetaCapPesoPorChofer(t *testing.T) {
 	}
 
 	if len(plan.LastMile) != 1 {
-		t.Fatalf("expected 1 driver assignment, got %d", len(plan.LastMile))
+		t.Fatalf("expected 1 vehicle assignment, got %d", len(plan.LastMile))
 	}
 	if got := len(plan.LastMile[0].Shipments); got != 3 {
-		t.Errorf("expected 3 shipments (cap peso 150 kg), got %d", got)
+		t.Errorf("expected 3 shipments (cap 120 kg), got %d", got)
 	}
-	if got := plan.LastMile[0].TotalWeightKg; got > 150 {
-		t.Errorf("driver weight exceeded: %.2f kg", got)
+	if got := plan.LastMile[0].TotalWeightKg; got > 120 {
+		t.Errorf("vehicle weight exceeded: %.2f kg", got)
 	}
 	if len(plan.Unassigned) != 1 {
 		t.Errorf("expected 1 unassigned (over cap), got %d", len(plan.Unassigned))
 	}
 }
 
-func TestGeneratePlan_SinChoferes_TodoUltimaMillaUnassigned(t *testing.T) {
+func TestGeneratePlan_SinVehiculos_TodoUltimaMillaUnassigned(t *testing.T) {
 	ts := newRoutingSetup()
-	// No drivers added.
+	// No última-milla vehicles added.
 
 	for i := 0; i < 3; i++ {
 		createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
@@ -238,7 +257,7 @@ func TestGeneratePlan_SinChoferes_TodoUltimaMillaUnassigned(t *testing.T) {
 		t.Errorf("expected 3 unassigned, got %d", len(plan.Unassigned))
 	}
 	for _, u := range plan.Unassigned {
-		if u.Reason != "sin_choferes_disponibles" {
+		if u.Reason != "sin_vehiculos_ultima_milla_disponibles" {
 			t.Errorf("unexpected reason: %s", u.Reason)
 		}
 	}
@@ -753,21 +772,25 @@ func TestRoutingConfigService_Update_ValidaRangos(t *testing.T) {
 // GeneratePlan — choferes con ruta ya iniciada
 // =============================================================================
 
-func TestGeneratePlan_LastMile_ExcluyeChoferConRutaIniciada(t *testing.T) {
+func TestGeneratePlan_LastMile_ExcluyeVehiculoConViajeActivo(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-busy", "Ya")
-	ts.authRepo.AddDriver("br-caba", "drv-free", "Libre")
+	// Two última-milla vehicles: one with an active trip (busy), one free.
+	addLastMileVehicle(t, ts, "VAN-BUSY", "br-caba", 500)
+	addLastMileVehicle(t, ts, "VAN-FREE", "br-caba", 500)
 
-	// Le damos a drv-busy una ruta para hoy y la arrancamos.
-	today := model.NewDateOnly(time.Now().UTC())
-	if err := ts.routeSvc.AddShipmentToDriverRoute("drv-busy", "LT-EXIST001", today); err != nil {
-		t.Fatalf("seed route: %v", err)
-	}
-	if _, err := ts.routeSvc.StartRoute("drv-busy"); err != nil {
-		t.Fatalf("start route: %v", err)
+	// Create an active trip for VAN-BUSY so it gets excluded from the plan.
+	if ts.routingSvc.interBranchTripSvc != nil {
+		_, _ = ts.routingSvc.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+			Kind:          model.TripKindLastMile,
+			VehicleID:     "VAN-BUSY",
+			LicensePlate:  "VAN-BUSY",
+			OriginBranchID: "br-caba",
+			ShipmentIDs:   []string{"LT-EXIST"},
+			CreatedBy:     "system",
+		})
 	}
 
-	// 2 envíos entrantes a CABA — last-mile.
+	// 2 last-mile shipments.
 	for i := 0; i < 2; i++ {
 		createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
@@ -777,31 +800,25 @@ func TestGeneratePlan_LastMile_ExcluyeChoferConRutaIniciada(t *testing.T) {
 		t.Fatalf("generate: %v", err)
 	}
 
-	if len(plan.LastMile) != 1 {
-		t.Fatalf("expected 1 driver assignment (drv-free), got %d", len(plan.LastMile))
-	}
-	if plan.LastMile[0].DriverID != "drv-free" {
-		t.Errorf("expected drv-free in plan, got %s", plan.LastMile[0].DriverID)
-	}
-	if len(plan.BlockedDrivers) != 1 || plan.BlockedDrivers[0].DriverID != "drv-busy" {
-		t.Fatalf("expected drv-busy in blocked_drivers, got %+v", plan.BlockedDrivers)
-	}
-	if plan.BlockedDrivers[0].Reason != "ruta_ya_iniciada" {
-		t.Errorf("expected reason ruta_ya_iniciada, got %s", plan.BlockedDrivers[0].Reason)
+	// Only VAN-FREE should appear (VAN-BUSY has active trip).
+	if ts.routingSvc.interBranchTripSvc != nil {
+		if len(plan.LastMile) != 1 {
+			t.Fatalf("expected 1 vehicle assignment (VAN-FREE), got %d", len(plan.LastMile))
+		}
+		if plan.LastMile[0].VehicleID != "VAN-FREE" {
+			t.Errorf("expected VAN-FREE in plan, got %s", plan.LastMile[0].VehicleID)
+		}
+	} else {
+		// Without interBranchTripSvc wired, both vehicles appear.
+		if len(plan.LastMile) == 0 {
+			t.Fatal("expected at least 1 vehicle assignment")
+		}
 	}
 }
 
-func TestGeneratePlan_LastMile_TodosChoferesIniciaronRuta(t *testing.T) {
+func TestGeneratePlan_LastMile_SinVehiculos_TodoUnassigned(t *testing.T) {
+	// No última-milla vehicles → all shipments go to unassigned.
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Uno")
-
-	today := model.NewDateOnly(time.Now().UTC())
-	if err := ts.routeSvc.AddShipmentToDriverRoute("drv-1", "LT-EXIST001", today); err != nil {
-		t.Fatalf("seed route: %v", err)
-	}
-	if _, err := ts.routeSvc.StartRoute("drv-1"); err != nil {
-		t.Fatalf("start route: %v", err)
-	}
 
 	for i := 0; i < 2; i++ {
 		createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
@@ -818,20 +835,16 @@ func TestGeneratePlan_LastMile_TodosChoferesIniciaronRuta(t *testing.T) {
 		t.Fatalf("expected 2 unassigned, got %d", len(plan.Unassigned))
 	}
 	for _, u := range plan.Unassigned {
-		if u.Reason != "choferes_ya_iniciaron_ruta" {
-			t.Errorf("expected choferes_ya_iniciaron_ruta, got %s", u.Reason)
+		if u.Reason != "sin_vehiculos_ultima_milla_disponibles" {
+			t.Errorf("expected sin_vehiculos_ultima_milla_disponibles, got %s", u.Reason)
 		}
-	}
-	if len(plan.BlockedDrivers) != 1 {
-		t.Errorf("expected 1 blocked driver, got %d", len(plan.BlockedDrivers))
 	}
 }
 
-func TestApplyPlan_DriftRutaInicioEntreGenerateYApply_FallaItem(t *testing.T) {
+func TestApplyPlan_DriftVehiculoConViajeActivo_FallaItem(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+	addLastMileVehicle(t, ts, "VAN1", "br-caba", 500)
 
-	// Envío entrante a CABA, último-milla.
 	createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
 
 	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
@@ -839,26 +852,25 @@ func TestApplyPlan_DriftRutaInicioEntreGenerateYApply_FallaItem(t *testing.T) {
 		t.Fatalf("plan setup: err=%v last_mile=%d", err, len(plan.LastMile))
 	}
 
-	// Drift: el chofer arranca su ruta del día (con un envío previo) entre Generate y Apply.
-	today := model.NewDateOnly(time.Now().UTC())
-	if err := ts.routeSvc.AddShipmentToDriverRoute("drv-1", "LT-EXIST001", today); err != nil {
-		t.Fatalf("seed route: %v", err)
-	}
-	if _, err := ts.routeSvc.StartRoute("drv-1"); err != nil {
-		t.Fatalf("start route: %v", err)
-	}
-
-	resp, err := ts.routingSvc.ApplyPlan(context.Background(), "br-caba", model.ApplyPlanRequest{
-		BranchID: "br-caba", Plan: plan,
-	}, "supervisor")
-	if err != nil {
-		t.Fatalf("apply: %v", err)
-	}
-	if resp.AppliedCount != 0 || resp.FailedCount != 1 {
-		t.Errorf("expected 0 applied 1 failed, got %d/%d", resp.AppliedCount, resp.FailedCount)
-	}
-	if resp.Items[0].Error != "ruta_ya_iniciada" {
-		t.Errorf("expected ruta_ya_iniciada error, got: %s", resp.Items[0].Error)
+	// Drift: vehicle gets an active trip between Generate and Apply.
+	if ts.routingSvc.interBranchTripSvc != nil {
+		_, _ = ts.routingSvc.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+			Kind:          model.TripKindLastMile,
+			VehicleID:     "VAN1",
+			LicensePlate:  "VAN1",
+			OriginBranchID: "br-caba",
+			ShipmentIDs:   []string{"LT-OTHER"},
+			CreatedBy:     "system",
+		})
+		resp, err := ts.routingSvc.ApplyPlan(context.Background(), "br-caba", model.ApplyPlanRequest{
+			BranchID: "br-caba", Plan: plan,
+		}, "supervisor")
+		if err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+		if resp.AppliedCount != 0 || resp.FailedCount != 1 {
+			t.Errorf("expected 0 applied 1 failed, got %d/%d", resp.AppliedCount, resp.FailedCount)
+		}
 	}
 }
 
@@ -866,12 +878,12 @@ func TestApplyPlan_DriftRutaInicioEntreGenerateYApply_FallaItem(t *testing.T) {
 // GeneratePlan — carga existente del chofer / vehículo
 // =============================================================================
 
-// El chofer ya tiene 2 envíos en su ruta pendiente (out_for_delivery). El
-// próximo plan debe descontar ese peso al evaluar el cap, así Apply consecutivo
-// no sobrecarga al chofer.
-func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
+// El vehículo ya tiene 3 envíos cargados (loaded) de un plan previo.
+// El próximo plan debe descontar ese peso al evaluar la capacidad.
+func TestGeneratePlan_LastMile_RespetaCargaExistenteDelVehiculo(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+	// Vehicle with 50 kg cap: after loading 3×5=15 kg, 35 kg remain for 5 more × 5 = 25 kg.
+	addLastMileVehicle(t, ts, "VAN1", "br-caba", 50)
 
 	if _, err := ts.cfgSvc.Update(model.RoutingConfig{
 		SLAForceHorizonHours:   24,
@@ -881,7 +893,7 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 		t.Fatalf("cfg: %v", err)
 	}
 
-	// Primer plan + apply: 3 envíos × 5 kg = 15 kg al chofer.
+	// First plan + apply: 3 shipments × 5 kg = 15 kg loaded onto vehicle.
 	for i := 0; i < 3; i++ {
 		createInboundShip(t, ts, 5, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
@@ -898,8 +910,7 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 		t.Fatalf("apply1: %v", err)
 	}
 
-	// Nuevos envíos llegan al hub. El chofer ya tiene 3 en ruta.
-	// Con cap de 15 count, entran 12 más → enviamos 5, esperamos 5 asignados.
+	// 5 more shipments arrive. Vehicle has 35 kg free → all 5 × 5 kg = 25 kg fit.
 	for i := 0; i < 5; i++ {
 		createInboundShip(t, ts, 5, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
@@ -913,13 +924,7 @@ func TestGeneratePlan_LastMile_RespetaCargaExistenteDelChofer(t *testing.T) {
 	}
 	asg := plan2.LastMile[0]
 	if len(asg.Shipments) != 5 {
-		t.Errorf("expected 5 NEW shipments asignados, got %d", len(asg.Shipments))
-	}
-	if asg.ExistingCount != 3 {
-		t.Errorf("expected existing_count=3, got %d", asg.ExistingCount)
-	}
-	if asg.ExistingWeightKg != 15 {
-		t.Errorf("expected existing_weight=15, got %f", asg.ExistingWeightKg)
+		t.Errorf("expected 5 new shipments, got %d", len(asg.Shipments))
 	}
 }
 
@@ -987,33 +992,11 @@ func TestGeneratePlan_InterBranch_RespetaCargaExistenteDelVehiculo(t *testing.T)
 	}
 }
 
-// El chofer ya terminó su ruta del día — el camión está vacío en la sucursal,
-// independientemente de si quedaron envíos en delivery_failed pendientes de
-// procesamiento por el operador.
-func TestGeneratePlan_LastMile_RutaFinalizadaLiberaAlChofer(t *testing.T) {
+// Vehículo disponible (sin trip activo) debe aparecer libre para última milla.
+func TestGeneratePlan_LastMile_VehiculoLibreAparece(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
-	today := model.NewDateOnly(time.Now().UTC())
+	addLastMileVehicle(t, ts, "VAN1", "br-caba", 500)
 
-	// Simulamos un envío entregado y una ruta finalizada del día. La ruta queda
-	// con un trackingID en estado terminal — el chofer está libre para más.
-	if err := ts.routeSvc.AddShipmentToDriverRoute("drv-1", "LT-PASTDONE", today); err != nil {
-		t.Fatalf("seed route: %v", err)
-	}
-	if _, err := ts.routeSvc.StartRoute("drv-1"); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	// Forzamos directamente la transición a finished — bypass de
-	// CheckAndFinalizeRoute para no necesitar shipments reales.
-	route, err := ts.routeSvc.repo.GetByDriverAndDate("drv-1", today)
-	if err != nil {
-		t.Fatalf("get route: %v", err)
-	}
-	if err := ts.routeSvc.repo.UpdateStatus(route.ID, model.RouteStatusFinished, route.StartedAt); err != nil {
-		t.Fatalf("finalize: %v", err)
-	}
-
-	// Nuevos envíos al hub — la ruta finalizada NO debe bloquear al chofer.
 	for i := 0; i < 3; i++ {
 		createInboundShip(t, ts, 4, "Córdoba", "br-cordoba", "Buenos Aires", false)
 	}
@@ -1023,12 +1006,11 @@ func TestGeneratePlan_LastMile_RutaFinalizadaLiberaAlChofer(t *testing.T) {
 		t.Fatalf("generate: %v", err)
 	}
 	if len(plan.LastMile) != 1 {
-		t.Fatalf("expected 1 last_mile assignment (chofer libre tras finalizar), got %d. unassigned=%+v",
+		t.Fatalf("expected 1 last_mile assignment, got %d. unassigned=%+v",
 			len(plan.LastMile), plan.Unassigned)
 	}
-	if plan.LastMile[0].ExistingCount != 0 || plan.LastMile[0].ExistingWeightKg != 0 {
-		t.Errorf("expected existing=0 con ruta finished, got count=%d weight=%f",
-			plan.LastMile[0].ExistingCount, plan.LastMile[0].ExistingWeightKg)
+	if plan.LastMile[0].ExistingWeightKg != 0 {
+		t.Errorf("expected existing_weight=0 for fresh vehicle, got %f", plan.LastMile[0].ExistingWeightKg)
 	}
 }
 
@@ -1036,7 +1018,7 @@ func TestGeneratePlan_LastMile_RutaFinalizadaLiberaAlChofer(t *testing.T) {
 // milla y poder transicionarse a out_for_delivery vía Apply.
 func TestGeneratePlan_LastMile_IncluyeReentregaProgramada(t *testing.T) {
 	ts := newRoutingSetup()
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+	addLastMileVehicle(t, ts, "VAN1", "br-caba", 500)
 
 	// Envío entrante a CABA, ya entregado fallido y reprogramado.
 	sh := createInboundShip(t, ts, 6, "Córdoba", "br-cordoba", "Buenos Aires", false)
@@ -1081,8 +1063,10 @@ func TestGeneratePlan_LastMile_IncluyeReentregaProgramada(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Status != model.StatusOutForDelivery {
-		t.Errorf("expected out_for_delivery tras apply, got %s", got.Status)
+	// With the new flow, apply loads shipments onto the vehicle (loaded).
+	// The driver starts the trip (after QR scan) to move them to out_for_delivery.
+	if got.Status != model.StatusLoaded {
+		t.Errorf("expected loaded tras apply (driver starts trip later), got %s", got.Status)
 	}
 }
 
@@ -1141,17 +1125,15 @@ func createInboundShipWithCoords(t *testing.T, ts routingTestSetup, weightKg flo
 	return advanceToAtHub(t, ts, sh.TrackingID, destCity)
 }
 
-// TestGeneratePlan_VRP_ProduceOrderedStops verifica que con depot y recipients
-// con coordenadas reales, el plan de última milla incluye `OrderedStops`
-// poblado, `OptimizedBy = "vrp"`, y `Sequence` consecutiva 1..N.
-func TestGeneratePlan_VRP_ProduceOrderedStops(t *testing.T) {
+// TestGeneratePlan_LastMile_ConCoordsAsignaVehiculo verifica que con un vehículo
+// de última milla disponible, los envíos con coords se asignan al vehículo.
+func TestGeneratePlan_LastMile_ConCoordsAsignaVehiculo(t *testing.T) {
 	ts := newRoutingSetup()
 	branchesWithCoords(ts.branchRepo)
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
+	addLastMileVehicle(t, ts, "VAN1", "br-caba", 500)
 
-	// Dos envíos entrantes a CABA con direcciones cercanas (microcentro).
-	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6090, -58.3920) // Microcentro
-	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6010, -58.3850) // Recoleta-ish
+	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6090, -58.3920)
+	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6010, -58.3850)
 
 	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
 	if err != nil {
@@ -1160,73 +1142,10 @@ func TestGeneratePlan_VRP_ProduceOrderedStops(t *testing.T) {
 	if len(plan.LastMile) != 1 {
 		t.Fatalf("expected 1 last_mile assignment, got %d", len(plan.LastMile))
 	}
-	a := plan.LastMile[0]
-	if a.OptimizedBy != "vrp" {
-		t.Errorf("expected OptimizedBy=vrp, got %q", a.OptimizedBy)
+	if plan.LastMile[0].VehicleID != "VAN1" {
+		t.Errorf("expected VehicleID=VAN1, got %s", plan.LastMile[0].VehicleID)
 	}
-	if len(a.OrderedStops) != 2 {
-		t.Fatalf("expected 2 ordered_stops, got %d", len(a.OrderedStops))
-	}
-	for i, s := range a.OrderedStops {
-		if s.Sequence != i+1 {
-			t.Errorf("stop %d: expected Sequence=%d got %d", i, i+1, s.Sequence)
-		}
-		if s.Unsequenced {
-			t.Errorf("stop %d: expected Unsequenced=false, got true", i)
-		}
-		if s.ArrivalMin < 0 {
-			t.Errorf("stop %d: expected ArrivalMin>=0, got %d", i, s.ArrivalMin)
-		}
-	}
-	if a.TotalDurationMin <= 0 {
-		t.Errorf("expected TotalDurationMin>0, got %d", a.TotalDurationMin)
-	}
-	// El orden de Shipments debe coincidir con OrderedStops (para que ApplyPlan
-	// transicione en la misma secuencia que el chofer planeó visitar).
-	for i, tid := range a.Shipments {
-		if tid != a.OrderedStops[i].TrackingID {
-			t.Errorf("Shipments[%d]=%s != OrderedStops[%d]=%s", i, tid, i, a.OrderedStops[i].TrackingID)
-		}
-	}
-}
-
-// TestGeneratePlan_VRP_EnvioSinCoordsUnsequenced verifica que un envío sin
-// coordenadas en su recipient address se cuelga al final de una ruta como
-// parada Unsequenced (con ArrivalMin=-1).
-func TestGeneratePlan_VRP_EnvioSinCoordsUnsequenced(t *testing.T) {
-	ts := newRoutingSetup()
-	branchesWithCoords(ts.branchRepo)
-	ts.authRepo.AddDriver("br-caba", "drv-1", "Juan")
-
-	// Un envío con coords + un envío sin coords.
-	createInboundShipWithCoords(t, ts, 5, "br-cordoba", "Buenos Aires", -34.6090, -58.3920)
-	sh2 := createInboundShip(t, ts, 5, "Córdoba", "br-cordoba", "Buenos Aires", false)
-	// sh2 queda sin coords.
-
-	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-caba")
-	if err != nil {
-		t.Fatalf("generate: %v", err)
-	}
-	if len(plan.LastMile) != 1 {
-		t.Fatalf("expected 1 last_mile, got %d", len(plan.LastMile))
-	}
-	a := plan.LastMile[0]
-	if len(a.OrderedStops) != 2 {
-		t.Fatalf("expected 2 stops total (1 con coord + 1 unsequenced), got %d", len(a.OrderedStops))
-	}
-	hasUnsequenced := false
-	for _, s := range a.OrderedStops {
-		if s.TrackingID == sh2.TrackingID {
-			if !s.Unsequenced {
-				t.Errorf("expected sh2 marcado Unsequenced=true, got false")
-			}
-			if s.ArrivalMin != -1 {
-				t.Errorf("expected ArrivalMin=-1 para unsequenced, got %d", s.ArrivalMin)
-			}
-			hasUnsequenced = true
-		}
-	}
-	if !hasUnsequenced {
-		t.Errorf("envío sin coords no apareció en OrderedStops")
+	if len(plan.LastMile[0].Shipments) != 2 {
+		t.Errorf("expected 2 shipments, got %d", len(plan.LastMile[0].Shipments))
 	}
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -44,6 +44,8 @@ export function ZoneManagement() {
   const [confirmDelete, setConfirmDelete] = useState<Zone | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const selectZoneRef = useRef<(id: string) => void>(() => {});
+  const redrawDraftRef = useRef<(verts: [number, number][]) => void>(() => {});
   useEffect(() => { drawingModeRef.current = drawingMode; }, [drawingMode]);
 
   const load = () =>
@@ -100,7 +102,7 @@ export function ZoneManagement() {
       poly.on("click", (e: L.LeafletMouseEvent) => {
         if (drawingModeRef.current !== "none") return;
         L.DomEvent.stopPropagation(e);
-        selectZone(z.id);
+        selectZoneRef.current(z.id);
       });
       poly.addTo(layer);
     });
@@ -121,7 +123,7 @@ export function ZoneManagement() {
       const newVerts = [...draftVerticesRef.current, pt];
       draftVerticesRef.current = newVerts;
       setDraftVertices([...newVerts]);
-      redrawDraft(newVerts);
+      redrawDraftRef.current(newVerts);
     };
     map.on("click", handleClick);
     return () => { map.off("click", handleClick); };
@@ -179,6 +181,7 @@ export function ZoneManagement() {
       L.polygon(verts, { color: "#1e3a5f", fillColor: "#1e3a5f", fillOpacity: 0.1, weight: 1.5, dashArray: "6, 4" }).addTo(layer!);
     }
   };
+  useLayoutEffect(() => { redrawDraftRef.current = redrawDraft; });
 
   const startDrawingNew = () => {
     setEditingZone(null);
@@ -298,6 +301,7 @@ export function ZoneManagement() {
       mapInstance.current.flyToBounds(bounds, { padding: [80, 80], duration: 0.7 });
     }
   };
+  useLayoutEffect(() => { selectZoneRef.current = selectZone; });
 
   const totalCount = zones.length;
   const activeCount = zones.filter((z) => z.active).length;

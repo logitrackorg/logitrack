@@ -98,7 +98,7 @@ export function useGeolocation(
     if (mode !== "simulate" || routePoints.length < 2) return;
     simPathRef.current = [];
 
-    const coords = routePoints.map((p) => `${p.lng},${p.lat}`).join(";");
+    const coords = routePointsRef.current.map((p) => `${p.lng},${p.lat}`).join(";");
     fetch(
       `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
     )
@@ -109,10 +109,10 @@ export function useGeolocation(
             (c: number[]) => ({ lat: c[1], lng: c[0] })
           );
         } else {
-          simPathRef.current = routePoints;
+          simPathRef.current = routePointsRef.current;
         }
       })
-      .catch(() => { simPathRef.current = routePoints; });
+      .catch(() => { simPathRef.current = routePointsRef.current; });
   }, [mode, routePoints.length]);
 
   // Intervalo de movimiento sobre la polilínea de calles
@@ -120,7 +120,7 @@ export function useGeolocation(
     if (mode !== "simulate" || routePoints.length < 2) return;
 
     simRef.current = { segIdx: 0, segProgress: 0 };
-    setPosition(routePoints[0]);
+    setPosition(routePointsRef.current[0]);
 
     const id = setInterval(() => {
       if (isPausedRef.current) return;

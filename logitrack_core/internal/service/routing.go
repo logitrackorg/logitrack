@@ -11,6 +11,7 @@ import (
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
+	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/vrp"
@@ -32,15 +33,19 @@ var uuidGen = func() (string, error) {
 // Apply hace validación per-item contra el estado actual antes de mutar — no es transaccional
 // porque shipment, vehicle y route viven en stores distintos.
 type RoutingService struct {
-	cfgSvc       *RoutingConfigService
-	shipmentRepo repository.ShipmentRepository
-	vehicleRepo  repository.VehicleRepository
-	branchRepo   repository.BranchRepository
-	authRepo     repository.AuthRepository
-	routeSvc     *RouteService
-	shipmentSvc  *ShipmentService
-	planRepo     repository.RoutingPlanRepository
-	osrmClient   *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
+	cfgSvc          *RoutingConfigService
+	shipmentRepo    repository.ShipmentRepository
+	vehicleRepo     repository.VehicleRepository
+	branchRepo      repository.BranchRepository
+	authRepo        repository.AuthRepository
+	routeSvc        *RouteService
+	shipmentSvc     *ShipmentService
+	planRepo        repository.RoutingPlanRepository
+	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
+	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
+	interBranchTripSvc *InterBranchTripService
+	graphSvc        *BranchGraphService // nullable; used for stale-replan
+	zoneSvc         *ZoneService        // nullable; needed for safe-route mode
 }
 
 func NewRoutingService(
@@ -67,13 +72,36 @@ func NewRoutingService(
 	}
 }
 
+func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) {
+	s.interBranchTripSvc = svc
+}
+
+func (s *RoutingService) SetZoneService(svc *ZoneService) {
+	s.zoneSvc = svc
+}
+
+func (s *RoutingService) SetORSClient(c *ors.Client) {
+	s.orsClient = c
+}
+
 const lastMileDestLabel = "(última milla)"
 
 // =============================================================================
 // GeneratePlan
 // =============================================================================
 
-func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model.RoutingPlan, error) {
+func (s *RoutingService) GeneratePlan(ctx context.Context, branchID string) (model.RoutingPlan, error) {
+	return s.generatePlan(ctx, branchID, false, nil)
+}
+
+// generatePlan es la implementación interna. forGlobal=true desactiva el
+// check de fill-rate en addMultiHopStops: el plan global corre
+// enforceMinSegmentUtilization después de sumar los pickups cross-branch,
+// por lo que el check prematuro bloquearía hops que sí consolidan en red.
+// existingGlobal, cuando no es nil, se usa para pre-marcar como "taken" los
+// shipments que otras sucursales del plan actual ya reservaron como cross-branch
+// pickups, evitando conflictos en regeneraciones locales.
+func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlobal bool, existingGlobal *model.GlobalRoutingPlan) (model.RoutingPlan, error) {
 	cfg := s.cfgSvc.Get()
 	now := clock.Now().UTC()
 
@@ -83,8 +111,6 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 		LastMile:       []model.LastMileAssignment{},
 		InterBranch:    []model.InterBranchAssignment{},
 		Unassigned:     []model.UnassignedShipment{},
-		BlockedDrivers: []model.BlockedDriver{},
-		DriverLoads:    []model.DriverLoad{},
 		VehicleLoads:   []model.VehicleLoad{},
 		ConfigSnapshot: cfg,
 	}
@@ -111,6 +137,11 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 			continue
 		}
 		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
+			continue
+		}
+		// Si el envío está reservado por un trip multi-hop (cross-branch pickup),
+		// no es candidato para otros planes hasta que el trip lo levante o se cancele.
+		if sh.ReservedForTripID != nil {
 			continue
 		}
 
@@ -145,58 +176,79 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 		// Edge: at_origin_hub + final == branch (no es ruteable hoy) → no entra al plan
 	}
 
-	// 2) Última milla — VRP optimizado (con fallback automático al greedy)
-	plan.LastMile, plan.Unassigned, plan.BlockedDrivers = s.lastMileVRP(lastMileQ, branchID, cfg, plan.Unassigned, plan.BlockedDrivers, now)
+	// 2) Última milla — asignar a vehículos de modo ultima_milla
+	plan.LastMile, plan.Unassigned = s.binPackLastMileVehicles(lastMileQ, branchID, plan.Unassigned)
+	// Optimizar orden de paradas y horario de salida sugerido por VRP.
+	s.scheduleLastMileAssignments(plan.LastMile, branchID, shipmentByTID, cfg, now, model.RouteModeVentanas)
 
-	// Cargas pendientes de los choferes no bloqueados (incluso los que el algoritmo
-	// no usó en este plan). Sirve para validación cliente-side al reasignar manual.
-	blockedSet := map[string]bool{}
-	for _, b := range plan.BlockedDrivers {
-		blockedSet[b.DriverID] = true
+	// 3) Inter-sucursal — solo vehículos de modo inter_sucursal
+	availableVehicles, existingVehicleLoad := s.filterAvailableVehiclesForMode(branchID, model.VehicleModeInterBranch)
+	plan.InterBranch, plan.Unassigned = s.dispatchInterBranch(interBranchQ, availableVehicles, existingVehicleLoad, cfg, now, plan.Unassigned)
+
+	// Agregar vehículos en_carga con destino seteado que el algoritmo no incluyó
+	// (p.ej. vehículos de paso en parada intermedia de un viaje multi-hop).
+	// Aparecen como assignments vacíos para que el operador pueda asignarles envíos manualmente.
+	assignedVehicleIDs := map[string]bool{}
+	for _, a := range plan.InterBranch {
+		assignedVehicleIDs[a.VehicleID] = true
 	}
-	for _, d := range s.authRepo.ListByRole(model.RoleDriver, branchID) {
-		if blockedSet[d.ID] {
+	for _, v := range availableVehicles {
+		if assignedVehicleIDs[v.ID] {
 			continue
 		}
-		count, weight := s.routeSvc.PendingLoad(d.ID, model.NewDateOnly(now))
-		existingTIDs := s.routeSvc.PendingShipments(d.ID, model.NewDateOnly(now))
-		plan.DriverLoads = append(plan.DriverLoads, model.DriverLoad{
-			DriverID:          d.ID,
-			DriverName:        driverDisplayName(d),
-			ExistingCount:     count,
-			ExistingWeightKg:  roundKg(weight),
-			ExistingShipments: existingTIDs,
+		if v.Status != model.VehicleStatusLoading || v.DestinationBranch == nil {
+			continue
+		}
+		var existing float64
+		for _, tid := range v.AssignedShipments {
+			if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+				existing += sh.WeightKg
+			}
+		}
+		plan.InterBranch = append(plan.InterBranch, model.InterBranchAssignment{
+			VehicleID:         v.ID,
+			LicensePlate:      v.LicensePlate,
+			DestinationBranch: *v.DestinationBranch,
+			Rule:              model.DispatchRuleManual,
+			Shipments:         []string{},
+			TotalWeightKg:     0,
+			CapacityKg:        v.CapacityKg,
+			ExistingWeightKg:  roundKg(existing),
+			ExistingShipments: append([]string(nil), v.AssignedShipments...),
 		})
 	}
 
-	// 3) Inter-sucursal — agrupar por destino, aplicar reglas, asignar vehículo
-	availableVehicles, existingVehicleLoad := s.filterAvailableVehicles(branchID)
-	plan.InterBranch, plan.Unassigned = s.dispatchInterBranch(interBranchQ, availableVehicles, existingVehicleLoad, cfg, now, plan.Unassigned)
-
-	// Cargas actuales de cada vehículo del pool — útil cuando el operador
-	// reasigna manualmente a un vehículo que no entró al plan.
-	for _, v := range availableVehicles {
-		// Copia defensiva: AssignedShipments podría compartir backing con
-		// el slice del repo. El cliente solo lee, pero igual evitamos sorpresas.
+	// Cargas actuales de todos los vehículos disponibles del branch (con modo)
+	allAvailable, allExistingLoad := s.filterAvailableVehicles(branchID)
+	for _, v := range allAvailable {
 		existingTIDs := append([]string(nil), v.AssignedShipments...)
 		plan.VehicleLoads = append(plan.VehicleLoads, model.VehicleLoad{
 			VehicleID:         v.ID,
 			LicensePlate:      v.LicensePlate,
+			Mode:              string(v.Mode),
 			CapacityKg:        v.CapacityKg,
-			ExistingWeightKg:  roundKg(existingVehicleLoad[v.ID]),
+			ExistingWeightKg:  roundKg(allExistingLoad[v.ID]),
 			ExistingShipments: existingTIDs,
 		})
 	}
 
-	// 4) Piggyback — sumar envíos huérfanos a despachos que los acerquen a su destino final
+	// 4) Multi-hop — agregar hasta 2 paradas adicionales a despachos cuando
+	// hay envíos sin asignar cuyo destino esté en el camino (grafo de sucursales).
+	s.addMultiHopStops(&plan, branchID, shipmentByTID, cfg, now, forGlobal)
+
+	// 5) Piggyback — sumar envíos huérfanos a despachos que los acerquen a su destino final
 	s.piggybackUnassigned(&plan, branchID, shipmentByTID)
+
+	// 6) Cross-branch pickups — agregar a las paradas intermedias de multi-hop
+	// envíos que esperan en at_hub en otras sucursales con destino más adelante.
+	s.addCrossBranchPickupsForBranch(&plan, branchID, existingGlobal)
 
 	// Orden determinístico de salida
 	sort.SliceStable(plan.InterBranch, func(i, j int) bool {
 		return plan.InterBranch[i].DestinationBranch < plan.InterBranch[j].DestinationBranch
 	})
 	sort.SliceStable(plan.LastMile, func(i, j int) bool {
-		return plan.LastMile[i].DriverID < plan.LastMile[j].DriverID
+		return plan.LastMile[i].VehicleID < plan.LastMile[j].VehicleID
 	})
 	sort.SliceStable(plan.Unassigned, func(i, j int) bool {
 		if plan.Unassigned[i].Destination != plan.Unassigned[j].Destination {
@@ -215,12 +267,6 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 	if plan.Unassigned == nil {
 		plan.Unassigned = []model.UnassignedShipment{}
 	}
-	if plan.BlockedDrivers == nil {
-		plan.BlockedDrivers = []model.BlockedDriver{}
-	}
-	if plan.DriverLoads == nil {
-		plan.DriverLoads = []model.DriverLoad{}
-	}
 	if plan.VehicleLoads == nil {
 		plan.VehicleLoads = []model.VehicleLoad{}
 	}
@@ -228,149 +274,9 @@ func (s *RoutingService) GeneratePlan(_ context.Context, branchID string) (model
 	return plan, nil
 }
 
-// binPackLastMile asigna envíos a choferes de la sucursal con tope por chofer.
-// Excluye choferes cuya ruta del día ya está iniciada — el chofer ya salió y
-// no puede recibir más envíos hasta que finalice o reabra su ruta.
-func (s *RoutingService) binPackLastMile(
-	queue []model.Shipment,
-	branchID string,
-	cfg model.RoutingConfig,
-	unassigned []model.UnassignedShipment,
-	blocked []model.BlockedDriver,
-) ([]model.LastMileAssignment, []model.UnassignedShipment, []model.BlockedDriver) {
-	allDrivers := s.authRepo.ListByRole(model.RoleDriver, branchID)
-	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 
-	var drivers []model.User
-	for _, d := range allDrivers {
-		if err := s.routeSvc.CanAssignToRoute(d.ID, today); err != nil {
-			blocked = append(blocked, model.BlockedDriver{
-				DriverID:   d.ID,
-				DriverName: driverDisplayName(d),
-				Reason:     "ruta_ya_iniciada",
-			})
-			continue
-		}
-		drivers = append(drivers, d)
-	}
 
-	if len(queue) == 0 {
-		return nil, unassigned, blocked
-	}
-
-	if len(drivers) == 0 {
-		reason := "sin_choferes_disponibles"
-		if len(allDrivers) > 0 {
-			reason = "choferes_ya_iniciaron_ruta"
-		}
-		for _, sh := range queue {
-			unassigned = append(unassigned, model.UnassignedShipment{
-				TrackingID:  sh.TrackingID,
-				Destination: lastMileDestLabel,
-				Reason:      reason,
-				WeightKg:    sh.WeightKg,
-				Priority:    sh.Priority,
-			})
-		}
-		return nil, unassigned, blocked
-	}
-
-	sortShipmentsForLastMile(queue)
-
-	type bucket struct {
-		driver            model.User
-		shipments         []string
-		weight            float64 // peso de los envíos NUEVOS de este plan
-		existingCount     int     // envíos ya en la ruta pendiente del día
-		existingWeightKg  float64
-		existingShipments []string
-	}
-	buckets := make([]*bucket, len(drivers))
-	// Orden estable de drivers por ID para load-balancing determinístico
-	driversCopy := make([]model.User, len(drivers))
-	copy(driversCopy, drivers)
-	sort.SliceStable(driversCopy, func(i, j int) bool { return driversCopy[i].ID < driversCopy[j].ID })
-	for i, d := range driversCopy {
-		// Pre-cargamos cada bucket con la carga pendiente del chofer en su ruta
-		// del día. Sin esto, aplicar el plan varias veces seguidas iría sumando
-		// envíos al mismo chofer hasta superar el peso máximo configurado.
-		count, weight := s.routeSvc.PendingLoad(d.ID, today)
-		existingTIDs := s.routeSvc.PendingShipments(d.ID, today)
-		buckets[i] = &bucket{
-			driver:            d,
-			existingCount:     count,
-			existingWeightKg:  weight,
-			existingShipments: existingTIDs,
-		}
-	}
-
-	maximize := cfg.LastMilePackingStrategy == model.PackingStrategyMaximizeCapacity
-	pickBucket := func(sh model.Shipment) *bucket {
-		var chosen *bucket
-		for _, b := range buckets {
-			if b.existingWeightKg+b.weight+sh.WeightKg > 150 {
-				continue
-			}
-			currLoad := b.existingWeightKg + b.weight
-			if chosen == nil {
-				chosen = b
-				continue
-			}
-			chosenLoad := chosen.existingWeightKg + chosen.weight
-			if maximize {
-				// Saturar el chofer con mayor carga proyectada que aún tenga
-				// capacidad — completa uno antes de abrir el siguiente.
-				if currLoad > chosenLoad {
-					chosen = b
-				}
-			} else {
-				// Load-balancing: el chofer con menor carga proyectada.
-				if currLoad < chosenLoad {
-					chosen = b
-				}
-			}
-		}
-		return chosen
-	}
-
-	for _, sh := range queue {
-		b := pickBucket(sh)
-		if b == nil {
-			unassigned = append(unassigned, model.UnassignedShipment{
-				TrackingID:  sh.TrackingID,
-				Destination: lastMileDestLabel,
-				Reason:      "sin_capacidad_en_choferes",
-				WeightKg:    sh.WeightKg,
-				Priority:    sh.Priority,
-			})
-			continue
-		}
-		b.shipments = append(b.shipments, sh.TrackingID)
-		b.weight += sh.WeightKg
-	}
-
-	var out []model.LastMileAssignment
-	for _, b := range buckets {
-		if len(b.shipments) == 0 {
-			continue
-		}
-		out = append(out, model.LastMileAssignment{
-			DriverID:          b.driver.ID,
-			DriverName:        driverDisplayName(b.driver),
-			Shipments:         b.shipments,
-			TotalWeightKg:     roundKg(b.weight),
-			ExistingCount:     b.existingCount,
-			ExistingWeightKg:  roundKg(b.existingWeightKg),
-			ExistingShipments: b.existingShipments,
-		})
-	}
-	return out, unassigned, blocked
-}
-
-// filterAvailableVehicles devuelve los vehículos elegibles para despacho desde la
-// sucursal y un mapa con la carga ya asignada (sumatoria de los pesos de los
-// envíos en AssignedShipments). Los vehículos en_carga pueden quedar ya cargados
-// parcialmente entre planes — esa carga se descuenta de la capacidad disponible.
+// filterAvailableVehicles devuelve todos los vehículos elegibles para despacho desde la sucursal.
 func (s *RoutingService) filterAvailableVehicles(branchID string) ([]model.Vehicle, map[string]float64) {
 	all := s.vehicleRepo.List()
 	var out []model.Vehicle
@@ -393,7 +299,6 @@ func (s *RoutingService) filterAvailableVehicles(branchID string) ([]model.Vehic
 		existing[v.ID] = loaded
 		out = append(out, v)
 	}
-	// Orden determinístico
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].CapacityKg != out[j].CapacityKg {
 			return out[i].CapacityKg < out[j].CapacityKg
@@ -401,6 +306,408 @@ func (s *RoutingService) filterAvailableVehicles(branchID string) ([]model.Vehic
 		return out[i].LicensePlate < out[j].LicensePlate
 	})
 	return out, existing
+}
+
+// filterAvailableVehiclesForMode is like filterAvailableVehicles but restricted to a given mode.
+func (s *RoutingService) filterAvailableVehiclesForMode(branchID string, mode model.VehicleMode) ([]model.Vehicle, map[string]float64) {
+	all, existing := s.filterAvailableVehicles(branchID)
+	var out []model.Vehicle
+	for _, v := range all {
+		if v.Mode == mode {
+			out = append(out, v)
+		}
+	}
+	return out, existing
+}
+
+// scheduleLastMileAssignments optimiza el orden de paradas y calcula el horario
+// de salida sugerido para cada asignación de última milla usando el VRP scheduler.
+// Mutates each assignment in-place: rellena SuggestedDepartureMin, OrderedStops
+// y WindowCoverage, y reordena Shipments para que coincida con el orden óptimo.
+// Si el branch no tiene coordenadas o faltan coords de destinatarios, se omite
+// silenciosamente y la asignación queda sin cambios.
+func (s *RoutingService) scheduleLastMileAssignments(
+	assignments []model.LastMileAssignment,
+	branchID string,
+	shipByTID map[string]model.Shipment,
+	cfg model.RoutingConfig,
+	now time.Time,
+	mode model.RouteMode,
+) {
+	if len(assignments) == 0 {
+		return
+	}
+
+	depot, ok := s.branchRepo.GetByID(branchID)
+	if !ok || depot.Latitude == nil || depot.Longitude == nil {
+		return
+	}
+	depotCoord := vrp.Coord{Lat: *depot.Latitude, Lon: *depot.Longitude}
+
+	// DepartureMin base: hora actual si es después del inicio de ventana morning,
+	// si no, el inicio de ventana morning configurado.
+	local := now.In(clock.LocalTZ)
+	departureMin := float64(local.Hour()*60 + local.Minute())
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+	if departureMin < morningStartMin {
+		departureMin = morningStartMin
+	}
+
+	// Para modo segura: cargar zonas activas una sola vez (fuera del loop).
+	// Si zoneSvc no está inyectado o no hay zonas, segura se comporta igual que ventanas.
+	var activeZones []model.Zone
+	if mode == model.RouteModeSegura && s.zoneSvc != nil {
+		activeZones, _ = s.zoneSvc.List(false) // false = solo activas
+	}
+
+	for i := range assignments {
+		a := &assignments[i]
+
+		// Construir nodos VRP solo para envíos con coordenadas.
+		// tidsWithCoords son los únicos que pasan al solver; los sin coords van
+		// al final como unsequenced.
+		var nodes []vrp.Node
+		var coords []vrp.Coord
+		var tidsWithCoords []string
+		indexByTID := map[string]int{}
+		for _, tid := range a.Shipments {
+			sh, ok := shipByTID[tid]
+			if !ok || sh.Recipient.Address.Latitude == nil || sh.Recipient.Address.Longitude == nil {
+				continue
+			}
+			c := vrp.Coord{Lat: *sh.Recipient.Address.Latitude, Lon: *sh.Recipient.Address.Longitude}
+			indexByTID[tid] = len(nodes)
+			nodes = append(nodes, vrp.Node{
+				ID:         tid,
+				Coord:      c,
+				WeightKg:   sh.WeightKg,
+				TimeWindow: sh.TimeWindow,
+			})
+			coords = append(coords, c)
+			tidsWithCoords = append(tidsWithCoords, tid)
+		}
+		if len(nodes) == 0 {
+			continue
+		}
+
+		dur, dist := s.buildDurationMatrix(depotCoord, coords, cfg.AvgSpeedKmh)
+
+		// Para modo segura: copiar la matriz y aplicar penalizaciones por zona.
+		// Las zonas se pasan ya resueltas (nil en otros modos).
+		effectiveDur := dur
+		if mode == model.RouteModeSegura && len(activeZones) > 0 {
+			effectiveDur = copyMatrix(dur)
+			// coords para la matriz: [depot] + deliveries
+			allCoords := make([]vrp.Coord, 0, len(coords)+1)
+			allCoords = append(allCoords, depotCoord)
+			allCoords = append(allCoords, coords...)
+			applyZonePenaltiesToMatrix(effectiveDur, allCoords, activeZones)
+		}
+
+		var bestDep float64
+		var bestRoute vrp.Route
+		var coverage float64
+
+		if mode == model.RouteModeCosto {
+			bestDep, bestRoute, coverage = s.findCostOptimalDeparture(
+				a.VehicleID, a.CapacityKg, tidsWithCoords,
+				depotCoord, nodes, indexByTID,
+				dur, dist, cfg, departureMin,
+			)
+		} else {
+			// ventanas y segura usan el mismo scoring; la diferencia está en la matriz.
+			bestDep, bestRoute, coverage = s.findBestDepartureForRoute(
+				a.VehicleID, a.CapacityKg, tidsWithCoords,
+				depotCoord, nodes, indexByTID,
+				effectiveDur, dist, cfg, departureMin,
+			)
+		}
+		if coverage == 0 || len(bestRoute.Stops) == 0 {
+			continue
+		}
+
+		// Reordenar Shipments y construir OrderedStops según el orden VRP.
+		stops := make([]model.RouteStop, 0, len(bestRoute.Stops))
+		shipIDs := make([]string, 0, len(bestRoute.Stops))
+		for idx, st := range bestRoute.Stops {
+			sh := shipByTID[st.NodeID]
+			dev := 0
+			if st.WindowDeviationMin != 0 {
+				dev = int(st.WindowDeviationMin + 0.5)
+				if st.WindowDeviationMin < 0 {
+					dev = int(st.WindowDeviationMin - 0.5)
+				}
+			}
+			stops = append(stops, model.RouteStop{
+				TrackingID:         st.NodeID,
+				Sequence:           idx + 1,
+				ArrivalMin:         int(st.ArrivalMin + 0.5),
+				TimeWindow:         string(sh.TimeWindow),
+				WeightKg:           sh.WeightKg,
+				WithinWindow:       !st.OutOfWindow,
+				WindowDeviationMin: dev,
+			})
+			shipIDs = append(shipIDs, st.NodeID)
+		}
+		// Agregar envíos sin coordenadas al final (unsequenced).
+		seqSet := map[string]bool{}
+		for _, tid := range shipIDs {
+			seqSet[tid] = true
+		}
+		for _, tid := range a.Shipments {
+			if !seqSet[tid] {
+				shipIDs = append(shipIDs, tid)
+				stops = append(stops, model.RouteStop{
+					TrackingID:  tid,
+					Sequence:    len(stops) + 1,
+					ArrivalMin:  -1,
+					Unsequenced: true,
+				})
+			}
+		}
+
+		a.Shipments = shipIDs
+		a.OrderedStops = stops
+		// Para segura y costo el horario no influye en el orden (el orden lo
+		// determina la matriz de penalty/distancia). Por defecto sugerimos 8am
+		// — el operador puede ajustar manual si quiere ganar cobertura de
+		// ventana. Para ventanas el horario SÍ es la métrica clave, así que
+		// usamos el horario óptimo que devolvió el solver.
+		if mode == model.RouteModeSegura || mode == model.RouteModeCosto {
+			a.SuggestedDepartureMin = int(morningStartMin)
+		} else {
+			a.SuggestedDepartureMin = int(bestDep + 0.5)
+		}
+		a.WindowCoverage = coverage
+		a.RouteMode = mode.Normalize()
+		// Geometría real del trayecto vía OSRM (sigue calles, no líneas rectas).
+		// Para segura intercala waypoints de bordeado para que OSRM rutee
+		// alrededor de las zonas peligrosas en vez de cruzarlas.
+		a.PolylineCoords = s.computeRoadPolyline(depotCoord, a.Shipments, shipByTID, activeZones, mode)
+	}
+}
+
+// computeRoadPolyline devuelve la geometría real del trayecto (vía calles)
+// que parte del depósito, pasa por todas las paradas en orden y vuelve al
+// depósito.
+//
+// Estrategia por modo:
+//   - segura + ORS configurado: ORS Directions con avoid_polygons = zonas
+//     activas → ORS rutea genuinamente alrededor de cada zona.
+//   - segura + solo OSRM: OSRM con waypoints de bordeado intercalados (mejor
+//     esfuerzo; OSRM puede aún cortar si hay calles que atraviesan la zona).
+//   - ventanas / costo: OSRM directo entre paradas (líneas rectas → calles).
+//
+// Devuelve nil si no hay routing engine configurado o si la llamada falla;
+// el frontend cae a líneas rectas en ese caso.
+func (s *RoutingService) computeRoadPolyline(
+	depotCoord vrp.Coord,
+	shipmentTIDs []string,
+	shipByTID map[string]model.Shipment,
+	activeZones []model.Zone,
+	mode model.RouteMode,
+) []model.LatLng {
+	// Construir la lista plana de paradas: depot → cada shipment con coords → depot.
+	type latLon struct{ Lat, Lon float64 }
+	var stops []latLon
+	stops = append(stops, latLon{depotCoord.Lat, depotCoord.Lon})
+	for _, tid := range shipmentTIDs {
+		sh, ok := shipByTID[tid]
+		if !ok || sh.Recipient.Address.Latitude == nil || sh.Recipient.Address.Longitude == nil {
+			continue
+		}
+		stops = append(stops, latLon{*sh.Recipient.Address.Latitude, *sh.Recipient.Address.Longitude})
+	}
+	stops = append(stops, latLon{depotCoord.Lat, depotCoord.Lon})
+
+	if len(stops) < 2 {
+		return nil
+	}
+
+	// Path A: ORS con avoid_polygons para modo segura, arco por arco.
+	//
+	// Hacer una sola llamada con todos los stops falla si alguno cae fuera
+	// de la cobertura del grafo ORS (p.ej. suburbios del GBA). Con routing
+	// por arco, si ORS no puede conectar un par específico cae al fallback
+	// de OSRM solo para ese arco, y el resto del recorrido sigue usando ORS.
+	if mode == model.RouteModeSegura && s.orsClient != nil && len(activeZones) > 0 {
+		polys := make([]ors.Polygon, 0, len(activeZones))
+		for _, z := range activeZones {
+			ring := make([]ors.Coord, len(z.Polygon))
+			for i, p := range z.Polygon {
+				ring[i] = ors.Coord{Lat: p.Lat, Lon: p.Lng}
+			}
+			polys = append(polys, ors.Polygon{Coords: ring})
+		}
+
+		var polyline []model.LatLng
+		orsArcs, osrmArcs := 0, 0
+		for i := 1; i < len(stops); i++ {
+			prev, curr := stops[i-1], stops[i]
+			arcCoords := []ors.Coord{
+				{Lat: prev.Lat, Lon: prev.Lon},
+				{Lat: curr.Lat, Lon: curr.Lon},
+			}
+			geom, err := s.orsClient.Route(arcCoords, polys)
+			if err != nil {
+				// ORS falló en este arco — usar OSRM con bypass waypoints.
+				osrmArcs++
+				prevVrp := vrp.Coord{Lat: prev.Lat, Lon: prev.Lon}
+				currVrp := vrp.Coord{Lat: curr.Lat, Lon: curr.Lon}
+				oCoords := []osrm.Coord{{Lat: prev.Lat, Lon: prev.Lon}}
+				for _, wp := range computeBypassWaypoints(prevVrp, currVrp, activeZones) {
+					oCoords = append(oCoords, osrm.Coord{Lat: wp.Lat, Lon: wp.Lon})
+				}
+				oCoords = append(oCoords, osrm.Coord{Lat: curr.Lat, Lon: curr.Lon})
+				if r, e2 := s.osrmClient.Route(oCoords); e2 == nil {
+					for j, c := range r {
+						if j == 0 && len(polyline) > 0 {
+							continue
+						}
+						polyline = append(polyline, model.LatLng{Lat: c.Lat, Lng: c.Lon})
+					}
+				}
+				continue
+			}
+			orsArcs++
+			for j, c := range geom {
+				if j == 0 && len(polyline) > 0 {
+					continue // evitar duplicar el punto de unión entre arcos
+				}
+				polyline = append(polyline, model.LatLng{Lat: c.Lat, Lng: c.Lon})
+			}
+		}
+		if len(polyline) > 0 {
+			log.Printf("[routing] mode=segura engine=ORS+OSRM arcos_ors=%d arcos_osrm_fallback=%d puntos_polyline=%d",
+				orsArcs, osrmArcs, len(polyline))
+			return polyline
+		}
+	}
+
+	// Path B: OSRM Route. Para segura intercalamos los waypoints de bordeado
+	// (mejor esfuerzo, fallback cuando ORS no está disponible).
+	if s.osrmClient == nil {
+		return nil
+	}
+	coords := []osrm.Coord{{Lat: stops[0].Lat, Lon: stops[0].Lon}}
+	for i := 1; i < len(stops); i++ {
+		prev := vrp.Coord{Lat: stops[i-1].Lat, Lon: stops[i-1].Lon}
+		curr := vrp.Coord{Lat: stops[i].Lat, Lon: stops[i].Lon}
+		if mode == model.RouteModeSegura && len(activeZones) > 0 {
+			for _, wp := range computeBypassWaypoints(prev, curr, activeZones) {
+				coords = append(coords, osrm.Coord{Lat: wp.Lat, Lon: wp.Lon})
+			}
+		}
+		coords = append(coords, osrm.Coord{Lat: curr.Lat, Lon: curr.Lon})
+	}
+	routeCoords, err := s.osrmClient.Route(coords)
+	if err != nil {
+		log.Printf("[routing] OSRM Route falló (cayendo a líneas rectas en cliente): %v", err)
+		return nil
+	}
+	log.Printf("[routing] mode=%s engine=OSRM waypoints_enviados=%d puntos_polyline=%d", mode, len(coords), len(routeCoords))
+	out := make([]model.LatLng, len(routeCoords))
+	for i, c := range routeCoords {
+		out[i] = model.LatLng{Lat: c.Lat, Lng: c.Lon}
+	}
+	return out
+}
+
+// binPackLastMileVehicles assigns last-mile shipments to ultima_milla vehicles.
+// Drivers self-assign by scanning the vehicle QR at trip start.
+func (s *RoutingService) binPackLastMileVehicles(
+	queue []model.Shipment,
+	branchID string,
+	unassigned []model.UnassignedShipment,
+) ([]model.LastMileAssignment, []model.UnassignedShipment) {
+	if len(queue) == 0 {
+		return nil, unassigned
+	}
+
+	// Vehicles available for last-mile in this branch, no active trip
+	all := s.vehicleRepo.List()
+	var vehicles []model.Vehicle
+	for _, v := range all {
+		if v.AssignedBranch == nil || *v.AssignedBranch != branchID {
+			continue
+		}
+		if v.Mode != model.VehicleModeLastMile {
+			continue
+		}
+		if v.Status == model.VehicleStatusInTransit || v.Status == model.VehicleStatusInMaintenance || v.Status == model.VehicleStatusInactive {
+			continue
+		}
+		if s.interBranchTripSvc != nil {
+			if _, hasTrip := s.interBranchTripSvc.repo.GetActiveByVehicle(v.ID); hasTrip {
+				continue
+			}
+		}
+		vehicles = append(vehicles, v)
+	}
+
+	if len(vehicles) == 0 {
+		for _, sh := range queue {
+			unassigned = append(unassigned, model.UnassignedShipment{
+				TrackingID:  sh.TrackingID,
+				Destination: lastMileDestLabel,
+				Reason:      "sin_vehiculos_ultima_milla_disponibles",
+				WeightKg:    sh.WeightKg,
+				Priority:    sh.Priority,
+			})
+		}
+		return nil, unassigned
+	}
+
+	sortShipmentsForLastMile(queue)
+	sort.SliceStable(vehicles, func(i, j int) bool {
+		return vehicles[i].CapacityKg < vehicles[j].CapacityKg
+	})
+
+	type bucket struct {
+		vehicle  model.Vehicle
+		shipments []string
+		weight   float64
+	}
+	buckets := make([]*bucket, len(vehicles))
+	for i, v := range vehicles {
+		buckets[i] = &bucket{vehicle: v}
+	}
+
+	for _, sh := range queue {
+		assigned := false
+		for _, b := range buckets {
+			if b.weight+sh.WeightKg <= b.vehicle.CapacityKg {
+				b.shipments = append(b.shipments, sh.TrackingID)
+				b.weight += sh.WeightKg
+				assigned = true
+				break
+			}
+		}
+		if !assigned {
+			unassigned = append(unassigned, model.UnassignedShipment{
+				TrackingID:  sh.TrackingID,
+				Destination: lastMileDestLabel,
+				Reason:      "sin_capacidad_en_vehiculos",
+				WeightKg:    sh.WeightKg,
+				Priority:    sh.Priority,
+			})
+		}
+	}
+
+	var out []model.LastMileAssignment
+	for _, b := range buckets {
+		if len(b.shipments) == 0 {
+			continue
+		}
+		out = append(out, model.LastMileAssignment{
+			VehicleID:    b.vehicle.ID,
+			LicensePlate: b.vehicle.LicensePlate,
+			CapacityKg:   b.vehicle.CapacityKg,
+			Shipments:    b.shipments,
+			TotalWeightKg: roundKg(b.weight),
+		})
+	}
+	return out, unassigned
 }
 
 // dispatchInterBranch evalúa cada destino y arma los despachos.
@@ -541,22 +848,50 @@ func (s *RoutingService) dispatchInterBranch(
 
 func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model.ApplyPlanRequest, username string) (model.ApplyPlanResponse, error) {
 	plan := req.Plan
-	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
 	// Inicializamos como empty (no nil) para que el JSON siempre serialice
 	// como `[]` y no como `null` — el frontend asume array.
 	items := make([]model.ApplyResultItem, 0)
 
 	// === Última milla ===
 	for _, asgmt := range plan.LastMile {
-		target := "driver:" + asgmt.DriverID
-		// Drift check: si el chofer arrancó la ruta entre Generate y Apply,
-		// rechazamos todos los items del bucket — no podemos sumarle envíos.
-		if err := s.routeSvc.CanAssignToRoute(asgmt.DriverID, today); err != nil {
+		target := "vehicle:" + asgmt.LicensePlate
+		v, ok := s.vehicleRepo.GetByID(asgmt.VehicleID)
+		if !ok {
 			for _, tid := range asgmt.Shipments {
-				items = append(items, failedItem(tid, target, "ruta_ya_iniciada"))
+				items = append(items, failedItem(tid, target, "vehiculo_no_encontrado"))
 			}
 			continue
 		}
+		if v.AssignedBranch == nil || *v.AssignedBranch != branchID {
+			for _, tid := range asgmt.Shipments {
+				items = append(items, failedItem(tid, target, "vehiculo_no_pertenece_a_sucursal"))
+			}
+			continue
+		}
+		if v.Status != model.VehicleStatusAvailable && v.Status != model.VehicleStatusLoading {
+			for _, tid := range asgmt.Shipments {
+				items = append(items, failedItem(tid, target, "vehiculo_no_disponible"))
+			}
+			continue
+		}
+		// Check no active trip already exists for this vehicle
+		if s.interBranchTripSvc != nil {
+			if _, hasTrip := s.interBranchTripSvc.repo.GetActiveByVehicle(v.ID); hasTrip {
+				for _, tid := range asgmt.Shipments {
+					items = append(items, failedItem(tid, target, "vehiculo_con_viaje_activo"))
+				}
+				continue
+			}
+		}
+
+		var currentLoad float64
+		for _, existingTID := range v.AssignedShipments {
+			if esh, err := s.shipmentRepo.GetByTrackingID(existingTID); err == nil {
+				currentLoad += esh.WeightKg
+			}
+		}
+
+		anyApplied := false
 		for _, tid := range asgmt.Shipments {
 			sh, err := s.shipmentRepo.GetByTrackingID(tid)
 			if err != nil {
@@ -567,42 +902,65 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				items = append(items, failedItem(tid, target, "envio_no_pertenece_a_sucursal"))
 				continue
 			}
-			// Aceptamos at_hub (primer despacho) y redelivery_scheduled (reintento).
-			// Ambos transicionan limpiamente a out_for_delivery.
 			if sh.Status != model.StatusAtHub && sh.Status != model.StatusRedeliveryScheduled {
 				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
 				continue
 			}
+			if currentLoad+sh.WeightKg > v.CapacityKg {
+				items = append(items, failedItem(tid, target, "capacidad_excedida"))
+				continue
+			}
 
+			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
 			_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-				Status:    model.StatusOutForDelivery,
+				Status:    model.StatusLoaded,
 				ChangedBy: username,
-				DriverID:  asgmt.DriverID,
-				Notes:     "Asignado vía planificador de ruteo",
+				Location:  branchID,
+				Notes:     "Cargado en " + v.LicensePlate + " vía planificador (última milla)",
 			})
 			if err != nil {
+				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
 				items = append(items, failedItem(tid, target, err.Error()))
 				continue
 			}
-
-			_ = s.routeSvc.RemoveShipmentFromTodayRoute(tid)
-			if err := s.routeSvc.AddShipmentToDriverRoute(asgmt.DriverID, tid, today); err != nil {
-				items = append(items, failedItem(tid, target, err.Error()))
-				continue
-			}
-
-			items = append(items, model.ApplyResultItem{
-				TrackingID: tid,
-				Target:     target,
-				Status:     "applied",
-			})
+			currentLoad += sh.WeightKg
+			anyApplied = true
+			items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
 		}
-		// Persistir el horario sugerido de salida para que el chofer/supervisor
-		// lo vea en /driver/route. DepartureMin > 0 indica que el motor de
-		// ruteo (VRP scheduler) pudo calcularlo.
-		if asgmt.DepartureMin > 0 {
-			suggestedAt := dateAtMinute(today, asgmt.DepartureMin)
-			_ = s.routeSvc.SetSuggestedStartTime(asgmt.DriverID, today, suggestedAt)
+
+		if anyApplied {
+			if v.Status == model.VehicleStatusAvailable {
+				_ = s.vehicleRepo.UpdateStatusByUser(v.ID, model.VehicleStatusLoading, username)
+			}
+			// Create last_mile trip — driver will self-assign via QR
+			if s.interBranchTripSvc != nil {
+				appliedIDs := make([]string, 0)
+				var totalWeight float64
+				for _, it := range items {
+					if it.Status == "applied" && it.Target == target {
+						appliedIDs = append(appliedIDs, it.TrackingID)
+						if sh, err := s.shipmentRepo.GetByTrackingID(it.TrackingID); err == nil {
+							totalWeight += sh.WeightKg
+						}
+					}
+				}
+				if len(appliedIDs) > 0 {
+					_, _ = s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+						Kind:                model.TripKindLastMile,
+						DriverID:            asgmt.DriverID,
+						VehicleID:           v.ID,
+						LicensePlate:        v.LicensePlate,
+						OriginBranchID:      branchID,
+						DestinationBranchID: nil,
+						ShipmentIDs:         appliedIDs,
+						TotalWeightKg:       totalWeight,
+						CreatedBy:           username,
+					})
+				}
+			}
 		}
 	}
 
@@ -654,8 +1012,29 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 			}
 		}
 
+		// Set de pickup TIDs: envíos cross-branch que se levantan en paradas
+		// intermedias. NO se cargan al origen — solo se marcan como "aplicados"
+		// para que el trip los registre como pickups. La reserva (ReserveForTrip)
+		// la hace el bloque que crea el Trip.
+		pickupSet := map[string]bool{}
+		for _, tid := range asgmt.PrimaryPickupShipments {
+			pickupSet[tid] = true
+		}
+		for _, st := range asgmt.AdditionalStops {
+			for _, tid := range st.PickupShipments {
+				pickupSet[tid] = true
+			}
+		}
+
 		anyApplied := false
 		for _, tid := range asgmt.Shipments {
+			// Cross-branch pickup: marcamos applied sin cargar al vehículo ni cambiar
+			// estado. Físicamente el envío se levantará al pasar por su sucursal.
+			if pickupSet[tid] {
+				items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
+				anyApplied = true
+				continue
+			}
 			sh, err := s.shipmentRepo.GetByTrackingID(tid)
 			if err != nil {
 				items = append(items, failedItem(tid, target, "envio_no_encontrado"))
@@ -702,6 +1081,108 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 
 		if anyApplied && v.Status == model.VehicleStatusAvailable {
 			_ = s.vehicleRepo.UpdateStatusByUser(v.ID, model.VehicleStatusLoading, username)
+		}
+
+		// Create InterBranchTrip — driver self-assigns via QR. Multi-hop aware.
+		if anyApplied && s.interBranchTripSvc != nil {
+			appliedSet := map[string]bool{}
+			for _, it := range items {
+				if it.Status == "applied" && it.Target == target {
+					appliedSet[it.TrackingID] = true
+				}
+			}
+			weight := func(tid string) float64 {
+				if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+					return sh.WeightKg
+				}
+				return 0
+			}
+
+			// Construir paradas: primera = destino primario, luego AdditionalStops.
+			// Solo incluimos shipments que efectivamente fueron aplicados.
+			var stops []model.TripStop
+			var allShipments []string
+			var totalWeight float64
+
+			// Parada primaria: shipments del asgmt que no estén en AdditionalStops
+			additionalSet := map[string]bool{}
+			for _, st := range asgmt.AdditionalStops {
+				for _, tid := range st.Shipments {
+					additionalSet[tid] = true
+				}
+			}
+			primaryShipments := []string{}
+			var primaryWeight float64
+			for _, tid := range asgmt.Shipments {
+				if !appliedSet[tid] || additionalSet[tid] {
+					continue
+				}
+				primaryShipments = append(primaryShipments, tid)
+				primaryWeight += weight(tid)
+			}
+			if len(primaryShipments) > 0 || len(asgmt.PrimaryPickupShipments) > 0 {
+				stops = append(stops, model.TripStop{
+					BranchID:          asgmt.DestinationBranch,
+					ShipmentIDs:       primaryShipments,
+					TotalWeightKg:     roundKg(primaryWeight),
+					PickupShipmentIDs: append([]string(nil), asgmt.PrimaryPickupShipments...),
+					PickupWeightKg:    asgmt.PrimaryPickupWeightKg,
+				})
+				allShipments = append(allShipments, primaryShipments...)
+				totalWeight += primaryWeight
+			}
+
+			for _, st := range asgmt.AdditionalStops {
+				stopShipments := []string{}
+				var stopWeight float64
+				for _, tid := range st.Shipments {
+					if !appliedSet[tid] {
+						continue
+					}
+					stopShipments = append(stopShipments, tid)
+					stopWeight += weight(tid)
+				}
+				if len(stopShipments) > 0 || len(st.PickupShipments) > 0 {
+					stops = append(stops, model.TripStop{
+						BranchID:          st.BranchID,
+						ShipmentIDs:       stopShipments,
+						TotalWeightKg:     roundKg(stopWeight),
+						PickupShipmentIDs: append([]string(nil), st.PickupShipments...),
+						PickupWeightKg:    st.PickupWeightKg,
+					})
+					allShipments = append(allShipments, stopShipments...)
+					totalWeight += stopWeight
+				}
+			}
+
+			if len(allShipments) > 0 {
+				// El destino persistido es la última parada (final)
+				finalDest := asgmt.DestinationBranch
+				if len(stops) > 0 {
+					finalDest = stops[len(stops)-1].BranchID
+				}
+				createdTrip, err := s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+					Kind:                model.TripKindInterBranch,
+					DriverID:            nil,
+					VehicleID:           v.ID,
+					LicensePlate:        v.LicensePlate,
+					OriginBranchID:      branchID,
+					DestinationBranchID: &finalDest,
+					ShipmentIDs:         allShipments,
+					TotalWeightKg:       roundKg(totalWeight),
+					Stops:               stops,
+					CreatedBy:           username,
+				})
+				// Reservar pickups: para cada stop con PickupShipmentIDs,
+				// marcar los envíos como reservados por este trip.
+				if err == nil {
+					for _, st := range stops {
+						for _, tid := range st.PickupShipmentIDs {
+							_ = s.shipmentRepo.ReserveForTrip(tid, createdTrip.ID)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -962,6 +1443,683 @@ func roundKg(v float64) float64 {
 	return float64(int64(v*100+0.5)) / 100
 }
 
+// addMultiHopStops agrega paradas adicionales (hop 2 y opcional hop 3) a los
+// despachos ya armados cuando hay envíos sin asignar cuyo path pasa por el
+// destino primario del despacho. Tope: model.MaxTripStops paradas en total
+// (incluyendo la primaria). El grafo de sucursales (s.graphSvc) provee el
+// shortest-path; si no está configurado, la función no hace nada.
+func (s *RoutingService) addMultiHopStops(plan *model.RoutingPlan, branchID string, shipmentByTID map[string]model.Shipment, cfg model.RoutingConfig, now time.Time, skipFillRateCheck bool) {
+	if s.graphSvc == nil {
+		return
+	}
+
+	// Index de unassigned por tracking_id para poder removerlos cuando los reasignamos
+	unassignedIdx := map[string]int{}
+	for i, u := range plan.Unassigned {
+		unassignedIdx[u.TrackingID] = i
+	}
+	removed := map[string]bool{}
+
+	for di := range plan.InterBranch {
+		dispatch := &plan.InterBranch[di]
+		// Reservamos capacidad para los envíos ya cargados (existing) + los primarios
+		// nuevos. Tope efectivo del vehículo (no del fill-rate).
+		usedKg := dispatch.ExistingWeightKg + dispatch.TotalWeightKg
+
+		// Construir la lista de paradas actuales: empezamos con el destino primario
+		stopBranches := []string{dispatch.DestinationBranch}
+		for _, s := range dispatch.AdditionalStops {
+			stopBranches = append(stopBranches, s.BranchID)
+		}
+
+		// Iteramos agregando hops mientras quepa
+		for len(stopBranches) < model.MaxTripStops {
+			fromBranch := stopBranches[len(stopBranches)-1]
+
+			// Buscar el mejor siguiente hop: agrupamos los envíos sin asignar por
+			// el "next branch" en su camino desde fromBranch.
+			candidatesByNext := map[string][]model.Shipment{} // next_branch → shipments
+			for _, u := range plan.Unassigned {
+				if removed[u.TrackingID] {
+					continue
+				}
+				sh, ok := shipmentByTID[u.TrackingID]
+				if !ok || sh.IsReturning {
+					continue
+				}
+				// Solo inter-sucursal — última milla se maneja aparte
+				if sh.FinalBranchID == "" || sh.FinalBranchID == branchID {
+					continue
+				}
+				path := s.graphSvc.ShortestPath(fromBranch, sh.FinalBranchID)
+				if len(path) < 2 {
+					continue
+				}
+				nextBranch := path[1]
+				// Evitar volver a una parada ya hecha
+				visited := false
+				for _, b := range stopBranches {
+					if b == nextBranch {
+						visited = true
+						break
+					}
+				}
+				if visited {
+					continue
+				}
+				candidatesByNext[nextBranch] = append(candidatesByNext[nextBranch], sh)
+			}
+
+			// Elegir el siguiente hop con más peso (mejor utilización del vehículo)
+			var bestNext string
+			var bestShipments []model.Shipment
+			var bestWeight float64
+			for next, ships := range candidatesByNext {
+				totalW := 0.0
+				for _, sh := range ships {
+					totalW += sh.WeightKg
+				}
+				if totalW > bestWeight {
+					bestWeight = totalW
+					bestNext = next
+					bestShipments = ships
+				}
+			}
+			if bestNext == "" {
+				break // no hay más hops posibles
+			}
+
+			// Bin-pack: agregar envíos hasta llenar capacidad
+			available := dispatch.CapacityKg - usedKg
+			if available <= 0 {
+				break
+			}
+			sortShipmentsForRouting(bestShipments) // priority desc
+			var included []string
+			var includedWeight float64
+			for _, sh := range bestShipments {
+				if includedWeight+sh.WeightKg > available {
+					continue
+				}
+				included = append(included, sh.TrackingID)
+				includedWeight += sh.WeightKg
+			}
+			if len(included) == 0 {
+				break
+			}
+
+			// Consolidación del nuevo segmento: el tramo desde `fromBranch` hasta
+			// `bestNext` lleva `includedWeight` kg (los envíos recién agregados;
+			// todavía no hay hops posteriores que podrían sumar carga). Si esa
+			// carga no llega al umbral `MinFillRate × capacidad`, no extendemos
+			// la ruta — salvo que algún envío incluido esté SLA-forzado.
+			includedSet := map[string]bool{}
+			for _, tid := range included {
+				includedSet[tid] = true
+			}
+			includedShipments := make([]model.Shipment, 0, len(included))
+			for _, sh := range bestShipments {
+				if includedSet[sh.TrackingID] {
+					includedShipments = append(includedShipments, sh)
+				}
+			}
+			// En plan global el check se omite porque addCrossBranchPickups
+			// puede agregar carga suficiente DESPUÉS de este paso; en ese caso
+			// enforceMinSegmentUtilization es quien poda el tramo si sigue bajo.
+			if !skipFillRateCheck {
+				threshold := cfg.MinFillRate * dispatch.CapacityKg
+				if includedWeight < threshold && !anyForced(includedShipments, cfg, now) {
+					break // tramo subutilizado y sin SLA forzado → no extender
+				}
+			}
+
+			// Agregar parada adicional al despacho
+			dispatch.AdditionalStops = append(dispatch.AdditionalStops, model.AssignmentStop{
+				BranchID:      bestNext,
+				Shipments:     included,
+				TotalWeightKg: roundKg(includedWeight),
+			})
+			dispatch.Shipments = append(dispatch.Shipments, included...)
+			dispatch.TotalWeightKg = roundKg(dispatch.TotalWeightKg + includedWeight)
+			usedKg += includedWeight
+			stopBranches = append(stopBranches, bestNext)
+
+			for _, tid := range included {
+				removed[tid] = true
+			}
+		}
+	}
+
+	// Limpiar unassigned: quitamos los envíos que ahora están en paradas multi-hop
+	if len(removed) > 0 {
+		filtered := plan.Unassigned[:0]
+		for _, u := range plan.Unassigned {
+			if !removed[u.TrackingID] {
+				filtered = append(filtered, u)
+			}
+		}
+		plan.Unassigned = filtered
+	}
+}
+
+// =============================================================================
+// Global-only passes
+// =============================================================================
+
+// consolidateCrossBranchDispatches absorbe dispatches single-hop (B) dentro de
+// dispatches multi-hop (A) cuando A ya pasa por el origen de B y el destino de
+// B está en el path remanente de A. Solo opción C: B debe quedar completamente
+// vacío (todos sus envíos se mueven a A). B debe ser single-hop.
+func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRoutingPlan) {
+	if s.graphSvc == nil {
+		return
+	}
+
+	// Índice global (branchPlanIdx, dispatchIdx) para encontrar dispatches por vehicleID
+	type dispatchRef struct {
+		bpIdx int
+		dIdx  int
+	}
+
+	// Set de vehicleIDs que ya fueron consumidos (B absorbido)
+	consumed := map[string]bool{}
+
+	for bpA := range plan.BranchPlans {
+		for dA := range plan.BranchPlans[bpA].Plan.InterBranch {
+			A := &plan.BranchPlans[bpA].Plan.InterBranch[dA]
+			if len(A.AdditionalStops) == 0 || consumed[A.VehicleID] {
+				continue
+			}
+			// Path completo de A: [primary, additional[0], additional[1], ...]
+			pathA := []string{A.DestinationBranch}
+			for _, st := range A.AdditionalStops {
+				pathA = append(pathA, st.BranchID)
+			}
+
+			// Peso por tramo de A: peso_vivo al entrar en cada segmento.
+			// Empezamos con el peso completo; restamos dropoffs, sumamos pickups.
+			type tramo struct {
+				from     string
+				to       string
+				liveKgIn float64 // peso al entrar en este tramo
+				liveKgOut float64 // peso al salir (= in - dropoffs + pickups)
+			}
+
+			// Calcular pesos dropoff/pickup por parada
+			additionalSet := map[string]bool{}
+			for _, st := range A.AdditionalStops {
+				for _, tid := range st.Shipments {
+					additionalSet[tid] = true
+				}
+			}
+			var primaryWeight float64
+			for _, tid := range A.Shipments {
+				if !additionalSet[tid] {
+					if sh, ok := s.lookupShipment(tid); ok {
+						primaryWeight += sh.WeightKg
+					}
+				}
+			}
+
+			tramos := make([]tramo, len(pathA))
+			// Carga total al salir del origen: existing + todos los nuevos dropoffs.
+			liveKg := A.ExistingWeightKg + A.TotalWeightKg
+			// Tramo 0: origen → pathA[0] (primary)
+			tramos[0] = tramo{from: plan.BranchPlans[bpA].BranchID, to: pathA[0], liveKgIn: liveKg}
+			// Al salir de primary: drop existing + primary new + pickup primary
+			liveKg = liveKg - A.ExistingWeightKg - primaryWeight + A.PrimaryPickupWeightKg
+			tramos[0].liveKgOut = liveKg
+
+			for i, st := range A.AdditionalStops {
+				to := ""
+				if i+1 < len(pathA) {
+					to = pathA[i+1]
+				}
+				tramos[i+1] = tramo{from: pathA[i], to: to, liveKgIn: liveKg}
+				liveKg = liveKg - st.TotalWeightKg + st.PickupWeightKg
+				tramos[i+1].liveKgOut = liveKg
+			}
+
+			// Buscar B en otros BranchPlans que sean single-hop y no consumidos
+			for bpB := range plan.BranchPlans {
+				for dB := range plan.BranchPlans[bpB].Plan.InterBranch {
+					B := plan.BranchPlans[bpB].Plan.InterBranch[dB]
+					if consumed[B.VehicleID] || B.VehicleID == A.VehicleID {
+						continue
+					}
+					if len(B.AdditionalStops) > 0 {
+						continue // B debe ser single-hop
+					}
+
+					// ¿El origen de B está en alguna parada k de A?
+					kMatch := -1
+					for k, branchID := range pathA {
+						if branchID == plan.BranchPlans[bpB].BranchID {
+							kMatch = k
+							break
+						}
+					}
+					if kMatch == -1 {
+						continue
+					}
+
+					// ¿El destino de B está en el path remanente de A?
+					destMatch := -1
+					for k := kMatch + 1; k < len(pathA); k++ {
+						if pathA[k] == B.DestinationBranch {
+							destMatch = k
+							break
+						}
+					}
+					if destMatch == -1 {
+						continue
+					}
+
+					// ¿Cabe el peso de B en los tramos donde estará a bordo?
+					// B se recoge en stop kMatch y se descarga en destMatch.
+					// Está a bordo durante los tramos kMatch..destMatch-1 (peso en cada
+					// tramo = tramos[t].liveKgOut).
+					fits := true
+					for t := kMatch; t < destMatch && t < len(tramos); t++ {
+						if tramos[t].liveKgOut+B.TotalWeightKg > A.CapacityKg {
+							fits = false
+							break
+						}
+					}
+					if !fits {
+						continue
+					}
+
+					// Match: mover envíos de B a A
+					// Pickup en la parada kMatch (la que coincide con origen de B)
+					if kMatch == 0 {
+						// Primary stop: usar PrimaryPickup
+						A.PrimaryPickupShipments = append(A.PrimaryPickupShipments, B.Shipments...)
+						A.PrimaryPickupWeightKg = roundKg(A.PrimaryPickupWeightKg + B.TotalWeightKg)
+					} else {
+						// Additional stop kMatch-1 (porque AdditionalStops[0] = pathA[1])
+						stIdx := kMatch - 1
+						A.AdditionalStops[stIdx].PickupShipments = append(A.AdditionalStops[stIdx].PickupShipments, B.Shipments...)
+						A.AdditionalStops[stIdx].PickupWeightKg = roundKg(A.AdditionalStops[stIdx].PickupWeightKg + B.TotalWeightKg)
+					}
+					// Dropoff en la parada destMatch (destMatch >= 1 siempre, así que
+					// AdditionalStops[destMatch-1])
+					stDropIdx := destMatch - 1
+					A.AdditionalStops[stDropIdx].Shipments = append(A.AdditionalStops[stDropIdx].Shipments, B.Shipments...)
+					A.AdditionalStops[stDropIdx].TotalWeightKg = roundKg(A.AdditionalStops[stDropIdx].TotalWeightKg + B.TotalWeightKg)
+					A.Shipments = append(A.Shipments, B.Shipments...)
+					A.TotalWeightKg = roundKg(A.TotalWeightKg + B.TotalWeightKg)
+
+					// Actualizar tramos para siguiente B (peso aumenta entre kMatch y destMatch-1)
+					for t := kMatch; t < destMatch && t < len(tramos); t++ {
+						tramos[t].liveKgOut += B.TotalWeightKg
+					}
+
+					// Marcar B como consumido — se eliminará al final
+					consumed[B.VehicleID] = true
+				}
+			}
+		}
+	}
+
+	// Eliminar dispatches consumidos
+	if len(consumed) == 0 {
+		return
+	}
+	for bpIdx := range plan.BranchPlans {
+		newDispatches := plan.BranchPlans[bpIdx].Plan.InterBranch[:0]
+		for _, d := range plan.BranchPlans[bpIdx].Plan.InterBranch {
+			if consumed[d.VehicleID] {
+				// Devolver los envíos de B al unassigned de su branch
+				for _, tid := range d.Shipments {
+					sh, err := s.shipmentRepo.GetByTrackingID(tid)
+					if err != nil {
+						continue
+					}
+					dest := sh.FinalBranchID
+					if sh.IsReturning {
+						dest = sh.OriginBranchID
+					}
+					plan.BranchPlans[bpIdx].Plan.Unassigned = append(
+						plan.BranchPlans[bpIdx].Plan.Unassigned,
+						model.UnassignedShipment{
+							TrackingID:  tid,
+							Destination: dest,
+							Reason:      "consolidado_en_viaje_multi_hop",
+							WeightKg:    sh.WeightKg,
+							Priority:    sh.Priority,
+						},
+					)
+				}
+			} else {
+				newDispatches = append(newDispatches, d)
+			}
+		}
+		plan.BranchPlans[bpIdx].Plan.InterBranch = newDispatches
+	}
+}
+
+// enforceMinSegmentUtilization recorre los dispatches multi-hop del plan global
+// y elimina las paradas adicionales cuyo tramo final tiene utilización <
+// cfg.MinFillRate, salvo que algún envío de esa parada tenga SLA forzado.
+// Los envíos de las paradas eliminadas vuelven a unassigned con motivo
+// "tramo_subutilizado".
+func (s *RoutingService) enforceMinSegmentUtilization(plan *model.GlobalRoutingPlan, cfg model.RoutingConfig) {
+	now := clock.Now()
+	for bpIdx := range plan.BranchPlans {
+		for dIdx := range plan.BranchPlans[bpIdx].Plan.InterBranch {
+			dispatch := &plan.BranchPlans[bpIdx].Plan.InterBranch[dIdx]
+			if len(dispatch.AdditionalStops) == 0 {
+				continue
+			}
+			if dispatch.CapacityKg <= 0 {
+				continue
+			}
+
+			// Calcular peso vivo por tramo
+			// Reconstruir peso primario
+			additionalSet := map[string]bool{}
+			for _, st := range dispatch.AdditionalStops {
+				for _, tid := range st.Shipments {
+					additionalSet[tid] = true
+				}
+			}
+			var primaryWeight float64
+			for _, tid := range dispatch.Shipments {
+				if !additionalSet[tid] {
+					if sh, ok := s.lookupShipment(tid); ok {
+						primaryWeight += sh.WeightKg
+					}
+				}
+			}
+
+			// liveKg = peso a bordo DURANTE el tramo desde primary hacia additional[0].
+			// Después de primary: drop existing + drop primary new + pickup primary.
+			// Initial load = ExistingWeightKg + TotalWeightKg.
+			// Después de primary: initial - ExistingWeightKg - primaryWeight + PrimaryPickupWeightKg
+			//                    = TotalWeightKg - primaryWeight + PrimaryPickupWeightKg.
+			liveKg := dispatch.TotalWeightKg - primaryWeight + dispatch.PrimaryPickupWeightKg
+
+			keepUntil := len(dispatch.AdditionalStops) // mantener todo por defecto
+			for i, st := range dispatch.AdditionalStops {
+				// El tramo "previo a esta parada" (i.e. el segmento que va desde la
+				// parada anterior HASTA esta) lleva `liveKg` (pickups en esta parada
+				// no afectan al segmento previo, sino al siguiente).
+				segmentLoad := liveKg
+				util := segmentLoad / dispatch.CapacityKg
+
+				if util >= cfg.MinFillRate {
+					// Tramo válido: avanzar con los pesos para el siguiente segmento
+					liveKg = liveKg - st.TotalWeightKg + st.PickupWeightKg
+					continue
+				}
+
+				// Tramo bajo el umbral — verificar si hay SLA forzado en esta parada
+				slaForced := false
+				combined := append([]string(nil), st.Shipments...)
+				combined = append(combined, st.PickupShipments...)
+				for _, tid := range combined {
+					sh, err := s.shipmentRepo.GetByTrackingID(tid)
+					if err != nil {
+						continue
+					}
+					if anyForced([]model.Shipment{sh}, cfg, now) {
+						slaForced = true
+						break
+					}
+				}
+				if slaForced {
+					liveKg = liveKg - st.TotalWeightKg + st.PickupWeightKg
+					continue
+				}
+
+				// Eliminar desde esta parada en adelante
+				keepUntil = i
+				break
+			}
+
+			if keepUntil == len(dispatch.AdditionalStops) {
+				continue // nada que eliminar
+			}
+
+			// Mover envíos de las paradas eliminadas a unassigned
+			for i := keepUntil; i < len(dispatch.AdditionalStops); i++ {
+				st := dispatch.AdditionalStops[i]
+				droppedSet := map[string]bool{}
+				for _, tid := range st.Shipments {
+					droppedSet[tid] = true
+					sh, err := s.shipmentRepo.GetByTrackingID(tid)
+					if err != nil {
+						continue
+					}
+					dest := sh.FinalBranchID
+					if sh.IsReturning {
+						dest = sh.OriginBranchID
+					}
+					plan.BranchPlans[bpIdx].Plan.Unassigned = append(
+						plan.BranchPlans[bpIdx].Plan.Unassigned,
+						model.UnassignedShipment{
+							TrackingID:  tid,
+							Destination: dest,
+							Reason:      "tramo_subutilizado",
+							WeightKg:    sh.WeightKg,
+							Priority:    sh.Priority,
+						},
+					)
+				}
+				// Pickups (cross-branch) cancelados: vuelven a estar libres,
+				// pero NO los marcamos como unassigned del branch actual — son envíos
+				// de OTROS branches. Simplemente no se persisten al apply.
+				dispatch.TotalWeightKg = roundKg(dispatch.TotalWeightKg - st.TotalWeightKg)
+				// Limpiar shipments de dispatch.Shipments
+				if len(droppedSet) > 0 {
+					filtered := dispatch.Shipments[:0]
+					for _, tid := range dispatch.Shipments {
+						if !droppedSet[tid] {
+							filtered = append(filtered, tid)
+						}
+					}
+					dispatch.Shipments = filtered
+				}
+			}
+
+			// Cortar las paradas — DestinationBranch (primary) NO cambia.
+			dispatch.AdditionalStops = dispatch.AdditionalStops[:keepUntil]
+		}
+	}
+}
+
+// snapshotAtHubInventory devuelve los envíos disponibles para cross-branch pickup
+// agrupados por sucursal (branch_id). Incluye tanto `at_hub` (envíos llegados
+// desde otra sucursal) como `at_origin_hub` (recién registrados en su origen):
+// para un camión multi-hop que pasa, ambos casos son levantables.
+// Excluye reservados, returns, retiro_sucursal, y los que están en su sucursal final.
+func (s *RoutingService) snapshotAtHubInventory() map[string][]model.Shipment {
+	inventory := map[string][]model.Shipment{}
+	all, err := s.shipmentRepo.List(model.ShipmentFilter{})
+	if err != nil {
+		return inventory
+	}
+	for _, sh := range all {
+		if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub {
+			continue
+		}
+		if sh.ReservedForTripID != nil {
+			continue
+		}
+		if sh.IsReturning {
+			continue
+		}
+		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
+			continue
+		}
+		if sh.FinalBranchID == "" || sh.FinalBranchID == sh.ReceivingBranchID {
+			continue
+		}
+		inventory[sh.ReceivingBranchID] = append(inventory[sh.ReceivingBranchID], sh)
+	}
+	return inventory
+}
+
+// enrichDispatchesWithPickups recorre los dispatches multi-hop del BranchPlan dado
+// y agrega pickups (cross-branch) en las paradas intermedias, respetando capacidad
+// y un set de envíos ya "tomados" por otros dispatches durante esta misma pasada.
+func (s *RoutingService) enrichDispatchesWithPickups(
+	branchPlan *model.RoutingPlan,
+	inventory map[string][]model.Shipment,
+	taken map[string]bool,
+) {
+	if s.graphSvc == nil {
+		return
+	}
+	for di := range branchPlan.InterBranch {
+		dispatch := &branchPlan.InterBranch[di]
+		// Solo dispatches multi-hop (con al menos una additional stop) tienen
+		// "paradas intermedias" donde podemos hacer pickup. Conservador: no
+		// extendemos rutas solo por pickup.
+		if len(dispatch.AdditionalStops) == 0 {
+			continue
+		}
+		// Path completo del trip: [primary, additional[0], additional[1], ...]
+		fullPath := []string{dispatch.DestinationBranch}
+		for _, st := range dispatch.AdditionalStops {
+			fullPath = append(fullPath, st.BranchID)
+		}
+		// Peso ya cargado al salir del origen (existing + primary + additional dropoffs)
+		usedKg := dispatch.ExistingWeightKg + dispatch.TotalWeightKg
+		// Peso dropped en cada parada (para calcular capacidad disponible al pasar)
+		dropoffByStop := []float64{0} // primary dropoff
+		// Calcular peso del primary stop (shipments que no están en additional stops)
+		additionalSet := map[string]bool{}
+		for _, st := range dispatch.AdditionalStops {
+			for _, tid := range st.Shipments {
+				additionalSet[tid] = true
+			}
+		}
+		var primaryWeight float64
+		for _, tid := range dispatch.Shipments {
+			if !additionalSet[tid] {
+				if sh, ok := s.lookupShipment(tid); ok {
+					primaryWeight += sh.WeightKg
+				}
+			}
+		}
+		dropoffByStop[0] = primaryWeight
+		for _, st := range dispatch.AdditionalStops {
+			dropoffByStop = append(dropoffByStop, st.TotalWeightKg)
+		}
+
+		// En cada parada intermedia (todas excepto la última), evaluar pickups
+		// para llevar a cualquier parada posterior.
+		// El "peso vivo" al llegar a la parada i es: usedKg - sum(dropoffs[0..i-1]).
+		// Al salir de la parada i (después de dropoffs Y pickups): peso anterior - dropoffs[i] + pickups[i].
+		liveKgAtStop := usedKg
+		for i := 0; i < len(fullPath)-1; i++ {
+			branchID := fullPath[i]
+			// Al llegar a la parada i, descargamos dropoffs[i]
+			liveKgAtStop -= dropoffByStop[i]
+			// Capacidad disponible para pickup en esta parada
+			available := dispatch.CapacityKg - liveKgAtStop
+			if available <= 0 {
+				continue
+			}
+			// Candidatos: envíos en branchID con destino en fullPath[i+1..]
+			candidates := []model.Shipment{}
+			remainingPath := map[string]bool{}
+			for j := i + 1; j < len(fullPath); j++ {
+				remainingPath[fullPath[j]] = true
+			}
+			for _, sh := range inventory[branchID] {
+				if taken[sh.TrackingID] {
+					continue
+				}
+				if !remainingPath[sh.FinalBranchID] {
+					continue
+				}
+				candidates = append(candidates, sh)
+			}
+			if len(candidates) == 0 {
+				continue
+			}
+			// Ordenar por prioridad desc y bin-pack
+			sortShipmentsForRouting(candidates)
+			var pickedIDs []string
+			var pickedWeight float64
+			for _, sh := range candidates {
+				if pickedWeight+sh.WeightKg > available {
+					continue
+				}
+				pickedIDs = append(pickedIDs, sh.TrackingID)
+				pickedWeight += sh.WeightKg
+				taken[sh.TrackingID] = true
+			}
+			if len(pickedIDs) == 0 {
+				continue
+			}
+			// Asignar al stop correcto. Si i == 0, es el primary (no hay AdditionalStops[i-1]).
+			// El "stop intermedio" donde se hace pickup es la parada i del path,
+			// que es additional_stops[i-1] (porque primary está en i==0).
+			if i == 0 {
+				// Pickup en el primary stop: no podemos agregarlo al AssignmentStop
+				// porque el primary no es uno. Saltamos (solo intermediate stops).
+				// (En la práctica, primary no es "intermediate" — la mejora es pickup
+				// en stop 2 con destino stop 3.)
+				continue
+			}
+			st := &dispatch.AdditionalStops[i-1]
+			st.PickupShipments = append(st.PickupShipments, pickedIDs...)
+			st.PickupWeightKg = roundKg(st.PickupWeightKg + pickedWeight)
+			// Sumamos al peso total del dispatch (capacidad que ocupa al salir de esta parada)
+			liveKgAtStop += pickedWeight
+		}
+	}
+}
+
+// lookupShipment helper: busca en projection por tracking ID.
+func (s *RoutingService) lookupShipment(tid string) (model.Shipment, bool) {
+	sh, err := s.shipmentRepo.GetByTrackingID(tid)
+	if err != nil {
+		return model.Shipment{}, false
+	}
+	return sh, true
+}
+
+// addCrossBranchPickups (global) — recorre TODOS los branch plans y enriquece
+// los dispatches multi-hop con pickups cross-branch. Usa un snapshot global y un
+// lock compartido para que un envío solo sea reservado por un dispatch.
+func (s *RoutingService) addCrossBranchPickups(plan *model.GlobalRoutingPlan) {
+	inventory := s.snapshotAtHubInventory()
+	taken := map[string]bool{}
+	for bi := range plan.BranchPlans {
+		s.enrichDispatchesWithPickups(&plan.BranchPlans[bi].Plan, inventory, taken)
+	}
+}
+
+// addCrossBranchPickupsForBranch (local) — enriquece solo el plan de UNA sucursal
+// tomando inventario de todas las demás. Útil cuando el operator regenera local.
+// existingGlobal, si no es nil, pre-marca como taken los shipments que otras
+// sucursales del plan del día ya tienen asignados como cross-branch pickups,
+// evitando que una regeneración local sobrescriba coordinaciones inter-sucursal.
+func (s *RoutingService) addCrossBranchPickupsForBranch(plan *model.RoutingPlan, branchID string, existingGlobal *model.GlobalRoutingPlan) {
+	inventory := s.snapshotAtHubInventory()
+	taken := map[string]bool{}
+	if existingGlobal != nil {
+		for _, bp := range existingGlobal.BranchPlans {
+			if bp.BranchID == branchID {
+				continue
+			}
+			for _, dispatch := range bp.Plan.InterBranch {
+				for _, stop := range dispatch.AdditionalStops {
+					for _, tid := range stop.Shipments {
+						taken[tid] = true
+					}
+				}
+			}
+		}
+	}
+	s.enrichDispatchesWithPickups(plan, inventory, taken)
+}
+
 // piggybackUnassigned agrega envíos sin asignar a despachos ya armados cuando el destino
 // del despacho está más cerca del final del envío que la sucursal actual. Solo se intenta
 // con envíos huérfanos por motivos de ruteo (consolidación / sin vehículo / sobrepeso),
@@ -1066,383 +2224,6 @@ func (s *RoutingService) branchDistance(b1, b2 string) float64 {
 	return ml.ComputeDistance(br1.Province, br2.Province)
 }
 
-// =============================================================================
-// VRP — última milla optimizada
-// =============================================================================
-
-// lastMileVRP es el reemplazo de binPackLastMile cuando hay coordenadas
-// disponibles. Construye una matriz de tiempos (OSRM o Haversine) y resuelve
-// el VRP con el solver del paquete vrp. Si el depósito no tiene coordenadas,
-// si ningún envío las tiene, o si el solver falla, cae al greedy clásico.
-//
-// Mantiene la semántica de binPackLastMile: choferes con ruta ya iniciada
-// quedan en `blocked`, envíos no asignables quedan en `unassigned`. Lo nuevo
-// es que cada LastMileAssignment trae OrderedStops con la secuencia óptima
-// y horas estimadas de llegada.
-func (s *RoutingService) lastMileVRP(
-	queue []model.Shipment,
-	branchID string,
-	cfg model.RoutingConfig,
-	unassigned []model.UnassignedShipment,
-	blocked []model.BlockedDriver,
-	now time.Time,
-) ([]model.LastMileAssignment, []model.UnassignedShipment, []model.BlockedDriver) {
-	if len(queue) == 0 {
-		return nil, unassigned, blocked
-	}
-
-	depot, ok := s.branchRepo.GetByID(branchID)
-	if !ok || depot.Latitude == nil || depot.Longitude == nil {
-		// Sin coords del depósito el VRP no es posible — fallback al greedy.
-		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
-	}
-
-	// Filtro de drivers: idéntico a binPackLastMile (replicar la lógica
-	// asegura que ambos paths tengan el mismo comportamiento de bloqueos).
-	allDrivers := s.authRepo.ListByRole(model.RoleDriver, branchID)
-	today := model.NewDateOnly(now)
-	var drivers []model.User
-	for _, d := range allDrivers {
-		if err := s.routeSvc.CanAssignToRoute(d.ID, today); err != nil {
-			blocked = append(blocked, model.BlockedDriver{
-				DriverID:   d.ID,
-				DriverName: driverDisplayName(d),
-				Reason:     "ruta_ya_iniciada",
-			})
-			continue
-		}
-		drivers = append(drivers, d)
-	}
-
-	if len(drivers) == 0 {
-		reason := "sin_choferes_disponibles"
-		if len(allDrivers) > 0 {
-			reason = "choferes_ya_iniciaron_ruta"
-		}
-		for _, sh := range queue {
-			unassigned = append(unassigned, model.UnassignedShipment{
-				TrackingID:  sh.TrackingID,
-				Destination: lastMileDestLabel,
-				Reason:      reason,
-				WeightKg:    sh.WeightKg,
-				Priority:    sh.Priority,
-			})
-		}
-		return nil, unassigned, blocked
-	}
-
-	// Particionar la cola entre envíos con coords (entran al solver) y
-	// envíos sin coords (se cuelgan al final de alguna ruta como unsequenced).
-	var withCoords, withoutCoords []model.Shipment
-	for _, sh := range queue {
-		if sh.Recipient.Address.Latitude != nil && sh.Recipient.Address.Longitude != nil {
-			withCoords = append(withCoords, sh)
-		} else {
-			withoutCoords = append(withoutCoords, sh)
-		}
-	}
-	if len(withCoords) == 0 {
-		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
-	}
-
-	// Construir Problem.
-	depotCoord := vrp.Coord{Lat: *depot.Latitude, Lon: *depot.Longitude}
-	deliveries := make([]vrp.Node, len(withCoords))
-	deliveryCoords := make([]vrp.Coord, len(withCoords))
-	for i, sh := range withCoords {
-		c := vrp.Coord{Lat: *sh.Recipient.Address.Latitude, Lon: *sh.Recipient.Address.Longitude}
-		deliveries[i] = vrp.Node{
-			ID:         sh.TrackingID,
-			Coord:      c,
-			WeightKg:   sh.WeightKg,
-			TimeWindow: sh.TimeWindow,
-		}
-		deliveryCoords[i] = c
-	}
-
-	vrpDrivers := make([]vrp.Driver, len(drivers))
-	for i, d := range drivers {
-		count, weight := s.routeSvc.PendingLoad(d.ID, today)
-		vrpDrivers[i] = vrp.Driver{
-			ID:               d.ID,
-			MaxWeightKg:      150,
-			ExistingCount:    count,
-			ExistingWeightKg: weight,
-		}
-	}
-
-	dur, dist := s.buildDurationMatrix(depotCoord, deliveryCoords, cfg.AvgSpeedKmh)
-
-	// DepartureMin: si el operador genera el plan después de morning_window_start,
-	// las horas estimadas parten de la hora actual; si no, parten del inicio
-	// configurado de la ventana morning. Wall-clock local del operador (no UTC).
-	local := now.In(clock.LocalTZ)
-	departureMin := float64(local.Hour()*60 + local.Minute())
-	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
-	if departureMin < morningStartMin {
-		departureMin = morningStartMin
-	}
-
-	problem := vrp.Problem{
-		Depot:                   vrp.Node{ID: "depot", Coord: depotCoord},
-		Deliveries:              deliveries,
-		Drivers:                 vrpDrivers,
-		DurationMatrix:          dur,
-		DistanceMatrix:          dist,
-		DepartureMin:            departureMin,
-		ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
-		DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
-		MorningWindowStartMin:   morningStartMin,
-		MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
-		AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
-		AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
-		EnforceTimeWindows:      cfg.EnforceTimeWindows,
-		PackingStrategy:         cfg.LastMilePackingStrategy,
-	}
-
-	// Index para sub-problems del scheduling (Fase 3): de tracking_id al
-	// índice del shipment en `deliveries` global (necesario para cortar la
-	// matriz de duraciones por chofer).
-	indexByTID := make(map[string]int, len(withCoords))
-	for i, sh := range withCoords {
-		indexByTID[sh.TrackingID] = i
-	}
-
-	// Loop "abrir choferes hasta cubrir ventanas":
-	// - Estrategia maximize_capacity: arranca con 1 chofer; si no logra 100%
-	//   de cobertura de ventana en alguna ruta, agrega un chofer más y vuelve
-	//   a resolver. Hasta cubrir o agotar choferes.
-	// - Estrategia balanced: usa todos los choferes desde el principio (un
-	//   solo pase del solver).
-	activeCount := len(drivers)
-	if cfg.LastMilePackingStrategy == model.PackingStrategyMaximizeCapacity {
-		activeCount = 1
-	}
-
-	type optimizedRoute struct {
-		departure float64
-		route     vrp.Route
-		coverage  float64
-	}
-
-	var sol vrp.Solution
-	var perDriverOpt map[string]optimizedRoute
-	for {
-		if activeCount > len(drivers) {
-			activeCount = len(drivers)
-		}
-
-		p := problem
-		p.Drivers = vrpDrivers[:activeCount]
-		sol = vrp.Solve(p)
-
-		perDriverOpt = make(map[string]optimizedRoute, len(sol.Routes))
-		allCovered := true
-		for _, r := range sol.Routes {
-			tids := make([]string, len(r.Stops))
-			for i, st := range r.Stops {
-				tids[i] = st.NodeID
-			}
-			var maxKg float64 = 150
-			for _, vd := range vrpDrivers {
-				if vd.ID == r.DriverID {
-					maxKg = vd.MaxWeightKg
-					break
-				}
-			}
-			bestDep, bestRoute, cov := s.findBestDepartureForRoute(
-				r.DriverID, maxKg, tids,
-				depotCoord, deliveries, indexByTID,
-				dur, dist, cfg, departureMin,
-			)
-			perDriverOpt[r.DriverID] = optimizedRoute{
-				departure: bestDep,
-				route:     bestRoute,
-				coverage:  cov,
-			}
-			if cov < 1.0 {
-				allCovered = false
-			}
-		}
-
-		if allCovered || activeCount >= len(drivers) {
-			break
-		}
-		activeCount++
-	}
-
-	// Sustituir las routes globales con las optimizadas (mismo set de
-	// shipments por chofer, pero con orden recalculado para el mejor
-	// departure encontrado).
-	for i, r := range sol.Routes {
-		opt, ok := perDriverOpt[r.DriverID]
-		if !ok || opt.coverage == 0 {
-			continue
-		}
-		opt.route.DriverID = r.DriverID
-		sol.Routes[i] = opt.route
-	}
-
-	// En modo duro (EnforceTimeWindows=true), el sub-solver de scheduling usa
-	// soft mode para comparar coberturas, lo que puede marcar como OutOfWindow
-	// paradas que sí eran válidas al departure inicial. Si quedaron marcadas
-	// así en la ruta optimizada, hay que sacarlas de la ruta y pasarlas a
-	// Unassigned con ReasonTimeWindowInfeasible.
-	if cfg.EnforceTimeWindows {
-		for i := range sol.Routes {
-			kept := sol.Routes[i].Stops[:0]
-			for _, st := range sol.Routes[i].Stops {
-				if st.OutOfWindow {
-					sol.Unassigned = append(sol.Unassigned, vrp.UnassignedNode{
-						NodeID: st.NodeID,
-						Reason: vrp.ReasonTimeWindowInfeasible,
-					})
-				} else {
-					kept = append(kept, st)
-				}
-			}
-			sol.Routes[i].Stops = kept
-		}
-	}
-
-	// Si el solver no produjo nada y nada quedó como unassigned, algo raro
-	// pasó — caemos al greedy para no devolver un plan vacío.
-	if len(sol.Routes) == 0 && len(sol.Unassigned) == 0 {
-		log.Printf("[routing] VRP devolvió solución vacía, fallback a greedy (branch=%s, n=%d)", branchID, len(withCoords))
-		return s.binPackLastMile(queue, branchID, cfg, unassigned, blocked)
-	}
-
-	// Mapear routes → LastMileAssignment.
-	driverByID := map[string]model.User{}
-	for _, d := range drivers {
-		driverByID[d.ID] = d
-	}
-	shipByTID := map[string]model.Shipment{}
-	for _, sh := range withCoords {
-		shipByTID[sh.TrackingID] = sh
-	}
-	type existing struct {
-		count     int
-		weight    float64
-		shipments []string
-	}
-	existingByDriver := map[string]existing{}
-	for _, vd := range vrpDrivers {
-		existingByDriver[vd.ID] = existing{
-			count:     vd.ExistingCount,
-			weight:    vd.ExistingWeightKg,
-			shipments: s.routeSvc.PendingShipments(vd.ID, today),
-		}
-	}
-
-	out := make([]model.LastMileAssignment, 0, len(sol.Routes))
-	for _, r := range sol.Routes {
-		stops := make([]model.RouteStop, len(r.Stops))
-		shipIDs := make([]string, len(r.Stops))
-		totalWeight := 0.0
-		for i, st := range r.Stops {
-			sh := shipByTID[st.NodeID]
-			dev := 0
-			if st.WindowDeviationMin != 0 {
-				dev = int(st.WindowDeviationMin + 0.5)
-				if st.WindowDeviationMin < 0 {
-					dev = int(st.WindowDeviationMin - 0.5)
-				}
-			}
-			stops[i] = model.RouteStop{
-				TrackingID:         st.NodeID,
-				Sequence:           i + 1,
-				ArrivalMin:         int(st.ArrivalMin + 0.5),
-				TimeWindow:         string(sh.TimeWindow),
-				WeightKg:           sh.WeightKg,
-				WithinWindow:       !st.OutOfWindow,
-				WindowDeviationMin: dev,
-			}
-			shipIDs[i] = st.NodeID
-			totalWeight += sh.WeightKg
-		}
-		ex := existingByDriver[r.DriverID]
-		drv := driverByID[r.DriverID]
-		// El bestDeparture per chofer (Fase 3) y la coverage calculada en
-		// el loop de scheduling. Si no hay (chofer sin shipments asignados
-		// o solver degenerado) caemos al departureMin global del problema.
-		dep := departureMin
-		coverage := 0.0
-		if opt, ok := perDriverOpt[r.DriverID]; ok && opt.coverage > 0 {
-			dep = opt.departure
-			coverage = opt.coverage
-		}
-		out = append(out, model.LastMileAssignment{
-			DriverID:          r.DriverID,
-			DriverName:        driverDisplayName(drv),
-			Shipments:         shipIDs,
-			TotalWeightKg:     roundKg(totalWeight),
-			ExistingCount:     ex.count,
-			ExistingWeightKg:  roundKg(ex.weight),
-			ExistingShipments: ex.shipments,
-			OrderedStops:      stops,
-			TotalDistanceKm:   roundKg(r.TotalDistanceKm),
-			TotalDurationMin:  int(r.TotalDurationMin + 0.5),
-			DepartureMin:      int(dep + 0.5),
-			OptimizedBy:       "vrp",
-			WindowCoverage:    coverage,
-		})
-	}
-
-	// Mapear Unassigned del solver → UnassignedShipment del plan.
-	for _, u := range sol.Unassigned {
-		sh := shipByTID[u.NodeID]
-		unassigned = append(unassigned, model.UnassignedShipment{
-			TrackingID:  u.NodeID,
-			Destination: lastMileDestLabel,
-			Reason:      string(u.Reason),
-			WeightKg:    sh.WeightKg,
-			Priority:    sh.Priority,
-		})
-	}
-
-	// Distribuir envíos sin coords como paradas unsequenced en la ruta más
-	// liviana que tenga capacidad. Si no hay rutas (todo quedó unassigned)
-	// o todas están al tope, van al unassigned con razón de capacidad.
-	for _, sh := range withoutCoords {
-		best := -1
-		for i := range out {
-			a := &out[i]
-			drv := vrpDriverByID(vrpDrivers, a.DriverID)
-			projWeight := a.TotalWeightKg + a.ExistingWeightKg + sh.WeightKg
-			if projWeight > drv.MaxWeightKg {
-				continue
-			}
-			if best == -1 || out[i].TotalDurationMin < out[best].TotalDurationMin {
-				best = i
-			}
-		}
-		if best == -1 {
-			unassigned = append(unassigned, model.UnassignedShipment{
-				TrackingID:  sh.TrackingID,
-				Destination: lastMileDestLabel,
-				Reason:      "sin_capacidad_en_choferes",
-				WeightKg:    sh.WeightKg,
-				Priority:    sh.Priority,
-			})
-			continue
-		}
-		a := &out[best]
-		seq := len(a.OrderedStops) + 1
-		a.OrderedStops = append(a.OrderedStops, model.RouteStop{
-			TrackingID:  sh.TrackingID,
-			Sequence:    seq,
-			ArrivalMin:  -1,
-			Unsequenced: true,
-			TimeWindow:  string(sh.TimeWindow),
-			WeightKg:    sh.WeightKg,
-		})
-		a.Shipments = append(a.Shipments, sh.TrackingID)
-		a.TotalWeightKg = roundKg(a.TotalWeightKg + sh.WeightKg)
-	}
-
-	return out, unassigned, blocked
-}
 
 // buildDurationMatrix construye una matriz NxN (depot + entregas) con tiempos
 // en segundos y distancias en metros. Intenta OSRM si hay cliente; si falla
@@ -1514,6 +2295,7 @@ func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalR
 	now := clock.Now().UTC()
 	local := now.In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
+	cfg := s.cfgSvc.Get()
 
 	branches := s.branchRepo.List()
 
@@ -1533,7 +2315,7 @@ func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalR
 		if br.Status != model.BranchStatusActive {
 			continue
 		}
-		branchPlan, err := s.GeneratePlan(ctx, br.ID)
+		branchPlan, err := s.generatePlan(ctx, br.ID, true, nil)
 		if err != nil {
 			log.Printf("[routing-global] error generando plan para sucursal %s: %v", br.ID, err)
 			continue
@@ -1561,6 +2343,19 @@ func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalR
 		TotalUnassigned: totalUnassigned,
 		TotalBranches:   len(plan.BranchPlans),
 	}
+
+	// Cross-branch pickups: enriquecer paradas de multi-hop con envíos de
+	// sucursales intermedias cuyo destino esté más adelante en el path.
+	s.addCrossBranchPickups(plan)
+
+	// Consolidación cross-branch: absorber dispatches single-hop dentro de
+	// multi-hops que ya pasan por su sucursal de origen (opción C: solo si B
+	// queda completamente vacío y se puede cancelar).
+	s.consolidateCrossBranchDispatches(plan)
+
+	// Utilización mínima del tramo: eliminar paradas adicionales cuyo tramo
+	// no alcanza el fill_rate configurado, salvo que haya SLA forzado.
+	s.enforceMinSegmentUtilization(plan, cfg)
 
 	return plan, nil
 }
@@ -1591,7 +2386,6 @@ func (s *RoutingService) GenerateAndPersistGlobalPlan(ctx context.Context) (*mod
 func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*model.GlobalRoutingPlan, error) {
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
-	today := model.NewDateOnly(local)
 
 	plan, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
@@ -1622,10 +2416,25 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 
 		for j := range bp.Plan.LastMile {
 			lm := &bp.Plan.LastMile[j]
-			if err := s.routeSvc.CanAssignToRoute(lm.DriverID, today); err != nil {
-				bp.Plan.Unassigned = append(bp.Plan.Unassigned, s.movePendingToUnassigned(lm.Shipments, lm.AppliedShipments, lastMileDestLabel, "chofer_inicio_ruta")...)
-				lm.RouteStarted = true
-				lm.Shipments = append([]string(nil), lm.AppliedShipments...) // solo muestra los que efectivamente lleva
+			v, ok := s.vehicleRepo.GetByID(lm.VehicleID)
+			if ok && v.Status == model.VehicleStatusInTransit {
+				bp.Plan.Unassigned = append(bp.Plan.Unassigned, s.movePendingToUnassigned(lm.Shipments, lm.AppliedShipments, lastMileDestLabel, "vehiculo_en_viaje")...)
+				lm.InTransit = true
+				lm.Shipments = append([]string(nil), lm.AppliedShipments...)
+			}
+			// Enriquecer con el chofer del trip activo si existe
+			if s.interBranchTripSvc != nil {
+				if trip, hasTrip := s.interBranchTripSvc.repo.GetActiveByVehicle(lm.VehicleID); hasTrip && trip.DriverID != nil {
+					dID := *trip.DriverID
+					lm.DriverID = &dID
+					if driver, err := s.authRepo.GetUserByID(dID); err == nil {
+						name := driver.FirstName + " " + driver.LastName
+						if name == " " {
+							name = driver.Username
+						}
+						lm.DriverName = name
+					}
+				}
 			}
 		}
 
@@ -1732,16 +2541,18 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
 
-	// Generar el plan fresco para esta sucursal.
-	branchPlan, err := s.GeneratePlan(ctx, branchID)
-	if err != nil {
-		return nil, fmt.Errorf("error generando plan para sucursal %s: %w", branchID, err)
-	}
-
-	// Leer el plan global del día (puede no existir todavía).
+	// Leer el plan global del día antes de generar: lo pasamos a generatePlan para
+	// que los cross-branch pickups ya asignados a otras sucursales queden marcados
+	// como taken y no sean reasignados por este plan local.
 	global, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
 		return nil, err
+	}
+
+	// Generar el plan fresco para esta sucursal con contexto del plan global existente.
+	branchPlan, err := s.generatePlan(ctx, branchID, false, global)
+	if err != nil {
+		return nil, fmt.Errorf("error generando plan para sucursal %s: %w", branchID, err)
 	}
 
 	if global == nil {
@@ -1934,9 +2745,9 @@ func (s *RoutingService) SaveEditedPlanForBranch(branchID string, edited *model.
 	for _, ib := range global.BranchPlans[bpIdx].Plan.InterBranch {
 		dbAppliedByVehicle[ib.VehicleID] = ib.AppliedShipments
 	}
-	dbAppliedByDriver := map[string][]string{}
+	dbAppliedByLMVehicle := map[string][]string{}
 	for _, lm := range global.BranchPlans[bpIdx].Plan.LastMile {
-		dbAppliedByDriver[lm.DriverID] = lm.AppliedShipments
+		dbAppliedByLMVehicle[lm.VehicleID] = lm.AppliedShipments
 	}
 
 	// Sobreescribir el plan de la sucursal con el editado.
@@ -1950,7 +2761,7 @@ func (s *RoutingService) SaveEditedPlanForBranch(branchID string, edited *model.
 	}
 	for i := range global.BranchPlans[bpIdx].Plan.LastMile {
 		lm := &global.BranchPlans[bpIdx].Plan.LastMile[i]
-		lm.AppliedShipments = filterToCurrent(dbAppliedByDriver[lm.DriverID], lm.Shipments)
+		lm.AppliedShipments = filterToCurrent(dbAppliedByLMVehicle[lm.VehicleID], lm.Shipments)
 		lm.Applied = allApplied(lm.Shipments, lm.AppliedShipments)
 	}
 
@@ -2085,8 +2896,27 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 			}
 		}
 
+		// Set de pickup TIDs (cross-branch) — no se cargan al origen
+		pickupSet := map[string]bool{}
+		for _, tid := range asgmt.PrimaryPickupShipments {
+			pickupSet[tid] = true
+		}
+		for _, st := range asgmt.AdditionalStops {
+			for _, tid := range st.PickupShipments {
+				pickupSet[tid] = true
+			}
+		}
+
 		anyApplied := false
 		for _, tid := range pending {
+			if pickupSet[tid] {
+				// Cross-branch pickup: marcamos applied sin cargar al vehículo.
+				// La reserva ocurre al crear el Trip más abajo.
+				items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
+				asgmt.AppliedShipments = append(asgmt.AppliedShipments, tid)
+				anyApplied = true
+				continue
+			}
 			sh, err := s.shipmentRepo.GetByTrackingID(tid)
 			if err != nil {
 				items = append(items, failedItem(tid, target, "envio_no_encontrado"))
@@ -2134,18 +2964,113 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 				asgmt.AppliedAt = &now
 				asgmt.AppliedBy = username
 			}
+
+			// Crear Trip inter-sucursal con stops (multi-hop) si no existe ya
+			// para este vehículo. Reserva los pickups cross-branch.
+			if s.interBranchTripSvc != nil {
+				if _, hasTrip := s.interBranchTripSvc.repo.GetActiveByVehicle(v.ID); !hasTrip {
+					weight := func(tid string) float64 {
+						if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+							return sh.WeightKg
+						}
+						return 0
+					}
+					appliedSet := map[string]bool{}
+					for _, tid := range asgmt.AppliedShipments {
+						appliedSet[tid] = true
+					}
+					additionalSet := map[string]bool{}
+					for _, st := range asgmt.AdditionalStops {
+						for _, tid := range st.Shipments {
+							additionalSet[tid] = true
+						}
+					}
+					// Primary stop
+					var stops []model.TripStop
+					var allShipments []string
+					var totalWeight float64
+					primaryShipments := []string{}
+					var primaryWeight float64
+					for _, tid := range asgmt.Shipments {
+						if !appliedSet[tid] || additionalSet[tid] || pickupSet[tid] {
+							continue
+						}
+						primaryShipments = append(primaryShipments, tid)
+						primaryWeight += weight(tid)
+					}
+					if len(primaryShipments) > 0 || len(asgmt.PrimaryPickupShipments) > 0 {
+						stops = append(stops, model.TripStop{
+							BranchID:          asgmt.DestinationBranch,
+							ShipmentIDs:       primaryShipments,
+							TotalWeightKg:     roundKg(primaryWeight),
+							PickupShipmentIDs: append([]string(nil), asgmt.PrimaryPickupShipments...),
+							PickupWeightKg:    asgmt.PrimaryPickupWeightKg,
+						})
+						allShipments = append(allShipments, primaryShipments...)
+						totalWeight += primaryWeight
+					}
+					// Additional stops
+					for _, st := range asgmt.AdditionalStops {
+						stopShipments := []string{}
+						var stopWeight float64
+						for _, tid := range st.Shipments {
+							if !appliedSet[tid] || pickupSet[tid] {
+								continue
+							}
+							stopShipments = append(stopShipments, tid)
+							stopWeight += weight(tid)
+						}
+						if len(stopShipments) > 0 || len(st.PickupShipments) > 0 {
+							stops = append(stops, model.TripStop{
+								BranchID:          st.BranchID,
+								ShipmentIDs:       stopShipments,
+								TotalWeightKg:     roundKg(stopWeight),
+								PickupShipmentIDs: append([]string(nil), st.PickupShipments...),
+								PickupWeightKg:    st.PickupWeightKg,
+							})
+							allShipments = append(allShipments, stopShipments...)
+							totalWeight += stopWeight
+						}
+					}
+					if len(allShipments) > 0 {
+						finalDest := asgmt.DestinationBranch
+						if len(stops) > 0 {
+							finalDest = stops[len(stops)-1].BranchID
+						}
+						createdTrip, err := s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+							Kind:                model.TripKindInterBranch,
+							DriverID:            nil,
+							VehicleID:           v.ID,
+							LicensePlate:        v.LicensePlate,
+							OriginBranchID:      branchID,
+							DestinationBranchID: &finalDest,
+							ShipmentIDs:         allShipments,
+							TotalWeightKg:       roundKg(totalWeight),
+							Stops:               stops,
+							CreatedBy:           username,
+						})
+						// Reservar pickups cross-branch
+						if err == nil {
+							for _, st := range stops {
+								for _, tid := range st.PickupShipmentIDs {
+									_ = s.shipmentRepo.ReserveForTrip(tid, createdTrip.ID)
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
-	// --- Última milla ---
-	today := model.NewDateOnly(now.In(clock.LocalTZ))
+	// --- Última milla (vehicle-centric) ---
 	for i := range bp.Plan.LastMile {
 		asgmt := &bp.Plan.LastMile[i]
-		if driverID != "" && asgmt.DriverID != driverID {
+		if vehicleID != "" && asgmt.VehicleID != vehicleID {
 			continue
 		}
-		if vehicleID != "" {
-			continue
+		if driverID != "" {
+			continue // last-mile no se filtra por driver (driver se auto-asigna vía QR)
 		}
 
 		alreadyApplied := make(map[string]bool, len(asgmt.AppliedShipments))
@@ -2162,12 +3087,26 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 			continue
 		}
 
-		target := "driver:" + asgmt.DriverID
-		if err := s.routeSvc.CanAssignToRoute(asgmt.DriverID, today); err != nil {
+		target := "vehicle:" + asgmt.LicensePlate
+		v, ok := s.vehicleRepo.GetByID(asgmt.VehicleID)
+		if !ok {
 			for _, tid := range pending {
-				items = append(items, failedItem(tid, target, "ruta_ya_iniciada"))
+				items = append(items, failedItem(tid, target, "vehiculo_no_encontrado"))
 			}
 			continue
+		}
+		if v.Status != model.VehicleStatusAvailable && v.Status != model.VehicleStatusLoading {
+			for _, tid := range pending {
+				items = append(items, failedItem(tid, target, "vehiculo_no_disponible"))
+			}
+			continue
+		}
+
+		var currentLoad float64
+		for _, existingTID := range v.AssignedShipments {
+			if esh, err := s.shipmentRepo.GetByTrackingID(existingTID); err == nil {
+				currentLoad += esh.WeightKg
+			}
 		}
 
 		anyApplied := false
@@ -2185,36 +3124,62 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 				items = append(items, failedItem(tid, target, "estado_cambio:"+string(sh.Status)))
 				continue
 			}
+			if currentLoad+sh.WeightKg > v.CapacityKg {
+				items = append(items, failedItem(tid, target, "capacidad_excedida"))
+				continue
+			}
+			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
+				continue
+			}
 			if _, err := s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-				Status:    model.StatusOutForDelivery,
+				Status:    model.StatusLoaded,
 				ChangedBy: username,
-				DriverID:  asgmt.DriverID,
-				Notes:     "Asignado vía planificador de ruteo",
+				Location:  branchID,
+				Notes:     "Cargado en " + v.LicensePlate + " vía planificador (última milla)",
 			}); err != nil {
+				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
 				items = append(items, failedItem(tid, target, err.Error()))
 				continue
 			}
-			_ = s.routeSvc.RemoveShipmentFromTodayRoute(tid)
-			if err := s.routeSvc.AddShipmentToDriverRoute(asgmt.DriverID, tid, today); err != nil {
-				items = append(items, failedItem(tid, target, err.Error()))
-				continue
-			}
+			currentLoad += sh.WeightKg
 			anyApplied = true
 			asgmt.AppliedShipments = append(asgmt.AppliedShipments, tid)
 			items = append(items, model.ApplyResultItem{TrackingID: tid, Target: target, Status: "applied"})
 		}
 
 		if anyApplied {
+			if v.Status == model.VehicleStatusAvailable {
+				_ = s.vehicleRepo.UpdateStatusByUser(v.ID, model.VehicleStatusLoading, username)
+			}
 			asgmt.Applied = allApplied(asgmt.Shipments, asgmt.AppliedShipments)
 			if asgmt.Applied {
 				asgmt.AppliedAt = &now
 				asgmt.AppliedBy = username
 			}
-			// Persistir el horario sugerido de salida (Fase 4): el chofer/supervisor
-			// lo verá en /driver/route como recomendación para cumplir ventanas.
-			if asgmt.DepartureMin > 0 {
-				suggestedAt := dateAtMinute(today, asgmt.DepartureMin)
-				_ = s.routeSvc.SetSuggestedStartTime(asgmt.DriverID, today, suggestedAt)
+			if s.interBranchTripSvc != nil {
+				if _, hasTrip := s.interBranchTripSvc.repo.GetActiveByVehicle(v.ID); !hasTrip {
+					appliedIDs := make([]string, 0)
+					var totalWeight float64
+					for _, tid := range asgmt.AppliedShipments {
+						appliedIDs = append(appliedIDs, tid)
+						if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
+							totalWeight += sh.WeightKg
+						}
+					}
+					if len(appliedIDs) > 0 {
+						_, _ = s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
+							Kind:          model.TripKindLastMile,
+							DriverID:      asgmt.DriverID,
+							VehicleID:     v.ID,
+							LicensePlate:  v.LicensePlate,
+							OriginBranchID: branchID,
+							ShipmentIDs:   appliedIDs,
+							TotalWeightKg: totalWeight,
+							CreatedBy:     username,
+						})
+					}
+				}
 			}
 		}
 	}
@@ -2279,6 +3244,56 @@ func (s *RoutingService) ApplyBranchPlan(ctx context.Context, branchID, username
 	return s.ApplyPlanItems(ctx, branchID, nil, "", "", username)
 }
 
+// RecomputeLastMileAssignment recalcula el orden de paradas y el horario de
+// salida sugerido para una asignación de última milla según el modo indicado.
+// No muta el plan persistido — solo devuelve la asignación recalculada para
+// que el operador la revise en el modal antes de aplicar.
+func (s *RoutingService) RecomputeLastMileAssignment(ctx context.Context, branchID string, req model.RecomputeLastMileRequest) (model.LastMileAssignment, error) {
+	mode := req.Mode.Normalize()
+	if !req.Mode.IsValid() {
+		return model.LastMileAssignment{}, fmt.Errorf("modo de ruta inválido: %q", req.Mode)
+	}
+
+	vehicle, ok := s.vehicleRepo.GetByID(req.VehicleID)
+	if !ok {
+		return model.LastMileAssignment{}, fmt.Errorf("vehículo no encontrado: %s", req.VehicleID)
+	}
+	if vehicle.AssignedBranch == nil || *vehicle.AssignedBranch != branchID {
+		return model.LastMileAssignment{}, fmt.Errorf("el vehículo no pertenece a la sucursal")
+	}
+
+	// Cargar los envíos solicitados.
+	shipByTID := make(map[string]model.Shipment, len(req.ShipmentIDs))
+	for _, tid := range req.ShipmentIDs {
+		sh, err := s.shipmentRepo.GetByTrackingID(tid)
+		if err != nil {
+			return model.LastMileAssignment{}, fmt.Errorf("envío no encontrado: %s", tid)
+		}
+		shipByTID[tid] = sh
+	}
+
+	a := model.LastMileAssignment{
+		VehicleID:    req.VehicleID,
+		LicensePlate: vehicle.LicensePlate,
+		CapacityKg:   vehicle.CapacityKg,
+		Shipments:    append([]string(nil), req.ShipmentIDs...),
+	}
+
+	cfg := s.cfgSvc.Get()
+	// Para el recompute usamos el inicio de la ventana morning como referencia
+	// en lugar de la hora actual. Así el operador puede recalcular a cualquier
+	// hora del día (incluso de noche) y siempre obtiene un plan con candidatos
+	// de salida válidos. La hora de inicio que devuelve el VRP igual refleja
+	// el horario óptimo dentro de la ventana operativa.
+	local := clock.Now().In(clock.LocalTZ)
+	morningStart := time.Date(local.Year(), local.Month(), local.Day(),
+		cfg.MorningWindowStartHour, 0, 0, 0, clock.LocalTZ).UTC()
+	assignments := []model.LastMileAssignment{a}
+	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, morningStart, mode)
+
+	return assignments[0], nil
+}
+
 // SyncAppliedItems actualiza el estado Applied de los ítems del plan persistido
 // cuando se usó el flujo legacy (plan editado enviado en body). Se llama en
 // background después del apply — es best-effort, un fallo no afecta la operativa.
@@ -2331,14 +3346,14 @@ func (s *RoutingService) SyncAppliedItems(branchID string, applied *model.Routin
 		}
 	}
 
-	// Marcar como applied los envíos de choferes que estaban en el plan aplicado.
-	appliedDriverShipments := map[string][]string{} // driverID → []trackingID
+	// Marcar como applied los envíos de vehículos de última milla que estaban en el plan aplicado.
+	appliedLMVehicleShipments := map[string][]string{} // vehicleID → []trackingID
 	for _, lm := range applied.LastMile {
-		appliedDriverShipments[lm.DriverID] = lm.Shipments
+		appliedLMVehicleShipments[lm.VehicleID] = lm.Shipments
 	}
 	for i := range bp.Plan.LastMile {
 		lm := &bp.Plan.LastMile[i]
-		tids, ok := appliedDriverShipments[lm.DriverID]
+		tids, ok := appliedLMVehicleShipments[lm.VehicleID]
 		if !ok {
 			continue
 		}
@@ -2455,6 +3470,16 @@ func candidateDepartures(cfg model.RoutingConfig, nowMin float64) []float64 {
 	}
 	for h := firstHour; h <= end; h++ {
 		out = append(out, float64(h)*60)
+	}
+	return out
+}
+
+// copyMatrix returns a deep copy of a square float64 matrix.
+func copyMatrix(m [][]float64) [][]float64 {
+	out := make([][]float64, len(m))
+	for i, row := range m {
+		out[i] = make([]float64, len(row))
+		copy(out[i], row)
 	}
 	return out
 }
@@ -2597,4 +3622,316 @@ func (s *RoutingService) findBestDepartureForRoute(
 		return 0, vrp.Route{}, 0
 	}
 	return best.dep, best.route, best.coverage
+}
+
+// findCostOptimalDeparture implements the "costo" routing mode:
+//  1. Runs VRP once with EnforceTimeWindows=false to get the min-distance stop order.
+//  2. Keeps that order fixed and probes candidate departure hours, recomputing
+//     per-stop window compliance. Picks the departure that maximises in-window coverage
+//     (ties broken by least early-arrival wait, then earliest departure).
+//
+// Unlike findBestDepartureForRoute, the stop order does NOT change between probes.
+// Stops that end up outside their window are included with WithinWindow=false so the
+// operator can review them in the modal.
+func (s *RoutingService) findCostOptimalDeparture(
+	driverID string,
+	driverMaxKg float64,
+	routeShipTIDs []string,
+	depotCoord vrp.Coord,
+	deliveries []vrp.Node,
+	indexByTID map[string]int,
+	fullDur, fullDist [][]float64,
+	cfg model.RoutingConfig,
+	nowMin float64,
+) (bestDep float64, bestRoute vrp.Route, bestCoverage float64) {
+	if len(routeShipTIDs) == 0 {
+		return 0, vrp.Route{}, 1.0
+	}
+	indices := make([]int, len(routeShipTIDs))
+	subDeliveries := make([]vrp.Node, len(routeShipTIDs))
+	for i, tid := range routeShipTIDs {
+		idx, ok := indexByTID[tid]
+		if !ok {
+			return 0, vrp.Route{}, 0
+		}
+		indices[i] = idx
+		subDeliveries[i] = deliveries[idx]
+	}
+	subDur := subMatrix(fullDur, indices)
+	subDist := subMatrix(fullDist, indices)
+
+	morningStartMin := float64(cfg.MorningWindowStartHour) * 60
+
+	// NN+2-opt es heurístico — no encuentra el óptimo global. Diferentes
+	// "starting contexts" (departure, restricciones de ventana) llevan a
+	// diferentes óptimos locales. Para encontrar la ruta de mínima distancia
+	// real, exploramos varios candidatos y nos quedamos con el de menor
+	// distancia. Como costo NO impone ventanas, cualquier ruta válida en otro
+	// contexto sigue siendo válida para costo.
+	flexDeliveries := make([]vrp.Node, len(subDeliveries))
+	for i, d := range subDeliveries {
+		flexDeliveries[i] = d
+		flexDeliveries[i].TimeWindow = model.TimeWindowFlexible
+	}
+
+	makeProblem := func(deps []vrp.Node, dep float64) vrp.Problem {
+		return vrp.Problem{
+			Depot:                   vrp.Node{ID: "depot", Coord: depotCoord},
+			Deliveries:              deps,
+			Drivers:                 []vrp.Driver{{ID: driverID, MaxWeightKg: driverMaxKg}},
+			DurationMatrix:          subDur,
+			DistanceMatrix:          subDist,
+			DepartureMin:            dep,
+			ServiceTimeMin:          float64(cfg.ServiceTimeMinutes),
+			DayEndMin:               float64(cfg.AfternoonWindowEndHour) * 60,
+			MorningWindowStartMin:   morningStartMin,
+			MorningWindowEndMin:     float64(cfg.MorningWindowEndHour) * 60,
+			AfternoonWindowStartMin: float64(cfg.AfternoonWindowStartHour) * 60,
+			AfternoonWindowEndMin:   float64(cfg.AfternoonWindowEndHour) * 60,
+			EnforceTimeWindows:      false,
+			PackingStrategy:         cfg.LastMilePackingStrategy,
+		}
+	}
+
+	// Candidatos a evaluar:
+	//   - 1 con ventanas flexibles a morningStart (NN+2-opt sin restricciones)
+	//   - N con ventanas reales en cada hora candidata (mismo set que ventanas)
+	var fixedRoute vrp.Route
+	bestDistance := -1.0
+	tryRoute := func(p vrp.Problem) {
+		sol := vrp.Solve(p)
+		if len(sol.Routes) == 0 || len(sol.Routes[0].Stops) == 0 {
+			return
+		}
+		r := sol.Routes[0]
+		if bestDistance < 0 || r.TotalDistanceKm < bestDistance {
+			bestDistance = r.TotalDistanceKm
+			fixedRoute = r
+		}
+	}
+
+	tryRoute(makeProblem(flexDeliveries, morningStartMin))
+	for _, dep := range candidateDepartures(cfg, nowMin) {
+		tryRoute(makeProblem(subDeliveries, dep))
+	}
+
+	if bestDistance < 0 {
+		return 0, vrp.Route{}, 0
+	}
+
+	// Build NodeID → TimeWindow lookup.
+	twByID := make(map[string]model.TimeWindow, len(subDeliveries))
+	for _, d := range subDeliveries {
+		twByID[d.ID] = d.TimeWindow
+	}
+
+	morningEndMin := float64(cfg.MorningWindowEndHour) * 60
+	afternoonStartMin := float64(cfg.AfternoonWindowStartHour) * 60
+	afternoonEndMin := float64(cfg.AfternoonWindowEndHour) * 60
+
+	type result struct {
+		dep      float64
+		route    vrp.Route
+		coverage float64
+		wait     float64
+	}
+	var best *result
+
+	candidates := candidateDepartures(cfg, nowMin)
+	for _, dep := range candidates {
+		inWindow := 0
+		totalWait := 0.0
+		updatedStops := make([]vrp.Stop, len(fixedRoute.Stops))
+		for i, st := range fixedRoute.Stops {
+			tw := twByID[st.NodeID]
+			abs := dep + st.ArrivalMin
+			outside, dev := costWindowCheck(tw, abs, morningStartMin, morningEndMin, afternoonStartMin, afternoonEndMin)
+			if !outside {
+				inWindow++
+			} else if dev < 0 { // arrived early → real wait until window opens
+				totalWait += -dev
+			}
+			updatedStops[i] = vrp.Stop{
+				NodeID:             st.NodeID,
+				ArrivalMin:         st.ArrivalMin,
+				OutOfWindow:        outside,
+				WindowDeviationMin: dev,
+			}
+		}
+		cov := float64(inWindow) / float64(len(fixedRoute.Stops))
+		r := vrp.Route{
+			DriverID:         fixedRoute.DriverID,
+			Stops:            updatedStops,
+			TotalDurationMin: fixedRoute.TotalDurationMin,
+			TotalDistanceKm:  fixedRoute.TotalDistanceKm,
+		}
+		c := &result{dep: dep, route: r, coverage: cov, wait: totalWait}
+		if best == nil ||
+			c.coverage > best.coverage ||
+			(c.coverage == best.coverage && c.wait < best.wait) ||
+			(c.coverage == best.coverage && c.wait == best.wait && c.dep < best.dep) {
+			best = c
+		}
+	}
+	if best == nil {
+		return 0, vrp.Route{}, 0
+	}
+	return best.dep, best.route, best.coverage
+}
+
+// costWindowCheck returns (outside, deviationMin) for the cost-mode window simulation.
+// deviationMin > 0 = late, < 0 = early. Flexible windows are always in-window.
+func costWindowCheck(tw model.TimeWindow, absArrMin, mStart, mEnd, aStart, aEnd float64) (outside bool, devMin float64) {
+	switch tw {
+	case model.TimeWindowMorning:
+		if absArrMin < mStart {
+			return true, absArrMin - mStart
+		}
+		if absArrMin > mEnd {
+			return true, absArrMin - mEnd
+		}
+	case model.TimeWindowAfternoon:
+		if absArrMin < aStart {
+			return true, absArrMin - aStart
+		}
+		if absArrMin > aEnd {
+			return true, absArrMin - aEnd
+		}
+	}
+	return false, 0
+}
+
+// runStaleReplan re-evaluates shipments stuck at a branch beyond staleHours.
+// Returns (replanned, stuck) counts. WIP — graphSvc must be set via SetBranchGraphService.
+func (s *RoutingService) runStaleReplan(branchID string, staleHours int) (int, int) {
+	if staleHours <= 0 || s.graphSvc == nil || s.shipmentRepo == nil {
+		return 0, 0
+	}
+	cutoff := clock.Now().UTC().Add(-time.Duration(staleHours) * time.Hour)
+	all, err := s.shipmentRepo.List(model.ShipmentFilter{ReceivingBranchID: branchID})
+	if err != nil {
+		return 0, 0
+	}
+	replanned, stuck := 0, 0
+	for _, sh := range all {
+		if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub {
+			continue
+		}
+		if !sh.UpdatedAt.Before(cutoff) {
+			continue
+		}
+		if sh.NextHopBranchID == "" {
+			continue
+		}
+		path := s.graphSvc.ShortestPath(branchID, sh.FinalBranchID)
+		if len(path) < 2 {
+			stuck++
+			continue
+		}
+		revision := sh.PathRevision + 1
+		_ = s.shipmentRepo.RecordPathPlanned(repository.PathPlannedCmd{
+			TrackingID:      sh.TrackingID,
+			PlannedPath:     path,
+			NextHopBranchID: path[1],
+			HopIndex:        0,
+			PathRevision:    revision,
+			Reason:          "stale_replan",
+		})
+		replanned++
+	}
+	return replanned, stuck
+}
+
+// SetBranchGraphService injects the graph service (needed for stale-replan).
+func (s *RoutingService) SetBranchGraphService(g *BranchGraphService) {
+	s.graphSvc = g
+}
+
+// matchBackhauls is a WIP feature: attempts to fill empty return capacity with backhaul shipments.
+func (s *RoutingService) matchBackhauls(plan *model.RoutingPlan, branchID string) {
+	for i := range plan.InterBranch {
+		ib := &plan.InterBranch[i]
+		available := ib.CapacityKg
+		if available <= 0 {
+			continue
+		}
+		candidates, _ := s.shipmentRepo.List(model.ShipmentFilter{ReceivingBranchID: ib.DestinationBranch})
+		var picked []string
+		var total float64
+		for _, sh := range candidates {
+			if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub {
+				continue
+			}
+			if sh.NextHopBranchID != branchID {
+				continue
+			}
+			if total+sh.WeightKg > available {
+				continue
+			}
+			picked = append(picked, sh.TrackingID)
+			total += sh.WeightKg
+		}
+		if len(picked) > 0 {
+			ib.Backhaul = &model.BackhaulPlan{
+				Shipments:     picked,
+				TotalWeightKg: total,
+				FillRatePct:   (total / available) * 100,
+			}
+		}
+	}
+}
+
+// tryProjectedDispatch is a WIP feature: uses incoming vehicles to rescue unassigned shipments.
+func (s *RoutingService) tryProjectedDispatch(
+	plan *model.RoutingPlan,
+	branchID string,
+	interBranchQ map[string][]model.Shipment,
+	existingLoad map[string]float64,
+	cfg model.RoutingConfig,
+	now time.Time,
+) {
+	if cfg.FleetProjectionHorizonHours <= 0 {
+		return
+	}
+	rescuableReasons := map[string]bool{
+		"sin_vehiculos_disponibles":    true,
+		"sin_vehiculos_para_destino":   true,
+	}
+	for _, incoming := range plan.IncomingVehicles {
+		if incoming.EstimatedArrivalAt == nil {
+			continue
+		}
+		for i := len(plan.Unassigned) - 1; i >= 0; i-- {
+			u := plan.Unassigned[i]
+			if !rescuableReasons[u.Reason] {
+				continue
+			}
+			dest := u.Destination
+			shipmentsForDest := interBranchQ[dest]
+			if len(shipmentsForDest) == 0 {
+				continue
+			}
+			var total float64
+			var ids []string
+			for _, sh := range shipmentsForDest {
+				total += sh.WeightKg
+				ids = append(ids, sh.TrackingID)
+			}
+			if total > incoming.CapacityKg {
+				continue
+			}
+			plan.InterBranch = append(plan.InterBranch, model.InterBranchAssignment{
+				VehicleID:         incoming.VehicleID,
+				LicensePlate:      incoming.LicensePlate,
+				DestinationBranch: dest,
+				Rule:              model.DispatchRuleSLA,
+				Shipments:         ids,
+				TotalWeightKg:     total,
+				CapacityKg:        incoming.CapacityKg,
+			})
+			// Remove rescued shipments from unassigned
+			plan.Unassigned = append(plan.Unassigned[:i], plan.Unassigned[i+1:]...)
+			break
+		}
+	}
 }

@@ -158,6 +158,38 @@ func (h *RoutingHandler) Apply(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// RecomputeLastMile recalcula el orden de paradas y horario sugerido para
+// una asignación de última milla según el modo solicitado (ventanas/segura/costo).
+// No aplica ni muta el plan persistido.
+func (h *RoutingHandler) RecomputeLastMile(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if user.BranchID == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "el usuario no tiene sucursal asignada"})
+		return
+	}
+
+	var req model.RecomputeLastMileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !req.Mode.IsValid() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "modo inválido: debe ser ventanas, segura o costo"})
+		return
+	}
+
+	result, err := h.svc.RecomputeLastMileAssignment(c.Request.Context(), user.BranchID, req)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "no encontrado") || strings.Contains(err.Error(), "no pertenece") {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func canRouteForBranch(user model.User, branchID string) bool {
 	if user.Role != model.RoleOperator && user.Role != model.RoleSupervisor {
 		return false

@@ -7,27 +7,29 @@ import (
 )
 
 type UserCreate struct {
-	Username  string
-	Password  string
-	FirstName string
-	LastName  string
-	Email     string
-	Role      model.Role
-	BranchID  string
-	Address   model.Address
+	Username   string
+	Password   string
+	FirstName  string
+	LastName   string
+	Email      string
+	Role       model.Role
+	BranchID   string
+	Address    model.Address
+	DriverType model.DriverType
 }
 
 type UserUpdate struct {
-	Username  *string
-	Password  *string
-	FirstName *string
-	LastName  *string
-	Email     *string
-	Role      *model.Role
-	BranchID  *string // nil = no change, "" = clear branch
-	Status    *model.UserStatus
-	Address   *model.Address
-	UpdatedBy string
+	Username   *string
+	Password   *string
+	FirstName  *string
+	LastName   *string
+	Email      *string
+	Role       *model.Role
+	BranchID   *string // nil = no change, "" = clear branch
+	Status     *model.UserStatus
+	Address    *model.Address
+	DriverType *model.DriverType
+	UpdatedBy  string
 }
 
 type credential struct {

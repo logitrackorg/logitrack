@@ -204,6 +204,52 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			payload.NewETA, event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventPaymentRequested:
+		// Stamp the price/priority already on the draft and transition to pending_payment.
+		// The shipment struct in the cmd already has Price/PriceBreakdown/Priority stamped —
+		// we only need to update the status; the rest was persisted by UpdateDraft before this event.
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(model.StatusPendingPayment), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventPaymentConfirmed:
+		payload := event.Payload.(model.PaymentConfirmedPayload)
+		var priceBreakdown []byte // price already stamped at request-payment time; no change needed here
+		_ = priceBreakdown
+		if payload.Prediction != nil {
+			factorsJSON, _ := json.Marshal(payload.Prediction.Factors)
+			_, err := p.db.Exec(`
+				UPDATE shipments
+				SET tracking_id = $1, status = $2, updated_at = $3,
+				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7,
+				    estimated_delivery_at = $8
+				WHERE tracking_id = $9`,
+				payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
+				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
+				payload.EstimatedDeliveryAt,
+				payload.OldTrackingID,
+			)
+			return err
+		}
+		_, err := p.db.Exec(`
+			UPDATE shipments
+			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4
+			WHERE tracking_id = $5`,
+			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
+			payload.EstimatedDeliveryAt,
+			payload.OldTrackingID,
+		)
+		return err
+
+	case model.EventReturnedToDraft:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(model.StatusDraft), event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }
@@ -322,13 +368,13 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
+		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
 
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
-	query := `
+	selectCols := `
 		SELECT tracking_id, status, current_location, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
@@ -337,8 +383,16 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
-		FROM shipments WHERE 1=1`
+		       price, price_breakdown, price_currency, reserved_for_trip_id
+		FROM shipments WHERE `
+	var statusCond string
+	if filter.IncludeExpired {
+		// Include non-expired + expired that haven't had PII purged yet
+		statusCond = "(status != 'expired' OR (status = 'expired' AND pii_purged_at IS NULL))"
+	} else {
+		statusCond = "status != 'expired'"
+	}
+	query := selectCols + statusCond
 	args := []interface{}{}
 	i := 1
 	if filter.ReceivingBranchID != "" {
@@ -377,13 +431,14 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency
+		       price, price_breakdown, price_currency, reserved_for_trip_id
 		FROM shipments
-		WHERE LOWER(tracking_id) LIKE $1
-		   OR LOWER(sender->>'name') LIKE $1
-		   OR LOWER(recipient->>'name') LIKE $1
-		   OR LOWER(sender->'address'->>'city') LIKE $1
-		   OR LOWER(recipient->'address'->>'city') LIKE $1
+		WHERE status != 'expired'
+		  AND (   LOWER(tracking_id) LIKE $1
+		       OR LOWER(sender->>'name') LIKE $1
+		       OR LOWER(recipient->>'name') LIKE $1
+		       OR LOWER(sender->'address'->>'city') LIKE $1
+		       OR LOWER(recipient->'address'->>'city') LIKE $1)
 		ORDER BY tracking_id ASC`, q)
 	if err != nil {
 		return nil, err
@@ -406,9 +461,9 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	var rows *sql.Rows
 	var err error
 	if branchFilter != "" {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE receiving_branch_id = $1`, branchFilter)
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
 	} else {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments`)
+		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired'`)
 	}
 	if err != nil {
 		return model.Stats{}, err
@@ -531,6 +586,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		price               sql.NullFloat64
 		priceBreakdownJSON  []byte
 		priceCurrency       string
+		reservedForTripID   sql.NullString
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -541,13 +597,16 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-		&price, &priceBreakdownJSON, &priceCurrency,
+		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
 	}
 	if err != nil {
 		return model.Shipment{}, err
+	}
+	if reservedForTripID.Valid {
+		s.ReservedForTripID = &reservedForTripID.String
 	}
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
@@ -610,6 +669,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			price               sql.NullFloat64
 			priceBreakdownJSON  []byte
 			priceCurrency       string
+			reservedForTripID   sql.NullString
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -620,10 +680,13 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-			&price, &priceBreakdownJSON, &priceCurrency,
+			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if reservedForTripID.Valid {
+			s.ReservedForTripID = &reservedForTripID.String
 		}
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
@@ -691,4 +754,23 @@ func nullableFloat(f *float64) interface{} {
 		return nil
 	}
 	return *f
+}
+
+// ReserveForTrip marca el envío como reservado para un trip multi-hop.
+// Atómico: solo reserva si el envío no está ya reservado.
+func (p *PostgresShipmentProjection) ReserveForTrip(trackingID, tripID string) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET reserved_for_trip_id = $1 WHERE tracking_id = $2 AND reserved_for_trip_id IS NULL`,
+		tripID, trackingID,
+	)
+	return err
+}
+
+// ReleaseFromTrip libera la reserva del envío.
+func (p *PostgresShipmentProjection) ReleaseFromTrip(trackingID string) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET reserved_for_trip_id = NULL WHERE tracking_id = $1`,
+		trackingID,
+	)
+	return err
 }

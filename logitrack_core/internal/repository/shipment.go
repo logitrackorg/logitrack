@@ -19,6 +19,19 @@ type ShipmentRepository interface {
 	ApplyCorrections(cmd CorrectCmd) (model.Shipment, error)
 	CancelShipment(cmd CancelCmd) (model.Shipment, error)
 	ExtendETA(cmd ExtendETACmd) (model.Shipment, error)
+	// Payment-related transitions — called by PaymentService only.
+	RequestPayment(cmd RequestPaymentCmd) (model.Shipment, error)
+	ConfirmPayment(cmd ConfirmPaymentCmd) (model.Shipment, error)
+	RevertToDraft(cmd RevertToDraftCmd) (model.Shipment, error)
+
+	// RecordPathPlanned persists a planned multi-hop path for stale-replan tracking (WIP).
+	RecordPathPlanned(cmd PathPlannedCmd) error
+	// SetPalletID associates a pallet identifier with a shipment (WIP).
+	SetPalletID(trackingID, palletID string) error
+	// ReserveForTrip marca el envío como reservado por un trip multi-hop (pickup cross-branch).
+	ReserveForTrip(trackingID, tripID string) error
+	// ReleaseFromTrip libera la reserva del envío.
+	ReleaseFromTrip(trackingID string) error
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
@@ -93,4 +106,46 @@ type ExtendETACmd struct {
 	Reason     string
 	ChangedBy  string
 	Timestamp  time.Time
+}
+
+type RequestPaymentCmd struct {
+	Shipment  model.Shipment // with Price/Priority already stamped
+	PaymentID string
+	MPPreferenceID string
+	InitPoint string
+	Amount    float64
+	Currency  string
+	ChangedBy string
+	Timestamp time.Time
+}
+
+type ConfirmPaymentCmd struct {
+	OldTrackingID string // BORRADOR-XXX
+	NewTrackingID string // LT-XXX
+	PaymentID     string
+	MPPaymentID   string
+	Amount        float64
+	ChangedBy     string
+	Timestamp     time.Time
+	// Fields needed to rebuild the confirmed shipment state:
+	EstimatedDeliveryAt *time.Time
+	Prediction          *model.PriorityPrediction
+}
+
+type RevertToDraftCmd struct {
+	TrackingID string
+	PaymentID  string
+	Reason     string
+	ChangedBy  string
+	Timestamp  time.Time
+}
+
+// PathPlannedCmd records a planned routing path for a shipment (stale-replan feature, WIP).
+type PathPlannedCmd struct {
+	TrackingID      string
+	PlannedPath     []string
+	NextHopBranchID string
+	HopIndex        int
+	PathRevision    int
+	Reason          string
 }

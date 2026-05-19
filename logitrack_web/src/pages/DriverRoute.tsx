@@ -1,17 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
-  Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
   MapPin,
-  MessageCircle,
   Package,
-  Phone,
-  Play,
   Truck,
   XCircle,
 } from "lucide-react";
@@ -24,6 +20,7 @@ import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
 import { BottomSheet } from "../components/ui/bottom-sheet";
+import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { zoneApi, type Zone } from "../api/zones";
 import { isInDangerZone } from "../utils/pointInPolygon";
@@ -32,9 +29,7 @@ import {
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
   recipientView,
-  telHref,
   timeWindowTone,
-  waHref,
 } from "../utils/driverActions";
 
 type Tab = "pendientes" | "completados";
@@ -70,7 +65,6 @@ export function DriverRoute() {
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [startingRoute, setStartingRoute] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
 
@@ -108,20 +102,6 @@ export function DriverRoute() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
-
-  const handleStartRoute = async () => {
-    setStartingRoute(true);
-    setActionError("");
-    try {
-      await driverApi.startRoute();
-      load();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setActionError(msg ?? "No se pudo iniciar la ruta.");
-    } finally {
-      setStartingRoute(false);
-    }
-  };
 
   const closeSheets = () => {
     setDeliverShipment(null);
@@ -186,9 +166,13 @@ export function DriverRoute() {
   }, [data]);
 
   const [simActive, setSimActive] = useState(false);
+  const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
-    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360);
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier);
+
+  const cycleSpeedMultiplier = () =>
+    setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
 
   // Mientras se verifica contra el backend, mostrar skeleton para evitar flash del modal.
   if (checkInDone === null) return <RouteSkeleton />;
@@ -206,7 +190,7 @@ export function DriverRoute() {
   }
 
   if (loading) return <RouteSkeleton />;
-  if (noRoute) return <NoRouteView />;
+  if (noRoute) return <Navigate to="/driver/scan" replace />;
   if (!data) return null;
 
   const routeStatus = data.route.status ?? "pendiente";
@@ -222,7 +206,11 @@ export function DriverRoute() {
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  if (routeStatus === "finalizada" && done > 0) {
+  const hasDeliveryFailedRemaining = data.shipments.some((s) => s.status === "delivery_failed");
+  const routeEffectivelyDone =
+    routeStatus === "finalizada" ||
+    (routeStatus === "en_curso" && pending === 0 && !hasDeliveryFailedRemaining && total > 0);
+  if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} />;
   }
 
@@ -387,7 +375,7 @@ export function DriverRoute() {
               origin={origin}
               userLocation={userLocation ?? undefined}
               simulationMode={simulationMode}
-              simulationControls={{ isPaused, pause, play, reset, onExit: () => setSimActive(false) }}
+              simulationControls={{ isPaused, pause, play, reset, onExit: () => { setSimActive(false); setSpeedMultiplier(1); }, speedMultiplier, onCycleSpeed: cycleSpeedMultiplier }}
               zones={zones}
               onRouteInfoChange={setRouteInfo}
               onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
@@ -440,21 +428,6 @@ export function DriverRoute() {
         />
       )}
 
-      {/* Sticky CTA para iniciar ruta */}
-      {routeStatus === "pendiente" && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="max-w-2xl mx-auto">
-            <button
-              onClick={handleStartRoute}
-              disabled={startingRoute}
-              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              <Play className="w-5 h-5" />
-              {startingRoute ? "Iniciando…" : "Iniciar ruta"}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Bottom sheets */}
       <DeliverSheet
@@ -671,25 +644,13 @@ function ShipmentCard({
 
       {!isCompleted && (
         <div className="px-4 pb-4 border-t border-slate-100">
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            <a
-              href={telHref(phone)}
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
-            >
-              <Phone className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Llamar</span>
-            </a>
-            <a
-              href={waHref(phone)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">WhatsApp</span>
-            </a>
+          <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+            <WhatsAppQuickButton
+              phone={phone}
+              recipientName={name}
+              trackingId={shipment.tracking_id}
+              compact
+            />
           </div>
 
           {canAct && (
@@ -888,25 +849,6 @@ function FailedSheet({
   );
 }
 
-function NoRouteView() {
-  return (
-    <div className="p-6 max-w-lg mx-auto">
-      <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
-          <Truck className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-          <p className="mt-1 text-sm text-slate-500">No tenés ninguna ruta asignada para hoy.</p>
-        </div>
-      </div>
-      <Card className="p-8 text-center">
-        <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-slate-500">Cuando un supervisor te asigne envíos, los vas a ver acá.</p>
-      </Card>
-    </div>
-  );
-}
 
 function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
   const navigate = useNavigate();

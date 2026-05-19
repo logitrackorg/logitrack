@@ -26,19 +26,15 @@ func branchForbidden(c *gin.Context, user model.User, shipmentBranchID string) b
 }
 
 // operatorReadForbidden returns true (and writes 403) when an operator tries to read a shipment
-// that neither belongs to their branch nor is in_transit toward it.
+// that they have no business viewing. Hoy retorna SIEMPRE false: operator puede leer
+// cualquier envío (mismo nivel que supervisor) porque el ruteo inteligente puede
+// referenciar envíos cross-branch (pickups) que el operator necesita inspeccionar
+// para evaluar el plan. La restricción de ESCRITURA (`branchForbidden`) se mantiene.
 func operatorReadForbidden(c *gin.Context, user model.User, shipment model.Shipment) bool {
-	if user.Role != model.RoleOperator || user.BranchID == "" {
-		return false
-	}
-	if shipment.ReceivingBranchID == user.BranchID {
-		return false
-	}
-	if shipment.Status == model.StatusInTransit && shipment.CurrentLocation == user.BranchID {
-		return false
-	}
-	c.JSON(http.StatusForbidden, gin.H{"error": "solo podés ver envíos asignados a tu sucursal"})
-	return true
+	_ = c
+	_ = user
+	_ = shipment
+	return false
 }
 
 // CancelRequest is the body for cancelling a shipment.
@@ -243,6 +239,11 @@ func (h *ShipmentHandler) List(c *gin.Context) {
 	} else if branchID := c.Query("branch_id"); branchID != "" {
 		filter.ReceivingBranchID = branchID
 	}
+	// Only supervisor and manager may request expired drafts.
+	if c.Query("include_expired") == "true" &&
+		(user.Role == model.RoleSupervisor || user.Role == model.RoleManager) {
+		filter.IncludeExpired = true
+	}
 	shipments, err := h.svc.List(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -271,6 +272,11 @@ func (h *ShipmentHandler) GetByTrackingID(c *gin.Context) {
 	}
 	if userVal, exists := c.Get(middleware.UserKey); exists {
 		user := userVal.(model.User)
+		// Expired drafts are invisible to everyone except admins.
+		if shipment.Status == model.StatusExpired && user.Role != model.RoleAdmin {
+			c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
+			return
+		}
 		if operatorReadForbidden(c, user, shipment) {
 			return
 		}

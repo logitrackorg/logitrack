@@ -321,7 +321,8 @@ func twoOpt(r Route, p Problem) Route {
 		}
 	}
 
-	// Re-simular para arrivals + distancia.
+	// Re-simular para arrivals + distancia + estado de ventana horaria.
+	mStart, mEnd, aStart, aEnd := windowBounds(p)
 	stops := make([]Stop, len(idxs))
 	curNode := 0
 	curTime := 0.0
@@ -329,7 +330,19 @@ func twoOpt(r Route, p Problem) Route {
 	for i, idx := range idxs {
 		travel := p.DurationMatrix[curNode][idx+1] / 60.0
 		arrival := curTime + travel
-		stops[i] = Stop{NodeID: p.Deliveries[idx].ID, ArrivalMin: arrival}
+		absArrival := p.DepartureMin + arrival
+		tw := p.Deliveries[idx].TimeWindow
+		inWindow := respectsWindow(tw, absArrival, mStart, mEnd, aStart, aEnd, p.DayEndMin)
+		dev := 0.0
+		if !inWindow {
+			dev = calcDeviation(tw, absArrival, mStart, mEnd, aStart, aEnd)
+		}
+		stops[i] = Stop{
+			NodeID:             p.Deliveries[idx].ID,
+			ArrivalMin:         arrival,
+			OutOfWindow:        !inWindow,
+			WindowDeviationMin: dev,
+		}
 		if len(p.DistanceMatrix) > 0 {
 			totalDistKm += p.DistanceMatrix[curNode][idx+1] / 1000.0
 		}
