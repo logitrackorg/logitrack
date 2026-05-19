@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FileText, Search, X, ArrowUpDown, ChevronRight, Filter,
+  FileText, Search, X, ArrowUpDown, ChevronRight, Filter, Clock, AlertTriangle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
+import { systemConfigApi } from "../api/systemConfig";
+import { clockApi } from "../api/clock";
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
@@ -14,24 +16,72 @@ type SortOrder = "oldest" | "newest";
 const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
 
+/** Returns a human-readable label for the time remaining until a draft expires. */
+function formatTimeLeft(createdAt: string, retentionDays: number, nowMs: number): {
+  label: string;
+  urgent: boolean; // true when ≤ 2 days left
+} {
+  const expiresAt = new Date(new Date(createdAt).getTime() + retentionDays * 24 * 60 * 60 * 1000);
+  const msLeft = expiresAt.getTime() - nowMs;
+
+  if (msLeft <= 0) return { label: "Vencido", urgent: true };
+
+  const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60));
+  const daysLeft  = Math.floor(hoursLeft / 24);
+
+  if (daysLeft === 0) {
+    return { label: hoursLeft <= 1 ? "Vence en menos de 1 h" : `Vence en ${hoursLeft} h`, urgent: true };
+  }
+  if (daysLeft === 1) return { label: "Vence mañana", urgent: true };
+  return { label: `Vence en ${daysLeft} días`, urgent: daysLeft <= 2 };
+}
+
 export function DraftList() {
   const [drafts, setDrafts] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [retentionDays, setRetentionDays] = useState<number>(7);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<SortOrder>("oldest");
   const navigate = useNavigate();
   const { hasRole } = useAuth();
 
+  const fetchClock = () =>
+    clockApi.get()
+      .then((c) => setNowMs(new Date(c.system_now).getTime()))
+      .catch(() => setNowMs(Date.now()));
+
   useEffect(() => {
     setLoading(true);
-    shipmentApi
-      .list()
-      .then((all) => setDrafts((all ?? []).filter((s) => s.status === "draft")))
+    Promise.all([
+      shipmentApi.list().then((all) => (all ?? []).filter((s) => s.status === "draft")),
+      systemConfigApi.get().catch(() => null),
+      clockApi.get().catch(() => null),
+    ])
+      .then(([draftList, cfg, clock]) => {
+        setDrafts(draftList);
+        if (cfg?.draft_retention_days) setRetentionDays(cfg.draft_retention_days);
+        // Use the server clock (may be overridden for testing) as "now"
+        setNowMs(clock?.system_now ? new Date(clock.system_now).getTime() : Date.now());
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Re-sync the clock whenever the tab regains focus (e.g. after setting override in another tab)
+    const onVisible = () => { if (document.visibilityState === "visible") fetchClock(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  const filtered = drafts
+  const expiresAtMs = (d: { created_at: string }) =>
+    new Date(d.created_at).getTime() + retentionDays * 24 * 60 * 60 * 1000;
+
+  // Hide drafts that have already passed their expiration window according to
+  // the server clock. The nightly job will eventually flip them to 'expired'
+  // in the DB, but in the meantime they should be invisible to operators.
+  const visibleDrafts = drafts.filter((d) => expiresAtMs(d) > nowMs);
+
+  const filtered = visibleDrafts
     .filter((d) => {
       const q = query.trim().toLowerCase();
       if (q.length < 2) return true;
@@ -119,7 +169,7 @@ export function DraftList() {
         <Card className="p-10 text-center">
           <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-500">
-            {drafts.length === 0
+            {visibleDrafts.length === 0
               ? "No hay borradores guardados."
               : "No se encontraron borradores con ese criterio de búsqueda."}
           </p>
@@ -133,54 +183,71 @@ export function DraftList() {
             </p>
           </div>
           <div className="divide-y divide-slate-100">
-            {filtered.map((d) => (
-              <button
-                key={d.tracking_id}
-                type="button"
-                onClick={() => navigate(`/shipments/${d.tracking_id}`)}
-                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
-              >
-                {/* Icon */}
-                <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-amber-500" />
-                </div>
+            {filtered.map((d) => {
+              const { label: timeLabel, urgent } = formatTimeLeft(d.created_at, retentionDays, nowMs);
+              return (
+                <button
+                  key={d.tracking_id}
+                  type="button"
+                  onClick={() => navigate(`/shipments/${d.tracking_id}`)}
+                  className="w-full flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
+                >
+                  {/* Icon */}
+                  <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                  </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-semibold text-slate-900 truncate">
-                      {d.sender?.name || "Sin remitente"}
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold text-slate-900 truncate">
+                        {d.sender?.name || "Sin remitente"}
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                      <span className="text-slate-700 truncate">
+                        {d.recipient?.name || "Sin destinatario"}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                      {d.sender?.address?.city && d.recipient?.address?.city && (
+                        <>
+                          <span>{d.sender.address.city}</span>
+                          <span className="text-slate-200">→</span>
+                          <span>{d.recipient.address.city}</span>
+                          <span className="text-slate-200">·</span>
+                        </>
+                      )}
+                      <span>{fmtDateTime(d.created_at)}</span>
+                      {d.weight_kg > 0 && (
+                        <>
+                          <span className="text-slate-200">·</span>
+                          <span>{d.weight_kg} kg</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Time left badge + CTA */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md ${
+                        urgent
+                          ? "bg-rose-50 text-rose-600 border border-rose-200"
+                          : "bg-slate-100 text-slate-500 border border-slate-200"
+                      }`}
+                    >
+                      {urgent
+                        ? <AlertTriangle className="w-3 h-3" />
+                        : <Clock className="w-3 h-3" />}
+                      {timeLabel}
                     </span>
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                    <span className="text-slate-700 truncate">
-                      {d.recipient?.name || "Sin destinatario"}
+                    <span className="text-xs font-semibold text-[#2563eb] group-hover:underline">
+                      Retomar →
                     </span>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                    {d.sender?.address?.city && d.recipient?.address?.city && (
-                      <>
-                        <span>{d.sender.address.city}</span>
-                        <span className="text-slate-200">→</span>
-                        <span>{d.recipient.address.city}</span>
-                        <span className="text-slate-200">·</span>
-                      </>
-                    )}
-                    <span>{fmtDateTime(d.created_at)}</span>
-                    {d.weight_kg > 0 && (
-                      <>
-                        <span className="text-slate-200">·</span>
-                        <span>{d.weight_kg} kg</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* CTA */}
-                <span className="text-xs font-semibold text-[#2563eb] group-hover:underline shrink-0">
-                  Retomar →
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </Card>
       )}

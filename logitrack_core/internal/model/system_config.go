@@ -2,8 +2,18 @@ package model
 
 type SystemConfig struct {
 	MaxDeliveryAttempts int `json:"max_delivery_attempts"`
+	// DraftRetentionDays is the number of days a draft remains visible to operators
+	// before the nightly job transitions it to "expired". Default: 7.
+	DraftRetentionDays int `json:"draft_retention_days"`
+	// DraftPurgeDays is the number of days after expiration before personal data
+	// (name, DNI, email, phone, address) is irreversibly anonymized. Default: 30.
+	DraftPurgeDays int `json:"draft_purge_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
-	return SystemConfig{MaxDeliveryAttempts: 3}
+	return SystemConfig{
+		MaxDeliveryAttempts: 3,
+		DraftRetentionDays:  7,
+		DraftPurgeDays:      30,
+	}
 }

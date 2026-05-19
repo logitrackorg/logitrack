@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Truck, Plus, Filter } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
+import { interBranchTripsApi, type InterBranchTrip } from "../api/interBranchTrips";
 import { shipmentApi } from "../api/shipments";
-import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
+import { branchApi, type Branch } from "../api/branches";
+import { usersApi, type UserProfile } from "../api/users";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
@@ -18,6 +20,7 @@ const vehicleTypeLabels: Record<VehicleType, string> = {
   furgoneta: "Furgoneta",
   camion: "Camión",
 };
+
 
 const vehicleStatusLabels: Record<VehicleStatus, string> = {
   disponible: "Disponible",
@@ -48,6 +51,9 @@ export function VehicleList() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [shipmentWeights, setShipmentWeights] = useState<Record<string, number>>({});
+  const [activeLastMileTrips, setActiveLastMileTrips] = useState<InterBranchTrip[]>([]);
+  const [activeInterBranchTrips, setActiveInterBranchTrips] = useState<InterBranchTrip[]>([]);
+  const [drivers, setDrivers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string>("");
@@ -58,16 +64,10 @@ export function VehicleList() {
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | "">("");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [plateSearch, setPlateSearch] = useState("");
-  // Start-trip modal
-  const [showStartTripModal, setShowStartTripModal] = useState(false);
-  const [startTripDestBranch, setStartTripDestBranch] = useState("");
-  const [startingTrip, setStartingTrip] = useState(false);
-  const [startTripCapacity, setStartTripCapacity] = useState<BranchCapacity | null>(null);
-  const [startTripCapacityLoading, setStartTripCapacityLoading] = useState(false);
-  const [startTripCapacityConfirmed, setStartTripCapacityConfirmed] = useState(false);
   // End-trip modal
   const [showEndTripModal, setShowEndTripModal] = useState(false);
   const [endingTrip, setEndingTrip] = useState(false);
+  // Receive trip modal (QR scan)
   // Load shipments modal
   const [loadModalVehicle, setLoadModalVehicle] = useState<Vehicle | null>(null);
   const [loadInput, setLoadInput] = useState("");
@@ -86,6 +86,7 @@ export function VehicleList() {
   const [formData, setFormData] = useState({
     license_plate: "",
     type: "furgoneta" as VehicleType,
+    mode: "ultima_milla" as import("../api/vehicles").VehicleMode,
     capacity_kg: 0,
     branch_id: "",
   });
@@ -120,6 +121,15 @@ export function VehicleList() {
         }
       }
       setShipmentWeights(weights);
+
+      // Fetch active last-mile trips and drivers in parallel for driver assignment display
+      const [trips, driverList] = await Promise.all([
+        interBranchTripsApi.listByBranch().catch(() => [] as InterBranchTrip[]),
+        usersApi.listDrivers().catch(() => [] as UserProfile[]),
+      ]);
+      setActiveLastMileTrips(trips.filter(t => t.kind === "last_mile" && t.status !== "completado" && t.status !== "cancelado"));
+      setActiveInterBranchTrips(trips.filter(t => t.kind === "inter_branch" && t.status !== "completado" && t.status !== "cancelado"));
+      setDrivers(driverList);
     } catch (err) {
       console.error("Failed to load vehicles:", err);
     } finally {
@@ -151,7 +161,7 @@ export function VehicleList() {
       await vehicleApi.create(formData);
       setSuccess("Vehículo registrado correctamente");
       setShowForm(false);
-      setFormData({ license_plate: "", type: "furgoneta", capacity_kg: 0, branch_id: "" });
+      setFormData({ license_plate: "", type: "furgoneta", mode: "ultima_milla", capacity_kg: 0, branch_id: "" });
       loadVehicles();
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { error?: string } } };
@@ -167,7 +177,7 @@ export function VehicleList() {
 
   const handleCancel = () => {
     setShowForm(false);
-    setFormData({ license_plate: "", type: "furgoneta", capacity_kg: 0, branch_id: "" });
+    setFormData({ license_plate: "", type: "furgoneta", mode: "ultima_milla", capacity_kg: 0, branch_id: "" });
     setError("");
     setSuccess("");
   };
@@ -187,65 +197,6 @@ export function VehicleList() {
     setSelectedVehicle(null);
   };
 
-  const handleStartTrip = async (plate: string) => {
-    if (!plate) return;
-    setSelectedForAssign(plate);
-    const vehicle = vehicles.find((v) => v.license_plate === plate);
-    const presetDest = vehicle?.destination_branch ?? "";
-    setStartTripDestBranch(presetDest);
-    setStartTripCapacity(null);
-    setStartTripCapacityConfirmed(false);
-    setShowVehicleDetail(false);
-    setSelectedVehicle(null);
-    setShowStartTripModal(true);
-    // Si el destino ya viene del plan de ruteo aplicado, precargamos la capacidad.
-    if (presetDest) {
-      setStartTripCapacityLoading(true);
-      try {
-        const cap = await branchApi.getCapacity(presetDest);
-        setStartTripCapacity(cap);
-      } catch {
-        setStartTripCapacity(null);
-      } finally {
-        setStartTripCapacityLoading(false);
-      }
-    }
-  };
-
-  const handleStartTripBranchChange = async (branchId: string) => {
-    setStartTripDestBranch(branchId);
-    setStartTripCapacity(null);
-    setStartTripCapacityConfirmed(false);
-    if (!branchId) return;
-    setStartTripCapacityLoading(true);
-    try {
-      const cap = await branchApi.getCapacity(branchId);
-      setStartTripCapacity(cap);
-    } catch {
-      setStartTripCapacity(null);
-    } finally {
-      setStartTripCapacityLoading(false);
-    }
-  };
-
-  const confirmStartTrip = async () => {
-    if (!selectedForAssign || !startTripDestBranch) return;
-    setStartingTrip(true);
-    setError("");
-    try {
-      await vehicleApi.startTrip(selectedForAssign, { destination_branch: startTripDestBranch });
-      setSuccess("Viaje iniciado. Todos los envíos están ahora en tránsito.");
-      setShowStartTripModal(false);
-      setSelectedForAssign("");
-      loadVehicles();
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: string } } };
-      setError(e.response?.data?.error ?? "Error al iniciar el viaje");
-    } finally {
-      setStartingTrip(false);
-    }
-  };
-
   const handleEndTrip = (plate: string) => {
     if (!plate) return;
     setSelectedForAssign(plate);
@@ -260,7 +211,6 @@ export function VehicleList() {
     setEndingTrip(true);
     setError("");
     try {
-      // Call the end-trip endpoint to clear shipment, destination_branch and change status to available
       await vehicleApi.endTrip(selectedForAssign);
       setSuccess("Viaje finalizado. El vehículo está disponible.");
       setShowEndTripModal(false);
@@ -268,22 +218,10 @@ export function VehicleList() {
       loadVehicles();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
-      if (e.response?.data?.error) {
-        setError(e.response.data.error);
-      } else {
-        setError("Error al finalizar el viaje");
-      }
+      setError(e.response?.data?.error ?? "Error al finalizar el viaje");
     } finally {
       setEndingTrip(false);
     }
-  };
-
-  const vehicleCanStartTrip = (v: { status: VehicleStatus; assigned_branch?: string | null }) => {
-    if (!canManageTrips || v.status !== "en_carga") return false;
-    if ((user?.role === "supervisor" || user?.role === "operator") && user.branch_id) {
-      return v.assigned_branch === user.branch_id;
-    }
-    return true;
   };
 
   const vehicleCanEndTrip = (v: { status: VehicleStatus; destination_branch?: string | null }) => {
@@ -332,14 +270,27 @@ const handleAddShipment = async () => {
     }
   };
 
+  const [modeTab, setModeTab] = useState<"ultima_milla" | "inter_sucursal">("ultima_milla");
+
   // Filtrar vehículos
   const filteredVehicles = vehicles.filter((v) => {
+    if (v.mode !== modeTab) return false;
     if (branchFilter && v.assigned_branch !== branchFilter && v.destination_branch !== branchFilter) return false;
     if (statusFilter && v.status !== statusFilter) return false;
     if (showOnlyAvailable && v.status !== "disponible") return false;
     if (plateSearch && !v.license_plate.toUpperCase().includes(plateSearch.toUpperCase())) return false;
     return true;
   });
+
+  const countByMode = (mode: "ultima_milla" | "inter_sucursal") =>
+    vehicles.filter((v) => {
+      if (v.mode !== mode) return false;
+      if (branchFilter && v.assigned_branch !== branchFilter && v.destination_branch !== branchFilter) return false;
+      if (statusFilter && v.status !== statusFilter) return false;
+      if (showOnlyAvailable && v.status !== "disponible") return false;
+      if (plateSearch && !v.license_plate.toUpperCase().includes(plateSearch.toUpperCase())) return false;
+      return true;
+    }).length;
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -348,15 +299,17 @@ const handleAddShipment = async () => {
         description="Vehículos, asignación a sucursales y trips operativos"
         icon={<Truck className="w-5 h-5" />}
         actions={
-          isAdmin ? (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Nuevo vehículo
-            </button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => setShowForm(!showForm)}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Nuevo vehículo
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -407,6 +360,17 @@ const handleAddShipment = async () => {
                   {Object.entries(vehicleTypeLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
+                </select>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Modo *</label>
+                <select
+                  value={formData.mode}
+                  onChange={(e) => setFormData({ ...formData, mode: e.target.value as import("../api/vehicles").VehicleMode })}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", boxSizing: "border-box" }}
+                >
+                  <option value="ultima_milla">Última milla (entrega local)</option>
+                  <option value="inter_sucursal">Inter-sucursal (transferencia)</option>
                 </select>
               </div>
               <div style={{ marginBottom: 16 }}>
@@ -540,6 +504,31 @@ const handleAddShipment = async () => {
         </div>
       )}
 
+      {/* Tabs por modo */}
+      <div className="flex gap-1 border-b border-slate-200 mb-4">
+        {(["ultima_milla", "inter_sucursal"] as const).map((mode) => {
+          const label = mode === "ultima_milla" ? "Última milla" : "Inter-sucursal";
+          const count = countByMode(mode);
+          const active = modeTab === mode;
+          return (
+            <button
+              key={mode}
+              onClick={() => setModeTab(mode)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                active
+                  ? "border-[#1e3a5f] text-[#1e3a5f]"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {label}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${active ? "bg-[#1e3a5f] text-white" : "bg-slate-100 text-slate-600"}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Lista de vehículos */}
       {loading ? (
         <Card className="p-10 text-center">
@@ -564,7 +553,9 @@ const handleAddShipment = async () => {
                   <th className={thClass}>Patente</th>
                   <th className={thClass}>Tipo</th>
                   <th className={thClass}>Sucursal actual</th>
-                  <th className={thClass}>Sucursal destino</th>
+                  {modeTab === "inter_sucursal" && <th className={thClass}>Sucursal destino</th>}
+                  {modeTab === "inter_sucursal" && <th className={thClass}>Chofer asignado</th>}
+                  {modeTab === "ultima_milla" && <th className={thClass}>Chofer asignado</th>}
                   <th className={thClass}>Capacidad</th>
                   <th className={thClass}>Cap. disponible</th>
                   <th className={thClass}>Estado</th>
@@ -602,13 +593,45 @@ const handleAddShipment = async () => {
                           <span className="text-slate-400 italic">Sin sucursal</span>
                         )}
                       </td>
-                      <td className={tdClass}>
-                        {destinationBranch ? (
-                          <span className="text-[#1e3a5f] font-medium">{destinationBranch.name}</span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
+                      {modeTab === "inter_sucursal" && (
+                        <td className={tdClass}>
+                          {destinationBranch ? (
+                            <span className="text-[#1e3a5f] font-medium">{destinationBranch.name}</span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                      )}
+                      {modeTab === "inter_sucursal" && (() => {
+                        const trip = activeInterBranchTrips.find(t => t.vehicle_id === v.id);
+                        const driver = trip?.driver_id ? drivers.find(d => d.id === trip.driver_id) : null;
+                        return (
+                          <td className={tdClass}>
+                            {driver ? (
+                              <span className="text-slate-800 font-medium">{driver.full_name}</span>
+                            ) : trip ? (
+                              <span className="text-amber-600 text-xs font-medium">Sin reclamar</span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                        );
+                      })()}
+                      {modeTab === "ultima_milla" && (() => {
+                        const trip = activeLastMileTrips.find(t => t.vehicle_id === v.id);
+                        const driver = trip?.driver_id ? drivers.find(d => d.id === trip.driver_id) : null;
+                        return (
+                          <td className={tdClass}>
+                            {driver ? (
+                              <span className="text-slate-800 font-medium">{driver.full_name}</span>
+                            ) : trip ? (
+                              <span className="text-amber-600 text-xs font-medium">Sin reclamar</span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                        );
+                      })()}
                       <td className={tdClass}>
                         <span className="tabular-nums">{v.capacity_kg} kg</span>
                       </td>
@@ -660,9 +683,7 @@ const handleAddShipment = async () => {
           readOnly={!canWrite}
           canAssignBranch={isAdmin}
           hideShipments={isAdmin}
-          canStartTrip={vehicleCanStartTrip(selectedVehicle)}
           canEndTrip={vehicleCanEndTrip(selectedVehicle)}
-          onStartTrip={() => handleStartTrip(selectedVehicle.license_plate)}
           onEndTrip={() => handleEndTrip(selectedVehicle.license_plate)}
         />
       )}
@@ -736,127 +757,7 @@ const handleAddShipment = async () => {
         </div>
       )}
 
-      {/* Start Trip modal — asks for destination branch */}
-      {showStartTripModal && (() => {
-        const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
-        const numShipments = vehicle?.assigned_shipments?.length ?? 0;
-        const wouldExceed = startTripCapacity != null && (startTripCapacity.current + numShipments) > startTripCapacity.max_capacity;
-        const canConfirm = !!startTripDestBranch && !startingTrip && !startTripCapacityLoading && (!wouldExceed || startTripCapacityConfirmed);
-        // Si el vehículo ya tiene destino (típico cuando viene del plan de ruteo aplicado),
-        // no hace falta elegirlo: solo confirmar.
-        const presetDest = vehicle?.destination_branch ?? "";
-        const presetBranch = presetDest ? branches.find(b => b.id === presetDest) : null;
-        return (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-            onClick={() => setShowStartTripModal(false)}
-          >
-            <div
-              style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Iniciar viaje</h2>
-                <button onClick={() => setShowStartTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
-              </div>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 16px" }}>
-                El vehículo <strong>{selectedForAssign}</strong> iniciará un viaje. Todos los envíos cargados pasarán a En tránsito.
-              </p>
-              {presetDest ? (
-                <div style={{ marginBottom: 16, padding: "12px 14px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
-                  <div style={{ fontSize: 12, color: "#0369a1", fontWeight: 600, marginBottom: 4 }}>Destino del viaje</div>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "#0c4a6e" }}>
-                    {presetBranch ? `${presetBranch.name} — ${presetBranch.address.city}` : presetDest}
-                  </div>
-                  {startTripCapacityLoading && (
-                    <p style={{ fontSize: 12, color: "#0369a1", margin: "8px 0 0" }}>Verificando capacidad de la sucursal...</p>
-                  )}
-                  {startTripCapacity && !startTripCapacityLoading && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: "#0369a1" }}>
-                      Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal destino *</label>
-                  <select
-                    value={startTripDestBranch}
-                    onChange={(e) => handleStartTripBranchChange(e.target.value)}
-                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" }}
-                  >
-                    <option value="">Seleccioná la sucursal destino...</option>
-                    {(() => {
-                      const byProvince = branches.reduce((acc, b) => {
-                        if (!acc[b.province]) acc[b.province] = [];
-                        acc[b.province].push(b);
-                        return acc;
-                      }, {} as Record<string, typeof branches>);
-                      return Object.entries(byProvince)
-                        .sort(([a], [b]) => a.localeCompare(b))
-                        .map(([province, pBranches]) => (
-                          <optgroup key={province} label={province}>
-                            {[...pBranches]
-                              .sort((a, b) => a.name.localeCompare(b.name))
-                              .map(b => (
-                                <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                              ))}
-                          </optgroup>
-                        ));
-                    })()}
-                  </select>
-                  {startTripCapacityLoading && (
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "6px 0 0" }}>Verificando capacidad de la sucursal...</p>
-                  )}
-                  {startTripCapacity && !startTripCapacityLoading && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-                      Capacidad actual: {startTripCapacity.current} / {startTripCapacity.max_capacity} bultos
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {wouldExceed && (
-                <div style={{ background: "#fff7ed", border: "1px solid #fb923c", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
-                  <p style={{ margin: "0 0 8px", fontWeight: 700, fontSize: 13, color: "#c2410c" }}>
-                    La sucursal superará su capacidad
-                  </p>
-                  <p style={{ margin: "0 0 10px", fontSize: 12, color: "#9a3412" }}>
-                    Con los {numShipments} bulto{numShipments !== 1 ? "s" : ""} de este vehículo, la sucursal quedaría con {startTripCapacity!.current + numShipments} de {startTripCapacity!.max_capacity} bultos ({Math.round(((startTripCapacity!.current + numShipments) / startTripCapacity!.max_capacity) * 100)}% de capacidad).
-                  </p>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", color: "#7c2d12", fontWeight: 600 }}>
-                    <input
-                      type="checkbox"
-                      checked={startTripCapacityConfirmed}
-                      onChange={(e) => setStartTripCapacityConfirmed(e.target.checked)}
-                    />
-                    Entiendo la situación y quiero continuar de todas formas
-                  </label>
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={() => setShowStartTripModal(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmStartTrip}
-                  disabled={!canConfirm}
-                  style={{
-                    padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                    background: !canConfirm ? "#9ca3af" : "#3b82f6",
-                    color: "#fff", cursor: !canConfirm ? "not-allowed" : "pointer",
-                    opacity: startingTrip ? 0.7 : 1,
-                  }}
-                >
-                  {startingTrip ? "Iniciando..." : "Iniciar viaje"}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
+      {/* Receive Trip modal */}
       {/* End Trip confirmation modal */}
       {showEndTripModal && (() => {
         const vehicle = vehicles.find(v => v.license_plate === selectedForAssign);
@@ -922,7 +823,7 @@ const MANUAL_STATUSES: { value: VehicleStatus; label: string }[] = [
   { value: "inactivo", label: "Inactivo" },
 ];
 
-export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canAssignBranch, hideShipments, canStartTrip, canEndTrip, onStartTrip, onEndTrip }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; canAssignBranch?: boolean; hideShipments?: boolean; canStartTrip?: boolean; canEndTrip?: boolean; onStartTrip?: () => void; onEndTrip?: () => void }) {
+export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canAssignBranch, hideShipments, canEndTrip, onEndTrip }: { vehicle: VehicleStatusResponse; onClose: () => void; onRefresh?: () => void; readOnly?: boolean; canAssignBranch?: boolean; hideShipments?: boolean; canEndTrip?: boolean; onEndTrip?: () => void }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [assigningBranch, setAssigningBranch] = useState(false);
@@ -1039,6 +940,14 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
       setStatusBusy(false);
     }
   };
+
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+
+  useEffect(() => {
+    vehicleApi.getQR(vehicle.license_plate)
+      .then(r => setQrBase64(r.qr_png_base64))
+      .catch((err) => { console.error("QR fetch failed:", err?.response?.status, err?.response?.data); setQrBase64(null); });
+  }, [vehicle.license_plate]);
 
   const currentBranch = branches.find(b => b.id === vehicle.assigned_branch);
   return (
@@ -1167,44 +1076,24 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         </div>
 
         {/* Acciones de viaje — operador / supervisor de la sucursal correspondiente */}
-        {!readOnly && (canStartTrip || canEndTrip) && (
+        {!readOnly && canEndTrip && (
           <div style={{ marginBottom: 16 }}>
-            {canStartTrip && (
-              <button
-                onClick={onStartTrip}
-                style={{
-                  width: "100%",
-                  background: "#3b82f6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "10px 16px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
-                Iniciar viaje
-              </button>
-            )}
-            {canEndTrip && (
-              <button
-                onClick={onEndTrip}
-                style={{
-                  width: "100%",
-                  background: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "10px 16px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
-                Finalizar viaje
-              </button>
-            )}
+            <button
+              onClick={onEndTrip}
+              style={{
+                width: "100%",
+                background: "#dc2626",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "10px 16px",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              Finalizar viaje
+            </button>
           </div>
         )}
 
@@ -1458,6 +1347,22 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             </div>
           )}
         </div>}
+
+        {/* QR del vehículo */}
+        {qrBase64 && (
+          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, marginTop: 16, textAlign: "center" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Código QR del vehículo</h3>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+              El chofer escanea este QR para reclamar el viaje del día.
+            </p>
+            <img
+              src={`data:image/png;base64,${qrBase64}`}
+              alt={`QR ${vehicle.license_plate}`}
+              style={{ width: 160, height: 160, display: "block", margin: "0 auto", imageRendering: "pixelated" }}
+            />
+            <p style={{ fontSize: 11, color: "#9ca3af", margin: "10px 0 0", fontFamily: "monospace" }}>{vehicle.license_plate}</p>
+          </div>
+        )}
       </div>
     </div>
     {showUnassignAllConfirm && (

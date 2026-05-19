@@ -20,11 +20,13 @@ const TEST_USERS = [
   { u: "op_posadas",     p: "op_posadas123",       r: "Operador",    branch: "Posadas" },
   { u: "gerente",        p: "gerente123",          r: "Gerente",     branch: "" },
   { u: "admin",          p: "admin123",            r: "Admin",       branch: "" },
-  { u: "chofer_caba",    p: "chofer_caba123",      r: "Chofer",      branch: "CABA" },
-  { u: "chofer_caba2",   p: "chofer_caba2123",     r: "Chofer",      branch: "CABA" },
-  { u: "chofer_cordoba", p: "chofer_cordoba123",   r: "Chofer",      branch: "Córdoba" },
-  { u: "chofer_mendoza", p: "chofer_mendoza123",   r: "Chofer",      branch: "Mendoza" },
-  { u: "chofer_posadas", p: "chofer_posadas123",   r: "Chofer",      branch: "Posadas" },
+  { u: "chofer_caba",          p: "chofer_caba123",            r: "Chofer Última milla",   branch: "CABA" },
+  { u: "chofer_caba2",         p: "chofer_caba2123",           r: "Chofer Última milla",   branch: "CABA" },
+  { u: "chofer_cordoba",       p: "chofer_cordoba123",         r: "Chofer Última milla",   branch: "Córdoba" },
+  { u: "chofer_mendoza",       p: "chofer_mendoza123",         r: "Chofer Última milla",   branch: "Mendoza" },
+  { u: "chofer_posadas",       p: "chofer_posadas123",         r: "Chofer Última milla",   branch: "Posadas" },
+  { u: "chofer_inter_1", p: "chofer_inter_1_123", r: "Chofer Intersucursal", branch: "" },
+  { u: "chofer_inter_2", p: "chofer_inter_2_123", r: "Chofer Intersucursal", branch: "" },
 ];
 
 const ROLE_STYLES: Record<string, string> = {
@@ -32,7 +34,8 @@ const ROLE_STYLES: Record<string, string> = {
   "Supervisor": "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
   "Gerente":    "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
   "Admin":      "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-  "Chofer":     "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
+  "Chofer Última milla":  "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
+  "Chofer Intersucursal": "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
 };
 
 const FEATURES = [

@@ -32,10 +32,12 @@ type Client struct {
 	http    *http.Client
 }
 
-// maxTablePoints es el tope de puntos por request al OSRM Table API.
-// Por encima de este número la URL resultante puede exceder los límites
-// de algunos proxies (~8KB) y el costo cuadrático del solver crece feo.
-const maxTablePoints = 80
+// maxTablePoints es el tope de puntos por request a los endpoints de OSRM.
+// El Table API tiene costo cuadrático en N, así que conviene quedar bajo;
+// el Route API solo necesita estar bajo el límite de URL del proxy (~8KB ≈
+// 200 coords). 150 alcanza para cubrir el caso de última milla con bordeado
+// denso de varias zonas sin que el matrix de scheduling explote.
+const maxTablePoints = 150
 
 // NewClient devuelve un cliente listo para usar. Si baseURL está vacía o
 // solo contiene whitespace, devuelve nil — ese es el modo "OSRM deshabilitado".
@@ -56,6 +58,85 @@ type tableResponse struct {
 	Message   string      `json:"message,omitempty"`
 	Durations [][]float64 `json:"durations"`
 	Distances [][]float64 `json:"distances"`
+}
+
+// routeResponse modela la respuesta del endpoint /route/v1/driving con
+// geometries=geojson — devuelve coords [lng, lat] a lo largo del trayecto.
+type routeResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message,omitempty"`
+	Routes  []struct {
+		Geometry struct {
+			Coordinates [][]float64 `json:"coordinates"`
+		} `json:"geometry"`
+		Distance float64 `json:"distance"` // metros
+		Duration float64 `json:"duration"` // segundos
+	} `json:"routes"`
+}
+
+// Route consulta el OSRM Route API y devuelve la geometría del trayecto (puntos
+// lat/lng a lo largo de las calles) que pasa por los waypoints indicados en
+// orden. Útil para dibujar la polyline real de una ruta en el mapa, en lugar
+// de líneas rectas Haversine.
+//
+// Las coords intermedias se tratan como via-points: OSRM rutea por ellas en
+// orden, snappeando cada una a la calle más cercana. Esto permite "forzar"
+// la ruta a pasar por puntos específicos (por ejemplo, para bordear una zona
+// peligrosa pasando vértices del polígono).
+func (c *Client) Route(coords []Coord) ([]Coord, error) {
+	if c == nil {
+		return nil, errors.New("osrm: client not configured")
+	}
+	if len(coords) < 2 {
+		return nil, errors.New("osrm: need at least 2 coordinates")
+	}
+	if len(coords) > maxTablePoints {
+		return nil, fmt.Errorf("osrm: too many points (%d > %d)", len(coords), maxTablePoints)
+	}
+
+	parts := make([]string, len(coords))
+	for i, c := range coords {
+		parts[i] = strconv.FormatFloat(c.Lon, 'f', 6, 64) + "," + strconv.FormatFloat(c.Lat, 'f', 6, 64)
+	}
+	apiURL := c.baseURL + "/route/v1/driving/" + strings.Join(parts, ";") + "?overview=full&geometries=geojson"
+
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("osrm: build request: %w", err)
+	}
+	req.Header.Set("User-Agent", "LogiTrack/1.0")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("osrm: do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("osrm: unexpected status %d", resp.StatusCode)
+	}
+
+	var body routeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("osrm: decode response: %w", err)
+	}
+	if body.Code != "Ok" {
+		return nil, fmt.Errorf("osrm: code=%s message=%s", body.Code, body.Message)
+	}
+	if len(body.Routes) == 0 {
+		return nil, errors.New("osrm: no routes returned")
+	}
+
+	raw := body.Routes[0].Geometry.Coordinates
+	out := make([]Coord, len(raw))
+	for i, c := range raw {
+		// GeoJSON: [lng, lat]
+		if len(c) < 2 {
+			continue
+		}
+		out[i] = Coord{Lat: c[1], Lon: c[0]}
+	}
+	return out, nil
 }
 
 // DurationMatrix consulta el OSRM Table API y devuelve dos matrices NxN:

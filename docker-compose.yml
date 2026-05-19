@@ -34,6 +34,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - path: ./logitrack_core/.env
+        required: false
     environment:
       DB_HOST: db
       DB_PORT: 5432

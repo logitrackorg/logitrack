@@ -12,6 +12,13 @@ const (
 	RoleDriver     Role = "driver"
 )
 
+type DriverType string
+
+const (
+	DriverTypeLastMile    DriverType = "ultima_milla"
+	DriverTypeInterBranch DriverType = "intersucursal"
+)
+
 type UserStatus string
 
 const (
@@ -20,17 +27,18 @@ const (
 )
 
 type User struct {
-	ID        string     `json:"id"`
-	Username  string     `json:"username"`
-	FirstName string     `json:"first_name,omitempty"`
-	LastName  string     `json:"last_name,omitempty"`
-	Email     string     `json:"email,omitempty"`
-	Role      Role       `json:"role"`
-	BranchID  string     `json:"branch_id,omitempty"`
-	Status    UserStatus `json:"status"`
-	Address   *Address   `json:"address,omitempty"`
-	UpdatedBy string     `json:"updated_by,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	ID         string     `json:"id"`
+	Username   string     `json:"username"`
+	FirstName  string     `json:"first_name,omitempty"`
+	LastName   string     `json:"last_name,omitempty"`
+	Email      string     `json:"email,omitempty"`
+	Role       Role       `json:"role"`
+	BranchID   string     `json:"branch_id,omitempty"`
+	Status     UserStatus `json:"status"`
+	Address    *Address   `json:"address,omitempty"`
+	UpdatedBy  string     `json:"updated_by,omitempty"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+	DriverType DriverType `json:"driver_type,omitempty"`
 }
 
 type UserProfileResponse struct {

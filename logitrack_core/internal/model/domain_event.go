@@ -25,6 +25,12 @@ const (
 	EventShipmentCancelled   = "shipment_cancelled"
 	EventIncidentReported    = "incident_reported"
 	EventShipmentETAExtended = "shipment_eta_extended"
+	EventDraftExpired        = "draft_expired"
+	EventDraftPIIPurged      = "draft_pii_purged"
+	EventDraftPIISuppressed  = "draft_pii_suppressed"
+	EventPaymentRequested    = "payment_requested"
+	EventPaymentConfirmed    = "payment_confirmed"
+	EventReturnedToDraft     = "returned_to_draft"
 )
 
 // ReturnETAExtraDays is added to the estimated_delivery_at when a shipment
@@ -78,6 +84,29 @@ type ShipmentCancelledPayload struct {
 type IncidentReportedPayload struct {
 	IncidentType IncidentType
 	Description  string
+}
+
+type PaymentRequestedPayload struct {
+	PaymentID      string
+	MPPreferenceID string
+	InitPoint      string
+	Amount         float64
+	Currency       string
+}
+
+type PaymentConfirmedPayload struct {
+	PaymentID           string
+	MPPaymentID         string
+	OldTrackingID       string
+	NewTrackingID       string
+	Amount              float64
+	EstimatedDeliveryAt *time.Time
+	Prediction          *PriorityPrediction
+}
+
+type ReturnedToDraftPayload struct {
+	PaymentID string
+	Reason    string
 }
 
 // ShipmentETAExtendedPayload registra una extensión de la fecha estimada de entrega.

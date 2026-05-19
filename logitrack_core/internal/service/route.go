@@ -85,20 +85,25 @@ func (s *RouteService) AddShipmentToDriverRoute(driverID, trackingID string, dat
 		return err
 	}
 	if route.Status == model.RouteStatusActive || route.Status == model.RouteStatusFinished {
-		// Si la ruta está activa o finalizada, verificar si el chofer tiene envíos activos.
-		// Una ruta "activa" sin envíos pendientes (out_for_delivery / delivery_failed) significa
-		// que el chofer ya terminó su lote aunque no se haya auto-cerrado la ruta todavía.
-		// Si no se puede buscar un envío, se trata como pendiente (conservador).
+		if route.HasShipment(trackingID) {
+			return nil
+		}
+		// Si no hay envíos activos pendientes, resetear la ruta para una nueva tanda.
+		// Si los hay, igualmente agregar el nuevo envío (el planificador puede asignar
+		// una segunda tanda al mismo chofer mientras aún tiene entregas en curso).
+		hasActivePending := false
 		for _, sid := range route.ShipmentIDs {
 			sh, err := s.shipmentRepo.GetByTrackingID(sid)
 			if err != nil || isDriverActiveStatus(sh.Status) {
-				return fmt.Errorf("la ruta ya está iniciada, no se pueden agregar nuevos envíos")
+				hasActivePending = true
+				break
 			}
 		}
-		// Sin envíos pendientes: purgar y reabrir como pending para la nueva tanda.
-		route.ShipmentIDs = route.ShipmentIDs[:0]
-		route.Status = model.RouteStatusPending
-		route.StartedAt = nil
+		if !hasActivePending {
+			route.ShipmentIDs = route.ShipmentIDs[:0]
+			route.Status = model.RouteStatusPending
+			route.StartedAt = nil
+		}
 	}
 	if route.HasShipment(trackingID) {
 		return nil

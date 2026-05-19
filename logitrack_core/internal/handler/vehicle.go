@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	qrcode "github.com/skip2/go-qrcode"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
@@ -20,6 +22,7 @@ type VehicleHandler struct {
 	repo        repository.VehicleRepository
 	shipmentSvc *service.ShipmentService
 	branchRepo  repository.BranchRepository
+	tripSvc     *service.InterBranchTripService
 }
 
 // effectiveWeight returns the shipment's weight. Weight is now locked at creation
@@ -30,6 +33,10 @@ func effectiveWeight(s model.Shipment) float64 {
 
 func NewVehicleHandler(repo repository.VehicleRepository, shipmentSvc *service.ShipmentService, branchRepo repository.BranchRepository) *VehicleHandler {
 	return &VehicleHandler{repo: repo, shipmentSvc: shipmentSvc, branchRepo: branchRepo}
+}
+
+func (h *VehicleHandler) SetTripService(svc *service.InterBranchTripService) {
+	h.tripSvc = svc
 }
 
 // List returns all vehicles in the fleet.
@@ -95,6 +102,7 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 	vehicle := model.Vehicle{
 		LicensePlate:   req.LicensePlate,
 		Type:           req.Type,
+		Mode:           req.Mode,
 		CapacityKg:     req.CapacityKg,
 		Status:         model.VehicleStatusAvailable,
 		AssignedBranch: &branchID,
@@ -340,11 +348,21 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 		return
 	}
 
-	// Transition shipment to loaded
+	// Detect last-mile delivery: vehicle is ultima_milla AND shipment is at its final destination
+	isLastMileDelivery := vehicle.Mode == model.VehicleModeLastMile &&
+		shipment.FinalBranchID != "" &&
+		shipment.CurrentLocation == shipment.FinalBranchID
+
+	// Transition shipment: out_for_delivery for last-mile at destination, loaded otherwise
+	targetStatus := model.StatusLoaded
+	if isLastMileDelivery {
+		targetStatus = model.StatusOutForDelivery
+	}
 	statusReq := model.UpdateStatusRequest{
-		Status:    model.StatusLoaded,
-		ChangedBy: user.Username,
-		Notes:     "Vehicle assigned: " + vehicle.LicensePlate,
+		Status:           targetStatus,
+		ChangedBy:        user.Username,
+		Notes:            "Vehicle assigned: " + vehicle.LicensePlate,
+		SystemTransition: isLastMileDelivery,
 	}
 	if _, err := h.shipmentSvc.UpdateStatus(req.TrackingID, statusReq); err != nil {
 		// Log but don't fail — assignment succeeded
@@ -352,10 +370,30 @@ func (h *VehicleHandler) AssignToShipment(c *gin.Context) {
 	}
 
 	// If vehicle was disponible, move it to en_carga
-	if vehicle.Status == model.VehicleStatusAvailable {
+	wasAvailable := vehicle.Status == model.VehicleStatusAvailable
+	if wasAvailable {
 		if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusLoading, user.Username); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
 			return
+		}
+	}
+
+	// For last-mile at destination: create or update the InterBranchTrip so the driver can claim it
+	if isLastMileDelivery && h.tripSvc != nil {
+		branchID := *vehicle.AssignedBranch
+		existingTrip, hasTrip := h.tripSvc.GetActiveByVehicle(vehicle.ID)
+		if !hasTrip {
+			_, _ = h.tripSvc.Create(service.CreateInterBranchTripCmd{
+				Kind:           model.TripKindLastMile,
+				VehicleID:      vehicle.ID,
+				LicensePlate:   vehicle.LicensePlate,
+				OriginBranchID: branchID,
+				ShipmentIDs:    []string{req.TrackingID},
+				TotalWeightKg:  effectiveWeight(shipment),
+				CreatedBy:      user.Username,
+			})
+		} else {
+			_ = h.tripSvc.AddShipmentToTrip(existingTrip.ID, req.TrackingID)
 		}
 	}
 
@@ -385,13 +423,20 @@ func (h *VehicleHandler) GetByShipment(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"error": "No hay un vehículo asignado a este envío"})
 }
 
+
 // StartTripRequest is the request body for starting a trip.
 type StartTripRequest struct {
 	DestinationBranch string `json:"destination_branch" binding:"required"`
 }
 
+// AssignBranchRequest is the request body for assigning a vehicle to a branch.
+type AssignBranchRequest struct {
+	BranchID string `json:"branch_id" binding:"required"`
+}
+
 // StartTrip initiates a trip: sets destination branch, transitions vehicle to en_transito,
 // and moves all assigned shipments to in_transit.
+// Kept as admin/supervisor fallback; the normal flow goes through the inter-branch driver.
 func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	plate := c.Param("plate")
 	if plate == "" {
@@ -432,39 +477,34 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 		return
 	}
 
-	// Validate destination branch is different from current branch
 	if vehicle.AssignedBranch != nil && *vehicle.AssignedBranch == req.DestinationBranch {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "El branch de destino debe ser diferente al branch actual"})
 		return
 	}
 
-	// Validate destination branch exists and get its city for shipment location
 	destBranch, found := h.branchRepo.GetByID(req.DestinationBranch)
 	if !found {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Branch de destino no encontrado: " + req.DestinationBranch})
 		return
 	}
 
-	// Set destination branch
 	destID := req.DestinationBranch
 	if err := h.repo.SetDestinationBranch(vehicle.ID, &destID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al establecer el branch de destino"})
 		return
 	}
 
-	// Update vehicle status to en_transito
 	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusInTransit, startUser.Username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
 		return
 	}
 
-	// Transition all assigned shipments to in_transit
 	for _, tid := range vehicle.AssignedShipments {
 		statusReq := model.UpdateStatusRequest{
 			Status:    model.StatusInTransit,
 			ChangedBy: startUser.Username,
 			Location:  destBranch.Address.City,
-			Notes:     "Viaje iniciado. Vehículo: " + vehicle.LicensePlate,
+			Notes:     "Viaje iniciado (manual). Vehículo: " + vehicle.LicensePlate,
 		}
 		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
 			_ = err
@@ -477,14 +517,94 @@ func (h *VehicleHandler) StartTrip(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// AssignBranchRequest is the request body for assigning a vehicle to a branch.
-type AssignBranchRequest struct {
-	BranchID string `json:"branch_id" binding:"required"`
-}
+// EndTrip ends a trip: vehicle moves to the destination branch, becomes disponible,
+// all assigned shipments transition to at_hub.
+// Kept as admin/supervisor fallback; the normal flow ends via QR scan by the destination operator.
+func (h *VehicleHandler) EndTrip(c *gin.Context) {
+	plate := c.Param("plate")
+	if plate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "La patente es obligatoria"})
+		return
+	}
 
-// EndTripRequest is the request body for ending a trip.
-type EndTripRequest struct {
-	Notes string `json:"notes,omitempty"`
+	vehicle, found := h.repo.GetByLicensePlate(plate)
+	if !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
+		return
+	}
+
+	if vehicle.Status != model.VehicleStatusInTransit {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":          "Solo se puede finalizar el viaje de vehículos en tránsito",
+			"current_status": getStatusLabel(vehicle.Status),
+		})
+		return
+	}
+
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if (user.Role == model.RoleSupervisor || user.Role == model.RoleOperator) && user.BranchID != "" {
+		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés finalizar viajes de vehículos con destino a tu sucursal"})
+			return
+		}
+	}
+
+	var destCity string
+	if vehicle.DestinationBranch != nil {
+		destBranch, found := h.branchRepo.GetByID(*vehicle.DestinationBranch)
+		if found {
+			destCity = destBranch.Address.City
+		}
+	}
+
+	terminalStatuses := map[model.Status]bool{
+		model.StatusDelivered: true, model.StatusReturned: true,
+		model.StatusCancelled: true, model.StatusLost: true, model.StatusDestroyed: true,
+	}
+	for _, tid := range vehicle.AssignedShipments {
+		if s, err := h.shipmentSvc.GetByTrackingID(tid); err == nil && terminalStatuses[s.Status] {
+			continue
+		}
+		statusReq := model.UpdateStatusRequest{
+			Status:    model.StatusAtHub,
+			ChangedBy: user.Username,
+			Notes:     "Viaje finalizado (manual). Vehículo: " + vehicle.LicensePlate,
+		}
+		if destCity != "" {
+			statusReq.Location = destCity
+		}
+		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
+			_ = err
+		}
+	}
+
+	if vehicle.DestinationBranch != nil {
+		destID := *vehicle.DestinationBranch
+		if err := h.repo.AssignBranch(vehicle.ID, &destID); err != nil {
+			_ = err
+		}
+		if destBranch, found := h.branchRepo.GetByID(destID); found && destBranch.Latitude != nil {
+			_ = h.repo.UpdateLocation(vehicle.ID, *destBranch.Latitude, *destBranch.Longitude)
+		}
+	}
+
+	if err := h.repo.ClearShipments(vehicle.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al liberar los envíos: " + err.Error()})
+		return
+	}
+	if err := h.repo.SetDestinationBranch(vehicle.ID, nil); err != nil {
+		_ = err
+	}
+
+	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
+		return
+	}
+
+	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+	resp := buildVehicleResponse(updatedVehicle)
+	resp["message"] = "Viaje finalizado. El vehículo está disponible en el branch de destino."
+	c.JSON(http.StatusOK, resp)
 }
 
 // AssignBranch assigns a vehicle to a branch (kept for compatibility; only available vehicles).
@@ -616,96 +736,30 @@ func (h *VehicleHandler) UnassignShipment(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// EndTrip ends a trip: vehicle moves to the destination branch, becomes disponible,
-// all assigned shipments transition to at_branch.
-func (h *VehicleHandler) EndTrip(c *gin.Context) {
+// GetVehicleQR returns the QR code for a vehicle (supervisor/manager/admin).
+func (h *VehicleHandler) GetVehicleQR(c *gin.Context) {
 	plate := c.Param("plate")
-	if plate == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "La patente es obligatoria"})
+	v, ok := h.repo.GetByLicensePlate(plate)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no encontrado"})
 		return
 	}
-
-	vehicle, found := h.repo.GetByLicensePlate(plate)
-	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Vehículo no registrado"})
+	if v.QRToken == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "El vehículo no tiene QR generado"})
 		return
 	}
-
-	if vehicle.Status != model.VehicleStatusInTransit {
-		c.JSON(http.StatusConflict, gin.H{
-			"error":          "Solo se puede finalizar el viaje de vehículos en tránsito",
-			"current_status": getStatusLabel(vehicle.Status),
-		})
+	qrPNG, err := qrcode.Encode(v.QRToken, qrcode.Medium, 512)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al generar el QR"})
 		return
 	}
-
-	user := c.MustGet(middleware.UserKey).(model.User)
-	if (user.Role == model.RoleSupervisor || user.Role == model.RoleOperator) && user.BranchID != "" {
-		if vehicle.DestinationBranch == nil || *vehicle.DestinationBranch != user.BranchID {
-			c.JSON(http.StatusForbidden, gin.H{"error": "solo podés finalizar viajes de vehículos con destino a tu sucursal"})
-			return
-		}
-	}
-
-	// Determine destination city for shipment location
-	var destCity string
-	if vehicle.DestinationBranch != nil {
-		destBranch, found := h.branchRepo.GetByID(*vehicle.DestinationBranch)
-		if found {
-			destCity = destBranch.Address.City
-		}
-	}
-
-	// Transition all assigned shipments to at_hub, skipping terminal ones.
-	terminalStatuses := map[model.Status]bool{
-		model.StatusDelivered: true, model.StatusReturned: true,
-		model.StatusCancelled: true, model.StatusLost: true, model.StatusDestroyed: true,
-	}
-	for _, tid := range vehicle.AssignedShipments {
-		if s, err := h.shipmentSvc.GetByTrackingID(tid); err == nil && terminalStatuses[s.Status] {
-			continue
-		}
-		statusReq := model.UpdateStatusRequest{
-			Status:    model.StatusAtHub,
-			ChangedBy: user.Username,
-			Notes:     "Viaje finalizado. Vehículo: " + vehicle.LicensePlate,
-		}
-		if destCity != "" {
-			statusReq.Location = destCity
-		}
-		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
-			_ = err
-		}
-	}
-
-	// Vehicle arrives at destination — set assigned_branch = destination_branch and update location
-	if vehicle.DestinationBranch != nil {
-		destID := *vehicle.DestinationBranch
-		if err := h.repo.AssignBranch(vehicle.ID, &destID); err != nil {
-			_ = err
-		}
-		if destBranch, found := h.branchRepo.GetByID(destID); found && destBranch.Latitude != nil {
-			_ = h.repo.UpdateLocation(vehicle.ID, *destBranch.Latitude, *destBranch.Longitude)
-		}
-	}
-
-	// Clear shipments and destination
-	if err := h.repo.ClearShipments(vehicle.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al liberar los envíos: " + err.Error()})
-		return
-	}
-	if err := h.repo.SetDestinationBranch(vehicle.ID, nil); err != nil {
-		_ = err
-	}
-
-	// Set vehicle to disponible
-	if err := h.repo.UpdateStatusByUser(vehicle.ID, model.VehicleStatusAvailable, user.Username); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar el estado del vehículo"})
-		return
-	}
-
-	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
-	resp := buildVehicleResponse(updatedVehicle)
-	resp["message"] = "Viaje finalizado. El vehículo está disponible en el branch de destino."
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, gin.H{
+		"vehicle_id":     v.ID,
+		"license_plate":  v.LicensePlate,
+		"qr_token":       v.QRToken,
+		"qr_png_base64":  base64.StdEncoding.EncodeToString(qrPNG),
+	})
 }
+
+
+
