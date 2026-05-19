@@ -12,8 +12,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
-import { KssCheckIn } from "../components/KssCheckIn";
-import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -36,21 +34,6 @@ type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-
-  // La jornada arranca a las 08:00. La clave incluye driver_id + fecha de jornada
-  // para que cada chofer tenga su propio registro y no colisionen en dispositivos compartidos.
-  const jornadaKey = (() => {
-    if (!user) return null;
-    const now = new Date();
-    // Si son antes de las 8am, la jornada vigente es la del día anterior
-    const jornada = new Date(now);
-    if (now.getHours() < 8) jornada.setDate(jornada.getDate() - 1);
-    return `kss_checkin_${user.id}_${jornada.toDateString()}`;
-  })();
-
-  // null = verificando contra backend, true = hecho, false = pendiente
-  const [checkInDone, setCheckInDone] = useState<boolean | null>(null);
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
@@ -67,31 +50,6 @@ export function DriverRoute() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
-
-  // Verifica contra el backend si el check-in ya fue completado hoy.
-  // localStorage se usa solo como cache optimista; el backend es fuente de verdad.
-  // Esto garantiza que un reset de base de datos invalide el estado persistido en el browser.
-  useEffect(() => {
-    if (!jornadaKey) {
-      setCheckInDone(true);
-      return;
-    }
-    driverApi.getTodayCheckin()
-      .then(() => {
-        localStorage.setItem(jornadaKey, "done");
-        setCheckInDone(true);
-      })
-      .catch((err: { response?: { status?: number } }) => {
-        if (err?.response?.status === 404) {
-          // El backend no tiene registro → limpiar cache stale y mostrar modal.
-          localStorage.removeItem(jornadaKey);
-          setCheckInDone(false);
-        } else {
-          // Error de red o 5xx → confiar en localStorage como fallback.
-          setCheckInDone(localStorage.getItem(jornadaKey) === "done");
-        }
-      });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = () =>
     driverApi
@@ -173,21 +131,6 @@ export function DriverRoute() {
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
-
-  // Mientras se verifica contra el backend, mostrar skeleton para evitar flash del modal.
-  if (checkInDone === null) return <RouteSkeleton />;
-
-  if (!checkInDone && user && jornadaKey) {
-    return (
-      <KssCheckIn
-        driverId={user.id}
-        onDone={() => {
-          localStorage.setItem(jornadaKey, "done");
-          setCheckInDone(true);
-        }}
-      />
-    );
-  }
 
   if (loading) return <RouteSkeleton />;
   if (noRoute) return <Navigate to="/driver/scan" replace />;
