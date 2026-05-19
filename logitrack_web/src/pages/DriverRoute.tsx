@@ -11,7 +11,7 @@ import {
   Truck,
   XCircle,
 } from "lucide-react";
-import { driverApi, type DriverRouteResponse } from "../api/driver";
+import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -449,6 +449,52 @@ function ShipmentCard({
   onFailed: () => void;
   onOpen: () => void;
 }) {
+  // US4: Tactile event tracking — refs to avoid re-renders.
+  // renderTimeRef is set in an effect (not the initializer) to satisfy the
+  // react-hooks/purity rule: Date.now() must not be called during render.
+  const renderTimeRef = useRef<number>(0);
+  const misfireCountRef = useRef<number>(0);
+  useEffect(() => {
+    renderTimeRef.current = Date.now();
+  }, []); // runs once after mount — records when the card becomes visible
+
+  /** Fire async touch event to backend without blocking the UI. */
+  const fireTouchEvent = (action: TouchEventPayload["action"]) => {
+    driverApi.submitTouchEvent({
+      tracking_id: shipment.tracking_id,
+      action,
+      reaction_time_ms: Date.now() - renderTimeRef.current,
+      misfires: misfireCountRef.current,
+    }).catch(() => {}); // silent failure — never block delivery workflow
+  };
+
+  /**
+   * Detect misfires: pointer down on the action area that doesn't land on
+   * either "Entregar" or "No entregado". Uses data-action attributes set
+   * on the buttons themselves.
+   */
+  const handleActionAreaPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (
+      !target.closest('[data-action="deliver"]') &&
+      !target.closest('[data-action="failed"]')
+    ) {
+      misfireCountRef.current++;
+    }
+  };
+
+  const handleDeliverClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fireTouchEvent("entregado");
+    onDeliver();
+  };
+
+  const handleFailedClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fireTouchEvent("no_entregado");
+    onFailed();
+  };
+
   const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
   const isCompleted = shipment.status === "delivered" || shipment.status === "delivery_failed";
   const isFailed = shipment.status === "delivery_failed";
@@ -551,16 +597,22 @@ function ShipmentCard({
           </div>
 
           {canAct && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            /* US4: onPointerDown on the action container detects misfires */
+            <div
+              className="grid grid-cols-2 gap-2 mt-2"
+              onPointerDown={handleActionAreaPointerDown}
+            >
               <button
-                onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                data-action="deliver"
+                onClick={handleDeliverClick}
                 className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Entregar
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); onFailed(); }}
+                data-action="failed"
+                onClick={handleFailedClick}
                 className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
                 <XCircle className="w-4 h-4" />

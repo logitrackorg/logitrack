@@ -132,6 +132,12 @@ func main() {
 	routingCfgSvc := service.NewRoutingConfigService(routingCfgRepo)
 	routingCfgHandler := handler.NewRoutingConfigHandler(routingCfgSvc)
 
+	fatigueConfigRepo := repository.NewFatigueConfigRepository()
+	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
+	auditLogRepo := repository.NewAuditLogRepository()
+	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc, auditLogRepo)
+	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
+
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
@@ -159,7 +165,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -315,11 +321,19 @@ func main() {
 	// Stats / dashboard — supervisor, manager
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
+	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 
 	// Driver route — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
+	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
+	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
+	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent) // US4: tactile events
+	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
+	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
@@ -362,6 +376,12 @@ func main() {
 	protected.PATCH("/admin/clock", adminOnly, clockHandler.Set)
 	protected.DELETE("/admin/clock", adminOnly, clockHandler.Clear)
 
+	// Fatigue model configuration — admin only, persisted to data/fatigue_config.json.
+	protected.GET("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Get)
+	protected.PUT("/admin/fatigue-config", adminOnly, fatigueConfigHandler.Update)
+	protected.POST("/admin/fatigue-config/reset-checkins", adminOnly, fatigueConfigHandler.ResetCheckins)
+	// Audit logs — strictly GET only. No DELETE/PUT (immutability enforced, AC2).
+	protected.GET("/admin/audit-logs", adminOnly, fatigueConfigHandler.ListAuditLogs)
 	// Draft lifecycle / compliance (Ley 25.326) — admin only
 	protected.GET("/admin/compliance/audit", adminOnly, draftLifecycleHandler.GetAuditLog)
 	protected.GET("/admin/compliance/drafts", adminOnly, draftLifecycleHandler.FindByDNI)

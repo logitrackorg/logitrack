@@ -47,6 +47,8 @@ services:
       FRONTEND_URL: http://localhost:5173
     ports:
       - "8080:8080"
+    volumes:
+      - logitrack_checkins:/app/data
 
   frontend:
     build:
@@ -60,3 +62,4 @@ services:
 
 volumes:
   logitrack_pgdata:
+  logitrack_checkins:

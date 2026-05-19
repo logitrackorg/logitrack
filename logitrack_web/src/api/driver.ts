@@ -58,7 +58,75 @@ export interface DriverRouteResponse {
 }
 
 
+export interface CheckInPayload {
+  driver_id: string;
+  horas_sueno: number;
+  kss_level: number;
+}
+
+export interface VoiceMetrics {
+  pitch_mean: number;
+  pitch_range: number;
+  energy_rms: number;
+  speech_rate: number;
+  pause_ratio: number;
+}
+
+export interface VoiceUploadResult {
+  ok: boolean;
+  voice_metrics: VoiceMetrics;
+  drift_score: number | null; // null on first upload (no baseline yet)
+  baseline: VoiceMetrics | null;
+}
+
+// US4: Tactile event capture
+export interface TouchEventPayload {
+  tracking_id: string;
+  action: "entregado" | "no_entregado";
+  reaction_time_ms: number;
+  misfires: number;
+}
+
+// US6: PVT (Psychomotor Vigilance Task)
+export interface PVTPayload {
+  latencia_promedio_ms: number;
+  aciertos: number;
+  errores: number;
+}
+
+export interface PVTResult {
+  latencia_promedio_ms: number;
+  aciertos: number;
+  errores: number;
+  recorded_at: string;
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
+  getTodayCheckin: () =>
+    api.get<{ ok: boolean }>("/driver/checkin/today").then((r) => r.data),
+  submitCheckin: (payload: CheckInPayload) =>
+    api.post("/driver/checkin", payload).then((r) => r.data),
+  /** Registra que el chofer eligió saltear el check-in de fatiga.
+   *  El gate queda suprimido 3 horas; el salto queda en el historial. */
+  skipCheckin: () =>
+    api.post<{ ok: boolean }>("/driver/checkin/skip").then((r) => r.data),
+  /** Registra en segundo plano un evento táctil de entrega (US4).
+   *  Se llama de forma asíncrona — la UI no espera la respuesta. */
+  submitTouchEvent: (payload: TouchEventPayload) =>
+    api.post<{ ok: boolean }>("/driver/touch-events", payload).then((r) => r.data),
+  /** Envía el resultado del minijuego PVT (US6). Opcional — el backend acepta
+   *  la llamada incluso si no hay un KSS registrado en el día. */
+  submitPVT: (payload: PVTPayload) =>
+    api.post<{ ok: boolean; pvt: PVTResult }>("/driver/pvt-test", payload).then((r) => r.data),
+  getControlPhrase: () =>
+    api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
+  uploadVoice: (audioBlob: Blob) => {
+    const form = new FormData();
+    form.append("audio", audioBlob, "checkin.webm");
+    return api.post<VoiceUploadResult>("/driver/voice-upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
 };
