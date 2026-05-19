@@ -15,7 +15,8 @@
       "Bash(go test *)",
       "Bash(npm run *)",
       "Bash(go build *)",
-      "Bash(ssh *)"
+      "Bash(ssh *)",
+      "Skill(bug-investigator)"
     ]
   }
 }

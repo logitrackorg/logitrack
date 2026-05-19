@@ -123,9 +123,11 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
+	notifSvc     *NotificationService
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService) { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService) { s.notifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -803,6 +805,15 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	})
 	if err != nil {
 		return model.Shipment{}, err
+	}
+
+	// Fire notification for shipment received at branch (non-blocking)
+	if s.notifSvc != nil && (targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub) {
+		branchID := resolvedLocation
+		if branchID == "" {
+			branchID = updated.CurrentLocation
+		}
+		go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return

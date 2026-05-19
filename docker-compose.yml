@@ -34,6 +34,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - path: ./logitrack_core/.env
+        required: false
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -41,7 +44,7 @@ services:
       DB_PASSWORD: localpass
       DB_NAME: logitrack
       DB_SSLMODE: disable
-      FRONTEND_URL: http://localhost:5173  
+      FRONTEND_URL: http://localhost:5173
     ports:
       - "8080:8080"
 

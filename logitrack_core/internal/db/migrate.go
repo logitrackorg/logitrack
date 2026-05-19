@@ -342,6 +342,20 @@ func RunMigrations(db *sql.DB) error {
 			received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 			raw_payload   JSONB NOT NULL
 		);
+
+		-- Notification center (US: Centro de notificaciones in-app + Envío recibido en sucursal)
+		CREATE TABLE IF NOT EXISTS notifications (
+			id          TEXT PRIMARY KEY,
+			user_id     TEXT NOT NULL,
+			type        TEXT NOT NULL,
+			title       TEXT NOT NULL,
+			body        TEXT NOT NULL,
+			resource_id TEXT NOT NULL DEFAULT '',
+			read_at     TIMESTAMPTZ,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+		CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
 	`)
 	return err
 }

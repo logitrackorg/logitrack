@@ -3,6 +3,8 @@ import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { NotificationBell } from "./components/NotificationBell";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { Dashboard } from "./pages/Dashboard";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
@@ -104,6 +106,7 @@ function Nav() {
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
+        <NotificationBell />
         {isMobile ? (
           <NavLink to="/profile" style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600, textDecoration: "none" }}>{user.username}</NavLink>
         ) : (
@@ -340,6 +343,12 @@ function AppRoutes() {
           <Route path="/profile" element={
             <ProtectedRoute>
               <UserProfile />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/notifications" element={
+            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+              <NotificationsPage />
             </ProtectedRoute>
           } />
 
