@@ -82,7 +82,7 @@ export function KssCheckIn({ driverId, onDone }: Props) {
 
   // Render PVT step — al terminar (con o sin registro) llama onDone.
   if (step === "pvt") {
-    return <PVTCheckIn driverId={driverId} onDone={onDone} />;
+    return <PVTCheckIn onDone={onDone} />;
   }
 
   return (

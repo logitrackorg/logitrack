@@ -18,6 +18,8 @@ export function VoiceCheckIn({ onDone }: Props) {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks whether chunksRef has content so the JSX doesn't access the ref during render.
+  const [hasChunks, setHasChunks] = useState(false);
 
   // Fetch the personalised control phrase on mount.
   useEffect(() => {
@@ -45,13 +47,17 @@ export function VoiceCheckIn({ onDone }: Props) {
   const startRecording = async () => {
     setErrorMsg("");
     chunksRef.current = [];
+    setHasChunks(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       mediaRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          setHasChunks(true);
+        }
       };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
@@ -162,7 +168,7 @@ export function VoiceCheckIn({ onDone }: Props) {
                 </button>
               ) : null}
 
-              {state === "recorded" && chunksRef.current.length > 0 && (
+              {state === "recorded" && hasChunks && (
                 <button
                   onClick={handleUpload}
                   className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"

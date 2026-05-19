@@ -533,9 +533,14 @@ function ShipmentCard({
   onFailed: () => void;
   onOpen: () => void;
 }) {
-  // US4: Tactile event tracking — refs to avoid re-renders
-  const renderTimeRef = useRef<number>(Date.now());
+  // US4: Tactile event tracking — refs to avoid re-renders.
+  // renderTimeRef is set in an effect (not the initializer) to satisfy the
+  // react-hooks/purity rule: Date.now() must not be called during render.
+  const renderTimeRef = useRef<number>(0);
   const misfireCountRef = useRef<number>(0);
+  useEffect(() => {
+    renderTimeRef.current = Date.now();
+  }, []); // runs once after mount — records when the card becomes visible
 
   /** Fire async touch event to backend without blocking the UI. */
   const fireTouchEvent = (action: TouchEventPayload["action"]) => {

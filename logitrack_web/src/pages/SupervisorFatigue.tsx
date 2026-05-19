@@ -295,9 +295,13 @@ export function SupervisorFatigue() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
 
-  // Usamos ref para que el intervalo de polling siempre use el branch actual
+  // Sync the ref with selectedBranch so the polling interval always reads the
+  // latest value without stale-closure issues. Writing to a ref must happen in
+  // an effect, not directly during render (react-hooks/refs rule).
   const branchRef = useRef(selectedBranch);
-  branchRef.current = selectedBranch;
+  useEffect(() => {
+    branchRef.current = selectedBranch;
+  });
 
   const load = useCallback(async (showSpinner = false) => {
     if (showSpinner) setRefreshing(true);

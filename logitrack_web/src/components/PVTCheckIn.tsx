@@ -36,7 +36,6 @@ function latencyInterpretation(avg: number): { text: string; colorClass: string 
 // ── interfaces ────────────────────────────────────────────────────────────────
 
 interface Props {
-  driverId: string; // recibido por consistencia con los otros pasos; el backend usa el token
   onDone: () => void;
 }
 
@@ -48,7 +47,7 @@ interface GameResults {
 
 // ── componente ────────────────────────────────────────────────────────────────
 
-export function PVTCheckIn({ driverId: _driverId, onDone }: Props) {
+export function PVTCheckIn({ onDone }: Props) {
   // Fase del componente
   const [phase, setPhase] = useState<"instructions" | "playing" | "results">("instructions");
 
