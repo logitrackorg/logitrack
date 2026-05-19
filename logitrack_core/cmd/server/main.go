@@ -19,6 +19,7 @@ import (
 	"github.com/logitrack/core/internal/scheduler"
 	"github.com/logitrack/core/internal/seed"
 	"github.com/logitrack/core/internal/service"
+	"github.com/logitrack/core/internal/sse"
 )
 
 func getenv(key, fallback string) string {
@@ -125,6 +126,13 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+
+	notifRepo := repository.NewPostgresNotificationRepository(database)
+	notifSvc := service.NewNotificationService(notifRepo)
+	notifHub := sse.NewHub()
+	notifSvc.SetHub(notifHub)
+	notifHandler := handler.NewNotificationHandler(notifSvc, notifHub)
+	shipmentSvc.SetNotificationService(notifSvc)
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -342,6 +350,14 @@ func main() {
 	protected.POST("/pricing/quote", shipmentWrite, pricingHandler.Quote)
 	protected.GET("/pricing/config", adminOnly, pricingHandler.GetConfig)
 	protected.PATCH("/pricing/config", adminOnly, pricingHandler.UpdateConfig)
+
+	// Notifications — standard routes on the protected group.
+	notifHandler.RegisterRoutes(protected, authenticated)
+	// SSE stream is registered on the public api group (not protected) so the
+	// group-level header-only Auth middleware doesn't block EventSource clients.
+	// sseAuth validates the token from ?token= query param as a fallback.
+	sseAuth := middleware.AuthWithQueryParam(authRepo)
+	notifHandler.RegisterStreamRoute(api, sseAuth)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
