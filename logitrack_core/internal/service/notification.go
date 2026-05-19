@@ -71,10 +71,15 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 
 	originCity := shipment.Sender.Address.City
 	destCity := shipment.Recipient.Address.City
-	label := statusLabel(toStatus)
 
-	title := "Envío recibido en sucursal"
-	body := shipment.TrackingID + " · " + originCity + " → " + destCity + " · " + label
+	var title string
+	switch toStatus {
+	case model.StatusAtOriginHub:
+		title = "Llegó a sucursal de origen"
+	default:
+		title = "Llegó a una sucursal intermedia"
+	}
+	body := shipment.TrackingID + " · " + originCity + " → " + destCity
 
 	now := clock.Now().UTC()
 	for _, u := range users {
@@ -112,7 +117,7 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 		return
 	}
 
-	title := "Envío llegó a tu sucursal destino"
+	title := "Llegó a su sucursal destino final"
 	body := fmt.Sprintf("%s · Desde %s · %.1f kg",
 		shipment.TrackingID, shipment.Sender.Address.City, shipment.WeightKg)
 	if shipment.Priority == "alta" {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, Package, CheckCheck, X, Building2, ChevronDown, ChevronUp } from "lucide-react";
+import { Bell, Package, CheckCheck, X, Building2, Warehouse, ChevronDown, ChevronUp } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -17,19 +17,38 @@ function relativeTime(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received") return <Package size={16} color="#60a5fa" />;
+  if (type === "shipment_received") return <Warehouse size={16} color="#60a5fa" />;
   if (type === "destination_arrival") return <Building2 size={16} color="#34d399" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
+function groupLabel(type: string, count: number): string {
+  if (type === "destination_arrival") return `Llegaron ${count} envíos a su sucursal destino final`;
+  if (type === "shipment_received")   return `Llegaron ${count} envíos a una sucursal intermedia`;
+  return `${count} notificaciones`;
+}
+
+function groupAccent(type: string): string {
+  if (type === "destination_arrival") return "#34d399";
+  if (type === "shipment_received")   return "#60a5fa";
+  return "#94a3b8";
+}
+
+function GroupIcon({ type }: { type: string }) {
+  if (type === "destination_arrival") return <Building2 size={16} color={groupAccent(type)} />;
+  if (type === "shipment_received")   return <Warehouse  size={16} color={groupAccent(type)} />;
+  return <Bell size={16} color="#94a3b8" />;
+}
+
 // ─── Grouping ────────────────────────────────────────────────────────────────
-// Consecutive destination_arrival notifications within a 5-minute window are
-// displayed as a collapsible group "Llegaron N envíos a tu sucursal".
+// Consecutive notifications of the same groupable type within a 5-minute window
+// collapse into an expandable card.
 
-const GROUP_WINDOW_MS = 5 * 60 * 1000;
+const GROUP_WINDOW_MS  = 5 * 60 * 1000;
+const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received"]);
 
-type SingleItem = { kind: "single"; n: Notification };
-type GroupItem  = { kind: "group";  items: Notification[]; key: string };
+type SingleItem  = { kind: "single"; n: Notification };
+type GroupItem   = { kind: "group";  items: Notification[]; key: string };
 type DisplayItem = SingleItem | GroupItem;
 
 function buildDisplayItems(notifications: Notification[]): DisplayItem[] {
@@ -37,18 +56,18 @@ function buildDisplayItems(notifications: Notification[]): DisplayItem[] {
   let i = 0;
   while (i < notifications.length) {
     const n = notifications[i];
-    if (n.type !== "destination_arrival") {
+    if (!GROUPABLE_TYPES.has(n.type)) {
       result.push({ kind: "single", n });
       i++;
       continue;
     }
-    // Collect consecutive destination_arrival within the window
+    // Collect same-type consecutive items within the window
     const anchor = new Date(n.created_at).getTime();
     const group: Notification[] = [n];
     let j = i + 1;
     while (
       j < notifications.length &&
-      notifications[j].type === "destination_arrival" &&
+      notifications[j].type === n.type &&
       Math.abs(new Date(notifications[j].created_at).getTime() - anchor) <= GROUP_WINDOW_MS
     ) {
       group.push(notifications[j]);
@@ -208,25 +227,28 @@ export function NotificationBell() {
   );
 
   const renderGroup = (items: Notification[], key: string) => {
-    const expanded    = expandedGroups.has(key);
-    const hasUnread   = items.some((n) => !n.read_at);
-    const newestRead  = !hasUnread;
-    const Chevron     = expanded ? ChevronUp : ChevronDown;
+    const type      = items[0].type;
+    const expanded  = expandedGroups.has(key);
+    const hasUnread = items.some((n) => !n.read_at);
+    const accent    = groupAccent(type);
+    const Chevron   = expanded ? ChevronUp : ChevronDown;
+    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)" : "rgba(96,165,250,0.07)";
+    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)" : "rgba(96,165,250,0.05)";
 
     return (
       <div key={key}>
         {/* Group header — click toggles expand, does NOT navigate or mark read */}
         <div
           onClick={() => toggleGroup(key)}
-          style={{ ...rowBase, cursor: "pointer", background: newestRead ? "transparent" : "rgba(52,211,153,0.07)" }}
+          style={{ ...rowBase, cursor: "pointer", background: hasUnread ? unreadBg : "transparent" }}
           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = newestRead ? "transparent" : "rgba(52,211,153,0.07)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = hasUnread ? unreadBg : "transparent")}
         >
-          <div style={{ marginTop: 2, flexShrink: 0 }}><Building2 size={16} color="#34d399" /></div>
+          <div style={{ marginTop: 2, flexShrink: 0 }}><GroupIcon type={type} /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: hasUnread ? 600 : 400 }}>
-                Llegaron {items.length} envíos a tu sucursal
+                {groupLabel(type, items.length)}
               </span>
               <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at)}</span>
             </div>
@@ -235,7 +257,7 @@ export function NotificationBell() {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {hasUnread && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#34d399", marginTop: 2 }} />}
+            {hasUnread && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, marginTop: 2 }} />}
             <Chevron size={14} color="#64748b" />
           </div>
         </div>
@@ -245,24 +267,16 @@ export function NotificationBell() {
           <div
             key={n.id}
             onClick={() => handleItemClick(n)}
-            style={{
-              ...rowBase,
-              cursor: "pointer",
-              paddingLeft: 36,
-              background: n.read_at ? "rgba(0,0,0,0.15)" : "rgba(52,211,153,0.05)",
-              borderBottom: "1px solid #152338",
-            }}
+            style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
             onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : "rgba(52,211,153,0.05)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {n.body}
-                </span>
-              </div>
+              <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                {n.body}
+              </span>
             </div>
-            {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#34d399", flexShrink: 0, marginTop: 4 }} />}
+            {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
           </div>
         ))}
       </div>
