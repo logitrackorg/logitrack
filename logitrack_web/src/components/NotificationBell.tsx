@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, Package, CheckCheck, X, Building2, Warehouse, ChevronDown, ChevronUp } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, ChevronDown, ChevronUp } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
