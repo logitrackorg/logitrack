@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, Package, CheckCheck, X } from "lucide-react";
+import { Bell, Package, CheckCheck, X, Building2 } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 function relativeTime(dateStr: string): string {
@@ -17,6 +17,9 @@ function relativeTime(dateStr: string): string {
 function NotifIcon({ type }: { type: string }) {
   if (type === "shipment_received") {
     return <Package size={16} color="#60a5fa" />;
+  }
+  if (type === "destination_arrival") {
+    return <Building2 size={16} color="#34d399" />;
   }
   return <Bell size={16} color="#94a3b8" />;
 }
@@ -137,7 +140,9 @@ export function NotificationBell() {
         )
       );
     }
-    if (n.resource_id) {
+    if (n.type === "destination_arrival" && !n.resource_id) {
+      navigate("/"); // grouped arrival → go to shipments list
+    } else if (n.resource_id) {
       navigate(`/shipments/${n.resource_id}`);
     }
     setOpen(false);

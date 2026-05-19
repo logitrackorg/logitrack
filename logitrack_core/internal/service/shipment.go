@@ -816,6 +816,13 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
 	}
 
+	// Destination-arrival notification: at_hub AND the location is the final branch.
+	// Enqueued into the 5-minute grouping buffer (non-blocking).
+	if s.notifSvc != nil && targetStatus == model.StatusAtHub &&
+		resolvedLocation != "" && resolvedLocation == updated.FinalBranchID {
+		go s.notifSvc.NotifyDestinationArrival(updated, resolvedLocation)
+	}
+
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
 	if targetStatus == model.StatusAtOriginHub && updated.IsReturning {
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{

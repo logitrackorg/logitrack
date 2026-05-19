@@ -5,7 +5,8 @@ import "time"
 type NotificationType string
 
 const (
-	NotificationShipmentReceived NotificationType = "shipment_received"
+	NotificationShipmentReceived   NotificationType = "shipment_received"
+	NotificationDestinationArrival NotificationType = "destination_arrival"
 )
 
 type Notification struct {
