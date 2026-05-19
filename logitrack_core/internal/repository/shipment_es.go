@@ -191,6 +191,74 @@ func (r *eventSourcedShipmentRepository) Stats(filter model.ShipmentFilter) (mod
 	return r.projection.Stats(filter)
 }
 
+func (r *eventSourcedShipmentRepository) RequestPayment(cmd RequestPaymentCmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.Shipment.TrackingID,
+		EventType:  model.EventPaymentRequested,
+		Payload: model.PaymentRequestedPayload{
+			PaymentID:      cmd.PaymentID,
+			MPPreferenceID: cmd.MPPreferenceID,
+			InitPoint:      cmd.InitPoint,
+			Amount:         cmd.Amount,
+			Currency:       cmd.Currency,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.Shipment.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) ConfirmPayment(cmd ConfirmPaymentCmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.OldTrackingID,
+		EventType:  model.EventPaymentConfirmed,
+		Payload: model.PaymentConfirmedPayload{
+			PaymentID:           cmd.PaymentID,
+			MPPaymentID:         cmd.MPPaymentID,
+			OldTrackingID:       cmd.OldTrackingID,
+			NewTrackingID:       cmd.NewTrackingID,
+			Amount:              cmd.Amount,
+			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
+			Prediction:          cmd.Prediction,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	// Mirror the ConfirmDraft pattern: set TrackingID to new ID before Apply
+	// so the projection's Get call uses the right key.
+	event.TrackingID = cmd.NewTrackingID
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.NewTrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) RevertToDraft(cmd RevertToDraftCmd) (model.Shipment, error) {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventReturnedToDraft,
+		Payload: model.ReturnedToDraftPayload{
+			PaymentID: cmd.PaymentID,
+			Reason:    cmd.Reason,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
 func (r *eventSourcedShipmentRepository) RecordPathPlanned(_ PathPlannedCmd) error { return nil }
 func (r *eventSourcedShipmentRepository) SetPalletID(_, _ string) error           { return nil }
 func (r *eventSourcedShipmentRepository) ReserveForTrip(trackingID, tripID string) error {
@@ -296,6 +364,44 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			EventType:  model.EventIncidentReported,
 			ChangedBy:  de.ChangedBy,
 			Notes:      payload.Description,
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventPaymentRequested:
+		from := model.StatusDraft
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
+			ToStatus:   model.StatusPendingPayment,
+			ChangedBy:  de.ChangedBy,
+			Notes:      "Pago solicitado vía Mercado Pago",
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventPaymentConfirmed:
+		payload := de.Payload.(model.PaymentConfirmedPayload)
+		from := model.StatusPendingPayment
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
+			ToStatus:   model.StatusAtOriginHub,
+			ChangedBy:  de.ChangedBy,
+			Notes:      fmt.Sprintf("Pago aprobado — confirmado desde borrador %s", payload.OldTrackingID),
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventReturnedToDraft:
+		from := model.StatusPendingPayment
+		payload := de.Payload.(model.ReturnedToDraftPayload)
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
+			ToStatus:   model.StatusDraft,
+			ChangedBy:  de.ChangedBy,
+			Notes:      "Devuelto a borrador: " + payload.Reason,
 			Timestamp:  de.Timestamp,
 		}, true
 

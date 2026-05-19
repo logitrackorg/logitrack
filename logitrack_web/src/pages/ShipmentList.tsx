@@ -348,6 +348,7 @@ export function ShipmentList() {
             <option value="cancelled">Cancelados</option>
             <option value="lost">Extraviados</option>
             <option value="destroyed">Daño total</option>
+            <option value="pending_payment">Pago pendiente</option>
             <option value="draft">Borrador</option>
             {hasRole("supervisor", "manager") && (
               <option value="expired">Borradores expirados</option>

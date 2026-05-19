@@ -504,15 +504,10 @@ func (s *ShipmentService) UpdateDraft(draftID string, req model.SaveDraftRequest
 	return s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: existing})
 }
 
-func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.Shipment, error) {
-	draft, err := s.repo.GetByTrackingID(draftID)
-	if err != nil {
-		return model.Shipment{}, err
-	}
-	if draft.Status != model.StatusDraft {
-		return model.Shipment{}, fmt.Errorf("solo se pueden confirmar envíos en borrador")
-	}
-	// Validate required fields
+// validateDraftReadyToConfirm validates that a draft has all required fields and
+// resolves FinalBranchID/DeliveryMethod defaults in place. Called by both RequestPayment
+// and ConfirmDraft so validation logic is not duplicated.
+func (s *ShipmentService) validateDraftReadyToConfirm(draft *model.Shipment) error {
 	missing := []string{}
 	if strings.TrimSpace(draft.Sender.Name) == "" {
 		missing = append(missing, "sender name")
@@ -545,43 +540,57 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		missing = append(missing, "recipient DNI")
 	}
 	if len(missing) > 0 {
-		return model.Shipment{}, fmt.Errorf("faltan campos obligatorios: %s", strings.Join(missing, ", "))
+		return fmt.Errorf("faltan campos obligatorios: %s", strings.Join(missing, ", "))
 	}
 	if err := validateDNI(draft.Sender.DNI, "sender_dni"); err != nil {
-		return model.Shipment{}, err
+		return err
 	}
 	if err := validateDNI(draft.Recipient.DNI, "recipient_dni"); err != nil {
-		return model.Shipment{}, err
+		return err
 	}
 	if draft.Sender.Email != "" {
 		if err := validateEmail(draft.Sender.Email, "sender_email"); err != nil {
-			return model.Shipment{}, err
+			return err
 		}
 	}
 	if draft.Recipient.Email != "" {
 		if err := validateEmail(draft.Recipient.Email, "recipient_email"); err != nil {
-			return model.Shipment{}, err
+			return err
 		}
 	}
 	if draft.ReceivingBranchID != "" {
 		if b, ok := s.branchRepo.GetByID(draft.ReceivingBranchID); ok && b.Status == model.BranchStatusOutOfService {
-			return model.Shipment{}, fmt.Errorf("la sucursal '%s' está fuera de servicio y no puede recibir envíos", b.Name)
+			return fmt.Errorf("la sucursal '%s' está fuera de servicio y no puede recibir envíos", b.Name)
 		}
 	}
 	if draft.FinalBranchID == "" {
 		draft.FinalBranchID = s.resolveFinalBranch(draft.Recipient)
 		if draft.FinalBranchID != "" {
 			draft.UpdatedAt = clock.Now().UTC()
-			s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: draft}) //nolint:errcheck
+			s.repo.UpdateDraft(repository.UpdateDraftCmd{Shipment: *draft}) //nolint:errcheck
 		}
 	}
 	if draft.DeliveryMethod == "" {
 		draft.DeliveryMethod = model.DeliveryMethodLastMile
 	}
 	if err := s.validateLastMileReachable(draft.DeliveryMethod, draft.Recipient, draft.FinalBranchID); err != nil {
-		return model.Shipment{}, err
+		return err
 	}
 	if err := validatePackageWeight(draft.PackageType, draft.WeightKg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.Shipment, error) {
+	draft, err := s.repo.GetByTrackingID(draftID)
+	if err != nil {
+		return model.Shipment{}, err
+	}
+	if draft.Status != model.StatusDraft {
+		return model.Shipment{}, fmt.Errorf("solo se pueden confirmar envíos en borrador")
+	}
+	if err := s.validateDraftReadyToConfirm(&draft); err != nil {
 		return model.Shipment{}, err
 	}
 
@@ -1208,7 +1217,8 @@ func generateDraftID() string {
 
 func isValidTransition(from, to model.Status) bool {
 	allowed := map[model.Status][]model.Status{
-		model.StatusDraft: {}, // draft transitions only via ConfirmDraft
+		model.StatusDraft:           {}, // draft transitions only via RequestPayment/ConfirmDraft
+		model.StatusPendingPayment:  {}, // transitions only via PaymentService (ConfirmPayment/RevertToDraft)
 		model.StatusAtOriginHub: {
 			model.StatusLoaded,
 			model.StatusInTransit, // cross-branch pickup en un trip multi-hop que pasa por el origen

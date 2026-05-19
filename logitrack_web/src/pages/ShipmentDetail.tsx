@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { paymentApi, type Payment } from "../api/payments";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
@@ -53,6 +54,7 @@ const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   lost:                 [],
   destroyed:            [],
   expired:              [],
+  pending_payment:      [],
 };
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -74,6 +76,7 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   lost:                 "Extraviado",
   destroyed:            "Daño total",
   expired:              "Borrador expirado",
+  pending_payment:      "Pago pendiente",
 };
 
 const PACKAGE_LABELS: Record<string, string> = {
@@ -551,7 +554,7 @@ export function ShipmentDetail() {
           <PriorityBadge priority={shipment.priority} />
         </div>
         <div className="flex items-center gap-2">
-          {hasRole("supervisor", "admin", "operator") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("supervisor", "admin", "operator") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={openCorrectionModal}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
@@ -560,7 +563,7 @@ export function ShipmentDetail() {
               Editar datos
             </button>
           )}
-          {hasRole("operator", "supervisor", "admin") && !["draft", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+          {hasRole("operator", "supervisor", "admin") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
             <button
               onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
               className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold text-amber-800 cursor-pointer transition-colors"
@@ -645,6 +648,13 @@ export function ShipmentDetail() {
             {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés confirmar el envío, pero la sucursal estará por encima de su capacidad.
           </div>
         </div>
+      )}
+
+      {shipment.status === "pending_payment" && (
+        <PendingPaymentPanel
+          trackingId={shipment.tracking_id}
+          onBackToDraft={() => navigate("/?status=pending")}
+        />
       )}
 
       {shipment.status === "draft" && draftForm ? (
@@ -1959,6 +1969,7 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
     redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
     delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
     returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
+    pending_payment: "#d97706",
   };
 
   const solidLine = (color = "#e5e7eb") => (
@@ -2346,6 +2357,117 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             {saving ? "Guardando..." : "Guardar correcciones"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingPaymentPanel({
+  trackingId,
+  onBackToDraft,
+}: {
+  trackingId: string;
+  onBackToDraft: () => void;
+}) {
+  const [payment, setPayment] = useState<Payment | null>(null);
+  const [reverting, setReverting] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    paymentApi.get(trackingId).then(setPayment).catch(() => {});
+  }, [trackingId]);
+
+  const handleBackToDraft = async () => {
+    setReverting(true);
+    setError("");
+    try {
+      await paymentApi.backToDraft(trackingId);
+      onBackToDraft();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "No se pudo volver al borrador.");
+      setReverting(false);
+    }
+  };
+
+  return (
+    <div style={{
+      background: "#fffbeb", border: "1px solid #fcd34d",
+      borderRadius: 10, padding: 20, marginBottom: 16,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e", marginBottom: 8 }}>
+        💳 Pago pendiente
+      </div>
+      {payment ? (
+        <>
+          <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>
+            Monto:{" "}
+            <strong>
+              {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
+            </strong>
+          </p>
+          {payment.init_point && (
+            <a
+              href={payment.init_point}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-block",
+                background: "#009ee3", color: "#fff",
+                borderRadius: 8, padding: "8px 18px",
+                fontWeight: 700, fontSize: 13, textDecoration: "none",
+                marginRight: 10, marginBottom: 8,
+              }}
+            >
+              Abrir link de pago ↗
+            </a>
+          )}
+        </>
+      ) : (
+        <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>Cargando información de pago…</p>
+      )}
+      {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {payment?.simulate_enabled && (
+          <button
+            onClick={async () => {
+              setSimulating(true);
+              setError("");
+              try {
+                const result = await paymentApi.simulateApproved(trackingId);
+                window.location.href = `/shipments/${result.tracking_id}`;
+              } catch (e: unknown) {
+                const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+                setError(msg ?? "Error al simular pago.");
+                setSimulating(false);
+              }
+            }}
+            disabled={simulating}
+            style={{
+              border: "1px dashed #86efac", borderRadius: 8,
+              background: "#f0fdf4", color: "#16a34a",
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+              padding: "8px 16px",
+              opacity: simulating ? 0.6 : 1,
+            }}
+          >
+            {simulating ? "Procesando…" : "⚡ Simular pago aprobado (demo)"}
+          </button>
+        )}
+        <button
+          onClick={handleBackToDraft}
+          disabled={reverting}
+          style={{
+            border: "1px solid #fcd34d", borderRadius: 8,
+            background: "#fff", color: "#92400e",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            padding: "8px 16px",
+            opacity: reverting ? 0.6 : 1,
+          }}
+        >
+          {reverting ? "Procesando…" : "Volver a borrador"}
+        </button>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ const (
 	StatusLost                Status = "lost"                 // extraviado — terminal
 	StatusDestroyed           Status = "destroyed"            // daño total — terminal
 	StatusExpired             Status = "expired"              // borrador expirado — solo visible en auditoría
+	StatusPendingPayment      Status = "pending_payment"      // esperando confirmación de pago antes de ingresar al flujo operacional
 )
 
 type PackageType string
