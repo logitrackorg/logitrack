@@ -73,11 +73,14 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 	destCity := shipment.Recipient.Address.City
 
 	var title string
+	var notifType model.NotificationType
 	switch toStatus {
 	case model.StatusAtOriginHub:
-		title = "Llegó a sucursal de origen"
+		title = "Envío en devolución — llegó a sucursal de origen"
+		notifType = model.NotificationReturnArrival
 	default:
 		title = "Llegó a una sucursal intermedia"
+		notifType = model.NotificationShipmentReceived
 	}
 	body := shipment.TrackingID + " · " + originCity + " → " + destCity
 
@@ -86,7 +89,7 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 		n := model.Notification{
 			ID:         uuid.NewString(),
 			UserID:     u.ID,
-			Type:       model.NotificationShipmentReceived,
+			Type:       notifType,
 			Title:      title,
 			Body:       body,
 			ResourceID: shipment.TrackingID,
@@ -105,6 +108,16 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 // Called as a goroutine (fire-and-forget) from the shipment service.
 // Grouping and expand/collapse is handled on the frontend.
 func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, branchID string) {
+	// Deduplication: skip if an identical notification was created in the last 5 minutes.
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationDestinationArrival, shipment.TrackingID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyDestinationArrival ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
 	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
 		model.RoleOperator,
 		model.RoleSupervisor,

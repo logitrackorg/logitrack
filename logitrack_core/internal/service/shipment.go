@@ -807,20 +807,24 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		return model.Shipment{}, err
 	}
 
-	// Fire notification for shipment received at branch (non-blocking)
-	if s.notifSvc != nil && (targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub) {
+	// Notification routing (non-blocking):
+	//   at_hub + FinalBranchID  → destination_arrival  (LOGITRACK-402)
+	//   at_hub (other)          → shipment_received     (LOGITRACK-401)
+	//   at_origin_hub           → return_arrival        (LOGITRACK-403)
+	// The two at_hub cases are mutually exclusive to avoid double notifications.
+	if s.notifSvc != nil {
 		branchID := resolvedLocation
 		if branchID == "" {
 			branchID = updated.CurrentLocation
 		}
-		go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
-	}
+		isDestination := targetStatus == model.StatusAtHub &&
+			resolvedLocation != "" && resolvedLocation == updated.FinalBranchID
 
-	// Destination-arrival notification: at_hub AND the location is the final branch.
-	// Enqueued into the 5-minute grouping buffer (non-blocking).
-	if s.notifSvc != nil && targetStatus == model.StatusAtHub &&
-		resolvedLocation != "" && resolvedLocation == updated.FinalBranchID {
-		go s.notifSvc.NotifyDestinationArrival(updated, resolvedLocation)
+		if isDestination {
+			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
+		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
+			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		}
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
