@@ -109,9 +109,7 @@ export function NotificationsPage() {
         )
       );
     }
-    if (n.type === "destination_arrival" && !n.resource_id) {
-      navigate("/"); // grouped arrival → go to shipments list
-    } else if (n.resource_id) {
+    if (n.resource_id) {
       navigate(`/shipments/${n.resource_id}`);
     }
   };
