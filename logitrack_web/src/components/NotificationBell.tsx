@@ -239,8 +239,10 @@ export function NotificationBell() {
 
   const renderSingle = (n: Notification) => {
     const isFatigue = n.type === "fatigue_alert";
-    const unreadBg  = isFatigue ? "rgba(239,68,68,0.12)" : "rgba(96,165,250,0.07)";
-    const dotColor  = isFatigue ? "#ef4444" : "#3b82f6";
+    // groupAccent devuelve el color correcto para cada tipo: azul, verde, naranja o rojo.
+    // Se usa tanto para el dot como para el fondo tintado (hex 12 ≈ 7 % opacidad).
+    const accent   = groupAccent(n.type);
+    const unreadBg = `${accent}12`;
     return (
       <div
         key={n.id}
@@ -269,7 +271,7 @@ export function NotificationBell() {
             </button>
           )}
         </div>
-        {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0, marginTop: 6 }} />}
+        {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
       </div>
     );
   };
