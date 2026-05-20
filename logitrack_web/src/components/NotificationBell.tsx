@@ -186,7 +186,7 @@ export function NotificationBell() {
     else pollInterval = setInterval(fetchCount, 60_000);
 
     return () => { es?.close(); if (pollInterval) clearInterval(pollInterval); };
-  }, [fetchCount]);
+  }, [fetchCount, fetchNotifications]);
 
   // Refetch on SPA navigation and tab/window focus.
   useEffect(() => { fetchCount(); }, [location.pathname, fetchCount]);

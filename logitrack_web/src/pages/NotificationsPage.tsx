@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle, AlertOctagon } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
@@ -73,8 +73,7 @@ export function NotificationsPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [, setTick] = useState(0); // ticker para countdown live de SLA
-  const clockOffsetMs = useRef(0); // offset entre reloj del servidor y el browser
+  const [clockOffsetMs, setClockOffsetMs] = useState(0); // offset reloj servidor vs browser
 
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -119,14 +118,8 @@ export function NotificationsPage() {
 
   // Carga el offset del reloj del servidor al montar y cada 30 s para que el
   // countdown refleje el reloj admin aunque el browser muestre otra hora.
-  // setTick fuerza re-render tanto en la carga inicial como en cada tick
-  // (los refs no disparan re-render por sí solos).
   useEffect(() => {
-    const refresh = () =>
-      fetchServerClockOffsetMs().then((ms) => {
-        clockOffsetMs.current = ms;
-        setTick((t) => t + 1);
-      });
+    const refresh = () => fetchServerClockOffsetMs().then(setClockOffsetMs);
     refresh();
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
@@ -357,7 +350,7 @@ export function NotificationsPage() {
                   </span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
                     <span style={{ color: "#94a3b8", fontSize: 11 }}>
-                      {relativeTime(n.created_at, clockOffsetMs.current)}
+                      {relativeTime(n.created_at, clockOffsetMs)}
                     </span>
                     <span style={{ color: "#cbd5e1", fontSize: 11 }}>
                       {formatDate(n.created_at)}
@@ -371,7 +364,7 @@ export function NotificationsPage() {
                 {n.type === "sla_risk" && (() => {
                   const eta = parseSLAEta(n.body);
                   if (!eta) return null;
-                  const label = slaCountdown(eta, clockOffsetMs.current);
+                  const label = slaCountdown(eta, clockOffsetMs);
                   if (label === "venció") return null; // sla_expired ya cubre este estado
                   return (
                     <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
