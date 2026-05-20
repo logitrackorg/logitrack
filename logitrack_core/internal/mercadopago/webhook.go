@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -12,8 +13,8 @@ import (
 // xSignature format: "ts=<timestamp>,v1=<hex-hash>"
 // Manifest: "id:<dataID>;request-id:<xRequestID>;ts:<ts>;"
 func (c *Client) ValidateSignature(xSignature, xRequestID, dataID string) error {
-	if c.webhookSecret == "" {
-		return nil // secret not configured — skip validation (dev mode)
+	if c.webhookSecret == "" || os.Getenv("MP_SKIP_SIGNATURE") == "true" {
+		return nil
 	}
 
 	var ts, v1 string

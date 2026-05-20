@@ -335,6 +335,8 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_payments_tracking_id ON payments(tracking_id);
 		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
+		ALTER TABLE payments ADD COLUMN IF NOT EXISTS original_tracking_id TEXT;
+		UPDATE payments SET original_tracking_id = tracking_id WHERE original_tracking_id IS NULL;
 
 		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
 		CREATE TABLE IF NOT EXISTS payment_events (

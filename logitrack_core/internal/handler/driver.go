@@ -1,7 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
+	"io"
+	"math"
+	"math/rand"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
@@ -10,14 +17,56 @@ import (
 	"github.com/logitrack/core/internal/service"
 )
 
+// controlPhrase is the fixed sentence drivers must read aloud.
+// The driver's first name is injected at runtime by GetControlPhrase.
+const controlPhraseTemplate = "Hoy es un buen día para trabajar con seguridad, %s."
+
 type DriverHandler struct {
-	routeSvc   *service.RouteService
-	branchRepo repository.BranchRepository
+	routeSvc    *service.RouteService
+	branchRepo  repository.BranchRepository
+	checkinRepo *repository.CheckinRepository
+	fatigueSvc  *service.FatigueConfigService
+	auditRepo   *repository.AuditLogRepository
+	notifSvc    *service.NotificationService
 }
 
-func NewDriverHandler(routeSvc *service.RouteService, branchRepo repository.BranchRepository) *DriverHandler {
-	return &DriverHandler{routeSvc: routeSvc, branchRepo: branchRepo}
+func NewDriverHandler(
+	routeSvc *service.RouteService,
+	branchRepo repository.BranchRepository,
+	fatigueSvc *service.FatigueConfigService,
+	auditRepo *repository.AuditLogRepository,
+	notifSvc *service.NotificationService,
+) *DriverHandler {
+	return &DriverHandler{
+		routeSvc:    routeSvc,
+		branchRepo:  branchRepo,
+		checkinRepo: repository.NewCheckinRepository(),
+		fatigueSvc:  fatigueSvc,
+		auditRepo:   auditRepo,
+		notifSvc:    notifSvc,
+	}
 }
+
+// checkAndNotifyFatigueRisk calcula el score de fatiga con los datos disponibles
+// en el check-in y notifica a los supervisores si el nivel es ROJO.
+// Debe llamarse en una goroutine (fire-and-forget).
+func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model.DriverCheckin) {
+	if h.notifSvc == nil {
+		return
+	}
+	cfg := h.fatigueSvc.Get()
+	score, level := fatigueRiskScore(checkin, cfg)
+	if level != model.RiskRed {
+		return
+	}
+	fullName := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if fullName == "" {
+		fullName = user.Username
+	}
+	h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
+}
+
+// ── Route handlers ────────────────────────────────────────────────────────────
 
 // GetRoute returns today's assigned route and shipments for the authenticated driver.
 func (h *DriverHandler) GetRoute(c *gin.Context) {
@@ -28,10 +77,9 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 		return
 	}
 
-	// Generar waypoints desde todos los shipments de la ruta
-	waypoints := make([]map[string]interface{}, 0)
+	waypoints := make([]map[string]interface{}, 0, len(shipments))
 	for i, shipment := range shipments {
-		waypoint := map[string]interface{}{
+		waypoints = append(waypoints, map[string]interface{}{
 			"sequence":    i + 1,
 			"tracking_id": shipment.TrackingID,
 			"latitude":    shipment.Recipient.Address.Latitude,
@@ -39,11 +87,9 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 			"name":        shipment.Recipient.Name,
 			"address":     shipment.Recipient.Address.Street + ", " + shipment.Recipient.Address.City,
 			"status":      shipment.Status,
-		}
-		waypoints = append(waypoints, waypoint)
+		})
 	}
 
-	// Incluir coordenadas de la sucursal del chofer como punto de partida
 	var origin map[string]interface{}
 	if branch, ok := h.branchRepo.GetByID(user.BranchID); ok {
 		lat, lng := branch.Latitude, branch.Longitude
@@ -79,4 +125,490 @@ func (h *DriverHandler) StartRoute(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"route": route})
+}
+
+// ── US1: KSS check-in ─────────────────────────────────────────────────────────
+
+// todayAR returns the current date in Argentina Standard Time (ART = UTC-3).
+// Docker containers run in UTC; using a fixed-offset zone avoids depending on
+// tzdata being installed in the image.
+func todayAR() string {
+	return time.Now().In(time.FixedZone("ART", -3*60*60)).Format("2006-01-02")
+}
+
+// skipGracePeriod is how long a "saltar" choice suppresses the fatigue gate.
+const skipGracePeriod = 3 * time.Hour
+
+// GetTodayCheckin returns the authenticated driver's check-in for today.
+// Returns 404 (gate re-appears) when:
+//   - no check-in has been recorded yet, OR
+//   - an admin reset was triggered after the existing check-in, OR
+//   - the driver had skipped and the 3-hour grace period has elapsed.
+func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		return
+	}
+	// Admin reset: invalidate any check-in recorded before the reset timestamp.
+	if cfg := h.fatigueSvc.Get(); cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "check-in requiere renovación"})
+		return
+	}
+	// Skipped grace period: after 3 h the gate re-appears so the driver is
+	// prompted again — without deleting the skip record from history.
+	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
+		c.JSON(http.StatusNotFound, gin.H{"error": "período de gracia de salto expirado"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
+// SkipCheckin records that the driver deliberately bypassed the fatigue gate.
+// The gate will be suppressed for 3 hours; the skip appears in the driver's history.
+func (h *DriverHandler) SkipCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	today := todayAR()
+
+	// Preserve any previously stored baseline voice data so it isn't wiped by a skip.
+	existing, _ := h.checkinRepo.Get(user.ID, today)
+
+	rec := model.DriverCheckin{
+		DriverID:      user.ID,
+		Date:          today,
+		Skipped:       true,
+		RecordedAt:    time.Now(),
+		VoiceMetrics:  existing.VoiceMetrics,
+		DriftScore:    existing.DriftScore,
+		BaselineVoice: existing.BaselineVoice,
+	}
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el salto"})
+		return
+	}
+
+	// Audit — non-blocking (AC1).
+	if detailsJSON, merr := json.Marshal(struct {
+		DriverID string `json:"driver_id"`
+		Date     string `json:"date"`
+		Skipped  bool   `json:"skipped"`
+	}{rec.DriverID, rec.Date, true}); merr == nil {
+		_ = h.auditRepo.Append(model.AuditLog{
+			ID:        model.NewAuditID(),
+			CreatedAt: time.Now(),
+			CreatedBy: user.Username,
+			Action:    "SKIP_CHECKIN",
+			Details:   json.RawMessage(detailsJSON),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
+// SubmitCheckin records (or overwrites) the KSS fatigue check-in for today.
+func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	var body struct {
+		HorasSueno int `json:"horas_sueno"`
+		KSSLevel   int `json:"kss_level"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+	if body.HorasSueno < 0 || body.HorasSueno > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
+		return
+	}
+	if body.KSSLevel < 1 || body.KSSLevel > 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
+		return
+	}
+
+	today := todayAR()
+
+	// Preserve existing voice data if the driver already uploaded audio today.
+	existing, _ := h.checkinRepo.Get(user.ID, today)
+
+	rec := model.DriverCheckin{
+		DriverID:      user.ID,
+		Date:          today,
+		HorasSueno:    body.HorasSueno,
+		KSSLevel:      body.KSSLevel,
+		RecordedAt:    time.Now(),
+		VoiceMetrics:  existing.VoiceMetrics,
+		DriftScore:    existing.DriftScore,
+		BaselineVoice: existing.BaselineVoice,
+	}
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el check-in"})
+		return
+	}
+
+	// Alerta de fatiga — non-blocking. Evalúa el score con los datos disponibles
+	// hasta este momento (KSS + voz si ya fue cargada) y notifica a supervisores
+	// si el nivel cae en ROJO.
+	go h.checkAndNotifyFatigueRisk(user, rec)
+
+	// Audit — non-blocking (AC1).
+	if detailsJSON, merr := json.Marshal(struct {
+		DriverID   string `json:"driver_id"`
+		Date       string `json:"date"`
+		KSSLevel   int    `json:"kss_level"`
+		HorasSueno int    `json:"horas_sueno"`
+	}{rec.DriverID, rec.Date, rec.KSSLevel, rec.HorasSueno}); merr == nil {
+		_ = h.auditRepo.Append(model.AuditLog{
+			ID:        model.NewAuditID(),
+			CreatedAt: time.Now(),
+			CreatedBy: user.Username,
+			Action:    "SUBMIT_CHECKIN",
+			Details:   json.RawMessage(detailsJSON),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+}
+
+// ── US4: Tactile event capture ────────────────────────────────────────────────
+
+// SubmitTouchEvent records a delivery interaction event (reaction time +
+// misfire count) captured in the driver's delivery management view.
+// Called asynchronously by the frontend — the UI does NOT wait for this response.
+func (h *DriverHandler) SubmitTouchEvent(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	var body struct {
+		TrackingID     string `json:"tracking_id"`
+		Action         string `json:"action"`
+		ReactionTimeMs int64  `json:"reaction_time_ms"`
+		Misfires       int    `json:"misfires"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+
+	today := todayAR()
+	rec, _ := h.checkinRepo.Get(user.ID, today)
+	rec.DriverID = user.ID
+	rec.Date = today
+	if rec.RecordedAt.IsZero() {
+		rec.RecordedAt = time.Now()
+	}
+	rec.TouchEvents = append(rec.TouchEvents, model.TouchEventRecord{
+		TrackingID:     body.TrackingID,
+		Action:         body.Action,
+		ReactionTimeMs: body.ReactionTimeMs,
+		Misfires:       body.Misfires,
+		RecordedAt:     time.Now(),
+	})
+
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el evento"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// ── US6: PVT (Psychomotor Vigilance Task) ─────────────────────────────────────
+
+// SubmitPVT receives the reaction-time mini-game results and persists them in
+// the driver's daily check-in record. The endpoint is optional — drivers may
+// skip the PVT entirely (AC1).
+func (h *DriverHandler) SubmitPVT(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	var body struct {
+		LatenciaPromedioMs float64 `json:"latencia_promedio_ms"`
+		Aciertos           int     `json:"aciertos"`
+		Errores            int     `json:"errores"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+
+	today := todayAR()
+	rec, _ := h.checkinRepo.Get(user.ID, today)
+	rec.DriverID = user.ID
+	rec.Date = today
+	if rec.RecordedAt.IsZero() {
+		rec.RecordedAt = time.Now()
+	}
+	rec.PVTMetrics = &model.PVTResult{
+		LatenciaPromedioMs: body.LatenciaPromedioMs,
+		Aciertos:           body.Aciertos,
+		Errores:            body.Errores,
+		RecordedAt:         time.Now(),
+	}
+
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el resultado PVT"})
+		return
+	}
+
+	// Alerta de fatiga — el PVT tiene peso 35%; recalcular con el dato nuevo.
+	// La dedup de 1 h evita duplicar la alerta si ya fue enviada tras el KSS.
+	go h.checkAndNotifyFatigueRisk(user, rec)
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "pvt": rec.PVTMetrics})
+}
+
+// ── US2: Voice check-in ───────────────────────────────────────────────────────
+
+// GetControlPhrase returns the personalised phrase the driver must read aloud.
+func (h *DriverHandler) GetControlPhrase(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	name := user.FirstName
+	if name == "" {
+		name = user.Username
+	}
+	phrase := "Hoy es un buen día para trabajar con seguridad, " + name + "."
+	_ = controlPhraseTemplate // kept for reference
+	c.JSON(http.StatusOK, gin.H{"phrase": phrase})
+}
+
+// UploadVoice receives a multipart audio file, extracts voice metrics, computes
+// the drift score against the driver's baseline, and persists the result.
+func (h *DriverHandler) UploadVoice(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	file, _, err := c.Request.FormFile("audio")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "se requiere el campo 'audio' en el form-data"})
+		return
+	}
+	defer file.Close()
+
+	audioData, err := io.ReadAll(file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo leer el archivo de audio"})
+		return
+	}
+	if len(audioData) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el archivo de audio está vacío"})
+		return
+	}
+
+	// Umbral mínimo de tamaño: un WebM con silencio puro ocupa solo unos pocos
+	// cientos de bytes (solo cabeceras + frames comprimidos de silencio). Una
+	// grabación con voz real tiene, como mínimo, varios KB de datos de audio.
+	// 2 500 bytes es un umbral conservador que filtra silencios sin rechazar
+	// grabaciones legítimas de baja calidad.
+	const minAudioBytes = 2500
+	if len(audioData) < minAudioBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
+
+	// Extract the 5 acoustic features from the raw audio bytes.
+	current := extractVoiceMetrics(audioData)
+
+	// Segunda validación: si la energía RMS es prácticamente cero, el audio
+	// no contiene voz (silencio, canal muteado, etc.). Umbral conservador: 0.05.
+	// Nota: con el motor de simulación actual esto no se disparará; queda
+	// preparado para el reemplazo por un DSP real.
+	if current.EnergyRMS < 0.05 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
+
+	today := todayAR()
+
+	// Load today's check-in (may or may not exist yet).
+	rec, _ := h.checkinRepo.Get(user.ID, today)
+	rec.DriverID = user.ID
+	rec.Date = today
+	if rec.RecordedAt.IsZero() {
+		rec.RecordedAt = time.Now()
+	}
+	rec.VoiceMetrics = &current
+
+	// Compute drift score if a baseline exists; otherwise this is the first sample.
+	var driftScore *int
+	if rec.BaselineVoice != nil {
+		score := computeDriftScore(current, *rec.BaselineVoice)
+		driftScore = &score
+	}
+	rec.DriftScore = driftScore
+
+	// Update the running baseline with the new sample.
+	rec.BaselineVoice = updateBaseline(rec.BaselineVoice, current)
+
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el análisis de voz"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ok":           true,
+		"voice_metrics": current,
+		"drift_score":  driftScore,
+		"baseline":     rec.BaselineVoice,
+	})
+}
+
+// ── Acoustic engine ───────────────────────────────────────────────────────────
+
+// extractVoiceMetrics derives the 5 acoustic features from raw audio bytes.
+//
+// Production path: replace the body of this function with calls to a real DSP
+// library (e.g. go-aubio bindings, a Python sidecar via gRPC, or a cloud
+// Speech API). The function signature and return type must not change.
+//
+// Simulation path (current): uses the audio length as a deterministic seed so
+// that the same file always produces the same metrics, making the output
+// reproducible in tests without external dependencies.
+func extractVoiceMetrics(audioData []byte) model.VoiceMetrics {
+	rng := rand.New(rand.NewSource(int64(len(audioData))))
+
+	return model.VoiceMetrics{
+		// pitch_mean: typical human speech range 85–255 Hz
+		PitchMean: 120 + rng.Float64()*80,
+		// pitch_range: variation within the sample
+		PitchRange: 20 + rng.Float64()*60,
+		// energy_rms: normalised 0–1 amplitude proxy
+		EnergyRMS: 0.3 + rng.Float64()*0.4,
+		// speech_rate: syllables per second (normal: 3–6)
+		SpeechRate: 3 + rng.Float64()*3,
+		// pause_ratio: fraction of silence (normal: 0.1–0.4)
+		PauseRatio: 0.1 + rng.Float64()*0.3,
+	}
+}
+
+// computeDriftScore calculates a weighted deviation score (0–100) between the
+// current voice metrics and the driver's historical baseline.
+//
+// For each metric the absolute percentage deviation is clamped to [0, 1] and
+// then multiplied by its weight:
+//
+//	pitch_mean  → 30 %  (0.30)  — most sensitive fatigue indicator
+//	pitch_range → 20 %  (0.20)  — monotone speech signals drowsiness
+//	energy_rms  → 20 %  (0.20)  — lower energy correlates with fatigue
+//	speech_rate → 15 %  (0.15)  — slowed speech is a fatigue marker
+//	pause_ratio → 15 %  (0.15)  — longer pauses indicate cognitive load
+//
+// The weighted sum is scaled to [0, 100] and rounded to the nearest integer.
+// Returns 0 when the baseline is uninitialised (all zeros) to avoid division
+// by zero.
+func computeDriftScore(current, baseline model.VoiceMetrics) int {
+	type metric struct {
+		cur, base, weight float64
+	}
+	metrics := []metric{
+		{current.PitchMean, baseline.PitchMean, 0.30},   // pitch_mean:  30%
+		{current.PitchRange, baseline.PitchRange, 0.20}, // pitch_range: 20%
+		{current.EnergyRMS, baseline.EnergyRMS, 0.20},   // energy_rms:  20%
+		{current.SpeechRate, baseline.SpeechRate, 0.15}, // speech_rate: 15%
+		{current.PauseRatio, baseline.PauseRatio, 0.15}, // pause_ratio: 15%
+	}
+
+	var weightedSum float64
+	for _, m := range metrics {
+		if m.base == 0 {
+			// Skip this metric to avoid division by zero; treat deviation as 0.
+			continue
+		}
+		// Absolute percentage deviation, clamped to [0, 1] (i.e. max 100% drift).
+		deviation := math.Abs(m.cur-m.base) / m.base
+		if deviation > 1 {
+			deviation = 1
+		}
+		weightedSum += deviation * m.weight
+	}
+
+	// Scale to 0–100 and round.
+	score := int(math.Round(weightedSum * 100))
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	return score
+}
+
+// GetTestEligibility evalúa si el chofer autenticado debe realizar las pruebas
+// de fatiga. El comportamiento varía según el tipo de chofer y los parámetros:
+//
+//	?is_trip_start=true   — inicio de viaje inter-sucursal (siempre requiere test)
+//	?stopped_minutes=N    — minutos detenido en ruta inter-sucursal (>= 6 requiere test)
+//
+// Choferes de última milla se evalúan por tiempo desde último check-in y misfires.
+func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	isTripStart := c.Query("is_trip_start") == "true"
+	stoppedMinutes := 0
+	if raw := c.Query("stopped_minutes"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			stoppedMinutes = v
+		}
+	}
+
+	switch user.DriverType {
+
+	// ── Inter-sucursal ───────────────────────────────────────────────────────
+	case model.DriverTypeInterBranch:
+		if isTripStart {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "trip_start"})
+			return
+		}
+		if stoppedMinutes >= 6 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Última milla ─────────────────────────────────────────────────────────
+	case model.DriverTypeLastMile:
+		rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+		if !ok {
+			// Sin check-in: la intercepción de scan ya se encarga de mostrarlo.
+			c.JSON(http.StatusOK, gin.H{"require_test": false})
+			return
+		}
+		// Condición 1: más de 3 horas desde el último check-in.
+		if time.Since(rec.RecordedAt) > 3*time.Hour {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		// Condición 2: más de 5 misfires acumulados en el día.
+		totalMisfires := 0
+		for _, e := range rec.TouchEvents {
+			totalMisfires += e.Misfires
+		}
+		if totalMisfires > 5 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Otros roles (fallback seguro) ────────────────────────────────────────
+	default:
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+	}
+}
+
+// updateBaseline computes a simple running average between the existing baseline
+// and the new sample. On the first call (baseline == nil) the new sample becomes
+// the baseline directly.
+func updateBaseline(baseline *model.VoiceMetrics, current model.VoiceMetrics) *model.VoiceMetrics {
+	if baseline == nil {
+		// First voice sample — use it as the initial baseline.
+		b := current
+		return &b
+	}
+	// Exponential moving average with α = 0.2 so the baseline evolves slowly.
+	const alpha = 0.2
+	updated := model.VoiceMetrics{
+		PitchMean:  baseline.PitchMean*(1-alpha) + current.PitchMean*alpha,
+		PitchRange: baseline.PitchRange*(1-alpha) + current.PitchRange*alpha,
+		EnergyRMS:  baseline.EnergyRMS*(1-alpha) + current.EnergyRMS*alpha,
+		SpeechRate: baseline.SpeechRate*(1-alpha) + current.SpeechRate*alpha,
+		PauseRatio: baseline.PauseRatio*(1-alpha) + current.PauseRatio*alpha,
+	}
+	return &updated
 }

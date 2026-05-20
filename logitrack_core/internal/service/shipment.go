@@ -217,6 +217,19 @@ func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 			}
 		}
 	}
+	destination := shipment.Recipient.Address
+	if shipment.FinalBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(shipment.FinalBranchID); ok {
+			destination = model.Address{
+				Street:     b.Address.Street,
+				City:       b.Address.City,
+				Province:   b.Province,
+				PostalCode: b.Address.PostalCode,
+				Latitude:   b.Latitude,
+				Longitude:  b.Longitude,
+			}
+		}
+	}
 	price, breakdown := s.pricingSvc.Quote(PricingInput{
 		WeightKg:       shipment.WeightKg,
 		PackageType:    shipment.PackageType,
@@ -225,7 +238,7 @@ func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 		IsFragile:      shipment.IsFragile,
 		DeliveryMethod: shipment.DeliveryMethod,
 		Origin:         origin,
-		Destination:    shipment.Recipient.Address,
+		Destination:    destination,
 	})
 	shipment.Price = &price
 	b := breakdown

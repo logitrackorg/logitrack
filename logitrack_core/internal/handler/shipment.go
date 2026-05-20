@@ -167,34 +167,6 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 	c.JSON(http.StatusOK, shipment)
 }
 
-// ConfirmDraft confirms a draft shipment, assigning a real LT- tracking ID.
-//
-// @Summary      Confirm draft
-// @Description  Transitions a pending draft to in_progress, replacing DRAFT- ID with LT-XXXXXXXX. Operator, supervisor, and admin only.
-// @Tags         shipments
-// @Produce      json
-// @Security     BearerAuth
-// @Param        tracking_id  path      string  true  "Draft tracking ID (DRAFT-XXXXXXXX)"
-// @Success      200          {object}  model.Shipment
-// @Failure      400          {object}  map[string]string
-// @Failure      401          {object}  map[string]string
-// @Failure      403          {object}  map[string]string
-// @Router       /shipments/{tracking_id}/confirm [post]
-func (h *ShipmentHandler) ConfirmDraft(c *gin.Context) {
-	user := c.MustGet(middleware.UserKey).(model.User)
-	trackingID := c.Param("tracking_id")
-	if existing, err := h.svc.GetByTrackingID(trackingID); err == nil {
-		if branchForbidden(c, user, existing.ReceivingBranchID) {
-			return
-		}
-	}
-	shipment, err := h.svc.ConfirmDraft(trackingID, user.Username)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, shipment)
-}
 
 // List returns all shipments, optionally filtered by date range.
 //

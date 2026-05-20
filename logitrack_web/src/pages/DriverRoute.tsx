@@ -11,7 +11,9 @@ import {
   Truck,
   XCircle,
 } from "lucide-react";
-import { driverApi, type DriverRouteResponse } from "../api/driver";
+import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -34,12 +36,17 @@ type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+
+  // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
+  const [midRouteCheckin, setMidRouteCheckin] = useState(false);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -69,6 +76,22 @@ export function DriverRoute() {
     setFailedNotes("");
   };
 
+  // Consulta el gate de re-test. Si el chofer debe hacer las pruebas de nuevo,
+  // activa el overlay antes de refrescar la lista. En caso de error de red,
+  // deja pasar para no bloquear al chofer.
+  const checkReTestGate = async () => {
+    try {
+      const eligibility = await driverApi.getTestEligibility();
+      if (eligibility.require_test) {
+        setMidRouteCheckin(true);
+        return;
+      }
+    } catch {
+      // error de red → continuar sin bloquear
+    }
+    load();
+  };
+
   const handleDeliver = async () => {
     if (!deliverShipment || !recipientDni.trim()) return;
     setSubmitting(true);
@@ -80,7 +103,10 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
-      load();
+      // Reanudar simulación: el período de gracia (3 s) evita re-pausa inmediata
+      // mientras load() actualiza la lista de puntos de entrega pendientes.
+      play();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar la entrega.");
@@ -103,7 +129,9 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
-      load();
+      // Reanudar simulación tras registrar intento fallido.
+      play();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar el intento fallido.");
@@ -123,14 +151,39 @@ export function DriverRoute() {
     return pts;
   }, [data]);
 
+  // Puntos de entrega pendientes en orden de secuencia. El simulador se
+  // detiene automáticamente al entrar en el radio del primero de la lista.
+  const deliveryPoints = useMemo(() => {
+    if (!data?.waypoints) return [];
+    return [...data.waypoints]
+      .filter((wp) => wp.status === "out_for_delivery")
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((wp) => ({ lat: wp.latitude, lng: wp.longitude }));
+  }, [data]);
+
   const [simActive, setSimActive] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
-    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier);
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
+
+  // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
+  // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
+  // Solo aplica a choferes de última milla; el overlay cubre toda la pantalla.
+  if (midRouteCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        onDone={() => {
+          setMidRouteCheckin(false);
+          load();
+        }}
+      />
+    );
+  }
 
   if (loading) return <RouteSkeleton />;
   if (noRoute) return <Navigate to="/driver/scan" replace />;
@@ -449,6 +502,52 @@ function ShipmentCard({
   onFailed: () => void;
   onOpen: () => void;
 }) {
+  // US4: Tactile event tracking — refs to avoid re-renders.
+  // renderTimeRef is set in an effect (not the initializer) to satisfy the
+  // react-hooks/purity rule: Date.now() must not be called during render.
+  const renderTimeRef = useRef<number>(0);
+  const misfireCountRef = useRef<number>(0);
+  useEffect(() => {
+    renderTimeRef.current = Date.now();
+  }, []); // runs once after mount — records when the card becomes visible
+
+  /** Fire async touch event to backend without blocking the UI. */
+  const fireTouchEvent = (action: TouchEventPayload["action"]) => {
+    driverApi.submitTouchEvent({
+      tracking_id: shipment.tracking_id,
+      action,
+      reaction_time_ms: Date.now() - renderTimeRef.current,
+      misfires: misfireCountRef.current,
+    }).catch(() => {}); // silent failure — never block delivery workflow
+  };
+
+  /**
+   * Detect misfires: pointer down on the action area that doesn't land on
+   * either "Entregar" or "No entregado". Uses data-action attributes set
+   * on the buttons themselves.
+   */
+  const handleActionAreaPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (
+      !target.closest('[data-action="deliver"]') &&
+      !target.closest('[data-action="failed"]')
+    ) {
+      misfireCountRef.current++;
+    }
+  };
+
+  const handleDeliverClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fireTouchEvent("entregado");
+    onDeliver();
+  };
+
+  const handleFailedClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fireTouchEvent("no_entregado");
+    onFailed();
+  };
+
   const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
   const isCompleted = shipment.status === "delivered" || shipment.status === "delivery_failed";
   const isFailed = shipment.status === "delivery_failed";
@@ -551,16 +650,22 @@ function ShipmentCard({
           </div>
 
           {canAct && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            /* US4: onPointerDown on the action container detects misfires */
+            <div
+              className="grid grid-cols-2 gap-2 mt-2"
+              onPointerDown={handleActionAreaPointerDown}
+            >
               <button
-                onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                data-action="deliver"
+                onClick={handleDeliverClick}
                 className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Entregar
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); onFailed(); }}
+                data-action="failed"
+                onClick={handleFailedClick}
                 className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
                 <XCircle className="w-4 h-4" />

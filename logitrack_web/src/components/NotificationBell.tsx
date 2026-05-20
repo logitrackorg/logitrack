@@ -22,6 +22,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "return_arrival")      return <RotateCcw     size={16} color="#fb923c" />;
   if (type === "sla_risk")            return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "sla_expired")         return <AlertOctagon  size={16} color="#b91c1c" />;
+  if (type === "fatigue_alert")       return <AlertTriangle size={16} color="#ef4444" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -40,6 +41,7 @@ function groupAccent(type: string): string {
   if (type === "return_arrival")      return "#fb923c";
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
+  if (type === "fatigue_alert")       return "#ef4444";
   return "#94a3b8";
 }
 
@@ -78,12 +80,14 @@ function GroupIcon({ type }: { type: string }) {
   if (type === "return_arrival")      return <RotateCcw     size={16} color={color} />;
   if (type === "sla_risk")            return <AlertTriangle size={16} color={color} />;
   if (type === "sla_expired")         return <AlertOctagon  size={16} color={color} />;
+  if (type === "fatigue_alert")       return <AlertTriangle size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
 // ─── Grouping ────────────────────────────────────────────────────────────────
 // Consecutive notifications of the same groupable type within a 5-minute window
 // collapse into an expandable card.
+// fatigue_alert is intentionally excluded — each alert is individual and urgent.
 
 const GROUP_WINDOW_MS  = 5 * 60 * 1000;
 const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival", "sla_risk", "sla_expired"]);
@@ -132,6 +136,8 @@ export function NotificationBell() {
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [clockOffsetMs, setClockOffsetMs]   = useState(0); // offset reloj servidor vs browser
+  // Primera alerta de fatiga sin leer — dispara el banner crítico.
+  const [criticalAlert, setCriticalAlert]   = useState<Notification | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -146,7 +152,11 @@ export function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     try {
       const data = await notificationApi.list({ limit: 20, offset: 0 });
-      setNotifications(data.notifications ?? []);
+      const notifs = data.notifications ?? [];
+      setNotifications(notifs);
+      // Detectar la primera alerta de fatiga sin leer para mostrar el banner crítico.
+      const firstCritical = notifs.find((n) => n.type === "fatigue_alert" && !n.read_at);
+      setCriticalAlert(firstCritical ?? null);
     } catch { /* silently ignore */ }
   }, []);
 
@@ -162,7 +172,10 @@ export function NotificationBell() {
 
     const startSSE = () => {
       es = new EventSource(url);
-      es.addEventListener("notification", () => fetchCount());
+      es.addEventListener("notification", () => {
+        fetchCount();
+        fetchNotifications(); // actualiza el banner crítico en tiempo real
+      });
       es.onerror = () => {
         es?.close(); es = null;
         if (!pollInterval) pollInterval = setInterval(fetchCount, 60_000);
@@ -230,9 +243,26 @@ export function NotificationBell() {
           item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item
         )
       );
+      if (n.type === "fatigue_alert") setCriticalAlert(null);
     }
-    if (n.resource_id) navigate(`/shipments/${n.resource_id}`);
+    if (n.type === "fatigue_alert") {
+      navigate("/supervisor/fatigue");
+    } else if (n.resource_id) {
+      navigate(`/shipments/${n.resource_id}`);
+    }
     setOpen(false);
+  };
+
+  const dismissCriticalAlert = async () => {
+    if (!criticalAlert) return;
+    await notificationApi.markRead(criticalAlert.id);
+    setUnreadCount((c) => Math.max(0, c - 1));
+    setNotifications((prev) =>
+      prev.map((item) =>
+        item.id === criticalAlert.id ? { ...item, read_at: new Date().toISOString() } : item
+      )
+    );
+    setCriticalAlert(null);
   };
 
   const toggleGroup = (key: string) => {
@@ -257,22 +287,29 @@ export function NotificationBell() {
   const renderSingle = (n: Notification) => {
     const isSLARisk    = n.type === "sla_risk";
     const isSLAExpired = n.type === "sla_expired";
+    const isFatigue    = n.type === "fatigue_alert";
     const eta          = isSLARisk ? parseSLAEta(n.body) : null;
     const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
     const accent       = groupAccent(n.type);
+    const unreadBg     = `${accent}12`;
 
     return (
       <div
         key={n.id}
         onClick={() => handleItemClick(n)}
-        style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : `${accent}12` }}
+        style={{
+          ...rowBase,
+          cursor: "pointer",
+          background: n.read_at ? "transparent" : unreadBg,
+          borderLeft: isFatigue && !n.read_at ? "3px solid #ef4444" : "3px solid transparent",
+        }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : `${accent}12`)}
+        onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : unreadBg)}
       >
         <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: isFatigue ? "#fca5a5" : "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {n.title}
             </span>
             <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs)}</span>
@@ -295,6 +332,15 @@ export function NotificationBell() {
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>
               SLA vencido
             </div>
+          )}
+          {/* Botón exclusivo para las alertas de fatiga */}
+          {isFatigue && (
+            <button
+              onClick={(e) => { e.stopPropagation(); navigate("/supervisor/fatigue"); setOpen(false); }}
+              style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: "#f87171", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, padding: "2px 8px", cursor: "pointer" }}
+            >
+              Ver historial del chofer →
+            </button>
           )}
         </div>
         {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
@@ -333,7 +379,7 @@ export function NotificationBell() {
               <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: hasUnread ? 600 : 400 }}>
                 {groupLabel(type, items.length)}
               </span>
-              <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at)}</span>
+              <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at, clockOffsetMs)}</span>
             </div>
             <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
               {expanded ? "Tocá cada envío para ver el detalle" : `${items.length} envíos · expandir`}
@@ -385,6 +431,43 @@ export function NotificationBell() {
   // ── JSX ─────────────────────────────────────────────────────────────────
 
   return (
+    <>
+      {/* ── Banner crítico de fatiga — fijo en la parte superior de la pantalla ── */}
+      {criticalAlert && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+          background: "linear-gradient(90deg, #7f1d1d, #991b1b)",
+          borderBottom: "2px solid #ef4444",
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 16px",
+          boxShadow: "0 4px 20px rgba(239,68,68,0.4)",
+          animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
+        }}>
+          <AlertTriangle size={20} color="#fca5a5" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ color: "#fca5a5", fontWeight: 700, fontSize: 13 }}>
+              {criticalAlert.title}
+            </span>
+            <span style={{ color: "#fecaca", fontSize: 12, marginLeft: 10 }}>
+              {criticalAlert.body}
+            </span>
+          </div>
+          <button
+            onClick={() => { navigate("/supervisor/fatigue"); dismissCriticalAlert(); }}
+            style={{ flexShrink: 0, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            Ver historial del chofer
+          </button>
+          <button
+            onClick={dismissCriticalAlert}
+            title="Descartar"
+            style={{ flexShrink: 0, background: "none", border: "none", color: "#fca5a5", cursor: "pointer", display: "flex", padding: 4 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
     <div ref={panelRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
       {/* Bell button */}
       <button
@@ -440,5 +523,6 @@ export function NotificationBell() {
         </div>
       )}
     </div>
+    </>
   );
 }
