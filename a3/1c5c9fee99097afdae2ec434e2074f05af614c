@@ -1,0 +1,21 @@
+logitrack_web/src/pages/NewShipment.tsx
+  s_031648674522be::t_9f007ee3ebd3b6 151-155,172
+logitrack_core/internal/service/shipment.go
+  s_031648674522be::t_7f930e59a487d4 220-232,241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "a31c5c9fee99097afdae2ec434e2074f05af614c",
+  "prompts": {},
+  "sessions": {
+    "s_031648674522be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67de85b3-a0db-4e4a-9641-ed79ba0a2454",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
