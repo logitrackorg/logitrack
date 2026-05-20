@@ -392,8 +392,28 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 		return
 	}
 
+	// Umbral mínimo de tamaño: un WebM con silencio puro ocupa solo unos pocos
+	// cientos de bytes (solo cabeceras + frames comprimidos de silencio). Una
+	// grabación con voz real tiene, como mínimo, varios KB de datos de audio.
+	// 2 500 bytes es un umbral conservador que filtra silencios sin rechazar
+	// grabaciones legítimas de baja calidad.
+	const minAudioBytes = 2500
+	if len(audioData) < minAudioBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
+
 	// Extract the 5 acoustic features from the raw audio bytes.
 	current := extractVoiceMetrics(audioData)
+
+	// Segunda validación: si la energía RMS es prácticamente cero, el audio
+	// no contiene voz (silencio, canal muteado, etc.). Umbral conservador: 0.05.
+	// Nota: con el motor de simulación actual esto no se disparará; queda
+	// preparado para el reemplazo por un DSP real.
+	if current.EnergyRMS < 0.05 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
 
 	today := todayAR()
 
