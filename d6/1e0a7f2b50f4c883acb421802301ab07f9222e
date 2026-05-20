@@ -1,0 +1,22 @@
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_031648674522be::t_1a0be206820c6c 334
+  s_031648674522be::t_897d07cfbda91c 1901
+  s_031648674522be::t_1d518ba6232f31 333,337
+  s_031648674522be::t_4084728d62b6cd 1874
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "d61e0a7f2b50f4c883acb421802301ab07f9222e",
+  "prompts": {},
+  "sessions": {
+    "s_031648674522be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67de85b3-a0db-4e4a-9641-ed79ba0a2454",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
