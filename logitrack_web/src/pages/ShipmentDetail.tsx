@@ -172,6 +172,7 @@ export function ShipmentDetail() {
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
           receiving_branch_id: s.receiving_branch_id ?? "",
+          delivery_method: s.delivery_method ?? "ultima_milla",
         });
       }
     } catch {
@@ -963,7 +964,7 @@ export function ShipmentDetail() {
       {/* ── Right column: Price, Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
         {/* Price Card */}
-        {shipment.price != null && (
+        {shipment.price != null && shipment.status !== "draft" && (
           <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
         )}
 
@@ -1519,11 +1520,15 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     const originAddress = selectedBranch
       ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
       : form.sender.address;
+    const finalBranch = findFinalBranch(form.recipient.address, branches);
+    const destinationAddress = finalBranch
+      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
+      : form.recipient.address;
     const hasMinData =
       weightKg > 0 &&
       !!form.package_type &&
       !!originAddress.province &&
-      !!form.recipient.address.province;
+      !!destinationAddress.province;
     if (!hasMinData) { setQuote(null); return; }
     if (quoteTimer.current) clearTimeout(quoteTimer.current);
     quoteTimer.current = setTimeout(async () => {
@@ -1537,7 +1542,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method ?? "ultima_milla",
           origin: originAddress,
-          destination: form.recipient.address,
+          destination: destinationAddress,
         });
         setQuote(q);
       } catch {
