@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -17,10 +17,11 @@ function relativeTime(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Warehouse      size={16} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2      size={16} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw      size={16} color="#fb923c" />;
-  if (type === "sla_risk")            return <AlertTriangle  size={16} color="#ef4444" />;
+  if (type === "shipment_received")   return <Warehouse     size={16} color="#60a5fa" />;
+  if (type === "destination_arrival") return <Building2     size={16} color="#34d399" />;
+  if (type === "return_arrival")      return <RotateCcw     size={16} color="#fb923c" />;
+  if (type === "sla_risk")            return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "sla_expired")         return <AlertOctagon  size={16} color="#b91c1c" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -36,7 +37,35 @@ function groupAccent(type: string): string {
   if (type === "shipment_received")   return "#60a5fa";
   if (type === "return_arrival")      return "#fb923c";
   if (type === "sla_risk")            return "#ef4444";
+  if (type === "sla_expired")         return "#b91c1c";
   return "#94a3b8";
+}
+
+// ─── SLA countdown helpers ────────────────────────────────────────────────────
+
+/** Extrae el ETA ISO del body de una notificación sla_risk (formato "... · eta:RFC3339"). */
+function parseSLAEta(body: string): Date | null {
+  const match = body.match(/eta:([^\s·]+)$/);
+  if (!match) return null;
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Devuelve el texto del body sin el sufijo eta:... */
+function bodyWithoutEta(body: string): string {
+  return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
+}
+
+/** Countdown en tiempo real a partir del ETA. */
+function slaCountdown(eta: Date): string {
+  const diff = eta.getTime() - Date.now();
+  if (diff <= 0) return "vence ahora";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `vence en ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `vence en ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `vence en ${days} d`;
 }
 
 function GroupIcon({ type }: { type: string }) {
@@ -98,6 +127,7 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount]       = useState(0);
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [, setTick]                         = useState(0); // fuerza re-render para countdown live
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -153,6 +183,13 @@ export function NotificationBell() {
       window.removeEventListener("focus", onFocus);
     };
   }, [fetchCount]);
+
+  // Ticker: re-render every 30 s while panel is open para actualizar el countdown de SLA.
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, [open]);
 
   // Close panel on outside click.
   useEffect(() => {
@@ -210,29 +247,49 @@ export function NotificationBell() {
     transition: "background 0.15s",
   };
 
-  const renderSingle = (n: Notification) => (
-    <div
-      key={n.id}
-      onClick={() => handleItemClick(n)}
-      style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : `${groupAccent(n.type)}12` }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : `${groupAccent(n.type)}12`)}
-    >
-      <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-          <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {n.title}
-          </span>
-          <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at)}</span>
+  const renderSingle = (n: Notification) => {
+    const isSLARisk    = n.type === "sla_risk";
+    const isSLAExpired = n.type === "sla_expired";
+    const eta          = isSLARisk ? parseSLAEta(n.body) : null;
+    const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+    const accent       = groupAccent(n.type);
+
+    return (
+      <div
+        key={n.id}
+        onClick={() => handleItemClick(n)}
+        style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : `${accent}12` }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : `${accent}12`)}
+      >
+        <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {n.title}
+            </span>
+            <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at)}</span>
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {displayBody}
+          </div>
+          {/* Countdown live para sla_risk */}
+          {isSLARisk && eta && (
+            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
+              {slaCountdown(eta)}
+            </div>
+          )}
+          {/* Label fijo para sla_expired */}
+          {isSLAExpired && (
+            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>
+              SLA vencido
+            </div>
+          )}
         </div>
-        <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {n.body}
-        </div>
+        {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
       </div>
-      {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: groupAccent(n.type), flexShrink: 0, marginTop: 6 }} />}
-    </div>
-  );
+    );
+  };
 
   const renderGroup = (items: Notification[], key: string) => {
     const type      = items[0].type;

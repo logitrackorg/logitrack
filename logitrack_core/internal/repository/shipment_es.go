@@ -271,6 +271,9 @@ func (r *eventSourcedShipmentRepository) ReleaseFromTrip(trackingID string) erro
 func (r *eventSourcedShipmentRepository) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
 	return r.projection.SetSLANotified(trackingID, notifiedAt)
 }
+func (r *eventSourcedShipmentRepository) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	return r.projection.SetSLAExpiredNotified(trackingID, notifiedAt)
+}
 
 // GetEvents transforms DomainEvents from the store into ShipmentEvent (API format).
 // draft_saved and draft_updated events are excluded — they are not part of the

@@ -184,21 +184,15 @@ func (s *NotificationService) NotifySLARisk(shipment model.Shipment, branchID st
 	}
 
 	title := "⚠️ SLA en riesgo"
+	// El ETA ISO se incrusta al final del body para que el frontend calcule el
+	// countdown en tiempo real. Formato: "TID · origen → destino · eta:RFC3339"
 	body := fmt.Sprintf("%s · %s → %s",
 		shipment.TrackingID,
 		shipment.Sender.Address.City,
 		shipment.Recipient.Address.City,
 	)
 	if shipment.EstimatedDeliveryAt != nil {
-		remaining := time.Until(*shipment.EstimatedDeliveryAt)
-		hours := int(remaining.Hours())
-		if hours <= 0 {
-			body += " · vence hoy"
-		} else if hours == 1 {
-			body += " · vence en 1 h"
-		} else {
-			body += fmt.Sprintf(" · vence en %d h", hours)
-		}
+		body += " · eta:" + shipment.EstimatedDeliveryAt.UTC().Format(time.RFC3339)
 	}
 
 	now := clock.Now().UTC()
@@ -214,6 +208,56 @@ func (s *NotificationService) NotifySLARisk(shipment model.Shipment, branchID st
 		}
 		if err := s.repo.Create(n); err != nil {
 			log.Printf("[NotificationService] NotifySLARisk Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifySLAExpired crea una notificación de SLA vencido para los operadores y supervisores
+// de la sucursal del envío, con fallback a admins (CA-02).
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifySLAExpired(shipment model.Shipment, branchID string) {
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifySLAExpired GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		admins, err := s.repo.GetAdmins()
+		if err != nil {
+			log.Printf("[NotificationService] NotifySLAExpired GetAdmins error: %v", err)
+			return
+		}
+		users = admins
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "🚨 SLA vencido"
+	body := fmt.Sprintf("%s · %s → %s",
+		shipment.TrackingID,
+		shipment.Sender.Address.City,
+		shipment.Recipient.Address.City,
+	)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationSLAExpired,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifySLAExpired Create error for user %s: %v", u.ID, err)
 		} else if s.hub != nil {
 			s.hub.Push(n.UserID)
 		}

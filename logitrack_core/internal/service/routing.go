@@ -1273,49 +1273,93 @@ func anyForced(group []model.Shipment, cfg model.RoutingConfig, now time.Time) b
 	return false
 }
 
-// isSLACriticalETA returns true if the shipment is within the SLA forced horizon
-// based solely on estimated delivery time (not priority score).
-func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
+// isSLAActive returns true if the shipment is in an active (non-terminal) state.
+func isSLAActive(sh model.Shipment) bool {
 	if model.IsTerminalStatus(sh.Status) {
 		return false
 	}
-	// Also skip Expired and Rechazado (non-active terminal-like statuses per CA-01)
 	if sh.Status == model.StatusExpired || sh.Status == model.StatusRechazado {
 		return false
 	}
-	slaHorizon := time.Duration(cfg.SLAForceHorizonHours) * time.Hour
-	return sh.EstimatedDeliveryAt != nil && sh.EstimatedDeliveryAt.Sub(now) < slaHorizon
+	return sh.EstimatedDeliveryAt != nil
 }
 
-// checkSLARisk evaluates SLA risk for the given shipments and fires/resets notifications (CA-04).
-// Must be called synchronously before plan generation returns.
+// isSLAExpired returns true when the shipment's ETA has already passed and it's still active.
+func isSLAExpired(sh model.Shipment, now time.Time) bool {
+	return isSLAActive(sh) && now.After(*sh.EstimatedDeliveryAt)
+}
+
+// isSLACriticalETA returns true if the shipment is within the SLA forced horizon
+// but has NOT yet expired.
+func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
+	if !isSLAActive(sh) {
+		return false
+	}
+	slaHorizon := time.Duration(cfg.SLAForceHorizonHours) * time.Hour
+	remaining := sh.EstimatedDeliveryAt.Sub(now)
+	return remaining >= 0 && remaining < slaHorizon
+}
+
+// checkSLARisk evaluates SLA state for each shipment and fires/resets notifications.
+//
+// State machine per shipment:
+//   inactive  → nothing
+//   active, remaining >= horizon → reset both flags (exited risk window)
+//   active, 0 <= remaining < horizon → sla_risk once (CA-04); reset expired flag if set
+//   active, remaining < 0 (expired) → sla_expired once; sla_risk flag stays
 func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.RoutingConfig, now time.Time) {
 	if s.notifSvc == nil {
 		return
 	}
 	for _, sh := range shipments {
-		critical := isSLACriticalETA(sh, cfg, now)
-		if critical {
+		if !isSLAActive(sh) {
+			continue
+		}
+
+		expired := isSLAExpired(sh, now)
+		critical := !expired && isSLACriticalETA(sh, cfg, now)
+
+		branchID := sh.CurrentLocation
+		if branchID == "" {
+			branchID = sh.ReceivingBranchID
+		}
+
+		if expired {
+			// Send expired notification once
+			if sh.SLAExpiredNotifiedAt == nil {
+				t := now
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, &t); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLAExpired(shCopy, branchID)
+			}
+		} else if critical {
+			// Send at-risk notification once per entry into risk window (CA-04)
 			if sh.SLANotifiedAt == nil {
-				// Mark first, then fire in background — avoids double-notif on concurrent runs.
-				notifiedAt := now
-				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, &notifiedAt); err != nil {
+				t := now
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, &t); err != nil {
 					log.Printf("[RoutingService] SetSLANotified error for %s: %v", sh.TrackingID, err)
 					continue
 				}
-				branchID := sh.CurrentLocation
-				if branchID == "" {
-					branchID = sh.ReceivingBranchID
+				// Reset expired flag in case ETA was extended and re-entered risk window
+				if sh.SLAExpiredNotifiedAt != nil {
+					_ = s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil)
 				}
 				shCopy := sh
 				go s.notifSvc.NotifySLARisk(shCopy, branchID)
 			}
-			// else: already notified for this critical cycle, skip (CA-04)
 		} else {
-			// Shipment exited critical state — reset so a future re-entry re-notifies (CA-04)
+			// Outside risk window — reset both flags so re-entry re-notifies (CA-04)
 			if sh.SLANotifiedAt != nil {
 				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, nil); err != nil {
 					log.Printf("[RoutingService] SetSLANotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+			if sh.SLAExpiredNotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified reset error for %s: %v", sh.TrackingID, err)
 				}
 			}
 		}

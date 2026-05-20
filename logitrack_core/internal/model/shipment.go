@@ -137,6 +137,10 @@ type Shipment struct {
 	// Se resetea a nil cuando el envío sale del estado crítico, habilitando una nueva
 	// notificación si vuelve a entrar (CA-04).
 	SLANotifiedAt *time.Time `json:"sla_notified_at,omitempty"`
+
+	// SLAExpiredNotifiedAt registra cuándo se emitió la notificación de SLA vencido.
+	// Se resetea si el envío sale del estado expirado (p. ej. ETA extendida).
+	SLAExpiredNotifiedAt *time.Time `json:"sla_expired_notified_at,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.

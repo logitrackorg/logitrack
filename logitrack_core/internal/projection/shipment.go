@@ -275,3 +275,15 @@ func (p *ShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.
 	p.shipments[trackingID] = s
 	return nil
 }
+
+func (p *ShipmentProjection) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	s.SLAExpiredNotifiedAt = notifiedAt
+	p.shipments[trackingID] = s
+	return nil
+}

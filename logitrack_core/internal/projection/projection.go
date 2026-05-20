@@ -21,4 +21,6 @@ type Projector interface {
 	ReleaseFromTrip(trackingID string) error
 	// SetSLANotified actualiza sla_notified_at del envío (nil = resetear, &t = marcar notificado).
 	SetSLANotified(trackingID string, notifiedAt *time.Time) error
+	// SetSLAExpiredNotified actualiza sla_expired_notified_at del envío.
+	SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error
 }

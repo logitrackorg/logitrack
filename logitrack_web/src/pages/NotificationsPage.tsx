@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle, AlertOctagon } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -26,12 +26,43 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function typeAccent(type: string): string {
+  if (type === "destination_arrival") return "#34d399";
+  if (type === "return_arrival")      return "#fb923c";
+  if (type === "sla_risk")            return "#ef4444";
+  if (type === "sla_expired")         return "#b91c1c";
+  return "#3b82f6";
+}
+
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Package       size={18} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2     size={18} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw     size={18} color="#fb923c" />;
+  if (type === "shipment_received")   return <Package      size={18} color="#60a5fa" />;
+  if (type === "destination_arrival") return <Building2    size={18} color="#34d399" />;
+  if (type === "return_arrival")      return <RotateCcw    size={18} color="#fb923c" />;
   if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
+  if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
   return <Bell size={18} color="#94a3b8" />;
+}
+
+function parseSLAEta(body: string): Date | null {
+  const match = body.match(/eta:([^\s·]+)$/);
+  if (!match) return null;
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function bodyWithoutEta(body: string): string {
+  return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
+}
+
+function slaCountdown(eta: Date): string {
+  const diff = eta.getTime() - Date.now();
+  if (diff <= 0) return "vence ahora";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `vence en ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `vence en ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `vence en ${days} d`;
 }
 
 export function NotificationsPage() {
@@ -41,6 +72,7 @@ export function NotificationsPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [, setTick] = useState(0); // ticker para countdown live de SLA
 
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -82,6 +114,12 @@ export function NotificationsPage() {
   useEffect(() => {
     fetchPage(offset, appliedSearch, appliedDateFrom, appliedDateTo);
   }, [fetchPage, offset, appliedSearch, appliedDateFrom, appliedDateTo]);
+
+  // Ticker: re-render cada 30 s para actualizar countdown de SLA en tiempo real
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSearch = () => {
     setAppliedSearch(search);
@@ -275,13 +313,13 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : n.type === "sla_risk" ? "#fef2f2" : "#eff6ff",
+                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : "#eff6ff",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : n.type === "sla_risk" ? "#fef2f2" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -315,7 +353,24 @@ export function NotificationsPage() {
                     </span>
                   </div>
                 </div>
-                <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>{n.body}</div>
+                <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>
+                  {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
+                </div>
+                {/* Countdown live para sla_risk */}
+                {n.type === "sla_risk" && (() => {
+                  const eta = parseSLAEta(n.body);
+                  return eta ? (
+                    <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
+                      {slaCountdown(eta)}
+                    </div>
+                  ) : null;
+                })()}
+                {/* Label para sla_expired */}
+                {n.type === "sla_expired" && (
+                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: typeAccent(n.type) }}>
+                    SLA vencido
+                  </div>
+                )}
                 {n.resource_id && (
                   <div style={{ fontSize: 11, color: "#60a5fa", marginTop: 4 }}>
                     #{n.resource_id}
@@ -328,7 +383,7 @@ export function NotificationsPage() {
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: n.type === "sla_risk" ? "#ef4444" : n.type === "return_arrival" ? "#fb923c" : n.type === "destination_arrival" ? "#34d399" : "#3b82f6",
+                    background: typeAccent(n.type),
                     flexShrink: 0,
                     marginTop: 7,
                   }}
