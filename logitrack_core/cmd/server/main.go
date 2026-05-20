@@ -4,11 +4,13 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/logitrack/core/internal/db"
+	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
@@ -162,6 +164,28 @@ func main() {
 	notifSvc.SetHub(notifHub)
 	notifHandler := handler.NewNotificationHandler(notifSvc, notifHub)
 	shipmentSvc.SetNotificationService(notifSvc)
+
+	// Email transaccional — deshabilitado cuando SMTP_HOST no está configurado.
+	smtpPort := 587
+	if p := os.Getenv("SMTP_PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			smtpPort = n
+		}
+	}
+	emailSvc := email.New(email.Config{
+		Host:         os.Getenv("SMTP_HOST"),
+		Port:         smtpPort,
+		Username:     os.Getenv("SMTP_USER"),
+		Password:     os.Getenv("SMTP_PASS"),
+		From:         getenv("SMTP_FROM", os.Getenv("SMTP_USER")),
+		TrackBaseURL: os.Getenv("TRACK_BASE_URL"),
+	}, orgSvc)
+	if emailSvc != nil {
+		shipmentSvc.SetEmailService(emailSvc)
+		log.Printf("[email] servicio SMTP habilitado — host: %s:%d", os.Getenv("SMTP_HOST"), smtpPort)
+	} else {
+		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
+	}
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
