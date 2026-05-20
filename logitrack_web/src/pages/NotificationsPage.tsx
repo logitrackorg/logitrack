@@ -119,14 +119,16 @@ export function NotificationsPage() {
 
   // Carga el offset del reloj del servidor al montar y cada 30 s para que el
   // countdown refleje el reloj admin aunque el browser muestre otra hora.
+  // setTick fuerza re-render tanto en la carga inicial como en cada tick
+  // (los refs no disparan re-render por sí solos).
   useEffect(() => {
     const refresh = () =>
-      fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
+      fetchServerClockOffsetMs().then((ms) => {
+        clockOffsetMs.current = ms;
+        setTick((t) => t + 1);
+      });
     refresh();
-    const id = setInterval(() => {
-      refresh();
-      setTick((t) => t + 1);
-    }, 30_000);
+    const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
   }, []);
 
