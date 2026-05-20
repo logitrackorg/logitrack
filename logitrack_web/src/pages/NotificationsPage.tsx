@@ -5,8 +5,8 @@ import { notificationApi, fetchServerClockOffsetMs, type Notification } from "..
 
 const PAGE_SIZE = 20;
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function relativeTime(dateStr: string, clockOffsetMs = 0): string {
+  const diff = (Date.now() + clockOffsetMs) - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "ahora";
   if (mins < 60) return `hace ${mins} min`;
@@ -355,7 +355,7 @@ export function NotificationsPage() {
                   </span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
                     <span style={{ color: "#94a3b8", fontSize: 11 }}>
-                      {relativeTime(n.created_at)}
+                      {relativeTime(n.created_at, clockOffsetMs.current)}
                     </span>
                     <span style={{ color: "#cbd5e1", fontSize: 11 }}>
                       {formatDate(n.created_at)}
