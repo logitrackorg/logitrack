@@ -800,3 +800,18 @@ func (p *PostgresShipmentProjection) SetSLAExpiredNotified(trackingID string, no
 	)
 	return err
 }
+
+// SetConfirmationEmailSent marca el envío como notificado por email de forma atómica (CA-05).
+// Solo actualiza si confirmation_email_sent_at aún es NULL. Devuelve true si fue el primer
+// llamado para ese tracking ID (el UPDATE afectó una fila), false si ya estaba marcado.
+func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	res, err := p.db.Exec(
+		`UPDATE shipments SET confirmation_email_sent_at = NOW() WHERE tracking_id = $1 AND confirmation_email_sent_at IS NULL`,
+		trackingID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}

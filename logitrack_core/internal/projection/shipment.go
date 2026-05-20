@@ -287,3 +287,21 @@ func (p *ShipmentProjection) SetSLAExpiredNotified(trackingID string, notifiedAt
 	p.shipments[trackingID] = s
 	return nil
 }
+
+// SetConfirmationEmailSent marca el envío como notificado por email (CA-05 dedup, in-memory).
+// Devuelve true si fue el primer llamado (no estaba marcado).
+func (p *ShipmentProjection) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return false, fmt.Errorf("shipment not found")
+	}
+	if s.ConfirmationEmailSentAt != nil {
+		return false, nil // ya enviado
+	}
+	now := time.Now().UTC()
+	s.ConfirmationEmailSentAt = &now
+	p.shipments[trackingID] = s
+	return true, nil
+}
