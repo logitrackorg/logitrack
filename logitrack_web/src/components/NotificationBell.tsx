@@ -211,9 +211,9 @@ export function NotificationBell() {
     <div
       key={n.id}
       onClick={() => handleItemClick(n)}
-      style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : "rgba(96,165,250,0.07)" }}
+      style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : `${groupAccent(n.type)}12` }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : "rgba(96,165,250,0.07)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : `${groupAccent(n.type)}12`)}
     >
       <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -227,7 +227,7 @@ export function NotificationBell() {
           {n.body}
         </div>
       </div>
-      {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, marginTop: 6 }} />}
+      {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: groupAccent(n.type), flexShrink: 0, marginTop: 6 }} />}
     </div>
   );
 
