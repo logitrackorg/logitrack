@@ -1300,6 +1300,23 @@ func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time)
 	return remaining >= 0 && remaining < slaHorizon
 }
 
+// RunSLARiskCheck fetches all shipments and runs the SLA risk state machine
+// immediately using the current system clock. Called by the admin clock handler
+// so that advancing the clock triggers notifications without waiting for the
+// next scheduled plan regeneration.
+func (s *RoutingService) RunSLARiskCheck() {
+	if s.notifSvc == nil {
+		return
+	}
+	cfg := s.cfgSvc.Get()
+	all, err := s.shipmentRepo.List(model.ShipmentFilter{})
+	if err != nil {
+		log.Printf("[RoutingService] RunSLARiskCheck: list shipments error: %v", err)
+		return
+	}
+	s.checkSLARisk(all, cfg, clock.Now().UTC())
+}
+
 // checkSLARisk evaluates SLA state for each shipment and fires/resets notifications.
 //
 // State machine per shipment:

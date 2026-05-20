@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from "lucide-react";
-import { notificationApi, type Notification } from "../api/notifications";
+import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,10 +56,11 @@ function bodyWithoutEta(body: string): string {
   return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
 }
 
-/** Countdown en tiempo real a partir del ETA. */
-function slaCountdown(eta: Date): string {
-  const diff = eta.getTime() - Date.now();
-  if (diff <= 0) return "vence ahora";
+/** Countdown en tiempo real a partir del ETA, usando el reloj del servidor. */
+function slaCountdown(eta: Date, clockOffsetMs = 0): string {
+  const serverNow = Date.now() + clockOffsetMs;
+  const diff = eta.getTime() - serverNow;
+  if (diff <= 0) return "venció";
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `vence en ${mins} min`;
   const hrs = Math.floor(mins / 60);
@@ -128,6 +129,7 @@ export function NotificationBell() {
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [, setTick]                         = useState(0); // fuerza re-render para countdown live
+  const clockOffsetMs                       = useRef(0);  // offset reloj servidor vs browser
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -185,9 +187,16 @@ export function NotificationBell() {
   }, [fetchCount]);
 
   // Ticker: re-render every 30 s while panel is open para actualizar el countdown de SLA.
+  // También refresca el offset del reloj del servidor para que el countdown sea correcto
+  // cuando el admin activó un override de reloj.
   useEffect(() => {
     if (!open) return;
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    // Carga inmediata al abrir el panel
+    fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
+    const id = setInterval(() => {
+      fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
+      setTick((t) => t + 1);
+    }, 30_000);
     return () => clearInterval(id);
   }, [open]);
 
@@ -276,7 +285,7 @@ export function NotificationBell() {
           {/* Countdown live para sla_risk */}
           {isSLARisk && eta && (
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
-              {slaCountdown(eta)}
+              {slaCountdown(eta, clockOffsetMs.current)}
             </div>
           )}
           {/* Label fijo para sla_expired */}

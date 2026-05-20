@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle, AlertOctagon } from "lucide-react";
-import { notificationApi, type Notification } from "../api/notifications";
+import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
 
@@ -54,9 +54,10 @@ function bodyWithoutEta(body: string): string {
   return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
 }
 
-function slaCountdown(eta: Date): string {
-  const diff = eta.getTime() - Date.now();
-  if (diff <= 0) return "vence ahora";
+function slaCountdown(eta: Date, clockOffsetMs = 0): string {
+  const serverNow = Date.now() + clockOffsetMs;
+  const diff = eta.getTime() - serverNow;
+  if (diff <= 0) return "venció";
   const mins = Math.floor(diff / 60000);
   if (mins < 60) return `vence en ${mins} min`;
   const hrs = Math.floor(mins / 60);
@@ -73,6 +74,7 @@ export function NotificationsPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [, setTick] = useState(0); // ticker para countdown live de SLA
+  const clockOffsetMs = useRef(0); // offset entre reloj del servidor y el browser
 
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -115,9 +117,16 @@ export function NotificationsPage() {
     fetchPage(offset, appliedSearch, appliedDateFrom, appliedDateTo);
   }, [fetchPage, offset, appliedSearch, appliedDateFrom, appliedDateTo]);
 
-  // Ticker: re-render cada 30 s para actualizar countdown de SLA en tiempo real
+  // Carga el offset del reloj del servidor al montar y cada 30 s para que el
+  // countdown refleje el reloj admin aunque el browser muestre otra hora.
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    const refresh = () =>
+      fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
+    refresh();
+    const id = setInterval(() => {
+      refresh();
+      setTick((t) => t + 1);
+    }, 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -361,7 +370,7 @@ export function NotificationsPage() {
                   const eta = parseSLAEta(n.body);
                   return eta ? (
                     <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
-                      {slaCountdown(eta)}
+                      {slaCountdown(eta, clockOffsetMs.current)}
                     </div>
                   ) : null;
                 })()}
