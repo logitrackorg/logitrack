@@ -123,12 +123,14 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	return status
 }
 
-// normalizeKSS maps the KSS level (1–9) to a fixed 0–100 risk scale.
-// KSS 1–4 = alert (0 risk), KSS 5–7 = moderate (50 risk), KSS 8–9 = high (100 risk).
-// The mapping is hardcoded; the admin no longer configures per-range penalties.
+// normalizeKSS maps the 8-point KSS level to a fixed 0–100 risk scale.
+// The scale excludes the original neutral midpoint (old level 5).
+//   1–4 (alert)                                  →   0 risk
+//   5–6 (signs of drowsiness / moderate effort)  →  50 risk
+//   7–8 (high drowsiness / fighting sleep)        → 100 risk
 func normalizeKSS(level int) float64 {
 	switch {
-	case level >= 8:
+	case level >= 7:
 		return 100
 	case level >= 5:
 		return 50

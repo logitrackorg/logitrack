@@ -1,26 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Info, Moon, Shield, SkipForward, Send, X } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 import { PVTCheckIn } from "./PVTCheckIn";
 
+// ── Escala KSS de 8 puntos ────────────────────────────────────────────────────
+// El punto neutro original (nivel 5 "Ni alerta ni somnoliento") fue eliminado
+// para obligar al chofer a posicionarse en el lado alerta o en el lado somnoliento.
 const KSS_LEVELS = [
   { value: 1, label: "Extremadamente alerta" },
   { value: 2, label: "Muy alerta" },
   { value: 3, label: "Alerta" },
   { value: 4, label: "Bastante alerta" },
-  { value: 5, label: "Ni alerta ni somnoliento" },
-  { value: 6, label: "Algunos signos de somnolencia" },
-  { value: 7, label: "Somnoliento, pero sin esfuerzo para permanecer despierto" },
-  { value: 8, label: "Somnoliento, con algo de esfuerzo para permanecer despierto" },
-  { value: 9, label: "Extremadamente somnoliento, gran esfuerzo para mantenerse despierto, luchando contra el sueño" },
-];
+  { value: 5, label: "Algunos signos de somnolencia" },
+  { value: 6, label: "Somnoliento, sin esfuerzo para mantenerse despierto" },
+  { value: 7, label: "Somnoliento, con esfuerzo para mantenerse despierto" },
+  { value: 8, label: "Extremadamente somnoliento, gran esfuerzo para no dormirse" },
+] as const;
 
-function kssColor(v: number) {
-  if (v <= 3) return "bg-emerald-500";
-  if (v <= 5) return "bg-amber-400";
-  if (v <= 7) return "bg-orange-500";
-  return "bg-rose-600";
+function kssAccentColor(v: number): string {
+  if (v <= 3) return "#10b981"; // emerald — alerta
+  if (v <= 5) return "#f59e0b"; // amber   — leve somnolencia
+  if (v <= 7) return "#f97316"; // orange  — somnolencia
+  return "#ef4444";             // rose    — alto riesgo
+}
+
+function kssBandLabel(v: number): { text: string; cls: string } {
+  if (v <= 3) return { text: "Alerta",      cls: "text-emerald-400" };
+  if (v <= 5) return { text: "Moderado",    cls: "text-amber-400"   };
+  if (v <= 7) return { text: "Somnolencia", cls: "text-orange-400"  };
+  return               { text: "Alto riesgo", cls: "text-rose-400"  };
 }
 
 interface Props {
@@ -31,24 +40,46 @@ interface Props {
 export function KssCheckIn({ driverId, onDone }: Props) {
   const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
   const [horasSueno, setHorasSueno] = useState<string>("");
-  const [kss, setKss] = useState(5);
+  const [kss, setKss] = useState(4);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Estado del modal de consentimiento informado
   const [showInfo, setShowInfo] = useState(false);
-
-  // Estado del modal de confirmación de salto
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [skipping, setSkipping] = useState(false);
+
+  // Toast que aparece cuando el chofer intenta retroceder con el botón atrás.
+  const [showBackWarning, setShowBackWarning] = useState(false);
+
+  // ── Bloqueo del botón "Atrás" del navegador / celular ────────────────────
+  // Insertamos un estado extra en el historial para siempre tener algo que
+  // interceptar. Cuando popstate se dispara, volvemos a insertar el estado y
+  // mostramos el aviso — nunca se sale de la pantalla por el botón atrás.
+  useEffect(() => {
+    window.history.pushState({ fatigueGate: true }, "");
+
+    const handlePopState = () => {
+      window.history.pushState({ fatigueGate: true }, "");
+      setShowBackWarning(true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  // Auto-ocultar el aviso de retroceso a los 4 segundos.
+  useEffect(() => {
+    if (!showBackWarning) return;
+    const t = setTimeout(() => setShowBackWarning(false), 4000);
+    return () => clearTimeout(t);
+  }, [showBackWarning]);
 
   const handleSkipConfirmed = async () => {
     setSkipping(true);
     try {
       await driverApi.skipCheckin();
     } catch {
-      // Si falla el registro del salto, dejamos pasar de todas formas
-      // para no bloquear al chofer — el error es no crítico.
+      // No crítico — registrar el salto puede fallar sin bloquear al chofer.
     } finally {
       setSkipping(false);
       setShowSkipConfirm(false);
@@ -66,7 +97,6 @@ export function KssCheckIn({ driverId, onDone }: Props) {
     setError("");
     try {
       await driverApi.submitCheckin({ driver_id: driverId, horas_sueno: horasNum, kss_level: kss });
-      // Advance to the voice step instead of calling onDone directly.
       setStep("voice");
     } catch {
       setError("No se pudo registrar el check-in. Intentá de nuevo.");
@@ -75,20 +105,36 @@ export function KssCheckIn({ driverId, onDone }: Props) {
     }
   };
 
-  // Render voice step — al terminar avanza a PVT (opcional).
-  if (step === "voice") {
-    return <VoiceCheckIn onDone={() => setStep("pvt")} />;
-  }
+  if (step === "voice") return <VoiceCheckIn onDone={() => setStep("pvt")} />;
+  if (step === "pvt")   return <PVTCheckIn onDone={onDone} />;
 
-  // Render PVT step — al terminar (con o sin registro) llama onDone.
-  if (step === "pvt") {
-    return <PVTCheckIn onDone={onDone} />;
-  }
+  const fillPct      = ((kss - 1) / 7) * 100;
+  const accent       = kssAccentColor(kss);
+  const band         = kssBandLabel(kss);
+  const currentLevel = KSS_LEVELS[kss - 1];
 
   return (
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
-      {/* Barra superior: ícono de info a la izquierda, saltar a la derecha */}
-      <div className="flex items-center justify-between px-4 pt-4">
+
+      {/* ── Toast: intento de retroceso ──────────────────────────────────── */}
+      {showBackWarning && (
+        <div className="absolute top-4 inset-x-4 z-[5000] flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 shadow-lg backdrop-blur-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300 leading-snug flex-1">
+            Debés completar el registro de seguridad para continuar, o seleccionar{" "}
+            <strong className="text-amber-200">Saltar test</strong> si está permitido.
+          </p>
+          <button
+            onClick={() => setShowBackWarning(false)}
+            className="shrink-0 text-amber-400 hover:text-amber-200 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Barra superior: info + saltar ────────────────────────────────── */}
+      <div className="flex items-center justify-between px-4 pt-4 shrink-0">
         <button
           onClick={() => setShowInfo(true)}
           aria-label="Información sobre los datos recopilados"
@@ -106,9 +152,10 @@ export function KssCheckIn({ driverId, onDone }: Props) {
         </button>
       </div>
 
-      {/* Content */}
+      {/* ── Contenido ────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 pb-8">
         <div className="max-w-md mx-auto pt-4">
+
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
@@ -139,42 +186,75 @@ export function KssCheckIn({ driverId, onDone }: Props) {
             )}
           </div>
 
-          {/* KSS Slider */}
+          {/* ── KSS Slider ─────────────────────────────────────────────────── */}
           <div className="mb-8">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-              Escala de somnolencia KSS
-            </label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Escala de somnolencia KSS
+              </label>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 ${band.cls}`}>
+                {band.text}
+              </span>
+            </div>
 
-            {/* Level display */}
-            <div className="mb-4 px-4 py-3 rounded-xl bg-slate-800 border border-slate-600">
-              <div className="flex items-baseline gap-2">
-                <span className={`text-3xl font-black text-white`}>{kss}</span>
-                <span className="text-sm text-slate-300 leading-snug">{KSS_LEVELS[kss - 1].label}</span>
+            {/* Tarjeta del nivel actual */}
+            <div className="mb-5 px-4 py-4 rounded-xl bg-slate-800 border border-slate-700">
+              <div className="flex items-baseline gap-3 mb-3">
+                <span
+                  className="text-4xl font-black tabular-nums transition-colors duration-150"
+                  style={{ color: accent }}
+                >
+                  {kss}
+                </span>
+                <span className="text-sm text-slate-200 leading-snug font-medium">
+                  {currentLevel.label}
+                </span>
               </div>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-slate-700 overflow-hidden">
+
+              {/* Barra de progreso */}
+              <div className="h-2 w-full rounded-full bg-slate-700 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-200 ${kssColor(kss)}`}
-                  style={{ width: `${((kss - 1) / 8) * 100}%` }}
+                  className="h-full rounded-full transition-all duration-150"
+                  style={{ width: `${fillPct}%`, background: accent }}
                 />
+              </div>
+
+              {/* Etiquetas de extremo */}
+              <div className="flex justify-between mt-1.5">
+                <span className="text-[10px] text-slate-500">Muy alerta</span>
+                <span className="text-[10px] text-slate-500">Muy somnoliento</span>
               </div>
             </div>
 
-            {/* Level grid */}
-            <div className="mt-4 grid grid-cols-3 gap-1.5">
-              {KSS_LEVELS.map((lvl) => (
-                <button
-                  key={lvl.value}
-                  onClick={() => setKss(lvl.value)}
-                  className={`px-2 py-2 rounded-lg border text-left transition-all cursor-pointer ${
-                    kss === lvl.value
-                      ? "border-blue-500 bg-blue-500/20 text-white"
-                      : "border-slate-700 bg-slate-800/60 text-slate-400 hover:border-slate-500"
-                  }`}
-                >
-                  <span className="block text-xs font-bold">{lvl.value}</span>
-                  <span className="block text-[10px] leading-tight mt-0.5 line-clamp-2">{lvl.label}</span>
-                </button>
-              ))}
+            {/* Slider nativo — zona táctil de 44 px para mobile */}
+            <div className="px-1">
+              <input
+                type="range"
+                min={1}
+                max={8}
+                step={1}
+                value={kss}
+                onChange={(e) => setKss(parseInt(e.target.value, 10))}
+                className="w-full cursor-pointer"
+                style={{
+                  accentColor: accent,
+                  height: "44px",
+                  touchAction: "none",
+                }}
+              />
+
+              {/* Ticks numéricos bajo el slider */}
+              <div className="flex justify-between mt-1 px-0.5">
+                {KSS_LEVELS.map((lvl) => (
+                  <span
+                    key={lvl.value}
+                    className="text-[11px] tabular-nums font-bold transition-colors duration-150"
+                    style={{ color: lvl.value === kss ? accent : "#475569" }}
+                  >
+                    {lvl.value}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -193,11 +273,10 @@ export function KssCheckIn({ driverId, onDone }: Props) {
         </div>
       </div>
 
-      {/* ── Modal de consentimiento informado (Ley 25.326 art. 6) ───── */}
+      {/* ── Modal de consentimiento informado (Ley 25.326 art. 6) ──────────── */}
       {showInfo && (
         <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[#0d1f38] border border-slate-700 shadow-2xl flex flex-col max-h-[90dvh]">
-            {/* Encabezado */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-700 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
@@ -215,12 +294,11 @@ export function KssCheckIn({ driverId, onDone }: Props) {
               </button>
             </div>
 
-            {/* Contenido scrolleable */}
             <div className="overflow-y-auto px-5 py-4 space-y-4 text-xs text-slate-300 leading-relaxed">
               <Section title="¿Qué datos se recopilan?">
                 <ul className="list-disc list-inside space-y-1 text-slate-400">
                   <li>Horas de sueño de la noche anterior</li>
-                  <li>Nivel de somnolencia según la Escala KSS (1–9)</li>
+                  <li>Nivel de somnolencia según la Escala KSS (1–8)</li>
                   <li>Métricas acústicas de voz: tono, energía, velocidad de habla y pausas</li>
                   <li>Puntaje de desvío vocal respecto a tu línea base personal</li>
                   <li>Fecha y hora de cada registro</li>
@@ -251,7 +329,6 @@ export function KssCheckIn({ driverId, onDone }: Props) {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="px-5 py-4 border-t border-slate-700 shrink-0">
               <button
                 onClick={() => setShowInfo(false)}
@@ -264,7 +341,7 @@ export function KssCheckIn({ driverId, onDone }: Props) {
         </div>
       )}
 
-      {/* ── Modal de confirmación de salto ──────────────────────────── */}
+      {/* ── Modal de confirmación de salto ─────────────────────────────────── */}
       {showSkipConfirm && (
         <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-[#0f2744] border border-slate-600 p-6 shadow-2xl">

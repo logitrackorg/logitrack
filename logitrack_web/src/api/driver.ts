@@ -87,6 +87,19 @@ export interface TouchEventPayload {
   misfires: number;
 }
 
+// US4+: respuesta del gate de re-test en ruta
+export interface TestEligibilityResponse {
+  require_test: boolean;
+  reason?: "time_or_misfires" | "trip_start" | "stopped_too_long";
+}
+
+export interface TestEligibilityParams {
+  /** Inicio de viaje inter-sucursal → siempre require_test: true */
+  is_trip_start?: boolean;
+  /** Minutos detenido en ruta inter-sucursal → require_test si >= 6 */
+  stopped_minutes?: number;
+}
+
 // US6: PVT (Psychomotor Vigilance Task)
 export interface PVTPayload {
   latencia_promedio_ms: number;
@@ -120,6 +133,11 @@ export const driverApi = {
    *  la llamada incluso si no hay un KSS registrado en el día. */
   submitPVT: (payload: PVTPayload) =>
     api.post<{ ok: boolean; pvt: PVTResult }>("/driver/pvt-test", payload).then((r) => r.data),
+  /** Consulta si el chofer debe realizar las pruebas de fatiga.
+   *  · Última milla: evalúa tiempo desde check-in y misfires acumulados.
+   *  · Inter-sucursal: evalúa inicio de viaje o tiempo detenido >= 6 min. */
+  getTestEligibility: (params?: TestEligibilityParams) =>
+    api.get<TestEligibilityResponse>("/driver/test-eligibility", { params }).then((r) => r.data),
   getControlPhrase: () =>
     api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
   uploadVoice: (audioBlob: Blob) => {

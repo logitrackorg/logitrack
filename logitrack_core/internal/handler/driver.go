@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -198,8 +199,8 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
 		return
 	}
-	if body.KSSLevel < 1 || body.KSSLevel > 9 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 9"})
+	if body.KSSLevel < 1 || body.KSSLevel > 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
 		return
 	}
 
@@ -474,6 +475,68 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 		score = 100
 	}
 	return score
+}
+
+// GetTestEligibility evalúa si el chofer autenticado debe realizar las pruebas
+// de fatiga. El comportamiento varía según el tipo de chofer y los parámetros:
+//
+//	?is_trip_start=true   — inicio de viaje inter-sucursal (siempre requiere test)
+//	?stopped_minutes=N    — minutos detenido en ruta inter-sucursal (>= 6 requiere test)
+//
+// Choferes de última milla se evalúan por tiempo desde último check-in y misfires.
+func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	isTripStart := c.Query("is_trip_start") == "true"
+	stoppedMinutes := 0
+	if raw := c.Query("stopped_minutes"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			stoppedMinutes = v
+		}
+	}
+
+	switch user.DriverType {
+
+	// ── Inter-sucursal ───────────────────────────────────────────────────────
+	case model.DriverTypeInterBranch:
+		if isTripStart {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "trip_start"})
+			return
+		}
+		if stoppedMinutes >= 6 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Última milla ─────────────────────────────────────────────────────────
+	case model.DriverTypeLastMile:
+		rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+		if !ok {
+			// Sin check-in: la intercepción de scan ya se encarga de mostrarlo.
+			c.JSON(http.StatusOK, gin.H{"require_test": false})
+			return
+		}
+		// Condición 1: más de 3 horas desde el último check-in.
+		if time.Since(rec.RecordedAt) > 3*time.Hour {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		// Condición 2: más de 5 misfires acumulados en el día.
+		totalMisfires := 0
+		for _, e := range rec.TouchEvents {
+			totalMisfires += e.Misfires
+		}
+		if totalMisfires > 5 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Otros roles (fallback seguro) ────────────────────────────────────────
+	default:
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+	}
 }
 
 // updateBaseline computes a simple running average between the existing baseline

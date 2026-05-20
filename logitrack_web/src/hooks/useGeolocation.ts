@@ -11,6 +11,10 @@ export interface UseGeolocationResult {
   position: GeoPoint | null;
   mode: GeoMode;
   isPaused: boolean;
+  /** Milisegundos continuos que el vehículo lleva detenido (velocidad = 0).
+   *  Se resetea a 0 en cuanto el vehículo vuelve a moverse.
+   *  Solo relevante en modo "simulate". */
+  stoppedTimeMs: number;
   pause: () => void;
   play: () => void;
   reset: () => void;
@@ -63,12 +67,19 @@ export function useGeolocation(
     return null;
   });
   const [isPaused, setIsPaused] = useState(false);
+  const [stoppedTimeMs, setStoppedTimeMs] = useState(0);
 
   const isPausedRef = useRef(false);
   const simRef = useRef<{ segIdx: number; segProgress: number }>({ segIdx: 0, segProgress: 0 });
   const routePointsRef = useRef(routePoints);
   const simPathRef = useRef<GeoPoint[]>([]);
   const speedRef = useRef(speed);
+
+  // ── Refs para paradas simuladas ───────────────────────────────────────────
+  // stopEndTimeRef: epoch ms en que termina la parada activa (null = en movimiento).
+  const stopEndTimeRef = useRef<number | null>(null);
+  // stoppedSinceRef: epoch ms en que comenzó la parada activa (null = en movimiento).
+  const stoppedSinceRef = useRef<number | null>(null);
 
   useEffect(() => { routePointsRef.current = routePoints; }, [routePoints]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
@@ -77,6 +88,9 @@ export function useGeolocation(
   const play  = useCallback(() => { setIsPaused(false); isPausedRef.current = false; }, []);
   const reset = useCallback(() => {
     simRef.current = { segIdx: 0, segProgress: 0 };
+    stopEndTimeRef.current = null;
+    stoppedSinceRef.current = null;
+    setStoppedTimeMs(0);
     const path = simPathRef.current.length >= 2 ? simPathRef.current : routePointsRef.current;
     if (path.length > 0) setPosition(path[0]);
   }, []);
@@ -115,25 +129,73 @@ export function useGeolocation(
       .catch(() => { simPathRef.current = routePointsRef.current; });
   }, [mode, routePoints.length]);
 
-  // Intervalo de movimiento sobre la polilínea de calles
+  // Intervalo de movimiento sobre la polilínea de calles.
+  // Incluye velocidad dinámica y paradas aleatorias realistas:
+  //   · Cortas  (10–60 s)  — semáforos, cruces          55 % de las paradas
+  //   · Medias  (1–5 min)  — tráfico denso, peajes      30 % de las paradas
+  //   · Largas  (6–15 min) — descanso, repostaje        15 % de las paradas
+  // Las paradas largas superan intencionalmente los 6 min para activar el gate.
   useEffect(() => {
     if (mode !== "simulate" || routePoints.length < 2) return;
 
     simRef.current = { segIdx: 0, segProgress: 0 };
+    stopEndTimeRef.current = null;
+    stoppedSinceRef.current = null;
+    setStoppedTimeMs(0);
     setPosition(routePointsRef.current[0]);
+
+    // Probabilidad de iniciar una parada nueva en cada tick (~0.6 % → ~1 parada/83 s).
+    const STOP_PROB = 0.006;
 
     const id = setInterval(() => {
       if (isPausedRef.current) return;
+
+      const now = Date.now();
+
+      // ── Gestión de parada activa ─────────────────────────────────────────
+      if (stopEndTimeRef.current !== null) {
+        // Primera vez que entramos en esta parada → registrar inicio.
+        if (stoppedSinceRef.current === null) stoppedSinceRef.current = now;
+        setStoppedTimeMs(now - stoppedSinceRef.current);
+
+        if (now < stopEndTimeRef.current) return; // todavía detenido
+
+        // Parada terminó → retomar movimiento.
+        stopEndTimeRef.current = null;
+        stoppedSinceRef.current = null;
+        setStoppedTimeMs(0);
+      }
+
       const cur = simPathRef.current.length >= 2 ? simPathRef.current : routePointsRef.current;
       if (cur.length < 2) return;
 
       let { segIdx, segProgress } = simRef.current;
       if (segIdx >= cur.length - 1) return;
 
-      // Distancia a recorrer en este tick
-      let remaining = speedRef.current * (TICK_MS / 1000 / 3600);
+      // ── Disparador de nueva parada aleatoria ─────────────────────────────
+      if (Math.random() < STOP_PROB) {
+        const r = Math.random();
+        let durationMs: number;
+        if (r < 0.55) {
+          // Corta: semáforo / cruce (10–60 s)
+          durationMs = (10 + Math.random() * 50) * 1000;
+        } else if (r < 0.85) {
+          // Media: tráfico / peaje (1–5 min)
+          durationMs = (60 + Math.random() * 240) * 1000;
+        } else {
+          // Larga: descanso / repostaje (6–15 min) → activa gate de fatiga
+          durationMs = (360 + Math.random() * 540) * 1000;
+        }
+        stopEndTimeRef.current = now + durationMs;
+        stoppedSinceRef.current = now;
+        setStoppedTimeMs(0);
+        return;
+      }
 
-      // Avanzar por tantos segmentos como corresponda
+      // ── Movimiento con velocidad dinámica (±20 % de la base) ─────────────
+      const dynamicFactor = 0.8 + Math.random() * 0.4; // 0.80–1.20
+      let remaining = speedRef.current * dynamicFactor * (TICK_MS / 1000 / 3600);
+
       while (remaining > 0 && segIdx < cur.length - 1) {
         const from = cur[segIdx];
         const to   = cur[segIdx + 1];
@@ -160,7 +222,7 @@ export function useGeolocation(
     }, TICK_MS);
 
     return () => clearInterval(id);
-  }, [mode, routePoints.length]);
+  }, [mode, routePoints.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { position, mode, isPaused, pause, play, reset };
+  return { position, mode, isPaused, stoppedTimeMs, pause, play, reset };
 }
