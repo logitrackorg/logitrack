@@ -11,6 +11,7 @@ import { AddressAutocomplete, type AddressParts } from "../components/AddressAut
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
+import ShipmentQRModal from "../components/ShipmentQRModal";
 
 const PROVINCES = [
   "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
@@ -147,7 +148,11 @@ export function NewShipment() {
     const originAddress = selectedBranch
       ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
       : form.sender.address;
-    const hasMinData = form.weight_kg > 0 && !!form.package_type && !!originAddress.province && !!form.recipient.address.province;
+    const finalBranch = findFinalBranch(form.recipient.address, branches);
+    const destinationAddress = finalBranch
+      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
+      : form.recipient.address;
+    const hasMinData = form.weight_kg > 0 && !!form.package_type && !!originAddress.province && !!destinationAddress.province;
     if (!hasMinData) {
       setQuote(null);
       return;
@@ -164,7 +169,7 @@ export function NewShipment() {
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method,
           origin: originAddress,
-          destination: form.recipient.address,
+          destination: destinationAddress,
         });
         setQuote(q);
       } catch {
@@ -846,6 +851,9 @@ function PaymentModal({
 }) {
   const [status, setStatus] = useState<Payment["status"]>(payment.status);
   const [polling, setPolling] = useState(true);
+  const [showQR, setShowQR] = useState(false);
+  const [qrBase64, setQrBase64] = useState("");
+  const [qrError, setQrError] = useState("");
 
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -900,20 +908,32 @@ function PaymentModal({
         {status === "pending" && (
           <>
             {payment.init_point && (
-              <a
-                href={payment.init_point}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "block", textAlign: "center",
-                  background: "#009ee3", color: "#fff",
-                  borderRadius: 10, padding: "12px 0",
-                  fontWeight: 700, fontSize: 15, textDecoration: "none",
-                  marginBottom: 12,
-                }}
-              >
-                Abrir pago en Mercado Pago ↗
-              </a>
+              <>
+                <CopyLinkButton url={payment.init_point} />
+                <button
+                  onClick={async () => {
+                    setQrError("");
+                    try {
+                      const { qr_code_base64 } = await paymentApi.getQR(trackingId);
+                      setQrBase64(qr_code_base64);
+                      setShowQR(true);
+                    } catch {
+                      setQrError("No se pudo generar el QR de pago.");
+                    }
+                  }}
+                  style={{
+                    display: "block", width: "100%", textAlign: "center",
+                    background: "#fff", color: "#009ee3",
+                    border: "1px solid #009ee3",
+                    borderRadius: 10, padding: "10px 0",
+                    fontWeight: 700, fontSize: 14, cursor: "pointer",
+                    marginBottom: 12,
+                  }}
+                >
+                  📱 Mostrar QR de cobro
+                </button>
+                {qrError && <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", marginBottom: 8 }}>{qrError}</p>}
+              </>
             )}
             {payment.simulate_enabled && (
               <button
@@ -961,7 +981,41 @@ function PaymentModal({
           Volver a editar el borrador
         </button>
       </div>
+      <ShipmentQRModal
+        isOpen={showQR}
+        onClose={() => setShowQR(false)}
+        trackingId={trackingId}
+        qrCodeBase64={qrBase64}
+        title="💳 QR de cobro"
+        subtitle="El remitente puede escanear este código con su celular para completar el pago."
+        variant="payment"
+      />
     </div>
+  );
+}
+
+function CopyLinkButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      style={{
+        display: "block", width: "100%", textAlign: "center",
+        background: copied ? "#f0fdf4" : "#fff",
+        color: copied ? "#16a34a" : "#374151",
+        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
+        borderRadius: 10, padding: "10px 0",
+        fontWeight: 600, fontSize: 14, cursor: "pointer",
+        marginBottom: 8, transition: "all 0.2s",
+      }}
+    >
+      {copied ? "✓ Link copiado" : "Copiar link de pago"}
+    </button>
   );
 }
 

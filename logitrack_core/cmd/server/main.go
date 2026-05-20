@@ -291,12 +291,12 @@ func main() {
 	protected.POST("/shipments", shipmentWrite, shipmentHandler.Create)
 	protected.POST("/shipments/draft", shipmentWrite, shipmentHandler.SaveDraft)
 	protected.PATCH("/shipments/:tracking_id/draft", shipmentWrite, shipmentHandler.UpdateDraft)
-	protected.POST("/shipments/:tracking_id/confirm", shipmentWrite, shipmentHandler.ConfirmDraft)
 
 	// Payment flow — operator, supervisor
 	protected.POST("/shipments/:tracking_id/request-payment", shipmentWrite, paymentHandler.RequestPayment)
 	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
+	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
 	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor

@@ -172,6 +172,7 @@ export function ShipmentDetail() {
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
           receiving_branch_id: s.receiving_branch_id ?? "",
+          delivery_method: s.delivery_method ?? "ultima_milla",
         });
       }
     } catch {
@@ -330,11 +331,11 @@ export function ShipmentDetail() {
     setConfirmError("");
     try {
       await shipmentApi.updateDraft(trackingId, draftForm);
-      const confirmed = await shipmentApi.confirmDraft(trackingId, user!.username);
-      navigate(`/shipments/${confirmed.tracking_id}`, { replace: true });
+      await paymentApi.requestPayment(trackingId);
+      setShipment(s => s ? { ...s, status: "pending_payment" as ShipmentStatus } : s);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setConfirmError(msg ?? "No se pudo confirmar el envío.");
+      setConfirmError(msg ?? "No se pudo iniciar el pago del envío.");
     } finally {
       setConfirming(false);
     }
@@ -963,7 +964,7 @@ export function ShipmentDetail() {
       {/* ── Right column: Price, Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
         {/* Price Card */}
-        {shipment.price != null && (
+        {shipment.price != null && shipment.status !== "draft" && (
           <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
         )}
 
@@ -1519,11 +1520,15 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     const originAddress = selectedBranch
       ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
       : form.sender.address;
+    const finalBranch = findFinalBranch(form.recipient.address, branches);
+    const destinationAddress = finalBranch
+      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
+      : form.recipient.address;
     const hasMinData =
       weightKg > 0 &&
       !!form.package_type &&
       !!originAddress.province &&
-      !!form.recipient.address.province;
+      !!destinationAddress.province;
     if (!hasMinData) { setQuote(null); return; }
     if (quoteTimer.current) clearTimeout(quoteTimer.current);
     quoteTimer.current = setTimeout(async () => {
@@ -1537,7 +1542,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method ?? "ultima_milla",
           origin: originAddress,
-          destination: form.recipient.address,
+          destination: destinationAddress,
         });
         setQuote(q);
       } catch {
@@ -1871,7 +1876,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           )}
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+          Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
@@ -1898,7 +1903,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           <button onClick={onConfirm}
             disabled={confirming || envelopeOverweight}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
-            {confirming ? "Confirmando..." : "Confirmar envío"}
+            {confirming ? "Procesando..." : "Continuar al pago"}
           </button>
           <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
             style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
@@ -2373,6 +2378,8 @@ function PendingPaymentPanel({
   const [reverting, setReverting] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState("");
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [paymentQRBase64, setPaymentQRBase64] = useState("");
 
   useEffect(() => {
     paymentApi.get(trackingId).then(setPayment).catch(() => {});
@@ -2408,20 +2415,28 @@ function PendingPaymentPanel({
             </strong>
           </p>
           {payment.init_point && (
-            <a
-              href={payment.init_point}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-block",
-                background: "#009ee3", color: "#fff",
-                borderRadius: 8, padding: "8px 18px",
-                fontWeight: 700, fontSize: 13, textDecoration: "none",
-                marginRight: 10, marginBottom: 8,
-              }}
-            >
-              Abrir link de pago ↗
-            </a>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              <CopyPaymentLink url={payment.init_point} />
+              <button
+                onClick={async () => {
+                  try {
+                    const { qr_code_base64 } = await paymentApi.getQR(trackingId);
+                    setPaymentQRBase64(qr_code_base64);
+                    setShowPaymentQR(true);
+                  } catch {
+                    setError("No se pudo generar el QR de pago.");
+                  }
+                }}
+                style={{
+                  background: "#fff", color: "#009ee3",
+                  border: "1px solid #009ee3", borderRadius: 8,
+                  padding: "8px 18px", fontWeight: 700, fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                📱 Mostrar QR de cobro
+              </button>
+            </div>
           )}
         </>
       ) : (
@@ -2469,6 +2484,39 @@ function PendingPaymentPanel({
           {reverting ? "Procesando…" : "Volver a borrador"}
         </button>
       </div>
+      <ShipmentQRModal
+        isOpen={showPaymentQR}
+        onClose={() => setShowPaymentQR(false)}
+        trackingId={trackingId}
+        qrCodeBase64={paymentQRBase64}
+        title="💳 QR de cobro"
+        subtitle="El remitente puede escanear este código con su celular para completar el pago."
+        variant="payment"
+      />
     </div>
+  );
+}
+
+function CopyPaymentLink({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      style={{
+        background: copied ? "#f0fdf4" : "#fff",
+        color: copied ? "#16a34a" : "#374151",
+        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
+        borderRadius: 8, padding: "8px 18px",
+        fontWeight: 600, fontSize: 13, cursor: "pointer",
+        transition: "all 0.2s",
+      }}
+    >
+      {copied ? "✓ Copiado" : "Copiar link de pago"}
+    </button>
   );
 }
