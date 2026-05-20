@@ -51,4 +51,7 @@ export const paymentApi = {
   simulateApproved(trackingId: string): Promise<{ tracking_id: string }> {
     return api.post(`/shipments/${trackingId}/simulate-payment`).then((r) => r.data);
   },
+  getQR(trackingId: string): Promise<{ qr_code_base64: string; init_point: string }> {
+    return api.get(`/shipments/${trackingId}/payment/qr`).then((r) => r.data);
+  },
 };

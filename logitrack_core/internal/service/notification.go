@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -70,17 +71,25 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 
 	originCity := shipment.Sender.Address.City
 	destCity := shipment.Recipient.Address.City
-	label := statusLabel(toStatus)
 
-	title := "Envío recibido en sucursal"
-	body := shipment.TrackingID + " · " + originCity + " → " + destCity + " · " + label
+	var title string
+	var notifType model.NotificationType
+	switch toStatus {
+	case model.StatusAtOriginHub:
+		title = "Envío en devolución — llegó a sucursal de origen"
+		notifType = model.NotificationReturnArrival
+	default:
+		title = "Llegó a una sucursal intermedia"
+		notifType = model.NotificationShipmentReceived
+	}
+	body := shipment.TrackingID + " · " + originCity + " → " + destCity
 
 	now := clock.Now().UTC()
 	for _, u := range users {
 		n := model.Notification{
 			ID:         uuid.NewString(),
 			UserID:     u.ID,
-			Type:       model.NotificationShipmentReceived,
+			Type:       notifType,
 			Title:      title,
 			Body:       body,
 			ResourceID: shipment.TrackingID,
@@ -88,6 +97,59 @@ func (s *NotificationService) NotifyShipmentReceived(shipment model.Shipment, br
 		}
 		if err := s.repo.Create(n); err != nil {
 			log.Printf("[NotificationService] Create notification error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifyDestinationArrival creates an individual destination_arrival notification
+// immediately for each operator and supervisor of the branch.
+// Called as a goroutine (fire-and-forget) from the shipment service.
+// Grouping and expand/collapse is handled on the frontend.
+func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, branchID string) {
+	// Deduplication: skip if an identical notification was created in the last 5 minutes.
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationDestinationArrival, shipment.TrackingID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyDestinationArrival ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyDestinationArrival GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "Llegó a su sucursal destino final"
+	body := fmt.Sprintf("%s · Desde %s · %.1f kg",
+		shipment.TrackingID, shipment.Sender.Address.City, shipment.WeightKg)
+	if shipment.Priority == "alta" {
+		body += " · ⚡ Prioridad alta"
+	}
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationDestinationArrival,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyDestinationArrival Create error for user %s: %v", u.ID, err)
 		} else if s.hub != nil {
 			s.hub.Push(n.UserID)
 		}

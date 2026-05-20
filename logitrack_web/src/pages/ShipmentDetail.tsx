@@ -2373,6 +2373,8 @@ function PendingPaymentPanel({
   const [reverting, setReverting] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState("");
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
+  const [paymentQRBase64, setPaymentQRBase64] = useState("");
 
   useEffect(() => {
     paymentApi.get(trackingId).then(setPayment).catch(() => {});
@@ -2408,20 +2410,28 @@ function PendingPaymentPanel({
             </strong>
           </p>
           {payment.init_point && (
-            <a
-              href={payment.init_point}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-block",
-                background: "#009ee3", color: "#fff",
-                borderRadius: 8, padding: "8px 18px",
-                fontWeight: 700, fontSize: 13, textDecoration: "none",
-                marginRight: 10, marginBottom: 8,
-              }}
-            >
-              Abrir link de pago ↗
-            </a>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              <CopyPaymentLink url={payment.init_point} />
+              <button
+                onClick={async () => {
+                  try {
+                    const { qr_code_base64 } = await paymentApi.getQR(trackingId);
+                    setPaymentQRBase64(qr_code_base64);
+                    setShowPaymentQR(true);
+                  } catch {
+                    setError("No se pudo generar el QR de pago.");
+                  }
+                }}
+                style={{
+                  background: "#fff", color: "#009ee3",
+                  border: "1px solid #009ee3", borderRadius: 8,
+                  padding: "8px 18px", fontWeight: 700, fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                📱 Mostrar QR de cobro
+              </button>
+            </div>
           )}
         </>
       ) : (
@@ -2469,6 +2479,39 @@ function PendingPaymentPanel({
           {reverting ? "Procesando…" : "Volver a borrador"}
         </button>
       </div>
+      <ShipmentQRModal
+        isOpen={showPaymentQR}
+        onClose={() => setShowPaymentQR(false)}
+        trackingId={trackingId}
+        qrCodeBase64={paymentQRBase64}
+        title="💳 QR de cobro"
+        subtitle="El remitente puede escanear este código con su celular para completar el pago."
+        variant="payment"
+      />
     </div>
+  );
+}
+
+function CopyPaymentLink({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      style={{
+        background: copied ? "#f0fdf4" : "#fff",
+        color: copied ? "#16a34a" : "#374151",
+        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
+        borderRadius: 8, padding: "8px 18px",
+        fontWeight: 600, fontSize: 13, cursor: "pointer",
+        transition: "all 0.2s",
+      }}
+    >
+      {copied ? "✓ Copiado" : "Copiar link de pago"}
+    </button>
   );
 }
