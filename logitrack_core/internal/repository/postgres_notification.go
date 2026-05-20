@@ -133,6 +133,26 @@ func (r *postgresNotificationRepository) ExistsRecent(notifType model.Notificati
 	return exists, err
 }
 
+func (r *postgresNotificationRepository) GetAdmins() ([]model.User, error) {
+	rows, err := r.db.Query(
+		`SELECT id FROM users WHERE role = $1 AND status = 'activo'`,
+		string(model.RoleAdmin),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func (r *postgresNotificationRepository) GetUsersByBranchAndRoles(branchID string, roles []model.Role) ([]model.User, error) {
 	// Convert []model.Role to []string for pq.Array or manual IN clause
 	roleStrings := make([]string, len(roles))

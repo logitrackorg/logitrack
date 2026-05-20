@@ -156,6 +156,114 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 	}
 }
 
+// NotifySLARisk crea una notificación de SLA en riesgo para los operadores y supervisores
+// de la sucursal del envío. Si no hay ninguno, se notifica a los administradores (CA-02).
+// La deduplicación por ciclo se controla externamente mediante shipment.SLANotifiedAt (CA-04).
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifySLARisk(shipment model.Shipment, branchID string) {
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifySLARisk GetUsers error: %v", err)
+		return
+	}
+
+	// Fallback CA-02: si no hay operadores/supervisores en la sucursal, notificar a admins.
+	if len(users) == 0 {
+		admins, err := s.repo.GetAdmins()
+		if err != nil {
+			log.Printf("[NotificationService] NotifySLARisk GetAdmins error: %v", err)
+			return
+		}
+		users = admins
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "⚠️ SLA en riesgo"
+	// El ETA ISO se incrusta al final del body para que el frontend calcule el
+	// countdown en tiempo real. Formato: "TID · origen → destino · eta:RFC3339"
+	body := fmt.Sprintf("%s · %s → %s",
+		shipment.TrackingID,
+		shipment.Sender.Address.City,
+		shipment.Recipient.Address.City,
+	)
+	if shipment.EstimatedDeliveryAt != nil {
+		body += " · eta:" + shipment.EstimatedDeliveryAt.UTC().Format(time.RFC3339)
+	}
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationSLARisk,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifySLARisk Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifySLAExpired crea una notificación de SLA vencido para los operadores y supervisores
+// de la sucursal del envío, con fallback a admins (CA-02).
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifySLAExpired(shipment model.Shipment, branchID string) {
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifySLAExpired GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		admins, err := s.repo.GetAdmins()
+		if err != nil {
+			log.Printf("[NotificationService] NotifySLAExpired GetAdmins error: %v", err)
+			return
+		}
+		users = admins
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "🚨 SLA vencido"
+	body := fmt.Sprintf("%s · %s → %s",
+		shipment.TrackingID,
+		shipment.Sender.Address.City,
+		shipment.Recipient.Address.City,
+	)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationSLAExpired,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifySLAExpired Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // NotifyFatigueAlert sends an urgent notification to all supervisors of the given
 // branch when a driver's composite fatigue score reaches the RED (high risk) level.
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.

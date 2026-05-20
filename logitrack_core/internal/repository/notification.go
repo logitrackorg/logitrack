@@ -39,4 +39,7 @@ type NotificationRepository interface {
 	// GetUsersByBranchAndRoles returns users belonging to branchID with any of
 	// the given roles and status 'activo'.
 	GetUsersByBranchAndRoles(branchID string, roles []model.Role) ([]model.User, error)
+
+	// GetAdmins returns all active users with role 'admin' (fallback for CA-02).
+	GetAdmins() ([]model.User, error)
 }

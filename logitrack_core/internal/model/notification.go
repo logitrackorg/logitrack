@@ -8,6 +8,8 @@ const (
 	NotificationShipmentReceived   NotificationType = "shipment_received"   // llegó a sucursal intermedia
 	NotificationDestinationArrival NotificationType = "destination_arrival"  // llegó a sucursal destino final
 	NotificationReturnArrival      NotificationType = "return_arrival"       // llegó a sucursal de origen (devolución)
+	NotificationSLARisk            NotificationType = "sla_risk"             // envío en riesgo de incumplir SLA
+	NotificationSLAExpired         NotificationType = "sla_expired"          // envío venció su SLA
 	NotificationFatigueAlert       NotificationType = "fatigue_alert"        // score de riesgo del chofer en nivel ROJO
 )
 

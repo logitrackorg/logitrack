@@ -123,9 +123,16 @@ func main() {
 
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
+	// También se dispara el chequeo de SLA en riesgo/vencido para que las
+	// notificaciones reflejen el nuevo momento sin esperar al siguiente plan.
+	// slaRiskChecker se asigna más abajo, después de crear routingSvc.
+	var slaRiskChecker func()
 	clockHandler := handler.NewClockHandler(func() {
 		draftLifecycleSvc.RunExpirationJob()
 		draftLifecycleSvc.RunPurgeJob()
+		if slaRiskChecker != nil {
+			slaRiskChecker()
+		}
 	})
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
@@ -194,6 +201,8 @@ func main() {
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetORSClient(orsClient)
+	routingSvc.SetNotificationService(notifSvc)
+	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
