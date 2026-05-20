@@ -330,11 +330,11 @@ export function ShipmentDetail() {
     setConfirmError("");
     try {
       await shipmentApi.updateDraft(trackingId, draftForm);
-      const confirmed = await shipmentApi.confirmDraft(trackingId, user!.username);
-      navigate(`/shipments/${confirmed.tracking_id}`, { replace: true });
+      await paymentApi.requestPayment(trackingId);
+      setShipment(s => s ? { ...s, status: "pending_payment" as ShipmentStatus } : s);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setConfirmError(msg ?? "No se pudo confirmar el envío.");
+      setConfirmError(msg ?? "No se pudo iniciar el pago del envío.");
     } finally {
       setConfirming(false);
     }
@@ -1871,7 +1871,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           )}
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+          Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
@@ -1898,7 +1898,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           <button onClick={onConfirm}
             disabled={confirming || envelopeOverweight}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
-            {confirming ? "Confirmando..." : "Confirmar envío"}
+            {confirming ? "Procesando..." : "Continuar al pago"}
           </button>
           <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
             style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
