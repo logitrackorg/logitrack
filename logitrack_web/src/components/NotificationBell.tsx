@@ -188,17 +188,15 @@ export function NotificationBell() {
     };
   }, [fetchCount]);
 
-  // Ticker: re-render every 30 s while panel is open para actualizar el countdown de SLA.
-  // También refresca el offset del reloj del servidor para que el countdown sea correcto
-  // cuando el admin activó un override de reloj.
+  // Carga el offset del reloj del servidor al montar (antes de que el usuario
+  // abra el panel) y lo refresca cada 30 s. Así el tiempo relativo ya es
+  // correcto desde el primer render del panel, sin esperar la promesa.
   useEffect(() => {
-    if (!open) return;
-    const refresh = () =>
-      fetchServerClockOffsetMs().then(setClockOffsetMs); // setState → re-render automático
-    refresh(); // carga inmediata al abrir el panel
+    const refresh = () => fetchServerClockOffsetMs().then(setClockOffsetMs);
+    refresh();
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
-  }, [open]);
+  }, []);
 
   // Close panel on outside click.
   useEffect(() => {
