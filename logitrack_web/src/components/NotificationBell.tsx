@@ -131,8 +131,7 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount]       = useState(0);
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [, setTick]                         = useState(0); // fuerza re-render para countdown live
-  const clockOffsetMs                       = useRef(0);  // offset reloj servidor vs browser
+  const [clockOffsetMs, setClockOffsetMs]   = useState(0); // offset reloj servidor vs browser
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -195,10 +194,7 @@ export function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     const refresh = () =>
-      fetchServerClockOffsetMs().then((ms) => {
-        clockOffsetMs.current = ms;
-        setTick((t) => t + 1); // fuerza re-render para que relativeTime y countdown usen el offset
-      });
+      fetchServerClockOffsetMs().then(setClockOffsetMs); // setState → re-render automático
     refresh(); // carga inmediata al abrir el panel
     const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
@@ -281,14 +277,14 @@ export function NotificationBell() {
             <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {n.title}
             </span>
-            <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs.current)}</span>
+            <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs)}</span>
           </div>
           <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {displayBody}
           </div>
           {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
           {isSLARisk && eta && (() => {
-            const label = slaCountdown(eta, clockOffsetMs.current);
+            const label = slaCountdown(eta, clockOffsetMs);
             if (label === "venció") return null; // sla_expired ya cubre este estado
             return (
               <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
@@ -370,7 +366,7 @@ export function NotificationBell() {
                   {displayBody}
                 </span>
                 {isSLARisk && eta && (() => {
-                  const label = slaCountdown(eta, clockOffsetMs.current);
+                  const label = slaCountdown(eta, clockOffsetMs);
                   if (label === "venció") return null;
                   return <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>{label}</span>;
                 })()}
