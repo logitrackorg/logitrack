@@ -282,12 +282,16 @@ export function NotificationBell() {
           <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {displayBody}
           </div>
-          {/* Countdown live para sla_risk */}
-          {isSLARisk && eta && (
-            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
-              {slaCountdown(eta, clockOffsetMs.current)}
-            </div>
-          )}
+          {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
+          {isSLARisk && eta && (() => {
+            const label = slaCountdown(eta, clockOffsetMs.current);
+            if (label === "venció") return null; // sla_expired ya cubre este estado
+            return (
+              <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
+                {label}
+              </div>
+            );
+          })()}
           {/* Label fijo para sla_expired */}
           {isSLAExpired && (
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>

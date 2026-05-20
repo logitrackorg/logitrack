@@ -365,14 +365,17 @@ export function NotificationsPage() {
                 <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>
                   {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
                 </div>
-                {/* Countdown live para sla_risk */}
+                {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
                 {n.type === "sla_risk" && (() => {
                   const eta = parseSLAEta(n.body);
-                  return eta ? (
+                  if (!eta) return null;
+                  const label = slaCountdown(eta, clockOffsetMs.current);
+                  if (label === "venció") return null; // sla_expired ya cubre este estado
+                  return (
                     <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
-                      {slaCountdown(eta, clockOffsetMs.current)}
+                      {label}
                     </div>
-                  ) : null;
+                  );
                 })()}
                 {/* Label para sla_expired */}
                 {n.type === "sla_expired" && (
