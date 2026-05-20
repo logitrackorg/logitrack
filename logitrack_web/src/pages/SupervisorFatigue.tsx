@@ -140,9 +140,8 @@ function HistoryRow({ record }: { record: CheckinRecord }) {
           <td className="py-2 px-3 text-center">
             {record.pvt_metrics ? (
               <span className={`text-[11px] font-bold tabular-nums ${
-                record.pvt_metrics.latencia_promedio_ms < 250 ? "text-emerald-600" :
-                record.pvt_metrics.latencia_promedio_ms < 350 ? "text-blue-600"   :
-                record.pvt_metrics.latencia_promedio_ms < 450 ? "text-amber-600"  : "text-rose-600"
+                record.pvt_metrics.latencia_promedio_ms <= 800  ? "text-emerald-600" :
+                record.pvt_metrics.latencia_promedio_ms <= 1100 ? "text-amber-600"   : "text-rose-600"
               }`}>
                 {record.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
               </span>

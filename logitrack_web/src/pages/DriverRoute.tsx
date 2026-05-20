@@ -103,6 +103,9 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
+      // Reanudar simulación: el período de gracia (3 s) evita re-pausa inmediata
+      // mientras load() actualiza la lista de puntos de entrega pendientes.
+      play();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -126,6 +129,8 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
+      // Reanudar simulación tras registrar intento fallido.
+      play();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -146,11 +151,21 @@ export function DriverRoute() {
     return pts;
   }, [data]);
 
+  // Puntos de entrega pendientes en orden de secuencia. El simulador se
+  // detiene automáticamente al entrar en el radio del primero de la lista.
+  const deliveryPoints = useMemo(() => {
+    if (!data?.waypoints) return [];
+    return [...data.waypoints]
+      .filter((wp) => wp.status === "out_for_delivery")
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((wp) => ({ lat: wp.latitude, lng: wp.longitude }));
+  }, [data]);
+
   const [simActive, setSimActive] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
-    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier);
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));

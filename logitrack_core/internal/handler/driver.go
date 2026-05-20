@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +27,7 @@ type DriverHandler struct {
 	checkinRepo *repository.CheckinRepository
 	fatigueSvc  *service.FatigueConfigService
 	auditRepo   *repository.AuditLogRepository
+	notifSvc    *service.NotificationService
 }
 
 func NewDriverHandler(
@@ -33,6 +35,7 @@ func NewDriverHandler(
 	branchRepo repository.BranchRepository,
 	fatigueSvc *service.FatigueConfigService,
 	auditRepo *repository.AuditLogRepository,
+	notifSvc *service.NotificationService,
 ) *DriverHandler {
 	return &DriverHandler{
 		routeSvc:    routeSvc,
@@ -40,7 +43,27 @@ func NewDriverHandler(
 		checkinRepo: repository.NewCheckinRepository(),
 		fatigueSvc:  fatigueSvc,
 		auditRepo:   auditRepo,
+		notifSvc:    notifSvc,
 	}
+}
+
+// checkAndNotifyFatigueRisk calcula el score de fatiga con los datos disponibles
+// en el check-in y notifica a los supervisores si el nivel es ROJO.
+// Debe llamarse en una goroutine (fire-and-forget).
+func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model.DriverCheckin) {
+	if h.notifSvc == nil {
+		return
+	}
+	cfg := h.fatigueSvc.Get()
+	score, level := fatigueRiskScore(checkin, cfg)
+	if level != model.RiskRed {
+		return
+	}
+	fullName := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if fullName == "" {
+		fullName = user.Username
+	}
+	h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
 }
 
 // ── Route handlers ────────────────────────────────────────────────────────────
@@ -224,6 +247,11 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		return
 	}
 
+	// Alerta de fatiga — non-blocking. Evalúa el score con los datos disponibles
+	// hasta este momento (KSS + voz si ya fue cargada) y notifica a supervisores
+	// si el nivel cae en ROJO.
+	go h.checkAndNotifyFatigueRisk(user, rec)
+
 	// Audit — non-blocking (AC1).
 	if detailsJSON, merr := json.Marshal(struct {
 		DriverID   string `json:"driver_id"`
@@ -320,6 +348,11 @@ func (h *DriverHandler) SubmitPVT(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el resultado PVT"})
 		return
 	}
+
+	// Alerta de fatiga — el PVT tiene peso 35%; recalcular con el dato nuevo.
+	// La dedup de 1 h evita duplicar la alerta si ya fue enviada tras el KSS.
+	go h.checkAndNotifyFatigueRisk(user, rec)
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "pvt": rec.PVTMetrics})
 }
 

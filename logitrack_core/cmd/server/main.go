@@ -165,7 +165,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
