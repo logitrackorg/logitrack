@@ -45,15 +45,7 @@ services:
       DB_NAME: logitrack
       DB_SSLMODE: disable
       FRONTEND_URL: http://localhost:5173
-      # Email transaccional — Resend SMTP.
-      # Estos valores se sobreescriben con los del .env cuando existe.
-      # En producción/CI setear directamente como variables de entorno del host.
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-465}
-      SMTP_USER: ${SMTP_USER:-resend}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-}
-      TRACK_BASE_URL: ${TRACK_BASE_URL:-http://localhost:5173}
+      # SMTP y TRACK_BASE_URL se cargan desde logitrack_core/.env vía env_file.
     ports:
       - "8080:8080"
     volumes:

@@ -119,8 +119,13 @@ func main() {
 		os.Getenv("MP_WEBHOOK_SECRET"),
 		getenv("MP_NOTIFICATION_URL", ""),
 	)
-	if mpClient == nil {
-		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — pagos deshabilitados")
+	if mpClient != nil {
+		log.Println("[mercadopago] cliente configurado — webhooks activos")
+	} else {
+		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
+	}
+	if os.Getenv("MP_SIMULATE_ENABLED") == "true" {
+		log.Println("[mercadopago] modo simulación HABILITADO (MP_SIMULATE_ENABLED=true)")
 	}
 
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
