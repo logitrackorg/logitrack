@@ -194,12 +194,13 @@ export function NotificationBell() {
   // cuando el admin activó un override de reloj.
   useEffect(() => {
     if (!open) return;
-    // Carga inmediata al abrir el panel
-    fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
-    const id = setInterval(() => {
-      fetchServerClockOffsetMs().then((ms) => { clockOffsetMs.current = ms; });
-      setTick((t) => t + 1);
-    }, 30_000);
+    const refresh = () =>
+      fetchServerClockOffsetMs().then((ms) => {
+        clockOffsetMs.current = ms;
+        setTick((t) => t + 1); // fuerza re-render para que relativeTime y countdown usen el offset
+      });
+    refresh(); // carga inmediata al abrir el panel
+    const id = setInterval(refresh, 30_000);
     return () => clearInterval(id);
   }, [open]);
 
