@@ -378,16 +378,9 @@ export function PVTCheckIn({ onDone }: Props) {
             <button
               onClick={handleSendResults}
               disabled={sending}
-              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-base cursor-pointer disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2 mb-3"
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-base cursor-pointer disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
             >
               {sending ? "Guardando…" : "Guardar y continuar →"}
-            </button>
-            <button
-              onClick={onDone}
-              disabled={sending}
-              className="w-full h-10 rounded-xl border border-slate-600 text-slate-400 text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              Omitir registro
             </button>
           </div>
         </div>
