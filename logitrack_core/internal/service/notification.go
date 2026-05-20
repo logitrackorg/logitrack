@@ -156,6 +156,52 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 	}
 }
 
+// NotifyFatigueAlert sends an urgent notification to all supervisors of the given
+// branch when a driver's composite fatigue score reaches the RED (high risk) level.
+// Deduplication: only one alert per driver per hour to avoid flooding supervisors.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, driverFullName string, score int) {
+	// Dedup: skip if an alert for the same driver was already sent within the last hour.
+	since := clock.Now().Add(-1 * time.Hour)
+	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyFatigueAlert ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	supervisors, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyFatigueAlert GetUsersByBranchAndRoles error: %v", err)
+		return
+	}
+	if len(supervisors) == 0 {
+		return
+	}
+
+	title := "⚠️ ALERTA: Fatiga Elevada"
+	body := fmt.Sprintf("Chofer: %s · Score de riesgo: %d/100 (nivel ROJO)", driverFullName, score)
+
+	now := clock.Now().UTC()
+	for _, sup := range supervisors {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     sup.ID,
+			Type:       model.NotificationFatigueAlert,
+			Title:      title,
+			Body:       body,
+			ResourceID: driverUsername, // usado para dedup y navegación en el frontend
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyFatigueAlert Create error for supervisor %s: %v", sup.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // GetForUser returns paginated notifications for a user.
 func (s *NotificationService) GetForUser(userID string, filters repository.NotificationFilters) ([]model.Notification, int, error) {
 	return s.repo.ListByUser(userID, filters)

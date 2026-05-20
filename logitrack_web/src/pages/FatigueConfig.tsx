@@ -6,8 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
-  FlaskConical,
-  RotateCcw,
 } from "lucide-react";
 import {
   fatigueConfigApi,
@@ -91,11 +89,6 @@ export function FatigueConfig() {
   const [error,    setError]    = useState("");
   const [success,  setSuccess]  = useState(false);
 
-  // reset de check-ins (testing)
-  const [resetting,    setResetting]    = useState(false);
-  const [resetError,   setResetError]   = useState("");
-  const [resetSuccess, setResetSuccess] = useState(false);
-
   // historial de auditoría (US13)
   const [auditOpen,    setAuditOpen]    = useState(false);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[] | null>(null);
@@ -145,26 +138,6 @@ export function FatigueConfig() {
       setError(msg);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleResetCheckins = async () => {
-    setResetting(true);
-    setResetError("");
-    setResetSuccess(false);
-    try {
-      const updated = await fatigueConfigApi.resetCheckins();
-      setConfig(updated);
-      setDraft(updated);
-      setResetSuccess(true);
-      setTimeout(() => setResetSuccess(false), 5000);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "No se pudo ejecutar el reset.";
-      setResetError(msg);
-    } finally {
-      setResetting(false);
     }
   };
 
@@ -220,7 +193,7 @@ export function FatigueConfig() {
           <CardTitle>Umbrales de riesgo</CardTitle>
           <CardDescription>
             El score compuesto (0–100) se clasifica según estos límites.
-            Verde ≤ <strong>green_max</strong> · Rojo ≥ <strong>red_min</strong> · Ámbar en el medio.
+            Verde ≤ <strong>green_max</strong> · Rojo ≥ <strong>red_min</strong> · Amarillo en el medio.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -292,59 +265,6 @@ export function FatigueConfig() {
 
           {/* Indicador de suma */}
           <ActiveWeightsBadge sum={wSum} ok={weightsOk} noneEnabled={noneEnabled} />
-        </CardContent>
-      </Card>
-
-      {/* ── Herramientas de testing ───────────────────────────────────── */}
-      <Card className="border-amber-200 bg-amber-50/40">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-amber-800">
-            <FlaskConical className="w-4 h-4" />
-            Herramientas de testing
-          </CardTitle>
-          <CardDescription>
-            Estas acciones están pensadas para pruebas. No afectan datos de producción de envíos ni rutas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-700">Resetear check-ins del día</p>
-              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                Fuerza que <strong>todos los choferes</strong> vean la puerta de check-in nuevamente,
-                sin importar si ya la completaron hoy. Los datos registrados se preservan.
-              </p>
-              {config?.last_checkin_reset && (
-                <p className="mt-1.5 text-[11px] text-amber-700 font-medium">
-                  Último reset:{" "}
-                  {new Date(config.last_checkin_reset).toLocaleString("es-AR", {
-                    day: "2-digit", month: "2-digit", year: "numeric",
-                    hour: "2-digit", minute: "2-digit", second: "2-digit",
-                  })}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={handleResetCheckins}
-              disabled={resetting}
-              className="shrink-0 h-10 px-4 rounded-lg border-2 border-amber-400 bg-white hover:bg-amber-50 active:bg-amber-100 disabled:bg-slate-100 disabled:border-slate-200 disabled:text-slate-400 text-amber-800 text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer inline-flex items-center gap-2"
-            >
-              <RotateCcw className={`w-4 h-4 ${resetting ? "animate-spin" : ""}`} />
-              {resetting ? "Reseteando…" : "Resetear ahora"}
-            </button>
-          </div>
-          {resetSuccess && (
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              Reset aplicado. Los choferes verán la puerta de check-in al recargar.
-            </div>
-          )}
-          {resetError && (
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {resetError}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -617,8 +537,8 @@ function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number })
         <div className="bg-emerald-400 flex items-center justify-center text-white" style={{ width: `${gPct}%` }} title={`Verde: 0–${greenMax}`}>
           {gPct >= 8 ? "Verde" : ""}
         </div>
-        <div className="bg-amber-400 flex items-center justify-center text-white" style={{ width: `${aPct}%` }} title={`Ámbar: ${greenMax + 1}–${redMin - 1}`}>
-          {aPct >= 8 ? "Ámbar" : ""}
+        <div className="bg-amber-400 flex items-center justify-center text-white" style={{ width: `${aPct}%` }} title={`Amarillo: ${greenMax + 1}–${redMin - 1}`}>
+          {aPct >= 8 ? "Amarillo" : ""}
         </div>
         <div className="bg-rose-500 flex items-center justify-center text-white" style={{ width: `${rPct}%` }} title={`Rojo: ${redMin}–100`}>
           {rPct >= 8 ? "Rojo" : ""}

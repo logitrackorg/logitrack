@@ -12,6 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -34,12 +36,17 @@ type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+
+  // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
+  const [midRouteCheckin, setMidRouteCheckin] = useState(false);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -69,6 +76,22 @@ export function DriverRoute() {
     setFailedNotes("");
   };
 
+  // Consulta el gate de re-test. Si el chofer debe hacer las pruebas de nuevo,
+  // activa el overlay antes de refrescar la lista. En caso de error de red,
+  // deja pasar para no bloquear al chofer.
+  const checkReTestGate = async () => {
+    try {
+      const eligibility = await driverApi.getTestEligibility();
+      if (eligibility.require_test) {
+        setMidRouteCheckin(true);
+        return;
+      }
+    } catch {
+      // error de red → continuar sin bloquear
+    }
+    load();
+  };
+
   const handleDeliver = async () => {
     if (!deliverShipment || !recipientDni.trim()) return;
     setSubmitting(true);
@@ -80,7 +103,10 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
-      load();
+      // Reanudar simulación: el período de gracia (3 s) evita re-pausa inmediata
+      // mientras load() actualiza la lista de puntos de entrega pendientes.
+      play();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar la entrega.");
@@ -103,7 +129,9 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
-      load();
+      // Reanudar simulación tras registrar intento fallido.
+      play();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar el intento fallido.");
@@ -123,14 +151,39 @@ export function DriverRoute() {
     return pts;
   }, [data]);
 
+  // Puntos de entrega pendientes en orden de secuencia. El simulador se
+  // detiene automáticamente al entrar en el radio del primero de la lista.
+  const deliveryPoints = useMemo(() => {
+    if (!data?.waypoints) return [];
+    return [...data.waypoints]
+      .filter((wp) => wp.status === "out_for_delivery")
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((wp) => ({ lat: wp.latitude, lng: wp.longitude }));
+  }, [data]);
+
   const [simActive, setSimActive] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
-    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier);
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
+
+  // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
+  // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
+  // Solo aplica a choferes de última milla; el overlay cubre toda la pantalla.
+  if (midRouteCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        onDone={() => {
+          setMidRouteCheckin(false);
+          load();
+        }}
+      />
+    );
+  }
 
   if (loading) return <RouteSkeleton />;
   if (noRoute) return <Navigate to="/driver/scan" replace />;

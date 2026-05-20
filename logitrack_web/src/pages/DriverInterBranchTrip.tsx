@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -16,9 +16,13 @@ import {
   X,
 } from "lucide-react";
 import { interBranchTripsApi, type InterBranchTrip, type TripQRResponse } from "../api/interBranchTrips";
+import { driverApi } from "../api/driver";
 import { publicTrackingApi } from "../api/publicTracking";
 import type { Branch } from "../api/branches";
 import { Card } from "../components/ui/card";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
+import { useGeolocation } from "../hooks/useGeolocation";
 
 // ---------------------------------------------------------------------------
 // Haversine
@@ -69,6 +73,7 @@ function formatDuration(hours: number): string {
 // ---------------------------------------------------------------------------
 export function DriverInterBranchTrip() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<InterBranchTrip | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +81,13 @@ export function DriverInterBranchTrip() {
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
+
+  // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
+  const [midTripCheckin, setMidTripCheckin] = useState(false);
+  // Indica que hay un "Iniciar viaje" pendiente que se debe ejecutar tras el check-in.
+  const pendingStartRef = useRef(false);
+  // Evita disparar múltiples consultas al gate cuando el vehículo está detenido.
+  const stopGateCheckedRef = useRef(false);
 
   // QR modal state
   const [qrOpen, setQrOpen] = useState(false);
@@ -93,6 +105,26 @@ export function DriverInterBranchTrip() {
   const mapInstanceRef = useRef<unknown>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
+  // Los routePoints se derivan del trip y las branches. Mientras no haya datos
+  // el hook recibe [] y no inicia el intervalo (ver implementación).
+  const routePoints = useMemo(() => {
+    if (!trip || !branches.length) return [];
+    const origin = branches.find((b) => b.id === trip.origin_branch_id);
+    if (!origin?.latitude) return [];
+    const pts: { lat: number; lng: number }[] = [
+      { lat: origin.latitude!, lng: origin.longitude! },
+    ];
+    const stops = trip.stops ?? [];
+    stops.forEach((s) => {
+      const b = branches.find((br) => br.id === s.branch_id);
+      if (b?.latitude) pts.push({ lat: b.latitude!, lng: b.longitude! });
+    });
+    return pts;
+  }, [trip, branches]);
+
+  const { stoppedTimeMs } = useGeolocation(routePoints, undefined, 80);
 
   const load = useCallback(async () => {
     try {
@@ -166,6 +198,26 @@ export function DriverInterBranchTrip() {
 
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [qrOpen, trip, branches]);
+
+  // Gate de fatiga por tiempo detenido (solo en modo simulación activa y viaje en tránsito).
+  // Cuando stoppedTimeMs vuelve a 0 el ref se resetea para detectar la próxima parada larga.
+  // La consulta al backend solo se dispara UNA VEZ por parada (al cruzar el umbral de 6 min).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito" || midTripCheckin) return;
+
+    if (stoppedTimeMs === 0) {
+      stopGateCheckedRef.current = false; // vehículo en movimiento → resetear para próxima parada
+      return;
+    }
+    if (stoppedTimeMs < 6 * 60 * 1000) return; // todavía bajo el umbral
+    if (stopGateCheckedRef.current) return;     // ya consultamos para esta parada
+
+    stopGateCheckedRef.current = true;
+    driverApi
+      .getTestEligibility({ stopped_minutes: Math.floor(stoppedTimeMs / 60_000) })
+      .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+      .catch(() => { /* error de red — no bloquear al chofer */ });
+  }, [stoppedTimeMs, trip, midTripCheckin]);
 
   // Mapa Leaflet
   useEffect(() => {
@@ -255,7 +307,7 @@ export function DriverInterBranchTrip() {
     }
   };
 
-  const handleStart = async () => {
+  const doStartTrip = async () => {
     if (!trip) return;
     setStarting(true);
     setError("");
@@ -269,6 +321,43 @@ export function DriverInterBranchTrip() {
       setStarting(false);
     }
   };
+
+  const handleStart = async () => {
+    if (!trip) return;
+    setError("");
+    try {
+      // Consultar gate de fatiga antes de iniciar el viaje.
+      const elig = await driverApi.getTestEligibility({ is_trip_start: true });
+      if (elig.require_test) {
+        pendingStartRef.current = true; // ejecutar startTrip después del check-in
+        setMidTripCheckin(true);
+        return;
+      }
+    } catch {
+      // Error de red → continuar sin bloquear
+    }
+    await doStartTrip();
+  };
+
+  // Callback que recibe KssCheckIn al terminar (completar o saltear).
+  const handleCheckinDone = useCallback(async () => {
+    setMidTripCheckin(false);
+    if (pendingStartRef.current) {
+      pendingStartRef.current = false;
+      await doStartTrip();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
+  // el viaje o cuando lleva más de 6 minutos detenido en ruta.
+  if (midTripCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        onDone={handleCheckinDone}
+      />
+    );
+  }
 
   if (loading) return <TripSkeleton />;
   if (noTrip) return <NoTripView />;

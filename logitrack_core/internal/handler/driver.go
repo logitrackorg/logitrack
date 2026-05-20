@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +27,7 @@ type DriverHandler struct {
 	checkinRepo *repository.CheckinRepository
 	fatigueSvc  *service.FatigueConfigService
 	auditRepo   *repository.AuditLogRepository
+	notifSvc    *service.NotificationService
 }
 
 func NewDriverHandler(
@@ -32,6 +35,7 @@ func NewDriverHandler(
 	branchRepo repository.BranchRepository,
 	fatigueSvc *service.FatigueConfigService,
 	auditRepo *repository.AuditLogRepository,
+	notifSvc *service.NotificationService,
 ) *DriverHandler {
 	return &DriverHandler{
 		routeSvc:    routeSvc,
@@ -39,7 +43,27 @@ func NewDriverHandler(
 		checkinRepo: repository.NewCheckinRepository(),
 		fatigueSvc:  fatigueSvc,
 		auditRepo:   auditRepo,
+		notifSvc:    notifSvc,
 	}
+}
+
+// checkAndNotifyFatigueRisk calcula el score de fatiga con los datos disponibles
+// en el check-in y notifica a los supervisores si el nivel es ROJO.
+// Debe llamarse en una goroutine (fire-and-forget).
+func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model.DriverCheckin) {
+	if h.notifSvc == nil {
+		return
+	}
+	cfg := h.fatigueSvc.Get()
+	score, level := fatigueRiskScore(checkin, cfg)
+	if level != model.RiskRed {
+		return
+	}
+	fullName := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if fullName == "" {
+		fullName = user.Username
+	}
+	h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
 }
 
 // ── Route handlers ────────────────────────────────────────────────────────────
@@ -198,8 +222,8 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
 		return
 	}
-	if body.KSSLevel < 1 || body.KSSLevel > 9 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 9"})
+	if body.KSSLevel < 1 || body.KSSLevel > 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
 		return
 	}
 
@@ -222,6 +246,11 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el check-in"})
 		return
 	}
+
+	// Alerta de fatiga — non-blocking. Evalúa el score con los datos disponibles
+	// hasta este momento (KSS + voz si ya fue cargada) y notifica a supervisores
+	// si el nivel cae en ROJO.
+	go h.checkAndNotifyFatigueRisk(user, rec)
 
 	// Audit — non-blocking (AC1).
 	if detailsJSON, merr := json.Marshal(struct {
@@ -319,6 +348,11 @@ func (h *DriverHandler) SubmitPVT(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el resultado PVT"})
 		return
 	}
+
+	// Alerta de fatiga — el PVT tiene peso 35%; recalcular con el dato nuevo.
+	// La dedup de 1 h evita duplicar la alerta si ya fue enviada tras el KSS.
+	go h.checkAndNotifyFatigueRisk(user, rec)
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "pvt": rec.PVTMetrics})
 }
 
@@ -358,8 +392,28 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 		return
 	}
 
+	// Umbral mínimo de tamaño: un WebM con silencio puro ocupa solo unos pocos
+	// cientos de bytes (solo cabeceras + frames comprimidos de silencio). Una
+	// grabación con voz real tiene, como mínimo, varios KB de datos de audio.
+	// 2 500 bytes es un umbral conservador que filtra silencios sin rechazar
+	// grabaciones legítimas de baja calidad.
+	const minAudioBytes = 2500
+	if len(audioData) < minAudioBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
+
 	// Extract the 5 acoustic features from the raw audio bytes.
 	current := extractVoiceMetrics(audioData)
+
+	// Segunda validación: si la energía RMS es prácticamente cero, el audio
+	// no contiene voz (silencio, canal muteado, etc.). Umbral conservador: 0.05.
+	// Nota: con el motor de simulación actual esto no se disparará; queda
+	// preparado para el reemplazo por un DSP real.
+	if current.EnergyRMS < 0.05 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		return
+	}
 
 	today := todayAR()
 
@@ -474,6 +528,68 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 		score = 100
 	}
 	return score
+}
+
+// GetTestEligibility evalúa si el chofer autenticado debe realizar las pruebas
+// de fatiga. El comportamiento varía según el tipo de chofer y los parámetros:
+//
+//	?is_trip_start=true   — inicio de viaje inter-sucursal (siempre requiere test)
+//	?stopped_minutes=N    — minutos detenido en ruta inter-sucursal (>= 6 requiere test)
+//
+// Choferes de última milla se evalúan por tiempo desde último check-in y misfires.
+func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	isTripStart := c.Query("is_trip_start") == "true"
+	stoppedMinutes := 0
+	if raw := c.Query("stopped_minutes"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			stoppedMinutes = v
+		}
+	}
+
+	switch user.DriverType {
+
+	// ── Inter-sucursal ───────────────────────────────────────────────────────
+	case model.DriverTypeInterBranch:
+		if isTripStart {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "trip_start"})
+			return
+		}
+		if stoppedMinutes >= 6 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Última milla ─────────────────────────────────────────────────────────
+	case model.DriverTypeLastMile:
+		rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+		if !ok {
+			// Sin check-in: la intercepción de scan ya se encarga de mostrarlo.
+			c.JSON(http.StatusOK, gin.H{"require_test": false})
+			return
+		}
+		// Condición 1: más de 3 horas desde el último check-in.
+		if time.Since(rec.RecordedAt) > 3*time.Hour {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		// Condición 2: más de 5 misfires acumulados en el día.
+		totalMisfires := 0
+		for _, e := range rec.TouchEvents {
+			totalMisfires += e.Misfires
+		}
+		if totalMisfires > 5 {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+
+	// ── Otros roles (fallback seguro) ────────────────────────────────────────
+	default:
+		c.JSON(http.StatusOK, gin.H{"require_test": false})
+	}
 }
 
 // updateBaseline computes a simple running average between the existing baseline
