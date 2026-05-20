@@ -1,0 +1,54 @@
+logitrack_web/src/components/ShipmentQRModal.css
+  s_031648674522be::t_5746f05338515f 200-294
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_031648674522be::t_67a955750f8170 2414
+  s_031648674522be::t_247abed96959fe 2489
+  s_031648674522be::t_84ea255f10bcf6 2376-2377
+  s_031648674522be::t_630c05a6e53a68 2494-2517
+  s_031648674522be::t_1e80d1170e41d8 2413,2415-2434
+  s_031648674522be::t_817e6a056b09d4 2482-2488,2490
+logitrack_core/internal/handler/payment.go
+  s_031648674522be::t_848649d070af7c 4,11
+  s_031648674522be::t_8e679ba7244b59 126-155
+logitrack_web/src/api/payments.ts
+  s_031648674522be::t_bfd5036162882a 54-56
+logitrack_web/src/pages/NewShipment.tsx
+  s_031648674522be::t_2e1a8a4773760d 907,931-932
+  s_031648674522be::t_ad5d58a483a6f4 980-986,988
+  s_031648674522be::t_0813ed5c82e404 850-852
+  s_031648674522be::t_0f4b57fd83ded5 14
+  s_031648674522be::t_b5991e848be114 987
+  s_031648674522be::t_972d9e6d79c77e 993-1017
+  s_031648674522be::t_af6f6de665b648 908-930
+logitrack_web/src/components/ShipmentQRModal.tsx
+  s_031648674522be::t_972cc2678b46b1 12
+  s_031648674522be::t_4b86ae84e10d91 139-148
+  s_031648674522be::t_dd15645b3ab8be 25
+  s_031648674522be::t_1fe71f65c0df4a 24
+  s_031648674522be::t_5f6502aaef2bae 82-106
+  s_031648674522be::t_7a09a29c38873a 111,116-120
+  s_031648674522be::t_c818ab2bf4c089 9-10
+  s_031648674522be::t_8e6e18790ab66e 129-134
+  s_031648674522be::t_d05ee86203a3d4 11
+  s_031648674522be::t_c5a989330816e6 23
+  s_031648674522be::t_396f838a77592b 13
+  s_031648674522be::t_1e9f4e4d45bbfb 21-22
+logitrack_core/cmd/server/main.go
+  s_031648674522be::t_c965fd3a2d61f8 300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "b172bcfc9ed1880a34fa351be6a9c91cfa19aaee",
+  "prompts": {},
+  "sessions": {
+    "s_031648674522be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67de85b3-a0db-4e4a-9641-ed79ba0a2454",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
