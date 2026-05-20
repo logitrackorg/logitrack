@@ -148,7 +148,11 @@ export function NewShipment() {
     const originAddress = selectedBranch
       ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
       : form.sender.address;
-    const hasMinData = form.weight_kg > 0 && !!form.package_type && !!originAddress.province && !!form.recipient.address.province;
+    const finalBranch = findFinalBranch(form.recipient.address, branches);
+    const destinationAddress = finalBranch
+      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
+      : form.recipient.address;
+    const hasMinData = form.weight_kg > 0 && !!form.package_type && !!originAddress.province && !!destinationAddress.province;
     if (!hasMinData) {
       setQuote(null);
       return;
@@ -165,7 +169,7 @@ export function NewShipment() {
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method,
           origin: originAddress,
-          destination: form.recipient.address,
+          destination: destinationAddress,
         });
         setQuote(q);
       } catch {
