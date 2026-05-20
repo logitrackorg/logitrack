@@ -368,7 +368,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -383,7 +383,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -431,7 +431,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -587,6 +587,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		priceBreakdownJSON  []byte
 		priceCurrency       string
 		reservedForTripID   sql.NullString
+		slaNotifiedAt       *time.Time
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -597,7 +598,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -608,6 +609,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	if reservedForTripID.Valid {
 		s.ReservedForTripID = &reservedForTripID.String
 	}
+	s.SLANotifiedAt = slaNotifiedAt
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
 	s.ShipmentType = model.ShipmentType(shipmentType)
@@ -670,6 +672,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			priceBreakdownJSON  []byte
 			priceCurrency       string
 			reservedForTripID   sql.NullString
+			slaNotifiedAt       *time.Time
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -680,7 +683,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -688,6 +691,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		if reservedForTripID.Valid {
 			s.ReservedForTripID = &reservedForTripID.String
 		}
+		s.SLANotifiedAt = slaNotifiedAt
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
 		s.ShipmentType = model.ShipmentType(shipmentType)
@@ -771,6 +775,15 @@ func (p *PostgresShipmentProjection) ReleaseFromTrip(trackingID string) error {
 	_, err := p.db.Exec(
 		`UPDATE shipments SET reserved_for_trip_id = NULL WHERE tracking_id = $1`,
 		trackingID,
+	)
+	return err
+}
+
+// SetSLANotified actualiza sla_notified_at del envío (nil = resetear, &t = marcar notificado).
+func (p *PostgresShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET sla_notified_at = $1 WHERE tracking_id = $2`,
+		notifiedAt, trackingID,
 	)
 	return err
 }

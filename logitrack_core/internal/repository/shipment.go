@@ -32,6 +32,8 @@ type ShipmentRepository interface {
 	ReserveForTrip(trackingID, tripID string) error
 	// ReleaseFromTrip libera la reserva del envío.
 	ReleaseFromTrip(trackingID string) error
+	// SetSLANotified actualiza sla_notified_at (nil = reset, &t = notificado) para CA-04.
+	SetSLANotified(trackingID string, notifiedAt *time.Time) error
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)

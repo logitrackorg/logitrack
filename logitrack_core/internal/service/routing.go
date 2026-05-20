@@ -44,8 +44,9 @@ type RoutingService struct {
 	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
-	graphSvc        *BranchGraphService // nullable; used for stale-replan
-	zoneSvc         *ZoneService        // nullable; needed for safe-route mode
+	graphSvc        *BranchGraphService  // nullable; used for stale-replan
+	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
+	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
 }
 
 func NewRoutingService(
@@ -74,6 +75,10 @@ func NewRoutingService(
 
 func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) {
 	s.interBranchTripSvc = svc
+}
+
+func (s *RoutingService) SetNotificationService(svc *NotificationService) {
+	s.notifSvc = svc
 }
 
 func (s *RoutingService) SetZoneService(svc *ZoneService) {
@@ -175,6 +180,10 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 		}
 		// Edge: at_origin_hub + final == branch (no es ruteable hoy) → no entra al plan
 	}
+
+	// SLA risk check: evalúa todos los envíos activos de la sucursal y dispara/resetea
+	// notificaciones según CA-01 a CA-04 (LOGITRACK-404).
+	s.checkSLARisk(all, cfg, now)
 
 	// 2) Última milla — asignar a vehículos de modo ultima_milla
 	plan.LastMile, plan.Unassigned = s.binPackLastMileVehicles(lastMileQ, branchID, plan.Unassigned)
@@ -1262,6 +1271,55 @@ func anyForced(group []model.Shipment, cfg model.RoutingConfig, now time.Time) b
 		}
 	}
 	return false
+}
+
+// isSLACriticalETA returns true if the shipment is within the SLA forced horizon
+// based solely on estimated delivery time (not priority score).
+func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
+	if model.IsTerminalStatus(sh.Status) {
+		return false
+	}
+	// Also skip Expired and Rechazado (non-active terminal-like statuses per CA-01)
+	if sh.Status == model.StatusExpired || sh.Status == model.StatusRechazado {
+		return false
+	}
+	slaHorizon := time.Duration(cfg.SLAForceHorizonHours) * time.Hour
+	return sh.EstimatedDeliveryAt != nil && sh.EstimatedDeliveryAt.Sub(now) < slaHorizon
+}
+
+// checkSLARisk evaluates SLA risk for the given shipments and fires/resets notifications (CA-04).
+// Must be called synchronously before plan generation returns.
+func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.RoutingConfig, now time.Time) {
+	if s.notifSvc == nil {
+		return
+	}
+	for _, sh := range shipments {
+		critical := isSLACriticalETA(sh, cfg, now)
+		if critical {
+			if sh.SLANotifiedAt == nil {
+				// Mark first, then fire in background — avoids double-notif on concurrent runs.
+				notifiedAt := now
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, &notifiedAt); err != nil {
+					log.Printf("[RoutingService] SetSLANotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				branchID := sh.CurrentLocation
+				if branchID == "" {
+					branchID = sh.ReceivingBranchID
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLARisk(shCopy, branchID)
+			}
+			// else: already notified for this critical cycle, skip (CA-04)
+		} else {
+			// Shipment exited critical state — reset so a future re-entry re-notifies (CA-04)
+			if sh.SLANotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLANotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+		}
+	}
 }
 
 func vehiclesAcceptingDest(pool []model.Vehicle, dest string, used map[string]bool) []model.Vehicle {

@@ -132,6 +132,11 @@ type Shipment struct {
 	// recogerlo al pasar por su branch actual. Mientras está reservado, el
 	// envío no aparece en otros planes ni operaciones.
 	ReservedForTripID *string `json:"reserved_for_trip_id,omitempty"`
+
+	// SLANotifiedAt registra cuándo se emitió la última notificación de SLA en riesgo.
+	// Se resetea a nil cuando el envío sale del estado crítico, habilitando una nueva
+	// notificación si vuelve a entrar (CA-04).
+	SLANotifiedAt *time.Time `json:"sla_notified_at,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.

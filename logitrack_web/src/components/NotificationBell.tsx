@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -17,9 +17,10 @@ function relativeTime(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Warehouse  size={16} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2  size={16} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw  size={16} color="#fb923c" />;
+  if (type === "shipment_received")   return <Warehouse      size={16} color="#60a5fa" />;
+  if (type === "destination_arrival") return <Building2      size={16} color="#34d399" />;
+  if (type === "return_arrival")      return <RotateCcw      size={16} color="#fb923c" />;
+  if (type === "sla_risk")            return <AlertTriangle  size={16} color="#ef4444" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -34,6 +35,7 @@ function groupAccent(type: string): string {
   if (type === "destination_arrival") return "#34d399";
   if (type === "shipment_received")   return "#60a5fa";
   if (type === "return_arrival")      return "#fb923c";
+  if (type === "sla_risk")            return "#ef4444";
   return "#94a3b8";
 }
 
@@ -50,6 +52,7 @@ function GroupIcon({ type }: { type: string }) {
 // collapse into an expandable card.
 
 const GROUP_WINDOW_MS  = 5 * 60 * 1000;
+// sla_risk no se agrupa: cada alerta es individual y urgente
 const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival"]);
 
 type SingleItem  = { kind: "single"; n: Notification };

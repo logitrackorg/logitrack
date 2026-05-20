@@ -8,6 +8,7 @@ const (
 	NotificationShipmentReceived   NotificationType = "shipment_received"   // llegó a sucursal intermedia
 	NotificationDestinationArrival NotificationType = "destination_arrival"  // llegó a sucursal destino final
 	NotificationReturnArrival      NotificationType = "return_arrival"       // llegó a sucursal de origen (devolución)
+	NotificationSLARisk            NotificationType = "sla_risk"             // envío en riesgo de incumplir SLA
 )
 
 type Notification struct {

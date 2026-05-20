@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/model"
@@ -266,6 +267,9 @@ func (r *eventSourcedShipmentRepository) ReserveForTrip(trackingID, tripID strin
 }
 func (r *eventSourcedShipmentRepository) ReleaseFromTrip(trackingID string) error {
 	return r.projection.ReleaseFromTrip(trackingID)
+}
+func (r *eventSourcedShipmentRepository) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	return r.projection.SetSLANotified(trackingID, notifiedAt)
 }
 
 // GetEvents transforms DomainEvents from the store into ShipmentEvent (API format).

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -27,9 +27,10 @@ function formatDate(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received") {
-    return <Package size={18} color="#60a5fa" />;
-  }
+  if (type === "shipment_received")   return <Package       size={18} color="#60a5fa" />;
+  if (type === "destination_arrival") return <Building2     size={18} color="#34d399" />;
+  if (type === "return_arrival")      return <RotateCcw     size={18} color="#fb923c" />;
+  if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
   return <Bell size={18} color="#94a3b8" />;
 }
 
@@ -274,13 +275,13 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : "#eff6ff",
+                background: n.read_at ? "#fff" : n.type === "sla_risk" ? "#fef2f2" : "#eff6ff",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : n.type === "sla_risk" ? "#fef2f2" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -327,7 +328,7 @@ export function NotificationsPage() {
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: "#3b82f6",
+                    background: n.type === "sla_risk" ? "#ef4444" : n.type === "return_arrival" ? "#fb923c" : n.type === "destination_arrival" ? "#34d399" : "#3b82f6",
                     flexShrink: 0,
                     marginTop: 7,
                   }}

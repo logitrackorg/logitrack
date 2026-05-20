@@ -356,6 +356,9 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 		CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
+
+		-- SLA en riesgo (LOGITRACK-404): columna para deduplicación de notificaciones por ciclo
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS sla_notified_at TIMESTAMPTZ;
 	`)
 	return err
 }

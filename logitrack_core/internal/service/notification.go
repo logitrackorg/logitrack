@@ -156,6 +156,70 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 	}
 }
 
+// NotifySLARisk crea una notificación de SLA en riesgo para los operadores y supervisores
+// de la sucursal del envío. Si no hay ninguno, se notifica a los administradores (CA-02).
+// La deduplicación por ciclo se controla externamente mediante shipment.SLANotifiedAt (CA-04).
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifySLARisk(shipment model.Shipment, branchID string) {
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifySLARisk GetUsers error: %v", err)
+		return
+	}
+
+	// Fallback CA-02: si no hay operadores/supervisores en la sucursal, notificar a admins.
+	if len(users) == 0 {
+		admins, err := s.repo.GetAdmins()
+		if err != nil {
+			log.Printf("[NotificationService] NotifySLARisk GetAdmins error: %v", err)
+			return
+		}
+		users = admins
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "⚠️ SLA en riesgo"
+	body := fmt.Sprintf("%s · %s → %s",
+		shipment.TrackingID,
+		shipment.Sender.Address.City,
+		shipment.Recipient.Address.City,
+	)
+	if shipment.EstimatedDeliveryAt != nil {
+		remaining := time.Until(*shipment.EstimatedDeliveryAt)
+		hours := int(remaining.Hours())
+		if hours <= 0 {
+			body += " · vence hoy"
+		} else if hours == 1 {
+			body += " · vence en 1 h"
+		} else {
+			body += fmt.Sprintf(" · vence en %d h", hours)
+		}
+	}
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationSLARisk,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifySLARisk Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // GetForUser returns paginated notifications for a user.
 func (s *NotificationService) GetForUser(userID string, filters repository.NotificationFilters) ([]model.Notification, int, error) {
 	return s.repo.ListByUser(userID, filters)

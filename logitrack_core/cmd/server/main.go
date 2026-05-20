@@ -188,6 +188,7 @@ func main() {
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetORSClient(orsClient)
+	routingSvc.SetNotificationService(notifSvc)
 
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas

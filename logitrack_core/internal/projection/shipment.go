@@ -263,3 +263,15 @@ func (p *ShipmentProjection) ReleaseFromTrip(trackingID string) error {
 	p.shipments[trackingID] = s
 	return nil
 }
+
+func (p *ShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	s.SLANotifiedAt = notifiedAt
+	p.shipments[trackingID] = s
+	return nil
+}
