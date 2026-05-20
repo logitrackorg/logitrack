@@ -237,17 +237,24 @@ export function NotificationBell() {
     transition: "background 0.15s",
   };
 
-  const renderSingle = (n: Notification) => {
+const renderSingle = (n: Notification) => {
     const isFatigue = n.type === "fatigue_alert";
+    
     // groupAccent devuelve el color correcto para cada tipo: azul, verde, naranja o rojo.
     // Se usa tanto para el dot como para el fondo tintado (hex 12 ≈ 7 % opacidad).
     const accent   = groupAccent(n.type);
     const unreadBg = `${accent}12`;
+
     return (
       <div
         key={n.id}
         onClick={() => handleItemClick(n)}
-        style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : unreadBg, borderLeft: isFatigue && !n.read_at ? "3px solid #ef4444" : "3px solid transparent" }}
+        style={{ 
+          ...rowBase, 
+          cursor: "pointer", 
+          background: n.read_at ? "transparent" : unreadBg, 
+          borderLeft: isFatigue && !n.read_at ? "3px solid #ef4444" : "3px solid transparent" 
+        }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
         onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : unreadBg)}
       >
@@ -262,6 +269,8 @@ export function NotificationBell() {
           <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {n.body}
           </div>
+          
+          {/* Botón exclusivo para las alertas de Ojo de Patrón */}
           {isFatigue && (
             <button
               onClick={(e) => { e.stopPropagation(); navigate("/supervisor/fatigue"); setOpen(false); }}
@@ -271,6 +280,8 @@ export function NotificationBell() {
             </button>
           )}
         </div>
+        
+        {/* El puntito de no leído usando tu variable accent unificada */}
         {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
       </div>
     );
