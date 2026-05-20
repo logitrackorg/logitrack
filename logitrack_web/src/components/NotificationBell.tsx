@@ -29,6 +29,8 @@ function groupLabel(type: string, count: number): string {
   if (type === "destination_arrival") return `Llegaron ${count} envíos a su sucursal destino final`;
   if (type === "shipment_received")   return `Llegaron ${count} envíos a una sucursal intermedia`;
   if (type === "return_arrival")      return `${count} envíos en devolución llegaron a sucursal de origen`;
+  if (type === "sla_risk")            return `${count} envíos en riesgo de SLA`;
+  if (type === "sla_expired")         return `${count} envíos con SLA vencido`;
   return `${count} notificaciones`;
 }
 
@@ -71,9 +73,11 @@ function slaCountdown(eta: Date, clockOffsetMs = 0): string {
 
 function GroupIcon({ type }: { type: string }) {
   const color = groupAccent(type);
-  if (type === "destination_arrival") return <Building2 size={16} color={color} />;
-  if (type === "shipment_received")   return <Warehouse  size={16} color={color} />;
-  if (type === "return_arrival")      return <RotateCcw  size={16} color={color} />;
+  if (type === "destination_arrival") return <Building2     size={16} color={color} />;
+  if (type === "shipment_received")   return <Warehouse     size={16} color={color} />;
+  if (type === "return_arrival")      return <RotateCcw     size={16} color={color} />;
+  if (type === "sla_risk")            return <AlertTriangle size={16} color={color} />;
+  if (type === "sla_expired")         return <AlertOctagon  size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -82,8 +86,7 @@ function GroupIcon({ type }: { type: string }) {
 // collapse into an expandable card.
 
 const GROUP_WINDOW_MS  = 5 * 60 * 1000;
-// sla_risk no se agrupa: cada alerta es individual y urgente
-const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival"]);
+const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival", "sla_risk", "sla_expired"]);
 
 type SingleItem  = { kind: "single"; n: Notification };
 type GroupItem   = { kind: "group";  items: Notification[]; key: string };
@@ -310,8 +313,15 @@ export function NotificationBell() {
     const hasUnread = items.some((n) => !n.read_at);
     const accent    = groupAccent(type);
     const Chevron   = expanded ? ChevronUp : ChevronDown;
-    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)" : "rgba(96,165,250,0.07)";
-    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)" : "rgba(96,165,250,0.05)";
+    const isSLA     = type === "sla_risk" || type === "sla_expired";
+    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)"
+                    : type === "return_arrival"       ? "rgba(251,146,60,0.07)"
+                    : isSLA                           ? `${accent}12`
+                    : "rgba(96,165,250,0.07)";
+    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)"
+                    : type === "return_arrival"       ? "rgba(251,146,60,0.05)"
+                    : isSLA                           ? `${accent}0d`
+                    : "rgba(96,165,250,0.05)";
 
     return (
       <div key={key}>
@@ -341,22 +351,36 @@ export function NotificationBell() {
         </div>
 
         {/* Expanded sub-items */}
-        {expanded && items.map((n) => (
-          <div
-            key={n.id}
-            onClick={() => handleItemClick(n)}
-            style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
-                {n.body}
-              </span>
+        {expanded && items.map((n) => {
+          const isSLARisk    = n.type === "sla_risk";
+          const isSLAExpired = n.type === "sla_expired";
+          const eta          = isSLARisk ? parseSLAEta(n.body) : null;
+          const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+          return (
+            <div
+              key={n.id}
+              onClick={() => handleItemClick(n)}
+              style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                  {displayBody}
+                </span>
+                {isSLARisk && eta && (() => {
+                  const label = slaCountdown(eta, clockOffsetMs.current);
+                  if (label === "venció") return null;
+                  return <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>{label}</span>;
+                })()}
+                {isSLAExpired && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>SLA vencido</span>
+                )}
+              </div>
+              {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
             </div>
-            {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
