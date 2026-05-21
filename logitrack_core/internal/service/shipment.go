@@ -1235,12 +1235,8 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
 				Timestamp:  now,
 			}); rfrErr == nil && s.notifSvc != nil {
-				// CA-03 — notificar a la sucursal de origen del contra-envío.
-				originBranchID := rfrUpdated.OriginBranchID
-				if originBranchID == "" {
-					originBranchID = rfrUpdated.ReceivingBranchID
-				}
-				go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, "Cancelación de envío — contra-envío generado")
+				// CA-03 — notificar a la sucursal receptora (donde está el paquete físicamente).
+				go s.notifSvc.NotifyReturnStarted(rfrUpdated, counterLocation, "Cancelación de envío — contra-envío generado")
 			}
 		}
 		_, _ = s.commentSvc.AddComment(counterID, username,
