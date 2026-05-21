@@ -56,6 +56,7 @@ func (s *PaymentService) SimulatePaymentApproved(trackingID, username string) (m
 	}
 
 	s.shipmentSvc.upsertParties(confirmed)
+	go s.shipmentSvc.sendConfirmationEmails(confirmed)
 
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
 		autoUpdated, autoErr := s.shipmentSvc.repo.UpdateStatus(repository.StatusUpdateCmd{

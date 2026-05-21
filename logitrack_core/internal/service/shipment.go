@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -114,6 +115,12 @@ func (s *ShipmentService) validateLastMileReachable(method model.DeliveryMethod,
 	return nil
 }
 
+// EmailConfirmationSender is the minimal interface this service needs to send
+// shipment confirmation emails. Satisfied by *email.Service.
+type EmailConfirmationSender interface {
+	SendShipmentConfirmation(shipment model.Shipment)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -124,14 +131,36 @@ type ShipmentService struct {
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
 	notifSvc     *NotificationService
+	emailSvc     EmailConfirmationSender
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService) { s.graphSvc = g }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)    { s.graphSvc = g }
 func (s *ShipmentService) SetNotificationService(svc *NotificationService) { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)     { s.emailSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
 	return s.repo.ReleaseFromTrip(trackingID)
+}
+
+// sendConfirmationEmails envía emails de confirmación al destinatario y al remitente (CA-03/CA-04).
+// Usa dedup atómica en DB para evitar duplicados aunque se llame más de una vez (CA-05).
+// Se llama siempre como goroutine (fire-and-forget) — los errores son silenciosos (CA-02).
+func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
+	if s.emailSvc == nil {
+		return
+	}
+	// Dedup (CA-05): marca atómicamente la fila; si ya estaba marcada, omite el envío.
+	sent, err := s.repo.SetConfirmationEmailSent(shipment.TrackingID)
+	if err != nil {
+		log.Printf("[email] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
+		return
+	}
+	if !sent {
+		log.Printf("[email] confirmación de envío para %s ya enviada anteriormente — omitida (CA-05)", shipment.TrackingID)
+		return
+	}
+	s.emailSvc.SendShipmentConfirmation(shipment)
 }
 
 // maybeRecordPath is a WIP feature: records a planned multi-hop path when a shipment moves.
@@ -376,6 +405,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		return model.Shipment{}, err
 	}
 	s.upsertParties(created)
+	go s.sendConfirmationEmails(created) // CA-01/02/03/04/05
 	return created, nil
 }
 
@@ -631,6 +661,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	setPriority(&confirmed, prediction)
 	s.upsertParties(confirmed)
+	go s.sendConfirmationEmails(confirmed) // CA-01/02/03/04/05
 
 	// Auto-transición: origen == destino → el envío ya está en su hub final.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {

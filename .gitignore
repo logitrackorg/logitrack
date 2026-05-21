@@ -38,6 +38,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ── Scripts locales ────────────────────────────────────────────────────────────
+reset.sh
+
 # ── Env / secrets ──────────────────────────────────────────────────────────────
 .env
 .env.*

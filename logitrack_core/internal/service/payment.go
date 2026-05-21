@@ -200,6 +200,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 	}
 
 	s.shipmentSvc.upsertParties(confirmed)
+	go s.shipmentSvc.sendConfirmationEmails(confirmed)
 
 	// Auto-transition: if origin == final branch, skip at_origin_hub → at_hub.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {

@@ -23,4 +23,7 @@ type Projector interface {
 	SetSLANotified(trackingID string, notifiedAt *time.Time) error
 	// SetSLAExpiredNotified actualiza sla_expired_notified_at del envío.
 	SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error
+	// SetConfirmationEmailSent marca el envío como notificado por email (CA-05 dedup).
+	// Devuelve true si fue el primer llamado (UPDATE afectó una fila).
+	SetConfirmationEmailSent(trackingID string) (bool, error)
 }
