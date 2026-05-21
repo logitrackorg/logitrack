@@ -344,7 +344,7 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 	if len(titleOverride) > 0 && titleOverride[0] != "" {
 		title = titleOverride[0]
 	}
-	body := fmt.Sprintf("%s · Coordinar entrega con el remitente", shipment.TrackingID)
+	body := shipment.TrackingID
 
 	now := clock.Now().UTC()
 	for _, u := range users {
