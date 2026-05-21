@@ -76,19 +76,22 @@ export function DriverRoute() {
     setFailedNotes("");
   };
 
-  // Consulta el gate de re-test. Si el chofer debe hacer las pruebas de nuevo,
-  // activa el overlay antes de refrescar la lista. En caso de error de red,
-  // deja pasar para no bloquear al chofer.
+  // Consulta el gate de re-test tras una acción de entrega.
+  // Si hay test pendiente: activa el overlay y mantiene la simulación pausada
+  //   (play() NO se llama aquí — se llama en el onDone del KssCheckIn).
+  // Si no hay test: reanuda la simulación y refresca la lista.
   const checkReTestGate = async () => {
     try {
       const eligibility = await driverApi.getTestEligibility();
       if (eligibility.require_test) {
         setMidRouteCheckin(true);
-        return;
+        return; // simulación sigue pausada mientras dura el check-in
       }
     } catch {
       // error de red → continuar sin bloquear
     }
+    // No hay test pendiente: reanudar simulación y actualizar ruta.
+    play();
     load();
   };
 
@@ -103,10 +106,7 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
-      // Reanudar simulación: el período de gracia (3 s) evita re-pausa inmediata
-      // mientras load() actualiza la lista de puntos de entrega pendientes.
-      play();
-      await checkReTestGate();
+      await checkReTestGate(); // play() se llama dentro, solo si no hay check-in
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar la entrega.");
@@ -129,9 +129,7 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
-      // Reanudar simulación tras registrar intento fallido.
-      play();
-      await checkReTestGate();
+      await checkReTestGate(); // play() se llama dentro, solo si no hay check-in
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar el intento fallido.");
@@ -179,6 +177,7 @@ export function DriverRoute() {
         driverId={user.id}
         onDone={() => {
           setMidRouteCheckin(false);
+          play(); // reanudar simulación recién aquí, cuando el check-in terminó
           load();
         }}
       />

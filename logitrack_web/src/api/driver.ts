@@ -90,7 +90,7 @@ export interface TouchEventPayload {
 // US4+: respuesta del gate de re-test en ruta
 export interface TestEligibilityResponse {
   require_test: boolean;
-  reason?: "time_or_misfires" | "trip_start" | "stopped_too_long";
+  reason?: "time_or_misfires" | "trip_start" | "stopped_too_long" | "checkpoint";
 }
 
 export interface TestEligibilityParams {
@@ -98,6 +98,8 @@ export interface TestEligibilityParams {
   is_trip_start?: boolean;
   /** Minutos detenido en ruta inter-sucursal → require_test si >= 6 */
   stopped_minutes?: number;
+  /** Geocerca de checkpoint (peaje, balanza, estación) → require_test: true */
+  checkpoint?: boolean;
 }
 
 // US6: PVT (Psychomotor Vigilance Task)

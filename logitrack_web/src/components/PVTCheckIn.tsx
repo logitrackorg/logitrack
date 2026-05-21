@@ -244,12 +244,6 @@ export function PVTCheckIn({ onDone }: Props) {
                 <Zap className="w-4 h-4" />
                 Iniciar prueba
               </button>
-              <button
-                onClick={onDone}
-                className="w-full h-10 rounded-xl border border-slate-600 text-slate-400 text-sm font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Saltar prueba
-              </button>
             </div>
           </div>
         </>

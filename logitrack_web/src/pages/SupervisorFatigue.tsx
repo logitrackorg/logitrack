@@ -85,7 +85,7 @@ function ScoreBar({
 
 // ── fila de historial ─────────────────────────────────────────────────────────
 
-function HistoryRow({ record }: { record: CheckinRecord }) {
+function HistoryRow({ record, isInterBranch }: { record: CheckinRecord; isInterBranch: boolean }) {
   const [yy, mm, dd] = record.date.split("-");
   const dateLabel = `${dd}/${mm}/${yy}`;
 
@@ -150,19 +150,21 @@ function HistoryRow({ record }: { record: CheckinRecord }) {
             )}
           </td>
 
-          {/* Interacciones táctiles fallidas */}
-          <td className="py-2 px-3 text-center">
-            {totalMisfires !== null ? (
-              <span className={`text-[11px] font-bold tabular-nums ${
-                totalMisfires === 0 ? "text-emerald-600" :
-                totalMisfires <= 3  ? "text-amber-600"   : "text-rose-600"
-              }`}>
-                {totalMisfires}
-              </span>
-            ) : (
-              <span className="text-[11px] text-slate-300">—</span>
-            )}
-          </td>
+          {/* Interacciones táctiles fallidas — solo para última milla */}
+          {!isInterBranch && (
+            <td className="py-2 px-3 text-center">
+              {totalMisfires !== null ? (
+                <span className={`text-[11px] font-bold tabular-nums ${
+                  totalMisfires === 0 ? "text-emerald-600" :
+                  totalMisfires <= 3  ? "text-amber-600"   : "text-rose-600"
+                }`}>
+                  {totalMisfires}
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-300">—</span>
+              )}
+            </td>
+          )}
         </>
       )}
     </tr>
@@ -258,7 +260,9 @@ function DriverRow({
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Sueño</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">Score Grabación</th>
                       <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center">PVT</th>
-                      <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Interac. Táctiles Fallidas</th>
+                      {driver.driver_type !== "intersucursal" && (
+                        <th className="py-2 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Interac. Táctiles Fallidas</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -266,6 +270,7 @@ function DriverRow({
                       <HistoryRow
                         key={rec.date}
                         record={rec}
+                        isInterBranch={driver.driver_type === "intersucursal"}
                       />
                     ))}
                   </tbody>

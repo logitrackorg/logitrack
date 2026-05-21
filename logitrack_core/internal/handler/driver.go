@@ -392,26 +392,46 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 		return
 	}
 
-	// Umbral mínimo de tamaño: un WebM con silencio puro ocupa solo unos pocos
-	// cientos de bytes (solo cabeceras + frames comprimidos de silencio). Una
-	// grabación con voz real tiene, como mínimo, varios KB de datos de audio.
-	// 2 500 bytes es un umbral conservador que filtra silencios sin rechazar
-	// grabaciones legítimas de baja calidad.
+	// ── Nivel 0: tamaño mínimo ────────────────────────────────────────────────
+	// Un WebM con silencio puro pesa solo unos cientos de bytes (cabeceras EBML
+	// + frames CN comprimidos). Cualquier grabación real de voz supera 2 500 B.
 	const minAudioBytes = 2500
 	if len(audioData) < minAudioBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "INVALID_AUDIO",
+			"message": vadInvalidMsg,
+		})
+		return
+	}
+
+	// ── Nivel 1: VAD por tamaño de frames WebM (EBML scanner) ─────────────────
+	// Escanea los bloques SimpleBlock/Block del contenedor Matroska y compara el
+	// tamaño del payload Opus de cada frame contra el umbral de voz activa.
+	// Los frames CN (silencio Opus) pesan 1-3 bytes; los frames de voz ≥ 20 bytes.
+	// En entornos muy ruidosos (cabina de camión, viento) el ruido puede inflar
+	// los frames por encima del umbral → por eso existe también el Nivel 2.
+	vadOk, vadErr := webmVAD(audioData, vadVoiceThreshold)
+	if vadErr != nil || !vadOk {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "INVALID_AUDIO",
+			"message": vadInvalidMsg,
+		})
 		return
 	}
 
 	// Extract the 5 acoustic features from the raw audio bytes.
 	current := extractVoiceMetrics(audioData)
 
-	// Segunda validación: si la energía RMS es prácticamente cero, el audio
-	// no contiene voz (silencio, canal muteado, etc.). Umbral conservador: 0.05.
-	// Nota: con el motor de simulación actual esto no se disparará; queda
-	// preparado para el reemplazo por un DSP real.
-	if current.EnergyRMS < 0.05 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "grabación inválida: no se detectó voz en el audio"})
+	// ── Nivel 2: validación cruzada por speech_rate ────────────────────────────
+	// Si el extractor acústico devuelve speech_rate == 0, no se detectaron
+	// sílabas en el audio — la grabación contiene ruido pero no voz humana.
+	// Con el motor de simulación actual esto no se dispara (siempre 3-6 sil/s),
+	// pero queda operativo para cuando se integre un DSP real.
+	if current.SpeechRate <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "INVALID_AUDIO",
+			"message": vadInvalidMsg,
+		})
 		return
 	}
 
@@ -540,7 +560,8 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	isTripStart := c.Query("is_trip_start") == "true"
+	isTripStart    := c.Query("is_trip_start") == "true"
+	isCheckpoint   := c.Query("checkpoint") == "true"
 	stoppedMinutes := 0
 	if raw := c.Query("stopped_minutes"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil {
@@ -556,9 +577,19 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "trip_start"})
 			return
 		}
-		if stoppedMinutes >= 6 {
-			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
+		if isCheckpoint {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "checkpoint"})
 			return
+		}
+		if stoppedMinutes >= 6 {
+			// Solo forzar el re-test si el último check-in fue hace más de 3 horas
+			// (o si nunca hubo check-in hoy). Paradas cortas de descanso dentro
+			// de las primeras 3h del turno no interrumpen el viaje innecesariamente.
+			rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+			if !ok || time.Since(rec.RecordedAt) > 3*time.Hour {
+				c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
+				return
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{"require_test": false})
 
