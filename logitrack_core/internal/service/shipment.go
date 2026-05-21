@@ -1226,7 +1226,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 	} else {
 		// If counter-shipment is at origin, auto-transition to ready_for_return
 		if counterStatus == model.StatusAtOriginHub {
-			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			if rfrUpdated, rfrErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 				TrackingID: counterID,
 				FromStatus: model.StatusAtOriginHub,
 				ToStatus:   model.StatusReadyForReturn,
@@ -1234,7 +1234,14 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				ChangedBy:  username,
 				Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
 				Timestamp:  now,
-			})
+			}); rfrErr == nil && s.notifSvc != nil {
+				// CA-03 — notificar a la sucursal de origen del contra-envío.
+				originBranchID := rfrUpdated.OriginBranchID
+				if originBranchID == "" {
+					originBranchID = rfrUpdated.ReceivingBranchID
+				}
+				go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, "Cancelación de envío — contra-envío generado")
+			}
 		}
 		_, _ = s.commentSvc.AddComment(counterID, username,
 			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
