@@ -297,6 +297,7 @@ export function NotificationBell() {
     const isSLAExpired      = n.type === "sla_expired";
     const isFatigue         = n.type === "fatigue_alert";
     const isReturnCompleted = n.type === "return_completed";
+    const isReturnArrival   = n.type === "return_arrival";
     const eta               = isSLARisk ? parseSLAEta(n.body) : null;
     const displayBody       = isSLARisk ? bodyWithoutEta(n.body) : n.body;
     const accent            = groupAccent(n.type);
@@ -344,8 +345,8 @@ export function NotificationBell() {
               SLA vencido
             </div>
           )}
-          {/* Botón de acción para return_completed — CA-05: requiere acción */}
-          {isReturnCompleted && (
+          {/* Botón de acción para return_completed y return_arrival — CA-05: requiere acción */}
+          {(isReturnCompleted || isReturnArrival) && (
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
               Acción requerida: coordinar entrega con remitente
             </div>

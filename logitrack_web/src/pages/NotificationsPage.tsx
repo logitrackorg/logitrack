@@ -321,14 +321,14 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : n.type === "return_completed" ? "#fffbeb" : "#eff6ff",
-                borderLeft: n.type === "return_completed" && !n.read_at ? "3px solid #f59e0b" : "3px solid transparent",
+                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : "#eff6ff",
+                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid #f59e0b" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : n.type === "return_completed" ? "#fffbeb" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -383,8 +383,8 @@ export function NotificationsPage() {
                     SLA vencido
                   </div>
                 )}
-                {/* Acción requerida para return_completed — CA-05 */}
-                {n.type === "return_completed" && (
+                {/* Acción requerida para return_completed y return_arrival — CA-05 */}
+                {(n.type === "return_completed" || n.type === "return_arrival") && (
                   <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
                     Acción requerida: coordinar entrega con remitente
                   </div>
