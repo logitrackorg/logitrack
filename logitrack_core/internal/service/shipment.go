@@ -1228,7 +1228,8 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		if s.notifSvc != nil {
 			if counterStatus == model.StatusAtOriginHub {
 				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
-				go s.notifSvc.NotifyReturnCompleted(counter, originID)
+				go s.notifSvc.NotifyReturnCompleted(counter, originID,
+					fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
 			} else {
 				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
 				go s.notifSvc.NotifyReturnStarted(counter, originID,

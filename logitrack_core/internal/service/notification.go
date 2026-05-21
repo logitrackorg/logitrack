@@ -318,7 +318,7 @@ func (s *NotificationService) NotifyReturnStarted(shipment model.Shipment, branc
 // supervisores de la sucursal de origen cuando un envío es devuelto al remitente (CA-04, CA-05).
 // Requiere acción: coordinar la entrega con el remitente.
 // Debe llamarse como goroutine (fire-and-forget).
-func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, branchID string) {
+func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, branchID string, titleOverride ...string) {
 	since := clock.Now().Add(-5 * time.Minute)
 	exists, err := s.repo.ExistsRecent(model.NotificationReturnCompleted, shipment.TrackingID, since)
 	if err != nil {
@@ -341,6 +341,9 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 	}
 
 	title := fmt.Sprintf("El envío %s fue devuelto y ya se encuentra en tu sucursal.", shipment.TrackingID)
+	if len(titleOverride) > 0 && titleOverride[0] != "" {
+		title = titleOverride[0]
+	}
 	body := fmt.Sprintf("%s · Coordinar entrega con el remitente", shipment.TrackingID)
 
 	now := clock.Now().UTC()
