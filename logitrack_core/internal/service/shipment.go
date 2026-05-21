@@ -868,6 +868,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
 		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
 			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		} else if targetStatus == model.StatusReadyForReturn {
+			// CA-03 — transición directa a ready_for_return (operador la setea manualmente).
+			// Las auto-transiciones tienen su propio hook y retornan antes de llegar acá.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnStarted(updated, originBranchID, req.Notes)
 		} else if targetStatus == model.StatusReturned {
 			// CA-04 — el envío fue devuelto: notificar a la sucursal de origen.
 			originBranchID := updated.OriginBranchID
