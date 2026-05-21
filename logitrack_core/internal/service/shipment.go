@@ -1224,9 +1224,21 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		// Log but don't fail the cancellation
 		_ = err
 	} else {
-		// If counter-shipment is at origin, auto-transition to ready_for_return
+		// Notificar a la sucursal de origen apenas se cancela — sin esperar ready_for_return.
+		if s.notifSvc != nil {
+			if counterStatus == model.StatusAtOriginHub {
+				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
+				go s.notifSvc.NotifyReturnCompleted(counter, originID)
+			} else {
+				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
+				go s.notifSvc.NotifyReturnStarted(counter, originID,
+					fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
+			}
+		}
+
+		// If counter-shipment is at origin, auto-transition to ready_for_return (sin notificación extra).
 		if counterStatus == model.StatusAtOriginHub {
-			if rfrUpdated, rfrErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
 				TrackingID: counterID,
 				FromStatus: model.StatusAtOriginHub,
 				ToStatus:   model.StatusReadyForReturn,
@@ -1234,11 +1246,9 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				ChangedBy:  username,
 				Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
 				Timestamp:  now,
-			}); rfrErr == nil && s.notifSvc != nil {
-				// CA-03 — notificar a la sucursal receptora (donde está el paquete físicamente).
-				go s.notifSvc.NotifyReturnStarted(rfrUpdated, counterLocation, "Cancelación de envío — contra-envío generado")
-			}
+			})
 		}
+
 		_, _ = s.commentSvc.AddComment(counterID, username,
 			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
 	}
