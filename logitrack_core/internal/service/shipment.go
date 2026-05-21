@@ -868,6 +868,13 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
 		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
 			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		} else if targetStatus == model.StatusReturned {
+			// CA-04 — el envío fue devuelto: notificar a la sucursal de origen.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
 		}
 	}
 
@@ -883,6 +890,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
+			// CA-03 — notificar a la sucursal de origen que el envío está listo para devolución.
+			if s.notifSvc != nil {
+				originBranchID := autoUpdated.OriginBranchID
+				if originBranchID == "" {
+					originBranchID = autoUpdated.ReceivingBranchID
+				}
+				go s.notifSvc.NotifyReturnStarted(autoUpdated, originBranchID, "Envío de retorno llegó a sucursal de origen")
+			}
 			return autoUpdated, nil
 		}
 	}
@@ -957,6 +972,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 					Timestamp:  clock.Now().UTC(),
 				})
 				if rfrErr == nil {
+					// CA-03 — notificar a la sucursal de origen.
+					if s.notifSvc != nil {
+						originBranchID := rfrUpdated.OriginBranchID
+						if originBranchID == "" {
+							originBranchID = rfrUpdated.ReceivingBranchID
+						}
+						go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, autoNotes)
+					}
 					return rfrUpdated, nil
 				}
 			}

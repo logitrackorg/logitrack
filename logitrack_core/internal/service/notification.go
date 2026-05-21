@@ -264,6 +264,104 @@ func (s *NotificationService) NotifySLAExpired(shipment model.Shipment, branchID
 	}
 }
 
+// NotifyReturnStarted crea una notificación informativa para los operadores y supervisores
+// de la sucursal de origen cuando un envío transiciona a "listo para devolución" (CA-01, CA-02, CA-03).
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifyReturnStarted(shipment model.Shipment, branchID, reason string) {
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationReturnStarted, shipment.TrackingID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyReturnStarted ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyReturnStarted GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := fmt.Sprintf("El envío %s está en proceso de devolución y volverá a tu sucursal", shipment.TrackingID)
+	body := shipment.TrackingID
+	if reason != "" {
+		body += " · " + reason
+	}
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationReturnStarted,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyReturnStarted Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifyReturnCompleted crea una notificación con mayor prominencia para los operadores y
+// supervisores de la sucursal de origen cuando un envío es devuelto al remitente (CA-04, CA-05).
+// Requiere acción: coordinar la entrega con el remitente.
+// Debe llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, branchID string) {
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationReturnCompleted, shipment.TrackingID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyReturnCompleted ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyReturnCompleted GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := fmt.Sprintf("El envío %s fue devuelto y ya se encuentra en tu sucursal.", shipment.TrackingID)
+	body := fmt.Sprintf("%s · Coordinar entrega con el remitente", shipment.TrackingID)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationReturnCompleted,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyReturnCompleted Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // NotifyFatigueAlert sends an urgent notification to all supervisors of the given
 // branch when a driver's composite fatigue score reaches the RED (high risk) level.
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.

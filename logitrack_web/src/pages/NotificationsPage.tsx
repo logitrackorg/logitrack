@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck, Building2, RotateCcw, AlertTriangle, AlertOctagon } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -29,6 +29,8 @@ function formatDate(dateStr: string): string {
 function typeAccent(type: string): string {
   if (type === "destination_arrival") return "#34d399";
   if (type === "return_arrival")      return "#fb923c";
+  if (type === "return_started")      return "#f97316";
+  if (type === "return_completed")    return "#f59e0b";
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   return "#3b82f6";
@@ -37,7 +39,9 @@ function typeAccent(type: string): string {
 function NotifIcon({ type }: { type: string }) {
   if (type === "shipment_received")   return <Package      size={18} color="#60a5fa" />;
   if (type === "destination_arrival") return <Building2    size={18} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw    size={18} color="#fb923c" />;
+  if (type === "return_arrival")      return <RotateCcw     size={18} color="#fb923c" />;
+  if (type === "return_started")      return <RotateCcw     size={18} color="#f97316" />;
+  if (type === "return_completed")    return <PackageCheck  size={18} color="#f59e0b" />;
   if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
   if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
   return <Bell size={18} color="#94a3b8" />;
@@ -317,13 +321,14 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : "#eff6ff",
+                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : n.type === "return_completed" ? "#fffbeb" : "#eff6ff",
+                borderLeft: n.type === "return_completed" && !n.read_at ? "3px solid #f59e0b" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : n.type === "return_completed" ? "#fffbeb" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -376,6 +381,12 @@ export function NotificationsPage() {
                 {n.type === "sla_expired" && (
                   <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: typeAccent(n.type) }}>
                     SLA vencido
+                  </div>
+                )}
+                {/* Acción requerida para return_completed — CA-05 */}
+                {n.type === "return_completed" && (
+                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+                    Acción requerida: coordinar entrega con remitente
                   </div>
                 )}
                 {n.resource_id && (
