@@ -868,6 +868,21 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
 		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
 			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		} else if targetStatus == model.StatusReadyForReturn {
+			// CA-03 — transición directa a ready_for_return (operador la setea manualmente).
+			// Las auto-transiciones tienen su propio hook y retornan antes de llegar acá.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnStarted(updated, originBranchID, req.Notes)
+		} else if targetStatus == model.StatusReturned {
+			// CA-04 — el envío fue devuelto: notificar a la sucursal de origen.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
 		}
 	}
 
@@ -883,6 +898,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
+			// CA-03 — notificar a la sucursal de origen que el envío está listo para devolución.
+			if s.notifSvc != nil {
+				originBranchID := autoUpdated.OriginBranchID
+				if originBranchID == "" {
+					originBranchID = autoUpdated.ReceivingBranchID
+				}
+				go s.notifSvc.NotifyReturnStarted(autoUpdated, originBranchID, "Envío de retorno llegó a sucursal de origen")
+			}
 			return autoUpdated, nil
 		}
 	}
@@ -957,6 +980,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 					Timestamp:  clock.Now().UTC(),
 				})
 				if rfrErr == nil {
+					// CA-03 — notificar a la sucursal de origen.
+					if s.notifSvc != nil {
+						originBranchID := rfrUpdated.OriginBranchID
+						if originBranchID == "" {
+							originBranchID = rfrUpdated.ReceivingBranchID
+						}
+						go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, autoNotes)
+					}
 					return rfrUpdated, nil
 				}
 			}
@@ -1193,7 +1224,20 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		// Log but don't fail the cancellation
 		_ = err
 	} else {
-		// If counter-shipment is at origin, auto-transition to ready_for_return
+		// Notificar a la sucursal de origen apenas se cancela — sin esperar ready_for_return.
+		if s.notifSvc != nil {
+			if counterStatus == model.StatusAtOriginHub {
+				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
+				go s.notifSvc.NotifyReturnCompleted(counter, originID,
+					fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
+			} else {
+				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
+				go s.notifSvc.NotifyReturnStarted(counter, originID,
+					fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
+			}
+		}
+
+		// If counter-shipment is at origin, auto-transition to ready_for_return (sin notificación extra).
 		if counterStatus == model.StatusAtOriginHub {
 			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
 				TrackingID: counterID,
@@ -1205,6 +1249,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				Timestamp:  now,
 			})
 		}
+
 		_, _ = s.commentSvc.AddComment(counterID, username,
 			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
 	}

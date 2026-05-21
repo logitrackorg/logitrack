@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -20,6 +20,8 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "shipment_received")   return <Warehouse     size={16} color="#60a5fa" />;
   if (type === "destination_arrival") return <Building2     size={16} color="#34d399" />;
   if (type === "return_arrival")      return <RotateCcw     size={16} color="#fb923c" />;
+  if (type === "return_started")      return <RotateCcw     size={16} color="#f97316" />;
+  if (type === "return_completed")    return <PackageCheck  size={16} color="#f59e0b" />;
   if (type === "sla_risk")            return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "sla_expired")         return <AlertOctagon  size={16} color="#b91c1c" />;
   if (type === "fatigue_alert")       return <AlertTriangle size={16} color="#ef4444" />;
@@ -30,6 +32,8 @@ function groupLabel(type: string, count: number): string {
   if (type === "destination_arrival") return `Llegaron ${count} envíos a su sucursal destino final`;
   if (type === "shipment_received")   return `Llegaron ${count} envíos a una sucursal intermedia`;
   if (type === "return_arrival")      return `${count} envíos en devolución llegaron a sucursal de origen`;
+  if (type === "return_started")      return `${count} envíos listos para devolución`;
+  if (type === "return_completed")    return `${count} envíos devueltos — coordinar entrega con remitente`;
   if (type === "sla_risk")            return `${count} envíos en riesgo de SLA`;
   if (type === "sla_expired")         return `${count} envíos con SLA vencido`;
   return `${count} notificaciones`;
@@ -39,6 +43,8 @@ function groupAccent(type: string): string {
   if (type === "destination_arrival") return "#34d399";
   if (type === "shipment_received")   return "#60a5fa";
   if (type === "return_arrival")      return "#fb923c";
+  if (type === "return_started")      return "#f97316";
+  if (type === "return_completed")    return "#f59e0b";
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   if (type === "fatigue_alert")       return "#ef4444";
@@ -78,6 +84,8 @@ function GroupIcon({ type }: { type: string }) {
   if (type === "destination_arrival") return <Building2     size={16} color={color} />;
   if (type === "shipment_received")   return <Warehouse     size={16} color={color} />;
   if (type === "return_arrival")      return <RotateCcw     size={16} color={color} />;
+  if (type === "return_started")      return <RotateCcw     size={16} color={color} />;
+  if (type === "return_completed")    return <PackageCheck  size={16} color={color} />;
   if (type === "sla_risk")            return <AlertTriangle size={16} color={color} />;
   if (type === "sla_expired")         return <AlertOctagon  size={16} color={color} />;
   if (type === "fatigue_alert")       return <AlertTriangle size={16} color={color} />;
@@ -90,7 +98,7 @@ function GroupIcon({ type }: { type: string }) {
 // fatigue_alert is intentionally excluded — each alert is individual and urgent.
 
 const GROUP_WINDOW_MS  = 5 * 60 * 1000;
-const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival", "sla_risk", "sla_expired"]);
+const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival", "return_started", "sla_risk", "sla_expired"]);
 
 type SingleItem  = { kind: "single"; n: Notification };
 type GroupItem   = { kind: "group";  items: Notification[]; key: string };
@@ -285,13 +293,15 @@ export function NotificationBell() {
   };
 
   const renderSingle = (n: Notification) => {
-    const isSLARisk    = n.type === "sla_risk";
-    const isSLAExpired = n.type === "sla_expired";
-    const isFatigue    = n.type === "fatigue_alert";
-    const eta          = isSLARisk ? parseSLAEta(n.body) : null;
-    const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
-    const accent       = groupAccent(n.type);
-    const unreadBg     = `${accent}12`;
+    const isSLARisk         = n.type === "sla_risk";
+    const isSLAExpired      = n.type === "sla_expired";
+    const isFatigue         = n.type === "fatigue_alert";
+    const isReturnCompleted = n.type === "return_completed";
+    const isReturnArrival   = n.type === "return_arrival";
+    const eta               = isSLARisk ? parseSLAEta(n.body) : null;
+    const displayBody       = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+    const accent            = groupAccent(n.type);
+    const unreadBg          = isReturnCompleted ? "rgba(245,158,11,0.12)" : `${accent}12`;
 
     return (
       <div
@@ -301,7 +311,9 @@ export function NotificationBell() {
           ...rowBase,
           cursor: "pointer",
           background: n.read_at ? "transparent" : unreadBg,
-          borderLeft: isFatigue && !n.read_at ? "3px solid #ef4444" : "3px solid transparent",
+          borderLeft: (isFatigue || isReturnCompleted) && !n.read_at
+            ? `3px solid ${accent}`
+            : "3px solid transparent",
         }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
         onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : unreadBg)}
@@ -309,7 +321,7 @@ export function NotificationBell() {
         <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: isFatigue ? "#fca5a5" : "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: (isFatigue || isReturnCompleted) ? "#fcd34d" : "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {n.title}
             </span>
             <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs)}</span>
@@ -331,6 +343,12 @@ export function NotificationBell() {
           {isSLAExpired && (
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>
               SLA vencido
+            </div>
+          )}
+          {/* Botón de acción para return_completed y return_arrival — CA-05: requiere acción */}
+          {(isReturnCompleted || isReturnArrival) && (
+            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+              Acción requerida: coordinar entrega con remitente
             </div>
           )}
           {/* Botón exclusivo para las alertas de fatiga */}
@@ -357,10 +375,14 @@ export function NotificationBell() {
     const isSLA     = type === "sla_risk" || type === "sla_expired";
     const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)"
                     : type === "return_arrival"       ? "rgba(251,146,60,0.07)"
+                    : type === "return_started"       ? "rgba(249,115,22,0.07)"
+                    : type === "return_completed"     ? "rgba(245,158,11,0.12)"
                     : isSLA                           ? `${accent}12`
                     : "rgba(96,165,250,0.07)";
     const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)"
                     : type === "return_arrival"       ? "rgba(251,146,60,0.05)"
+                    : type === "return_started"       ? "rgba(249,115,22,0.05)"
+                    : type === "return_completed"     ? "rgba(245,158,11,0.08)"
                     : isSLA                           ? `${accent}0d`
                     : "rgba(96,165,250,0.05)";
 
