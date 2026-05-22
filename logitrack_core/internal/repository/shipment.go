@@ -33,6 +33,12 @@ type ShipmentRepository interface {
 	// ReleaseFromTrip libera la reserva del envío.
 	ReleaseFromTrip(trackingID string) error
 
+	// Chatbot operations
+	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)
+	RequestPickup(cmd RequestPickupCmd) (model.Shipment, error)
+	RescheduleDelivery(cmd RescheduleDeliveryCmd) (model.Shipment, error)
+	CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error)
+
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
 	List(filter model.ShipmentFilter) ([]model.Shipment, error)
@@ -148,4 +154,41 @@ type PathPlannedCmd struct {
 	HopIndex        int
 	PathRevision    int
 	Reason          string
+}
+
+
+// ==========================================
+// CHATBOT COMMANDS
+// ==========================================
+
+// AuthenticateRecipientCmd valida tracking ID y DNI del destinatario
+type AuthenticateRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+}
+
+// RequestPickupCmd cambia el método de entrega a retiro en sucursal
+type RequestPickupCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	ChangedBy    string
+	Timestamp    time.Time
+}
+
+// RescheduleDeliveryCmd reprograma la fecha de entrega (máx 2 veces, +3 días)
+type RescheduleDeliveryCmd struct {
+	TrackingID      string
+	RecipientDNI    string
+	NewDeliveryDate time.Time
+	ChangedBy       string
+	Timestamp       time.Time
+}
+
+// CancelByRecipientCmd cancela el envío por solicitud del destinatario
+type CancelByRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	Reason       string
+	ChangedBy    string
+	Timestamp    time.Time
 }

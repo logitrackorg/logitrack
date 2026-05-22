@@ -467,3 +467,41 @@
   .pt-skel-line { animation: none; }
   .pt-search-btn { transition: none; }
 }
+
+/* ============================================
+   CHATBOT INTEGRATION
+   ============================================ */
+
+/* Asegurar que el chatbot no cubra contenido */
+.pt-root {
+  position: relative;
+  min-height: 100vh;
+  padding-bottom: 24px;
+}
+
+/* Espacio adicional en móvil para el botón flotante */
+@media (max-width: 768px) {
+  .pt-container {
+    padding-bottom: 100px;
+  }
+  
+  .pt-footer {
+    margin-bottom: 80px;
+  }
+}
+
+/* Personalización del botón del chatbot para esta página */
+.pt-root .chatbot-toggle {
+  /* Usar variables CSS si las tienes definidas, 
+     o colores específicos que coincidan con tu diseño */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Ajustar z-index si hay conflictos con modales o overlays */
+.pt-root .chatbot-toggle {
+  z-index: 1000;
+}
+
+.pt-root .chatbot-widget {
+  z-index: 999;
+}

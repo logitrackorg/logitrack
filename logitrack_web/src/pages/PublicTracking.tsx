@@ -9,6 +9,7 @@ import type { ShipmentStatus } from "../api/shipments";
 import type { Branch } from "../api/branches";
 import { fmtDateTime, fmtRelative } from "../utils/date";
 import "./PublicTracking.css";
+import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
 
 // User-facing one-liner explanation for each status. Shown under the badge in
 // the summary card. Friendlier than the operational labels in StatusBadge.
@@ -444,6 +445,7 @@ export function PublicTracking() {
       <footer className="pt-footer">
         © {new Date().getFullYear()} LogiTrack · Seguimiento de envíos
       </footer>
+        <ChatbotWidget />
     </div>
   );
 }

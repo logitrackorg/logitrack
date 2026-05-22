@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/model"
@@ -409,4 +410,177 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 		// draft_saved, draft_updated — not exposed
 		return model.ShipmentEvent{}, false
 	}
+}
+
+// ==========================================
+// CHATBOT OPERATIONS
+// ==========================================
+
+func (r *eventSourcedShipmentRepository) AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error) {
+	shipment, err := r.projection.Get(cmd.TrackingID)
+	if err != nil {
+		return model.Shipment{}, fmt.Errorf("envío no encontrado")
+	}
+
+	// Obtener DNI del destinatario (considerar correcciones)
+	recipientDNI := shipment.Recipient.DNI
+	if shipment.Corrections != nil && shipment.Corrections.RecipientDNI != nil {
+		recipientDNI = *shipment.Corrections.RecipientDNI
+	}
+
+	// Validar DNI
+	if recipientDNI != cmd.RecipientDNI {
+		return model.Shipment{}, fmt.Errorf("los datos ingresados no coinciden con nuestros registros")
+	}
+
+	// Inicializar metadata del chatbot si no existe
+	if shipment.ChatbotMetadata == nil {
+		shipment.InitializeChatbotMetadata()
+	}
+
+	return shipment, nil
+}
+
+func (r *eventSourcedShipmentRepository) RequestPickup(cmd RequestPickupCmd) (model.Shipment, error) {
+	// Autenticar primero
+	shipment, err := r.AuthenticateRecipient(AuthenticateRecipientCmd{
+		TrackingID:   cmd.TrackingID,
+		RecipientDNI: cmd.RecipientDNI,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	// Validar que se puede solicitar retiro
+	canPickup, reason := shipment.CanRequestPickup()
+	if !canPickup {
+		return model.Shipment{}, fmt.Errorf(reason)
+	}
+
+	// Crear evento
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventPickupRequested,
+		Payload: model.PickupRequestedPayload{
+			RecipientDNI:   cmd.RecipientDNI,
+			PreviousMethod: shipment.DeliveryMethod,
+			FinalBranchID:  shipment.FinalBranchID,
+			RequestedVia:   "chatbot",
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDeliveryCmd) (model.Shipment, error) {
+	// Autenticar primero
+	shipment, err := r.AuthenticateRecipient(AuthenticateRecipientCmd{
+		TrackingID:   cmd.TrackingID,
+		RecipientDNI: cmd.RecipientDNI,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	// Validar que se puede reprogramar
+	canReschedule, reason := shipment.CanReschedule()
+	if !canReschedule {
+		return model.Shipment{}, fmt.Errorf(reason)
+	}
+
+	// Validar que la fecha está dentro del rango permitido
+	availableDates := shipment.GetAvailableRescheduleDates()
+	validDate := false
+	for _, date := range availableDates {
+		if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {
+			validDate = true
+			break
+		}
+	}
+	if !validDate {
+		return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
+	}
+
+	// Inicializar metadata si no existe
+	if shipment.ChatbotMetadata == nil {
+		shipment.InitializeChatbotMetadata()
+	}
+
+	// Calcular días desde la fecha original
+	daysFromOriginal := 0
+	if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+		daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
+	}
+
+	// Crear evento
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventDeliveryRescheduled,
+		Payload: model.DeliveryRescheduledPayload{
+			RecipientDNI:     cmd.RecipientDNI,
+			OldDeliveryDate:  shipment.EstimatedDeliveryAt,
+			NewDeliveryDate:  cmd.NewDeliveryDate,
+			OriginalDate:     shipment.ChatbotMetadata.OriginalDeliveryDate,
+			RescheduleCount:  shipment.ChatbotMetadata.RescheduleCount + 1,
+			DaysFromOriginal: daysFromOriginal,
+			RequestedVia:     "chatbot",
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error) {
+	// Autenticar primero
+	shipment, err := r.AuthenticateRecipient(AuthenticateRecipientCmd{
+		TrackingID:   cmd.TrackingID,
+		RecipientDNI: cmd.RecipientDNI,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	// Validar que se puede cancelar
+	canCancel, reason := shipment.CanCancel()
+	if !canCancel {
+		return model.Shipment{}, fmt.Errorf(reason)
+	}
+
+	// Crear evento
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventCancelledByRecipient,
+		Payload: model.CancelledByRecipientPayload{
+			RecipientDNI: cmd.RecipientDNI,
+			FromStatus:   shipment.Status,
+			Reason:       cmd.Reason,
+			RequestedVia: "chatbot",
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
 }
