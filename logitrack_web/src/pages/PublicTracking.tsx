@@ -5,11 +5,20 @@ import {
   type PublicShipment,
   type PublicShipmentEvent,
   type PublicClaim,
-  type ClaimType,
   type ClaimStatus,
 } from "../api/publicTracking";
 import type { ShipmentStatus } from "../api/shipments";
 import type { Branch } from "../api/branches";
+import {
+  PublicClaimFormFields,
+  emptyClaimFormValues,
+  type PublicClaimFormValues,
+} from "../components/PublicClaimFormFields";
+import {
+  buildClaimDescription,
+  resolveClaimType,
+  validatePublicClaimForm,
+} from "../utils/publicClaimForm";
 import { fmtDateTime, fmtRelative } from "../utils/date";
 import "./PublicTracking.css";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
@@ -37,12 +46,6 @@ const STATUS_BLURBS: Record<ShipmentStatus, string> = {
   expired:              "Este borrador ha expirado.",
   pending_payment:      "Tu envío está pendiente de confirmación de pago.",
 };
-
-const CLAIM_TYPES: { value: ClaimType; label: string }[] = [
-  { value: "damage", label: "Daño/Faltante" },
-  { value: "delay", label: "Retraso" },
-  { value: "other", label: "Maltrato/Datos Incorrectos/Otro" },
-];
 
 const EXAMPLE_TRACKING_IDS = [
   {
@@ -243,11 +246,7 @@ export function PublicTracking() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
-  const [claimType, setClaimType] = useState<ClaimType | "">("");
-  const [claimDescription, setClaimDescription] = useState("");
-  const [claimCreatedBy, setClaimCreatedBy] = useState("");
-  const [claimDni, setClaimDni] = useState("");
-  const [claimEvidence, setClaimEvidence] = useState<File | null>(null);
+  const [claimForm, setClaimForm] = useState<PublicClaimFormValues>(emptyClaimFormValues);
   const [claimSubmitting, setClaimSubmitting] = useState(false);
   const [claimError, setClaimError] = useState("");
   const [claimResult, setClaimResult] = useState<PublicClaim | null>(null);
@@ -264,14 +263,14 @@ export function PublicTracking() {
 
   const resetClaimForm = () => {
     setClaimOpen(false);
-    setClaimType("");
-    setClaimDescription("");
-    setClaimCreatedBy("");
-    setClaimDni("");
-    setClaimEvidence(null);
+    setClaimForm(emptyClaimFormValues());
     setClaimSubmitting(false);
     setClaimError("");
     setClaimResult(null);
+  };
+
+  const patchClaimForm = (patch: Partial<PublicClaimFormValues>) => {
+    setClaimForm((prev) => ({ ...prev, ...patch }));
   };
 
   const runSearch = async (trackingId: string) => {
@@ -313,34 +312,25 @@ export function PublicTracking() {
     e.preventDefault();
     if (!shipment) return;
     setClaimError("");
-    if (!claimType) {
-      setClaimError("Seleccioná un tipo de reclamo.");
+
+    const validationError = validatePublicClaimForm({
+      category: claimForm.category,
+      damageSubtypes: claimForm.damageSubtypes,
+      deliverySubtype: claimForm.deliverySubtype,
+      staffDescription: claimForm.staffDescription,
+      evidence: claimForm.evidence,
+      createdBy: claimForm.createdBy,
+      dni: claimForm.dni,
+    });
+    if (validationError) {
+      setClaimError(validationError);
       return;
     }
-    if (!claimDescription.trim()) {
-      setClaimError("La descripción es requerida.");
-      return;
-    }
-    if (claimDescription.trim().length < 10 || claimDescription.trim().length > 400) {
-      setClaimError("La descripción debe tener entre 10 y 400 caracteres.");
-      return;
-    }
-    if (!claimCreatedBy.trim()) {
-      setClaimError("Indicá tu nombre para continuar.");
-      return;
-    }
-    if (!claimDni.trim()) {
-      setClaimError("El DNI es requerido.");
-      return;
-    }
-    if (!/^[0-9]+$/.test(claimDni.trim()) || claimDni.trim().length < 7) {
-      setClaimError("El DNI debe contener solo dígitos y tener al menos 7 números.");
-      return;
-    }
+
     const example = EXAMPLE_TRACKING_IDS.find((item) => item.trackingId === shipment.tracking_id);
     if (example) {
-      const dni = claimDni.trim();
-      const name = claimCreatedBy.trim();
+      const dni = claimForm.dni.trim();
+      const name = claimForm.createdBy.trim();
       const matchesSender = example.sender.dni === dni && example.sender.name === name;
       const matchesRecipient = example.recipient.dni === dni && example.recipient.name === name;
       if (!matchesSender && !matchesRecipient) {
@@ -348,21 +338,30 @@ export function PublicTracking() {
         return;
       }
     }
+
+    const category = claimForm.category;
+    if (!category) return;
+
+    const description = buildClaimDescription({
+      category,
+      damageSubtypes: claimForm.damageSubtypes,
+      deliverySubtype: claimForm.deliverySubtype,
+      staffDescription: claimForm.staffDescription,
+      evidenceName: claimForm.evidence?.name,
+    });
+    const claimType = resolveClaimType(category, claimForm.damageSubtypes, claimForm.deliverySubtype);
+
     setClaimSubmitting(true);
     try {
       const created = await publicTrackingApi.createClaim({
         tracking_id: shipment.tracking_id,
         claim_type: claimType,
-        description: claimDescription.trim(),
-        created_by: claimCreatedBy.trim(),
+        description,
+        created_by: claimForm.createdBy.trim(),
       });
       setClaimResult(created);
       setClaimOpen(false);
-      setClaimType("");
-      setClaimDescription("");
-      setClaimCreatedBy("");
-      setClaimDni("");
-      setClaimEvidence(null);
+      setClaimForm(emptyClaimFormValues());
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -628,69 +627,11 @@ export function PublicTracking() {
 
               {claimOpen && !claimResult && (
                 <form className="pt-claim-form" onSubmit={handleClaimSubmit}>
-                  <div className="pt-claim-grid">
-                    <label className="pt-claim-field">
-                      <span className="pt-claim-label">Nombre y apellido</span>
-                      <input
-                        className="pt-claim-input"
-                        value={claimCreatedBy}
-                        onChange={(e) => setClaimCreatedBy(e.target.value)}
-                        placeholder="Ingresá tu nombre y apellido"
-                        autoComplete="name"
-                      />
-                    </label>
-
-                    <label className="pt-claim-field">
-                      <span className="pt-claim-label">DNI</span>
-                      <input
-                        className="pt-claim-input"
-                        value={claimDni}
-                        onChange={(e) => setClaimDni(e.target.value)}
-                        placeholder="Solo números"
-                        inputMode="numeric"
-                        autoComplete="off"
-                      />
-                    </label>
-
-                    <label className="pt-claim-field">
-                      <span className="pt-claim-label">Tipo de reclamo</span>
-                      <select
-                        className="pt-claim-select"
-                        value={claimType}
-                        onChange={(e) => setClaimType(e.target.value as ClaimType)}
-                      >
-                        <option value="">Seleccioná una opción</option>
-                        {CLAIM_TYPES.map((t) => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <label className="pt-claim-field">
-                    <span className="pt-claim-label">Descripción</span>
-                    <textarea
-                      className="pt-claim-textarea"
-                      rows={4}
-                      value={claimDescription}
-                      onChange={(e) => setClaimDescription(e.target.value)}
-                      placeholder="Contanos qué pasó con tu envío"
-                    />
-                    <span className="pt-claim-hint">Entre 10 y 400 caracteres.</span>
-                  </label>
-
-                  <label className="pt-claim-field">
-                    <span className="pt-claim-label">Evidencia (opcional)</span>
-                    <input
-                      className="pt-claim-input"
-                      type="file"
-                      onChange={(e) => setClaimEvidence(e.target.files?.[0] ?? null)}
-                      accept="image/*,application/pdf"
-                    />
-                    {claimEvidence && (
-                      <span className="pt-claim-hint">Adjunto: {claimEvidence.name}</span>
-                    )}
-                  </label>
+                  <PublicClaimFormFields
+                    values={claimForm}
+                    onChange={patchClaimForm}
+                    disabled={claimSubmitting}
+                  />
 
                   {claimError && <div className="pt-claim-error" role="alert">{claimError}</div>}
 
