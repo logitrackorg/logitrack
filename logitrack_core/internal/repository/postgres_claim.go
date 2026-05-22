@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/logitrack/core/internal/model"
 )
@@ -72,4 +73,89 @@ func (r *postgresClaimRepository) GetByID(id string) (model.Claim, error) {
 		claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
 	}
 	return claim, nil
+}
+
+func (r *postgresClaimRepository) ListAll() ([]model.Claim, error) {
+	rows, err := r.db.Query(
+		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic
+		 FROM shipment_claims ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.Claim
+	for rows.Next() {
+		var claim model.Claim
+		var claimType string
+		var status string
+		var assignedCategory sql.NullString
+		var resolutionType sql.NullString
+		if err := rows.Scan(
+			&claim.ID,
+			&claim.TrackingID,
+			&claimType,
+			&status,
+			&claim.Description,
+			&claim.CreatedBy,
+			&claim.CreatedAt,
+			&claim.UpdatedAt,
+			&assignedCategory,
+			&resolutionType,
+			&claim.IsAutomatic,
+		); err != nil {
+			return nil, err
+		}
+		claim.ClaimType = model.ClaimType(claimType)
+		claim.Status = model.ClaimStatus(status)
+		if assignedCategory.Valid {
+			claim.AssignedCategory = model.ClaimCategory(assignedCategory.String)
+		}
+		if resolutionType.Valid {
+			claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
+		}
+		result = append(result, claim)
+	}
+	return result, nil
+}
+
+func (r *postgresClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {
+	res, err := r.db.Exec(
+		`UPDATE shipment_claims
+		 SET assigned_category = $1, status = $2, updated_at = $3
+		 WHERE id = $4`,
+		string(category),
+		string(status),
+		updatedAt,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return ErrClaimNotFound
+	}
+	return err
+}
+
+func (r *postgresClaimRepository) Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error {
+	res, err := r.db.Exec(
+		`UPDATE shipment_claims
+		 SET resolution_type = $1, status = $2, updated_at = $3
+		 WHERE id = $4`,
+		string(resolutionType),
+		string(status),
+		updatedAt,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return ErrClaimNotFound
+	}
+	return err
 }

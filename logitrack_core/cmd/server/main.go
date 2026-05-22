@@ -337,6 +337,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -392,6 +394,12 @@ func main() {
 	// Incidents — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/incidents", shipmentDetailRead, incidentHandler.GetIncidents)
 	protected.POST("/shipments/:tracking_id/incidents", shipmentWrite, incidentHandler.ReportIncident)
+
+	// Claims — list/detail/derive/resolve for operator/supervisor
+	protected.GET("/claims", claimRead, claimHandler.ListClaims)
+	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
+	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
