@@ -1,0 +1,43 @@
+logitrack_web/src/api/payments.ts
+  s_8f8beb952b55d7::t_6a8492f8a5f432 50-51
+logitrack_web/src/components/PaymentMethodsPanel.tsx
+  s_8f8beb952b55d7::t_39e4de751f1d9e 109,120-126
+  s_8f8beb952b55d7::t_738617cab2c117 209-400
+  s_8f8beb952b55d7::t_248d10d341991e 54
+  s_8f8beb952b55d7::t_e40eba35c0ce73 2-22,24-53,55-108,110-119,127-208
+  s_8f8beb952b55d7::t_db99efc2f3e81f 1
+  s_8f8beb952b55d7::t_c36059e7a2a3de 23
+logitrack_core/internal/service/payment.go
+  s_8f8beb952b55d7::t_b6948acc8e2a57 252
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_8f8beb952b55d7::t_f4e0f88f31e72a 31
+  s_8f8beb952b55d7::t_57b214123df385 2402,2404-2409,2414-2425,2427,2429-2430,2442
+logitrack_core/cmd/server/main.go
+  s_8f8beb952b55d7::t_1a3b7b79647054 334
+logitrack_core/internal/service/payment_simulate.go
+  s_8f8beb952b55d7::t_d0ae0f6e380a4b 30
+  s_8f8beb952b55d7::t_69c80c7a427297 14-16
+  s_8f8beb952b55d7::t_df9af3852f0522 55
+logitrack_web/src/pages/NewShipment.tsx
+  s_8f8beb952b55d7::t_37bedfee873104 14
+  s_8f8beb952b55d7::t_ba8b0301406932 854
+  s_8f8beb952b55d7::t_34362a310b25fd 908-920,922-925,933,939-951
+logitrack_core/internal/handler/payment.go
+  s_8f8beb952b55d7::t_34e12b6f558ffe 105-107,114-115,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "1b589d3df1031a54b50a4ecbe132c0b4f292a212",
+  "prompts": {},
+  "sessions": {
+    "s_8f8beb952b55d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02c0627d-61c7-4519-ba47-5a33659d94eb",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
