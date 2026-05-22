@@ -340,8 +340,10 @@ export function PublicTracking() {
       setClaimCreatedBy("");
       setClaimDni("");
       setClaimEvidence(null);
-    } catch {
-      setClaimError("No pudimos registrar el reclamo. Intentá nuevamente.");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setClaimError(msg ?? "No pudimos registrar el reclamo. Intentá nuevamente.");
     } finally {
       setClaimSubmitting(false);
     }

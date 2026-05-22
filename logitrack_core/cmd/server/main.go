@@ -151,7 +151,8 @@ func main() {
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
-	claimSvc := service.NewClaimService(claimRepo, shipmentRepo)
+	claimEventRepo := repository.NewPostgresClaimEventRepository(database)
+	claimSvc := service.NewClaimService(claimRepo, claimEventRepo, shipmentRepo, eventStore)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
@@ -349,6 +350,7 @@ func main() {
 	// Claims — list/detail/derive/resolve for operator/supervisor
 	protected.GET("/claims", claimRead, claimHandler.ListClaims)
 	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
+	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 

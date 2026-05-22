@@ -936,11 +936,17 @@ export function ShipmentDetail() {
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
                   <span style={{ fontWeight: 600 }}>
-                    {ev.event_type === "edited"
-                      ? STATUS_LABELS[ev.to_status]
-                      : ev.from_status
-                        ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
-                        : STATUS_LABELS[ev.to_status]}
+                    {ev.event_type === "claim_created"
+                      ? "Reclamo registrado"
+                      : ev.event_type === "incident_reported"
+                        ? "Incidencia reportada"
+                        : ev.event_type === "edited"
+                          ? STATUS_LABELS[ev.to_status]
+                          : ev.from_status
+                            ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
+                            : ev.to_status
+                              ? STATUS_LABELS[ev.to_status]
+                              : "Evento registrado"}
                   </span>
                   <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
                 </div>

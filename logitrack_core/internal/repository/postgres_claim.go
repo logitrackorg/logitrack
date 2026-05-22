@@ -15,6 +15,12 @@ func NewPostgresClaimRepository(db *sql.DB) ClaimRepository {
 	return &postgresClaimRepository{db: db}
 }
 
+func (r *postgresClaimRepository) NextID() (string, error) {
+	var id string
+	err := r.db.QueryRow(`SELECT 'REC-' || nextval('shipment_claim_id_seq')::text`).Scan(&id)
+	return id, err
+}
+
 func (r *postgresClaimRepository) Create(claim model.Claim) error {
 	_, err := r.db.Exec(
 		`INSERT INTO shipment_claims
@@ -32,6 +38,18 @@ func (r *postgresClaimRepository) Create(claim model.Claim) error {
 		string(claim.ResolutionType),
 		claim.IsAutomatic,
 	)
+	return err
+}
+
+func (r *postgresClaimRepository) Delete(id string) error {
+	res, err := r.db.Exec(`DELETE FROM shipment_claims WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return ErrClaimNotFound
+	}
 	return err
 }
 

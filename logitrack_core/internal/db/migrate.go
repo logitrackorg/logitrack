@@ -164,6 +164,18 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_claims_tracking_id ON shipment_claims(tracking_id);
 
+		CREATE TABLE IF NOT EXISTS claim_events (
+			id         VARCHAR(50)  PRIMARY KEY,
+			claim_id   VARCHAR(50)  NOT NULL,
+			event_type TEXT         NOT NULL,
+			payload    JSONB        NOT NULL DEFAULT '{}',
+			changed_by VARCHAR(100) NOT NULL,
+			timestamp  TIMESTAMPTZ  NOT NULL,
+			version    INT          NOT NULL,
+			UNIQUE (claim_id, version)
+		);
+		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
+
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
 			tracking_id TEXT NOT NULL,
@@ -380,6 +392,30 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Email transaccional: deduplicación de emails de confirmación de envío (CA-05)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
+
+		-- Reclamos: IDs secuenciales únicos (REC-NNNNN) y historial de eventos
+		CREATE SEQUENCE IF NOT EXISTS shipment_claim_id_seq START WITH 10000;
+		DO $migrate_claim_seq$
+		DECLARE max_n BIGINT;
+		BEGIN
+			SELECT COALESCE(MAX(CAST(SUBSTRING(id FROM 5) AS BIGINT)), 9999)
+			INTO max_n
+			FROM shipment_claims
+			WHERE id ~ '^REC-[0-9]+$';
+			PERFORM setval('shipment_claim_id_seq', max_n, true);
+		END
+		$migrate_claim_seq$;
+		CREATE TABLE IF NOT EXISTS claim_events (
+			id         VARCHAR(50)  PRIMARY KEY,
+			claim_id   VARCHAR(50)  NOT NULL,
+			event_type TEXT         NOT NULL,
+			payload    JSONB        NOT NULL DEFAULT '{}',
+			changed_by VARCHAR(100) NOT NULL,
+			timestamp  TIMESTAMPTZ  NOT NULL,
+			version    INT          NOT NULL,
+			UNIQUE (claim_id, version)
+		);
+		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
 	`)
 	return err
 }
