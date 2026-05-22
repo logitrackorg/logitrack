@@ -236,6 +236,27 @@ func (p *ShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, er
 	return stats, nil
 }
 
+func (p *ShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	result := map[string]int{}
+	for _, s := range p.shipments {
+		if statusFilter != "" && string(s.Status) != statusFilter {
+			continue
+		}
+		if dateFrom != nil && s.CreatedAt.Before(*dateFrom) {
+			continue
+		}
+		if dateTo != nil && s.CreatedAt.After(*dateTo) {
+			continue
+		}
+		if s.ReceivingBranchID != "" {
+			result[s.ReceivingBranchID]++
+		}
+	}
+	return result, nil
+}
+
 func (p *ShipmentProjection) ReserveForTrip(trackingID, tripID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

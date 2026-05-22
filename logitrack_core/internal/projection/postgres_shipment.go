@@ -458,21 +458,25 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	branchFilter := filter.ReceivingBranchID
 
 	// Main totals query.
-	var rows *sql.Rows
-	var err error
+	var (
+		rows *sql.Rows
+		err  error
+	)
 	if branchFilter != "" {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
+		rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
 	} else {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired'`)
+		rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE status != 'expired'`)
 	}
 	if err != nil {
 		return model.Stats{}, err
 	}
 	defer rows.Close()
 
+	totalDelivered := 0
 	for rows.Next() {
 		var status, location string
-		if err := rows.Scan(&status, &location); err != nil {
+		var hasIncident bool
+		if err := rows.Scan(&status, &location, &hasIncident); err != nil {
 			return model.Stats{}, err
 		}
 		stats.Total++
@@ -481,10 +485,77 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		if s != model.StatusDelivered && s != model.StatusReturned && location != "" {
 			stats.ByBranch[location]++
 		}
+		if s == model.StatusDelivered {
+			totalDelivered++
+		}
+		if hasIncident {
+			stats.OpenIncidents++
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return model.Stats{}, err
 	}
+
+	// Cycle time & success rate.
+	if stats.Total > 0 {
+		rate := (float64(totalDelivered) / float64(stats.Total)) * 100
+		stats.SuccessRate = &rate
+	}
+	if totalDelivered > 0 {
+		var row *sql.Row
+		if branchFilter != "" {
+			row = p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
+				FROM shipments WHERE status = 'delivered' AND delivered_at IS NOT NULL AND receiving_branch_id = $1`, branchFilter)
+		} else {
+			row = p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
+				FROM shipments WHERE status = 'delivered' AND delivered_at IS NOT NULL`)
+		}
+		var avg float64
+		if err := row.Scan(&avg); err == nil {
+			stats.AvgCycleTimeHours = &avg
+		}
+	}
+
+	// Recent shipments (last 5, no drafts).
+	var recentRows *sql.Rows
+	if branchFilter != "" {
+		recentRows, err = p.db.Query(`
+			SELECT tracking_id, status, current_location, weight_kg, package_type,
+			       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
+			       created_at, updated_at, estimated_delivery_at, delivered_at,
+			       sender, recipient, corrections,
+			       shipment_type, time_window,
+			       priority, priority_score, priority_confidence, priority_factors,
+			       has_incident, incident_type,
+			       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+			       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+			FROM shipments
+			WHERE status != 'expired' AND status != 'draft' AND receiving_branch_id = $1
+			ORDER BY created_at DESC LIMIT 5`, branchFilter)
+	} else {
+		recentRows, err = p.db.Query(`
+			SELECT tracking_id, status, current_location, weight_kg, package_type,
+			       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
+			       created_at, updated_at, estimated_delivery_at, delivered_at,
+			       sender, recipient, corrections,
+			       shipment_type, time_window,
+			       priority, priority_score, priority_confidence, priority_factors,
+			       has_incident, incident_type,
+			       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+			       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+			FROM shipments
+			WHERE status != 'expired' AND status != 'draft'
+			ORDER BY created_at DESC LIMIT 5`)
+	}
+	if err != nil {
+		return model.Stats{}, err
+	}
+	defer recentRows.Close()
+	recent, err := scanShipments(recentRows)
+	if err != nil {
+		return model.Stats{}, err
+	}
+	stats.RecentShipments = recent
 
 	// Pre-fill zeros for every day in the requested range.
 	if filter.DateFrom != nil && filter.DateTo != nil {
@@ -556,6 +627,55 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	}
 	return stats, nil
 }
+
+// StatsDetail returns KPI breakdown by branch for drill-down.
+func (p *PostgresShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	args := []interface{}{}
+	where := "status != 'expired'"
+	i := 1
+
+	if statusFilter != "" {
+		where += fmt.Sprintf(" AND status = $%d", i)
+		args = append(args, statusFilter)
+		i++
+	}
+	if dateFrom != nil {
+		where += fmt.Sprintf(" AND created_at >= $%d", i)
+		args = append(args, *dateFrom)
+		i++
+	}
+	if dateTo != nil {
+		where += fmt.Sprintf(" AND created_at <= $%d", i)
+		args = append(args, *dateTo)
+		i++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT receiving_branch_id, COUNT(*) AS cnt
+		FROM shipments
+		WHERE %s AND receiving_branch_id != ''
+		GROUP BY receiving_branch_id
+		ORDER BY cnt DESC`, where)
+
+	rows, err := p.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]int{}
+	for rows.Next() {
+		var branchID string
+		var cnt int
+		if err := rows.Scan(&branchID, &cnt); err != nil {
+			return nil, err
+		}
+		result[branchID] = cnt
+	}
+	return result, rows.Err()
+}
+
+
 
 // CountActiveByBranch returns the number of non-terminal shipments assigned to a branch.
 func (p *PostgresShipmentProjection) CountActiveByBranch(branchID string) int {
