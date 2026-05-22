@@ -406,6 +406,43 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			Timestamp:  de.Timestamp,
 		}, true
 
+	case model.EventPickupRequested:
+		payload := de.Payload.(model.PickupRequestedPayload)
+		from := model.Status("at_origin_hub") // puede variar, pero el payload no lo guarda
+		_ = payload
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
+			ToStatus:   model.StatusReadyForPickup,
+			ChangedBy:  de.ChangedBy,
+			Notes:      "Destinatario solicitó retiro en sucursal vía chatbot",
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventDeliveryRescheduled:
+		payload := de.Payload.(model.DeliveryRescheduledPayload)
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			ChangedBy:  de.ChangedBy,
+			Notes:      fmt.Sprintf("Entrega reprogramada para %s vía chatbot", payload.NewDeliveryDate.Format("02/01/2006")),
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventCancelledByRecipient:
+		payload := de.Payload.(model.CancelledByRecipientPayload)
+		from := payload.FromStatus
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
+			ToStatus:   model.StatusCancelled,
+			ChangedBy:  de.ChangedBy,
+			Notes:      payload.Reason,
+			Timestamp:  de.Timestamp,
+		}, true
+
 	default:
 		// draft_saved, draft_updated — not exposed
 		return model.ShipmentEvent{}, false
