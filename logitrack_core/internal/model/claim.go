@@ -1,0 +1,68 @@
+package model
+
+import "time"
+
+type ClaimStatus string
+
+const (
+	ClaimStatusOpen            ClaimStatus = "open"
+	ClaimStatusInReview        ClaimStatus = "in_review"
+	ClaimStatusPendingCustomer ClaimStatus = "pending_customer"
+	ClaimStatusDerived         ClaimStatus = "derived"
+	ClaimStatusResolved        ClaimStatus = "resolved"
+)
+
+type ClaimType string
+
+const (
+	ClaimTypeDamage       ClaimType = "damage"
+	ClaimTypeMissing      ClaimType = "missing"
+	ClaimTypeDelay        ClaimType = "delay"
+	ClaimTypeNotDelivered ClaimType = "not_delivered"
+	ClaimTypeBadTreatment ClaimType = "bad_treatment"
+	ClaimTypeWrongData    ClaimType = "wrong_data"
+	ClaimTypeOther        ClaimType = "other"
+)
+
+type ClaimCategory string
+
+type ClaimResolutionType string
+
+var ValidClaimTypes = map[ClaimType]bool{
+	ClaimTypeDamage:       true,
+	ClaimTypeMissing:      true,
+	ClaimTypeDelay:        true,
+	ClaimTypeNotDelivered: true,
+	ClaimTypeBadTreatment: true,
+	ClaimTypeWrongData:    true,
+	ClaimTypeOther:        true,
+}
+
+var ValidClaimStatuses = map[ClaimStatus]bool{
+	ClaimStatusOpen:            true,
+	ClaimStatusInReview:        true,
+	ClaimStatusPendingCustomer: true,
+	ClaimStatusDerived:         true,
+	ClaimStatusResolved:        true,
+}
+
+type Claim struct {
+	ID               string              `json:"id"`
+	TrackingID       string              `json:"tracking_id"`
+	ClaimType        ClaimType           `json:"claim_type"`
+	Status           ClaimStatus         `json:"status"`
+	Description      string              `json:"description"`
+	CreatedBy        string              `json:"created_by"`
+	CreatedAt        time.Time           `json:"created_at"`
+	UpdatedAt        time.Time           `json:"updated_at"`
+	AssignedCategory ClaimCategory       `json:"assigned_category,omitempty"`
+	ResolutionType   ClaimResolutionType `json:"resolution_type,omitempty"`
+	IsAutomatic      bool                `json:"is_automatic"`
+}
+
+type CreatePublicClaimRequest struct {
+	TrackingID  string    `json:"tracking_id" binding:"required"`
+	ClaimType   ClaimType `json:"claim_type" binding:"required"`
+	Description string    `json:"description" binding:"required"`
+	CreatedBy   string    `json:"created_by" binding:"required"`
+}

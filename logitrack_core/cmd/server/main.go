@@ -12,10 +12,13 @@ import (
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+<<<<<<< HEAD
 	"github.com/logitrack/core/internal/messaging"
+=======
+	"github.com/logitrack/core/internal/mercadopago"
+>>>>>>> 7b06d09 (feat claims: initial backend structure)
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
-	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
@@ -83,6 +86,7 @@ func main() {
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
+	claimRepo := repository.NewPostgresClaimRepository(database)
 	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
@@ -151,6 +155,7 @@ func main() {
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
+	claimSvc := service.NewClaimService(claimRepo, shipmentRepo)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
@@ -222,6 +227,7 @@ func main() {
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
+	claimHandler := handler.NewClaimHandler(claimSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
@@ -410,8 +416,8 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
-	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
-	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)    // US4: tactile events
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
 	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
@@ -495,7 +501,7 @@ func main() {
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
-	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
+	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
@@ -517,6 +523,8 @@ func main() {
 	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetPublicEvents)
 	publicAPI.GET("/branches", branchHandler.List)
 	publicAPI.GET("/stats", shipmentHandler.PublicStats)
+	publicAPI.POST("/claims", claimHandler.CreatePublicClaim)
+	publicAPI.GET("/claims/:id", claimHandler.GetPublicClaim)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	chatbotHandler.RegisterRoutes(publicAPI)
