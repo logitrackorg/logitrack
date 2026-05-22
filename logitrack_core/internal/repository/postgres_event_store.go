@@ -296,6 +296,9 @@ func unmarshalPayload(eventType string, data []byte) (interface{}, error) {
 	case model.EventIncidentReported:
 		var p model.IncidentReportedPayload
 		return p, json.Unmarshal(data, &p)
+	case model.EventClaimCreated:
+		var p model.ShipmentClaimCreatedPayload
+		return p, json.Unmarshal(data, &p)
 	case model.EventShipmentETAExtended:
 		var p model.ShipmentETAExtendedPayload
 		return p, json.Unmarshal(data, &p)

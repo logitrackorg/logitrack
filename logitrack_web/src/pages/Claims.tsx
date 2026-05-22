@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { ClipboardList, RefreshCw } from "lucide-react";
-import { claimsApi, type Claim, type ClaimCategory, type ClaimResolutionType, type ClaimStatus, type ClaimType } from "../api/claims";
+import {
+  claimsApi,
+  CLAIM_EVENT_LABELS,
+  type Claim,
+  type ClaimCategory,
+  type ClaimEvent,
+  type ClaimResolutionType,
+  type ClaimStatus,
+  type ClaimType,
+} from "../api/claims";
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
@@ -63,6 +72,8 @@ export function Claims() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [categoryDraft, setCategoryDraft] = useState<Record<string, ClaimCategory | "">>({});
+  const [eventsByClaim, setEventsByClaim] = useState<Record<string, ClaimEvent[]>>({});
+  const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
 
   const loadClaims = async () => {
     setLoading(true);
@@ -82,6 +93,19 @@ export function Claims() {
 
   useEffect(() => { loadClaims(); }, []);
 
+  const loadClaimEvents = async (claimId: string, force = false) => {
+    if (!force && eventsByClaim[claimId]) return;
+    setEventsLoadingId(claimId);
+    try {
+      const evs = await claimsApi.getEvents(claimId);
+      setEventsByClaim((prev) => ({ ...prev, [claimId]: evs ?? [] }));
+    } catch {
+      setError("No se pudo cargar el historial del reclamo.");
+    } finally {
+      setEventsLoadingId(null);
+    }
+  };
+
   const handleUpdateCategory = async (id: string) => {
     const nextCategory = categoryDraft[id];
     if (!nextCategory) return;
@@ -89,6 +113,7 @@ export function Claims() {
     try {
       const updated = await claimsApi.updateCategory(id, nextCategory);
       setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      await loadClaimEvents(id, true);
     } catch {
       setError("No se pudo actualizar la categoría del reclamo.");
     } finally {
@@ -101,6 +126,7 @@ export function Claims() {
     try {
       const updated = await claimsApi.resolve(id, resolution);
       setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      await loadClaimEvents(id, true);
     } catch {
       setError("No se pudo resolver el reclamo.");
     } finally {
@@ -144,7 +170,13 @@ export function Claims() {
         <div className="flex flex-col gap-4">
           {claims.map((claim) => (
             <Card key={claim.id} className="p-4">
-              <details>
+              <details
+                onToggle={(e) => {
+                  if ((e.currentTarget as HTMLDetailsElement).open) {
+                    void loadClaimEvents(claim.id);
+                  }
+                }}
+              >
                 <summary style={{ cursor: "pointer", listStyle: "none" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -174,6 +206,44 @@ export function Claims() {
                     <div><strong>Categoría asignada:</strong> {claim.assigned_category ? CATEGORY_OPTIONS.find((c) => c.value === claim.assigned_category)?.label : "Sin asignar"}</div>
                     <div><strong>Resolución:</strong> {claim.resolution_type ? CLAIM_STATUS_LABELS[claim.status] : "Pendiente"}</div>
                     <div><strong>Automático:</strong> {claim.is_automatic ? "Sí" : "No"}</div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Historial del reclamo</div>
+                    {eventsLoadingId === claim.id ? (
+                      <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Cargando historial…</p>
+                    ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
+                      <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Sin eventos registrados.</p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
+                          <div
+                            key={ev.id}
+                            style={{
+                              border: "1px solid #e2e8f0",
+                              borderRadius: 8,
+                              padding: "8px 10px",
+                              fontSize: 13,
+                              background: "#f8fafc",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                              <span style={{ fontWeight: 600, color: "#1e3a5f" }}>
+                                {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
+                              </span>
+                              <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
+                            </div>
+                            {ev.notes && <div style={{ color: "#475569" }}>{ev.notes}</div>}
+                            <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
+                              por <strong>{ev.changed_by}</strong>
+                              {ev.from_status && ev.to_status && (
+                                <> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: "grid", gap: 10, borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>

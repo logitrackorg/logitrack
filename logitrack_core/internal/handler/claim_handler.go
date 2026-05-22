@@ -95,7 +95,7 @@ func (h *ClaimHandler) UpdateClaimCategory(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claim, err := h.svc.UpdateCategory(c.Param("id"), req.AssignedCategory, user.BranchID)
+	claim, err := h.svc.UpdateCategory(c.Param("id"), req.AssignedCategory, user.Username, user.BranchID)
 	if err != nil {
 		if err == repository.ErrClaimNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -133,7 +133,7 @@ func (h *ClaimHandler) ResolveClaim(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claim, err := h.svc.Resolve(c.Param("id"), req.ResolutionType, user.BranchID)
+	claim, err := h.svc.Resolve(c.Param("id"), req.ResolutionType, user.Username, user.BranchID)
 	if err != nil {
 		if err == repository.ErrClaimNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -147,6 +147,39 @@ func (h *ClaimHandler) ResolveClaim(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, claim)
+}
+
+// GetClaimEvents returns the event history for a claim.
+//
+// @Summary      Get claim events
+// @Description  Returns the event timeline for a claim. Operator and supervisor only.
+// @Tags         claims
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Claim ID"
+// @Success      200  {array}   model.ClaimEvent
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /claims/{id}/events [get]
+func (h *ClaimHandler) GetClaimEvents(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	events, err := h.svc.GetEvents(c.Param("id"), user.BranchID)
+	if err != nil {
+		if err == repository.ErrClaimNotFound || err == repository.ErrClaimEventStreamNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if events == nil {
+		events = []model.ClaimEvent{}
+	}
+	c.JSON(http.StatusOK, events)
 }
 
 // CreatePublicClaim creates a public claim without authentication.
