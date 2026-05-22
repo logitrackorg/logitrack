@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { NotificationBell } from "./components/NotificationBell";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { Dashboard } from "./pages/Dashboard";
+import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
 import { NewShipment } from "./pages/NewShipment";
@@ -222,11 +223,17 @@ function AppRoutes() {
       <Nav />
       <main>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace /> : <Login />} />
+          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : user.role === "manager" ? "/dashboard" : "/"} replace /> : <Login />} />
 
           <Route path="/dashboard" element={
             <ProtectedRoute roles={["supervisor", "manager"]}>
               <Dashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/kpi-detail" element={
+            <ProtectedRoute roles={["supervisor", "manager"]}>
+              <KpiDetail />
             </ProtectedRoute>
           } />
 
