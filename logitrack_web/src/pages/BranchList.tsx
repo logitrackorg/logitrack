@@ -328,6 +328,7 @@ function BranchFormModal({
     province: initial?.province ?? initial?.address.province ?? "",
     postal_code: initial?.address.postal_code ?? "",
     max_capacity: initial?.max_capacity ?? 50,
+    hours: initial?.hours ?? "",
   });
   const [step, setStep] = useState<"form" | "confirm">("form");
   const [submitting, setSubmitting] = useState(false);
@@ -475,6 +476,14 @@ function BranchFormModal({
             />
           </Field>
         </div>
+        <Field label="Horarios de atención">
+          <input
+            style={inputStyle}
+            value={form.hours}
+            onChange={(e) => set("hours", e.target.value)}
+            placeholder="ej. Lunes a Viernes 9:00-18:00hs"
+          />
+        </Field>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
