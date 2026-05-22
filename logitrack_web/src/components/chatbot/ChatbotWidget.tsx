@@ -76,13 +76,25 @@ export const ChatbotWidget: React.FC = () => {
       setTrackingId(trackingId);
       setState('authenticated');
 
-      addBotMessage(
-        `¡Perfecto, ${response.recipient_name}! ✅\n\n` +
-        `Encontré tu envío: ${trackingId}\n` +
-        `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
-        `¿En qué puedo ayudarte?`,
-        buildMenuOptions(response.available_actions)
-      );
+      const menuOptions = buildMenuOptions(response.available_actions);
+
+      if (menuOptions.length > 0) {
+        addBotMessage(
+          `¡Perfecto, ${response.recipient_name}! ✅\n\n` +
+          `Encontré tu envío: ${trackingId}\n` +
+          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+          `¿En qué puedo ayudarte?`,
+          menuOptions
+        );
+      } else {
+        addBotMessage(
+          `¡Hola, ${response.recipient_name}! ✅\n\n` +
+          `Encontré tu envío: ${trackingId}\n` +
+          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+          getNoActionsMessage(response.shipment.status),
+          [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
+        );
+      }
     } catch (error: any) {
       addBotMessage(
         '❌ ' + (error.response?.data?.error ||
@@ -167,7 +179,15 @@ export const ChatbotWidget: React.FC = () => {
       addBotMessage('❌ ' + (error.response?.data?.error || 'Ocurrió un error. Por favor intenta de nuevo.'));
       setState('authenticated');
       if (shipment) {
-        addBotMessage('¿En qué más puedo ayudarte?', buildMenuOptions(getAvailableActions()));
+        const menuOptions = buildMenuOptions(getAvailableActions());
+        if (menuOptions.length > 0) {
+          addBotMessage('¿En qué más puedo ayudarte?', menuOptions);
+        } else {
+          addBotMessage(
+            getNoActionsMessage(shipment.status),
+            [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
+          );
+        }
       }
     } finally {
       setLoading(false);
@@ -258,7 +278,15 @@ export const ChatbotWidget: React.FC = () => {
   const handleRestart = () => {
     if (shipment) {
       setState('authenticated');
-      addBotMessage('¿En qué puedo ayudarte?', buildMenuOptions(getAvailableActions()));
+      const menuOptions = buildMenuOptions(getAvailableActions());
+      if (menuOptions.length > 0) {
+        addBotMessage('¿En qué puedo ayudarte?', menuOptions);
+      } else {
+        addBotMessage(
+          getNoActionsMessage(shipment.status),
+          [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
+        );
+      }
     } else {
       setMessages([]);
       setShipment(null);
@@ -297,6 +325,23 @@ export const ChatbotWidget: React.FC = () => {
 
   const isTerminalStatus = (status: string): boolean => {
     return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed'].includes(status);
+  };
+
+  const getNoActionsMessage = (status: string): string => {
+    switch (status) {
+      case 'out_for_delivery':
+        return '🚚 Tu paquete ya está en camino a tu domicilio. No es posible modificar el envío mientras está en reparto.\n\nSi no estás en casa al momento de la entrega, el repartidor dejará un aviso para coordinar un nuevo intento.';
+      case 'delivered':
+        return '✅ Tu envío fue entregado exitosamente. No hay acciones pendientes.';
+      case 'ready_for_pickup':
+        return '📦 Tu paquete ya está listo para retiro en la sucursal. Presentate con tu DNI para retirarlo.';
+      case 'cancelled':
+        return '❌ Este envío fue cancelado. Contactá al remitente para más información.';
+      case 'returned':
+        return '↩️ Este envío fue devuelto al remitente. Contactalo para coordinar la entrega.';
+      default:
+        return 'No hay acciones disponibles para tu envío en este momento. Podés comunicarte con el remitente para más información.';
+    }
   };
 
   const getStatusText = (status: string): string => {
