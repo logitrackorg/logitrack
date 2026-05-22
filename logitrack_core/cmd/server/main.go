@@ -124,10 +124,6 @@ func main() {
 	} else {
 		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
 	}
-	if os.Getenv("MP_SIMULATE_ENABLED") == "true" {
-		log.Println("[mercadopago] modo simulación HABILITADO (MP_SIMULATE_ENABLED=true)")
-	}
-
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	// También se dispara el chequeo de SLA en riesgo/vencido para que las
@@ -335,7 +331,7 @@ func main() {
 	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
 	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
-	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
+	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
