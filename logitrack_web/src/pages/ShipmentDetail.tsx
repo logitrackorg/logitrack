@@ -290,6 +290,15 @@ export function ShipmentDetail() {
   }, [trackingId, reload]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:pickup-success', handler);
+    return () => window.removeEventListener('chatbot:pickup-success', handler);
+  }, [trackingId, reload]);
+
+  useEffect(() => {
     if (shipment?.status === "draft" && shipment.receiving_branch_id) {
       branchApi.getCapacity(shipment.receiving_branch_id).then(setBranchCapacity).catch(() => {});
     } else {

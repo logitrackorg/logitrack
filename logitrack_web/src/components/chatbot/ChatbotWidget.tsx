@@ -196,16 +196,18 @@ export const ChatbotWidget: React.FC = () => {
 
   const handlePickupRequest = async () => {
     const response = await chatbotService.requestPickup(trackingId, recipientDni);
-    
+
     addBotMessage(
       `✅ ${response.message}\n\n` +
-      (response.branch ? 
+      (response.branch ?
         `📍 Sucursal: ${response.branch.name}\n` +
         `📫 Dirección: ${response.branch.address}\n` +
-        `🕐 Horarios: ${response.branch.hours}` 
+        `🕐 Horarios: ${response.branch.hours}`
         : ''
       )
     );
+
+    window.dispatchEvent(new CustomEvent('chatbot:pickup-success', { detail: { trackingId } }));
 
     setState('authenticated');
     addBotMessage('¿Necesitas algo más?', [
