@@ -236,7 +236,6 @@ function AppRoutes() {
               <KpiDetail />
             </ProtectedRoute>
           } />
-
           <Route path="/" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentList />

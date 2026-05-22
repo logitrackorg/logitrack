@@ -1,6 +1,6 @@
 import type { ShipmentStatus } from "../api/shipments";
 
-const config: Record<ShipmentStatus, { label: string; bg: string }> = {
+export const STATUS_BADGE_CONFIG: Record<ShipmentStatus, { label: string; bg: string }> = {
   draft:                 { label: "Borrador",              bg: "#9ca3af" },
   pending_payment:       { label: "Pago pendiente",        bg: "#d97706" },
   at_origin_hub:         { label: "En sucursal origen",    bg: "#f59e0b" },
@@ -23,7 +23,7 @@ const config: Record<ShipmentStatus, { label: string; bg: string }> = {
 };
 
 export function StatusBadge({ status, label }: { status: ShipmentStatus; label?: string }) {
-  const base = config[status] ?? { label: status, bg: "#9ca3af" };
+  const base = STATUS_BADGE_CONFIG[status] ?? { label: status, bg: "#9ca3af" };
   const cfg = label ? { ...base, label } : base;
   return (
     <span style={{

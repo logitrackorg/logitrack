@@ -675,7 +675,87 @@ func (p *PostgresShipmentProjection) StatsDetail(statusFilter string, dateFrom, 
 	return result, rows.Err()
 }
 
+// CancellationStats returns cancellations grouped by day and reason.
+func (p *PostgresShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	result := model.CancellationStats{
+		ByDay:            map[string]int{},
+		ReasonsBreakdown: map[string]int{},
+	}
 
+	// Default to last 30 days if no range specified.
+	from := dateFrom
+	to := dateTo
+	now := time.Now()
+	if from == nil {
+		f := now.AddDate(0, 0, -30)
+		from = &f
+	}
+	if to == nil {
+		to = &now
+	}
+
+	// Pre-fill zeros for every day in the requested range.
+	for d := from.Truncate(24 * time.Hour); !d.After(*to); d = d.AddDate(0, 0, 1) {
+		result.ByDay[d.Format("2006-01-02")] = 0
+	}
+
+	// Query the events table for shipment_cancelled events,
+	// joining with shipments to support branch filtering.
+	whereBranch := ""
+	args := []interface{}{}
+	if branchID != "" {
+		whereBranch = " AND s.receiving_branch_id = $3"
+		args = append(args, branchID)
+	}
+
+	rows, err := p.db.Query(`
+		SELECT DATE(e.timestamp)::text AS day,
+		       e.payload->>'Reason' AS reason,
+		       COUNT(*) AS cnt
+		FROM events e
+		JOIN shipments s ON s.tracking_id = e.tracking_id
+		WHERE e.event_type = 'shipment_cancelled'
+		  AND e.timestamp >= $1 AND e.timestamp <= $2`+whereBranch+`
+		GROUP BY DATE(e.timestamp), e.payload->>'Reason'
+		ORDER BY day`, append([]interface{}{*from, *to}, args...)...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var day, reason string
+		var cnt int
+		if err := rows.Scan(&day, &reason, &cnt); err != nil {
+			return result, err
+		}
+		result.ByDay[day] += cnt
+		result.ReasonsBreakdown[reason] += cnt
+		result.Total += cnt
+	}
+	if err := rows.Err(); err != nil {
+		return result, err
+	}
+
+	// Compute top reason.
+	if result.Total > 0 {
+		maxCount := 0
+		for reason, count := range result.ReasonsBreakdown {
+			if count > maxCount {
+				maxCount = count
+				result.TopReason = reason
+			}
+		}
+		// If zero-fill days inflated the total, recount from reasons.
+		computedTotal := 0
+		for _, count := range result.ReasonsBreakdown {
+			computedTotal += count
+		}
+		result.Total = computedTotal
+	}
+
+	return result, nil
+}
 
 // CountActiveByBranch returns the number of non-terminal shipments assigned to a branch.
 func (p *PostgresShipmentProjection) CountActiveByBranch(branchID string) int {

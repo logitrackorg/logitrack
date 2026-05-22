@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * StatCard — compact KPI tile for dashboards.
- * Supports an optional trend indicator and tone variants for status colors.
+ * Supports an optional trend indicator, tone variants, and an accent color strip.
  */
 type StatCardProps = {
   label: string;
@@ -11,6 +11,8 @@ type StatCardProps = {
   hint?: React.ReactNode;
   icon?: React.ReactNode;
   tone?: "default" | "success" | "warning" | "danger" | "info";
+  /** Hex color for a left accent strip (e.g. status badge color) */
+  accentColor?: string;
   className?: string;
   onClick?: () => void;
 };
@@ -23,27 +25,36 @@ const TONE_STYLES: Record<NonNullable<StatCardProps["tone"]>, { iconBg: string; 
   info: { iconBg: "bg-sky-50", iconColor: "text-sky-600" },
 };
 
-export function StatCard({ label, value, hint, icon, tone = "default", className, onClick }: StatCardProps) {
+export function StatCard({ label, value, hint, icon, tone = "default", accentColor, className, onClick }: StatCardProps) {
   const t = TONE_STYLES[tone];
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-xl bg-white border border-slate-200 p-5 shadow-sm transition-all",
-        onClick && "cursor-pointer hover:border-slate-300 hover:shadow-md",
+        "rounded-xl bg-white border border-slate-200 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all relative",
+        onClick && "cursor-pointer hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
+      {accentColor && (
+        <span
+          className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full"
+          style={{ backgroundColor: accentColor }}
+        />
+      )}
+      <div className={cn("flex items-start justify-between gap-3 mb-3", accentColor && "pl-2")}>
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
         {icon && (
-          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", t.iconBg, t.iconColor)}>
+          <div
+            className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", !accentColor && t.iconBg, !accentColor && t.iconColor)}
+            style={accentColor ? { backgroundColor: accentColor + "1A", color: accentColor } : undefined}
+          >
             {icon}
           </div>
         )}
       </div>
-      <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      <p className={cn("text-3xl font-bold tabular-nums tracking-tight text-slate-900", accentColor && "pl-2")}>{value}</p>
+      {hint && <p className={cn("mt-1 text-xs text-slate-500", accentColor && "pl-2")}>{hint}</p>}
     </div>
   );
 }

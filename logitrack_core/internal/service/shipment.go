@@ -1286,6 +1286,10 @@ func (s *ShipmentService) StatsDetail(statusFilter string, dateFrom, dateTo *tim
 	return s.repo.StatsDetail(statusFilter, dateFrom, dateTo)
 }
 
+func (s *ShipmentService) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	return s.repo.CancellationStats(dateFrom, dateTo, branchID)
+}
+
 func (s *ShipmentService) estimatedDelivery(from time.Time, originBranchID, finalBranchID, shipmentType string) *time.Time {
 	var distKm float64
 	origin, okO := s.branchRepo.GetByID(originBranchID)

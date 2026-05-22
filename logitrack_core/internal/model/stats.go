@@ -19,6 +19,14 @@ type StatsDetailItem struct {
 	Count      int    `json:"count"`
 }
 
+// CancellationStats represents cancellations grouped by day and reason.
+type CancellationStats struct {
+	ByDay            map[string]int `json:"by_day"`             // YYYY-MM-DD → cancellation count
+	Total            int            `json:"total"`              // total cancellations in range
+	TopReason        string         `json:"top_reason"`         // most frequent reason overall
+	ReasonsBreakdown map[string]int `json:"reasons_breakdown"`  // reason → count
+}
+
 // PublicStats is a redacted, auth-free snapshot used by the login screen.
 // Excludes drafts from totals so the number reflects real, confirmed activity.
 type PublicStats struct {

@@ -196,6 +196,10 @@ func (r *eventSourcedShipmentRepository) StatsDetail(statusFilter string, dateFr
 	return r.projection.StatsDetail(statusFilter, dateFrom, dateTo)
 }
 
+func (r *eventSourcedShipmentRepository) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	return r.projection.CancellationStats(dateFrom, dateTo, branchID)
+}
+
 func (r *eventSourcedShipmentRepository) RequestPayment(cmd RequestPaymentCmd) (model.Shipment, error) {
 	event := model.DomainEvent{
 		ID:         uuid.NewString(),

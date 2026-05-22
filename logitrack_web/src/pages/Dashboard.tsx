@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, MapPin, ArrowRight, Package, Truck, CheckCircle2, AlertCircle, AlertTriangle, Box, Download, Eye, Clock } from "lucide-react";
+import { LayoutDashboard, MapPin, ArrowRight, Package, Truck, CheckCircle2, AlertCircle, AlertTriangle, Box, Download, Eye, Clock, ChevronDown, Calendar, FileEdit, Building2, PackageCheck, Navigation, XCircle, RefreshCw, ThumbsDown, Ban, Undo2, HelpCircle, CreditCard, PackageOpen, Warehouse } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import domtoimage from "dom-to-image-more";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
-import { shipmentApi, type Stats, type ShipmentStatus } from "../api/shipments";
+import { shipmentApi, type Stats, type CancellationStats, type ShipmentStatus } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
-import { StatusBadge } from "../components/StatusBadge";
+import { StatusBadge, STATUS_BADGE_CONFIG } from "../components/StatusBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { toast } from "../utils/toast";
 import { PageHeader } from "../components/ui/page-header";
@@ -42,7 +42,10 @@ const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "s
 };
 
 function toDateInput(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function defaultRange(): { from: string; to: string } {
@@ -53,7 +56,9 @@ function defaultRange(): { from: string; to: string } {
 }
 
 const inputClass =
-  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+
+const selectClass = inputClass + " appearance-none cursor-pointer pr-8";
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-slate-200 rounded-lg ${className ?? ""}`} />;
@@ -67,6 +72,7 @@ export function Dashboard() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [exportOpen, setExportOpen] = useState(false);
   const [showAllStatuses, setShowAllStatuses] = useState(false);
+  const [cancellationData, setCancellationData] = useState<CancellationStats | null>(null);
   const range = defaultRange();
   const [dateFrom, setDateFrom] = useState(range.from);
   const [dateTo, setDateTo] = useState(range.to);
@@ -90,8 +96,12 @@ export function Dashboard() {
       date_to: dateTo,
     };
     if (effectiveBranch) params.branch_id = effectiveBranch;
-    shipmentApi.stats(params).then((s) => {
+    Promise.all([
+      shipmentApi.stats(params),
+      shipmentApi.cancellationStats(params),
+    ]).then(([s, cs]) => {
       setStats(s);
+      setCancellationData(cs);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [dateFrom, dateTo, effectiveBranch]);
@@ -122,12 +132,15 @@ export function Dashboard() {
   const delivered = stats?.by_status?.delivered ?? 0;
   const issues = (stats?.by_status?.delivery_failed ?? 0) + (stats?.by_status?.lost ?? 0) + (stats?.by_status?.destroyed ?? 0);
 
+  function keyFromDate(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
   const chartData: { date: string; creados: number; entregados: number }[] = [];
   if (dateFrom && dateTo) {
     const cur = new Date(dateFrom + "T00:00:00");
     const end = new Date(dateTo + "T00:00:00");
     while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10);
+      const key = keyFromDate(cur);
       chartData.push({ date: key, creados: stats?.by_day?.[key] ?? 0, entregados: stats?.by_day_delivered?.[key] ?? 0 });
       cur.setDate(cur.getDate() + 1);
     }
@@ -209,21 +222,24 @@ export function Dashboard() {
                 {branchLabel}
               </span>
             ) : (
-              <select
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className={inputClass}
-                aria-label="Filtrar por sucursal"
-              >
-                <option value="">Todas las sucursales</option>
-                {sortedProvinces.map((prov) => (
-                  <optgroup key={prov} label={prov}>
-                    {branchesByProvince[prov].map((b) => (
-                      <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className={selectClass}
+                  aria-label="Filtrar por sucursal"
+                >
+                  <option value="">Todas las sucursales</option>
+                  {sortedProvinces.map((prov) => (
+                    <optgroup key={prov} label={prov}>
+                      {branchesByProvince[prov].map((b) => (
+                        <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
             )}
             <div className="relative">
               <button
@@ -269,7 +285,7 @@ export function Dashboard() {
             </>
           ) : (
             <>
-              <GradientCard tone="brand">
+              <GradientCard tone="brand" className="hover:shadow-[0_8px_24px_rgba(30,58,95,0.25)] transition-shadow duration-200">
                 <div className="flex items-start gap-3">
                   <GradientCardIcon><Box className="w-5 h-5" /></GradientCardIcon>
                   <div className="flex-1 min-w-0">
@@ -285,6 +301,7 @@ export function Dashboard() {
                 hint="Cargado en vehículo + en tránsito + última milla"
                 icon={<Truck className="w-4 h-4" />}
                 tone="info"
+                accentColor="#3b82f6"
               />
               <StatCard
                 label="Entregados"
@@ -292,6 +309,7 @@ export function Dashboard() {
                 hint="Completados con éxito"
                 icon={<CheckCircle2 className="w-4 h-4" />}
                 tone="success"
+                accentColor="#10b981"
                 onClick={() => navigate(`/kpi-detail?kpi=delivered&date_from=${dateFrom}&date_to=${dateTo}${effectiveBranch ? `&branch_id=${effectiveBranch}` : ""}`)}
               />
               <StatCard
@@ -300,6 +318,7 @@ export function Dashboard() {
                 hint="Fallidos + extraviados + dañados"
                 icon={<AlertCircle className="w-4 h-4" />}
                 tone="danger"
+                accentColor="#ef4444"
                 onClick={() => navigate(`/kpi-detail?kpi=issues&date_from=${dateFrom}&date_to=${dateTo}${effectiveBranch ? `&branch_id=${effectiveBranch}` : ""}`)}
               />
             </>
@@ -308,35 +327,38 @@ export function Dashboard() {
 
         {/* Success rate & avg cycle time — grouped card when there's data */}
         {!loading && stats && (stats.success_rate != null || stats.avg_cycle_time_hours != null) && (
-          <Card variant="muted" className="px-5 py-3">
+          <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 px-5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Métricas de operación</span>
               {stats.success_rate != null && (
-                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-sm text-emerald-700">
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                   Tasa de éxito: <strong className="tab-nums">{stats.success_rate.toFixed(1)}%</strong>
                 </span>
               )}
               {stats.avg_cycle_time_hours != null && (
-                <span className="inline-flex items-center gap-1.5 text-sm text-blue-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-sm text-blue-700">
                   <Clock className="w-3.5 h-3.5 shrink-0" />
                   Ciclo promedio: <strong className="tab-nums">{stats.avg_cycle_time_hours.toFixed(1)} h</strong>
                 </span>
               )}
               {stats.open_incidents > 0 && (
-                <span className="inline-flex items-center gap-1.5 text-sm text-rose-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-sm text-rose-700">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   Incidentes abiertos: <strong className="tab-nums">{stats.open_incidents}</strong>
                 </span>
               )}
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Status breakdown */}
         <Card>
-          <div className="px-5 pt-5 pb-3 flex items-baseline justify-between">
-            <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por estado</h2>
+          <div className="px-5 pt-5 pb-3 flex items-baseline justify-between border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#1e3a5f]" />
+              <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por estado</h2>
+            </div>
             <div className="flex items-center gap-3">
               <p className="text-xs text-slate-500 hidden sm:block">Click en una tarjeta para filtrar</p>
               <button
@@ -357,19 +379,36 @@ export function Dashboard() {
                 {(Object.keys(statusConfig) as ShipmentStatus[]).filter(s => showAllStatuses || (stats?.by_status?.[s] ?? 0) > 0).map((s) => {
                   const cfg = statusConfig[s];
                   const value = stats?.by_status?.[s] ?? 0;
-                  const iconMap: Record<string, React.ReactNode> = {
-                    success: <CheckCircle2 className="w-3.5 h-3.5" />,
-                    danger: <AlertCircle className="w-3.5 h-3.5" />,
-                    warning: <AlertTriangle className="w-3.5 h-3.5" />,
-                    info: <Eye className="w-3.5 h-3.5" />,
+                  const statusIconMap: Record<ShipmentStatus, React.ReactNode> = {
+                    draft: <FileEdit className="w-3.5 h-3.5" />,
+                    at_origin_hub: <Building2 className="w-3.5 h-3.5" />,
+                    loaded: <PackageCheck className="w-3.5 h-3.5" />,
+                    in_transit: <Navigation className="w-3.5 h-3.5" />,
+                    at_hub: <Warehouse className="w-3.5 h-3.5" />,
+                    out_for_delivery: <Truck className="w-3.5 h-3.5" />,
+                    delivery_failed: <XCircle className="w-3.5 h-3.5" />,
+                    redelivery_scheduled: <RefreshCw className="w-3.5 h-3.5" />,
+                    no_entregado: <AlertCircle className="w-3.5 h-3.5" />,
+                    rechazado: <ThumbsDown className="w-3.5 h-3.5" />,
+                    delivered: <CheckCircle2 className="w-3.5 h-3.5" />,
+                    ready_for_pickup: <PackageOpen className="w-3.5 h-3.5" />,
+                    ready_for_return: <Undo2 className="w-3.5 h-3.5" />,
+                    returned: <Undo2 className="w-3.5 h-3.5" />,
+                    cancelled: <Ban className="w-3.5 h-3.5" />,
+                    lost: <HelpCircle className="w-3.5 h-3.5" />,
+                    destroyed: <AlertTriangle className="w-3.5 h-3.5" />,
+                    expired: <Clock className="w-3.5 h-3.5" />,
+                    pending_payment: <CreditCard className="w-3.5 h-3.5" />,
                   };
+                  const badgeColor = STATUS_BADGE_CONFIG[s]?.bg;
                   return (
                     <StatCard
                       key={s}
                       label={cfg.label}
                       value={value}
                       tone={cfg.tone}
-                      icon={iconMap[cfg.tone] ?? <Package className="w-3.5 h-3.5" />}
+                      icon={statusIconMap[s] ?? <Package className="w-3.5 h-3.5" />}
+                      accentColor={badgeColor}
                       onClick={() => navigate(`/?status=${s}`)}
                       className="!p-3"
                     />
@@ -383,8 +422,12 @@ export function Dashboard() {
         {/* Chart */}
         <Card>
           <div className="px-5 pt-5 pb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
-            <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos creados vs entregados por día</h2>
             <div className="flex items-center gap-2">
+              <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#10b981]" />
+              <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos creados vs entregados por día</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Desde</span>
               <input
                 type="date"
@@ -394,6 +437,7 @@ export function Dashboard() {
                 className={inputClass}
                 aria-label="Fecha desde"
               />
+              <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Hasta</span>
               <input
                 type="date"
@@ -441,7 +485,10 @@ export function Dashboard() {
                         padding: "10px 14px",
                         background: "rgba(255,255,255,0.97)",
                       }}
-                      labelFormatter={(label) => `${String(label)}`}
+                      labelFormatter={(label: string) => {
+                        const d = new Date(label + "T12:00:00");
+                        return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+                      }}
                       formatter={(value: number, name: string) => [value, name === "creados" ? "Creados" : "Entregados"]}
                     />
                     <Bar dataKey="creados" fill="#2563eb" radius={[3, 3, 0, 0]} name="Creados" maxBarSize={32} />
@@ -449,12 +496,12 @@ export function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="flex items-center justify-center gap-5 mt-3 pt-3 border-t border-slate-100">
-                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="inline-block w-2.5 h-2.5 rounded bg-[#2563eb]" />
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                    <span className="inline-block w-2 h-2 rounded-sm bg-[#2563eb]" />
                     Creados
                   </span>
-                  <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="inline-block w-2.5 h-2.5 rounded bg-emerald-500" />
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" />
                     Entregados
                   </span>
                 </div>
@@ -463,10 +510,105 @@ export function Dashboard() {
           </div>
         </Card>
 
+        {/* Cancelaciones — integrado en el dashboard */}
+        <Card>
+          <div className="px-5 pt-5 pb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 rounded-full bg-gradient-to-b from-rose-500 to-rose-300" />
+              <h2 className="text-base font-semibold text-slate-900 tracking-tight">Cancelaciones</h2>
+            </div>
+            {!loading && cancellationData && cancellationData.total > 0 && (
+              <span className="text-xs text-slate-500">
+                Total: <strong className="text-red-600 tabular-nums">{cancellationData.total}</strong>
+              </span>
+            )}
+          </div>
+          {loading ? (
+            <div className="px-5 pb-5">
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : !cancellationData || cancellationData.total === 0 ? (
+            <div className="px-5 pb-5">
+              <p className="text-xs text-slate-400 text-center py-4">Sin cancelaciones en el período</p>
+            </div>
+          ) : (() => {
+            const sortedDays = Object.entries(cancellationData.by_day)
+              .sort(([a], [b]) => a.localeCompare(b));
+            const lineData = sortedDays.map(([date, count]) => ({ date, cancelaciones: count }));
+            const hasLine = lineData.some((d) => d.cancelaciones > 0);
+            if (!hasLine) {
+              return (
+                <div className="px-5 pb-5">
+                  <p className="text-xs text-slate-400 text-center py-4">Sin cancelaciones en el período</p>
+                </div>
+              );
+            }
+            const maxVal = Math.max(...lineData.map((d) => d.cancelaciones), 1);
+            const peakEntry = [...lineData].sort((a, b) => b.cancelaciones - a.cancelaciones)[0];
+            const CustomPeakDot = (props: { cx?: number; cy?: number; payload?: { date: string; cancelaciones: number } }) => {
+              const { cx, cy, payload } = props;
+              if (!payload || !cx || !cy) return null;
+              const isPeak = payload.date === peakEntry?.date && payload.cancelaciones > 0;
+              if (!isPeak) return <circle cx={cx} cy={cy} r={2} fill="#ef4444" />;
+              return (
+                <g>
+                  <circle cx={cx} cy={cy} r={8} fill="#fee2e2" stroke="#ef4444" strokeWidth={1.5} />
+                  <text x={cx} y={cy + 4} textAnchor="middle" fontSize={11} fill="#dc2626" fontWeight="bold">⚠</text>
+                </g>
+              );
+            };
+            return (
+              <div className="px-5 pb-5 space-y-4">
+                <div className="h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={lineData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                      <defs>
+                        <linearGradient id="cancelGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#ef4444" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10, fill: "#94a3b8" }}
+                        tickFormatter={(v: string) => v.slice(5)}
+                        interval={Math.max(0, Math.floor(lineData.length / 8))}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        domain={[0, maxVal + 1]}
+                        allowDecimals={false}
+                        tick={{ fontSize: 10, fill: "#94a3b8" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", padding: "8px 12px", background: "rgba(255,255,255,0.97)" }}
+                        formatter={(value: number) => [value, "Cancelaciones"]}
+                        labelFormatter={(v: string) => {
+                          const d = new Date(v + "T12:00:00");
+                          return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+                        }}
+                      />
+                      <Area type="monotone" dataKey="cancelaciones" stroke="#ef4444" strokeWidth={2} fill="url(#cancelGrad)" dot={<CustomPeakDot />} activeDot={{ r: 5, fill: "#ef4444" }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+              </div>
+            );
+          })()}
+        </Card>
+
         {/* Recent shipments */}
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100">
-            <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos recientes</h2>
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-5 rounded-full bg-gradient-to-b from-slate-400 to-slate-300" />
+              <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos recientes</h2>
+            </div>
             <button
               onClick={() => navigate("/")}
               className="inline-flex items-center gap-1 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 rounded"
@@ -504,9 +646,9 @@ export function Dashboard() {
                     <tr
                       key={s.tracking_id}
                       onClick={() => navigate(`/shipments/${s.tracking_id}`)}
-                      className={`border-b border-slate-100 cursor-pointer transition-colors ${
+                      className={`border-b border-slate-100 cursor-pointer transition-all ${
                         i % 2 === 0 ? "bg-white" : "bg-slate-50/20"
-                      } hover:bg-blue-50/60`}
+                      } hover:bg-blue-50/70 hover:shadow-[0_1px_4px_rgba(37,99,235,0.08)]`}
                     >
                       <td className={tdClass}>
                         <code className="text-xs font-mono text-[#1e3a5f] font-semibold bg-slate-50 px-1.5 py-0.5 rounded">{s.tracking_id}</code>

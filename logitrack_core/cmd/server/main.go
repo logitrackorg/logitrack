@@ -360,6 +360,7 @@ func main() {
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
 	protected.GET("/stats/detail", canViewStats, shipmentHandler.StatsDetail)
+	protected.GET("/stats/cancellations", canViewStats, shipmentHandler.CancellationStats)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 
 	// Driver route — driver only

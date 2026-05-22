@@ -236,6 +236,15 @@ func (p *ShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, er
 	return stats, nil
 }
 
+func (p *ShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.CancellationStats{
+		ByDay:            map[string]int{},
+		ReasonsBreakdown: map[string]int{},
+	}, nil
+}
+
 func (p *ShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

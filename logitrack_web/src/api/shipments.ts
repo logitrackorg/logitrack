@@ -127,6 +127,13 @@ export interface ShipmentEvent {
   timestamp: string;
 }
 
+export interface CancellationStats {
+  by_day: Record<string, number>;
+  total: number;
+  top_reason: string;
+  reasons_breakdown: Record<string, number>;
+}
+
 export interface Stats {
   total: number;
   by_status: Record<ShipmentStatus, number>;
@@ -240,6 +247,8 @@ export const shipmentApi = {
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
   stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
+  cancellationStats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
+    api.get<CancellationStats>("/stats/cancellations", { params }).then((r) => r.data),
   statsDetail: (params?: { status?: string; date_from?: string; date_to?: string }) =>
     api.get<Record<string, number>>("/stats/detail", { params }).then((r) => r.data),
   bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>
