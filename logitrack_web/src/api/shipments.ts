@@ -133,6 +133,10 @@ export interface Stats {
   by_branch: Record<string, number>;         // branch ID → active shipment count
   by_day: Record<string, number>;            // YYYY-MM-DD → shipments created that day
   by_day_delivered: Record<string, number>;  // YYYY-MM-DD → shipments delivered that day
+  avg_cycle_time_hours: number | null;       // average hours from creation to delivery
+  success_rate: number | null;               // delivery success rate 0–100
+  open_incidents: number;                    // shipments with has_incident = true
+  recent_shipments: Shipment[];              // last 5 created (no drafts)
 }
 
 export interface CreateShipmentPayload {
@@ -236,6 +240,8 @@ export const shipmentApi = {
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
   stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
+  statsDetail: (params?: { status?: string; date_from?: string; date_to?: string }) =>
+    api.get<Record<string, number>>("/stats/detail", { params }).then((r) => r.data),
   bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>
     api.post<{ updated: number; skipped: { tracking_id: string; reason: string }[] }>("/shipments/bulk-status", payload).then((r) => r.data),
   getIncidents: (trackingId: string) =>
