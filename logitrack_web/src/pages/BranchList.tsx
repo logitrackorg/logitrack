@@ -166,6 +166,7 @@ export function BranchList() {
                 <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Nombre{sortIcon("name")}</button></th>
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
+                <th style={isMobile ? { display: "none" } : thStyle}>Horarios</th>
                 <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
                 {canViewCapacity && <th style={isMobile ? { display: "none" } : thStyle}>Capacidad</th>}
                 <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
@@ -180,6 +181,9 @@ export function BranchList() {
                   </td>
                   <td style={tdStyle}>{b.address.city}, {b.province}</td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>
+                  <td style={isMobile ? { display: "none" } : { ...tdStyle, color: b.hours ? "#374151" : "#9ca3af", fontSize: 13 }}>
+                    {b.hours || "—"}
+                  </td>
                   <td style={tdStyle}>
                     <span style={{
                       display: "inline-block", padding: "2px 10px", borderRadius: 12,
