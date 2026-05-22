@@ -8,6 +8,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { Dashboard } from "./pages/Dashboard";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
+import { Claims } from "./pages/Claims";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
@@ -66,6 +67,9 @@ function Nav() {
       )}
       {!hasRole("admin") && (
         <NavLink to="/" end style={navStyle}>Envíos</NavLink>
+      )}
+      {hasRole("operator", "supervisor") && (
+        <NavLink to="/claims" style={navStyle}>Reclamos</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
@@ -233,6 +237,12 @@ function AppRoutes() {
           <Route path="/" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentList />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/claims" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <Claims />
             </ProtectedRoute>
           } />
 

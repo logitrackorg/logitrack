@@ -56,7 +56,15 @@ export interface PublicStats {
   active_branches: number;
 }
 
-export type ClaimStatus = "open" | "in_review" | "pending_customer" | "derived" | "resolved";
+export type ClaimStatus =
+  | "open"
+  | "in_review"
+  | "pending_customer"
+  | "derived"
+  | "resolved_operativa"
+  | "resolved_comercial"
+  | "resolved_rrhh"
+  | "resolved_improcedente";
 
 export type ClaimType =
   | "damage"

@@ -5,11 +5,14 @@ import "time"
 type ClaimStatus string
 
 const (
-	ClaimStatusOpen            ClaimStatus = "open"
-	ClaimStatusInReview        ClaimStatus = "in_review"
-	ClaimStatusPendingCustomer ClaimStatus = "pending_customer"
-	ClaimStatusDerived         ClaimStatus = "derived"
-	ClaimStatusResolved        ClaimStatus = "resolved"
+	ClaimStatusOpen                 ClaimStatus = "open"
+	ClaimStatusInReview             ClaimStatus = "in_review"
+	ClaimStatusPendingCustomer      ClaimStatus = "pending_customer"
+	ClaimStatusDerived              ClaimStatus = "derived"
+	ClaimStatusResolvedOperativa    ClaimStatus = "resolved_operativa"
+	ClaimStatusResolvedComercial    ClaimStatus = "resolved_comercial"
+	ClaimStatusResolvedRRHH         ClaimStatus = "resolved_rrhh"
+	ClaimStatusResolvedImprocedente ClaimStatus = "resolved_improcedente"
 )
 
 type ClaimType string
@@ -28,6 +31,22 @@ type ClaimCategory string
 
 type ClaimResolutionType string
 
+const (
+	ClaimCategoryOperaciones    ClaimCategory = "operaciones"
+	ClaimCategoryComercial      ClaimCategory = "comercial"
+	ClaimCategoryRRHH           ClaimCategory = "rrhh"
+	ClaimCategoryLegales        ClaimCategory = "legales"
+	ClaimCategorySeguros        ClaimCategory = "seguros"
+	ClaimCategoryAdministracion ClaimCategory = "administracion"
+)
+
+const (
+	ClaimResolutionOperativa    ClaimResolutionType = "operativa"
+	ClaimResolutionComercial    ClaimResolutionType = "comercial"
+	ClaimResolutionRRHH         ClaimResolutionType = "rrhh"
+	ClaimResolutionImprocedente ClaimResolutionType = "improcedente"
+)
+
 var ValidClaimTypes = map[ClaimType]bool{
 	ClaimTypeDamage:       true,
 	ClaimTypeMissing:      true,
@@ -39,11 +58,30 @@ var ValidClaimTypes = map[ClaimType]bool{
 }
 
 var ValidClaimStatuses = map[ClaimStatus]bool{
-	ClaimStatusOpen:            true,
-	ClaimStatusInReview:        true,
-	ClaimStatusPendingCustomer: true,
-	ClaimStatusDerived:         true,
-	ClaimStatusResolved:        true,
+	ClaimStatusOpen:                 true,
+	ClaimStatusInReview:             true,
+	ClaimStatusPendingCustomer:      true,
+	ClaimStatusDerived:              true,
+	ClaimStatusResolvedOperativa:    true,
+	ClaimStatusResolvedComercial:    true,
+	ClaimStatusResolvedRRHH:         true,
+	ClaimStatusResolvedImprocedente: true,
+}
+
+var ValidClaimCategories = map[ClaimCategory]bool{
+	ClaimCategoryOperaciones:    true,
+	ClaimCategoryComercial:      true,
+	ClaimCategoryRRHH:           true,
+	ClaimCategoryLegales:        true,
+	ClaimCategorySeguros:        true,
+	ClaimCategoryAdministracion: true,
+}
+
+var ValidClaimResolutionTypes = map[ClaimResolutionType]bool{
+	ClaimResolutionOperativa:    true,
+	ClaimResolutionComercial:    true,
+	ClaimResolutionRRHH:         true,
+	ClaimResolutionImprocedente: true,
 }
 
 type Claim struct {
@@ -65,4 +103,12 @@ type CreatePublicClaimRequest struct {
 	ClaimType   ClaimType `json:"claim_type" binding:"required"`
 	Description string    `json:"description" binding:"required"`
 	CreatedBy   string    `json:"created_by" binding:"required"`
+}
+
+type UpdateClaimCategoryRequest struct {
+	AssignedCategory ClaimCategory `json:"assigned_category" binding:"required"`
+}
+
+type ResolveClaimRequest struct {
+	ResolutionType ClaimResolutionType `json:"resolution_type" binding:"required"`
 }

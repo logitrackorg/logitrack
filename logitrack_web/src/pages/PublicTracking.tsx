@@ -66,7 +66,10 @@ const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   in_review: "En revisión",
   pending_customer: "Pendiente del cliente",
   derived: "Derivado",
-  resolved: "Resuelto",
+  resolved_operativa: "Resuelto",
+  resolved_comercial: "Resuelto",
+  resolved_rrhh: "Resuelto",
+  resolved_improcedente: "Resuelto",
 };
 
 interface EventDescription {
