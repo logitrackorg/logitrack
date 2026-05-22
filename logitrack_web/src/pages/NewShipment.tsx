@@ -11,7 +11,7 @@ import { AddressAutocomplete, type AddressParts } from "../components/AddressAut
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
-import ShipmentQRModal from "../components/ShipmentQRModal";
+import PaymentMethodsPanel from "../components/PaymentMethodsPanel";
 
 const PROVINCES = [
   "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
@@ -851,9 +851,7 @@ function PaymentModal({
 }) {
   const [status, setStatus] = useState<Payment["status"]>(payment.status);
   const [polling, setPolling] = useState(true);
-  const [showQR, setShowQR] = useState(false);
-  const [qrBase64, setQrBase64] = useState("");
-  const [qrError, setQrError] = useState("");
+  const [paymentError, setPaymentError] = useState("");
 
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -907,115 +905,52 @@ function PaymentModal({
 
         {status === "pending" && (
           <>
-            {payment.init_point && (
-              <>
-                <CopyLinkButton url={payment.init_point} />
-                <button
-                  onClick={async () => {
-                    setQrError("");
-                    try {
-                      const { qr_code_base64 } = await paymentApi.getQR(trackingId);
-                      setQrBase64(qr_code_base64);
-                      setShowQR(true);
-                    } catch {
-                      setQrError("No se pudo generar el QR de pago.");
-                    }
-                  }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "center",
-                    background: "#fff", color: "#009ee3",
-                    border: "1px solid #009ee3",
-                    borderRadius: 10, padding: "10px 0",
-                    fontWeight: 700, fontSize: 14, cursor: "pointer",
-                    marginBottom: 12,
-                  }}
-                >
-                  📱 Mostrar QR de cobro
-                </button>
-                {qrError && <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", marginBottom: 8 }}>{qrError}</p>}
-              </>
+            <PaymentMethodsPanel
+              payment={payment}
+              trackingId={trackingId}
+              onCashConfirmed={(newTrackingId) => {
+                if (pollRef.current) clearInterval(pollRef.current);
+                onApproved(newTrackingId);
+              }}
+              onError={setPaymentError}
+            />
+            {paymentError && (
+              <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
+                {paymentError}
+              </p>
             )}
-            {payment.simulate_enabled && (
-              <button
-                onClick={async () => {
-                  if (pollRef.current) clearInterval(pollRef.current);
-                  const result = await paymentApi.simulateApproved(trackingId);
-                  onApproved(result.tracking_id);
-                }}
-                style={{
-                  display: "block", width: "100%", textAlign: "center",
-                  background: "#f0fdf4", color: "#16a34a",
-                  border: "1px dashed #86efac",
-                  borderRadius: 10, padding: "10px 0",
-                  fontWeight: 600, fontSize: 13, cursor: "pointer",
-                  marginBottom: 12,
-                }}
-              >
-                ⚡ Simular pago aprobado (demo)
-              </button>
+            {polling && payment.init_point && (
+              <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginTop: 14, marginBottom: 0 }}>
+                Esperando confirmación de pago…
+              </p>
             )}
-            <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginBottom: 16 }}>
-              {polling && payment.init_point ? "Esperando confirmación de pago…" : ""}
-            </p>
           </>
         )}
 
         {status === "approved" && (
           <div style={{
             textAlign: "center", background: "#ecfdf5", borderRadius: 10,
-            padding: 16, marginBottom: 16, color: "#16a34a", fontWeight: 600,
+            padding: 16, marginTop: 16, marginBottom: 0, color: "#16a34a", fontWeight: 600,
           }}>
             ✓ Pago confirmado — redirigiendo…
           </div>
         )}
 
-        <button
-          onClick={onBackToDraft}
-          style={{
-            width: "100%", padding: "10px 0",
-            border: "1px solid #e2e8f0", borderRadius: 10,
-            background: "#fff", color: "#64748b",
-            fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}
-        >
-          Volver a editar el borrador
-        </button>
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #e2e8f0" }}>
+          <button
+            onClick={onBackToDraft}
+            style={{
+              width: "100%", padding: "10px 0",
+              border: "1px solid #e2e8f0", borderRadius: 10,
+              background: "#fff", color: "#64748b",
+              fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            ← Volver a editar el borrador
+          </button>
+        </div>
       </div>
-      <ShipmentQRModal
-        isOpen={showQR}
-        onClose={() => setShowQR(false)}
-        trackingId={trackingId}
-        qrCodeBase64={qrBase64}
-        title="💳 QR de cobro"
-        subtitle="El remitente puede escanear este código con su celular para completar el pago."
-        variant="payment"
-      />
     </div>
-  );
-}
-
-function CopyLinkButton({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(url).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      style={{
-        display: "block", width: "100%", textAlign: "center",
-        background: copied ? "#f0fdf4" : "#fff",
-        color: copied ? "#16a34a" : "#374151",
-        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
-        borderRadius: 10, padding: "10px 0",
-        fontWeight: 600, fontSize: 14, cursor: "pointer",
-        marginBottom: 8, transition: "all 0.2s",
-      }}
-    >
-      {copied ? "✓ Link copiado" : "Copiar link de pago"}
-    </button>
   );
 }
 
