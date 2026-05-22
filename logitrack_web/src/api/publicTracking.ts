@@ -56,6 +56,38 @@ export interface PublicStats {
   active_branches: number;
 }
 
+export type ClaimStatus = "open" | "in_review" | "pending_customer" | "derived" | "resolved";
+
+export type ClaimType =
+  | "damage"
+  | "missing"
+  | "delay"
+  | "not_delivered"
+  | "bad_treatment"
+  | "wrong_data"
+  | "other";
+
+export interface PublicClaim {
+  id: string;
+  tracking_id: string;
+  claim_type: ClaimType;
+  status: ClaimStatus;
+  description: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  assigned_category?: string;
+  resolution_type?: string;
+  is_automatic: boolean;
+}
+
+export interface CreatePublicClaimPayload {
+  tracking_id: string;
+  claim_type: ClaimType;
+  description: string;
+  created_by: string;
+}
+
 export const publicTrackingApi = {
   getShipment: (trackingId: string) =>
     api.get<PublicShipment>(`/public/track/${trackingId}`).then((r) => r.data),
@@ -65,4 +97,8 @@ export const publicTrackingApi = {
     api.get<Branch[]>("/public/branches").then((r) => r.data),
   getStats: () =>
     api.get<PublicStats>("/public/stats").then((r) => r.data),
+  createClaim: (payload: CreatePublicClaimPayload) =>
+    api.post<PublicClaim>("/public/claims", payload).then((r) => r.data),
+  getClaim: (id: string) =>
+    api.get<PublicClaim>(`/public/claims/${id}`).then((r) => r.data),
 };
