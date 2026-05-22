@@ -149,6 +149,21 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_incidents_tracking_id ON shipment_incidents(tracking_id);
 
+		CREATE TABLE IF NOT EXISTS shipment_claims (
+			id                VARCHAR(50)  PRIMARY KEY,
+			tracking_id       VARCHAR(50)  NOT NULL,
+			claim_type        TEXT         NOT NULL,
+			status            TEXT         NOT NULL,
+			description       TEXT         NOT NULL,
+			created_by        VARCHAR(100) NOT NULL,
+			created_at        TIMESTAMPTZ  NOT NULL,
+			updated_at        TIMESTAMPTZ  NOT NULL,
+			assigned_category TEXT,
+			resolution_type   TEXT,
+			is_automatic      BOOLEAN      NOT NULL DEFAULT FALSE
+		);
+		CREATE INDEX IF NOT EXISTS idx_claims_tracking_id ON shipment_claims(tracking_id);
+
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
 			tracking_id TEXT NOT NULL,
