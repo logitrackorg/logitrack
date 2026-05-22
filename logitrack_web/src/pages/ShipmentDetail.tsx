@@ -733,7 +733,7 @@ export function ShipmentDetail() {
                       : <InfoRow label="Ventana horaria" value={twLabel} />;
                   })()}
                   {(() => {
-                    const changedByChat = events.some(ev => ev.changed_by?.startsWith("chatbot-recipient:") && ev.to_status === "ready_for_pickup");
+                    const changedByChat = events.some(ev => ev.notes === "Destinatario solicitó retiro en sucursal vía chatbot");
                     const dmLabel = (shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)";
                     return changedByChat
                       ? <InfoRowEx label="Método de entrega" value="Retiro en sucursal" original="Última milla (a domicilio)" corrected />
