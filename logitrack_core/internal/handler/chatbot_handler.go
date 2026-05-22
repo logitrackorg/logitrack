@@ -176,10 +176,14 @@ func (h *ChatbotHandler) RequestPickup(c *gin.Context) {
 	var branchInfo *BranchInfo
 	if shipment.FinalBranchID != "" {
 		if branch, found := h.branchRepo.GetByID(shipment.FinalBranchID); found {
+			hours := branch.Hours
+			if hours == "" {
+				hours = "Lunes a Viernes 9:00-18:00hs"
+			}
 			branchInfo = &BranchInfo{
 				Name:    branch.Name,
 				Address: formatAddress(branch.Address),
-				Hours:   "Lunes a Viernes 9:00-18:00hs", // Ajustar según tu modelo
+				Hours:   hours,
 			}
 		}
 	}

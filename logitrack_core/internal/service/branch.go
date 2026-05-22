@@ -94,6 +94,7 @@ func (s *BranchService) Create(req model.CreateBranchRequest) (model.Branch, err
 		Province:    req.Province,
 		Status:      model.BranchStatusActive,
 		MaxCapacity: maxCap,
+		Hours:       req.Hours,
 		Latitude:    lat,
 		Longitude:   lng,
 	}
@@ -160,6 +161,7 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 		},
 		Province:    req.Province,
 		MaxCapacity: maxCap,
+		Hours:       req.Hours,
 		Latitude:    updateLat,
 		Longitude:   updateLng,
 	}
