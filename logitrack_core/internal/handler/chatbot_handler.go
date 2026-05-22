@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
-	
+	"github.com/logitrack/core/internal/service"
 )
 
 // formatAddress convierte un Address struct a string legible
@@ -38,12 +38,14 @@ func formatAddress(addr model.Address) string {
 type ChatbotHandler struct {
 	shipmentRepo repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
+	notifSvc     *service.NotificationService
 }
 
-func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository) *ChatbotHandler {
+func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository, notifSvc *service.NotificationService) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
 		branchRepo:   branchRepo,
+		notifSvc:     notifSvc,
 	}
 }
 
@@ -187,6 +189,8 @@ func (h *ChatbotHandler) RequestPickup(c *gin.Context) {
 			}
 		}
 	}
+
+	go h.notifSvc.NotifyChatbotPickupRequested(shipment)
 
 	c.JSON(http.StatusOK, PickupResponse{
 		Success: true,

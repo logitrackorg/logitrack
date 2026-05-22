@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp, Bot } from "lucide-react";
 import { notificationApi, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -17,9 +17,10 @@ function relativeTime(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Warehouse  size={16} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2  size={16} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw  size={16} color="#fb923c" />;
+  if (type === "shipment_received")        return <Warehouse  size={16} color="#60a5fa" />;
+  if (type === "destination_arrival")      return <Building2  size={16} color="#34d399" />;
+  if (type === "return_arrival")           return <RotateCcw  size={16} color="#fb923c" />;
+  if (type === "chatbot_pickup_requested") return <Bot        size={16} color="#a78bfa" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
