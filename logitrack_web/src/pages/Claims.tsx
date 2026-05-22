@@ -13,6 +13,7 @@ import {
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
+import { ConfirmDialog } from "../components/ui/confirm-dialog";
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
   damage: "Daño/Faltante",
@@ -74,6 +75,17 @@ export function Claims() {
   const [categoryDraft, setCategoryDraft] = useState<Record<string, ClaimCategory | "">>({});
   const [eventsByClaim, setEventsByClaim] = useState<Record<string, ClaimEvent[]>>({});
   const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
+  
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant?: "default" | "danger";
+  } | null>(null);
 
   const loadClaims = async () => {
     setLoading(true);
@@ -109,29 +121,58 @@ export function Claims() {
   const handleUpdateCategory = async (id: string) => {
     const nextCategory = categoryDraft[id];
     if (!nextCategory) return;
-    setBusyId(id);
-    try {
-      const updated = await claimsApi.updateCategory(id, nextCategory);
-      setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      await loadClaimEvents(id, true);
-    } catch {
-      setError("No se pudo actualizar la categoría del reclamo.");
-    } finally {
-      setBusyId(null);
-    }
+
+    const categoryLabel = CATEGORY_OPTIONS.find((c) => c.value === nextCategory)?.label ?? nextCategory;
+    
+    // Show confirm dialog
+    setConfirmDialog({
+      isOpen: true,
+      title: "Confirmar derivación",
+      message: `¿Estás seguro de derivar este reclamo a "${categoryLabel}"? Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, derivar",
+      cancelLabel: "Cancelar",
+      variant: "default",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setBusyId(id);
+        try {
+          const updated = await claimsApi.updateCategory(id, nextCategory);
+          setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+          await loadClaimEvents(id, true);
+        } catch {
+          setError("No se pudo actualizar la categoría del reclamo.");
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
   };
 
   const handleResolve = async (id: string, resolution: ClaimResolutionType) => {
-    setBusyId(id);
-    try {
-      const updated = await claimsApi.resolve(id, resolution);
-      setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
-      await loadClaimEvents(id, true);
-    } catch {
-      setError("No se pudo resolver el reclamo.");
-    } finally {
-      setBusyId(null);
-    }
+    const resolutionLabel = RESOLUTION_OPTIONS.find((o) => o.value === resolution)?.label ?? resolution;
+    
+    // Show confirm dialog
+    setConfirmDialog({
+      isOpen: true,
+      title: "Confirmar resolución",
+      message: `¿Estás seguro de resolver este reclamo como "${resolutionLabel}"? Esta acción no se puede deshacer.`,
+      confirmLabel: "Sí, resolver",
+      cancelLabel: "Cancelar",
+      variant: "default",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setBusyId(id);
+        try {
+          const updated = await claimsApi.resolve(id, resolution);
+          setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+          await loadClaimEvents(id, true);
+        } catch {
+          setError("No se pudo resolver el reclamo.");
+        } finally {
+          setBusyId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -321,6 +362,19 @@ export function Claims() {
             </Card>
           ))}
         </div>
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(null)}
+          variant={confirmDialog.variant}
+        />
       )}
     </div>
   );
