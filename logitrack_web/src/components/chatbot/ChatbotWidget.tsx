@@ -85,9 +85,10 @@ export const ChatbotWidget: React.FC = () => {
       );
     } catch (error: any) {
       addBotMessage(
-        '❌ ' + (error.response?.data?.error || 
+        '❌ ' + (error.response?.data?.error ||
         'No pudimos encontrar tu envío con los datos ingresados, por favor verifica e intenta nuevamente.')
       );
+      setTrackingId('');
       setState('initial');
       setTimeout(() => {
         addBotMessage('Por favor ingresa nuevamente tu ID de envío:');
