@@ -46,6 +46,7 @@ type ShipmentRepository interface {
 	Search(query string) ([]model.Shipment, error)
 	GetEvents(trackingID string) ([]model.ShipmentEvent, error)
 	Stats(filter model.ShipmentFilter) (model.Stats, error)
+	StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error)
 }
 
 // Command structs — carry all data the repo needs to persist an event.
