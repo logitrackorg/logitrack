@@ -208,44 +208,6 @@ export function Claims() {
                     <div><strong>Automático:</strong> {claim.is_automatic ? "Sí" : "No"}</div>
                   </div>
 
-                  <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Historial del reclamo</div>
-                    {eventsLoadingId === claim.id ? (
-                      <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Cargando historial…</p>
-                    ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
-                      <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Sin eventos registrados.</p>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
-                          <div
-                            key={ev.id}
-                            style={{
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 8,
-                              padding: "8px 10px",
-                              fontSize: 13,
-                              background: "#f8fafc",
-                            }}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                              <span style={{ fontWeight: 600, color: "#1e3a5f" }}>
-                                {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
-                              </span>
-                              <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
-                            </div>
-                            {ev.notes && <div style={{ color: "#475569" }}>{ev.notes}</div>}
-                            <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
-                              por <strong>{ev.changed_by}</strong>
-                              {ev.from_status && ev.to_status && (
-                                <> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div style={{ display: "grid", gap: 10, borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                       <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Derivar a:</label>
@@ -309,6 +271,50 @@ export function Claims() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+                    <details>
+                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>
+                        Historial del reclamo
+                      </summary>
+                      <div style={{ marginTop: 8 }}>
+                        {eventsLoadingId === claim.id ? (
+                          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Cargando historial…</p>
+                        ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
+                          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Sin eventos registrados.</p>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
+                              <div
+                                key={ev.id}
+                                style={{
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: 8,
+                                  padding: "8px 10px",
+                                  fontSize: 13,
+                                  background: "#f8fafc",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                                  <span style={{ fontWeight: 600, color: "#1e3a5f" }}>
+                                    {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
+                                  </span>
+                                  <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
+                                </div>
+                                {ev.notes && <div style={{ color: "#475569" }}>{ev.notes}</div>}
+                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
+                                  por <strong>{ev.changed_by}</strong>
+                                  {ev.from_status && ev.to_status && (
+                                    <> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </details>
                   </div>
                 </div>
               </details>
