@@ -1,27 +1,45 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, SkipForward, Volume2 } from "lucide-react";
-import { driverApi, type VoiceUploadResult } from "../api/driver";
+import { driverApi } from "../api/driver";
 
-type RecordingState = "idle" | "recording" | "recorded" | "uploading" | "done" | "error";
+const MIN_AUDIO_BYTES = 2500;
+
+const INVALID_AUDIO_MSG =
+  "No hemos detectado una grabación válida. Por favor, intenta nuevamente leyendo la frase.";
+
+// Umbral de energía RMS para distinguir voz real de silencio/micrófono muteado.
+// Voz conversacional normal: RMS ≈ 0.02–0.30
+// Ruido de fondo leve:       RMS ≈ 0.001–0.005
+// Micrófono muteado/silencio: RMS ≈ 0.0001 o menos
+// Umbral conservador de 0.01 — deja pasar incluso voces muy suaves.
+const VOICE_RMS_THRESHOLD = 0.01;
+
+type RecordingState = "idle" | "recording" | "recorded" | "uploading";
 
 interface Props {
   onDone: () => void;
 }
 
 export function VoiceCheckIn({ onDone }: Props) {
-  const [phrase, setPhrase] = useState<string>("");
-  const [state, setState] = useState<RecordingState>("idle");
-  const [seconds, setSeconds] = useState(0);
-  const [result, setResult] = useState<VoiceUploadResult | null>(null);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [phrase, setPhrase]         = useState<string>("");
+  const [state, setState]           = useState<RecordingState>("idle");
+  const [seconds, setSeconds]       = useState(0);
+  const [errorMsg, setErrorMsg]     = useState("");
+  const [hasChunks, setHasChunks]   = useState(false);
+  // Mensaje informativo cuando la grabación se acepta pero no genera score todavía.
+  const [retryMsg, setRetryMsg]     = useState("");
 
-  const mediaRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Tracks whether chunksRef has content so the JSX doesn't access the ref during render.
-  const [hasChunks, setHasChunks] = useState(false);
+  const mediaRef       = useRef<MediaRecorder | null>(null);
+  const chunksRef      = useRef<Blob[]>([]);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch the personalised control phrase on mount.
+  // Web Audio API — análisis de energía en tiempo real
+  const audioCtxRef    = useRef<AudioContext | null>(null);
+  const analyserRef    = useRef<AnalyserNode | null>(null);
+  const energyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // true si en algún momento durante la grabación se detectó energía de voz real.
+  const hasVoiceRef    = useRef(false);
+
   useEffect(() => {
     driverApi
       .getControlPhrase()
@@ -29,41 +47,73 @@ export function VoiceCheckIn({ onDone }: Props) {
       .catch(() => setPhrase("Hoy es un buen día para trabajar con seguridad."));
   }, []);
 
-  // Cleanup on unmount.
   useEffect(() => {
     return () => {
       stopTimer();
+      stopEnergyAnalysis();
       mediaRef.current?.stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  const stopEnergyAnalysis = () => {
+    if (energyTimerRef.current) { clearInterval(energyTimerRef.current); energyTimerRef.current = null; }
+    if (analyserRef.current)    { analyserRef.current.disconnect(); analyserRef.current = null; }
+    if (audioCtxRef.current)    { audioCtxRef.current.close();      audioCtxRef.current = null; }
   };
 
   const startRecording = async () => {
     setErrorMsg("");
+    setRetryMsg("");
     chunksRef.current = [];
     setHasChunks(false);
+    hasVoiceRef.current = false; // resetear antes de cada nueva grabación
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       mediaRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-          setHasChunks(true);
-        }
+        if (e.data.size > 0) { chunksRef.current.push(e.data); setHasChunks(true); }
       };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-      };
+      recorder.onstop = () => stream.getTracks().forEach((t) => t.stop());
 
-      recorder.start(100); // collect chunks every 100 ms
+      // ── Análisis de energía RMS en tiempo real ─────────────────────────────
+      // Chrome no activa DTX por defecto → los frames de silencio y voz tienen
+      // el mismo tamaño en bytes, haciendo inútil el VAD basado en frames EBML.
+      // La Web Audio API mide la amplitud real del micrófono, sin importar cómo
+      // Opus comprima los datos. Detecta micrófono muteado con 100 % de precisión.
+      try {
+        type AudioCtxCtor = typeof AudioContext;
+        const Ctor = (window.AudioContext ??
+          (window as unknown as { webkitAudioContext: AudioCtxCtor }).webkitAudioContext);
+        const ctx = new Ctor();
+        audioCtxRef.current = ctx;
+
+        const source   = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const buf = new Float32Array(analyser.fftSize);
+        energyTimerRef.current = setInterval(() => {
+          analyser.getFloatTimeDomainData(buf);
+          // RMS = raíz cuadrada de la media de los cuadrados de las muestras
+          const rms = Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length);
+          if (rms > VOICE_RMS_THRESHOLD) hasVoiceRef.current = true;
+        }, 100); // muestrear cada 100 ms
+      } catch {
+        // Web Audio API no disponible (contexto seguro requerido, etc.).
+        // Fallback: dejar pasar; el VAD del backend actuará como segunda barrera.
+        hasVoiceRef.current = true;
+      }
+
+      recorder.start(100);
       setState("recording");
       setSeconds(0);
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -74,39 +124,60 @@ export function VoiceCheckIn({ onDone }: Props) {
 
   const stopRecording = () => {
     stopTimer();
+    stopEnergyAnalysis();
     mediaRef.current?.stop();
     setState("recorded");
+
+    // Mostrar error de inmediato si no se detectó voz durante la grabación,
+    // sin esperar a que el chofer presione "Enviar".
+    if (!hasVoiceRef.current) {
+      setErrorMsg(INVALID_AUDIO_MSG);
+    }
   };
 
   const handleUpload = async () => {
     if (chunksRef.current.length === 0) return;
+
+    // Guard 1: sin energía de voz detectada en tiempo real
+    if (!hasVoiceRef.current) {
+      setErrorMsg(INVALID_AUDIO_MSG);
+      return;
+    }
+
+    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+
+    // Guard 2: blob demasiado pequeño (silencio con DTX activo)
+    if (blob.size < MIN_AUDIO_BYTES) {
+      setErrorMsg(INVALID_AUDIO_MSG);
+      return;
+    }
+
     setState("uploading");
     setErrorMsg("");
+    setRetryMsg("");
     try {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-      const data = await driverApi.uploadVoice(blob);
-      setResult(data);
-      setState("done");
-    } catch {
-      setErrorMsg("No se pudo enviar el audio. Intentá de nuevo.");
+      const result = await driverApi.uploadVoice(blob);
+      if (result.drift_score === null) {
+        // La grabación fue aceptada pero no pudo generar un score comparativo
+        // (sin línea base previa o audio de muy baja calidad).
+        // Pedir que grabe nuevamente para obtener un análisis válido.
+        setState("idle");
+        setHasChunks(false);
+        setRetryMsg(
+          "No se pudo obtener un puntaje de la grabación. " +
+          "Por favor, leé la frase en voz alta nuevamente."
+        );
+      } else {
+        onDone();
+      }
+    } catch (err: unknown) {
+      const respData = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      const isInvalidAudio = respData?.error === "INVALID_AUDIO";
+      setErrorMsg(isInvalidAudio && respData?.message
+        ? respData.message
+        : "No se pudo enviar el audio. Intentá de nuevo.");
       setState("recorded");
     }
-  };
-
-  const driftColor = (score: number | null) => {
-    if (score === null) return "text-slate-400";
-    if (score <= 25) return "text-emerald-400";
-    if (score <= 50) return "text-amber-400";
-    if (score <= 75) return "text-orange-400";
-    return "text-rose-400";
-  };
-
-  const driftLabel = (score: number | null) => {
-    if (score === null) return "Sin historial previo — este registro será tu línea base.";
-    if (score <= 25) return "Voz normal — sin signos de fatiga.";
-    if (score <= 50) return "Leve desvío — prestá atención.";
-    if (score <= 75) return "Desvío moderado — considerá descansar.";
-    return "Desvío alto — se recomienda no conducir.";
   };
 
   return (
@@ -148,83 +219,48 @@ export function VoiceCheckIn({ onDone }: Props) {
           </div>
 
           {/* Recording controls */}
-          {state !== "done" && (
-            <div className="mb-6">
-              {state === "idle" || state === "recorded" ? (
-                <button
-                  onClick={startRecording}
-                  className="w-full h-14 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
-                >
-                  <Mic className="w-5 h-5" />
-                  {state === "recorded" ? "Grabar de nuevo" : "Iniciar grabación"}
-                </button>
-              ) : state === "recording" ? (
-                <button
-                  onClick={stopRecording}
-                  className="w-full h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 animate-pulse"
-                >
-                  <MicOff className="w-5 h-5" />
-                  Detener ({seconds}s)
-                </button>
-              ) : null}
-
-              {state === "recorded" && hasChunks && (
-                <button
-                  onClick={handleUpload}
-                  className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Enviar audio
-                </button>
-              )}
-
-              {state === "uploading" && (
-                <div className="mt-3 w-full h-12 rounded-xl bg-slate-700 text-slate-400 font-bold text-base inline-flex items-center justify-center gap-2">
-                  <Send className="w-4 h-4 animate-pulse" />
-                  Analizando…
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Result */}
-          {state === "done" && result && (
-            <div className="mb-6 px-4 py-4 rounded-xl bg-slate-800 border border-slate-600">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">
-                Resultado del análisis
-              </p>
-              <div className="flex items-baseline gap-3 mb-2">
-                <span className={`text-4xl font-black ${driftColor(result.drift_score)}`}>
-                  {result.drift_score ?? "—"}
-                </span>
-                <span className="text-xs text-slate-400">/ 100 drift score</span>
-              </div>
-              <p className={`text-sm font-semibold ${driftColor(result.drift_score)}`}>
-                {driftLabel(result.drift_score)}
-              </p>
-
-              <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
-                <span>Tono medio: <strong className="text-slate-200">{result.voice_metrics.pitch_mean.toFixed(1)} Hz</strong></span>
-                <span>Rango tonal: <strong className="text-slate-200">{result.voice_metrics.pitch_range.toFixed(1)} Hz</strong></span>
-                <span>Energía RMS: <strong className="text-slate-200">{result.voice_metrics.energy_rms.toFixed(3)}</strong></span>
-                <span>Vel. habla: <strong className="text-slate-200">{result.voice_metrics.speech_rate.toFixed(2)} sil/s</strong></span>
-                <span>Ratio pausa: <strong className="text-slate-200">{(result.voice_metrics.pause_ratio * 100).toFixed(1)}%</strong></span>
-                {result.baseline === null && (
-                  <span className="col-span-2 text-violet-400">✓ Línea base registrada</span>
-                )}
-              </div>
-
+          <div className="mb-6">
+            {state === "idle" || state === "recorded" ? (
               <button
-                onClick={onDone}
-                className="mt-5 w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm cursor-pointer transition-colors"
+                onClick={startRecording}
+                className="w-full h-14 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
               >
-                Continuar
+                <Mic className="w-5 h-5" />
+                {state === "recorded" ? "Grabar de nuevo" : "Iniciar grabación"}
               </button>
-            </div>
-          )}
+            ) : state === "recording" ? (
+              <button
+                onClick={stopRecording}
+                className="w-full h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 animate-pulse"
+              >
+                <MicOff className="w-5 h-5" />
+                Detener ({seconds}s)
+              </button>
+            ) : null}
 
+            {state === "recorded" && hasChunks && !errorMsg && (
+              <button
+                onClick={handleUpload}
+                className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                Enviar audio
+              </button>
+            )}
+
+            {state === "uploading" && (
+              <div className="mt-3 w-full h-12 rounded-xl bg-slate-700 text-slate-400 font-bold text-base inline-flex items-center justify-center gap-2">
+                <Send className="w-4 h-4 animate-pulse" />
+                Analizando…
+              </div>
+            )}
+          </div>
+
+          {retryMsg && (
+            <p className="text-sm text-amber-400 text-center leading-snug">{retryMsg}</p>
+          )}
           {errorMsg && (
-            <p className="mt-2 text-sm text-rose-400 text-center">{errorMsg}</p>
+            <p className="text-sm text-rose-400 text-center leading-snug">{errorMsg}</p>
           )}
         </div>
       </div>

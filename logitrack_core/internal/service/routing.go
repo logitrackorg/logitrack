@@ -44,8 +44,9 @@ type RoutingService struct {
 	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
-	graphSvc        *BranchGraphService // nullable; used for stale-replan
-	zoneSvc         *ZoneService        // nullable; needed for safe-route mode
+	graphSvc        *BranchGraphService  // nullable; used for stale-replan
+	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
+	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
 }
 
 func NewRoutingService(
@@ -74,6 +75,10 @@ func NewRoutingService(
 
 func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) {
 	s.interBranchTripSvc = svc
+}
+
+func (s *RoutingService) SetNotificationService(svc *NotificationService) {
+	s.notifSvc = svc
 }
 
 func (s *RoutingService) SetZoneService(svc *ZoneService) {
@@ -175,6 +180,10 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 		}
 		// Edge: at_origin_hub + final == branch (no es ruteable hoy) → no entra al plan
 	}
+
+	// SLA risk check: evalúa todos los envíos activos de la sucursal y dispara/resetea
+	// notificaciones según CA-01 a CA-04 (LOGITRACK-404).
+	s.checkSLARisk(all, cfg, now)
 
 	// 2) Última milla — asignar a vehículos de modo ultima_milla
 	plan.LastMile, plan.Unassigned = s.binPackLastMileVehicles(lastMileQ, branchID, plan.Unassigned)
@@ -1262,6 +1271,116 @@ func anyForced(group []model.Shipment, cfg model.RoutingConfig, now time.Time) b
 		}
 	}
 	return false
+}
+
+// isSLAActive returns true if the shipment is in an active (non-terminal) state.
+func isSLAActive(sh model.Shipment) bool {
+	if model.IsTerminalStatus(sh.Status) {
+		return false
+	}
+	if sh.Status == model.StatusExpired || sh.Status == model.StatusRechazado {
+		return false
+	}
+	return sh.EstimatedDeliveryAt != nil
+}
+
+// isSLAExpired returns true when the shipment's ETA has already passed and it's still active.
+func isSLAExpired(sh model.Shipment, now time.Time) bool {
+	return isSLAActive(sh) && now.After(*sh.EstimatedDeliveryAt)
+}
+
+// isSLACriticalETA returns true if the shipment is within the SLA forced horizon
+// but has NOT yet expired.
+func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
+	if !isSLAActive(sh) {
+		return false
+	}
+	slaHorizon := time.Duration(cfg.SLAForceHorizonHours) * time.Hour
+	remaining := sh.EstimatedDeliveryAt.Sub(now)
+	return remaining >= 0 && remaining < slaHorizon
+}
+
+// RunSLARiskCheck fetches all shipments and runs the SLA risk state machine
+// immediately using the current system clock. Called by the admin clock handler
+// so that advancing the clock triggers notifications without waiting for the
+// next scheduled plan regeneration.
+func (s *RoutingService) RunSLARiskCheck() {
+	if s.notifSvc == nil {
+		return
+	}
+	cfg := s.cfgSvc.Get()
+	all, err := s.shipmentRepo.List(model.ShipmentFilter{})
+	if err != nil {
+		log.Printf("[RoutingService] RunSLARiskCheck: list shipments error: %v", err)
+		return
+	}
+	s.checkSLARisk(all, cfg, clock.Now().UTC())
+}
+
+// checkSLARisk evaluates SLA state for each shipment and fires/resets notifications.
+//
+// State machine per shipment:
+//   inactive  → nothing
+//   active, remaining >= horizon → reset both flags (exited risk window)
+//   active, 0 <= remaining < horizon → sla_risk once (CA-04); reset expired flag if set
+//   active, remaining < 0 (expired) → sla_expired once; sla_risk flag stays
+func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.RoutingConfig, now time.Time) {
+	if s.notifSvc == nil {
+		return
+	}
+	for _, sh := range shipments {
+		if !isSLAActive(sh) {
+			continue
+		}
+
+		expired := isSLAExpired(sh, now)
+		critical := !expired && isSLACriticalETA(sh, cfg, now)
+
+		branchID := sh.CurrentLocation
+		if branchID == "" {
+			branchID = sh.ReceivingBranchID
+		}
+
+		if expired {
+			// Send expired notification once
+			if sh.SLAExpiredNotifiedAt == nil {
+				t := now
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, &t); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLAExpired(shCopy, branchID)
+			}
+		} else if critical {
+			// Send at-risk notification once per entry into risk window (CA-04)
+			if sh.SLANotifiedAt == nil {
+				t := now
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, &t); err != nil {
+					log.Printf("[RoutingService] SetSLANotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				// Reset expired flag in case ETA was extended and re-entered risk window
+				if sh.SLAExpiredNotifiedAt != nil {
+					_ = s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil)
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLARisk(shCopy, branchID)
+			}
+		} else {
+			// Outside risk window — reset both flags so re-entry re-notifies (CA-04)
+			if sh.SLANotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLANotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+			if sh.SLAExpiredNotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+		}
+	}
 }
 
 func vehiclesAcceptingDest(pool []model.Vehicle, dest string, used map[string]bool) []model.Vehicle {

@@ -32,6 +32,13 @@ type ShipmentRepository interface {
 	ReserveForTrip(trackingID, tripID string) error
 	// ReleaseFromTrip libera la reserva del envío.
 	ReleaseFromTrip(trackingID string) error
+	// SetSLANotified actualiza sla_notified_at (nil = reset, &t = notificado) para CA-04.
+	SetSLANotified(trackingID string, notifiedAt *time.Time) error
+	// SetSLAExpiredNotified actualiza sla_expired_notified_at.
+	SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error
+	// SetConfirmationEmailSent marca el envío como ya notificado por email para dedup (CA-05).
+	// Devuelve (true, nil) si fue el primer llamado para ese tracking ID; (false, nil) si ya estaba marcado.
+	SetConfirmationEmailSent(trackingID string) (bool, error)
 
 	// Chatbot operations
 	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)

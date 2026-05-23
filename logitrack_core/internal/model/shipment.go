@@ -131,6 +131,18 @@ type Shipment struct {
 	HopIndex          int      `json:"hop_index,omitempty"`            
 	PathRevision      int      `json:"path_revision,omitempty"`        
 
+	// SLANotifiedAt registra cuándo se emitió la última notificación de SLA en riesgo.
+	// Se resetea a nil cuando el envío sale del estado crítico, habilitando una nueva
+	// notificación si vuelve a entrar (CA-04).
+	SLANotifiedAt *time.Time `json:"sla_notified_at,omitempty"`
+
+	// SLAExpiredNotifiedAt registra cuándo se emitió la notificación de SLA vencido.
+	// Se resetea si el envío sale del estado expirado (p. ej. ETA extendida).
+	SLAExpiredNotifiedAt *time.Time `json:"sla_expired_notified_at,omitempty"`
+
+	// ConfirmationEmailSentAt registra cuándo se enviaron los emails de confirmación
+	// al destinatario y al remitente. Nil = aún no enviados. Usado para dedup (CA-05).
+	ConfirmationEmailSentAt *time.Time `json:"confirmation_email_sent_at,omitempty"`
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.

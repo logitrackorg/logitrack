@@ -11,9 +11,9 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
-// SimulatePaymentApproved bypasses Mercado Pago and confirms the payment directly.
-// Solo para demo/testing — no llama a MP ni valida ninguna firma.
-func (s *PaymentService) SimulatePaymentApproved(trackingID, username string) (model.Shipment, error) {
+// ConfirmCashPayment bypasses Mercado Pago and confirms the payment as paid in cash.
+// El operador usa este flujo cuando el cliente paga en efectivo en la sucursal.
+func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.Shipment, error) {
 	shipment, err := s.shipmentSvc.repo.GetByTrackingID(trackingID)
 	if err != nil {
 		return model.Shipment{}, fmt.Errorf("envío no encontrado: %w", err)
@@ -27,7 +27,7 @@ func (s *PaymentService) SimulatePaymentApproved(trackingID, username string) (m
 		return model.Shipment{}, fmt.Errorf("pago activo no encontrado: %w", err)
 	}
 
-	fakeMPPaymentID := "SIMULATED-" + uuid.NewString()[:8]
+	fakeMPPaymentID := "EFECTIVO-" + uuid.NewString()[:8]
 	newTrackingID := generateTrackingID()
 	now := clock.Now().UTC()
 
@@ -52,10 +52,11 @@ func (s *PaymentService) SimulatePaymentApproved(trackingID, username string) (m
 	}
 
 	if err := s.paymentRepo.MarkApproved(payment.ID, fakeMPPaymentID, newTrackingID, now); err != nil {
-		log.Printf("[payment-simulate] advertencia: no se pudo marcar pago como aprobado: %v", err)
+		log.Printf("[payment-cash] advertencia: no se pudo marcar pago como aprobado: %v", err)
 	}
 
 	s.shipmentSvc.upsertParties(confirmed)
+	go s.shipmentSvc.sendConfirmationEmails(confirmed)
 
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
 		autoUpdated, autoErr := s.shipmentSvc.repo.UpdateStatus(repository.StatusUpdateCmd{

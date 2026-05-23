@@ -4,12 +4,15 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/logitrack/core/internal/db"
+	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/mercadopago"
@@ -117,15 +120,23 @@ func main() {
 		os.Getenv("MP_WEBHOOK_SECRET"),
 		getenv("MP_NOTIFICATION_URL", ""),
 	)
-	if mpClient == nil {
-		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — pagos deshabilitados")
+	if mpClient != nil {
+		log.Println("[mercadopago] cliente configurado — webhooks activos")
+	} else {
+		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
 	}
-
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
+	// También se dispara el chequeo de SLA en riesgo/vencido para que las
+	// notificaciones reflejen el nuevo momento sin esperar al siguiente plan.
+	// slaRiskChecker se asigna más abajo, después de crear routingSvc.
+	var slaRiskChecker func()
 	clockHandler := handler.NewClockHandler(func() {
 		draftLifecycleSvc.RunExpirationJob()
 		draftLifecycleSvc.RunPurgeJob()
+		if slaRiskChecker != nil {
+			slaRiskChecker()
+		}
 	})
 
 	routingCfgRepo := repository.NewPostgresRoutingConfigRepository(database)
@@ -155,6 +166,44 @@ func main() {
 	notifSvc.SetHub(notifHub)
 	notifHandler := handler.NewNotificationHandler(notifSvc, notifHub)
 	shipmentSvc.SetNotificationService(notifSvc)
+
+	// Email transaccional — deshabilitado cuando SMTP_HOST no está configurado.
+	smtpPort := 587
+	if p := os.Getenv("SMTP_PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			smtpPort = n
+		}
+	}
+	emailSvc := email.New(email.Config{
+		Host:         os.Getenv("SMTP_HOST"),
+		Port:         smtpPort,
+		Username:     os.Getenv("SMTP_USER"),
+		Password:     os.Getenv("SMTP_PASS"),
+		From:         getenv("SMTP_FROM", os.Getenv("SMTP_USER")),
+		TrackBaseURL: os.Getenv("TRACK_BASE_URL"),
+	}, orgSvc)
+	if emailSvc != nil {
+		shipmentSvc.SetEmailService(emailSvc)
+		log.Printf("[email] servicio SMTP habilitado — host: %s:%d", os.Getenv("SMTP_HOST"), smtpPort)
+	} else {
+		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
+	}
+	// Mensajería de última milla — WhatsApp (Twilio) con fallback a email (CA-02/CA-03).
+	messagingSvc := messaging.New(
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		os.Getenv("TRACK_BASE_URL"),
+		emailSvc,
+		routingCfgSvc,
+	)
+	shipmentSvc.SetMessagingService(messagingSvc)
+	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
+		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
+	} else {
+		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
+	}
+
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -166,7 +215,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -195,6 +244,8 @@ func main() {
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetORSClient(orsClient)
+	routingSvc.SetNotificationService(notifSvc)
+	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
@@ -292,13 +343,13 @@ func main() {
 	protected.POST("/shipments", shipmentWrite, shipmentHandler.Create)
 	protected.POST("/shipments/draft", shipmentWrite, shipmentHandler.SaveDraft)
 	protected.PATCH("/shipments/:tracking_id/draft", shipmentWrite, shipmentHandler.UpdateDraft)
-	protected.POST("/shipments/:tracking_id/confirm", shipmentWrite, shipmentHandler.ConfirmDraft)
 
 	// Payment flow — operator, supervisor
 	protected.POST("/shipments/:tracking_id/request-payment", shipmentWrite, paymentHandler.RequestPayment)
 	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
-	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
+	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
+	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
@@ -332,9 +383,12 @@ func main() {
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
 	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
-	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent) // US4: tactile events
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)    // US4: tactile events
+	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
+	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
+	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)

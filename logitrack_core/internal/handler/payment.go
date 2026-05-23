@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	qrcode "github.com/skip2/go-qrcode"
 	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
@@ -100,25 +102,55 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	c.JSON(http.StatusOK, payment)
 }
 
-// SimulatePayment godoc
-// @Summary      Simular pago aprobado (solo demo)
-// @Description  Confirma un pago pendiente sin llamar a Mercado Pago. Solo para testing/demo.
+// ConfirmCashPayment godoc
+// @Summary      Confirmar pago en efectivo
+// @Description  Confirma un pago pendiente como pagado en efectivo por el cliente, sin pasar por Mercado Pago.
 // @Tags         payments
 // @Produce      json
 // @Security     BearerAuth
 // @Param        tracking_id  path      string  true  "Tracking ID en pending_payment"
 // @Success      200          {object}  model.Shipment
 // @Failure      400          {object}  map[string]string
-// @Router       /shipments/{tracking_id}/simulate-payment [post]
-func (h *PaymentHandler) SimulatePayment(c *gin.Context) {
+// @Router       /shipments/{tracking_id}/cash-payment [post]
+func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
-	shipment, err := h.svc.SimulatePaymentApproved(trackingID, user.Username)
+	shipment, err := h.svc.ConfirmCashPayment(trackingID, user.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, shipment)
+}
+
+// GeneratePaymentQR godoc
+// @Summary      QR de pago
+// @Description  Genera un código QR que apunta al init_point de Mercado Pago del pago pendiente.
+// @Tags         payments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        tracking_id  path      string  true  "Tracking ID en pending_payment"
+// @Success      200          {object}  map[string]string
+// @Failure      404          {object}  map[string]string
+// @Router       /shipments/{tracking_id}/payment/qr [get]
+func (h *PaymentHandler) GeneratePaymentQR(c *gin.Context) {
+	trackingID := c.Param("tracking_id")
+	payment, err := h.svc.GetByTrackingID(trackingID)
+	if err != nil || payment.InitPoint == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pago no encontrado o sin link de pago"})
+		return
+	}
+
+	qrPNG, err := qrcode.Encode(payment.InitPoint, qrcode.Medium, 256)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al generar código QR"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"qr_code_base64": base64.StdEncoding.EncodeToString(qrPNG),
+		"init_point":     payment.InitPoint,
+	})
 }
 
 // webhookBody is the minimal structure of an MP webhook notification.

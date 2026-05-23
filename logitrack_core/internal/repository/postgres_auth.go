@@ -233,9 +233,17 @@ func (r *postgresAuthRepository) ListByRole(role model.Role, branchID string) []
 	var rows *sql.Rows
 	var err error
 	if branchID != "" {
+		// Devuelve:
+		//   1. Todos los choferes de la sucursal (branch_id = $2), sin importar su driver_type.
+		//   2. Todos los choferes inter-sucursal, incluso si no tienen branch_id asignado.
+		//      Los choferes inter-sucursal son un recurso de toda la flota y cualquier
+		//      supervisor debe poder monitorear su nivel de fatiga.
 		rows, err = r.db.Query(
-			`SELECT `+userSelectCols+` FROM users WHERE role = $1 AND branch_id = $2 ORDER BY username`,
-			string(role), branchID,
+			`SELECT `+userSelectCols+` FROM users
+			 WHERE role = $1
+			   AND (branch_id = $2 OR driver_type = $3)
+			 ORDER BY username`,
+			string(role), branchID, string(model.DriverTypeInterBranch),
 		)
 	} else {
 		rows, err = r.db.Query(

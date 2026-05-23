@@ -28,6 +28,7 @@ import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } 
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
+import PaymentMethodsPanel from '../components/PaymentMethodsPanel';
 import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
@@ -172,6 +173,7 @@ export function ShipmentDetail() {
           shipment_type: s.shipment_type ?? "normal",
           time_window: s.time_window ?? "flexible",
           receiving_branch_id: s.receiving_branch_id ?? "",
+          delivery_method: s.delivery_method ?? "ultima_milla",
         });
       }
     } catch {
@@ -339,11 +341,11 @@ export function ShipmentDetail() {
     setConfirmError("");
     try {
       await shipmentApi.updateDraft(trackingId, draftForm);
-      const confirmed = await shipmentApi.confirmDraft(trackingId, user!.username);
-      navigate(`/shipments/${confirmed.tracking_id}`, { replace: true });
+      await paymentApi.requestPayment(trackingId);
+      setShipment(s => s ? { ...s, status: "pending_payment" as ShipmentStatus } : s);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setConfirmError(msg ?? "No se pudo confirmar el envío.");
+      setConfirmError(msg ?? "No se pudo iniciar el pago del envío.");
     } finally {
       setConfirming(false);
     }
@@ -978,7 +980,7 @@ export function ShipmentDetail() {
       {/* ── Right column: Price, Vehicle & Comments ── */}
       <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
         {/* Price Card */}
-        {shipment.price != null && (
+        {shipment.price != null && shipment.status !== "draft" && (
           <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
         )}
 
@@ -1534,11 +1536,15 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
     const originAddress = selectedBranch
       ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
       : form.sender.address;
+    const finalBranch = findFinalBranch(form.recipient.address, branches);
+    const destinationAddress = finalBranch
+      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
+      : form.recipient.address;
     const hasMinData =
       weightKg > 0 &&
       !!form.package_type &&
       !!originAddress.province &&
-      !!form.recipient.address.province;
+      !!destinationAddress.province;
     if (!hasMinData) { setQuote(null); return; }
     if (quoteTimer.current) clearTimeout(quoteTimer.current);
     quoteTimer.current = setTimeout(async () => {
@@ -1552,7 +1558,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           is_fragile: form.is_fragile,
           delivery_method: form.delivery_method ?? "ultima_milla",
           origin: originAddress,
-          destination: form.recipient.address,
+          destination: destinationAddress,
         });
         setQuote(q);
       } catch {
@@ -1886,7 +1892,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           )}
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al confirmar se asignará un número de seguimiento y el envío ingresará al sistema logístico.
+          Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
         </p>
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
@@ -1913,7 +1919,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
           <button onClick={onConfirm}
             disabled={confirming || envelopeOverweight}
             style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
-            {confirming ? "Confirmando..." : "Confirmar envío"}
+            {confirming ? "Procesando..." : "Continuar al pago"}
           </button>
           <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
             style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
@@ -2386,7 +2392,6 @@ function PendingPaymentPanel({
 }) {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [reverting, setReverting] = useState(false);
-  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -2409,67 +2414,35 @@ function PendingPaymentPanel({
   return (
     <div style={{
       background: "#fffbeb", border: "1px solid #fcd34d",
-      borderRadius: 10, padding: 20, marginBottom: 16,
+      borderRadius: 12, padding: 20, marginBottom: 16,
     }}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e", marginBottom: 8 }}>
-        💳 Pago pendiente
-      </div>
-      {payment ? (
-        <>
-          <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>
+          💳 Pago pendiente
+        </div>
+        {payment && (
+          <div style={{ fontSize: 13, color: "#78350f" }}>
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
             </strong>
-          </p>
-          {payment.init_point && (
-            <a
-              href={payment.init_point}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-block",
-                background: "#009ee3", color: "#fff",
-                borderRadius: 8, padding: "8px 18px",
-                fontWeight: 700, fontSize: 13, textDecoration: "none",
-                marginRight: 10, marginBottom: 8,
-              }}
-            >
-              Abrir link de pago ↗
-            </a>
-          )}
-        </>
-      ) : (
-        <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>Cargando información de pago…</p>
-      )}
-      {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {payment?.simulate_enabled && (
-          <button
-            onClick={async () => {
-              setSimulating(true);
-              setError("");
-              try {
-                const result = await paymentApi.simulateApproved(trackingId);
-                window.location.href = `/shipments/${result.tracking_id}`;
-              } catch (e: unknown) {
-                const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-                setError(msg ?? "Error al simular pago.");
-                setSimulating(false);
-              }
-            }}
-            disabled={simulating}
-            style={{
-              border: "1px dashed #86efac", borderRadius: 8,
-              background: "#f0fdf4", color: "#16a34a",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              padding: "8px 16px",
-              opacity: simulating ? 0.6 : 1,
-            }}
-          >
-            {simulating ? "Procesando…" : "⚡ Simular pago aprobado (demo)"}
-          </button>
+          </div>
         )}
+      </div>
+      {payment ? (
+        <PaymentMethodsPanel
+          payment={payment}
+          trackingId={trackingId}
+          onCashConfirmed={(newTrackingId) => {
+            window.location.href = `/shipments/${newTrackingId}`;
+          }}
+          onError={setError}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: "#78350f" }}>Cargando información de pago…</p>
+      )}
+      {error && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a", display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={handleBackToDraft}
           disabled={reverting}
@@ -2481,7 +2454,7 @@ function PendingPaymentPanel({
             opacity: reverting ? 0.6 : 1,
           }}
         >
-          {reverting ? "Procesando…" : "Volver a borrador"}
+          {reverting ? "Procesando…" : "← Volver a borrador"}
         </button>
       </div>
     </div>

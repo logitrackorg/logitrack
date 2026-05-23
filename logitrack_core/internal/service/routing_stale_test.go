@@ -72,6 +72,15 @@ func (f *fakeShipmentRepo) GetEvents(id string) ([]model.ShipmentEvent, error) {
 func (f *fakeShipmentRepo) Stats(f2 model.ShipmentFilter) (model.Stats, error) {
 	return model.Stats{}, nil
 }
+func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	return nil
+}
+func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	return nil
+}
+func (f *fakeShipmentRepo) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	return true, nil
+}
 
 // newMinimalRoutingService arma un RoutingService con solo lo necesario para stale-replan.
 func newMinimalRoutingService(shipments []model.Shipment, edges []model.BranchEdge) *RoutingService {

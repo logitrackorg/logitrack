@@ -30,6 +30,9 @@ export interface FatigueConfig {
   tactile_enabled: boolean;
   pvt_enabled:     boolean;
 
+  /** Hour (0–23, ART) at which a new logical day begins for the check-in gate. Default 0 = midnight. */
+  daily_reset_hour: number;
+
   /** ISO timestamp; null/absent when no reset has been triggered yet. */
   last_checkin_reset?: string | null;
 }

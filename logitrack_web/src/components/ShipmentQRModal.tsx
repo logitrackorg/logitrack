@@ -6,6 +6,11 @@ interface Props {
   onClose: () => void;
   trackingId: string;
   qrCodeBase64: string;
+  title?: string;
+  subtitle?: string;
+  showTrackingLabel?: boolean;
+  showActions?: boolean;
+  variant?: "default" | "payment";
 }
 
 const ShipmentQRModal: React.FC<Props> = ({
@@ -13,6 +18,11 @@ const ShipmentQRModal: React.FC<Props> = ({
   onClose,
   trackingId,
   qrCodeBase64,
+  title = "📦 Código QR del Envío",
+  subtitle,
+  showTrackingLabel = true,
+  showActions = true,
+  variant = "default",
 }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -69,17 +79,46 @@ const ShipmentQRModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
+  if (variant === "payment") {
+    return (
+      <div className="qr-modal-overlay" onClick={onClose}>
+        <div className="qr-payment-card" onClick={(e) => e.stopPropagation()}>
+          <button className="qr-payment-close" onClick={onClose} aria-label="Cerrar">✕</button>
+          <div className="qr-payment-header">
+            <div className="qr-payment-icon">📱</div>
+            <h2 className="qr-payment-title">{title ?? "QR de cobro"}</h2>
+            {subtitle && <p className="qr-payment-subtitle">{subtitle}</p>}
+          </div>
+          <div className="qr-payment-image-wrap">
+            <img
+              src={`data:image/png;base64,${qrCodeBase64}`}
+              alt="QR de pago"
+              className="qr-payment-image"
+            />
+          </div>
+          <button className="qr-payment-btn-close" onClick={onClose}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="qr-modal-overlay" onClick={onClose}>
       <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="qr-modal-header">
-          <h2>📦 Código QR del Envío</h2>
+          <h2>{title}</h2>
           <button className="qr-modal-close" onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
         </div>
+        {subtitle && (
+          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px", textAlign: "center" }}>
+            {subtitle}
+          </p>
+        )}
 
-        {/* CA-4: QR con tracking ID en texto legible */}
         <div ref={printRef} className="qr-printable-area">
           <div className="qr-code-container">
             <img
@@ -87,21 +126,26 @@ const ShipmentQRModal: React.FC<Props> = ({
               alt={`QR Code ${trackingId}`}
               className="qr-image"
             />
-            <div className="qr-tracking-text">
-              <strong>Tracking ID:</strong>
-              <div className="tracking-number">{trackingId}</div>
-            </div>
-
+            {showTrackingLabel && (
+              <div className="qr-tracking-text">
+                <strong>Tracking ID:</strong>
+                <div className="tracking-number">{trackingId}</div>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="qr-modal-actions">
-          <button className="btn-primary" onClick={handlePrint}>
-            🖨️ Imprimir
-          </button>
-          <button className="btn-secondary" onClick={handleDownload}>
-            💾 Descargar PNG
-          </button>
+          {showActions && (
+            <>
+              <button className="btn-primary" onClick={handlePrint}>
+                🖨️ Imprimir
+              </button>
+              <button className="btn-secondary" onClick={handleDownload}>
+                💾 Descargar PNG
+              </button>
+            </>
+          )}
           <button className="btn-outline" onClick={onClose}>
             Cerrar
           </button>

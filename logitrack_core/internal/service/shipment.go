@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -114,6 +115,18 @@ func (s *ShipmentService) validateLastMileReachable(method model.DeliveryMethod,
 	return nil
 }
 
+// EmailConfirmationSender is the minimal interface this service needs to send
+// shipment confirmation emails. Satisfied by *email.Service.
+type EmailConfirmationSender interface {
+	SendShipmentConfirmation(shipment model.Shipment)
+}
+
+// OutForDeliveryNotifier sends last-mile notifications to recipients (CA-01).
+// Satisfied by *messaging.Service.
+type OutForDeliveryNotifier interface {
+	SendOutForDeliveryNotification(shipment model.Shipment)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -124,14 +137,38 @@ type ShipmentService struct {
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
 	notifSvc     *NotificationService
+	emailSvc     EmailConfirmationSender
+	messagingSvc OutForDeliveryNotifier
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService) { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService) { s.notifSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)        { s.emailSvc = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)     { s.messagingSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
 	return s.repo.ReleaseFromTrip(trackingID)
+}
+
+// sendConfirmationEmails envía emails de confirmación al destinatario y al remitente (CA-03/CA-04).
+// Usa dedup atómica en DB para evitar duplicados aunque se llame más de una vez (CA-05).
+// Se llama siempre como goroutine (fire-and-forget) — los errores son silenciosos (CA-02).
+func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
+	if s.emailSvc == nil {
+		return
+	}
+	// Dedup (CA-05): marca atómicamente la fila; si ya estaba marcada, omite el envío.
+	sent, err := s.repo.SetConfirmationEmailSent(shipment.TrackingID)
+	if err != nil {
+		log.Printf("[email] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
+		return
+	}
+	if !sent {
+		log.Printf("[email] confirmación de envío para %s ya enviada anteriormente — omitida (CA-05)", shipment.TrackingID)
+		return
+	}
+	s.emailSvc.SendShipmentConfirmation(shipment)
 }
 
 // maybeRecordPath is a WIP feature: records a planned multi-hop path when a shipment moves.
@@ -217,6 +254,19 @@ func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 			}
 		}
 	}
+	destination := shipment.Recipient.Address
+	if shipment.FinalBranchID != "" {
+		if b, ok := s.branchRepo.GetByID(shipment.FinalBranchID); ok {
+			destination = model.Address{
+				Street:     b.Address.Street,
+				City:       b.Address.City,
+				Province:   b.Province,
+				PostalCode: b.Address.PostalCode,
+				Latitude:   b.Latitude,
+				Longitude:  b.Longitude,
+			}
+		}
+	}
 	price, breakdown := s.pricingSvc.Quote(PricingInput{
 		WeightKg:       shipment.WeightKg,
 		PackageType:    shipment.PackageType,
@@ -225,7 +275,7 @@ func (s *ShipmentService) applyPrice(shipment *model.Shipment) {
 		IsFragile:      shipment.IsFragile,
 		DeliveryMethod: shipment.DeliveryMethod,
 		Origin:         origin,
-		Destination:    shipment.Recipient.Address,
+		Destination:    destination,
 	})
 	shipment.Price = &price
 	b := breakdown
@@ -363,6 +413,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 		return model.Shipment{}, err
 	}
 	s.upsertParties(created)
+	go s.sendConfirmationEmails(created) // CA-01/02/03/04/05
 	return created, nil
 }
 
@@ -618,6 +669,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	}
 	setPriority(&confirmed, prediction)
 	s.upsertParties(confirmed)
+	go s.sendConfirmationEmails(confirmed) // CA-01/02/03/04/05
 
 	// Auto-transición: origen == destino → el envío ya está en su hub final.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
@@ -824,7 +876,29 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
 		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
 			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		} else if targetStatus == model.StatusReadyForReturn {
+			// CA-03 — transición directa a ready_for_return (operador la setea manualmente).
+			// Las auto-transiciones tienen su propio hook y retornan antes de llegar acá.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnStarted(updated, originBranchID, req.Notes)
+		} else if targetStatus == model.StatusReturned {
+			// CA-04 — el envío fue devuelto: notificar a la sucursal de origen.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
 		}
+	}
+
+	// CA-01: envío transicionó a última milla → notificar al destinatario por WhatsApp/email.
+	if targetStatus == model.StatusOutForDelivery &&
+		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
+		s.messagingSvc != nil {
+		go s.messagingSvc.SendOutForDeliveryNotification(updated)
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
@@ -839,6 +913,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
+			// CA-03 — notificar a la sucursal de origen que el envío está listo para devolución.
+			if s.notifSvc != nil {
+				originBranchID := autoUpdated.OriginBranchID
+				if originBranchID == "" {
+					originBranchID = autoUpdated.ReceivingBranchID
+				}
+				go s.notifSvc.NotifyReturnStarted(autoUpdated, originBranchID, "Envío de retorno llegó a sucursal de origen")
+			}
 			return autoUpdated, nil
 		}
 	}
@@ -913,6 +995,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 					Timestamp:  clock.Now().UTC(),
 				})
 				if rfrErr == nil {
+					// CA-03 — notificar a la sucursal de origen.
+					if s.notifSvc != nil {
+						originBranchID := rfrUpdated.OriginBranchID
+						if originBranchID == "" {
+							originBranchID = rfrUpdated.ReceivingBranchID
+						}
+						go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, autoNotes)
+					}
 					return rfrUpdated, nil
 				}
 			}
@@ -1149,7 +1239,20 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		// Log but don't fail the cancellation
 		_ = err
 	} else {
-		// If counter-shipment is at origin, auto-transition to ready_for_return
+		// Notificar a la sucursal de origen apenas se cancela — sin esperar ready_for_return.
+		if s.notifSvc != nil {
+			if counterStatus == model.StatusAtOriginHub {
+				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
+				go s.notifSvc.NotifyReturnCompleted(counter, originID,
+					fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
+			} else {
+				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
+				go s.notifSvc.NotifyReturnStarted(counter, originID,
+					fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
+			}
+		}
+
+		// If counter-shipment is at origin, auto-transition to ready_for_return (sin notificación extra).
 		if counterStatus == model.StatusAtOriginHub {
 			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
 				TrackingID: counterID,
@@ -1161,6 +1264,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				Timestamp:  now,
 			})
 		}
+
 		_, _ = s.commentSvc.AddComment(counterID, username,
 			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
 	}

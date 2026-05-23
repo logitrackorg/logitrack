@@ -390,7 +390,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -405,7 +405,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -453,7 +453,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -608,7 +608,9 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		price               sql.NullFloat64
 		priceBreakdownJSON  []byte
 		priceCurrency       string
-		reservedForTripID   sql.NullString
+		reservedForTripID    sql.NullString
+		slaNotifiedAt        *time.Time
+		slaExpiredNotifiedAt *time.Time
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -619,7 +621,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -630,6 +632,8 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	if reservedForTripID.Valid {
 		s.ReservedForTripID = &reservedForTripID.String
 	}
+	s.SLANotifiedAt = slaNotifiedAt
+	s.SLAExpiredNotifiedAt = slaExpiredNotifiedAt
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
 	s.ShipmentType = model.ShipmentType(shipmentType)
@@ -691,7 +695,9 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			price               sql.NullFloat64
 			priceBreakdownJSON  []byte
 			priceCurrency       string
-			reservedForTripID   sql.NullString
+			reservedForTripID    sql.NullString
+			slaNotifiedAt        *time.Time
+			slaExpiredNotifiedAt *time.Time
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -702,7 +708,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -710,6 +716,8 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		if reservedForTripID.Valid {
 			s.ReservedForTripID = &reservedForTripID.String
 		}
+		s.SLANotifiedAt = slaNotifiedAt
+		s.SLAExpiredNotifiedAt = slaExpiredNotifiedAt
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
 		s.ShipmentType = model.ShipmentType(shipmentType)
@@ -795,4 +803,37 @@ func (p *PostgresShipmentProjection) ReleaseFromTrip(trackingID string) error {
 		trackingID,
 	)
 	return err
+}
+
+// SetSLANotified actualiza sla_notified_at del envío (nil = resetear, &t = marcar notificado).
+func (p *PostgresShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET sla_notified_at = $1 WHERE tracking_id = $2`,
+		notifiedAt, trackingID,
+	)
+	return err
+}
+
+// SetSLAExpiredNotified actualiza sla_expired_notified_at del envío.
+func (p *PostgresShipmentProjection) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET sla_expired_notified_at = $1 WHERE tracking_id = $2`,
+		notifiedAt, trackingID,
+	)
+	return err
+}
+
+// SetConfirmationEmailSent marca el envío como notificado por email de forma atómica (CA-05).
+// Solo actualiza si confirmation_email_sent_at aún es NULL. Devuelve true si fue el primer
+// llamado para ese tracking ID (el UPDATE afectó una fila), false si ya estaba marcado.
+func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	res, err := p.db.Exec(
+		`UPDATE shipments SET confirmation_email_sent_at = NOW() WHERE tracking_id = $1 AND confirmation_email_sent_at IS NULL`,
+		trackingID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }

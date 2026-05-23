@@ -35,7 +35,6 @@ export interface Payment {
   approved_at?: string;
   abandoned_at?: string;
   abandoned_reason?: string;
-  simulate_enabled?: boolean;
 }
 
 export const paymentApi = {
@@ -48,7 +47,10 @@ export const paymentApi = {
   get(trackingId: string): Promise<Payment> {
     return api.get(`/shipments/${trackingId}/payment`).then((r) => r.data);
   },
-  simulateApproved(trackingId: string): Promise<{ tracking_id: string }> {
-    return api.post(`/shipments/${trackingId}/simulate-payment`).then((r) => r.data);
+  confirmCashPayment(trackingId: string): Promise<{ tracking_id: string }> {
+    return api.post(`/shipments/${trackingId}/cash-payment`).then((r) => r.data);
+  },
+  getQR(trackingId: string): Promise<{ qr_code_base64: string; init_point: string }> {
+    return api.get(`/shipments/${trackingId}/payment/qr`).then((r) => r.data);
   },
 };

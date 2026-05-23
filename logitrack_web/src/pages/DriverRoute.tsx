@@ -12,6 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
@@ -34,12 +36,20 @@ type Tab = "pendientes" | "completados";
 
 export function DriverRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [noRoute, setNoRoute] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+
+  // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
+  const [midRouteCheckin, setMidRouteCheckin] = useState(false);
+  // Misfires capturados en el momento en que se activa el overlay, para mostrarlo
+  // en el toast de "Saltar test" dentro de KssCheckIn.
+  const [checkinMisfires, setCheckinMisfires] = useState(0);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -50,6 +60,23 @@ export function DriverRoute() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
+
+  // US4 global: contador de misfires para toda la vista de ruta.
+  // Cualquier click que no sea detenido por e.stopPropagation() en un botón
+  // válido burbujea hasta document y suma +1. Se usa useRef para evitar
+  // re-renders en cada tap y para leer el valor corriente en funciones async.
+  const misfireRef = useRef(0);
+  // Ref espejo de midRouteCheckin para el listener (evita closure stale).
+  const midRouteCheckinRef = useRef(false);
+  useEffect(() => { midRouteCheckinRef.current = midRouteCheckin; }, [midRouteCheckin]);
+  // Listener global: monta/desmonta con el componente (cleanup en el return).
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (!midRouteCheckinRef.current) misfireRef.current++;
+    };
+    document.addEventListener("click", handleGlobalClick);
+    return () => document.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   const load = () =>
     driverApi
@@ -69,6 +96,34 @@ export function DriverRoute() {
     setFailedNotes("");
   };
 
+  // Secuencia post-entrega:
+  //  1) Lee los misfires globales acumulados en misfireRef
+  //  2) Consulta el gate enviando ese conteo al backend
+  //  3) Resetea el contador local y el registro del backend
+  //  4) Si se requiere test: pausa el simulador + despliega el overlay
+  //  5) Si no: reanuda el simulador y refresca la ruta
+  const checkReTestGate = async () => {
+    const misfires = misfireRef.current;
+    let requireTest = false;
+    try {
+      const eligibility = await driverApi.getTestEligibility({ misfires });
+      requireTest = eligibility.require_test;
+    } catch {
+      // error de red → continuar sin bloquear
+    }
+    const capturedMisfires = misfireRef.current;
+    misfireRef.current = 0;                   // resetear contador local
+    driverApi.resetMisfires().catch(() => {}); // resetear historial backend
+    if (requireTest) {
+      setCheckinMisfires(capturedMisfires); // guardar para el toast de skip
+      pause();                  // detener el camión inmediatamente
+      setMidRouteCheckin(true); // desplegar overlay bloqueante
+      return;
+    }
+    play();
+    load();
+  };
+
   const handleDeliver = async () => {
     if (!deliverShipment || !recipientDni.trim()) return;
     setSubmitting(true);
@@ -80,7 +135,7 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
-      load();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar la entrega.");
@@ -103,7 +158,7 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
-      load();
+      await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar el intento fallido.");
@@ -123,14 +178,41 @@ export function DriverRoute() {
     return pts;
   }, [data]);
 
+  // Puntos de entrega pendientes en orden de secuencia. El simulador se
+  // detiene automáticamente al entrar en el radio del primero de la lista.
+  const deliveryPoints = useMemo(() => {
+    if (!data?.waypoints) return [];
+    return [...data.waypoints]
+      .filter((wp) => wp.status === "out_for_delivery")
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((wp) => ({ lat: wp.latitude, lng: wp.longitude }));
+  }, [data]);
+
   const [simActive, setSimActive] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
-    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier);
+    useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
+
+  // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
+  // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
+  // Solo aplica a choferes de última milla; el overlay cubre toda la pantalla.
+  if (midRouteCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        misfireCount={checkinMisfires}
+        onDone={() => {
+          setMidRouteCheckin(false);
+          play(); // reanudar simulación recién aquí, cuando el check-in terminó
+          load();
+        }}
+      />
+    );
+  }
 
   if (loading) return <RouteSkeleton />;
   if (noRoute) return <Navigate to="/driver/scan" replace />;
@@ -318,7 +400,13 @@ export function DriverRoute() {
               origin={origin}
               userLocation={userLocation ?? undefined}
               simulationMode={simulationMode}
-              simulationControls={{ isPaused, pause, play, reset, onExit: () => { setSimActive(false); setSpeedMultiplier(1); }, speedMultiplier, onCycleSpeed: cycleSpeedMultiplier }}
+              simulationControls={{
+                isPaused, pause, play, reset,
+                onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
+                speedMultiplier,
+                onCycleSpeed: cycleSpeedMultiplier,
+                onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
+              }}
               zones={zones}
               onRouteInfoChange={setRouteInfo}
               onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
@@ -347,6 +435,7 @@ export function DriverRoute() {
                     shipment={shipment}
                     order={tab === "pendientes" ? idx + 1 : undefined}
                     canAct={canAct && tab === "pendientes"}
+                    getMisfires={() => misfireRef.current}
                     onDeliver={() => setDeliverShipment(shipment)}
                     onFailed={() => setFailedShipment(shipment)}
                     onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
@@ -366,8 +455,8 @@ export function DriverRoute() {
           userLocation={userLocation ?? undefined}
           routeInfo={routeInfo}
           canAct={canAct}
-          onDeliver={() => nextShipment && setDeliverShipment(nextShipment)}
-          onFailed={() => nextShipment && setFailedShipment(nextShipment)}
+          onDeliver={() => { if (nextShipment) setDeliverShipment(nextShipment); }}
+          onFailed={() => { if (nextShipment) setFailedShipment(nextShipment); }}
         />
       )}
 
@@ -438,6 +527,7 @@ function ShipmentCard({
   shipment,
   order,
   canAct,
+  getMisfires,
   onDeliver,
   onFailed,
   onOpen,
@@ -445,46 +535,27 @@ function ShipmentCard({
   shipment: Shipment;
   order?: number;
   canAct: boolean;
+  getMisfires: () => number;
   onDeliver: () => void;
   onFailed: () => void;
   onOpen: () => void;
 }) {
-  // US4: Tactile event tracking — refs to avoid re-renders.
-  // renderTimeRef is set in an effect (not the initializer) to satisfy the
-  // react-hooks/purity rule: Date.now() must not be called during render.
+  // Momento en que la card se montó — para calcular reaction_time_ms.
   const renderTimeRef = useRef<number>(0);
-  const misfireCountRef = useRef<number>(0);
-  useEffect(() => {
-    renderTimeRef.current = Date.now();
-  }, []); // runs once after mount — records when the card becomes visible
+  useEffect(() => { renderTimeRef.current = Date.now(); }, []);
 
-  /** Fire async touch event to backend without blocking the UI. */
+  /** Envía el evento táctil al backend (fire-and-forget). */
   const fireTouchEvent = (action: TouchEventPayload["action"]) => {
     driverApi.submitTouchEvent({
       tracking_id: shipment.tracking_id,
       action,
       reaction_time_ms: Date.now() - renderTimeRef.current,
-      misfires: misfireCountRef.current,
-    }).catch(() => {}); // silent failure — never block delivery workflow
-  };
-
-  /**
-   * Detect misfires: pointer down on the action area that doesn't land on
-   * either "Entregar" or "No entregado". Uses data-action attributes set
-   * on the buttons themselves.
-   */
-  const handleActionAreaPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    if (
-      !target.closest('[data-action="deliver"]') &&
-      !target.closest('[data-action="failed"]')
-    ) {
-      misfireCountRef.current++;
-    }
+      misfires: getMisfires(), // leer el contador global del padre
+    }).catch(() => {});
   };
 
   const handleDeliverClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // no burbujar al listener global → no cuenta como misfire
     fireTouchEvent("entregado");
     onDeliver();
   };
@@ -597,13 +668,8 @@ function ShipmentCard({
           </div>
 
           {canAct && (
-            /* US4: onPointerDown on the action container detects misfires */
-            <div
-              className="grid grid-cols-2 gap-2 mt-2"
-              onPointerDown={handleActionAreaPointerDown}
-            >
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <button
-                data-action="deliver"
                 onClick={handleDeliverClick}
                 className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
@@ -611,7 +677,6 @@ function ShipmentCard({
                 Entregar
               </button>
               <button
-                data-action="failed"
                 onClick={handleFailedClick}
                 className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
@@ -691,13 +756,13 @@ function DeliverSheet({
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
         <button
-          onClick={onConfirm}
+          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!dni.trim() || submitting}
           className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
@@ -775,13 +840,13 @@ function FailedSheet({
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
         <button
-          onClick={onConfirm}
+          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!canSubmit || submitting}
           className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >

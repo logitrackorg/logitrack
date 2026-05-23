@@ -21,6 +21,9 @@ func (s *postgresEventStore) Append(event model.DomainEvent) error {
 	if event.EventType == model.EventDraftConfirmed {
 		return s.applyDraftConfirmed(event)
 	}
+	if event.EventType == model.EventPaymentConfirmed {
+		return s.applyPaymentConfirmed(event)
+	}
 
 	payload, err := marshalPayload(event.Payload)
 	if err != nil {
@@ -58,6 +61,46 @@ func (s *postgresEventStore) applyDraftConfirmed(event model.DomainEvent) error 
 	}
 
 	// Append the confirmation event itself
+	raw, err := marshalPayload(payload)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO events (id, tracking_id, event_type, payload, changed_by, timestamp, version)
+		VALUES ($1, $2, $3, $4, $5, $6,
+			(SELECT COALESCE(MAX(version), 0) + 1 FROM events WHERE tracking_id = $2)
+		)`,
+		event.ID, payload.NewTrackingID, event.EventType, raw, event.ChangedBy, event.Timestamp,
+	); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// applyPaymentConfirmed retags all prior events (BORRADOR-xxx → LT-xxx) and appends
+// the payment_confirmed event under the new tracking ID — same pattern as applyDraftConfirmed.
+func (s *postgresEventStore) applyPaymentConfirmed(event model.DomainEvent) error {
+	payload, ok := event.Payload.(model.PaymentConfirmedPayload)
+	if !ok {
+		return fmt.Errorf("invalid payload for payment_confirmed event")
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Retag all prior events (draft + payment_requested) with the new tracking ID.
+	if _, err := tx.Exec(
+		`UPDATE events SET tracking_id = $1 WHERE tracking_id = $2`,
+		payload.NewTrackingID, payload.OldTrackingID,
+	); err != nil {
+		return err
+	}
+
+	// Append the confirmation event itself under the new tracking ID.
 	raw, err := marshalPayload(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
