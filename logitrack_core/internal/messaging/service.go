@@ -382,3 +382,83 @@ func timeWindowText(tw model.TimeWindow, cfg model.RoutingConfig) string {
 		return "a lo largo del día"
 	}
 }
+
+// ── Confirmación de registro (LOGITRACK-406) ──────────────────────────────────
+
+// SendShipmentConfirmationNotification sends WhatsApp confirmation messages to both the
+// recipient (CA-03) and the sender (CA-04) when a shipment is registered.
+// If a party has no phone or WhatsApp is not configured, that message is silently
+// skipped without affecting the other party or the shipment (CA-02).
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendShipmentConfirmationNotification(shipment model.Shipment) {
+	if !s.whatsappConfigured() {
+		return
+	}
+	trackURL := ""
+	if s.trackBaseURL != "" {
+		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	}
+
+	// CA-03: notificar al destinatario.
+	if shipment.Recipient.Phone != "" {
+		msg := buildConfirmationRecipientMsg(shipment, trackURL)
+		if err := s.sendWhatsApp(shipment.Recipient.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp confirmación destinatario falló para %s (%s): %v",
+				shipment.TrackingID, shipment.Recipient.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp confirmación destinatario enviado a %s para %s",
+				shipment.Recipient.Phone, shipment.TrackingID)
+		}
+	} else {
+		log.Printf("[messaging] destinatario de %s sin teléfono — WhatsApp confirmación omitido (CA-02)", shipment.TrackingID)
+	}
+
+	// CA-04: notificar al remitente.
+	if shipment.Sender.Phone != "" {
+		msg := buildConfirmationSenderMsg(shipment, trackURL)
+		if err := s.sendWhatsApp(shipment.Sender.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp confirmación remitente falló para %s (%s): %v",
+				shipment.TrackingID, shipment.Sender.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp confirmación remitente enviado a %s para %s",
+				shipment.Sender.Phone, shipment.TrackingID)
+		}
+	} else {
+		log.Printf("[messaging] remitente de %s sin teléfono — WhatsApp confirmación omitido (CA-02)", shipment.TrackingID)
+	}
+}
+
+func buildConfirmationRecipientMsg(shipment model.Shipment, trackURL string) string {
+	packageLabels := map[string]string{"box": "Caja", "envelope": "Sobre"}
+	pkgLabel := packageLabels[string(shipment.PackageType)]
+	if pkgLabel == "" {
+		pkgLabel = string(shipment.PackageType)
+	}
+
+	msg := fmt.Sprintf("📦 Tu envío *%s* fue registrado y está en camino.\n\n", shipment.TrackingID)
+	msg += fmt.Sprintf("👤 *Remitente:* %s\n", shipment.Sender.Name)
+	msg += fmt.Sprintf("📦 *Paquete:* %s · %.1f kg\n", pkgLabel, shipment.WeightKg)
+	if shipment.EstimatedDeliveryAt != nil {
+		msg += fmt.Sprintf("📅 *Entrega estimada:* %s\n", formatShortDate(*shipment.EstimatedDeliveryAt))
+	}
+	if trackURL != "" {
+		msg += "\nSeguí tu envío en: " + trackURL
+	}
+	return msg
+}
+
+func buildConfirmationSenderMsg(shipment model.Shipment, trackURL string) string {
+	msg := fmt.Sprintf("✅ Tu envío *%s* fue registrado exitosamente.\n", shipment.TrackingID)
+	if trackURL != "" {
+		msg += "\nSeguí tu envío en: " + trackURL
+	}
+	return msg
+}
+
+func formatShortDate(t time.Time) string {
+	months := [...]string{
+		"ene", "feb", "mar", "abr", "may", "jun",
+		"jul", "ago", "sep", "oct", "nov", "dic",
+	}
+	return fmt.Sprintf("%d de %s de %d", t.Day(), months[t.Month()-1], t.Year())
+}

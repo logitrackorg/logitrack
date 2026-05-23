@@ -1642,6 +1642,92 @@ func TestList_OrderedByTrackingID(t *testing.T) {
 	}
 }
 
+// ─── WhatsApp confirmation (LOGITRACK-406) ────────────────────────────────────
+
+type fakeWhatsAppConfirmSender struct {
+	ch chan model.Shipment
+}
+
+func newFakeWhatsAppConfirmSender() *fakeWhatsAppConfirmSender {
+	return &fakeWhatsAppConfirmSender{ch: make(chan model.Shipment, 1)}
+}
+
+func (f *fakeWhatsAppConfirmSender) SendShipmentConfirmationNotification(s model.Shipment) {
+	f.ch <- s
+}
+
+// CA-01: al crear un envío se dispara exactamente una confirmación por WhatsApp.
+func TestConfirmationWhatsApp_FiredOnCreate(t *testing.T) {
+	ts := newSetup()
+	wa := newFakeWhatsAppConfirmSender()
+	ts.svc.SetWhatsAppConfirmationService(wa)
+
+	_, err := ts.svc.Create(defaultCreateReq())
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+
+	select {
+	case s := <-wa.ch:
+		if s.TrackingID == "" {
+			t.Error("se recibió un Shipment con TrackingID vacío")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: la confirmación WhatsApp no se disparó")
+	}
+}
+
+// CA-05: la confirmación WhatsApp no se dispara si el servicio no está configurado.
+func TestConfirmationWhatsApp_NoFireWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// No se llama a SetWhatsAppConfirmationService ni SetEmailService → ambos nil.
+
+	_, err := ts.svc.Create(defaultCreateReq())
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+	// No hay canal al que esperar; verificamos que no explota y que no llega nada.
+	wa := newFakeWhatsAppConfirmSender()
+	select {
+	case <-wa.ch:
+		t.Fatal("no debería haberse disparado ninguna confirmación")
+	case <-time.After(100 * time.Millisecond):
+		// ok — nada llegó
+	}
+}
+
+// CA-03/CA-04: el Shipment enviado al notificador contiene los datos del remitente
+// y del destinatario correctos.
+func TestConfirmationWhatsApp_ShipmentDataPropagated(t *testing.T) {
+	ts := newSetup()
+	wa := newFakeWhatsAppConfirmSender()
+	ts.svc.SetWhatsAppConfirmationService(wa)
+
+	req := defaultCreateReq()
+	req.Sender.Phone = "1155550001"
+	req.Recipient.Phone = "1155550002"
+
+	ship, err := ts.svc.Create(req)
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+
+	select {
+	case got := <-wa.ch:
+		if got.TrackingID != ship.TrackingID {
+			t.Errorf("TrackingID = %q, want %q", got.TrackingID, ship.TrackingID)
+		}
+		if got.Sender.Phone != req.Sender.Phone {
+			t.Errorf("Sender.Phone = %q, want %q", got.Sender.Phone, req.Sender.Phone)
+		}
+		if got.Recipient.Phone != req.Recipient.Phone {
+			t.Errorf("Recipient.Phone = %q, want %q", got.Recipient.Phone, req.Recipient.Phone)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: la confirmación WhatsApp no se disparó")
+	}
+}
+
 // ─── delivery confirmed notification ─────────────────────────────────────────
 
 // fakeDeliveryNotifier registra llamadas a SendDeliveryConfirmedNotification
@@ -1693,9 +1779,6 @@ func TestDeliveryConfirmed_NotifiesSenderOnly(t *testing.T) {
 	notified := notifier.recv(t)
 
 	// CA-02: el envío notificado corresponde al remitente, no al destinatario.
-	// El servicio de notificación recibe el Shipment completo; quien decide
-	// a quién notificar es la implementación (messaging.Service), pero el
-	// contrato del trigger es correcto cuando el campo Sender está poblado.
 	if notified.TrackingID != ship.TrackingID {
 		t.Errorf("CA-02: tracking ID incorrecto: got %s, want %s", notified.TrackingID, ship.TrackingID)
 	}

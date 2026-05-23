@@ -188,6 +188,7 @@ func main() {
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
 	}
+
 	// Mensajería — WhatsApp (Twilio) con fallback a email para última milla y retiro en sucursal.
 	messagingSvc := messaging.New(
 		os.Getenv("TWILIO_ACCOUNT_SID"),
@@ -197,13 +198,14 @@ func main() {
 		emailSvc,
 		routingCfgSvc,
 	)
-	messagingSvc.SetPickupEmailFallback(emailSvc)              // email fallback para ready_for_pickup
-	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc)   // email fallback para entrega confirmada
-	messagingSvc.SetRejectedEmailFallback(emailSvc)            // email fallback para rechazo (LOGITRACK-429)
+	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
+	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
+	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
+	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
-	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)    // WhatsApp primero, email fallback
-	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)      // WhatsApp primero, email fallback (CA-01/CA-02)
-	shipmentSvc.SetRejectedService(messagingSvc)               // WhatsApp primero, email fallback (LOGITRACK-429)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)  // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)    // WhatsApp primero, email fallback (CA-01/CA-02)
+	shipmentSvc.SetRejectedService(messagingSvc)             // WhatsApp primero, email fallback (LOGITRACK-429)
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {

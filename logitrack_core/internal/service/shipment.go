@@ -121,6 +121,13 @@ type EmailConfirmationSender interface {
 	SendShipmentConfirmation(shipment model.Shipment)
 }
 
+// ConfirmationWhatsAppSender sends WhatsApp confirmation messages to both the
+// recipient and the sender when a shipment is registered (CA-03/CA-04).
+// Satisfied by *messaging.Service.
+type ConfirmationWhatsAppSender interface {
+	SendShipmentConfirmationNotification(shipment model.Shipment)
+}
+
 // OutForDeliveryNotifier sends last-mile notifications to recipients (CA-01).
 // Satisfied by *messaging.Service.
 type OutForDeliveryNotifier interface {
@@ -154,45 +161,61 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
-	notifSvc     *NotificationService
-	emailSvc            EmailConfirmationSender
-	messagingSvc        OutForDeliveryNotifier
-	pickupEmailSvc      ReadyForPickupNotifier
-	deliveryNotifSvc    DeliveryConfirmedNotifier
-	rejectedNotifSvc    RejectedNotifier
+	notifSvc         *NotificationService
+	emailSvc         EmailConfirmationSender
+	whatsappConfirm  ConfirmationWhatsAppSender
+	messagingSvc     OutForDeliveryNotifier
+	pickupEmailSvc   ReadyForPickupNotifier
+	deliveryNotifSvc DeliveryConfirmedNotifier
+	rejectedNotifSvc RejectedNotifier
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)           { s.emailSvc = svc }
-func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
-func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
-func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) { s.deliveryNotifSvc = svc }
-func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                  { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                  { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService)               { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                   { s.emailSvc = svc }
+func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender) { s.whatsappConfirm = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)      { s.pickupEmailSvc = svc }
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)     { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                      { s.rejectedNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
 	return s.repo.ReleaseFromTrip(trackingID)
 }
 
-// sendConfirmationEmails envía emails de confirmación al destinatario y al remitente (CA-03/CA-04).
+// sendConfirmationNotifications envía emails y mensajes WhatsApp de confirmación
+// al destinatario y al remitente (CA-01/CA-02/CA-03/CA-04).
 // Usa dedup atómica en DB para evitar duplicados aunque se llame más de una vez (CA-05).
 // Se llama siempre como goroutine (fire-and-forget) — los errores son silenciosos (CA-02).
-func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
-	if s.emailSvc == nil {
+func (s *ShipmentService) sendConfirmationNotifications(shipment model.Shipment) {
+	if s.emailSvc == nil && s.whatsappConfirm == nil {
 		return
 	}
 	// Dedup (CA-05): marca atómicamente la fila; si ya estaba marcada, omite el envío.
 	sent, err := s.repo.SetConfirmationEmailSent(shipment.TrackingID)
 	if err != nil {
-		log.Printf("[email] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
+		log.Printf("[confirmation] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
 		return
 	}
 	if !sent {
-		log.Printf("[email] confirmación de envío para %s ya enviada anteriormente — omitida (CA-05)", shipment.TrackingID)
+		log.Printf("[confirmation] ya enviada para %s — omitida (CA-05)", shipment.TrackingID)
 		return
 	}
-	s.emailSvc.SendShipmentConfirmation(shipment)
+	// Email al destinatario y remitente (CA-03/CA-04).
+	if s.emailSvc != nil {
+		s.emailSvc.SendShipmentConfirmation(shipment)
+	}
+	// WhatsApp al destinatario y remitente (CA-03/CA-04).
+	if s.whatsappConfirm != nil {
+		s.whatsappConfirm.SendShipmentConfirmationNotification(shipment)
+	}
+}
+
+// sendConfirmationEmails es un alias de sendConfirmationNotifications mantenido
+// para compatibilidad con payment.go y payment_simulate.go.
+func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
+	s.sendConfirmationNotifications(shipment)
 }
 
 // maybeRecordPath is a WIP feature: records a planned multi-hop path when a shipment moves.
