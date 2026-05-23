@@ -63,6 +63,9 @@ export interface Claim {
   assigned_category?: ClaimCategory;
   resolution_type?: ClaimResolutionType;
   is_automatic: boolean;
+  evidence_file_name?: string;
+  evidence_mime_type?: string;
+  evidence_upload_date?: string;
 }
 
 export type ClaimEventType =
@@ -104,6 +107,10 @@ export const claimsApi = {
   },
   get: (id: string) => api.get<Claim>(`/claims/${id}`).then((r) => r.data),
   getEvents: (id: string) => api.get<ClaimEvent[]>(`/claims/${id}/events`).then((r) => r.data),
+  downloadEvidence: async (id: string) => {
+    const response = await api.get(`/claims/${id}/evidence/download`, { responseType: "blob" });
+    return response.data as Blob;
+  },
   updateCategory: (id: string, category: ClaimCategory, notes?: string) =>
     api.patch<Claim>(`/claims/${id}/category`, { assigned_category: category, notes }).then((r) => r.data),
   resolve: (id: string, resolution: ClaimResolutionType, notes?: string) =>
