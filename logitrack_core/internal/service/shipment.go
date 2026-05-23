@@ -128,6 +128,30 @@ type ConfirmationWhatsAppSender interface {
 	SendShipmentConfirmationNotification(shipment model.Shipment)
 }
 
+// OutForDeliveryNotifier sends last-mile notifications to recipients (CA-01).
+// Satisfied by *messaging.Service.
+type OutForDeliveryNotifier interface {
+	SendOutForDeliveryNotification(shipment model.Shipment)
+}
+
+// ReadyForPickupNotifier sends branch-pickup notifications to recipients.
+// Satisfied by *email.Service.
+type ReadyForPickupNotifier interface {
+	SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time)
+}
+
+// DeliveryConfirmedNotifier sends delivery-confirmed notifications to the sender.
+// CA-01/CA-02: only the sender is notified; satisfied by *messaging.Service.
+type DeliveryConfirmedNotifier interface {
+	SendDeliveryConfirmedNotification(shipment model.Shipment)
+}
+
+// RejectedNotifier sends rejection notifications to the sender (LOGITRACK-429).
+// CA-01/CA-02: only the sender is notified; satisfied by *messaging.Service.
+type RejectedNotifier interface {
+	SendRejectedNotification(shipment model.Shipment, notes string)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -137,15 +161,23 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
-	notifSvc        *NotificationService
-	emailSvc        EmailConfirmationSender
-	whatsappConfirm ConfirmationWhatsAppSender
+	notifSvc         *NotificationService
+	emailSvc         EmailConfirmationSender
+	whatsappConfirm  ConfirmationWhatsAppSender
+	messagingSvc     OutForDeliveryNotifier
+	pickupEmailSvc   ReadyForPickupNotifier
+	deliveryNotifSvc DeliveryConfirmedNotifier
+	rejectedNotifSvc RejectedNotifier
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                  { s.graphSvc = g }
 func (s *ShipmentService) SetNotificationService(svc *NotificationService)               { s.notifSvc = svc }
 func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                   { s.emailSvc = svc }
 func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender) { s.whatsappConfirm = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)      { s.pickupEmailSvc = svc }
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)     { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                      { s.rejectedNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -891,6 +923,84 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			go s.notifSvc.NotifyDestinationArrival(updated, branchID)
 		} else if targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub {
 			go s.notifSvc.NotifyShipmentReceived(updated, branchID, targetStatus)
+		} else if targetStatus == model.StatusReadyForReturn {
+			// CA-03 — transición directa a ready_for_return (operador la setea manualmente).
+			// Las auto-transiciones tienen su propio hook y retornan antes de llegar acá.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnStarted(updated, originBranchID, req.Notes)
+		} else if targetStatus == model.StatusReturned {
+			// CA-04 — el envío fue devuelto: notificar a la sucursal de origen.
+			originBranchID := updated.OriginBranchID
+			if originBranchID == "" {
+				originBranchID = updated.ReceivingBranchID
+			}
+			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
+		}
+	}
+
+	// CA-01: envío transicionó a última milla → notificar al destinatario por WhatsApp/email.
+	if targetStatus == model.StatusOutForDelivery &&
+		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
+		s.messagingSvc != nil {
+		go s.messagingSvc.SendOutForDeliveryNotification(updated)
+	}
+
+	// CA-01/CA-02: envío entregado → notificar al remitente (solo) por WhatsApp/email.
+	if targetStatus == model.StatusDelivered && s.deliveryNotifSvc != nil {
+		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
+	}
+
+	// LOGITRACK-429 CA-01/CA-02: envío rechazado → notificar al remitente (solo) por WhatsApp/email.
+	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
+		notes := req.Notes
+		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
+	}
+
+	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.
+	if targetStatus == model.StatusReadyForPickup && s.pickupEmailSvc != nil {
+		branch, _ := s.branchRepo.GetByID(updated.ReceivingBranchID)
+		var deadline *time.Time
+		if s.sysConfig != nil {
+			if days := s.sysConfig.Get().PickupDeadlineDays; days > 0 {
+				d := clock.Now().UTC().AddDate(0, 0, days)
+				deadline = &d
+			}
+		}
+		go s.pickupEmailSvc.SendReadyForPickupNotification(updated, branch, deadline)
+	}
+
+	// Auto-transition: retiro_sucursal llegó a su sucursal final → listo para retiro.
+	// Aplica tanto a at_hub (llegó vía inter-sucursal) como a at_origin_hub (mismo origen
+	// y destino, p.ej. Córdoba → Córdoba), para que el destinatario sea notificado
+	// automáticamente sin requerir acción manual del operador.
+	if (targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub) &&
+		updated.DeliveryMethod == model.DeliveryMethodBranchPickup &&
+		resolvedLocation != "" && resolvedLocation == updated.FinalBranchID {
+		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: trackingID,
+			FromStatus: targetStatus,
+			ToStatus:   model.StatusReadyForPickup,
+			Location:   resolvedLocation,
+			ChangedBy:  req.ChangedBy,
+			Notes:      "Envío listo para retiro en sucursal — transición automática",
+			Timestamp:  clock.Now().UTC(),
+		})
+		if autoErr == nil {
+			if s.pickupEmailSvc != nil {
+				branch, _ := s.branchRepo.GetByID(resolvedLocation)
+				var deadline *time.Time
+				if s.sysConfig != nil {
+					if days := s.sysConfig.Get().PickupDeadlineDays; days > 0 {
+						d := clock.Now().UTC().AddDate(0, 0, days)
+						deadline = &d
+					}
+				}
+				go s.pickupEmailSvc.SendReadyForPickupNotification(autoUpdated, branch, deadline)
+			}
+			return autoUpdated, nil
 		}
 	}
 
@@ -906,12 +1016,39 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			Timestamp:  clock.Now().UTC(),
 		})
 		if autoErr == nil {
+			// CA-03 — notificar a la sucursal de origen que el envío está listo para devolución.
+			if s.notifSvc != nil {
+				originBranchID := autoUpdated.OriginBranchID
+				if originBranchID == "" {
+					originBranchID = autoUpdated.ReceivingBranchID
+				}
+				go s.notifSvc.NotifyReturnStarted(autoUpdated, originBranchID, "Envío de retorno llegó a sucursal de origen")
+			}
 			return autoUpdated, nil
 		}
 	}
 
-	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
-	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
+	// rechazado: extiende ETA y marca is_returning, pero NO auto-transiciona a at_hub.
+	// El envío queda visible en ese estado para el chofer y el operador decide el siguiente paso.
+	if targetStatus == model.StatusRechazado {
+		nowET := clock.Now().UTC()
+		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
+		if extended, etaErr := s.repo.ExtendETA(repository.ExtendETACmd{
+			TrackingID: trackingID,
+			OldETA:     updated.EstimatedDeliveryAt,
+			NewETA:     *newETA,
+			AddedDays:  model.ReturnETAExtraDays,
+			Reason:     "shipment_returning_to_sender",
+			ChangedBy:  req.ChangedBy,
+			Timestamp:  nowET,
+		}); etaErr == nil {
+			updated = extended
+		}
+		return updated, nil
+	}
+
+	// Auto-transition: no_entregado → at_hub (el envío vuelve al depósito para reintento).
+	if targetStatus == model.StatusNoEntregado {
 		// El envío empieza un retorno → extender la fecha estimada de entrega 10 días.
 		nowET := clock.Now().UTC()
 		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
@@ -951,12 +1088,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 
-		var autoNotes string
-		if targetStatus == model.StatusNoEntregado {
-			autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
-		} else {
-			autoNotes = "Destinatario rechazó el envío — devuelto a sucursal"
-		}
+		const autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
 
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 			TrackingID: trackingID,
@@ -980,6 +1112,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 					Timestamp:  clock.Now().UTC(),
 				})
 				if rfrErr == nil {
+					// CA-03 — notificar a la sucursal de origen.
+					if s.notifSvc != nil {
+						originBranchID := rfrUpdated.OriginBranchID
+						if originBranchID == "" {
+							originBranchID = rfrUpdated.ReceivingBranchID
+						}
+						go s.notifSvc.NotifyReturnStarted(rfrUpdated, originBranchID, autoNotes)
+					}
 					return rfrUpdated, nil
 				}
 			}
@@ -1216,7 +1356,20 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		// Log but don't fail the cancellation
 		_ = err
 	} else {
-		// If counter-shipment is at origin, auto-transition to ready_for_return
+		// Notificar a la sucursal de origen apenas se cancela — sin esperar ready_for_return.
+		if s.notifSvc != nil {
+			if counterStatus == model.StatusAtOriginHub {
+				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
+				go s.notifSvc.NotifyReturnCompleted(counter, originID,
+					fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
+			} else {
+				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
+				go s.notifSvc.NotifyReturnStarted(counter, originID,
+					fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
+			}
+		}
+
+		// If counter-shipment is at origin, auto-transition to ready_for_return (sin notificación extra).
 		if counterStatus == model.StatusAtOriginHub {
 			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
 				TrackingID: counterID,
@@ -1228,6 +1381,7 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 				Timestamp:  now,
 			})
 		}
+
 		_, _ = s.commentSvc.AddComment(counterID, username,
 			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
 	}
@@ -1327,6 +1481,7 @@ func isValidTransition(from, to model.Status) bool {
 		model.StatusOutForDelivery: {
 			model.StatusDelivered,
 			model.StatusDeliveryFailed,
+			model.StatusRechazado, // destinatario rechaza activamente en el momento de la entrega
 			model.StatusLost,
 			model.StatusDestroyed,
 		},

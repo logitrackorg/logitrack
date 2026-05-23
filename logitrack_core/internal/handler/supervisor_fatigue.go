@@ -77,10 +77,11 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	}
 
 	status := model.DriverFatigueStatus{
-		DriverID:  driver.ID,
-		FullName:  fullName,
-		Username:  driver.Username,
-		RiskLevel: model.RiskPending,
+		DriverID:   driver.ID,
+		FullName:   fullName,
+		Username:   driver.Username,
+		DriverType: driver.DriverType,
+		RiskLevel:  model.RiskPending,
 	}
 
 	// Today's check-in
@@ -101,7 +102,16 @@ func (h *SupervisorFatigueHandler) buildStatus(
 			status.HasVoice = checkin.VoiceMetrics != nil
 			status.PVTMetrics = checkin.PVTMetrics
 
-			score, level := fatigueRiskScore(checkin, cfg)
+			// Los choferes inter-sucursal no realizan entregas directas al
+			// destinatario, por lo que nunca generan touch events.
+			// Excluir la prueba táctil de su cálculo para que el peso no se
+			// redistribuya artificialmente entre las otras pruebas.
+			effectiveCfg := cfg
+			if driver.DriverType == model.DriverTypeInterBranch {
+				effectiveCfg.TactileEnabled = false
+			}
+
+			score, level := fatigueRiskScore(checkin, effectiveCfg)
 			status.RiskScore = &score
 			status.RiskLevel = level
 		}

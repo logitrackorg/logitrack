@@ -142,7 +142,8 @@ export function SystemConfig() {
     draft !== null && config !== null && (
       draft.max_delivery_attempts !== config.max_delivery_attempts ||
       draft.draft_retention_days  !== config.draft_retention_days  ||
-      draft.draft_purge_days      !== config.draft_purge_days
+      draft.draft_purge_days      !== config.draft_purge_days      ||
+      draft.pickup_deadline_days  !== config.pickup_deadline_days
     );
 
   return (
@@ -361,6 +362,67 @@ export function SystemConfig() {
               <p className="text-xs text-slate-400">
                 Días después de expirar hasta que se eliminan nombre, DNI, email, teléfono y dirección de forma irreversible.
               </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pickup deadline */}
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Retiro en sucursal</CardTitle>
+            <CardDescription>
+              Plazo máximo de días para retirar un envío disponible en sucursal. El destinatario lo verá en el email de notificación. <strong>0 = sin límite</strong> (no se muestra fecha en el email). Rango: 0–365 días.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                Días para retirar
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, pickup_deadline_days: Math.max(0, d.pickup_deadline_days - 1) } : d
+                    )
+                  }
+                  disabled={draft.pickup_deadline_days <= 0}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Minus className="w-4 h-4 text-slate-700" />
+                </button>
+                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  {draft.pickup_deadline_days === 0 ? "∞" : draft.pickup_deadline_days}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, pickup_deadline_days: Math.min(365, d.pickup_deadline_days + 1) } : d
+                    )
+                  }
+                  disabled={draft.pickup_deadline_days >= 365}
+                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-slate-700" />
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={30}
+                  value={draft.pickup_deadline_days}
+                  onChange={(e) =>
+                    setDraft((d) =>
+                      d ? { ...d, pickup_deadline_days: Number(e.target.value) } : d
+                    )
+                  }
+                  className="w-32 accent-[#1e3a5f]"
+                />
+              </div>
+              {draft.pickup_deadline_days === 0 && (
+                <p className="text-xs text-slate-400">Sin límite — no se muestra fecha en el email.</p>
+              )}
             </div>
           </CardContent>
         </Card>

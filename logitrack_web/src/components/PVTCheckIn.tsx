@@ -2,7 +2,7 @@
  * PVTCheckIn — Psychomotor Vigilance Task (US6)
  *
  * Flujo:
- *   instrucciones → jugando (30 s) → resultados → envía al backend → onDone()
+ *   instrucciones → jugando (15 s) → resultados → envía al backend → onDone()
  *
  * Precisión de milisegundos:
  *   - Los timestamps se capturan con Date.now() directamente en callbacks,
@@ -17,7 +17,7 @@ import { driverApi, type PVTPayload } from "../api/driver";
 
 // ── constantes ────────────────────────────────────────────────────────────────
 
-const GAME_DURATION_S = 30;
+const GAME_DURATION_S = 15;
 const CIRCLE_RADIUS = 28;      // px
 const CIRCLE_SIZE = CIRCLE_RADIUS * 2;
 const MIN_DELAY_MS = 1000;
@@ -137,7 +137,7 @@ export function PVTCheckIn({ onDone }: Props) {
     isPlayingRef.current = true;
     setPhase("playing");
 
-    // Temporizador global de 30 s
+    // Temporizador global de 15 s
     gameTimerRef.current = setInterval(() => {
       timeLeftRef.current -= 1;
       setTimeLeft(timeLeftRef.current);
@@ -219,7 +219,7 @@ export function PVTCheckIn({ onDone }: Props) {
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-white leading-tight">Prueba de Reacción</h1>
-                  <p className="text-xs text-slate-400">Test psicomotriz opcional · 30 segundos</p>
+                  <p className="text-xs text-slate-400">Test psicomotriz opcional · 15 segundos</p>
                 </div>
               </div>
 
@@ -229,7 +229,7 @@ export function PVTCheckIn({ onDone }: Props) {
                   <li>Aparecerá un <span className="text-emerald-400 font-semibold">círculo verde</span> en una posición aleatoria.</li>
                   <li>Tocá el círculo lo más rápido que puedas.</li>
                   <li>Si tocás la pantalla sin que haya círculo, se registra como error.</li>
-                  <li>La prueba dura <strong className="text-white">30 segundos</strong> en total.</li>
+                  <li>La prueba dura <strong className="text-white">15 segundos</strong> en total.</li>
                 </ol>
                 <p className="text-[11px] text-slate-500 pt-1">
                   El sistema mide tu velocidad de respuesta en milisegundos.
@@ -243,12 +243,6 @@ export function PVTCheckIn({ onDone }: Props) {
               >
                 <Zap className="w-4 h-4" />
                 Iniciar prueba
-              </button>
-              <button
-                onClick={onDone}
-                className="w-full h-10 rounded-xl border border-slate-600 text-slate-400 text-sm font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Saltar prueba
               </button>
             </div>
           </div>
@@ -341,7 +335,7 @@ export function PVTCheckIn({ onDone }: Props) {
               </div>
               <div>
                 <h1 className="text-lg font-bold text-white leading-tight">Resultado</h1>
-                <p className="text-xs text-slate-400">Prueba de 30 s finalizada</p>
+                <p className="text-xs text-slate-400">Prueba de 15 s finalizada</p>
               </div>
             </div>
 

@@ -145,6 +145,140 @@ const senderBodySrc = `
 </div>
 {{end}}`
 
+// ─── Last mile template (CA-04) ──────────────────────────────────────────────
+
+const lastMileBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🚚 Tu envío está en camino y llegará hoy.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Entrega estimada</td>
+          <td><strong>Hoy, {{.TimeWindowText}}</strong></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  Asegurate de estar disponible para recibir tu paquete. Si no estás en casa al momento de la entrega, el repartidor dejará un aviso para coordinar un nuevo intento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Rastrear mi envío &rarr;
+  </a>
+</div>
+{{end}}`
+
+// ─── Ready-for-pickup template ────────────────────────────────────────────────
+
+const readyForPickupBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  📦 Tu envío está disponible para retiro en sucursal.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Sucursal</td>
+          <td><strong>{{.BranchName}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Dirección</td>
+          <td>{{.BranchAddress}}</td>
+        </tr>
+        {{if .BusinessHours}}
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Horarios</td>
+          <td>{{.BusinessHours}}</td>
+        </tr>
+        {{end}}
+        {{if .DeadlineDate}}
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Retirá antes del</td>
+          <td><strong style="color:#b45309;">{{.DeadlineDate}}</strong></td>
+        </tr>
+        {{end}}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  Presentate en la sucursal con tu DNI para retirar el paquete. Si no podés concurrir personalmente, podés autorizar a otra persona presentando una nota firmada y copia de tu DNI.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Ver estado del envío &rarr;
+  </a>
+</div>
+{{end}}`
+
+// ─── Delivery confirmed template (CA-03) ─────────────────────────────────────
+
+const deliveryConfirmedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  ✅ Tu envío fue entregado exitosamente.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Recibido por</td>
+          <td><strong>{{.RecipientName}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Fecha y hora de entrega</td>
+          <td>{{.DeliveredAt}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  Este mensaje es la constancia de que tu envío llegó a destino. Podés ver el detalle completo en el portal de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Ver detalle del envío &rarr;
+  </a>
+</div>
+{{end}}`
+
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 type baseData struct {
@@ -156,10 +290,56 @@ type baseData struct {
 	Body       template.HTML
 }
 
+const rejectedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🚫 Tu envío fue rechazado por el destinatario.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Motivo del rechazo</td>
+          <td><strong>{{.RejectionReason}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Fecha y hora</td>
+          <td>{{.RejectedAt}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  El envío está siendo devuelto. Para coordinar una solución, contactate con tu sucursal más cercana.
+  {{if .OrgPhone}}<br>📞 <strong>{{.OrgPhone}}</strong>{{end}}
+  {{if .OrgEmail}}<br>✉️ <strong>{{.OrgEmail}}</strong>{{end}}
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Ver detalle del envío &rarr;
+  </a>
+</div>
+{{end}}`
+
 var (
-	baseTmpl      = template.Must(template.New("base").Parse(baseTmplSrc))
-	recipientTmpl = template.Must(template.New("recipient").Parse(recipientBodySrc))
-	senderTmpl    = template.Must(template.New("sender").Parse(senderBodySrc))
+	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
+	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
+	senderTmpl              = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl            = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
+	readyForPickupTmpl      = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
+	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -218,6 +398,31 @@ func renderSenderConfirmation(s model.Shipment, org model.OrganizationConfig, tr
 	})
 }
 
+func renderLastMileNotification(trackingID, timeWindowText, trackURL string, org model.OrganizationConfig) string {
+	type lastMileData struct {
+		TrackingID     string
+		TimeWindowText string
+		TrackURL       string
+	}
+	data := lastMileData{
+		TrackingID:     trackingID,
+		TimeWindowText: timeWindowText,
+		TrackURL:       trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := lastMileTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s está en camino — llegará hoy", trackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
 func renderBase(data baseData) string {
 	var buf bytes.Buffer
 	if err := baseTmpl.Execute(&buf, data); err != nil {
@@ -267,4 +472,104 @@ func buildTrackURL(base, trackingID string) string {
 		return ""
 	}
 	return base + "/track?id=" + trackingID
+}
+
+func renderDeliveryConfirmedNotification(s model.Shipment, deliveredAt time.Time, trackURL string, org model.OrganizationConfig) string {
+	type deliveryData struct {
+		TrackingID    string
+		RecipientName string
+		DeliveredAt   string
+		TrackURL      string
+	}
+	data := deliveryData{
+		TrackingID:    s.TrackingID,
+		RecipientName: s.Recipient.Name,
+		DeliveredAt:   formatDeliveredAt(deliveredAt),
+		TrackURL:      trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := deliveryConfirmedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s fue entregado exitosamente", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func formatDeliveredAt(t time.Time) string {
+	months := [...]string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+	return fmt.Sprintf("%d de %s de %d, %02d:%02d hs",
+		t.Day(), months[t.Month()-1], t.Year(), t.Hour(), t.Minute())
+}
+
+func renderReadyForPickupNotification(s model.Shipment, branchName, branchAddress, businessHours string, deadlineDate *time.Time, trackURL string, org model.OrganizationConfig) string {
+	type pickupData struct {
+		TrackingID    string
+		BranchName    string
+		BranchAddress string
+		BusinessHours string
+		DeadlineDate  string
+		TrackURL      string
+	}
+	data := pickupData{
+		TrackingID:    s.TrackingID,
+		BranchName:    branchName,
+		BranchAddress: branchAddress,
+		BusinessHours: businessHours,
+		TrackURL:      trackURL,
+	}
+	if deadlineDate != nil {
+		data.DeadlineDate = formatEstimatedDelivery(deadlineDate)
+	}
+	var bodyBuf bytes.Buffer
+	if err := readyForPickupTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderRejectedNotification(s model.Shipment, rejectionReason string, rejectedAt time.Time, trackURL string, org model.OrganizationConfig) string {
+	type rejectedData struct {
+		TrackingID      string
+		RejectionReason string
+		RejectedAt      string
+		TrackURL        string
+		OrgPhone        string
+		OrgEmail        string
+	}
+	data := rejectedData{
+		TrackingID:      s.TrackingID,
+		RejectionReason: rejectionReason,
+		RejectedAt:      formatDeliveredAt(rejectedAt),
+		TrackURL:        trackURL,
+		OrgPhone:        org.Phone,
+		OrgEmail:        org.Email,
+	}
+	var bodyBuf bytes.Buffer
+	if err := rejectedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s fue rechazado por el destinatario", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
 }

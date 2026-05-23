@@ -23,6 +23,4 @@ type Payment struct {
 	ApprovedAt      *time.Time    `json:"approved_at,omitempty"`
 	AbandonedAt     *time.Time    `json:"abandoned_at,omitempty"`
 	AbandonedReason string        `json:"abandoned_reason,omitempty"` // "back_to_draft" | "expired"
-	// SimulateEnabled no se persiste — se inyecta en runtime según MP_SIMULATE_ENABLED.
-	SimulateEnabled bool          `json:"simulate_enabled,omitempty"`
 }

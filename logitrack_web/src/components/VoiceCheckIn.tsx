@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, SkipForward, Volume2 } from "lucide-react";
 import { driverApi } from "../api/driver";
 
-// Grabaciones de silencio puro (sin voz) generan blobs muy pequeños: solo
-// cabeceras del contenedor WebM + frames de silencio muy comprimidos.
-// 2 500 bytes es un umbral conservador que filtra silencios sin rechazar
-// grabaciones legítimas de baja calidad de audio.
 const MIN_AUDIO_BYTES = 2500;
 
 const INVALID_AUDIO_MSG =
   "No hemos detectado una grabación válida. Por favor, intenta nuevamente leyendo la frase.";
+
+// Umbral de energía RMS para distinguir voz real de silencio/micrófono muteado.
+// Voz conversacional normal: RMS ≈ 0.02–0.30
+// Ruido de fondo leve:       RMS ≈ 0.001–0.005
+// Micrófono muteado/silencio: RMS ≈ 0.0001 o menos
+// Umbral conservador de 0.01 — deja pasar incluso voces muy suaves.
+const VOICE_RMS_THRESHOLD = 0.01;
 
 type RecordingState = "idle" | "recording" | "recorded" | "uploading";
 
@@ -18,15 +21,24 @@ interface Props {
 }
 
 export function VoiceCheckIn({ onDone }: Props) {
-  const [phrase, setPhrase]     = useState<string>("");
-  const [state, setState]       = useState<RecordingState>("idle");
-  const [seconds, setSeconds]   = useState(0);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [hasChunks, setHasChunks] = useState(false);
+  const [phrase, setPhrase]         = useState<string>("");
+  const [state, setState]           = useState<RecordingState>("idle");
+  const [seconds, setSeconds]       = useState(0);
+  const [errorMsg, setErrorMsg]     = useState("");
+  const [hasChunks, setHasChunks]   = useState(false);
+  // Mensaje informativo cuando la grabación se acepta pero no genera score todavía.
+  const [retryMsg, setRetryMsg]     = useState("");
 
-  const mediaRef  = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaRef       = useRef<MediaRecorder | null>(null);
+  const chunksRef      = useRef<Blob[]>([]);
+  const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Web Audio API — análisis de energía en tiempo real
+  const audioCtxRef    = useRef<AudioContext | null>(null);
+  const analyserRef    = useRef<AnalyserNode | null>(null);
+  const energyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // true si en algún momento durante la grabación se detectó energía de voz real.
+  const hasVoiceRef    = useRef(false);
 
   useEffect(() => {
     driverApi
@@ -38,35 +50,68 @@ export function VoiceCheckIn({ onDone }: Props) {
   useEffect(() => {
     return () => {
       stopTimer();
+      stopEnergyAnalysis();
       mediaRef.current?.stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  const stopEnergyAnalysis = () => {
+    if (energyTimerRef.current) { clearInterval(energyTimerRef.current); energyTimerRef.current = null; }
+    if (analyserRef.current)    { analyserRef.current.disconnect(); analyserRef.current = null; }
+    if (audioCtxRef.current)    { audioCtxRef.current.close();      audioCtxRef.current = null; }
   };
 
   const startRecording = async () => {
     setErrorMsg("");
+    setRetryMsg("");
     chunksRef.current = [];
     setHasChunks(false);
+    hasVoiceRef.current = false; // resetear antes de cada nueva grabación
+
     try {
       const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       mediaRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-          setHasChunks(true);
-        }
+        if (e.data.size > 0) { chunksRef.current.push(e.data); setHasChunks(true); }
       };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-      };
+      recorder.onstop = () => stream.getTracks().forEach((t) => t.stop());
+
+      // ── Análisis de energía RMS en tiempo real ─────────────────────────────
+      // Chrome no activa DTX por defecto → los frames de silencio y voz tienen
+      // el mismo tamaño en bytes, haciendo inútil el VAD basado en frames EBML.
+      // La Web Audio API mide la amplitud real del micrófono, sin importar cómo
+      // Opus comprima los datos. Detecta micrófono muteado con 100 % de precisión.
+      try {
+        type AudioCtxCtor = typeof AudioContext;
+        const Ctor = (window.AudioContext ??
+          (window as unknown as { webkitAudioContext: AudioCtxCtor }).webkitAudioContext);
+        const ctx = new Ctor();
+        audioCtxRef.current = ctx;
+
+        const source   = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const buf = new Float32Array(analyser.fftSize);
+        energyTimerRef.current = setInterval(() => {
+          analyser.getFloatTimeDomainData(buf);
+          // RMS = raíz cuadrada de la media de los cuadrados de las muestras
+          const rms = Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length);
+          if (rms > VOICE_RMS_THRESHOLD) hasVoiceRef.current = true;
+        }, 100); // muestrear cada 100 ms
+      } catch {
+        // Web Audio API no disponible (contexto seguro requerido, etc.).
+        // Fallback: dejar pasar; el VAD del backend actuará como segunda barrera.
+        hasVoiceRef.current = true;
+      }
 
       recorder.start(100);
       setState("recording");
@@ -79,35 +124,59 @@ export function VoiceCheckIn({ onDone }: Props) {
 
   const stopRecording = () => {
     stopTimer();
+    stopEnergyAnalysis();
     mediaRef.current?.stop();
     setState("recorded");
+
+    // Mostrar error de inmediato si no se detectó voz durante la grabación,
+    // sin esperar a que el chofer presione "Enviar".
+    if (!hasVoiceRef.current) {
+      setErrorMsg(INVALID_AUDIO_MSG);
+    }
   };
 
   const handleUpload = async () => {
     if (chunksRef.current.length === 0) return;
 
+    // Guard 1: sin energía de voz detectada en tiempo real
+    if (!hasVoiceRef.current) {
+      setErrorMsg(INVALID_AUDIO_MSG);
+      return;
+    }
+
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
 
-    // Validación local: silencio o grabación vacía producen blobs muy pequeños.
+    // Guard 2: blob demasiado pequeño (silencio con DTX activo)
     if (blob.size < MIN_AUDIO_BYTES) {
       setErrorMsg(INVALID_AUDIO_MSG);
-      return; // el estado se mantiene en "recorded" para permitir reintentar
+      return;
     }
 
     setState("uploading");
     setErrorMsg("");
+    setRetryMsg("");
     try {
-      await driverApi.uploadVoice(blob);
-      // Éxito: avanzar directamente a la prueba PVT sin mostrar estadísticas.
-      onDone();
+      const result = await driverApi.uploadVoice(blob);
+      if (result.drift_score === null) {
+        // La grabación fue aceptada pero no pudo generar un score comparativo
+        // (sin línea base previa o audio de muy baja calidad).
+        // Pedir que grabe nuevamente para obtener un análisis válido.
+        setState("idle");
+        setHasChunks(false);
+        setRetryMsg(
+          "No se pudo obtener un puntaje de la grabación. " +
+          "Por favor, leé la frase en voz alta nuevamente."
+        );
+      } else {
+        onDone();
+      }
     } catch (err: unknown) {
-      const serverMsg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
-      // El backend devuelve 400 cuando detecta silencio o audio inválido.
-      setErrorMsg(serverMsg.includes("inválida") || serverMsg.includes("vacío")
-        ? INVALID_AUDIO_MSG
+      const respData = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+      const isInvalidAudio = respData?.error === "INVALID_AUDIO";
+      setErrorMsg(isInvalidAudio && respData?.message
+        ? respData.message
         : "No se pudo enviar el audio. Intentá de nuevo.");
-      setState("recorded"); // habilitar el botón "Enviar audio" para reintentar
+      setState("recorded");
     }
   };
 
@@ -169,7 +238,7 @@ export function VoiceCheckIn({ onDone }: Props) {
               </button>
             ) : null}
 
-            {state === "recorded" && hasChunks && (
+            {state === "recorded" && hasChunks && !errorMsg && (
               <button
                 onClick={handleUpload}
                 className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
@@ -187,6 +256,9 @@ export function VoiceCheckIn({ onDone }: Props) {
             )}
           </div>
 
+          {retryMsg && (
+            <p className="text-sm text-amber-400 text-center leading-snug">{retryMsg}</p>
+          )}
           {errorMsg && (
             <p className="text-sm text-rose-400 text-center leading-snug">{errorMsg}</p>
           )}

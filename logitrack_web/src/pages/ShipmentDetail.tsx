@@ -28,6 +28,7 @@ import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } 
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
+import PaymentMethodsPanel from '../components/PaymentMethodsPanel';
 import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
@@ -288,6 +289,15 @@ export function ShipmentDetail() {
     branchApi.list().then(setBranches);
     organizationApi.get().then(setOrgConfig).catch(() => {});
     systemConfigApi.get().then((cfg) => setMaxDeliveryAttempts(cfg.max_delivery_attempts)).catch(() => {});
+  }, [trackingId, reload]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:pickup-success', handler);
+    return () => window.removeEventListener('chatbot:pickup-success', handler);
   }, [trackingId, reload]);
 
   useEffect(() => {
@@ -724,7 +734,13 @@ export function ShipmentDetail() {
                       ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
                       : <InfoRow label="Ventana horaria" value={twLabel} />;
                   })()}
-                  <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
+                  {(() => {
+                    const changedByChat = events.some(ev => ev.notes === "Destinatario solicitó retiro en sucursal vía chatbot");
+                    const dmLabel = (shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)";
+                    return changedByChat
+                      ? <InfoRowEx label="Método de entrega" value="Retiro en sucursal" original="Última milla (a domicilio)" corrected />
+                      : <InfoRow label="Método de entrega" value={dmLabel} />;
+                  })()}
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
@@ -2376,10 +2392,7 @@ function PendingPaymentPanel({
 }) {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [reverting, setReverting] = useState(false);
-  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState("");
-  const [showPaymentQR, setShowPaymentQR] = useState(false);
-  const [paymentQRBase64, setPaymentQRBase64] = useState("");
 
   useEffect(() => {
     paymentApi.get(trackingId).then(setPayment).catch(() => {});
@@ -2401,75 +2414,35 @@ function PendingPaymentPanel({
   return (
     <div style={{
       background: "#fffbeb", border: "1px solid #fcd34d",
-      borderRadius: 10, padding: 20, marginBottom: 16,
+      borderRadius: 12, padding: 20, marginBottom: 16,
     }}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e", marginBottom: 8 }}>
-        💳 Pago pendiente
-      </div>
-      {payment ? (
-        <>
-          <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>
+          💳 Pago pendiente
+        </div>
+        {payment && (
+          <div style={{ fontSize: 13, color: "#78350f" }}>
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
             </strong>
-          </p>
-          {payment.init_point && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-              <CopyPaymentLink url={payment.init_point} />
-              <button
-                onClick={async () => {
-                  try {
-                    const { qr_code_base64 } = await paymentApi.getQR(trackingId);
-                    setPaymentQRBase64(qr_code_base64);
-                    setShowPaymentQR(true);
-                  } catch {
-                    setError("No se pudo generar el QR de pago.");
-                  }
-                }}
-                style={{
-                  background: "#fff", color: "#009ee3",
-                  border: "1px solid #009ee3", borderRadius: 8,
-                  padding: "8px 18px", fontWeight: 700, fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                📱 Mostrar QR de cobro
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>Cargando información de pago…</p>
-      )}
-      {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {payment?.simulate_enabled && (
-          <button
-            onClick={async () => {
-              setSimulating(true);
-              setError("");
-              try {
-                const result = await paymentApi.simulateApproved(trackingId);
-                window.location.href = `/shipments/${result.tracking_id}`;
-              } catch (e: unknown) {
-                const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-                setError(msg ?? "Error al simular pago.");
-                setSimulating(false);
-              }
-            }}
-            disabled={simulating}
-            style={{
-              border: "1px dashed #86efac", borderRadius: 8,
-              background: "#f0fdf4", color: "#16a34a",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              padding: "8px 16px",
-              opacity: simulating ? 0.6 : 1,
-            }}
-          >
-            {simulating ? "Procesando…" : "⚡ Simular pago aprobado (demo)"}
-          </button>
+          </div>
         )}
+      </div>
+      {payment ? (
+        <PaymentMethodsPanel
+          payment={payment}
+          trackingId={trackingId}
+          onCashConfirmed={(newTrackingId) => {
+            window.location.href = `/shipments/${newTrackingId}`;
+          }}
+          onError={setError}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: "#78350f" }}>Cargando información de pago…</p>
+      )}
+      {error && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a", display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={handleBackToDraft}
           disabled={reverting}
@@ -2481,42 +2454,9 @@ function PendingPaymentPanel({
             opacity: reverting ? 0.6 : 1,
           }}
         >
-          {reverting ? "Procesando…" : "Volver a borrador"}
+          {reverting ? "Procesando…" : "← Volver a borrador"}
         </button>
       </div>
-      <ShipmentQRModal
-        isOpen={showPaymentQR}
-        onClose={() => setShowPaymentQR(false)}
-        trackingId={trackingId}
-        qrCodeBase64={paymentQRBase64}
-        title="💳 QR de cobro"
-        subtitle="El remitente puede escanear este código con su celular para completar el pago."
-        variant="payment"
-      />
     </div>
-  );
-}
-
-function CopyPaymentLink({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(url).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      style={{
-        background: copied ? "#f0fdf4" : "#fff",
-        color: copied ? "#16a34a" : "#374151",
-        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
-        borderRadius: 8, padding: "8px 18px",
-        fontWeight: 600, fontSize: 13, cursor: "pointer",
-        transition: "all 0.2s",
-      }}
-    >
-      {copied ? "✓ Copiado" : "Copiar link de pago"}
-    </button>
   );
 }

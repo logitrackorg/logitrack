@@ -1,0 +1,58 @@
+{
+  "12|2026-05-23": {
+    "driver_id": "12",
+    "date": "2026-05-23",
+    "horas_sueno": 3,
+    "kss_level": 6,
+    "recorded_at": "2026-05-23T12:56:59.174843-03:00",
+    "voice_metrics": {
+      "pitch_mean": 140.03522495329014,
+      "pitch_range": 55.272154160976385,
+      "energy_rms": 0.3865196911774333,
+      "speech_rate": 4.286676256270551,
+      "pause_ratio": 0.254121589934978
+    },
+    "drift_score": 16,
+    "baseline_voice": {
+      "pitch_mean": 187.94958875466398,
+      "pitch_range": 56.1443074191272,
+      "energy_rms": 0.3925237881149444,
+      "speech_rate": 5.460854972050731,
+      "pause_ratio": 0.2281517789015861
+    },
+    "pvt_metrics": {
+      "latencia_promedio_ms": 1877,
+      "aciertos": 3,
+      "errores": 0,
+      "recorded_at": "2026-05-23T12:57:38.28658-03:00"
+    }
+  },
+  "15|2026-05-23": {
+    "driver_id": "15",
+    "date": "2026-05-23",
+    "horas_sueno": 8,
+    "kss_level": 2,
+    "recorded_at": "2026-05-23T12:54:35.505139-03:00",
+    "voice_metrics": {
+      "pitch_mean": 196.31517999821952,
+      "pitch_range": 24.914637896244706,
+      "energy_rms": 0.5818113785620482,
+      "speech_rate": 3.0108587273858176,
+      "pause_ratio": 0.22509158190220613
+    },
+    "drift_score": 34,
+    "baseline_voice": {
+      "pitch_mean": 192.7054367089588,
+      "pitch_range": 30.5932958878805,
+      "energy_rms": 0.37578247092725997,
+      "speech_rate": 4.611252323026947,
+      "pause_ratio": 0.16807369913592976
+    },
+    "pvt_metrics": {
+      "latencia_promedio_ms": 702,
+      "aciertos": 5,
+      "errores": 0,
+      "recorded_at": "2026-05-23T12:55:15.803167-03:00"
+    }
+  }
+}

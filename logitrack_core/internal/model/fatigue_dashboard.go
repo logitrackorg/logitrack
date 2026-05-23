@@ -19,6 +19,7 @@ type DriverFatigueStatus struct {
 	DriverID     string          `json:"driver_id"`
 	FullName     string          `json:"full_name"`
 	Username     string          `json:"username"`
+	DriverType   DriverType      `json:"driver_type"`
 	CheckinToday bool            `json:"checkin_today"`
 	RiskScore    *int            `json:"risk_score"`    // nil when no check-in today
 	RiskLevel    DriverRiskLevel `json:"risk_level"`    // "pendiente" when no check-in today

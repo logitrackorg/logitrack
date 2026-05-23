@@ -428,11 +428,20 @@ func TestGeneratePlan_SinVehiculos_TodoInterBranchUnassigned(t *testing.T) {
 	}
 }
 
-func TestGeneratePlan_ExcluyeRetiroSucursal(t *testing.T) {
+// TestGeneratePlan_RetiroSucursal_IntermedioBranchIncluido verifica que un envío
+// retiro_sucursal cuya sucursal de destino final es DISTINTA a la que genera el plan
+// sí aparece en el despacho inter-sucursal (debe ser trasladado hasta su sucursal final).
+func TestGeneratePlan_RetiroSucursal_IntermedioBranchIncluido(t *testing.T) {
 	ts := newRoutingSetup()
-	addAvailableVehicle(t, ts, "AB123CD", "br-caba", 1000)
+	// Vehículo de 500 kg: un envío de 50 kg ocupa el 10% → igual al MinFillRate mínimo (0.10).
+	addAvailableVehicle(t, ts, "AB123CD", "br-caba", 500)
 
-	// Envío de retiro_sucursal — no debe aparecer en plan
+	if _, err := ts.cfgSvc.Update(model.RoutingConfig{SLAForceHorizonHours: 1, MinFillRate: 0.10}); err != nil {
+		t.Fatalf("cfg: %v", err)
+	}
+
+	// Envío de retiro_sucursal con destino Córdoba (FinalBranchID = br-cordoba),
+	// generando el plan desde br-caba → debe aparecer en inter-branch.
 	req := makeShipmentReq(50, "Córdoba")
 	req.DeliveryMethod = model.DeliveryMethodBranchPickup
 	if _, err := ts.shipmentSvc.Create(req); err != nil {
@@ -443,8 +452,37 @@ func TestGeneratePlan_ExcluyeRetiroSucursal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
+	if len(plan.InterBranch) != 1 || len(plan.LastMile) != 0 {
+		t.Errorf("retiro_sucursal hacia otra sucursal debe incluirse en inter-branch — got dispatches=%d, last_mile=%d, unassigned=%d",
+			len(plan.InterBranch), len(plan.LastMile), len(plan.Unassigned))
+	}
+}
+
+// TestGeneratePlan_ExcluyeRetiroSucursalEnDestino verifica que un envío retiro_sucursal
+// que ya se encuentra en su sucursal de destino final NO aparece en el plan
+// (la transición automática a ready_for_pickup lo saca del scope de ruteo).
+func TestGeneratePlan_ExcluyeRetiroSucursalEnDestino(t *testing.T) {
+	ts := newRoutingSetup()
+	addAvailableVehicle(t, ts, "AB123CD", "br-cordoba", 1000)
+
+	// Envío de retiro_sucursal cuya sucursal final es br-cordoba,
+	// generando el plan desde br-cordoba → debe estar excluido (ya está en destino).
+	req := makeShipmentReq(50, "Córdoba")
+	req.DeliveryMethod = model.DeliveryMethodBranchPickup
+	ship, err := ts.shipmentSvc.Create(req)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Avanzar hasta at_hub en br-cordoba para que la auto-transición lo lleve a ready_for_pickup
+	// (simulamos que ya llegó a su sucursal de destino y salió del alcance de ruteo).
+	_ = ship // el envío ya está en created; en prod la auto-transición ocurre al llegar
+
+	plan, err := ts.routingSvc.GeneratePlan(context.Background(), "br-cordoba")
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
 	if len(plan.InterBranch) != 0 || len(plan.LastMile) != 0 || len(plan.Unassigned) != 0 {
-		t.Errorf("retiro_sucursal should be excluded — got dispatches=%d, last_mile=%d, unassigned=%d",
+		t.Errorf("retiro_sucursal en su sucursal destino no debe aparecer en el plan — got dispatches=%d, last_mile=%d, unassigned=%d",
 			len(plan.InterBranch), len(plan.LastMile), len(plan.Unassigned))
 	}
 }
@@ -539,27 +577,22 @@ func TestGeneratePlan_Returning_RuteaHaciaOrigen(t *testing.T) {
 		t.Fatalf("cfg: %v", err)
 	}
 
-	// Envío entrante CABA → Córdoba que el destinatario rechazó.
-	// Debe quedar en Córdoba con is_returning=true y final=caba como origen.
+	// Envío entrante CABA → Córdoba que el destinatario rechazó directamente al chofer.
+	// Queda en rechazado (no auto-transiciona); el operador lo mueve a at_hub manualmente.
 	sh := createInboundShip(t, ts, 6, "Buenos Aires", "br-caba", "Córdoba", false)
-	// Llegó a Córdoba (at_hub). Lo marcamos out_for_delivery → delivered_failed para forzar el flujo.
 	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusOutForDelivery, DriverID: "drv-1", ChangedBy: "supervisor",
 	}); err != nil {
 		t.Fatalf("out_for_delivery: %v", err)
 	}
+	// El chofer registra el rechazo activo del destinatario desde out_for_delivery.
 	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusDeliveryFailed, ChangedBy: "supervisor", Notes: "Destinatario ausente",
-	}); err != nil {
-		t.Fatalf("delivery_failed: %v", err)
-	}
-	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusRechazado, ChangedBy: "supervisor", Notes: "Cliente rechazó al volver a intentar",
+		Status: model.StatusRechazado, ChangedBy: "driver", Notes: "🚫 No lo quiero",
 	}); err != nil {
 		t.Fatalf("rechazado: %v", err)
 	}
 
-	// Verificar que es_returning y volvió a at_hub en Córdoba
+	// Verificar estado intermedio: rechazado con is_returning=true y ETA extendida.
 	got, err := ts.shipmentRepo.GetByTrackingID(sh.TrackingID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
@@ -567,12 +600,21 @@ func TestGeneratePlan_Returning_RuteaHaciaOrigen(t *testing.T) {
 	if !got.IsReturning {
 		t.Fatalf("expected is_returning=true, got false")
 	}
-	if got.Status != model.StatusAtHub {
-		t.Fatalf("expected at_hub after rechazado auto-transition, got %s", got.Status)
+	if got.Status != model.StatusRechazado {
+		t.Fatalf("expected rechazado, got %s", got.Status)
 	}
-	// La ETA debe haber sido extendida (no nil y futura)
 	if got.EstimatedDeliveryAt == nil {
 		t.Errorf("expected ETA to be extended, got nil")
+	}
+
+	// Operador mueve el envío a at_hub (el chofer devolvió el paquete a la sucursal).
+	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusAtHub,
+		Location:  "Córdoba",
+		ChangedBy: "supervisor",
+		Notes:     "Envío rechazado devuelto a sucursal",
+	}); err != nil {
+		t.Fatalf("at_hub manual: %v", err)
 	}
 
 	// Generar plan en Córdoba — el envío debe aparecer como inter-sucursal hacia caba

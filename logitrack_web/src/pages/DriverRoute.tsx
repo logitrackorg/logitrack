@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   AlertTriangle,
+  Ban,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -26,6 +27,7 @@ import { zoneApi, type Zone } from "../api/zones";
 import { isInDangerZone } from "../utils/pointInPolygon";
 import {
   FAILED_REASONS,
+  REJECTED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
   recipientView,
@@ -47,16 +49,39 @@ export function DriverRoute() {
 
   // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
   const [midRouteCheckin, setMidRouteCheckin] = useState(false);
+  // Misfires capturados en el momento en que se activa el overlay, para mostrarlo
+  // en el toast de "Saltar test" dentro de KssCheckIn.
+  const [checkinMisfires, setCheckinMisfires] = useState(0);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
   const [failedShipment, setFailedShipment] = useState<Shipment | null>(null);
+  const [rejectedShipment, setRejectedShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState("");
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
+  const [rejectedReason, setRejectedReason] = useState<string>("");
+  const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
+
+  // US4 global: contador de misfires para toda la vista de ruta.
+  // Cualquier click que no sea detenido por e.stopPropagation() en un botón
+  // válido burbujea hasta document y suma +1. Se usa useRef para evitar
+  // re-renders en cada tap y para leer el valor corriente en funciones async.
+  const misfireRef = useRef(0);
+  // Ref espejo de midRouteCheckin para el listener (evita closure stale).
+  const midRouteCheckinRef = useRef(false);
+  useEffect(() => { midRouteCheckinRef.current = midRouteCheckin; }, [midRouteCheckin]);
+  // Listener global: monta/desmonta con el componente (cleanup en el return).
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (!midRouteCheckinRef.current) misfireRef.current++;
+    };
+    document.addEventListener("click", handleGlobalClick);
+    return () => document.removeEventListener("click", handleGlobalClick);
+  }, []);
 
   const load = () =>
     driverApi
@@ -71,24 +96,39 @@ export function DriverRoute() {
   const closeSheets = () => {
     setDeliverShipment(null);
     setFailedShipment(null);
+    setRejectedShipment(null);
     setRecipientDni("");
     setFailedReason("");
     setFailedNotes("");
+    setRejectedReason("");
+    setRejectedNotes("");
   };
 
-  // Consulta el gate de re-test. Si el chofer debe hacer las pruebas de nuevo,
-  // activa el overlay antes de refrescar la lista. En caso de error de red,
-  // deja pasar para no bloquear al chofer.
+  // Secuencia post-entrega:
+  //  1) Lee los misfires globales acumulados en misfireRef
+  //  2) Consulta el gate enviando ese conteo al backend
+  //  3) Resetea el contador local y el registro del backend
+  //  4) Si se requiere test: pausa el simulador + despliega el overlay
+  //  5) Si no: reanuda el simulador y refresca la ruta
   const checkReTestGate = async () => {
+    const misfires = misfireRef.current;
+    let requireTest = false;
     try {
-      const eligibility = await driverApi.getTestEligibility();
-      if (eligibility.require_test) {
-        setMidRouteCheckin(true);
-        return;
-      }
+      const eligibility = await driverApi.getTestEligibility({ misfires });
+      requireTest = eligibility.require_test;
     } catch {
       // error de red → continuar sin bloquear
     }
+    const capturedMisfires = misfireRef.current;
+    misfireRef.current = 0;                   // resetear contador local
+    driverApi.resetMisfires().catch(() => {}); // resetear historial backend
+    if (requireTest) {
+      setCheckinMisfires(capturedMisfires); // guardar para el toast de skip
+      pause();                  // detener el camión inmediatamente
+      setMidRouteCheckin(true); // desplegar overlay bloqueante
+      return;
+    }
+    play();
     load();
   };
 
@@ -103,9 +143,6 @@ export function DriverRoute() {
         recipient_dni: recipientDni.trim(),
       });
       closeSheets();
-      // Reanudar simulación: el período de gracia (3 s) evita re-pausa inmediata
-      // mientras load() actualiza la lista de puntos de entrega pendientes.
-      play();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -129,12 +166,33 @@ export function DriverRoute() {
         notes: note,
       });
       closeSheets();
-      // Reanudar simulación tras registrar intento fallido.
-      play();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setActionError(msg ?? "No se pudo registrar el intento fallido.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRejected = async () => {
+    if (!rejectedShipment || !rejectedReason) return;
+    const reasonEntry = REJECTED_REASONS.find((r) => r.id === rejectedReason);
+    const reasonLabel = reasonEntry ? `${reasonEntry.emoji} ${reasonEntry.label}` : rejectedReason;
+    const note = [reasonLabel, rejectedNotes.trim()].filter(Boolean).join(" — ");
+    setSubmitting(true);
+    setActionError("");
+    try {
+      await shipmentApi.updateStatus(rejectedShipment.tracking_id, {
+        status: "rechazado",
+        location: "",
+        notes: note,
+      });
+      closeSheets();
+      await checkReTestGate();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setActionError(msg ?? "No se pudo registrar el rechazo.");
     } finally {
       setSubmitting(false);
     }
@@ -177,8 +235,10 @@ export function DriverRoute() {
     return (
       <KssCheckIn
         driverId={user.id}
+        misfireCount={checkinMisfires}
         onDone={() => {
           setMidRouteCheckin(false);
+          play(); // reanudar simulación recién aquí, cuando el check-in terminó
           load();
         }}
       />
@@ -195,14 +255,16 @@ export function DriverRoute() {
 
   const pendingList = data.shipments.filter((s) => s.status === "out_for_delivery");
   const completedList = data.shipments.filter(
-    (s) => s.status === "delivered" || s.status === "delivery_failed",
+    (s) => s.status === "delivered" || s.status === "delivery_failed" || s.status === "rechazado",
   );
   const total = data.shipments.length;
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  const hasDeliveryFailedRemaining = data.shipments.some((s) => s.status === "delivery_failed");
+  const hasDeliveryFailedRemaining = data.shipments.some(
+    (s) => s.status === "delivery_failed" || s.status === "rechazado",
+  );
   const routeEffectivelyDone =
     routeStatus === "finalizada" ||
     (routeStatus === "en_curso" && pending === 0 && !hasDeliveryFailedRemaining && total > 0);
@@ -371,7 +433,13 @@ export function DriverRoute() {
               origin={origin}
               userLocation={userLocation ?? undefined}
               simulationMode={simulationMode}
-              simulationControls={{ isPaused, pause, play, reset, onExit: () => { setSimActive(false); setSpeedMultiplier(1); }, speedMultiplier, onCycleSpeed: cycleSpeedMultiplier }}
+              simulationControls={{
+                isPaused, pause, play, reset,
+                onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
+                speedMultiplier,
+                onCycleSpeed: cycleSpeedMultiplier,
+                onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
+              }}
               zones={zones}
               onRouteInfoChange={setRouteInfo}
               onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
@@ -400,8 +468,10 @@ export function DriverRoute() {
                     shipment={shipment}
                     order={tab === "pendientes" ? idx + 1 : undefined}
                     canAct={canAct && tab === "pendientes"}
+                    getMisfires={() => misfireRef.current}
                     onDeliver={() => setDeliverShipment(shipment)}
                     onFailed={() => setFailedShipment(shipment)}
+                    onRejected={() => setRejectedShipment(shipment)}
                     onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
                   />
                 ))}
@@ -419,8 +489,9 @@ export function DriverRoute() {
           userLocation={userLocation ?? undefined}
           routeInfo={routeInfo}
           canAct={canAct}
-          onDeliver={() => nextShipment && setDeliverShipment(nextShipment)}
-          onFailed={() => nextShipment && setFailedShipment(nextShipment)}
+          onDeliver={() => { if (nextShipment) setDeliverShipment(nextShipment); }}
+          onFailed={() => { if (nextShipment) setFailedShipment(nextShipment); }}
+          onRejected={() => { if (nextShipment) setRejectedShipment(nextShipment); }}
         />
       )}
 
@@ -445,6 +516,17 @@ export function DriverRoute() {
         onNotesChange={setFailedNotes}
         submitting={submitting}
         onConfirm={handleFailedAttempt}
+      />
+      <RejectedSheet
+        open={!!rejectedShipment}
+        onClose={() => { setRejectedShipment(null); setRejectedReason(""); setRejectedNotes(""); }}
+        shipment={rejectedShipment}
+        reason={rejectedReason}
+        onReasonChange={setRejectedReason}
+        notes={rejectedNotes}
+        onNotesChange={setRejectedNotes}
+        submitting={submitting}
+        onConfirm={handleRejected}
       />
     </div>
   );
@@ -491,53 +573,37 @@ function ShipmentCard({
   shipment,
   order,
   canAct,
+  getMisfires,
   onDeliver,
   onFailed,
+  onRejected,
   onOpen,
 }: {
   shipment: Shipment;
   order?: number;
   canAct: boolean;
+  getMisfires: () => number;
   onDeliver: () => void;
   onFailed: () => void;
+  onRejected: () => void;
   onOpen: () => void;
 }) {
-  // US4: Tactile event tracking — refs to avoid re-renders.
-  // renderTimeRef is set in an effect (not the initializer) to satisfy the
-  // react-hooks/purity rule: Date.now() must not be called during render.
+  // Momento en que la card se montó — para calcular reaction_time_ms.
   const renderTimeRef = useRef<number>(0);
-  const misfireCountRef = useRef<number>(0);
-  useEffect(() => {
-    renderTimeRef.current = Date.now();
-  }, []); // runs once after mount — records when the card becomes visible
+  useEffect(() => { renderTimeRef.current = Date.now(); }, []);
 
-  /** Fire async touch event to backend without blocking the UI. */
+  /** Envía el evento táctil al backend (fire-and-forget). */
   const fireTouchEvent = (action: TouchEventPayload["action"]) => {
     driverApi.submitTouchEvent({
       tracking_id: shipment.tracking_id,
       action,
       reaction_time_ms: Date.now() - renderTimeRef.current,
-      misfires: misfireCountRef.current,
-    }).catch(() => {}); // silent failure — never block delivery workflow
-  };
-
-  /**
-   * Detect misfires: pointer down on the action area that doesn't land on
-   * either "Entregar" or "No entregado". Uses data-action attributes set
-   * on the buttons themselves.
-   */
-  const handleActionAreaPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    if (
-      !target.closest('[data-action="deliver"]') &&
-      !target.closest('[data-action="failed"]')
-    ) {
-      misfireCountRef.current++;
-    }
+      misfires: getMisfires(), // leer el contador global del padre
+    }).catch(() => {});
   };
 
   const handleDeliverClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // no burbujar al listener global → no cuenta como misfire
     fireTouchEvent("entregado");
     onDeliver();
   };
@@ -548,10 +614,20 @@ function ShipmentCard({
     onFailed();
   };
 
+  const handleRejectedClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fireTouchEvent("no_entregado");
+    onRejected();
+  };
+
   const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
-  const isCompleted = shipment.status === "delivered" || shipment.status === "delivery_failed";
+  const isCompleted =
+    shipment.status === "delivered" ||
+    shipment.status === "delivery_failed" ||
+    shipment.status === "rechazado";
   const isFailed = shipment.status === "delivery_failed";
   const isDelivered = shipment.status === "delivered";
+  const isRejected = shipment.status === "rechazado";
 
   const cor = shipment.corrections ?? {};
   const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
@@ -593,6 +669,12 @@ function ShipmentCard({
                 <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
                   <XCircle className="w-3 h-3" />
                   Sin entregar
+                </span>
+              )}
+              {isRejected && (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                  <Ban className="w-3 h-3" />
+                  Rechazado
                 </span>
               )}
             </div>
@@ -650,28 +732,31 @@ function ShipmentCard({
           </div>
 
           {canAct && (
-            /* US4: onPointerDown on the action container detects misfires */
-            <div
-              className="grid grid-cols-2 gap-2 mt-2"
-              onPointerDown={handleActionAreaPointerDown}
-            >
+            <>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  onClick={handleDeliverClick}
+                  className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Entregar
+                </button>
+                <button
+                  onClick={handleFailedClick}
+                  className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+                >
+                  <XCircle className="w-4 h-4" />
+                  No entregado
+                </button>
+              </div>
               <button
-                data-action="deliver"
-                onClick={handleDeliverClick}
-                className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+                onClick={handleRejectedClick}
+                className="w-full mt-2 h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Entregar
+                <Ban className="w-4 h-4" />
+                Rechazado por destinatario
               </button>
-              <button
-                data-action="failed"
-                onClick={handleFailedClick}
-                className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-              >
-                <XCircle className="w-4 h-4" />
-                No entregado
-              </button>
-            </div>
+            </>
           )}
 
           <p className="mt-3 text-[10px] font-mono text-slate-400 text-center">{shipment.tracking_id}</p>
@@ -744,13 +829,13 @@ function DeliverSheet({
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
         <button
-          onClick={onConfirm}
+          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!dni.trim() || submitting}
           className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
@@ -828,13 +913,13 @@ function FailedSheet({
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
-          onClick={onClose}
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
         <button
-          onClick={onConfirm}
+          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!canSubmit || submitting}
           className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
@@ -846,10 +931,99 @@ function FailedSheet({
 }
 
 
+function RejectedSheet({
+  open,
+  onClose,
+  shipment,
+  reason,
+  onReasonChange,
+  notes,
+  onNotesChange,
+  submitting,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shipment: Shipment | null;
+  reason: string;
+  onReasonChange: (s: string) => void;
+  notes: string;
+  onNotesChange: (s: string) => void;
+  submitting: boolean;
+  onConfirm: () => void;
+}) {
+  if (!shipment) return null;
+  const { name } = recipientView(shipment);
+  const requiresNotes = reason === "otro";
+  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Rechazo por destinatario"
+      description={`${name} rechazó el envío`}
+    >
+      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+        Motivo del rechazo
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {REJECTED_REASONS.map((r) => {
+          const active = reason === r.id;
+          return (
+            <button
+              key={r.id}
+              onClick={() => onReasonChange(r.id)}
+              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors flex flex-col items-center justify-center gap-0.5 px-2 ${
+                active
+                  ? "border-amber-500 bg-amber-50 text-amber-900"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <span className="text-lg leading-none">{r.emoji}</span>
+              <span className="text-xs leading-tight text-center">{r.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
+      </label>
+      <textarea
+        value={notes}
+        onChange={(e) => onNotesChange(e.target.value)}
+        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
+        rows={2}
+        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none"
+      />
+
+      <div className="grid grid-cols-2 gap-2 mt-5">
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
+          disabled={!canSubmit || submitting}
+          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? "Guardando…" : "Confirmar rechazo"}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+
 function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
   const navigate = useNavigate();
   const done = data.shipments.filter((s) => s.status === "delivered").length;
-  const failed = data.shipments.filter((s) => s.status === "delivery_failed").length;
+  const failed = data.shipments.filter(
+    (s) => s.status === "delivery_failed" || s.status === "rechazado",
+  ).length;
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
@@ -889,15 +1063,27 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
         {data.shipments.map((shipment) => {
           const { name } = recipientView(shipment);
           const delivered = shipment.status === "delivered";
+          const rejected = shipment.status === "rechazado";
           return (
             <Card
               key={shipment.tracking_id}
               onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
               className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-3"
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${delivered ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                }`}>
-                {delivered ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                delivered
+                  ? "bg-emerald-100 text-emerald-700"
+                  : rejected
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-rose-100 text-rose-700"
+              }`}>
+                {delivered ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : rejected ? (
+                  <Ban className="w-4 h-4" />
+                ) : (
+                  <XCircle className="w-4 h-4" />
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>

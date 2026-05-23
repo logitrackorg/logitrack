@@ -53,6 +53,7 @@ export interface DriverFatigueStatus {
   driver_id: string;
   full_name: string;
   username: string;
+  driver_type: "ultima_milla" | "intersucursal" | "";
   checkin_today: boolean;
   risk_score: number | null;
   risk_level: RiskLevel;
