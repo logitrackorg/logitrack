@@ -43,6 +43,8 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(sh.DeliveredAt.In(clock.LocalTZ)).Equal(routeDate)
+	case model.StatusRechazado:
+		return true
 	}
 	return false
 }
