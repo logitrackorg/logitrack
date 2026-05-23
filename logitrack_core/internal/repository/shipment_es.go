@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -500,7 +501,7 @@ func (r *eventSourcedShipmentRepository) RequestPickup(cmd RequestPickupCmd) (mo
 	// Validar que se puede solicitar retiro
 	canPickup, reason := shipment.CanRequestPickup()
 	if !canPickup {
-		return model.Shipment{}, fmt.Errorf(reason)
+		return model.Shipment{}, errors.New(reason)
 	}
 
 	// Crear evento
@@ -539,7 +540,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	// Validar que se puede reprogramar
 	canReschedule, reason := shipment.CanReschedule()
 	if !canReschedule {
-		return model.Shipment{}, fmt.Errorf(reason)
+		return model.Shipment{}, errors.New(reason)
 	}
 
 	// Validar que la fecha está dentro del rango permitido
@@ -605,7 +606,7 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 	// Validar que se puede cancelar
 	canCancel, reason := shipment.CanCancel()
 	if !canCancel {
-		return model.Shipment{}, fmt.Errorf(reason)
+		return model.Shipment{}, errors.New(reason)
 	}
 
 	// Crear evento
