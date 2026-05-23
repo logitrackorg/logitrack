@@ -31,11 +31,12 @@ func (h *OrganizationHandler) Get(c *gin.Context) {
 }
 
 type updateOrgRequest struct {
-	Name    string `json:"name"`
-	CUIT    string `json:"cuit"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
-	Email   string `json:"email"`
+	Name          string `json:"name"`
+	CUIT          string `json:"cuit"`
+	Address       string `json:"address"`
+	Phone         string `json:"phone"`
+	Email         string `json:"email"`
+	BusinessHours string `json:"business_hours"`
 }
 
 func (h *OrganizationHandler) Update(c *gin.Context) {
@@ -53,11 +54,12 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	}
 
 	cfg := model.OrganizationConfig{
-		Name:    req.Name,
-		CUIT:    req.CUIT,
-		Address: req.Address,
-		Phone:   req.Phone,
-		Email:   req.Email,
+		Name:          req.Name,
+		CUIT:          req.CUIT,
+		Address:       req.Address,
+		Phone:         req.Phone,
+		Email:         req.Email,
+		BusinessHours: req.BusinessHours,
 	}
 
 	result, err := h.svc.Update(cfg, updatedBy)

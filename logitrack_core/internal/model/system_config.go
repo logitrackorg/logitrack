@@ -8,6 +8,9 @@ type SystemConfig struct {
 	// DraftPurgeDays is the number of days after expiration before personal data
 	// (name, DNI, email, phone, address) is irreversibly anonymized. Default: 30.
 	DraftPurgeDays int `json:"draft_purge_days"`
+	// PickupDeadlineDays is the number of days a shipment in ready_for_pickup can
+	// be held before being returned. 0 = no deadline (default). Range: 0–365.
+	PickupDeadlineDays int `json:"pickup_deadline_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -15,5 +18,6 @@ func DefaultSystemConfig() SystemConfig {
 		MaxDeliveryAttempts: 3,
 		DraftRetentionDays:  7,
 		DraftPurgeDays:      30,
+		PickupDeadlineDays:  0,
 	}
 }

@@ -184,6 +184,7 @@ func main() {
 	}, orgSvc)
 	if emailSvc != nil {
 		shipmentSvc.SetEmailService(emailSvc)
+		shipmentSvc.SetReadyForPickupEmailService(emailSvc)
 		log.Printf("[email] servicio SMTP habilitado — host: %s:%d", os.Getenv("SMTP_HOST"), smtpPort)
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")

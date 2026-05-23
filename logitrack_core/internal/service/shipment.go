@@ -127,6 +127,12 @@ type OutForDeliveryNotifier interface {
 	SendOutForDeliveryNotification(shipment model.Shipment)
 }
 
+// ReadyForPickupNotifier sends branch-pickup notifications to recipients.
+// Satisfied by *email.Service.
+type ReadyForPickupNotifier interface {
+	SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -137,14 +143,16 @@ type ShipmentService struct {
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
 	notifSvc     *NotificationService
-	emailSvc     EmailConfirmationSender
-	messagingSvc OutForDeliveryNotifier
+	emailSvc        EmailConfirmationSender
+	messagingSvc    OutForDeliveryNotifier
+	pickupEmailSvc  ReadyForPickupNotifier
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
 func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)        { s.emailSvc = svc }
-func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)     { s.messagingSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)           { s.emailSvc = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -899,6 +907,19 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
 		s.messagingSvc != nil {
 		go s.messagingSvc.SendOutForDeliveryNotification(updated)
+	}
+
+	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por email.
+	if targetStatus == model.StatusReadyForPickup && s.pickupEmailSvc != nil {
+		branch, _ := s.branchRepo.GetByID(updated.ReceivingBranchID)
+		var deadline *time.Time
+		if s.sysConfig != nil {
+			if days := s.sysConfig.Get().PickupDeadlineDays; days > 0 {
+				d := clock.Now().UTC().AddDate(0, 0, days)
+				deadline = &d
+			}
+		}
+		go s.pickupEmailSvc.SendReadyForPickupNotification(updated, branch, deadline)
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
