@@ -12,6 +12,7 @@ import (
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/mercadopago"
@@ -191,6 +192,21 @@ func main() {
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
 	}
+
+	// WhatsApp (Twilio) — deshabilitado cuando TWILIO_ACCOUNT_SID no está configurado.
+	messagingSvc := messaging.New(
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		os.Getenv("TRACK_BASE_URL"),
+	)
+	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc)
+	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
+		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
+	} else {
+		log.Println("[messaging] TWILIO_ACCOUNT_SID no configurado — WhatsApp deshabilitado")
+	}
+
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
