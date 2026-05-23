@@ -1,0 +1,91 @@
+logitrack_web/src/pages/SystemConfig.tsx
+  s_bb152406e624a3::t_c40ce1c7acc8c9 2
+logitrack_web/src/App.tsx
+  s_bb152406e624a3::t_a8f1149154d932 9
+  s_bb152406e624a3::t_fc1f2ed158d233 88,102
+  s_bb152406e624a3::t_7c9340d088a3e4 6-7
+  s_bb152406e624a3::t_1fc4d09a31295b 8,84-87,89-101,103-105,145-147,150-151,154-311,313
+logitrack_web/src/pages/UserProfile.tsx
+  s_bb152406e624a3::t_059b889ace04d1 3
+logitrack_web/src/pages/Dashboard.tsx
+  s_bb152406e624a3::t_488a24756a4ba4 3
+  s_bb152406e624a3::t_37e0c71a337144 121-143
+  s_bb152406e624a3::t_3abcf52df7a6d5 10
+logitrack_web/src/components/topbarContext.tsx
+  s_bb152406e624a3::t_621059b337c365 21-23,31-32
+  s_bb152406e624a3::t_06008a968645ce 1-20,24-30,33-57
+logitrack_web/src/pages/AccessLog.tsx
+  s_bb152406e624a3::t_cee0f99dfad533 2
+logitrack_web/src/pages/DraftList.tsx
+  s_bb152406e624a3::t_a52bb0f27b1afa 10
+  s_bb152406e624a3::t_44b599530af8d7 108-117
+logitrack_web/src/hooks/useTopbarSlot.ts
+  s_bb152406e624a3::t_a821c4d6929477 1-11
+logitrack_web/src/pages/OrganizationConfig.tsx
+  s_bb152406e624a3::t_377def242de2fe 2
+logitrack_web/src/components/Topbar.tsx
+  s_bb152406e624a3::t_ecdc380220d2e4 42-45,51,66,78,83-96
+  s_bb152406e624a3::t_630be16ef0b337 1-3,5-38,47-50,52-65,67-77,79-82,97-101
+  s_bb152406e624a3::t_1c502accd9cca9 4
+  s_bb152406e624a3::t_3a3e89b4a57815 39-41,46
+logitrack_web/src/pages/ShipmentList.tsx
+  s_bb152406e624a3::t_8a40b21ad2aca4 269-292,294-300,302,304-337,339,366,369,420,434,467-482,485-514
+  s_bb152406e624a3::t_5bfdcd0753025e 13
+  s_bb152406e624a3::t_9e5c927a56498c 3,14
+  s_bb152406e624a3::t_56dacb66eae4a7 241-242,245-267
+logitrack_web/src/pages/RollingPlanView.tsx
+  s_bb152406e624a3::t_9fb032a30bc936 2
+logitrack_web/src/pages/RoutingMetrics.tsx
+  s_bb152406e624a3::t_97fd089688bb30 2
+logitrack_web/src/pages/BranchList.tsx
+  s_bb152406e624a3::t_c8a97f32b57ddd 102-112
+  s_bb152406e624a3::t_ba660c76a5b03b 8
+  s_bb152406e624a3::t_25bcbe92b54ed3 2
+logitrack_web/src/pages/PricingConfig.tsx
+  s_bb152406e624a3::t_f3780c3c9d4127 2
+logitrack_web/src/pages/BulkUpload.tsx
+  s_bb152406e624a3::t_fb69baa4bdee60 3
+logitrack_web/src/pages/VehicleList.tsx
+  s_bb152406e624a3::t_4e6056019ce5f5 297-307
+  s_bb152406e624a3::t_cae0a2d64fd806 10
+  s_bb152406e624a3::t_bf4b91a66960ef 3
+logitrack_web/src/components/Sidebar.tsx
+  s_bb152406e624a3::t_622efd623b6c08 415,422-444
+  s_bb152406e624a3::t_20646339da9fab 256-258,270-272
+  s_bb152406e624a3::t_cee7dfe02b6736 1-27,36-105,107-114,117-255,259-269,273-414,416-421,445-451
+  s_bb152406e624a3::t_e76009e9b85d53 28-35
+  s_bb152406e624a3::t_041f4b5c3d08b4 106
+  s_bb152406e624a3::t_b7dbffe7e0226c 115-116
+logitrack_web/src/components/sidebarLayout.ts
+  s_bb152406e624a3::t_a6a393f0180283 1-37
+logitrack_web/src/components/ShipmentKPIStrip.tsx
+  s_bb152406e624a3::t_d9fedf4fda4d66 72
+  s_bb152406e624a3::t_08a2c4aa404d3b 1-71,73-105
+logitrack_web/src/pages/NetworkPlanView.tsx
+  s_bb152406e624a3::t_cb69bd437353bb 2
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_bb152406e624a3::t_b55b91f681c532 2
+logitrack_web/src/pages/AdminUsers.tsx
+  s_bb152406e624a3::t_97ff88396bafc3 2
+  s_bb152406e624a3::t_57594e44b833e6 9
+  s_bb152406e624a3::t_ea6bcab5e001cb 212-220
+logitrack_web/src/pages/InterBranchTripsList.tsx
+  s_bb152406e624a3::t_02c7e601cec946 118-136
+  s_bb152406e624a3::t_9843c56fb4336b 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "a08a284ece588e00f5dd37d3f3581f99a6732980",
+  "prompts": {},
+  "sessions": {
+    "s_bb152406e624a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86b40d7c-77e1-4852-900e-352042832e29",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
