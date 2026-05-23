@@ -859,10 +859,9 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 					t.Fatalf("create with branch_pickup: %v", err)
 				}
 				toInTransit(t, ts, ship.TrackingID)
+				// toAtHub dispara la auto-transición a ready_for_pickup cuando
+				// el envío llega a su sucursal de destino final (FinalBranchID).
 				toAtHub(t, ts, ship.TrackingID)
-				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-					Status: model.StatusReadyForPickup, ChangedBy: "supervisor",
-				})
 				return ship.TrackingID
 			},
 		},
