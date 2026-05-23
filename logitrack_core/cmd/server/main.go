@@ -353,6 +353,7 @@ func main() {
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
+	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)

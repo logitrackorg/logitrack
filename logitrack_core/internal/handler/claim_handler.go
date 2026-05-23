@@ -149,6 +149,44 @@ func (h *ClaimHandler) ResolveClaim(c *gin.Context) {
 	c.JSON(http.StatusOK, claim)
 }
 
+// RequestCustomerInfo requests more information from the customer and sets status to pending_customer.
+//
+// @Summary      Request customer info
+// @Description  Requests more information from the customer and marks claim as pending customer. Operator and supervisor only.
+// @Tags         claims
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Claim ID"
+// @Param        body body      model.RequestCustomerInfoRequest true "Notes"
+// @Success      200  {object}  model.Claim
+// @Failure      400  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /claims/{id}/request-info [post]
+func (h *ClaimHandler) RequestCustomerInfo(c *gin.Context) {
+	var req model.RequestCustomerInfoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.RequestCustomerInfo(c.Param("id"), user.Username, user.BranchID, req.Notes)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
 // GetClaimEvents returns the event history for a claim.
 //
 // @Summary      Get claim events
