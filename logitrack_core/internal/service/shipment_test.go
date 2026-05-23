@@ -694,26 +694,29 @@ func TestUpdateStatus_AtHub_AutoDerivesLocationFromInTransitEvent(t *testing.T) 
 	}
 }
 
-func TestUpdateStatus_AtHub_FromDeliveryFailed_AutoDerivesFromLastAtHub(t *testing.T) {
+func TestUpdateStatus_Rechazado_QuedaEnRechazadoConIsReturning(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
 	toAtHub(t, ts, ship.TrackingID) // at br-cordoba
 	toOutForDelivery(t, ts, ship.TrackingID)
 
-	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusDeliveryFailed, ChangedBy: "driver", Notes: "nobody home",
+	// rechazado desde out_for_delivery directamente (sin pasar por delivery_failed)
+	result := mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusRechazado, ChangedBy: "driver", Notes: "🚫 No lo quiero",
 	})
 
-	// rechazado auto-transitions to at_hub — verify the auto-derived location
-	result := mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusRechazado, ChangedBy: "supervisor",
-	})
-	if result.Status != model.StatusAtHub {
-		t.Errorf("Status = %q, want at_hub after rechazado auto-transition", result.Status)
+	// El envío debe quedar en rechazado (no auto-transiciona a at_hub).
+	if result.Status != model.StatusRechazado {
+		t.Errorf("Status = %q, want rechazado", result.Status)
 	}
-	if result.CurrentLocation != "br-cordoba" {
-		t.Errorf("CurrentLocation = %q, want %q after rechazado auto-transition", result.CurrentLocation, "br-cordoba")
+	// Debe marcarse como returning para que el plan de ruteo lo incluya en la devolución.
+	if !result.IsReturning {
+		t.Errorf("IsReturning = false, want true after rechazado")
+	}
+	// La ETA debe haber sido extendida.
+	if result.EstimatedDeliveryAt == nil {
+		t.Errorf("EstimatedDeliveryAt nil, want extended ETA after rechazado")
 	}
 }
 

@@ -991,8 +991,27 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
-	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
-	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
+	// rechazado: extiende ETA y marca is_returning, pero NO auto-transiciona a at_hub.
+	// El envío queda visible en ese estado para el chofer y el operador decide el siguiente paso.
+	if targetStatus == model.StatusRechazado {
+		nowET := clock.Now().UTC()
+		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
+		if extended, etaErr := s.repo.ExtendETA(repository.ExtendETACmd{
+			TrackingID: trackingID,
+			OldETA:     updated.EstimatedDeliveryAt,
+			NewETA:     *newETA,
+			AddedDays:  model.ReturnETAExtraDays,
+			Reason:     "shipment_returning_to_sender",
+			ChangedBy:  req.ChangedBy,
+			Timestamp:  nowET,
+		}); etaErr == nil {
+			updated = extended
+		}
+		return updated, nil
+	}
+
+	// Auto-transition: no_entregado → at_hub (el envío vuelve al depósito para reintento).
+	if targetStatus == model.StatusNoEntregado {
 		// El envío empieza un retorno → extender la fecha estimada de entrega 10 días.
 		nowET := clock.Now().UTC()
 		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
@@ -1032,12 +1051,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 
-		var autoNotes string
-		if targetStatus == model.StatusNoEntregado {
-			autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
-		} else {
-			autoNotes = "Destinatario rechazó el envío — devuelto a sucursal"
-		}
+		const autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
 
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 			TrackingID: trackingID,
@@ -1430,6 +1444,7 @@ func isValidTransition(from, to model.Status) bool {
 		model.StatusOutForDelivery: {
 			model.StatusDelivered,
 			model.StatusDeliveryFailed,
+			model.StatusRechazado, // destinatario rechaza activamente en el momento de la entrega
 			model.StatusLost,
 			model.StatusDestroyed,
 		},
