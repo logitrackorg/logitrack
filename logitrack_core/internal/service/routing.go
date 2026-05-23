@@ -46,6 +46,7 @@ type RoutingService struct {
 	interBranchTripSvc *InterBranchTripService
 	graphSvc        *BranchGraphService  // nullable; used for stale-replan
 	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
+	branchZoneSvc   *BranchZoneService   // nullable; auto-move entrada→salida on ApplyPlan
 	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
 }
 
@@ -83,6 +84,10 @@ func (s *RoutingService) SetNotificationService(svc *NotificationService) {
 
 func (s *RoutingService) SetZoneService(svc *ZoneService) {
 	s.zoneSvc = svc
+}
+
+func (s *RoutingService) SetBranchZoneService(svc *BranchZoneService) {
+	s.branchZoneSvc = svc
 }
 
 func (s *RoutingService) SetORSClient(c *ors.Client) {
@@ -920,16 +925,23 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				continue
 			}
 
-			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
-				items = append(items, failedItem(tid, target, err.Error()))
+		// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+		if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+			if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+				items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
 				continue
 			}
-			_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-				Status:    model.StatusLoaded,
-				ChangedBy: username,
-				Location:  branchID,
-				Notes:     "Cargado en " + v.LicensePlate + " vía planificador (última milla)",
-			})
+		}
+
+		if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+			items = append(items, failedItem(tid, target, err.Error()))
+			continue
+		}
+		_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
+			Status:    model.StatusLoaded,
+			ChangedBy: username,
+			Notes:     "Carga automática al aplicar plan de ruteo inter-sucursal",
+		})
 			if err != nil {
 				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
 				items = append(items, failedItem(tid, target, err.Error()))
@@ -1060,6 +1072,14 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 			if currentLoad+sh.WeightKg > v.CapacityKg {
 				items = append(items, failedItem(tid, target, "capacidad_excedida"))
 				continue
+			}
+
+			// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+			if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+				if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+					items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
+					continue
+				}
 			}
 
 			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {

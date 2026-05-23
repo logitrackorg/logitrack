@@ -102,6 +102,7 @@ type Shipment struct {
 	// Status & dates
 	Status              Status     `json:"status"`
 	CurrentLocation     string     `json:"current_location,omitempty"` // branch ID of current location
+	CurrentZone         *string    `json:"current_zone,omitempty"`     // entrada / salida / revision / devolucion
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	EstimatedDeliveryAt *time.Time `json:"estimated_delivery_at"`

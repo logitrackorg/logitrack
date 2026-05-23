@@ -365,6 +365,20 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Email transaccional: deduplicación de emails de confirmación de envío (CA-05)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
+
+		-- Branch zones (ubicaciones internas de sucursal)
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS current_zone TEXT;
+
+		CREATE TABLE IF NOT EXISTS branch_zones (
+			id         TEXT PRIMARY KEY,
+			branch_id  TEXT NOT NULL REFERENCES branches(id),
+			zone_type  TEXT NOT NULL,
+			name       TEXT NOT NULL,
+			active     BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(branch_id, zone_type)
+		);
 	`)
 	return err
 }

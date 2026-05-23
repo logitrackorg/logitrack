@@ -25,12 +25,17 @@ type ActiveShipmentCounter interface {
 }
 
 type BranchService struct {
-	repo    repository.BranchRepository
-	counter ActiveShipmentCounter
+	repo         repository.BranchRepository
+	counter      ActiveShipmentCounter
+	branchZoneSvc *BranchZoneService
 }
 
 func NewBranchService(repo repository.BranchRepository, counter ActiveShipmentCounter) *BranchService {
 	return &BranchService{repo: repo, counter: counter}
+}
+
+func (s *BranchService) SetBranchZoneService(svc *BranchZoneService) {
+	s.branchZoneSvc = svc
 }
 
 func (s *BranchService) List() []model.Branch {
@@ -181,7 +186,7 @@ func (s *BranchService) Update(id string, req model.UpdateBranchRequest) (model.
 }
 
 func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequest, username string) (model.Branch, error) {
-	_, found := s.repo.GetByID(id)
+	oldBranch, found := s.repo.GetByID(id)
 	if !found {
 		return model.Branch{}, ErrBranchNotFound
 	}
@@ -203,6 +208,22 @@ func (s *BranchService) UpdateStatus(id string, req model.UpdateBranchStatusRequ
 
 	if err := s.repo.UpdateStatus(id, req.Status, username); err != nil {
 		return model.Branch{}, fmt.Errorf("error al actualizar el estado: %w", err)
+	}
+
+	// Sincronizar zonas con el ciclo de vida de la sucursal
+	if s.branchZoneSvc != nil {
+		if req.Status == model.BranchStatusInactive || req.Status == model.BranchStatusOutOfService {
+			if err := s.branchZoneSvc.SetActiveForBranch(id, false); err != nil {
+				return model.Branch{}, fmt.Errorf("error al desactivar zonas: %w", err)
+			}
+		} else if req.Status == model.BranchStatusActive && oldBranch.Status != model.BranchStatusActive {
+			if err := s.branchZoneSvc.SetActiveForBranch(id, true); err != nil {
+				return model.Branch{}, fmt.Errorf("error al reactivar zonas: %w", err)
+			}
+			if err := s.branchZoneSvc.EnsureZonesForBranch(id); err != nil {
+				return model.Branch{}, fmt.Errorf("error al restaurar zonas: %w", err)
+			}
+		}
 	}
 
 	updated, _ := s.repo.GetByID(id)

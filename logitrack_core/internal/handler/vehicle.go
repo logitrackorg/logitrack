@@ -19,10 +19,11 @@ import (
 var validPlateRegex = regexp.MustCompile(`^(?:[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$`)
 
 type VehicleHandler struct {
-	repo        repository.VehicleRepository
-	shipmentSvc *service.ShipmentService
-	branchRepo  repository.BranchRepository
-	tripSvc     *service.InterBranchTripService
+	repo          repository.VehicleRepository
+	shipmentSvc   *service.ShipmentService
+	branchRepo    repository.BranchRepository
+	tripSvc       *service.InterBranchTripService
+	branchZoneSvc *service.BranchZoneService
 }
 
 // effectiveWeight returns the shipment's weight. Weight is now locked at creation
@@ -37,6 +38,10 @@ func NewVehicleHandler(repo repository.VehicleRepository, shipmentSvc *service.S
 
 func (h *VehicleHandler) SetTripService(svc *service.InterBranchTripService) {
 	h.tripSvc = svc
+}
+
+func (h *VehicleHandler) SetBranchZoneService(svc *service.BranchZoneService) {
+	h.branchZoneSvc = svc
 }
 
 // List returns all vehicles in the fleet.
@@ -550,7 +555,9 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 	}
 
 	var destCity string
+	var destID string
 	if vehicle.DestinationBranch != nil {
+		destID = *vehicle.DestinationBranch
 		destBranch, found := h.branchRepo.GetByID(*vehicle.DestinationBranch)
 		if found {
 			destCity = destBranch.Address.City
@@ -562,7 +569,8 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		model.StatusCancelled: true, model.StatusLost: true, model.StatusDestroyed: true,
 	}
 	for _, tid := range vehicle.AssignedShipments {
-		if s, err := h.shipmentSvc.GetByTrackingID(tid); err == nil && terminalStatuses[s.Status] {
+		s, err := h.shipmentSvc.GetByTrackingID(tid)
+		if err != nil || terminalStatuses[s.Status] {
 			continue
 		}
 		statusReq := model.UpdateStatusRequest{
@@ -576,10 +584,16 @@ func (h *VehicleHandler) EndTrip(c *gin.Context) {
 		if _, err := h.shipmentSvc.UpdateStatus(tid, statusReq); err != nil {
 			_ = err
 		}
+
+		// US-02: asignar zona Entrada automáticamente al llegar a la sucursal de destino
+		if h.branchZoneSvc != nil && destID != "" {
+			if err := h.branchZoneSvc.MoveShipment(tid, user.Username, destID, "Recepción automática al finalizar viaje", model.ZoneEntrada, user.Role); err != nil {
+				_ = err
+			}
+		}
 	}
 
 	if vehicle.DestinationBranch != nil {
-		destID := *vehicle.DestinationBranch
 		if err := h.repo.AssignBranch(vehicle.ID, &destID); err != nil {
 			_ = err
 		}

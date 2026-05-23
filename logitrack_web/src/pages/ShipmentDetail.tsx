@@ -19,6 +19,7 @@ import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { ZoneBadge } from "../components/ZoneBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
@@ -139,6 +140,7 @@ export function ShipmentDetail() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrError, setQRError] = useState<string>('');
   const [generatingQR, setGeneratingQR] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   // Estados para impresión de alta
   const [printingDoc, setPrintingDoc] = useState(false);
@@ -752,6 +754,9 @@ export function ShipmentDetail() {
                   {shipment.current_location && (
                     <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
                   )}
+                  {shipment.current_zone && (
+                    <InfoRow label="Zona" value={<ZoneBadge zone={shipment.current_zone} />} />
+                  )}
                 </Card>
               </>;
             })()}
@@ -803,6 +808,47 @@ export function ShipmentDetail() {
     {printingDoc ? "Generando..." : "🖨️ Imprimir alta"}
   </button>
 )}
+
+      {/* Zona actions — mover entre zonas internas de sucursal */}
+      {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
+        <div style={{ ...cardStyle, marginBottom: 16, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>
+              Zona actual: <ZoneBadge zone={shipment.current_zone} />
+            </span>
+            {shipment.current_zone === "entrada" && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                  Mover a Salida
+                </button>
+                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                  Mover a Revisión
+                </button>
+              </>
+            )}
+            {shipment.current_zone === "salida" && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                  Mover a Revisión
+                </button>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #3b82f6", background: "#fff", color: "#1e40af" }}>
+                  Reingresar a Entrada
+                </button>
+              </>
+            )}
+            {shipment.current_zone === "revision" && hasRole("supervisor") && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                  Aprobar (→ Salida)
+                </button>
+                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #ef4444", background: "#fff", color: "#991b1b" }}>
+                  Clasificar (Perdido/Destruido)
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Status update — supervisor y operador (no admin) */}
       {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (

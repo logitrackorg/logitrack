@@ -272,6 +272,22 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			string(model.StatusCancelled), event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventShipmentZoned:
+		payload := event.Payload.(model.ShipmentZonedPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET current_zone = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(payload.Zone), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventShipmentMoved:
+		payload := event.Payload.(model.ShipmentMovedPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET current_zone = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(payload.ToZone), event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }
@@ -318,7 +334,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
-			tracking_id, status, current_location, weight_kg, package_type,
+			tracking_id, status, current_location, current_zone, weight_kg, package_type,
 			is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
 			sender, recipient, corrections,
@@ -328,10 +344,11 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
+			current_zone          = EXCLUDED.current_zone,
 			weight_kg             = EXCLUDED.weight_kg,
 			package_type          = EXCLUDED.package_type,
 			is_fragile            = EXCLUDED.is_fragile,
@@ -357,7 +374,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			price                 = COALESCE(EXCLUDED.price, shipments.price),
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
 			price_currency        = EXCLUDED.price_currency`,
-		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
+		s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
@@ -382,7 +399,7 @@ func (p *PostgresShipmentProjection) Rebuild(events []model.DomainEvent) {
 
 func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, error) {
 	row := p.db.QueryRow(`
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -397,7 +414,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	selectCols := `
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -445,7 +462,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, error) {
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := p.db.Query(`
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -613,7 +630,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		slaExpiredNotifiedAt *time.Time
 	)
 	err := row.Scan(
-		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
+		&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
 		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
@@ -700,7 +717,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			slaExpiredNotifiedAt *time.Time
 		)
 		err := rows.Scan(
-			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
+			&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
 			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
