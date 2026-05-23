@@ -141,7 +141,9 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 		if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub && sh.Status != model.StatusRedeliveryScheduled {
 			continue
 		}
-		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
+		// retiro_sucursal: solo excluir si ya está en su sucursal de retiro final.
+		// Si FinalBranchID está en otra sucursal, necesita transporte inter-sucursal igual.
+		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup && sh.FinalBranchID == branchID {
 			continue
 		}
 		// Si el envío está reservado por un trip multi-hop (cross-branch pickup),
@@ -2069,9 +2071,8 @@ func (s *RoutingService) snapshotAtHubInventory() map[string][]model.Shipment {
 		if sh.IsReturning {
 			continue
 		}
-		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
-			continue
-		}
+		// retiro_sucursal ya en destino final: no necesita más transporte.
+		// retiro_sucursal con destino en otra sucursal: sí es levantable por un multi-hop.
 		if sh.FinalBranchID == "" || sh.FinalBranchID == sh.ReceivingBranchID {
 			continue
 		}
