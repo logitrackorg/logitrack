@@ -250,6 +250,28 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			string(model.StatusDraft), event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventPickupRequested:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, delivery_method = $2, updated_at = $3 WHERE tracking_id = $4`,
+			string(model.StatusReadyForPickup), string(model.DeliveryMethodBranchPickup), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventDeliveryRescheduled:
+		payload := event.Payload.(model.DeliveryRescheduledPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET estimated_delivery_at = $1, updated_at = $2 WHERE tracking_id = $3`,
+			payload.NewDeliveryDate, event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventCancelledByRecipient:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(model.StatusCancelled), event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }
