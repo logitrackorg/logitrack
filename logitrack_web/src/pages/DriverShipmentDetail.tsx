@@ -4,6 +4,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  Ban,
   CheckCircle2,
   Clock,
   MapPin,
@@ -18,6 +19,7 @@ import { BottomSheet } from "../components/ui/bottom-sheet";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import {
   FAILED_REASONS,
+  REJECTED_REASONS,
   TIME_WINDOW_HOURS,
   TIME_WINDOW_LABEL,
   recipientView,
@@ -44,9 +46,12 @@ export function DriverShipmentDetail() {
 
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [failedOpen, setFailedOpen] = useState(false);
+  const [rejectedOpen, setRejectedOpen] = useState(false);
   const [recipientDni, setRecipientDni] = useState("");
   const [failedReason, setFailedReason] = useState("");
   const [failedNotes, setFailedNotes] = useState("");
+  const [rejectedReason, setRejectedReason] = useState("");
+  const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
 
@@ -110,6 +115,34 @@ export function DriverShipmentDetail() {
     }
   };
 
+  const handleRejected = async () => {
+    if (!shipment) return;
+    const r = REJECTED_REASONS.find((x) => x.id === rejectedReason);
+    if (!r) return;
+    if (r.id === "otro" && !rejectedNotes.trim()) return;
+    const note = r.id === "otro"
+      ? `${r.emoji} ${rejectedNotes.trim()}`
+      : `${r.emoji} ${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
+    setSubmitting(true);
+    setActionError("");
+    try {
+      await shipmentApi.updateStatus(shipment.tracking_id, {
+        status: "rechazado",
+        location: "",
+        notes: note,
+      });
+      setRejectedOpen(false);
+      setRejectedReason("");
+      setRejectedNotes("");
+      await reload(shipment.tracking_id);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setActionError(msg ?? "No se pudo registrar el rechazo.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) return <DetailSkeleton />;
   if (error || !shipment) {
     return (
@@ -140,6 +173,7 @@ export function DriverShipmentDetail() {
   const canAct = isOutForDelivery && routeStarted;
   const isDelivered = shipment.status === "delivered";
   const isFailed = shipment.status === "delivery_failed";
+  const isRejected = shipment.status === "rechazado";
 
   const packageType = cor.package_type ?? shipment.package_type;
   const weightKg = cor.weight_kg ?? String(shipment.weight_kg);
@@ -172,6 +206,12 @@ export function DriverShipmentDetail() {
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-full">
               <XCircle className="w-3 h-3" />
               Sin entregar
+            </span>
+          )}
+          {isRejected && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
+              <Ban className="w-3 h-3" />
+              Rechazado
             </span>
           )}
           {isOutForDelivery && (
@@ -303,20 +343,29 @@ export function DriverShipmentDetail() {
       {/* Sticky CTAs cuando se puede actuar */}
       {canAct && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="max-w-2xl mx-auto grid grid-cols-2 gap-2">
+          <div className="max-w-2xl mx-auto flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setFailedOpen(true)}
+                className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
+              >
+                <XCircle className="w-4 h-4" />
+                No entregado
+              </button>
+              <button
+                onClick={() => setDeliverOpen(true)}
+                className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Entregar
+              </button>
+            </div>
             <button
-              onClick={() => setFailedOpen(true)}
-              className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
+              onClick={() => setRejectedOpen(true)}
+              className="h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
             >
-              <XCircle className="w-4 h-4" />
-              No entregado
-            </button>
-            <button
-              onClick={() => setDeliverOpen(true)}
-              className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-sm"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Entregar
+              <Ban className="w-4 h-4" />
+              Rechazado por destinatario
             </button>
           </div>
         </div>
@@ -341,6 +390,17 @@ export function DriverShipmentDetail() {
         onNotesChange={setFailedNotes}
         submitting={submitting}
         onConfirm={handleFailed}
+      />
+      <RejectedSheet
+        open={rejectedOpen}
+        onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }}
+        recipientName={name}
+        reason={rejectedReason}
+        onReasonChange={setRejectedReason}
+        notes={rejectedNotes}
+        onNotesChange={setRejectedNotes}
+        submitting={submitting}
+        onConfirm={handleRejected}
       />
     </div>
   );
@@ -499,6 +559,89 @@ function FailedSheet({
           className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar"}
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+function RejectedSheet({
+  open,
+  onClose,
+  recipientName,
+  reason,
+  onReasonChange,
+  notes,
+  onNotesChange,
+  submitting,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  recipientName: string;
+  reason: string;
+  onReasonChange: (s: string) => void;
+  notes: string;
+  onNotesChange: (s: string) => void;
+  submitting: boolean;
+  onConfirm: () => void;
+}) {
+  const requiresNotes = reason === "otro";
+  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Rechazado por destinatario"
+      description={`${recipientName} rechazó el envío`}
+    >
+      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+        Motivo del rechazo
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {REJECTED_REASONS.map((r) => {
+          const active = reason === r.id;
+          return (
+            <button
+              key={r.id}
+              onClick={() => onReasonChange(r.id)}
+              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
+                active
+                  ? "border-amber-500 bg-amber-50 text-amber-800"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {r.emoji} {r.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
+      </label>
+      <textarea
+        value={notes}
+        onChange={(e) => onNotesChange(e.target.value)}
+        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional"}
+        rows={3}
+        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
+      />
+
+      <div className="grid grid-cols-2 gap-2 mt-5">
+        <button
+          onClick={onClose}
+          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={!canSubmit || submitting}
+          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+        >
+          {submitting ? "Guardando…" : "Confirmar rechazo"}
         </button>
       </div>
     </BottomSheet>
