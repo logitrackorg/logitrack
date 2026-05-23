@@ -3,7 +3,10 @@ import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { NotificationBell } from "./components/NotificationBell";
+import { Sidebar } from "./components/Sidebar";
+import { useSidebarOffset } from "./components/sidebarLayout";
+import { Topbar } from "./components/Topbar";
+import { TopbarProvider } from "./components/topbarContext";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { Dashboard } from "./pages/Dashboard";
 import { ShipmentList } from "./pages/ShipmentList";
@@ -34,106 +37,6 @@ import { Repartos } from "./pages/Repartos";
 import OperatorTripReception from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
-
-const ROLE_LABELS: Record<string, string> = {
-  operator: "Operador",
-  supervisor: "Supervisor",
-  manager: "Gerente",
-  admin: "Administrador",
-  driver: "Chofer",
-};
-
-function Nav() {
-  const { user, logout, hasRole } = useAuth();
-  const isMobile = useIsMobile();
-  if (!user) return null;
-
-  return (
-    <nav style={{
-      background: "#1e3a5f", color: "#fff",
-      padding: isMobile ? "8px 12px" : "0 24px",
-      display: "flex", alignItems: "center",
-      gap: isMobile ? 10 : 24,
-      minHeight: 52, flexWrap: "wrap", rowGap: 6,
-    }}>
-      <span style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: 1 }}>LogiTrack</span>
-
-      {hasRole("supervisor", "manager") && (
-        <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
-      )}
-      {hasRole("supervisor", "manager") && (
-        <NavLink to="/supervisor/fatigue" style={navStyle}>Fatiga</NavLink>
-      )}
-      {!hasRole("admin") && (
-        <NavLink to="/" end style={navStyle}>Envíos</NavLink>
-      )}
-      {hasRole("operator", "supervisor", "manager", "admin") && (
-        <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
-      )}
-      {hasRole("supervisor", "manager", "admin") && (
-        <NavLink to="/branches" style={navStyle}>Sucursales</NavLink>
-      )}
-      {hasRole("operator", "supervisor", "manager") && (
-        <NavLink to="/repartos" style={navStyle}>Repartos</NavLink>
-      )}
-      {hasRole("operator", "supervisor", "manager") && (
-        <NavLink to="/inter-sucursal" style={navStyle}>Inter-sucursal</NavLink>
-      )}
-      {hasRole("operator", "supervisor", "manager") && (
-        <NavLink to="/viajes" style={navStyle}>Viajes</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/zones" style={navStyle}>Zonas</NavLink>
-      )}
-      {hasRole("operator", "supervisor") && (
-        <NavLink to="/bulk-upload" style={navStyle}>Importar CSV</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/ml-config" style={navStyle}>Config. ML</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/fatigue-config" style={navStyle}>Config. fatiga</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/routing-config" style={navStyle}>Config. ruteo</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/system-config" style={navStyle}>Config. sistema</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/pricing-config" style={navStyle}>Tarifario</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/organization" style={navStyle}>Organización</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/admin/users" style={navStyle}>Usuarios</NavLink>
-      )}
-      {hasRole("admin") && (
-        <NavLink to="/admin/access-logs" style={navStyle}>Log de accesos</NavLink>
-      )}
-
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
-        <NotificationBell />
-        {isMobile ? (
-          <NavLink to="/profile" style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600, textDecoration: "none" }}>{user.username}</NavLink>
-        ) : (
-          <NavLink to="/profile" style={{ fontSize: 13, color: "#94a3b8", textDecoration: "none" }}>
-            <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
-            {" · "}
-            <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
-              {ROLE_LABELS[user.role]}
-            </span>
-          </NavLink>
-        )}
-        <button onClick={logout}
-          style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
-          {isMobile ? "✕" : "Cerrar sesión"}
-        </button>
-      </div>
-    </nav>
-  );
-}
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -178,6 +81,28 @@ function DriverNav() {
   );
 }
 
+/** Layout wrapper for non-driver roles: sidebar (fixed) + topbar (sticky) + main with left offset. */
+function AppShell({ children }: { children: React.ReactNode }) {
+  const offset = useSidebarOffset();
+  return (
+    <TopbarProvider>
+      <Sidebar />
+      <div style={{
+        marginLeft: offset,
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        transition: "margin-left 0.18s ease",
+      }}>
+        <Topbar />
+        <main style={{ flex: 1 }}>
+          {children}
+        </main>
+      </div>
+    </TopbarProvider>
+  );
+}
+
 function AppRoutes() {
   const { user } = useAuth();
 
@@ -217,166 +142,175 @@ function AppRoutes() {
     );
   }
 
-  return (
-    <>
-      <Nav />
+  // Unauthenticated → only the login route, sin shell.
+  if (!user) {
+    return (
       <main>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace /> : <Login />} />
-
-          <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <ShipmentList />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/shipments/:trackingId" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <ShipmentDetail />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/inter-branch-trips/:id/recepcion" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <OperatorTripReception />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/new" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <NewShipment />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/drafts" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <DraftList />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/vehicles" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
-              <VehicleList />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/branches" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
-              <BranchList />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/ml-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <MLConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/system-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <SystemConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/pricing-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <PricingConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/repartos" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <Repartos />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/inter-sucursal" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <InterSucursal />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/viajes" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <InterBranchTripsList />
-            </ProtectedRoute>
-          } />
-
-          {/* Legacy redirects */}
-          <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
-          <Route path="/operations/trips" element={<Navigate to="/viajes" replace />} />
-
-          <Route path="/routing-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <RoutingConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/fatigue-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <FatigueConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/supervisor/fatigue" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <SupervisorFatigue />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/zones" element={
-            <ProtectedRoute roles={["admin"]}>
-              <ZoneManagement />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/organization" element={
-            <ProtectedRoute roles={["admin"]}>
-              <OrganizationConfig />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/admin/users" element={
-            <ProtectedRoute roles={["admin"]}>
-              <AdminUsers />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/bulk-upload" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <BulkUpload />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/admin/access-logs" element={
-            <ProtectedRoute roles={["admin"]}>
-              <AccessLog />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <UserProfile />
-            </ProtectedRoute>
-          } />
-
-          <Route path="/notifications" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
-              <NotificationsPage />
-            </ProtectedRoute>
-          } />
-
-          <Route path="*" element={<Navigate to={user?.role === "admin" ? "/admin/users" : "/"} replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </main>
+    );
+  }
+
+  return (
+    <AppShell>
+      <Routes>
+        <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
+
+        <Route path="/dashboard" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <ShipmentList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/shipments/:trackingId" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <ShipmentDetail />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/inter-branch-trips/:id/recepcion" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <OperatorTripReception />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/new" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <NewShipment />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/drafts" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <DraftList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/vehicles" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <VehicleList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/branches" element={
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <BranchList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/ml-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <MLConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/system-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <SystemConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/pricing-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <PricingConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/repartos" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <Repartos />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/inter-sucursal" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <InterSucursal />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/viajes" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <InterBranchTripsList />
+          </ProtectedRoute>
+        } />
+
+        {/* Legacy redirects */}
+        <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
+        <Route path="/operations/trips" element={<Navigate to="/viajes" replace />} />
+
+        <Route path="/routing-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <RoutingConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/fatigue-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <FatigueConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/supervisor/fatigue" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <SupervisorFatigue />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/zones" element={
+          <ProtectedRoute roles={["admin"]}>
+            <ZoneManagement />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/organization" element={
+          <ProtectedRoute roles={["admin"]}>
+            <OrganizationConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/users" element={
+          <ProtectedRoute roles={["admin"]}>
+            <AdminUsers />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/bulk-upload" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <BulkUpload />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/access-logs" element={
+          <ProtectedRoute roles={["admin"]}>
+            <AccessLog />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <UserProfile />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/notifications" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <NotificationsPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="*" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
+      </Routes>
       <ToastContainer />
-    </>
+    </AppShell>
   );
 }
 

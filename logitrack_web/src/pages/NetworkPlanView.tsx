@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Network, ArrowRight, TrendingDown, Layers, AlertCircle, RefreshCw, Truck } from "lucide-react";
-import { PageHeader } from "../components/ui/page-header";
+import { ArrowRight, TrendingDown, Layers, AlertCircle, RefreshCw, Truck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { routingApi, type GlobalRoutingPlan } from "../api/routing";
 import { branchApi, type Branch } from "../api/branches";
@@ -64,14 +63,6 @@ export function NetworkPlanView({ embedded = false }: NetworkPlanViewProps = {})
   const insights = plan?.insights;
 
   const body = (<>
-    {!embedded && (
-      <PageHeader
-        icon={<Network className="h-6 w-6" />}
-        title="Plan de red"
-        description="Vista global de todas las sucursales con señales cross-branch: vehículos ociosos, oportunidades de consolidación, métricas agregadas."
-      />
-    )}
-
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="text-sm text-slate-600">
             {plan?.plan_date && (

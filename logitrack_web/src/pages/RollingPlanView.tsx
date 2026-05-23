@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, TrendingUp, AlertCircle, RefreshCw, Lock, Eye } from "lucide-react";
-import { PageHeader } from "../components/ui/page-header";
+import { TrendingUp, AlertCircle, RefreshCw, Lock, Eye } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { routingForecastApi, type RollingHorizonPlan, type ForecastQuality } from "../api/routingForecast";
 import { branchApi, type Branch } from "../api/branches";
@@ -64,14 +63,6 @@ export function RollingPlanView({ embedded = false }: { embedded?: boolean } = {
   }, [plan]);
 
   const body = (<>
-    {!embedded && (
-      <PageHeader
-        icon={<Calendar className="h-6 w-6" />}
-        title="Plan multi-día (rolling horizon)"
-        description="Día 1 firm (plan global real) + proyección de los próximos días basada en forecasting estadístico de demanda."
-      />
-    )}
-
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <label className="text-sm text-slate-600">Horizonte:</label>

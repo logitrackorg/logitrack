@@ -5,7 +5,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi, type InterBranchTrip, type TripStop } from "../api/interBranchTrips";
 import { branchApi, branchLabelById, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card, CardContent } from "../components/ui/card";
 import { fmtDateTime } from "../utils/date";
 
@@ -115,36 +115,25 @@ export function InterBranchTripsList() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <PageHeader
-        icon={<Truck className="w-5 h-5" />}
-        title="Viajes activos"
-        description={
-          isNetworkRole
-            ? "Todos los viajes pendientes o en tránsito en la red."
-            : "Inter-sucursal y última milla activos de tu sucursal."
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            {canReceive && (
-              <button
-                onClick={openReceiveModal}
-                className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
-              >
-                <QrCode className="w-4 h-4" />
-                Recibir viaje
-              </button>
-            )}
-            <button
-              onClick={() => void load()}
-              disabled={loading}
-              className="h-9 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-sm flex items-center gap-2 cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-              Actualizar
-            </button>
-          </div>
-        }
-      />
+      <TopbarActions>
+        {canReceive && (
+          <button
+            onClick={openReceiveModal}
+            className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            Recibir viaje
+          </button>
+        )}
+        <button
+          onClick={() => void load()}
+          disabled={loading}
+          className="h-9 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-sm flex items-center gap-2 cursor-pointer"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
+        </button>
+      </TopbarActions>
 
       {/* Filtro de sucursal (solo manager/admin) */}
       {isNetworkRole && (

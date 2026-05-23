@@ -1,6 +1,4 @@
 import { useSearchParams } from "react-router-dom";
-import { Settings } from "lucide-react";
-import { PageHeader } from "../components/ui/page-header";
 import { RoutingConfig } from "./RoutingConfig";
 import { BranchGraphAdmin } from "./BranchGraphAdmin";
 
@@ -12,20 +10,10 @@ export function AdminRoutingHub() {
 
   const setTab = (t: string) => setSearchParams({ tab: t });
 
-  const tabDescriptions: Record<string, string> = {
-    config: "Parámetros del algoritmo de planificación. Los cambios afectan los planes generados a partir de ahora.",
-    graph:  "Aristas del grafo multi-hop. Las aristas auto-derivadas se actualizan con el historial; las manuales conservan su estado.",
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 pt-5 pb-0">
-          <PageHeader
-            icon={<Settings className="h-6 w-6" />}
-            title="Configuración de ruteo"
-            description={tabDescriptions[tab] || tabDescriptions.config}
-          />
         </div>
         <div className="max-w-7xl mx-auto px-6 mt-3 flex gap-0">
           <TabButton active={tab === "config"} onClick={() => setTab("config")}>

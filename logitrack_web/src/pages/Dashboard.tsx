@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, MapPin, ArrowRight, Package, Truck, CheckCircle2, AlertCircle, RotateCcw, Box } from "lucide-react";
+import { MapPin, ArrowRight, Package, Truck, CheckCircle2, AlertCircle, RotateCcw, Box } from "lucide-react";
 import { shipmentApi, type Stats, type Shipment, type ShipmentStatus } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
 import { StatusBadge } from "../components/StatusBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import { StatCard } from "../components/ui/stat-card";
@@ -118,34 +118,29 @@ export function Dashboard() {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader
-        title="Dashboard"
-        description="Vista consolidada de la operación logística"
-        icon={<LayoutDashboard className="w-5 h-5" />}
-        actions={
-          isSupervisor ? (
-            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
-              <MapPin className="w-3.5 h-3.5" />
-              {branchLabel}
-            </span>
-          ) : (
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Todas las sucursales</option>
-              {sortedProvinces.map((prov) => (
-                <optgroup key={prov} label={prov}>
-                  {branchesByProvince[prov].map((b) => (
-                    <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          )
-        }
-      />
+      <TopbarActions>
+        {isSupervisor ? (
+          <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
+            <MapPin className="w-3.5 h-3.5" />
+            {branchLabel}
+          </span>
+        ) : (
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Todas las sucursales</option>
+            {sortedProvinces.map((prov) => (
+              <optgroup key={prov} label={prov}>
+                {branchesByProvince[prov].map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
+      </TopbarActions>
 
       {/* Highlighted KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

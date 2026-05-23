@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Package, Plus, Search, X, Download, AlertTriangle, MapPin, Filter, FileText, Clock } from "lucide-react";
+import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
@@ -9,8 +9,9 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
+import { TopbarActions } from "../components/topbarContext";
+import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
 
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
@@ -237,47 +238,105 @@ export function ShipmentList() {
   const actionLabel = (action: BulkAction) =>
     action === "ready_for_pickup" ? "Listo para retiro" : "Última milla (asignar a chofer)";
 
+  const draftCount = shipments.filter((s) => s.status === "draft").length;
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader
-        title="Envíos"
-        description="Seguimiento y gestión del flujo logístico"
-        icon={<Package className="w-5 h-5" />}
-        actions={
-          hasRole("operator", "supervisor") ? (
-            <div className="flex items-center gap-2">
-              {/* Drafts button with badge */}
-              {(() => {
-                const draftCount = shipments.filter((s) => s.status === "draft").length;
-                return (
-                  <button
-                    onClick={() => navigate("/drafts")}
-                    className="relative inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-semibold transition-colors cursor-pointer"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Borradores
-                    {draftCount > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
-                        {draftCount > 99 ? "99+" : draftCount}
-                      </span>
-                    )}
-                  </button>
-                );
-              })()}
-              <button
-                onClick={() => navigate("/new")}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Nuevo envío
-              </button>
-            </div>
-          ) : undefined
-        }
+      {hasRole("operator", "supervisor") && (
+        <TopbarActions>
+          <button
+            onClick={() => navigate("/drafts")}
+            className="relative inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-semibold transition-colors cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            Borradores
+            {draftCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none">
+                {draftCount > 99 ? "99+" : draftCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => navigate("/new")}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo envío
+          </button>
+        </TopbarActions>
+      )}
+
+      {/* KPI strip — computed from raw shipment list, siempre refleja el total sin filtros de estado */}
+      <ShipmentKPIStrip
+        shipments={shipments}
+        activeFilter={statusFilter}
+        onFilter={(v) => setStatusFilter(v)}
       />
 
-      {/* Search & filters */}
+      {/* Status chips + search/date/branch */}
       <Card className="mb-4 p-4">
+        {/* Chips de estado */}
+        <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b border-slate-100">
+          {(
+            [
+              { label: "Activos",           value: "active" },
+              { label: "En tránsito",       value: "in_transit" },
+              { label: "Última milla",      value: "out_for_delivery" },
+              { label: "En sucursal",       value: "at_hub" },
+              { label: "Entrega fallida",   value: "delivery_failed" },
+              { label: "Listo p/ retiro",   value: "ready_for_pickup" },
+              { label: "Todos",             value: "" },
+            ] as { label: string; value: StatusFilter }[]
+          ).map(({ label, value }) => {
+            const isActive = statusFilter === value;
+            return (
+              <button
+                key={value || "__all__"}
+                onClick={() => setStatusFilter(value)}
+                className={`inline-flex items-center h-8 px-3 rounded-full text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? "bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {/* Más estados — select compacto para opciones poco frecuentes */}
+          <div className="relative">
+            <select
+              value={[
+                "active", "in_transit", "out_for_delivery", "at_hub",
+                "delivery_failed", "ready_for_pickup", "",
+              ].includes(statusFilter) ? "" : statusFilter}
+              onChange={(e) => { if (e.target.value) setStatusFilter(e.target.value as StatusFilter); }}
+              className="h-8 pl-3 pr-8 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 cursor-pointer appearance-none hover:border-slate-300 focus:outline-none focus:border-[#2563eb]"
+              style={{ minWidth: 110 }}
+            >
+              <option value="">Más estados…</option>
+              <option value="at_origin_hub">En sucursal origen</option>
+              <option value="loaded">Cargado en vehículo</option>
+              <option value="redelivery_scheduled">Reentrega programada</option>
+              <option value="no_entregado">No entregado</option>
+              <option value="rechazado">Rechazado</option>
+              <option value="ready_for_return">Listo para devolución</option>
+              <option value="delivered">Entregados</option>
+              <option value="returned">Devueltos</option>
+              <option value="cancelled">Cancelados</option>
+              <option value="lost">Extraviados</option>
+              <option value="destroyed">Daño total</option>
+              <option value="pending_payment">Pago pendiente</option>
+              <option value="draft">Borrador</option>
+              {hasRole("supervisor", "manager") && (
+                <option value="expired">Borradores expirados</option>
+              )}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          </div>
+        </div>
+
+        {/* Search + fecha + sucursal */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[260px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -300,14 +359,14 @@ export function ShipmentList() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Desde</span>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
+              placeholder="Desde"
               className={inputClass}
             />
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hasta</span>
+            <span className="text-slate-300">—</span>
             <input
               type="date"
               value={dateTo}
@@ -324,36 +383,6 @@ export function ShipmentList() {
               </button>
             )}
           </div>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className={inputClass}
-          >
-            <option value="active">Activos</option>
-            <option value="">Todos</option>
-            <option value="at_origin_hub">En sucursal de origen</option>
-            <option value="loaded">Cargado en vehículo</option>
-            <option value="in_transit">En tránsito</option>
-            <option value="at_hub">En sucursal</option>
-            <option value="out_for_delivery">Última milla</option>
-            <option value="delivery_failed">Entrega fallida</option>
-            <option value="redelivery_scheduled">Reentrega programada</option>
-            <option value="no_entregado">No entregado</option>
-            <option value="rechazado">Rechazado</option>
-            <option value="ready_for_pickup">Listo para retiro</option>
-            <option value="ready_for_return">Listo para devolución</option>
-            <option value="delivered">Entregados</option>
-            <option value="returned">Devueltos</option>
-            <option value="cancelled">Cancelados</option>
-            <option value="lost">Extraviados</option>
-            <option value="destroyed">Daño total</option>
-            <option value="pending_payment">Pago pendiente</option>
-            <option value="draft">Borrador</option>
-            {hasRole("supervisor", "manager") && (
-              <option value="expired">Borradores expirados</option>
-            )}
-          </select>
 
           {isOperator ? (
             <span className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
@@ -388,6 +417,7 @@ export function ShipmentList() {
             </select>
           )}
         </div>
+
         {dateRangeInvalid && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-600">
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -401,7 +431,7 @@ export function ShipmentList() {
         <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-xl border border-slate-300 bg-slate-100 text-sm text-slate-700">
           <Clock className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
           <span>
-            Mostrando borradores expirados. Son visibles solo para supervisores y gerentes hasta que se eliminen los datos personales (según configuración en <strong>Configuración del sistema</strong>).
+            Mostrando borradores expirados. Visibles solo para supervisores y gerentes hasta que se eliminen los datos personales (según <strong>Configuración del sistema</strong>).
           </span>
         </div>
       )}
@@ -434,13 +464,54 @@ export function ShipmentList() {
       )}
 
       {loading ? (
-        <Card className="p-10 text-center">
-          <p className="text-sm text-slate-500">Cargando…</p>
+        /* Skeleton table */
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+            <div className="h-4 w-24 rounded bg-slate-200 animate-pulse" />
+          </div>
+          <div className="divide-y divide-slate-100">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4">
+                <div className="h-3 w-28 rounded bg-slate-200 animate-pulse" />
+                <div className="h-3 flex-1 rounded bg-slate-100 animate-pulse" />
+                <div className="h-3 flex-1 rounded bg-slate-100 animate-pulse" />
+                <div className="h-3 w-20 rounded bg-slate-200 animate-pulse" />
+                <div className="h-5 w-24 rounded-full bg-slate-200 animate-pulse" />
+              </div>
+            ))}
+          </div>
         </Card>
       ) : filtered.length === 0 ? (
-        <Card className="p-10 text-center">
-          <Filter className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-500">No se encontraron envíos con los filtros aplicados.</p>
+        <Card className="py-14 px-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <Search className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 mb-1">No se encontraron envíos</p>
+          <p className="text-xs text-slate-400 mb-5">
+            {query || statusFilter !== "active" || dateFrom || dateTo || branchFilter
+              ? "Probá ajustando los filtros aplicados."
+              : "Todavía no hay envíos registrados."}
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {(query || statusFilter !== "active" || dateFrom || dateTo) && (
+              <button
+                onClick={() => { setQuery(""); setStatusFilter("active"); setDateFrom(""); setDateTo(""); }}
+                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                Limpiar filtros
+              </button>
+            )}
+            {hasRole("operator", "supervisor") && (
+              <button
+                onClick={() => navigate("/new")}
+                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-xs font-semibold cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Nuevo envío
+              </button>
+            )}
+          </div>
         </Card>
       ) : (
         <Card className="overflow-hidden">

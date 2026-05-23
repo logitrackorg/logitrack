@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Users, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { adminApi, type UserUpdatePayload, type UserCreatePayload } from "../api/admin";
 import { branchApi, type Branch } from "../api/branches";
 import type { User, Role, UserStatus, UserAddress } from "../api/auth";
 import { fmtDateTime } from "../utils/date";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
 
 const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
@@ -209,20 +209,15 @@ export function AdminUsers() {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader
-        title="Gestión de usuarios"
-        description="Administración de cuentas, roles y permisos del sistema"
-        icon={<Users className="w-5 h-5" />}
-        actions={
-          <button
-            onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm(emptyCreate()); }}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Nuevo usuario
-          </button>
-        }
-      />
+      <TopbarActions>
+        <button
+          onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm(emptyCreate()); }}
+          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Nuevo usuario
+        </button>
+      </TopbarActions>
 
       <Card className="mb-4 p-4">
       <div className="flex flex-wrap gap-3 items-center">
