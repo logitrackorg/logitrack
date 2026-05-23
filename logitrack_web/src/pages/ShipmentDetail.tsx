@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
@@ -960,6 +960,18 @@ export function ShipmentDetail() {
                   })()}
                 </div>
                 {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                {ev.event_type === "claim_created" && ev.notes && (() => {
+                  const m = ev.notes.match(/REC-\d+/);
+                  if (m) {
+                    const claimId = m[0];
+                    return (
+                      <p style={{ margin: "6px 0 0" }}>
+                        <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           ))}
