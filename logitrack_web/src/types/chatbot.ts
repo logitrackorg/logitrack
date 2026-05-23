@@ -84,7 +84,7 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
   options?: ChatOption[];
-  data?: any;
+  data?: unknown;
 }
 
 export interface ChatOption {

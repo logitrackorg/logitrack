@@ -21,6 +21,7 @@ export const ChatbotWidget: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const msgIdRef = useRef(0);
 
   // Auto-scroll al último mensaje
   useEffect(() => {
@@ -39,11 +40,11 @@ export const ChatbotWidget: React.FC = () => {
       );
       setState('authenticating');
     }
-  }, [isOpen]);
+  }, [isOpen, messages.length]);
 
-  const addBotMessage = (text: string, options?: ChatOption[], data?: any) => {
+  const addBotMessage = (text: string, options?: ChatOption[], data?: unknown) => {
     const message: ChatMessage = {
-      id: Date.now().toString(),
+      id: String(++msgIdRef.current),
       type: 'bot',
       text,
       timestamp: new Date(),
@@ -55,7 +56,7 @@ export const ChatbotWidget: React.FC = () => {
 
   const addUserMessage = (text: string) => {
     const message: ChatMessage = {
-      id: Date.now().toString(),
+      id: String(++msgIdRef.current),
       type: 'user',
       text,
       timestamp: new Date(),
@@ -95,9 +96,10 @@ export const ChatbotWidget: React.FC = () => {
           [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
         );
       }
-    } catch (error: any) {
+    } catch (error) {
+      const apiErr = error as { response?: { data?: { error?: string } } };
       addBotMessage(
-        '❌ ' + (error.response?.data?.error ||
+        '❌ ' + (apiErr.response?.data?.error ||
         'No pudimos encontrar tu envío con los datos ingresados, por favor verifica e intenta nuevamente.')
       );
       setTrackingId('');
@@ -175,8 +177,9 @@ export const ChatbotWidget: React.FC = () => {
         default:
           addBotMessage('Opción no reconocida. Por favor intenta de nuevo.');
       }
-    } catch (error: any) {
-      addBotMessage('❌ ' + (error.response?.data?.error || 'Ocurrió un error. Por favor intenta de nuevo.'));
+    } catch (error) {
+      const apiErr = error as { response?: { data?: { error?: string } } };
+      addBotMessage('❌ ' + (apiErr.response?.data?.error || 'Ocurrió un error. Por favor intenta de nuevo.'));
       setState('authenticated');
       if (shipment) {
         const menuOptions = buildMenuOptions(getAvailableActions());
@@ -292,16 +295,14 @@ export const ChatbotWidget: React.FC = () => {
     setRecipientDni('');
     setTrackingId('');
     setState('authenticating');
-    setMessages([{
-      id: Date.now().toString(),
-      type: 'bot',
-      text: '¡Hola! 👋 Soy tu asistente virtual de LogiTrack.\n\n' +
-            'Para ayudarte con tu envío, necesito que me proporciones:\n' +
-            '1️⃣ Tu número de seguimiento (ID de envío)\n' +
-            '2️⃣ Tu número de DNI\n\n' +
-            'Por favor ingresa tu ID de envío:',
-      timestamp: new Date(),
-    }]);
+    setMessages([]);
+    addBotMessage(
+      '¡Hola! 👋 Soy tu asistente virtual de LogiTrack.\n\n' +
+      'Para ayudarte con tu envío, necesito que me proporciones:\n' +
+      '1️⃣ Tu número de seguimiento (ID de envío)\n' +
+      '2️⃣ Tu número de DNI\n\n' +
+      'Por favor ingresa tu ID de envío:'
+    );
   };
 
   const getAvailableActions = (): string[] => {
