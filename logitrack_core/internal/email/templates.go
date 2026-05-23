@@ -145,6 +145,44 @@ const senderBodySrc = `
 </div>
 {{end}}`
 
+// ─── Last mile template (CA-04) ──────────────────────────────────────────────
+
+const lastMileBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🚚 Tu envío está en camino y llegará hoy.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Entrega estimada</td>
+          <td><strong>Hoy, {{.TimeWindowText}}</strong></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  Asegurate de estar disponible para recibir tu paquete. Si no estás en casa al momento de la entrega, el repartidor dejará un aviso para coordinar un nuevo intento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Rastrear mi envío &rarr;
+  </a>
+</div>
+{{end}}`
+
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 type baseData struct {
@@ -160,6 +198,7 @@ var (
 	baseTmpl      = template.Must(template.New("base").Parse(baseTmplSrc))
 	recipientTmpl = template.Must(template.New("recipient").Parse(recipientBodySrc))
 	senderTmpl    = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl  = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -210,6 +249,31 @@ func renderSenderConfirmation(s model.Shipment, org model.OrganizationConfig, tr
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("Tu envío %s fue registrado", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderLastMileNotification(trackingID, timeWindowText, trackURL string, org model.OrganizationConfig) string {
+	type lastMileData struct {
+		TrackingID     string
+		TimeWindowText string
+		TrackURL       string
+	}
+	data := lastMileData{
+		TrackingID:     trackingID,
+		TimeWindowText: timeWindowText,
+		TrackURL:       trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := lastMileTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s está en camino — llegará hoy", trackingID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,
