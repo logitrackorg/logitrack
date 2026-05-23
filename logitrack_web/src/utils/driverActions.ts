@@ -137,7 +137,7 @@ export const REJECTED_REASONS: { id: string; label: string; emoji: string }[] = 
   { id: "no_lo_pedi", label: "No lo pedí", emoji: "🤷" },
   { id: "no_lo_quiero", label: "No lo quiero", emoji: "🚫" },
   { id: "producto_danado", label: "Producto dañado", emoji: "📦" },
-  { id: "precio_incorrecto", label: "Precio incorrecto", emoji: "💰" },
+  { id: "llego_tarde", label: "Llegó demasiado tarde", emoji: "⏰" },
   { id: "no_coincide_pedido", label: "No coincide con el pedido", emoji: "📋" },
   { id: "otro", label: "Otro", emoji: "✏️" },
 ];
