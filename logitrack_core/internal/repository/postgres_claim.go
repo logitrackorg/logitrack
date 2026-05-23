@@ -93,6 +93,49 @@ func (r *postgresClaimRepository) GetByID(id string) (model.Claim, error) {
 	return claim, nil
 }
 
+func (r *postgresClaimRepository) GetLatestByTrackingID(trackingID string) (model.Claim, error) {
+	row := r.db.QueryRow(
+		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic
+		 FROM shipment_claims
+		 WHERE tracking_id = $1
+		 ORDER BY updated_at DESC
+		 LIMIT 1`,
+		trackingID,
+	)
+	var claim model.Claim
+	var claimType string
+	var status string
+	var assignedCategory sql.NullString
+	var resolutionType sql.NullString
+	if err := row.Scan(
+		&claim.ID,
+		&claim.TrackingID,
+		&claimType,
+		&status,
+		&claim.Description,
+		&claim.CreatedBy,
+		&claim.CreatedAt,
+		&claim.UpdatedAt,
+		&assignedCategory,
+		&resolutionType,
+		&claim.IsAutomatic,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return model.Claim{}, ErrClaimNotFound
+		}
+		return model.Claim{}, err
+	}
+	claim.ClaimType = model.ClaimType(claimType)
+	claim.Status = model.ClaimStatus(status)
+	if assignedCategory.Valid {
+		claim.AssignedCategory = model.ClaimCategory(assignedCategory.String)
+	}
+	if resolutionType.Valid {
+		claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
+	}
+	return claim, nil
+}
+
 func (r *postgresClaimRepository) ListAll() ([]model.Claim, error) {
 	rows, err := r.db.Query(
 		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic

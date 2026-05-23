@@ -44,10 +44,13 @@ export interface PublicShipment {
 export interface PublicShipmentEvent {
   id: string;
   tracking_id: string;
+  event_type?: string;
   from_status?: ShipmentStatus;
   to_status: ShipmentStatus;
   location?: string;
   timestamp: string;
+  claim_status?: ClaimStatus;
+  claim_updated_at?: string;
 }
 
 export interface PublicStats {
