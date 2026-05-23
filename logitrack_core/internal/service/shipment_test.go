@@ -1738,3 +1738,109 @@ func TestDeliveryConfirmed_NoNotifWhenNotConfigured(t *testing.T) {
 		t.Errorf("status esperado delivered, got %s", result.Status)
 	}
 }
+
+// ─── LOGITRACK-429: Envío rechazado al remitente ──────────────────────────────
+
+// fakeRejectedNotifier registra llamadas a SendRejectedNotification
+// de forma goroutine-safe usando un canal con buffer.
+type fakeRejectedNotifier struct {
+	ch chan struct {
+		shipment model.Shipment
+		notes    string
+	}
+}
+
+func newFakeRejectedNotifier() *fakeRejectedNotifier {
+	return &fakeRejectedNotifier{ch: make(chan struct {
+		shipment model.Shipment
+		notes    string
+	}, 8)}
+}
+
+func (f *fakeRejectedNotifier) SendRejectedNotification(s model.Shipment, notes string) {
+	f.ch <- struct {
+		shipment model.Shipment
+		notes    string
+	}{s, notes}
+}
+
+func (f *fakeRejectedNotifier) recv(t *testing.T) (model.Shipment, string) {
+	t.Helper()
+	select {
+	case v := <-f.ch:
+		return v.shipment, v.notes
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout esperando SendRejectedNotification")
+		return model.Shipment{}, ""
+	}
+}
+
+// TestRejected_NotifiesSenderOnly verifica CA-01 y CA-02:
+// cuando un envío transiciona a "rechazado", se invoca la notificación
+// exactamente una vez y recibe el Sender y el motivo (notes).
+func TestRejected_NotifiesSenderOnly(t *testing.T) {
+	ts := newSetup()
+	notifier := newFakeRejectedNotifier()
+	ts.svc.SetRejectedService(notifier)
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusRechazado,
+		ChangedBy: "driver-01",
+		Notes:     "🚫 No lo quiero",
+	})
+
+	// CA-01: la notificación se disparó exactamente una vez.
+	notified, notes := notifier.recv(t)
+
+	// CA-02: el tracking ID y el Sender son correctos.
+	if notified.TrackingID != ship.TrackingID {
+		t.Errorf("CA-02: tracking ID incorrecto: got %s, want %s", notified.TrackingID, ship.TrackingID)
+	}
+	if notified.Sender.DNI != defaultSender().DNI {
+		t.Errorf("CA-02: Sender.DNI incorrecto: got %s", notified.Sender.DNI)
+	}
+	if notified.Status != model.StatusRechazado {
+		t.Errorf("CA-01: status debería ser rechazado, got %s", notified.Status)
+	}
+
+	// CA-03: el motivo de rechazo se pasa correctamente.
+	if notes != "🚫 No lo quiero" {
+		t.Errorf("CA-03: notes incorrecto: got %q, want %q", notes, "🚫 No lo quiero")
+	}
+
+	// Solo una notificación (CA-02).
+	select {
+	case extra := <-notifier.ch:
+		t.Errorf("CA-02: notificación inesperada adicional para %s", extra.shipment.TrackingID)
+	default:
+	}
+}
+
+// TestRejected_NoNotifWhenNotConfigured verifica que si el servicio
+// de notificación no fue configurado, UpdateStatus no falla.
+func TestRejected_NoNotifWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// rejectedNotifSvc no seteado → debe funcionar igualmente
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	result, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusRechazado,
+		ChangedBy: "driver-01",
+		Notes:     "🚫 No lo quiero",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus falló sin notifier configurado: %v", err)
+	}
+	if result.Status != model.StatusRechazado {
+		t.Errorf("status esperado rechazado, got %s", result.Status)
+	}
+}

@@ -290,6 +290,48 @@ type baseData struct {
 	Body       template.HTML
 }
 
+const rejectedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🚫 Tu envío fue rechazado por el destinatario.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Motivo del rechazo</td>
+          <td><strong>{{.RejectionReason}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Fecha y hora</td>
+          <td>{{.RejectedAt}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  El envío está siendo devuelto. Para coordinar una solución, contactate con tu sucursal más cercana.
+  {{if .OrgPhone}}<br>📞 <strong>{{.OrgPhone}}</strong>{{end}}
+  {{if .OrgEmail}}<br>✉️ <strong>{{.OrgEmail}}</strong>{{end}}
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Ver detalle del envío &rarr;
+  </a>
+</div>
+{{end}}`
+
 var (
 	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
 	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
@@ -297,6 +339,7 @@ var (
 	lastMileTmpl            = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
 	readyForPickupTmpl      = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
 	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
+	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -492,6 +535,37 @@ func renderReadyForPickupNotification(s model.Shipment, branchName, branchAddres
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderRejectedNotification(s model.Shipment, rejectionReason string, rejectedAt time.Time, trackURL string, org model.OrganizationConfig) string {
+	type rejectedData struct {
+		TrackingID      string
+		RejectionReason string
+		RejectedAt      string
+		TrackURL        string
+		OrgPhone        string
+		OrgEmail        string
+	}
+	data := rejectedData{
+		TrackingID:      s.TrackingID,
+		RejectionReason: rejectionReason,
+		RejectedAt:      formatDeliveredAt(rejectedAt),
+		TrackURL:        trackURL,
+		OrgPhone:        org.Phone,
+		OrgEmail:        org.Email,
+	}
+	var bodyBuf bytes.Buffer
+	if err := rejectedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s fue rechazado por el destinatario", s.TrackingID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,
