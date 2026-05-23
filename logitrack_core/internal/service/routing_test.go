@@ -577,27 +577,22 @@ func TestGeneratePlan_Returning_RuteaHaciaOrigen(t *testing.T) {
 		t.Fatalf("cfg: %v", err)
 	}
 
-	// Envío entrante CABA → Córdoba que el destinatario rechazó.
-	// Debe quedar en Córdoba con is_returning=true y final=caba como origen.
+	// Envío entrante CABA → Córdoba que el destinatario rechazó directamente al chofer.
+	// Queda en rechazado (no auto-transiciona); el operador lo mueve a at_hub manualmente.
 	sh := createInboundShip(t, ts, 6, "Buenos Aires", "br-caba", "Córdoba", false)
-	// Llegó a Córdoba (at_hub). Lo marcamos out_for_delivery → delivered_failed para forzar el flujo.
 	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
 		Status: model.StatusOutForDelivery, DriverID: "drv-1", ChangedBy: "supervisor",
 	}); err != nil {
 		t.Fatalf("out_for_delivery: %v", err)
 	}
+	// El chofer registra el rechazo activo del destinatario desde out_for_delivery.
 	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusDeliveryFailed, ChangedBy: "supervisor", Notes: "Destinatario ausente",
-	}); err != nil {
-		t.Fatalf("delivery_failed: %v", err)
-	}
-	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusRechazado, ChangedBy: "supervisor", Notes: "Cliente rechazó al volver a intentar",
+		Status: model.StatusRechazado, ChangedBy: "driver", Notes: "🚫 No lo quiero",
 	}); err != nil {
 		t.Fatalf("rechazado: %v", err)
 	}
 
-	// Verificar que es_returning y volvió a at_hub en Córdoba
+	// Verificar estado intermedio: rechazado con is_returning=true y ETA extendida.
 	got, err := ts.shipmentRepo.GetByTrackingID(sh.TrackingID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
@@ -605,12 +600,21 @@ func TestGeneratePlan_Returning_RuteaHaciaOrigen(t *testing.T) {
 	if !got.IsReturning {
 		t.Fatalf("expected is_returning=true, got false")
 	}
-	if got.Status != model.StatusAtHub {
-		t.Fatalf("expected at_hub after rechazado auto-transition, got %s", got.Status)
+	if got.Status != model.StatusRechazado {
+		t.Fatalf("expected rechazado, got %s", got.Status)
 	}
-	// La ETA debe haber sido extendida (no nil y futura)
 	if got.EstimatedDeliveryAt == nil {
 		t.Errorf("expected ETA to be extended, got nil")
+	}
+
+	// Operador mueve el envío a at_hub (el chofer devolvió el paquete a la sucursal).
+	if _, err := ts.shipmentSvc.UpdateStatus(sh.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusAtHub,
+		Location:  "Córdoba",
+		ChangedBy: "supervisor",
+		Notes:     "Envío rechazado devuelto a sucursal",
+	}); err != nil {
+		t.Fatalf("at_hub manual: %v", err)
 	}
 
 	// Generar plan en Córdoba — el envío debe aparecer como inter-sucursal hacia caba
