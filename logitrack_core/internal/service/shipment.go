@@ -909,7 +909,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		go s.messagingSvc.SendOutForDeliveryNotification(updated)
 	}
 
-	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por email.
+	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.
 	if targetStatus == model.StatusReadyForPickup && s.pickupEmailSvc != nil {
 		branch, _ := s.branchRepo.GetByID(updated.ReceivingBranchID)
 		var deadline *time.Time
@@ -920,6 +920,38 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 		go s.pickupEmailSvc.SendReadyForPickupNotification(updated, branch, deadline)
+	}
+
+	// Auto-transition: retiro_sucursal llegó a su sucursal final → listo para retiro.
+	// Aplica tanto a at_hub (llegó vía inter-sucursal) como a at_origin_hub (mismo origen
+	// y destino, p.ej. Córdoba → Córdoba), para que el destinatario sea notificado
+	// automáticamente sin requerir acción manual del operador.
+	if (targetStatus == model.StatusAtHub || targetStatus == model.StatusAtOriginHub) &&
+		updated.DeliveryMethod == model.DeliveryMethodBranchPickup &&
+		resolvedLocation != "" && resolvedLocation == updated.FinalBranchID {
+		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: trackingID,
+			FromStatus: targetStatus,
+			ToStatus:   model.StatusReadyForPickup,
+			Location:   resolvedLocation,
+			ChangedBy:  req.ChangedBy,
+			Notes:      "Envío listo para retiro en sucursal — transición automática",
+			Timestamp:  clock.Now().UTC(),
+		})
+		if autoErr == nil {
+			if s.pickupEmailSvc != nil {
+				branch, _ := s.branchRepo.GetByID(resolvedLocation)
+				var deadline *time.Time
+				if s.sysConfig != nil {
+					if days := s.sysConfig.Get().PickupDeadlineDays; days > 0 {
+						d := clock.Now().UTC().AddDate(0, 0, days)
+						deadline = &d
+					}
+				}
+				go s.pickupEmailSvc.SendReadyForPickupNotification(autoUpdated, branch, deadline)
+			}
+			return autoUpdated, nil
+		}
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
