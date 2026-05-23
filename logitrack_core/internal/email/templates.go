@@ -237,6 +237,48 @@ const readyForPickupBodySrc = `
 </div>
 {{end}}`
 
+// ─── Delivery confirmed template (CA-03) ─────────────────────────────────────
+
+const deliveryConfirmedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  ✅ Tu envío fue entregado exitosamente.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+          <td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Recibido por</td>
+          <td><strong>{{.RecipientName}}</strong></td>
+        </tr>
+        <tr>
+          <td style="color:#64748b;white-space:nowrap;padding-right:16px;">Fecha y hora de entrega</td>
+          <td>{{.DeliveredAt}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.6;">
+  Este mensaje es la constancia de que tu envío llegó a destino. Podés ver el detalle completo en el portal de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+  <a href="{{.TrackURL}}"
+     style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+            padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+    Ver detalle del envío &rarr;
+  </a>
+</div>
+{{end}}`
+
 // ─── Render helpers ───────────────────────────────────────────────────────────
 
 type baseData struct {
@@ -249,11 +291,12 @@ type baseData struct {
 }
 
 var (
-	baseTmpl           = template.Must(template.New("base").Parse(baseTmplSrc))
-	recipientTmpl      = template.Must(template.New("recipient").Parse(recipientBodySrc))
-	senderTmpl         = template.Must(template.New("sender").Parse(senderBodySrc))
-	lastMileTmpl       = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
-	readyForPickupTmpl = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
+	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
+	senderTmpl              = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl            = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
+	readyForPickupTmpl      = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -386,6 +429,42 @@ func buildTrackURL(base, trackingID string) string {
 		return ""
 	}
 	return base + "/track?id=" + trackingID
+}
+
+func renderDeliveryConfirmedNotification(s model.Shipment, deliveredAt time.Time, trackURL string, org model.OrganizationConfig) string {
+	type deliveryData struct {
+		TrackingID    string
+		RecipientName string
+		DeliveredAt   string
+		TrackURL      string
+	}
+	data := deliveryData{
+		TrackingID:    s.TrackingID,
+		RecipientName: s.Recipient.Name,
+		DeliveredAt:   formatDeliveredAt(deliveredAt),
+		TrackURL:      trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := deliveryConfirmedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s fue entregado exitosamente", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func formatDeliveredAt(t time.Time) string {
+	months := [...]string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+	return fmt.Sprintf("%d de %s de %d, %02d:%02d hs",
+		t.Day(), months[t.Month()-1], t.Year(), t.Hour(), t.Minute())
 }
 
 func renderReadyForPickupNotification(s model.Shipment, branchName, branchAddress, businessHours string, deadlineDate *time.Time, trackURL string, org model.OrganizationConfig) string {
