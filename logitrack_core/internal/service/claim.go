@@ -335,6 +335,36 @@ func (s *ClaimService) RequestCustomerInfo(id string, changedBy, branchID, notes
 	return claim, nil
 }
 
+func (s *ClaimService) MarkInReview(id string, changedBy, branchID string) (model.Claim, error) {
+	claim, err := s.GetByIDForBranch(id, branchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if claim.Status != model.ClaimStatusPendingCustomer {
+		return model.Claim{}, fmt.Errorf("solo se puede pasar a revision desde pendiente del cliente")
+	}
+	updatedAt := clock.Now().UTC()
+	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, updatedAt); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimInReview,
+		Payload: model.ClaimInReviewPayload{
+			FromStatus: claim.Status,
+			ToStatus:   model.ClaimStatusInReview,
+		},
+		ChangedBy: changedBy,
+		Timestamp: updatedAt,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+	claim.Status = model.ClaimStatusInReview
+	claim.UpdatedAt = updatedAt
+	return claim, nil
+}
+
 func (s *ClaimService) appendClaimEvent(event model.DomainEvent) error {
 	return s.claimEventRepo.Append(event)
 }
@@ -398,6 +428,12 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		} else {
 			base.Notes = "Solicitud de información al cliente"
 		}
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		return base, true
+	case model.EventClaimInReview:
+		payload := de.Payload.(model.ClaimInReviewPayload)
+		base.Notes = "Reclamo retomado en revisión"
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true

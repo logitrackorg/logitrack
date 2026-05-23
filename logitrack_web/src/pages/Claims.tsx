@@ -193,6 +193,32 @@ export function Claims() {
     });
   };
 
+  const handleMarkInReview = async (id: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "Volver a revisión",
+      message: "¿Querés pasar este reclamo a estado En revisión?",
+      confirmLabel: "Sí, pasar a revisión",
+      cancelLabel: "Cancelar",
+      variant: "default",
+      onConfirm: () => {
+        setConfirmDialog(null);
+        setBusyId(id);
+        (async () => {
+          try {
+            const updated = await claimsApi.markInReview(id);
+            setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+            await loadClaimEvents(id, true);
+          } catch {
+            setError("No se pudo cambiar el estado del reclamo.");
+          } finally {
+            setBusyId(null);
+          }
+        })();
+      },
+    });
+  };
+
   return (
     <div className="max-w-[1100px] mx-auto p-6 md:px-8">
       <PageHeader
@@ -374,6 +400,26 @@ export function Claims() {
                       >
                         Solicitar más info
                       </button>
+                      {claim.status === "pending_customer" && (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkInReview(claim.id)}
+                          disabled={busyId === claim.id}
+                          style={{
+                            background: "#2563eb",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 999,
+                            padding: "6px 12px",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            opacity: busyId === claim.id ? 0.6 : 1,
+                          }}
+                        >
+                          Pasar a revisión
+                        </button>
+                      )}
                     </div>
                   </div>
 
