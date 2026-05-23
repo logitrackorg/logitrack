@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -17,14 +17,15 @@ function relativeTime(dateStr: string, clockOffsetMs = 0): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Warehouse     size={16} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2     size={16} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw     size={16} color="#fb923c" />;
-  if (type === "return_started")      return <RotateCcw     size={16} color="#f97316" />;
-  if (type === "return_completed")    return <PackageCheck  size={16} color="#f59e0b" />;
-  if (type === "sla_risk")            return <AlertTriangle size={16} color="#ef4444" />;
-  if (type === "sla_expired")         return <AlertOctagon  size={16} color="#b91c1c" />;
-  if (type === "fatigue_alert")       return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "shipment_received")        return <Warehouse     size={16} color="#60a5fa" />;
+  if (type === "destination_arrival")      return <Building2     size={16} color="#34d399" />;
+  if (type === "return_arrival")           return <RotateCcw     size={16} color="#fb923c" />;
+  if (type === "return_started")           return <RotateCcw     size={16} color="#f97316" />;
+  if (type === "return_completed")         return <PackageCheck  size={16} color="#f59e0b" />;
+  if (type === "sla_risk")                 return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "sla_expired")              return <AlertOctagon  size={16} color="#b91c1c" />;
+  if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "chatbot_pickup_requested") return <Bot           size={16} color="#a78bfa" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 

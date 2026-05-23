@@ -22,8 +22,10 @@ const (
 	StatusCancelled           Status = "cancelled"            // cancelado — terminal
 	StatusLost                Status = "lost"                 // extraviado — terminal
 	StatusDestroyed           Status = "destroyed"            // daño total — terminal
-	StatusExpired             Status = "expired"              // borrador expirado — solo visible en auditoría
-	StatusPendingPayment      Status = "pending_payment"      // esperando confirmación de pago antes de ingresar al flujo operacional
+	StatusRecipientNotFound   Status = "recipient_not_found"
+	StatusExpired             Status = "expired"
+	StatusPendingPayment      Status = "pending_payment"
+	
 )
 
 type PackageType string
@@ -121,17 +123,13 @@ type Shipment struct {
 	Price          *float64        `json:"price,omitempty"`
 	PriceBreakdown *PriceBreakdown `json:"price_breakdown,omitempty"`
 	PriceCurrency  string          `json:"price_currency,omitempty"`
-
-	// Multi-hop routing path (WIP — stale-replan feature).
-	PlannedPath     []string `json:"planned_path,omitempty"`      // ordered list of branch IDs
-	NextHopBranchID string   `json:"next_hop_branch_id,omitempty"` // first branch after current
-	HopIndex        int      `json:"hop_index,omitempty"`
-	PathRevision    int      `json:"path_revision,omitempty"`
-
-	// Cross-branch pickup: cuando un trip multi-hop reserva el envío para
-	// recogerlo al pasar por su branch actual. Mientras está reservado, el
-	// envío no aparece en otros planes ni operaciones.
-	ReservedForTripID *string `json:"reserved_for_trip_id,omitempty"`
+	ChatbotMetadata *ChatbotMetadata `json:"chatbot_metadata,omitempty"`
+	// Multi-hop routing
+	ReservedForTripID *string  `json:"reserved_for_trip_id,omitempty"`
+	NextHopBranchID   string   `json:"next_hop_branch_id,omitempty"`   
+	PlannedPath       []string `json:"planned_path,omitempty"`         
+	HopIndex          int      `json:"hop_index,omitempty"`            
+	PathRevision      int      `json:"path_revision,omitempty"`        
 
 	// SLANotifiedAt registra cuándo se emitió la última notificación de SLA en riesgo.
 	// Se resetea a nil cuando el envío sale del estado crítico, habilitando una nueva
@@ -305,7 +303,7 @@ type ShipmentFilter struct {
 	DateFrom          *time.Time // inclusive lower bound on created_at
 	DateTo            *time.Time // inclusive upper bound on created_at (end of day)
 	ReceivingBranchID string     // if non-empty, only shipments with this branch
-	IncludeExpired    bool       // if true, also return expired drafts (supervisor/manager only)
+	IncludeExpired    bool 
 }
 
 // CorrectShipmentRequest carries typed field corrections.
@@ -328,4 +326,130 @@ type SaveDraftRequest struct {
 	DeliveryMethod      DeliveryMethod `json:"delivery_method"`
 	ReceivingBranchID   string         `json:"receiving_branch_id"`
 	CreatedBy           string         `json:"created_by"`
+}
+
+// ==========================================
+// CHATBOT EXTENSIONS
+// ==========================================
+
+// ChatbotMetadata holds chatbot-related tracking data
+type ChatbotMetadata struct {
+	RescheduleCount        int        `json:"reschedule_count"`
+	MaxReschedules         int        `json:"max_reschedules"`
+	OriginalDeliveryDate   *time.Time `json:"original_delivery_date,omitempty"`
+	ScheduledDeliveryDate  *time.Time `json:"scheduled_delivery_date,omitempty"`
+	CancelledAt            *time.Time `json:"cancelled_at,omitempty"`
+	CancelledBy            string     `json:"cancelled_by,omitempty"` // RECIPIENT, SENDER, SYSTEM
+	CancellationReason     string     `json:"cancellation_reason,omitempty"`
+	LastChatbotInteraction *time.Time `json:"last_chatbot_interaction,omitempty"`
+}
+
+// CanReschedule checks if shipment can be rescheduled via chatbot (US3)
+func (s *Shipment) CanReschedule() (bool, string) {
+	if s.ChatbotMetadata == nil {
+		return true, ""
+	}
+
+	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
+		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
+	}
+
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser modificado"
+	}
+
+	return true, ""
+}
+
+// CanCancel checks if shipment can be cancelled via chatbot (US4)
+func (s *Shipment) CanCancel() (bool, string) {
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino a tu domicilio y no podemos detener al repartidor. Si no lo deseas, por favor recházalo cuando llegue"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser cancelado"
+	}
+
+	validStatuses := []Status{
+		StatusAtHub,
+		StatusReadyForPickup,
+		StatusRedeliveryScheduled,
+		StatusInTransit,
+		StatusAtOriginHub,
+		StatusLoaded,
+	}
+
+	for _, valid := range validStatuses {
+		if s.Status == valid {
+			return true, ""
+		}
+	}
+
+	return false, "Este envío no puede ser cancelado en su estado actual"
+}
+
+// CanRequestPickup checks if shipment can be changed to pickup mode (US2)
+func (s *Shipment) CanRequestPickup() (bool, string) {
+	if s.DeliveryMethod != DeliveryMethodLastMile {
+		return false, "Este envío ya está configurado para retiro en sucursal"
+	}
+
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino y no puede ser redirigido"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser modificado"
+	}
+
+	if s.FinalBranchID == "" {
+		return false, "No se pudo determinar la sucursal de destino"
+	}
+
+	return true, ""
+}
+
+// GetAvailableRescheduleDates calculates available dates for rescheduling (US3 CA-01 & CA-03)
+func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
+	if s.EstimatedDeliveryAt == nil {
+		return []time.Time{}
+	}
+
+	baseDate := s.EstimatedDeliveryAt
+	if s.ChatbotMetadata != nil && s.ChatbotMetadata.OriginalDeliveryDate != nil {
+		baseDate = s.ChatbotMetadata.OriginalDeliveryDate
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+	maxDate := baseDate.AddDate(0, 0, 3)
+
+	var dates []time.Time
+	for i := 1; i <= 3; i++ {
+		newDate := baseDate.AddDate(0, 0, i)
+		if newDate.After(today) && !newDate.After(maxDate) {
+			dates = append(dates, newDate)
+		}
+	}
+
+	return dates
+}
+
+// InitializeChatbotMetadata sets up chatbot metadata if not present
+func (s *Shipment) InitializeChatbotMetadata() {
+	if s.ChatbotMetadata == nil {
+		s.ChatbotMetadata = &ChatbotMetadata{
+			RescheduleCount: 0,
+			MaxReschedules:  2,
+		}
+
+		if s.EstimatedDeliveryAt != nil {
+			originalDate := *s.EstimatedDeliveryAt
+			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
+		}
+	}
 }
