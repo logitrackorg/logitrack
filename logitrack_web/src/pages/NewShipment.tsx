@@ -53,6 +53,28 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Normalizes any Argentine phone to +549XXXXXXXXXX (13 chars).
+// Handles: digits-only (local), already prefixed with 54 or 549, etc.
+function normalizeArgPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  // Already full international: +549 + 10 local digits = 13 digits
+  if (digits.startsWith("549") && digits.length >= 12) return "+" + digits;
+  // Has country code 54 but missing mobile 9 — strip leading 54 and re-add +549
+  if (digits.startsWith("54")) return "+549" + digits.slice(2).replace(/^9/, "");
+  // Local number with leading 0 (e.g. 011...) — strip leading 0
+  if (digits.startsWith("0")) return "+549" + digits.slice(1);
+  // Already a bare local number
+  return "+549" + digits;
+}
+
+// Returns the part the user types after the "+54 9" prefix in the input.
+function phoneLocalPart(stored: string): string {
+  if (stored.startsWith("+549")) return stored.slice(4);
+  if (stored.startsWith("549")) return stored.slice(3);
+  return stored.replace(/\D/g, "");
+}
+
 function findFinalBranch(recipientAddress: { province?: string; latitude?: number; longitude?: number }, branches: Branch[]): Branch | null {
   const active = branches.filter(b => b.status === "activo");
   if (!active.length) return null;
@@ -297,7 +319,7 @@ export function NewShipment() {
       sender: {
         ...prev.sender,
         name: senderSuggestion.name,
-        phone: (senderSuggestion.phone ?? "").replace(/\D/g, ""),
+        phone: normalizeArgPhone(senderSuggestion.phone ?? ""),
         email: senderSuggestion.email ?? prev.sender.email,
         address: {
           street: senderSuggestion.address.street ?? prev.sender.address.street,
@@ -330,7 +352,7 @@ export function NewShipment() {
       recipient: {
         ...prev.recipient,
         name: recipientSuggestion.name,
-        phone: (recipientSuggestion.phone ?? "").replace(/\D/g, ""),
+        phone: normalizeArgPhone(recipientSuggestion.phone ?? ""),
         email: recipientSuggestion.email ?? prev.recipient.email,
         address: {
           street: recipientSuggestion.address.street ?? prev.recipient.address.street,
@@ -478,8 +500,13 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <input style={input} required value={form.sender.phone}
-                onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" />
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", overflow: "hidden" }}>
+                <span style={{ padding: "10px 10px", color: "#64748b", fontSize: 14, borderRight: "1px solid #e2e8f0", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
+                <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
+                  value={phoneLocalPart(form.sender.phone)}
+                  onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setSender("phone", d ? "+549" + d : ""); }}
+                  placeholder="11 1234 5678" />
+              </div>
             </Field>
             <Field label="Email">
               <input style={input} type="email" value={form.sender.email}
@@ -537,8 +564,13 @@ export function NewShipment() {
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <input style={input} required value={form.recipient.phone}
-                onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" />
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", overflow: "hidden" }}>
+                <span style={{ padding: "10px 10px", color: "#64748b", fontSize: 14, borderRight: "1px solid #e2e8f0", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
+                <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
+                  value={phoneLocalPart(form.recipient.phone)}
+                  onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setRecipient("phone", d ? "+549" + d : ""); }}
+                  placeholder="11 1234 5678" />
+              </div>
             </Field>
             <Field label="Email">
               <input style={input} type="email" value={form.recipient.email}

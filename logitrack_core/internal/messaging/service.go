@@ -104,16 +104,7 @@ func (s *Service) sendWhatsApp(phone, message string) error {
 
 	to := phone
 	if !strings.HasPrefix(phone, "whatsapp:") {
-		digits := strings.Map(func(r rune) rune {
-			if (r >= '0' && r <= '9') || r == '+' {
-				return r
-			}
-			return -1
-		}, phone)
-		if !strings.HasPrefix(digits, "+") {
-			digits = "+" + digits
-		}
-		to = "whatsapp:" + digits
+		to = "whatsapp:" + toE164Argentina(phone)
 	}
 
 	data := url.Values{}
@@ -139,6 +130,36 @@ func (s *Service) sendWhatsApp(phone, message string) error {
 		return fmt.Errorf("twilio %d: %s", resp.StatusCode, string(body))
 	}
 	return nil
+}
+
+// toE164Argentina converts any Argentine phone number to E.164 format (+549XXXXXXXXXX).
+// Handles: already-E164 (+549...), digits-only (local 10-digit), with leading 0, etc.
+func toE164Argentina(raw string) string {
+	digits := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, raw)
+	if digits == "" {
+		return raw
+	}
+	// Already full international with mobile 9 prefix
+	if strings.HasPrefix(digits, "549") && len(digits) >= 12 {
+		return "+" + digits
+	}
+	// Has country code 54 but missing mobile 9
+	if strings.HasPrefix(digits, "54") {
+		local := strings.TrimPrefix(digits, "54")
+		local = strings.TrimPrefix(local, "9") // avoid double 9
+		return "+549" + local
+	}
+	// Local with leading 0 (e.g. 011...)
+	if strings.HasPrefix(digits, "0") {
+		return "+549" + digits[1:]
+	}
+	// Bare local number
+	return "+549" + digits
 }
 
 func buildWhatsAppMessage(trackingID, timeWindowText, trackURL string) string {
