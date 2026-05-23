@@ -526,6 +526,10 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	if err != nil {
 		return model.Shipment{}, err
 	}
+	// Inicializar metadata si no existe
+	if shipment.ChatbotMetadata == nil {
+		shipment.InitializeChatbotMetadata()
+	}
 
 	// Validar que se puede reprogramar
 	canReschedule, reason := shipment.CanReschedule()
@@ -546,10 +550,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 		return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
 	}
 
-	// Inicializar metadata si no existe
-	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata()
-	}
+	
 
 	// Calcular días desde la fecha original
 	daysFromOriginal := 0
