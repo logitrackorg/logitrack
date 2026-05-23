@@ -103,6 +103,7 @@ type CreatePublicClaimRequest struct {
 	ClaimType   ClaimType `json:"claim_type" binding:"required"`
 	Description string    `json:"description" binding:"required"`
 	CreatedBy   string    `json:"created_by" binding:"required"`
+	DNI         string    `json:"dni" binding:"required"`
 }
 
 type UpdateClaimCategoryRequest struct {

@@ -94,6 +94,7 @@ export interface CreatePublicClaimPayload {
   claim_type: ClaimType;
   description: string;
   created_by: string;
+  dni: string;
 }
 
 export const publicTrackingApi = {

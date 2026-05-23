@@ -84,10 +84,22 @@ export function validatePublicClaimForm(input: {
 }): string | null {
   const { category, damageSubtypes, deliverySubtype, staffDescription, evidence, createdBy, dni } = input;
 
-  if (!createdBy.trim()) return "Indicá tu nombre para continuar.";
-  if (!dni.trim()) return "El DNI es requerido.";
-  if (!/^[0-9]+$/.test(dni.trim()) || dni.trim().length < 7) {
-    return "El DNI debe contener solo dígitos y tener al menos 7 números.";
+  const normalizedName = createdBy.trim().replace(/\s+/g, " ");
+  if (!normalizedName) {
+    return "Ingresá tu nombre y apellido. No es posible crear un reclamo sin esos datos.";
+  }
+  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'\s]+$/.test(normalizedName)) {
+    return "El nombre y apellido solo puede contener letras y espacios.";
+  }
+  if (normalizedName.split(" ").length < 2) {
+    return "Ingresá tu nombre y apellido completos.";
+  }
+  const normalizedDni = dni.trim();
+  if (!normalizedDni) {
+    return "Ingresá tu DNI. No es posible crear un reclamo sin esos datos.";
+  }
+  if (!/^[0-9]{7,8}$/.test(normalizedDni)) {
+    return "El DNI debe tener 7 u 8 dígitos.";
   }
   if (!category) return "Seleccioná qué problema tuviste con el envío.";
 

@@ -39,7 +39,8 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest) (mo
 	if trackingID == "" {
 		return model.Claim{}, fmt.Errorf("tracking_id es requerido")
 	}
-	if _, err := s.shipmentRepo.GetByTrackingID(trackingID); err != nil {
+	shipment, err := s.shipmentRepo.GetByTrackingID(trackingID)
+	if err != nil {
 		return model.Claim{}, fmt.Errorf("envio no encontrado")
 	}
 	if !model.ValidClaimTypes[req.ClaimType] {
@@ -55,6 +56,16 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest) (mo
 	createdBy := strings.TrimSpace(req.CreatedBy)
 	if createdBy == "" {
 		return model.Claim{}, fmt.Errorf("created_by es requerido")
+	}
+	claimantDNI := strings.TrimSpace(req.DNI)
+	if claimantDNI == "" {
+		return model.Claim{}, fmt.Errorf("dni es requerido")
+	}
+	if !isDigits(claimantDNI) || len(claimantDNI) < 7 || len(claimantDNI) > 8 {
+		return model.Claim{}, fmt.Errorf("dni invalido")
+	}
+	if !s.ValidateClaimant(&shipment, createdBy, claimantDNI) {
+		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
 	}
 
 	claimID, err := s.claimRepo.NextID()
@@ -310,4 +321,33 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 	default:
 		return model.ClaimEvent{}, false
 	}
+}
+
+func (s *ClaimService) ValidateClaimant(shipment *model.Shipment, fullName, dni string) bool {
+	normalizedName := normalizeName(fullName)
+	if normalizedName == "" || strings.TrimSpace(dni) == "" {
+		return false
+	}
+	return matchesCustomer(shipment.Sender, normalizedName, dni) || matchesCustomer(shipment.Recipient, normalizedName, dni)
+}
+
+func matchesCustomer(customer model.Customer, normalizedName, dni string) bool {
+	if strings.TrimSpace(customer.DNI) == "" || strings.TrimSpace(customer.Name) == "" {
+		return false
+	}
+	return normalizeName(customer.Name) == normalizedName && strings.TrimSpace(customer.DNI) == strings.TrimSpace(dni)
+}
+
+func normalizeName(name string) string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(name)))
+	return strings.Join(fields, " ")
+}
+
+func isDigits(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
