@@ -296,6 +296,45 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	return claim, nil
 }
 
+func (s *ClaimService) RequestCustomerInfo(id string, changedBy, branchID, notes string) (model.Claim, error) {
+	notes = strings.TrimSpace(notes)
+	if len(notes) < 15 {
+		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 15 caracteres")
+	}
+	claim, err := s.GetByIDForBranch(id, branchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	// Block if already final/resolved
+	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
+	}
+	fromStatus := claim.Status
+	updatedAt := clock.Now().UTC()
+	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusPendingCustomer, updatedAt); err != nil {
+		return model.Claim{}, err
+	}
+
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimPendingCustomer,
+		Payload: model.ClaimPendingCustomerPayload{
+			Notes:      notes,
+			FromStatus: fromStatus,
+			ToStatus:   model.ClaimStatusPendingCustomer,
+		},
+		ChangedBy: changedBy,
+		Timestamp: updatedAt,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+
+	claim.Status = model.ClaimStatusPendingCustomer
+	claim.UpdatedAt = updatedAt
+	return claim, nil
+}
+
 func (s *ClaimService) appendClaimEvent(event model.DomainEvent) error {
 	return s.claimEventRepo.Append(event)
 }
@@ -349,6 +388,16 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 			base.Notes = fmt.Sprintf("Resuelto: %s", payload.ResolutionType)
 		}
 		base.ResolutionType = payload.ResolutionType
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		return base, true
+	case model.EventClaimPendingCustomer:
+		payload := de.Payload.(model.ClaimPendingCustomerPayload)
+		if strings.TrimSpace(payload.Notes) != "" {
+			base.Notes = payload.Notes
+		} else {
+			base.Notes = "Solicitud de información al cliente"
+		}
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true

@@ -330,6 +330,50 @@ export function Claims() {
                           {opt.label}
                         </button>
                       ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // request more info
+                          setConfirmDialog({
+                            isOpen: true,
+                            title: "Solicitar más información",
+                            message: "Solicitar más información al cliente (por ejemplo: fotos o aclaraciones). Se registrará en el historial.",
+                            confirmLabel: "Solicitar",
+                            cancelLabel: "Cancelar",
+                            variant: "default",
+                            requireComment: true,
+                            onConfirm: (notes?: string) => {
+                              setConfirmDialog(null);
+                              setBusyId(claim.id);
+                              (async () => {
+                                try {
+                                  const updated = await claimsApi.requestInfo(claim.id, notes);
+                                  setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
+                                  await loadClaimEvents(claim.id, true);
+                                } catch {
+                                  setError("No se pudo solicitar información al cliente.");
+                                } finally {
+                                  setBusyId(null);
+                                }
+                              })();
+                            },
+                          });
+                        }}
+                        disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
+                        style={{
+                          background: "#0ea5e9",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "6px 12px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                        }}
+                      >
+                        Solicitar más info
+                      </button>
                     </div>
                   </div>
 

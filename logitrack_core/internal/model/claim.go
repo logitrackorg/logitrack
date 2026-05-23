@@ -115,3 +115,7 @@ type ResolveClaimRequest struct {
 	ResolutionType ClaimResolutionType `json:"resolution_type" binding:"required"`
 	Notes          string              `json:"notes" binding:"required"`
 }
+
+type RequestCustomerInfoRequest struct {
+	Notes string `json:"notes" binding:"required"`
+}

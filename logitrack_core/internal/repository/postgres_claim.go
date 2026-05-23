@@ -220,3 +220,22 @@ func (r *postgresClaimRepository) Resolve(id string, resolutionType model.ClaimR
 	}
 	return err
 }
+
+func (r *postgresClaimRepository) UpdateStatus(id string, status model.ClaimStatus, updatedAt time.Time) error {
+	res, err := r.db.Exec(
+		`UPDATE shipment_claims
+		 SET status = $1, updated_at = $2
+		 WHERE id = $3`,
+		string(status),
+		updatedAt,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err == nil && rows == 0 {
+		return ErrClaimNotFound
+	}
+	return err
+}
