@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { chatbotService } from '../../api/chatbot';
-import type { 
-  ChatMessage, 
+import type {
+  ChatMessage,
   Shipment,
-  ChatOption 
+  ChatOption
 } from '../../types/chatbot';
 import './chatbot.css';
 
@@ -19,8 +19,14 @@ export const ChatbotWidget: React.FC = () => {
   const [recipientDni, setRecipientDni] = useState<string>('');
   const [trackingId, setTrackingId] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  
+  const [sessionActive, setSessionActive] = useState(true);
+  const sessionTimeoutRef = useRef<number | null>(null);
+  const SESSION_DURATION = 60000; // 1 minuto en milisegundos
+  const [timeRemaining, setTimeRemaining] = useState(60);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+
 
   // Auto-scroll al último mensaje
   useEffect(() => {
@@ -75,8 +81,10 @@ export const ChatbotWidget: React.FC = () => {
       setRecipientDni(dni);
       setTrackingId(trackingId);
       setState('authenticated');
+      setSessionActive(true);
 
       const menuOptions = buildMenuOptions(response.available_actions);
+      resetSessionTimer();
 
       if (menuOptions.length > 0) {
         addBotMessage(
@@ -98,7 +106,7 @@ export const ChatbotWidget: React.FC = () => {
     } catch (error: any) {
       addBotMessage(
         '❌ ' + (error.response?.data?.error ||
-        'No pudimos encontrar tu envío con los datos ingresados, por favor verifica e intenta nuevamente.')
+          'No pudimos encontrar tu envío con los datos ingresados, por favor verifica e intenta nuevamente.')
       );
       setTrackingId('');
       setState('initial');
@@ -135,6 +143,7 @@ export const ChatbotWidget: React.FC = () => {
 
   const handleUserInput = async (input: string) => {
     addUserMessage(input);
+    resetSessionTimer();
 
     if (state === 'authenticating') {
       if (!trackingId) {
@@ -148,7 +157,90 @@ export const ChatbotWidget: React.FC = () => {
     }
   };
 
+  // Función para limpiar la sesión
+  const clearSession = () => {
+    setSessionActive(false);
+    setState('initial');
+    setShipment(null);
+    setRecipientDni('');
+    setTrackingId('');
+
+
+    addBotMessage(
+      '⏱️ Tu sesión ha expirado por seguridad.\n\n' +
+      'Por favor, vuelve a autenticarte para continuar.'
+    );
+
+    // Limpiar el timer
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
+  };
+
+  // Función para reiniciar el timer de inactividad
+  const resetSessionTimer = () => {
+    // Limpiar timer anterior si existe
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    setTimeRemaining(60);
+
+    // Solo iniciar timer si hay una sesión activa (usuario autenticado)
+    if (state === 'authenticated' || state === 'menu') {
+      sessionTimeoutRef.current = setTimeout(() => {
+        clearSession();
+      }, SESSION_DURATION);
+    }
+  };
+
+  // Limpiar timer al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (state === 'authenticated' && sessionActive) {
+      const interval = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [state, sessionActive]);
+
+  // Reset del countdown cuando cambia el estado
+  useEffect(() => {
+    if (state === 'authenticated') {
+      setTimeRemaining(60);
+    }
+  }, [state]);
+
+  // Detectar cuando el tiempo llega a 0 y cerrar sesión
+  useEffect(() => {
+    if (timeRemaining === 0 && sessionActive && state === 'authenticated') {
+      clearSession();
+    }
+  }, [timeRemaining, sessionActive, state]);
+
   const handleOptionClick = async (action: string, value: string) => {
+    if (!sessionActive) {
+      addBotMessage('⏱️ Tu sesión ha expirado por seguridad. Por favor vuelve a autenticarte.');
+      handleRestart();
+      return;
+    }
+
+    resetSessionTimer();
     setState('processing');
     setLoading(true);
 
@@ -196,13 +288,13 @@ export const ChatbotWidget: React.FC = () => {
 
   const handlePickupRequest = async () => {
     const response = await chatbotService.requestPickup(trackingId, recipientDni);
-    
+
     addBotMessage(
       `✅ ${response.message}\n\n` +
-      (response.branch ? 
+      (response.branch ?
         `📍 Sucursal: ${response.branch.name}\n` +
         `📫 Dirección: ${response.branch.address}\n` +
-        `🕐 Horarios: ${response.branch.hours}` 
+        `🕐 Horarios: ${response.branch.hours}`
         : ''
       )
     );
@@ -241,7 +333,7 @@ export const ChatbotWidget: React.FC = () => {
 
   const handleDateSelection = async (newDate: string) => {
     const response = await chatbotService.rescheduleDelivery(trackingId, recipientDni, newDate);
-    
+
     addBotMessage(
       `✅ ${response.message}\n\n` +
       `📅 Nueva fecha de entrega: ${formatDate(response.new_delivery_date)}`
@@ -266,9 +358,9 @@ export const ChatbotWidget: React.FC = () => {
 
   const handleCancelConfirmation = async () => {
     const response = await chatbotService.cancelShipment(trackingId, recipientDni);
-    
+
     addBotMessage(`✅ ${response.message}`);
-    
+
     setState('authenticated');
     addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
       { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }
@@ -276,6 +368,10 @@ export const ChatbotWidget: React.FC = () => {
   };
 
   const handleRestart = () => {
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+      sessionTimeoutRef.current = null;
+    }
     if (shipment) {
       setState('authenticated');
       const menuOptions = buildMenuOptions(getAvailableActions());
@@ -293,30 +389,31 @@ export const ChatbotWidget: React.FC = () => {
       setRecipientDni('');
       setTrackingId('');
       setState('initial');
+      setSessionActive(true);
       setIsOpen(true); // Trigger initial message
     }
   };
 
   const getAvailableActions = (): string[] => {
     if (!shipment) return [];
-    
+
     const actions: string[] = [];
-    
+
     // Simular lógica basada en el modelo
-    if (shipment.delivery_method === 'ultima_milla' && 
-        shipment.status !== 'out_for_delivery' &&
-        !isTerminalStatus(shipment.status)) {
+    if (shipment.delivery_method === 'ultima_milla' &&
+      shipment.status !== 'out_for_delivery' &&
+      !isTerminalStatus(shipment.status)) {
       actions.push('request_pickup');
     }
 
-    if (shipment.status !== 'out_for_delivery' && 
-        !isTerminalStatus(shipment.status) &&
-        (shipment.chatbot_metadata?.reschedule_count || 0) < 2) {
+    if (shipment.status !== 'out_for_delivery' &&
+      !isTerminalStatus(shipment.status) &&
+      (shipment.chatbot_metadata?.reschedule_count || 0) < 2) {
       actions.push('reschedule');
     }
 
-    if (shipment.status !== 'out_for_delivery' && 
-        !isTerminalStatus(shipment.status)) {
+    if (shipment.status !== 'out_for_delivery' &&
+      !isTerminalStatus(shipment.status)) {
       actions.push('cancel');
     }
 
@@ -371,7 +468,7 @@ export const ChatbotWidget: React.FC = () => {
   return (
     <>
       {/* Botón flotante */}
-      <button 
+      <button
         className={`chatbot-toggle ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir chat"
@@ -387,14 +484,23 @@ export const ChatbotWidget: React.FC = () => {
               <span className="bot-icon">🤖</span>
               <div>
                 <h3>Asistente LogiTrack</h3>
-                <span className="status-indicator">
-                  {loading ? '⏳ Procesando...' : '🟢 En línea'}
+                <span className={`status-indicator ${timeRemaining < 20 && sessionActive && state === 'authenticated' ? 'warning' : ''}`}>
+                  {loading
+                    ? '⏳ Procesando...'
+                    : sessionActive && state === 'authenticated'
+                      ? `🟢 Sesión activa (${timeRemaining}s)`
+                      : '🟢 En línea'}
                 </span>
               </div>
             </div>
-            <button 
+            <button
               className="close-button"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+                if (sessionTimeoutRef.current) {
+                  clearTimeout(sessionTimeoutRef.current);
+                }
+              }}
               aria-label="Cerrar chat"
             >
               ✕
@@ -423,8 +529,8 @@ export const ChatbotWidget: React.FC = () => {
             onSend={handleUserInput}
             disabled={loading || state === 'authenticated'}
             placeholder={
-              state === 'authenticated' 
-                ? 'Selecciona una opción...' 
+              state === 'authenticated'
+                ? 'Selecciona una opción...'
                 : 'Escribe tu respuesta...'
             }
           />
