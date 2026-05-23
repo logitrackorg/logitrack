@@ -97,6 +97,23 @@ func (s *Service) SendShipmentConfirmation(shipment model.Shipment) {
 	}
 }
 
+// SendLastMileNotification sends an out-for-delivery notification email to the recipient.
+// Used as fallback when WhatsApp is unavailable or fails (CA-03).
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendLastMileNotification(recipient model.Customer, trackingID, timeWindowText, trackURL string) {
+	if s == nil {
+		return
+	}
+	if recipient.Email == "" {
+		log.Printf("[email] última milla: destinatario de %s sin email registrado — omitido", trackingID)
+		return
+	}
+	org := s.orgConfig()
+	subj := fmt.Sprintf("Tu envío %s está en camino — llegará hoy", trackingID)
+	body := renderLastMileNotification(trackingID, timeWindowText, trackURL, org)
+	s.sendOne(recipient.Email, subj, body, trackingID, "destinatario (última milla)", org.Email)
+}
+
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {

@@ -121,6 +121,12 @@ type EmailConfirmationSender interface {
 	SendShipmentConfirmation(shipment model.Shipment)
 }
 
+// OutForDeliveryNotifier sends last-mile notifications to recipients (CA-01).
+// Satisfied by *messaging.Service.
+type OutForDeliveryNotifier interface {
+	SendOutForDeliveryNotification(shipment model.Shipment)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -132,11 +138,13 @@ type ShipmentService struct {
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
 	notifSvc     *NotificationService
 	emailSvc     EmailConfirmationSender
+	messagingSvc OutForDeliveryNotifier
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)    { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService) { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)     { s.emailSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)        { s.emailSvc = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)     { s.messagingSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -884,6 +892,13 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
 		}
+	}
+
+	// CA-01: envío transicionó a última milla → notificar al destinatario por WhatsApp/email.
+	if targetStatus == model.StatusOutForDelivery &&
+		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
+		s.messagingSvc != nil {
+		go s.messagingSvc.SendOutForDeliveryNotification(updated)
 	}
 
 	// Auto-transition: returning shipment arrived at origin hub → ready_for_return
