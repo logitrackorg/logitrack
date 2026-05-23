@@ -83,7 +83,6 @@ interface EventDescription {
 }
 
 function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescription {
-  
   if (ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date) {
     const locationText = ev.current_location.type === "DESTINATION_BRANCH"
       ? "En Sucursal Destino"
@@ -104,7 +103,11 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
     };
   }
 
-  
+  if (ev.event_type === "claim_created") {
+    const statusLabel = ev.claim_status ? CLAIM_STATUS_LABELS[ev.claim_status] ?? "Abierto" : "Abierto";
+    return { icon: "🧾", title: `En Reclamo · ${statusLabel}` };
+  }
+
   const loc = ev.location;
   const branch = loc
     ? (branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc))
@@ -585,6 +588,9 @@ export function PublicTracking() {
                   {chronological.map((ev, i) => {
                     const isCurrent = i === 0;
                     const desc = describeEvent(ev, branches);
+                    const eventTime = ev.event_type === "claim_created" && ev.claim_updated_at
+                      ? ev.claim_updated_at
+                      : ev.timestamp;
                     return (
                       <li key={ev.id} className="pt-event" data-current={isCurrent || undefined}>
                         <div className="pt-event-dot" aria-current={isCurrent ? "step" : undefined} aria-hidden="true">
@@ -594,7 +600,7 @@ export function PublicTracking() {
                           <div className="pt-event-title">{desc.title}</div>
                           {desc.subtitle && <div className="pt-event-loc">📍 {desc.subtitle}</div>}
                           <div className="pt-event-time">
-                            {fmtDateTime(ev.timestamp)} · <span className="pt-event-time-rel">{fmtRelative(ev.timestamp)}</span>
+                            {fmtDateTime(eventTime)} · <span className="pt-event-time-rel">{fmtRelative(eventTime)}</span>
                           </div>
                         </div>
                       </li>

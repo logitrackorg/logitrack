@@ -136,6 +136,14 @@ func (s *ClaimService) GetByID(id string) (model.Claim, error) {
 	return s.claimRepo.GetByID(id)
 }
 
+func (s *ClaimService) GetLatestByTrackingID(trackingID string) (model.Claim, error) {
+	trackingID = strings.TrimSpace(trackingID)
+	if trackingID == "" {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return s.claimRepo.GetLatestByTrackingID(trackingID)
+}
+
 func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error) {
 	claim, err := s.GetByID(id)
 	if err != nil {

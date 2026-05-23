@@ -47,10 +47,17 @@ type ShipmentHandler struct {
 	routeSvc   *service.RouteService
 	commentSvc *service.CommentService
 	branchSvc  *service.BranchService
+	claimSvc   *service.ClaimService
 }
 
-func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService, commentSvc *service.CommentService, branchSvc *service.BranchService) *ShipmentHandler {
-	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc, branchSvc: branchSvc}
+func NewShipmentHandler(
+	svc *service.ShipmentService,
+	routeSvc *service.RouteService,
+	commentSvc *service.CommentService,
+	branchSvc *service.BranchService,
+	claimSvc *service.ClaimService,
+) *ShipmentHandler {
+	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc, branchSvc: branchSvc, claimSvc: claimSvc}
 }
 
 func (h *ShipmentHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -476,11 +483,26 @@ func (h *ShipmentHandler) GetPublicEvents(c *gin.Context) {
 		return
 	}
 	out := make([]model.PublicShipmentEvent, 0, len(events))
+	var latestClaim *model.Claim
+	claimFetched := false
 	for _, ev := range events {
 		if ev.EventType == "edited" {
 			continue
 		}
-		out = append(out, ev.ToPublicEvent())
+		publicEvent := ev.ToPublicEvent()
+		if ev.EventType == model.EventClaimCreated {
+			if !claimFetched && h.claimSvc != nil {
+				if claim, err := h.claimSvc.GetLatestByTrackingID(trackingID); err == nil {
+					latestClaim = &claim
+				}
+				claimFetched = true
+			}
+			if latestClaim != nil {
+				publicEvent.ClaimStatus = latestClaim.Status
+				publicEvent.ClaimUpdatedAt = &latestClaim.UpdatedAt
+			}
+		}
+		out = append(out, publicEvent)
 	}
 	c.JSON(http.StatusOK, out)
 }

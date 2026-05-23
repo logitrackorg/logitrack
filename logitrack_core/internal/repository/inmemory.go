@@ -641,6 +641,25 @@ func (r *inMemoryClaimRepository) GetByID(id string) (model.Claim, error) {
 	return model.Claim{}, ErrClaimNotFound
 }
 
+func (r *inMemoryClaimRepository) GetLatestByTrackingID(trackingID string) (model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *model.Claim
+	for i := range r.claims {
+		if r.claims[i].TrackingID != trackingID {
+			continue
+		}
+		if latest == nil || r.claims[i].UpdatedAt.After(latest.UpdatedAt) {
+			candidate := r.claims[i]
+			latest = &candidate
+		}
+	}
+	if latest == nil {
+		return model.Claim{}, ErrClaimNotFound
+	}
+	return *latest, nil
+}
+
 func (r *inMemoryClaimRepository) ListAll() ([]model.Claim, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
