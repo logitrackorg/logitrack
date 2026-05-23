@@ -33,10 +33,12 @@ type ClaimCategoryUpdatedPayload struct {
 	AssignedCategory ClaimCategory `json:"assigned_category"`
 	FromStatus       ClaimStatus   `json:"from_status"`
 	ToStatus         ClaimStatus   `json:"to_status"`
+	Notes            string        `json:"notes,omitempty"`
 }
 
 type ClaimResolvedPayload struct {
 	ResolutionType ClaimResolutionType `json:"resolution_type"`
 	FromStatus     ClaimStatus         `json:"from_status"`
 	ToStatus       ClaimStatus         `json:"to_status"`
+	Notes          string              `json:"notes,omitempty"`
 }

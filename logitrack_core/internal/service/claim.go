@@ -204,9 +204,13 @@ func (s *ClaimService) GetEvents(claimID, branchID string) ([]model.ClaimEvent, 
 	return result, nil
 }
 
-func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, changedBy, branchID string) (model.Claim, error) {
+func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, changedBy, branchID, notes string) (model.Claim, error) {
 	if !model.ValidClaimCategories[category] {
 		return model.Claim{}, fmt.Errorf("categoria de reclamo no valida")
+	}
+	notes = strings.TrimSpace(notes)
+	if len(notes) < 15 {
+		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 15 caracteres")
 	}
 	claim, err := s.GetByIDForBranch(id, branchID)
 	if err != nil {
@@ -230,6 +234,7 @@ func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, c
 			AssignedCategory: category,
 			FromStatus:       fromStatus,
 			ToStatus:         model.ClaimStatusDerived,
+			Notes:            notes,
 		},
 		ChangedBy: changedBy,
 		Timestamp: updatedAt,
@@ -243,9 +248,13 @@ func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, c
 	return claim, nil
 }
 
-func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, changedBy, branchID string) (model.Claim, error) {
+func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, changedBy, branchID, notes string) (model.Claim, error) {
 	if !model.ValidClaimResolutionTypes[resolution] {
 		return model.Claim{}, fmt.Errorf("tipo de resolucion no valido")
+	}
+	notes = strings.TrimSpace(notes)
+	if len(notes) < 15 {
+		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 15 caracteres")
 	}
 	claim, err := s.GetByIDForBranch(id, branchID)
 	if err != nil {
@@ -273,6 +282,7 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 			ResolutionType: resolution,
 			FromStatus:     fromStatus,
 			ToStatus:       status,
+			Notes:          notes,
 		},
 		ChangedBy: changedBy,
 		Timestamp: updatedAt,
@@ -322,14 +332,22 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		return base, true
 	case model.EventClaimCategoryUpdated:
 		payload := de.Payload.(model.ClaimCategoryUpdatedPayload)
-		base.Notes = fmt.Sprintf("Derivado a %s", payload.AssignedCategory)
+		if strings.TrimSpace(payload.Notes) != "" {
+			base.Notes = payload.Notes
+		} else {
+			base.Notes = fmt.Sprintf("Derivado a %s", payload.AssignedCategory)
+		}
 		base.AssignedCategory = payload.AssignedCategory
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true
 	case model.EventClaimResolved:
 		payload := de.Payload.(model.ClaimResolvedPayload)
-		base.Notes = fmt.Sprintf("Resuelto: %s", payload.ResolutionType)
+		if strings.TrimSpace(payload.Notes) != "" {
+			base.Notes = payload.Notes
+		} else {
+			base.Notes = fmt.Sprintf("Resuelto: %s", payload.ResolutionType)
+		}
 		base.ResolutionType = payload.ResolutionType
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus

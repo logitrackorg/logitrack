@@ -91,8 +91,8 @@ export const claimsApi = {
   list: () => api.get<Claim[]>("/claims").then((r) => r.data),
   get: (id: string) => api.get<Claim>(`/claims/${id}`).then((r) => r.data),
   getEvents: (id: string) => api.get<ClaimEvent[]>(`/claims/${id}/events`).then((r) => r.data),
-  updateCategory: (id: string, category: ClaimCategory) =>
-    api.patch<Claim>(`/claims/${id}/category`, { assigned_category: category }).then((r) => r.data),
-  resolve: (id: string, resolution: ClaimResolutionType) =>
-    api.post<Claim>(`/claims/${id}/resolve`, { resolution_type: resolution }).then((r) => r.data),
+  updateCategory: (id: string, category: ClaimCategory, notes?: string) =>
+    api.patch<Claim>(`/claims/${id}/category`, { assigned_category: category, notes }).then((r) => r.data),
+  resolve: (id: string, resolution: ClaimResolutionType, notes?: string) =>
+    api.post<Claim>(`/claims/${id}/resolve`, { resolution_type: resolution, notes }).then((r) => r.data),
 };

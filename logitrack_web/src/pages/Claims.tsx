@@ -84,8 +84,9 @@ export function Claims() {
     message: string;
     confirmLabel: string;
     cancelLabel: string;
-    onConfirm: () => void;
+    onConfirm: (notes?: string) => void;
     variant?: "default" | "danger";
+    requireComment?: boolean;
   } | null>(null);
 
   const loadClaims = async () => {
@@ -143,18 +144,21 @@ export function Claims() {
       confirmLabel: "Sí, derivar",
       cancelLabel: "Cancelar",
       variant: "default",
-      onConfirm: async () => {
+        requireComment: true,
+      onConfirm: (notes?: string) => {
         setConfirmDialog(null);
         setBusyId(id);
-        try {
-          const updated = await claimsApi.updateCategory(id, nextCategory);
-          setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
-          await loadClaimEvents(id, true);
-        } catch {
-          setError("No se pudo actualizar la categoría del reclamo.");
-        } finally {
-          setBusyId(null);
-        }
+        (async () => {
+          try {
+            const updated = await claimsApi.updateCategory(id, nextCategory, notes);
+            setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+            await loadClaimEvents(id, true);
+          } catch {
+            setError("No se pudo actualizar la categoría del reclamo.");
+          } finally {
+            setBusyId(null);
+          }
+        })();
       },
     });
   };
@@ -170,18 +174,21 @@ export function Claims() {
       confirmLabel: "Sí, resolver",
       cancelLabel: "Cancelar",
       variant: "default",
-      onConfirm: async () => {
+      requireComment: true,
+      onConfirm: (notes?: string) => {
         setConfirmDialog(null);
         setBusyId(id);
-        try {
-          const updated = await claimsApi.resolve(id, resolution);
-          setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
-          await loadClaimEvents(id, true);
-        } catch {
-          setError("No se pudo resolver el reclamo.");
-        } finally {
-          setBusyId(null);
-        }
+        (async () => {
+          try {
+            const updated = await claimsApi.resolve(id, resolution, notes);
+            setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
+            await loadClaimEvents(id, true);
+          } catch {
+            setError("No se pudo resolver el reclamo.");
+          } finally {
+            setBusyId(null);
+          }
+        })();
       },
     });
   };
@@ -386,6 +393,7 @@ export function Claims() {
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
           variant={confirmDialog.variant}
+          requireComment={confirmDialog.requireComment}
         />
       )}
     </div>
