@@ -139,6 +139,12 @@ type DeliveryConfirmedNotifier interface {
 	SendDeliveryConfirmedNotification(shipment model.Shipment)
 }
 
+// RejectedNotifier sends rejection notifications to the sender (LOGITRACK-429).
+// CA-01/CA-02: only the sender is notified; satisfied by *messaging.Service.
+type RejectedNotifier interface {
+	SendRejectedNotification(shipment model.Shipment, notes string)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -153,6 +159,7 @@ type ShipmentService struct {
 	messagingSvc        OutForDeliveryNotifier
 	pickupEmailSvc      ReadyForPickupNotifier
 	deliveryNotifSvc    DeliveryConfirmedNotifier
+	rejectedNotifSvc    RejectedNotifier
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
@@ -161,6 +168,7 @@ func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)          
 func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
 func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
 func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                  { s.rejectedNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -920,6 +928,12 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	// CA-01/CA-02: envío entregado → notificar al remitente (solo) por WhatsApp/email.
 	if targetStatus == model.StatusDelivered && s.deliveryNotifSvc != nil {
 		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
+	}
+
+	// LOGITRACK-429 CA-01/CA-02: envío rechazado → notificar al remitente (solo) por WhatsApp/email.
+	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
+		notes := req.Notes
+		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
 	}
 
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.

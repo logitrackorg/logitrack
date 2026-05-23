@@ -174,6 +174,27 @@ func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
 	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (entrega confirmada)", org.Email)
 }
 
+// SendRejectedNotification sends a rejection notification email to the shipment's sender.
+// CA-01: called when a shipment transitions to "rechazado".
+// CA-02: only the sender is notified.
+// CA-03: includes tracking ID, rejection reason, date/time, and branch contact instructions.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string) {
+	if s == nil {
+		return
+	}
+	if shipment.Sender.Email == "" {
+		log.Printf("[email] rechazo: remitente de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	rejectedAt := time.Now().UTC()
+	subj := fmt.Sprintf("Tu envío %s fue rechazado por el destinatario — %s", shipment.TrackingID, org.Name)
+	body := renderRejectedNotification(shipment, notes, rejectedAt, trackURL, org)
+	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (rechazo)", org.Email)
+}
+
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {
