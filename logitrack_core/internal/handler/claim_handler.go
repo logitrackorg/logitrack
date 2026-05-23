@@ -187,6 +187,37 @@ func (h *ClaimHandler) RequestCustomerInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, claim)
 }
 
+// MarkClaimInReview moves a claim from pending customer to in review.
+//
+// @Summary      Mark claim in review
+// @Description  Moves a claim from pending customer back to review. Operator and supervisor only.
+// @Tags         claims
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Claim ID"
+// @Success      200  {object}  model.Claim
+// @Failure      400  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /claims/{id}/review [post]
+func (h *ClaimHandler) MarkClaimInReview(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.MarkInReview(c.Param("id"), user.Username, user.BranchID)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
 // GetClaimEvents returns the event history for a claim.
 //
 // @Summary      Get claim events

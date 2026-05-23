@@ -8,6 +8,7 @@ const (
 	EventClaimCategoryUpdated = "claim_category_updated"
 	EventClaimResolved        = "claim_resolved"
 	EventClaimPendingCustomer = "claim_pending_customer"
+	EventClaimInReview        = "claim_in_review"
 )
 
 // ClaimEvent is the API representation of a claim timeline entry.
@@ -46,6 +47,11 @@ type ClaimResolvedPayload struct {
 
 type ClaimPendingCustomerPayload struct {
 	Notes      string      `json:"notes,omitempty"`
+	FromStatus ClaimStatus `json:"from_status"`
+	ToStatus   ClaimStatus `json:"to_status"`
+}
+
+type ClaimInReviewPayload struct {
 	FromStatus ClaimStatus `json:"from_status"`
 	ToStatus   ClaimStatus `json:"to_status"`
 }

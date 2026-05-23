@@ -149,3 +149,49 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 		t.Errorf("expected notes to be stored, got %q", events[1].Notes)
 	}
 }
+
+func TestMarkInReview_TransitionsFromPendingCustomer(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDelay,
+		Description: "Demora en la entrega del paquete",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	})
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+
+	claim, err = claimSvc.RequestCustomerInfo(claim.ID, "sup_caba", "", "Necesitamos fotos del paquete y del embalaje para continuar")
+	if err != nil {
+		t.Fatalf("request customer info: %v", err)
+	}
+	if claim.Status != model.ClaimStatusPendingCustomer {
+		t.Fatalf("expected pending_customer after request info, got %s", claim.Status)
+	}
+
+	updated, err := claimSvc.MarkInReview(claim.ID, "sup_caba", "")
+	if err != nil {
+		t.Fatalf("mark in review: %v", err)
+	}
+	if updated.Status != model.ClaimStatusInReview {
+		t.Fatalf("expected in_review, got %s", updated.Status)
+	}
+
+	events, err := claimSvc.GetEvents(claim.ID, "")
+	if err != nil {
+		t.Fatalf("get claim events: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+	if events[2].EventType != model.EventClaimInReview {
+		t.Fatalf("expected claim_in_review, got %s", events[2].EventType)
+	}
+	if events[2].FromStatus != model.ClaimStatusPendingCustomer || events[2].ToStatus != model.ClaimStatusInReview {
+		t.Fatalf("unexpected transition payload: %+v", events[2])
+	}
+}

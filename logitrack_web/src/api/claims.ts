@@ -65,7 +65,12 @@ export interface Claim {
   is_automatic: boolean;
 }
 
-export type ClaimEventType = "claim_created" | "claim_category_updated" | "claim_resolved" | "claim_pending_customer";
+export type ClaimEventType =
+  | "claim_created"
+  | "claim_category_updated"
+  | "claim_resolved"
+  | "claim_pending_customer"
+  | "claim_in_review";
 
 export interface ClaimEvent {
   id: string;
@@ -86,6 +91,7 @@ export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
   claim_category_updated: "Derivado a área",
   claim_resolved: "Reclamo resuelto",
   claim_pending_customer: "Solicitud de información al cliente",
+  claim_in_review: "Reclamo en revisión",
 };
 
 export const claimsApi = {
@@ -98,4 +104,5 @@ export const claimsApi = {
     api.post<Claim>(`/claims/${id}/resolve`, { resolution_type: resolution, notes }).then((r) => r.data),
   requestInfo: (id: string, notes?: string) =>
     api.post<Claim>(`/claims/${id}/request-info`, { notes }).then((r) => r.data),
+  markInReview: (id: string) => api.post<Claim>(`/claims/${id}/review`).then((r) => r.data),
 };
