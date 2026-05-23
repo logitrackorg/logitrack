@@ -28,6 +28,12 @@ type FatigueConfig struct {
 	TactileEnabled bool `json:"tactile_enabled"`
 	PVTEnabled     bool `json:"pvt_enabled"`
 
+	// DailyResetHour defines the hour (0–23, ART timezone) at which a new
+	// "logical day" begins for the fatigue check-in gate. Defaults to 0 (midnight).
+	// Example: if set to 6, drivers who check in at 05:00 must check in again
+	// after 06:00 even though the calendar date has not changed.
+	DailyResetHour int `json:"daily_reset_hour"`
+
 	// LastCheckinReset is set by the admin "reset check-ins" action (testing only).
 	// GetTodayCheckin returns 404 when the stored check-in RecordedAt is before
 	// this timestamp, forcing the driver to redo the gate.
