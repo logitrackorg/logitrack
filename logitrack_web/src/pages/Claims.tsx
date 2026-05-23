@@ -423,7 +423,7 @@ export function Claims() {
       ) : (
         <div className="flex flex-col gap-4">
           {visibleClaims.map((claim) => (
-            <Card key={claim.id} className="p-4">
+            <Card key={claim.id} className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
               <details
                 open={openClaimId === claim.id || undefined}
                 onToggle={(e) => {
@@ -432,28 +432,44 @@ export function Claims() {
                   if (opened) void loadClaimEvents(claim.id);
                 }}
               >
-                <summary style={{ cursor: "pointer", listStyle: "none" }}>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    listStyle: "none",
+                    padding: "18px 20px",
+                    borderBottom: "1px solid #e2e8f0",
+                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                  }}
+                >
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ fontWeight: 700, color: "#1e3a5f" }}>{claim.id}</div>
-                      <div style={{ fontSize: 13, color: "#64748b" }}>
-                        Envío {claim.tracking_id} · {CLAIM_TYPE_LABELS[claim.claim_type]}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "#1e3a5f", background: "rgba(30,58,95,0.08)", padding: "3px 8px", borderRadius: 999 }}>
+                          {claim.id}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#94a3b8" }}>Envío {claim.tracking_id}</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: "#475569" }}>
+                        {CLAIM_TYPE_LABELS[claim.claim_type]}
                       </div>
                     </div>
-                    <span style={{
-                      padding: "4px 10px",
-                      borderRadius: 999,
-                      fontSize: 12,
-                      fontWeight: 700,
-                      ...statusBadgeStyle(claim.status),
-                    }}>
+                    <span
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        fontWeight: 800,
+                        boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
+                        ...statusBadgeStyle(claim.status),
+                      }}
+                    >
                       {CLAIM_STATUS_LABELS[claim.status]}
                     </span>
                   </div>
                 </summary>
 
-                <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
-                  <div style={{ display: "grid", gap: 6, fontSize: 13, color: "#334155" }}>
+                <div style={{ padding: "18px 20px 20px", display: "grid", gap: 16 }}>
+                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#334155", lineHeight: 1.45 }}>
                     <div><strong>Creado por:</strong> {claim.created_by}</div>
                     <div><strong>Descripción:</strong> {claim.description}</div>
                     <div><strong>Creado:</strong> {fmtDateTime(claim.created_at)}</div>
@@ -464,18 +480,20 @@ export function Claims() {
                   </div>
 
                   {!isManager && (
-                    <div style={{ display: "grid", gap: 10, borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Derivar a:</label>
+                    <div style={{ display: "grid", gap: 12, borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end" }}>
+                        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Derivar a</label>
                         <select
                           value={categoryDraft[claim.id] ?? ""}
                           onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
                           style={{
-                            minWidth: 220,
-                            border: "1px solid #e2e8f0",
-                            borderRadius: 8,
-                            padding: "6px 10px",
+                            minWidth: 240,
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 12,
+                            padding: "10px 12px",
                             fontSize: 13,
+                            background: "#fff",
+                            boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
                           }}
                         >
                           <option value="">Seleccionar área</option>
@@ -488,23 +506,25 @@ export function Claims() {
                           onClick={() => handleUpdateCategory(claim.id)}
                           disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
                           style={{
-                            background: "#1e3a5f",
+                            background: "linear-gradient(180deg, #1e3a5f 0%, #162b49 100%)",
                             color: "#fff",
                             border: "none",
-                            borderRadius: 8,
-                            padding: "6px 12px",
+                            borderRadius: 12,
+                            padding: "10px 14px",
                             fontSize: 12,
-                            fontWeight: 600,
+                            fontWeight: 700,
+                            minHeight: 42,
                             cursor: "pointer",
-                            opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                            opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.55 : 1,
+                            boxShadow: "0 8px 18px rgba(30,58,95,0.14)",
                           }}
                         >
                           Aplicar
                         </button>
                       </div>
 
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Resolver:</span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Resolver</span>
                         {RESOLUTION_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
@@ -512,15 +532,16 @@ export function Claims() {
                             onClick={() => handleResolve(claim.id, opt.value)}
                             disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
                             style={{
-                              background: "#f59e0b",
+                              background: "#fff7ed",
                               color: "#1e293b",
-                              border: "none",
+                              border: "1px solid #fed7aa",
                               borderRadius: 999,
-                              padding: "6px 12px",
+                              padding: "9px 14px",
                               fontSize: 12,
                               fontWeight: 700,
                               cursor: "pointer",
                               opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                              boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
                             }}
                           >
                             {opt.label}
@@ -557,15 +578,16 @@ export function Claims() {
                           }}
                           disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
                           style={{
-                            background: "#0ea5e9",
+                            background: "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
                             color: "#fff",
                             border: "none",
                             borderRadius: 999,
-                            padding: "6px 12px",
+                            padding: "9px 14px",
                             fontSize: 12,
                             fontWeight: 700,
                             cursor: "pointer",
                             opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                            boxShadow: "0 8px 18px rgba(14,165,233,0.18)",
                           }}
                         >
                           Solicitar más info
@@ -576,15 +598,16 @@ export function Claims() {
                             onClick={() => handleMarkInReview(claim.id)}
                             disabled={busyId === claim.id}
                             style={{
-                              background: "#2563eb",
+                              background: "linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%)",
                               color: "#fff",
                               border: "none",
                               borderRadius: 999,
-                              padding: "6px 12px",
+                              padding: "9px 14px",
                               fontSize: 12,
                               fontWeight: 700,
                               cursor: "pointer",
                               opacity: busyId === claim.id ? 0.6 : 1,
+                              boxShadow: "0 8px 18px rgba(37,99,235,0.18)",
                             }}
                           >
                             Pasar a revisión
@@ -594,9 +617,9 @@ export function Claims() {
                     </div>
                   )}
 
-                  <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
                     <details>
-                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>
+                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>
                         Historial del reclamo
                       </summary>
                       <div style={{ marginTop: 8 }}>
