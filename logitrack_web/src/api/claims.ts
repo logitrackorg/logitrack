@@ -95,7 +95,13 @@ export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
 };
 
 export const claimsApi = {
-  list: () => api.get<Claim[]>("/claims").then((r) => r.data),
+  list: (branchId?: string, status?: ClaimStatus) => {
+    const params = [] as string[];
+    if (branchId) params.push(`branch_id=${encodeURIComponent(branchId)}`);
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    const url = params.length ? `/claims?${params.join("&")}` : "/claims";
+    return api.get<Claim[]>(url).then((r) => r.data);
+  },
   get: (id: string) => api.get<Claim>(`/claims/${id}`).then((r) => r.data),
   getEvents: (id: string) => api.get<ClaimEvent[]>(`/claims/${id}/events`).then((r) => r.data),
   updateCategory: (id: string, category: ClaimCategory, notes?: string) =>

@@ -15,6 +15,8 @@ import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
+import { useAuth } from "../context/AuthContext";
+import { branchApi, type Branch } from "../api/branches";
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
   damage: "Daño/Faltante",
@@ -69,6 +71,19 @@ function statusBadgeStyle(status: ClaimStatus): React.CSSProperties {
 }
 
 export function Claims() {
+  const { hasRole } = useAuth();
+  const isManager = hasRole("manager");
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
+  const [metrics, setMetrics] = useState<{
+    total: number;
+    open: number;
+    closed: number;
+    pending_review: number;
+    resolved_this_month: number;
+    resolution_rate: number;
+  }>({ total: 0, open: 0, closed: 0, pending_review: 0, resolved_this_month: 0, resolution_rate: 0 });
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -93,11 +108,21 @@ export function Claims() {
     setLoading(true);
     setError("");
     try {
-      const data = await claimsApi.list();
+      const data = await claimsApi.list(isManager && selectedBranch ? selectedBranch : undefined, selectedStatus ? (selectedStatus as ClaimStatus) : undefined);
       setClaims(data ?? []);
       const nextDraft: Record<string, ClaimCategory | ""> = {};
       data.forEach((c) => { nextDraft[c.id] = c.assigned_category ?? ""; });
       setCategoryDraft(nextDraft);
+      // compute metrics on current dataset
+      const now = new Date();
+      const total = data.length;
+      const open = data.filter((c) => c.status === "open").length;
+      const closed = data.filter((c) => String(c.status).startsWith("resolved_")).length;
+      const pending_review = data.filter((c) => c.status === "pending_customer").length;
+      const resolved_this_month = data.filter((c) => String(c.status).startsWith("resolved_") && (() => { const d = new Date(c.updated_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); })()).length;
+      const total_this_month = data.filter((c) => { const d = new Date(c.created_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }).length;
+      const resolution_rate = total_this_month > 0 ? Math.round((resolved_this_month / total_this_month) * 100) : 0;
+      setMetrics({ total, open, closed, pending_review, resolved_this_month, resolution_rate });
     } catch {
       setError("No se pudieron cargar los reclamos.");
     } finally {
@@ -106,6 +131,12 @@ export function Claims() {
   };
 
   useEffect(() => { loadClaims(); }, []);
+
+  useEffect(() => {
+    if (isManager) {
+      branchApi.listActive().then(setBranches).catch(() => {});
+    }
+  }, [isManager]);
 
   // If route includes a claim id, open it on load
   const { id: routeClaimId } = useParams();
@@ -129,6 +160,11 @@ export function Claims() {
       setEventsLoadingId(null);
     }
   };
+
+  // reload when filters change (for manager)
+  useEffect(() => {
+    if (isManager) void loadClaims();
+  }, [selectedBranch, selectedStatus]);
 
   const handleUpdateCategory = async (id: string) => {
     const nextCategory = categoryDraft[id];
@@ -236,6 +272,54 @@ export function Claims() {
         }
       />
 
+      {isManager && (
+        <Card className="p-4 mb-4">
+          <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label style={{ fontWeight: 600, color: "#334155" }}>Sucursal:</label>
+              <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
+                <option value="">Todas</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+
+              <label style={{ fontWeight: 600, color: "#334155", marginLeft: 12 }}>Estado:</label>
+              <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
+                <option value="">Todos</option>
+                {Object.keys(CLAIM_STATUS_LABELS).map((s) => (
+                  <option key={s} value={s}>{CLAIM_STATUS_LABELS[s as ClaimStatus]}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: 16 }}>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Total</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.total}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Abiertos</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.open}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Cerrados</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.closed}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Pendientes revisión</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.pending_review}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b" }}>Resueltos este mes</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.resolved_this_month}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>{metrics.resolution_rate}% tasa</div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {error && (
         <div className="mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
           {error}
@@ -294,56 +378,102 @@ export function Claims() {
                     <div><strong>Automático:</strong> {claim.is_automatic ? "Sí" : "No"}</div>
                   </div>
 
-                  <div style={{ display: "grid", gap: 10, borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                      <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Derivar a:</label>
-                      <select
-                        value={categoryDraft[claim.id] ?? ""}
-                        onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
-                        style={{
-                          minWidth: 220,
-                          border: "1px solid #e2e8f0",
-                          borderRadius: 8,
-                          padding: "6px 10px",
-                          fontSize: 13,
-                        }}
-                      >
-                        <option value="">Seleccionar área</option>
-                        {CATEGORY_OPTIONS.map((cat) => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateCategory(claim.id)}
-                        disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                        style={{
-                          background: "#1e3a5f",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 8,
-                          padding: "6px 12px",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
-                        }}
-                      >
-                        Aplicar
-                      </button>
-                    </div>
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Resolver:</span>
-                      {RESOLUTION_OPTIONS.map((opt) => (
+                  {!isManager && (
+                    <div style={{ display: "grid", gap: 10, borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Derivar a:</label>
+                        <select
+                          value={categoryDraft[claim.id] ?? ""}
+                          onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
+                          style={{
+                            minWidth: 220,
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 8,
+                            padding: "6px 10px",
+                            fontSize: 13,
+                          }}
+                        >
+                          <option value="">Seleccionar área</option>
+                          {CATEGORY_OPTIONS.map((cat) => (
+                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                          ))}
+                        </select>
                         <button
-                          key={opt.value}
                           type="button"
-                          onClick={() => handleResolve(claim.id, opt.value)}
+                          onClick={() => handleUpdateCategory(claim.id)}
+                          disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
+                          style={{
+                            background: "#1e3a5f",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 8,
+                            padding: "6px 12px",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                          }}
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>Resolver:</span>
+                        {RESOLUTION_OPTIONS.map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => handleResolve(claim.id, opt.value)}
+                            disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
+                            style={{
+                              background: "#f59e0b",
+                              color: "#1e293b",
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "6px 12px",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // request more info
+                            setConfirmDialog({
+                              isOpen: true,
+                              title: "Solicitar más información",
+                              message: "Solicitar más información al cliente (por ejemplo: fotos o aclaraciones). Se registrará en el historial.",
+                              confirmLabel: "Solicitar",
+                              cancelLabel: "Cancelar",
+                              variant: "default",
+                              requireComment: true,
+                              onConfirm: (notes?: string) => {
+                                setConfirmDialog(null);
+                                setBusyId(claim.id);
+                                (async () => {
+                                  try {
+                                    const updated = await claimsApi.requestInfo(claim.id, notes);
+                                    setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
+                                    await loadClaimEvents(claim.id, true);
+                                  } catch {
+                                    setError("No se pudo solicitar información al cliente.");
+                                  } finally {
+                                    setBusyId(null);
+                                  }
+                                })();
+                              },
+                            });
+                          }}
                           disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
                           style={{
-                            background: "#f59e0b",
-                            color: "#1e293b",
+                            background: "#0ea5e9",
+                            color: "#fff",
                             border: "none",
                             borderRadius: 999,
                             padding: "6px 12px",
@@ -353,75 +483,31 @@ export function Claims() {
                             opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
                           }}
                         >
-                          {opt.label}
+                          Solicitar más info
                         </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // request more info
-                          setConfirmDialog({
-                            isOpen: true,
-                            title: "Solicitar más información",
-                            message: "Solicitar más información al cliente (por ejemplo: fotos o aclaraciones). Se registrará en el historial.",
-                            confirmLabel: "Solicitar",
-                            cancelLabel: "Cancelar",
-                            variant: "default",
-                            requireComment: true,
-                            onConfirm: (notes?: string) => {
-                              setConfirmDialog(null);
-                              setBusyId(claim.id);
-                              (async () => {
-                                try {
-                                  const updated = await claimsApi.requestInfo(claim.id, notes);
-                                  setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
-                                  await loadClaimEvents(claim.id, true);
-                                } catch {
-                                  setError("No se pudo solicitar información al cliente.");
-                                } finally {
-                                  setBusyId(null);
-                                }
-                              })();
-                            },
-                          });
-                        }}
-                        disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                        style={{
-                          background: "#0ea5e9",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 999,
-                          padding: "6px 12px",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
-                        }}
-                      >
-                        Solicitar más info
-                      </button>
-                      {claim.status === "pending_customer" && (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkInReview(claim.id)}
-                          disabled={busyId === claim.id}
-                          style={{
-                            background: "#2563eb",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 999,
-                            padding: "6px 12px",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            opacity: busyId === claim.id ? 0.6 : 1,
-                          }}
-                        >
-                          Pasar a revisión
-                        </button>
-                      )}
+                        {claim.status === "pending_customer" && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkInReview(claim.id)}
+                            disabled={busyId === claim.id}
+                            style={{
+                              background: "#2563eb",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "6px 12px",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              opacity: busyId === claim.id ? 0.6 : 1,
+                            }}
+                          >
+                            Pasar a revisión
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
                     <details>
@@ -456,7 +542,7 @@ export function Claims() {
                                 <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
                                   por <strong>{ev.changed_by}</strong>
                                   {ev.from_status && ev.to_status && (
-                                    <> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</>
+                                    <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>
                                   )}
                                 </div>
                               </div>
