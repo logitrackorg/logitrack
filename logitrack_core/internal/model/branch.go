@@ -19,6 +19,7 @@ type Branch struct {
 	Province    string       `json:"province"`
 	Status      BranchStatus `json:"status"`
 	MaxCapacity int          `json:"max_capacity"`
+	Hours       string       `json:"hours,omitempty"`
 	Latitude    *float64     `json:"latitude,omitempty"`
 	Longitude   *float64     `json:"longitude,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`

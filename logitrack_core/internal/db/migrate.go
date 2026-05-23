@@ -368,9 +368,6 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
-
-		-- Notificación de retiro en sucursal: horarios de atención de la organización
-		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS business_hours TEXT NOT NULL DEFAULT '';
 	`)
 	return err
 }

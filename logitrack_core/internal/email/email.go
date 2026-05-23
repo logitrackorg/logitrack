@@ -146,7 +146,7 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 	branchAddr := BranchAddressString(branch)
 	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
 	subj := fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", shipment.TrackingID)
-	body := renderReadyForPickupNotification(shipment, branch.Name, branchAddr, org.BusinessHours, deadlineDate, trackURL, org)
+	body := renderReadyForPickupNotification(shipment, branch.Name, branchAddr, branch.Hours, deadlineDate, trackURL, org)
 	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (retiro en sucursal)", org.Email)
 }
 

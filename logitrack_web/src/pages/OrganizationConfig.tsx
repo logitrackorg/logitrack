@@ -12,7 +12,7 @@ const labelClass = "text-sm font-semibold text-slate-700";
 
 export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
-  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "", business_hours: "" });
+  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,6 @@ export function OrganizationConfig() {
         address: cfg.address ?? "",
         phone: cfg.phone ?? "",
         email: cfg.email ?? "",
-        business_hours: cfg.business_hours ?? "",
       });
     }).catch(() => {
       setError("No se pudo cargar la configuración de la organización.");
@@ -128,17 +127,6 @@ export function OrganizationConfig() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="Ej: contacto@empresa.com.ar"
               />
-            </div>
-
-            <div className="grid gap-1.5">
-              <label className={labelClass}>Horarios de atención</label>
-              <input
-                className={inputClass}
-                value={form.business_hours}
-                onChange={(e) => setForm({ ...form, business_hours: e.target.value })}
-                placeholder="Ej: Lun a Vie 9–18 hs, Sáb 9–13 hs"
-              />
-              <p className="text-xs text-slate-400">Se incluye en el email de notificación de retiro en sucursal.</p>
             </div>
 
             {error && (

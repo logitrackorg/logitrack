@@ -17,7 +17,6 @@ export interface OrganizationConfig {
   address: string;
   phone: string;
   email: string;
-  business_hours: string;
   updated_at?: string;
   updated_by?: string;
 }
