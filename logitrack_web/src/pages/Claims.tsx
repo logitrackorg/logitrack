@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { ClipboardList, RefreshCw } from "lucide-react";
 import {
   claimsApi,
@@ -104,6 +105,16 @@ export function Claims() {
   };
 
   useEffect(() => { loadClaims(); }, []);
+
+  // If route includes a claim id, open it on load
+  const { id: routeClaimId } = useParams();
+  const [openClaimId, setOpenClaimId] = useState<string | null>(null);
+  useEffect(() => {
+    if (routeClaimId) {
+      setOpenClaimId(routeClaimId);
+      void loadClaimEvents(routeClaimId, true);
+    }
+  }, [routeClaimId]);
 
   const loadClaimEvents = async (claimId: string, force = false) => {
     if (!force && eventsByClaim[claimId]) return;
@@ -212,10 +223,11 @@ export function Claims() {
           {claims.map((claim) => (
             <Card key={claim.id} className="p-4">
               <details
+                open={openClaimId === claim.id || undefined}
                 onToggle={(e) => {
-                  if ((e.currentTarget as HTMLDetailsElement).open) {
-                    void loadClaimEvents(claim.id);
-                  }
+                  const opened = (e.currentTarget as HTMLDetailsElement).open;
+                  setOpenClaimId(opened ? claim.id : null);
+                  if (opened) void loadClaimEvents(claim.id);
                 }}
               >
                 <summary style={{ cursor: "pointer", listStyle: "none" }}>
@@ -271,7 +283,7 @@ export function Claims() {
                       <button
                         type="button"
                         onClick={() => handleUpdateCategory(claim.id)}
-                        disabled={!categoryDraft[claim.id] || busyId === claim.id}
+                        disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
                         style={{
                           background: "#1e3a5f",
                           color: "#fff",
@@ -281,7 +293,7 @@ export function Claims() {
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: "pointer",
-                          opacity: !categoryDraft[claim.id] || busyId === claim.id ? 0.6 : 1,
+                          opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
                         }}
                       >
                         Aplicar
@@ -295,7 +307,7 @@ export function Claims() {
                           key={opt.value}
                           type="button"
                           onClick={() => handleResolve(claim.id, opt.value)}
-                          disabled={busyId === claim.id}
+                          disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
                           style={{
                             background: "#f59e0b",
                             color: "#1e293b",
@@ -305,7 +317,7 @@ export function Claims() {
                             fontSize: 12,
                             fontWeight: 700,
                             cursor: "pointer",
-                            opacity: busyId === claim.id ? 0.6 : 1,
+                            opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
                           }}
                         >
                           {opt.label}

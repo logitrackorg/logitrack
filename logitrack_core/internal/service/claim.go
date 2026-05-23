@@ -212,6 +212,10 @@ func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, c
 	if err != nil {
 		return model.Claim{}, err
 	}
+	// Block operations on already resolved (final) claims
+	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
+	}
 	fromStatus := claim.Status
 	updatedAt := clock.Now().UTC()
 	if err := s.claimRepo.UpdateCategory(claim.ID, category, model.ClaimStatusDerived, updatedAt); err != nil {
@@ -246,6 +250,10 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	claim, err := s.GetByIDForBranch(id, branchID)
 	if err != nil {
 		return model.Claim{}, err
+	}
+	// Block resolving an already resolved (final) claim
+	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
 	}
 	status, err := statusForResolution(resolution)
 	if err != nil {

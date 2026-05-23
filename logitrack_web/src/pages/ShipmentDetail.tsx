@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
@@ -971,6 +971,7 @@ export function ShipmentDetail() {
                 background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
               }} />
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+<<<<<<< HEAD
                 {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
@@ -1012,6 +1013,46 @@ export function ShipmentDetail() {
                     {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
                   </>
                 )}
+=======
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600 }}>
+                    {ev.event_type === "claim_created"
+                      ? "Reclamo registrado"
+                      : ev.event_type === "incident_reported"
+                        ? "Incidencia reportada"
+                        : ev.event_type === "edited"
+                          ? STATUS_LABELS[ev.to_status]
+                          : ev.from_status
+                            ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
+                            : ev.to_status
+                              ? STATUS_LABELS[ev.to_status]
+                              : "Evento registrado"}
+                  </span>
+                  <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                </div>
+                <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                  <span>por <strong>{ev.changed_by || "sistema"}</strong></span>
+                  {ev.location && (() => {
+                    const b = branches.find(x => x.id === ev.location);
+                    return (
+                      <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+                    );
+                  })()}
+                </div>
+                {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                {ev.event_type === "claim_created" && ev.notes && (() => {
+                  const m = ev.notes.match(/REC-\d+/);
+                  if (m) {
+                    const claimId = m[0];
+                    return (
+                      <p style={{ margin: "6px 0 0" }}>
+                        <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
+>>>>>>> 98dcd40 (chore: bloqueo btns post resolver reclamo y link con envio)
               </div>
             </div>
           ))}

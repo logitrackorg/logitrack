@@ -46,6 +46,7 @@ type PublicShipmentView struct {
 // the operator username (changed_by) and any free-form notes, since notes can
 // contain operational language not meant for end users.
 type PublicShipmentEvent struct {
+<<<<<<< HEAD
 	ID              string         `json:"id"`
 	TrackingID      string         `json:"tracking_id"`
 	EventType       string         `json:"event_type,omitempty"`
@@ -59,6 +60,17 @@ type PublicShipmentEvent struct {
 	Via             string         `json:"via,omitempty"`
 	ClaimStatus     ClaimStatus    `json:"claim_status,omitempty"`
 	ClaimUpdatedAt  *time.Time     `json:"claim_updated_at,omitempty"`
+=======
+	ID             string      `json:"id"`
+	TrackingID     string      `json:"tracking_id"`
+	EventType      string      `json:"event_type,omitempty"`
+	FromStatus     *Status     `json:"from_status,omitempty"`
+	ToStatus       Status      `json:"to_status"`
+	Location       string      `json:"location,omitempty"`
+	Timestamp      time.Time   `json:"timestamp"`
+	ClaimStatus    ClaimStatus `json:"claim_status,omitempty"`
+	ClaimUpdatedAt *time.Time  `json:"claim_updated_at,omitempty"`
+>>>>>>> 98dcd40 (chore: bloqueo btns post resolver reclamo y link con envio)
 }
 
 // ToPublicView builds a PublicShipmentView from a Shipment, applying any

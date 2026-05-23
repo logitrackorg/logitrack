@@ -174,7 +174,6 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 	c.JSON(http.StatusOK, shipment)
 }
 
-
 // List returns all shipments, optionally filtered by date range.
 //
 // @Summary      List shipments

@@ -245,6 +245,11 @@ function AppRoutes() {
               <Claims />
             </ProtectedRoute>
           } />
+          <Route path="/claims/:id" element={
+            <ProtectedRoute roles={["operator", "supervisor"]}>
+              <Claims />
+            </ProtectedRoute>
+          } />
 
           <Route path="/shipments/:trackingId" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
