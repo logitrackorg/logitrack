@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { ClipboardList, RefreshCw } from "lucide-react";
+import { BadgeCheck, BarChart3, ClipboardList, Clock3, RefreshCw } from "lucide-react";
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
@@ -285,55 +285,120 @@ export function Claims() {
       />
 
       {isManager && (
-        <Card className="p-4 mb-4">
-          <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <label style={{ fontWeight: 600, color: "#334155" }}>Sucursal:</label>
-              <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
-                <option value="">Todas</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
+        <Card className="p-5 mb-4 border-slate-200 shadow-sm bg-gradient-to-br from-white via-white to-slate-50/80">
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1e3a5f]">Panel gerencial</p>
+                <h3 className="mt-1 text-base font-semibold text-slate-900">Métricas de reclamos</h3>
+                <p className="mt-1 text-sm text-slate-500">Resumen dinámico sobre el conjunto filtrado.</p>
+              </div>
 
-              <label style={{ fontWeight: 600, color: "#334155", marginLeft: 12 }}>Estado:</label>
-              <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
-                <option value="">Todos</option>
-                {Object.keys(CLAIM_STATUS_LABELS).map((s) => (
-                  <option key={s} value={s}>{CLAIM_STATUS_LABELS[s as ClaimStatus]}</option>
-                ))}
-              </select>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col gap-1">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Sucursal</label>
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                  >
+                    <option value="">Todas</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <label style={{ fontWeight: 600, color: "#334155", marginLeft: 12 }}>ID reclamo:</label>
-              <input
-                value={selectedClaimId}
-                onChange={(e) => setSelectedClaimId(e.target.value)}
-                placeholder="Buscar por ID"
-                style={{ padding: 8, borderRadius: 8, minWidth: 180 }}
-              />
+                <div className="flex flex-col gap-1">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Estado</label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                  >
+                    <option value="">Todos</option>
+                    {Object.keys(CLAIM_STATUS_LABELS).map((s) => (
+                      <option key={s} value={s}>{CLAIM_STATUS_LABELS[s as ClaimStatus]}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>ID reclamo</label>
+                  <input
+                    value={selectedClaimId}
+                    onChange={(e) => setSelectedClaimId(e.target.value)}
+                    placeholder="Buscar por ID"
+                    className="h-10 min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: "flex", gap: 16 }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b" }}>Total</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.total}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total de reclamos</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.total}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f]">
+                    <BarChart3 className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Registros que entran en el filtro actual.</p>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b" }}>Abiertos</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.open}</div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Reclamos abiertos</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.open}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                    <Clock3 className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Casos que siguen activos.</p>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b" }}>Cerrados</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.closed}</div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Reclamos cerrados</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.closed}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <BadgeCheck className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Casos resueltos o finalizados.</p>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b" }}>Pendientes revisión</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.pending_review}</div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pendientes de revisión</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.pending_review}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <ClipboardList className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">En estado pendiente del cliente.</p>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b" }}>Resueltos este mes</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.resolved_this_month}</div>
-                <div style={{ fontSize: 12, color: "#94a3b8" }}>{visibleResolutionRate}% tasa</div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resueltos este mes</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.resolved_this_month}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                    <RefreshCw className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Tasa de resolución: {visibleResolutionRate}%</p>
               </div>
             </div>
           </div>
