@@ -76,14 +76,7 @@ export function Claims() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [metrics, setMetrics] = useState<{
-    total: number;
-    open: number;
-    closed: number;
-    pending_review: number;
-    resolved_this_month: number;
-    resolution_rate: number;
-  }>({ total: 0, open: 0, closed: 0, pending_review: 0, resolved_this_month: 0, resolution_rate: 0 });
+  const [selectedClaimId, setSelectedClaimId] = useState<string>("");
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -113,16 +106,6 @@ export function Claims() {
       const nextDraft: Record<string, ClaimCategory | ""> = {};
       data.forEach((c) => { nextDraft[c.id] = c.assigned_category ?? ""; });
       setCategoryDraft(nextDraft);
-      // compute metrics on current dataset
-      const now = new Date();
-      const total = data.length;
-      const open = data.filter((c) => c.status === "open").length;
-      const closed = data.filter((c) => String(c.status).startsWith("resolved_")).length;
-      const pending_review = data.filter((c) => c.status === "pending_customer").length;
-      const resolved_this_month = data.filter((c) => String(c.status).startsWith("resolved_") && (() => { const d = new Date(c.updated_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); })()).length;
-      const total_this_month = data.filter((c) => { const d = new Date(c.created_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); }).length;
-      const resolution_rate = total_this_month > 0 ? Math.round((resolved_this_month / total_this_month) * 100) : 0;
-      setMetrics({ total, open, closed, pending_review, resolved_this_month, resolution_rate });
     } catch {
       setError("No se pudieron cargar los reclamos.");
     } finally {
@@ -165,6 +148,35 @@ export function Claims() {
   useEffect(() => {
     if (isManager) void loadClaims();
   }, [selectedBranch, selectedStatus]);
+
+  const visibleClaims = isManager && selectedClaimId.trim()
+    ? claims.filter((claim) => claim.id.toLowerCase().includes(selectedClaimId.trim().toLowerCase()))
+    : claims;
+
+  const now = new Date();
+  const visibleMetrics = visibleClaims.reduce(
+    (acc, claim) => {
+      acc.total += 1;
+      if (claim.status === "open") acc.open += 1;
+      if (String(claim.status).startsWith("resolved_")) {
+        acc.closed += 1;
+        const updatedAt = new Date(claim.updated_at);
+        if (updatedAt.getFullYear() === now.getFullYear() && updatedAt.getMonth() === now.getMonth()) {
+          acc.resolved_this_month += 1;
+        }
+      }
+      if (claim.status === "pending_customer") acc.pending_review += 1;
+      const createdAt = new Date(claim.created_at);
+      if (createdAt.getFullYear() === now.getFullYear() && createdAt.getMonth() === now.getMonth()) {
+        acc.created_this_month += 1;
+      }
+      return acc;
+    },
+    { total: 0, open: 0, closed: 0, pending_review: 0, resolved_this_month: 0, created_this_month: 0 }
+  );
+  const visibleResolutionRate = visibleMetrics.created_this_month > 0
+    ? Math.round((visibleMetrics.resolved_this_month / visibleMetrics.created_this_month) * 100)
+    : 0;
 
   const handleUpdateCategory = async (id: string) => {
     const nextCategory = categoryDraft[id];
@@ -275,7 +287,7 @@ export function Claims() {
       {isManager && (
         <Card className="p-4 mb-4">
           <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <label style={{ fontWeight: 600, color: "#334155" }}>Sucursal:</label>
               <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} style={{ padding: 8, borderRadius: 8 }}>
                 <option value="">Todas</option>
@@ -291,29 +303,37 @@ export function Claims() {
                   <option key={s} value={s}>{CLAIM_STATUS_LABELS[s as ClaimStatus]}</option>
                 ))}
               </select>
+
+              <label style={{ fontWeight: 600, color: "#334155", marginLeft: 12 }}>ID reclamo:</label>
+              <input
+                value={selectedClaimId}
+                onChange={(e) => setSelectedClaimId(e.target.value)}
+                placeholder="Buscar por ID"
+                style={{ padding: 8, borderRadius: 8, minWidth: 180 }}
+              />
             </div>
 
             <div style={{ display: "flex", gap: 16 }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b" }}>Total</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.total}</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.total}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b" }}>Abiertos</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.open}</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.open}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b" }}>Cerrados</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.closed}</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.closed}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b" }}>Pendientes revisión</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.pending_review}</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.pending_review}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b" }}>Resueltos este mes</div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{metrics.resolved_this_month}</div>
-                <div style={{ fontSize: 12, color: "#94a3b8" }}>{metrics.resolution_rate}% tasa</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{visibleMetrics.resolved_this_month}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>{visibleResolutionRate}% tasa</div>
               </div>
             </div>
           </div>
@@ -330,14 +350,14 @@ export function Claims() {
         <Card className="p-10 text-center">
           <p className="text-sm text-slate-500">Cargando…</p>
         </Card>
-      ) : claims.length === 0 ? (
+      ) : visibleClaims.length === 0 ? (
         <Card className="p-12 text-center">
           <p className="text-base font-semibold text-slate-700">No hay reclamos registrados</p>
           <p className="mt-1 text-sm text-slate-500">Los reclamos aparecerán cuando un cliente los genere desde tracking.</p>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {claims.map((claim) => (
+          {visibleClaims.map((claim) => (
             <Card key={claim.id} className="p-4">
               <details
                 open={openClaimId === claim.id || undefined}
