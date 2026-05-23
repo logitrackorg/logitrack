@@ -299,6 +299,8 @@ export const ChatbotWidget: React.FC = () => {
       )
     );
 
+    window.dispatchEvent(new CustomEvent('chatbot:pickup-success', { detail: { trackingId } }));
+
     setState('authenticated');
     addBotMessage('¿Necesitas algo más?', [
       { label: '🏠 Volver al menú', value: 'menu', action: 'restart' }
@@ -373,15 +375,11 @@ export const ChatbotWidget: React.FC = () => {
       sessionTimeoutRef.current = null;
     }
     if (shipment) {
-      setState('authenticated');
       const menuOptions = buildMenuOptions(getAvailableActions());
       if (menuOptions.length > 0) {
+        setState('authenticated');
         addBotMessage('¿En qué puedo ayudarte?', menuOptions);
-      } else {
-        addBotMessage(
-          getNoActionsMessage(shipment.status),
-          [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
-        );
+        return;
       }
     } else {
       setMessages([]);
@@ -392,6 +390,22 @@ export const ChatbotWidget: React.FC = () => {
       setSessionActive(true);
       setIsOpen(true); // Trigger initial message
     }
+
+    // Reset completo: volver al principio para consultar un nuevo envío
+    setShipment(null);
+    setRecipientDni('');
+    setTrackingId('');
+    setState('authenticating');
+    setMessages([{
+      id: Date.now().toString(),
+      type: 'bot',
+      text: '¡Hola! 👋 Soy tu asistente virtual de LogiTrack.\n\n' +
+            'Para ayudarte con tu envío, necesito que me proporciones:\n' +
+            '1️⃣ Tu número de seguimiento (ID de envío)\n' +
+            '2️⃣ Tu número de DNI\n\n' +
+            'Por favor ingresa tu ID de envío:',
+      timestamp: new Date(),
+    }]);
   };
 
   const getAvailableActions = (): string[] => {

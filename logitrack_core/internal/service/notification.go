@@ -156,6 +156,47 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 	}
 }
 
+// NotifyChatbotPickupRequested notifica a operadores y supervisores de la sucursal destino
+// cuando el destinatario cambia el método de entrega a retiro en sucursal vía chatbot.
+func (s *NotificationService) NotifyChatbotPickupRequested(shipment model.Shipment) {
+	if shipment.FinalBranchID == "" {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(shipment.FinalBranchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyChatbotPickupRequested GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "Cambio de método de entrega"
+	body := fmt.Sprintf("%s · El destinatario cambió el método de entrega a retiro en sucursal vía chatbot", shipment.TrackingID)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationChatbotPickupRequested,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyChatbotPickupRequested Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // GetForUser returns paginated notifications for a user.
 func (s *NotificationService) GetForUser(userID string, filters repository.NotificationFilters) ([]model.Notification, int, error) {
 	return s.repo.ListByUser(userID, filters)
