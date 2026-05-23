@@ -188,7 +188,7 @@ func main() {
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
 	}
-	// Mensajería de última milla — WhatsApp (Twilio) con fallback a email (CA-02/CA-03).
+	// Mensajería — WhatsApp (Twilio) con fallback a email para última milla y retiro en sucursal.
 	messagingSvc := messaging.New(
 		os.Getenv("TWILIO_ACCOUNT_SID"),
 		os.Getenv("TWILIO_AUTH_TOKEN"),
@@ -197,7 +197,9 @@ func main() {
 		emailSvc,
 		routingCfgSvc,
 	)
+	messagingSvc.SetPickupEmailFallback(emailSvc) // email fallback para ready_for_pickup
 	shipmentSvc.SetMessagingService(messagingSvc)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {

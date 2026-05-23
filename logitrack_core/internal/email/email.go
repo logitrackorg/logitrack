@@ -30,6 +30,24 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
+// BranchAddressString formats a Branch address into a single human-readable line.
+func BranchAddressString(b model.Branch) string {
+	parts := []string{}
+	if b.Address.Street != "" {
+		parts = append(parts, b.Address.Street)
+	}
+	if b.Address.City != "" {
+		parts = append(parts, b.Address.City)
+	}
+	if b.Address.Province != "" {
+		parts = append(parts, b.Address.Province)
+	}
+	if b.Address.PostalCode != "" {
+		parts = append(parts, b.Address.PostalCode)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // OrgConfigProvider is the minimal interface this package needs to render
 // the org name, contact info, and reply-to address in every email.
 type OrgConfigProvider interface {
@@ -112,6 +130,24 @@ func (s *Service) SendLastMileNotification(recipient model.Customer, trackingID,
 	subj := fmt.Sprintf("Tu envío %s está en camino — llegará hoy", trackingID)
 	body := renderLastMileNotification(trackingID, timeWindowText, trackURL, org)
 	s.sendOne(recipient.Email, subj, body, trackingID, "destinatario (última milla)", org.Email)
+}
+
+// SendReadyForPickupNotification sends an email to the recipient when their shipment
+// is ready to be picked up at a branch. Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time) {
+	if s == nil {
+		return
+	}
+	if shipment.Recipient.Email == "" {
+		log.Printf("[email] retiro en sucursal: destinatario de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	branchAddr := BranchAddressString(branch)
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	subj := fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", shipment.TrackingID)
+	body := renderReadyForPickupNotification(shipment, branch.Name, branchAddr, branch.Hours, deadlineDate, trackURL, org)
+	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (retiro en sucursal)", org.Email)
 }
 
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).

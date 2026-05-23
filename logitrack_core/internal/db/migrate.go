@@ -365,6 +365,9 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Email transaccional: deduplicación de emails de confirmación de envío (CA-05)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
+
+		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
 	`)
 	return err
 }
