@@ -85,17 +85,21 @@ var ValidClaimResolutionTypes = map[ClaimResolutionType]bool{
 }
 
 type Claim struct {
-	ID               string              `json:"id"`
-	TrackingID       string              `json:"tracking_id"`
-	ClaimType        ClaimType           `json:"claim_type"`
-	Status           ClaimStatus         `json:"status"`
-	Description      string              `json:"description"`
-	CreatedBy        string              `json:"created_by"`
-	CreatedAt        time.Time           `json:"created_at"`
-	UpdatedAt        time.Time           `json:"updated_at"`
-	AssignedCategory ClaimCategory       `json:"assigned_category,omitempty"`
-	ResolutionType   ClaimResolutionType `json:"resolution_type,omitempty"`
-	IsAutomatic      bool                `json:"is_automatic"`
+	ID                 string              `json:"id"`
+	TrackingID         string              `json:"tracking_id"`
+	ClaimType          ClaimType           `json:"claim_type"`
+	Status             ClaimStatus         `json:"status"`
+	Description        string              `json:"description"`
+	CreatedBy          string              `json:"created_by"`
+	CreatedAt          time.Time           `json:"created_at"`
+	UpdatedAt          time.Time           `json:"updated_at"`
+	AssignedCategory   ClaimCategory       `json:"assigned_category,omitempty"`
+	ResolutionType     ClaimResolutionType `json:"resolution_type,omitempty"`
+	IsAutomatic        bool                `json:"is_automatic"`
+	EvidenceFileName   string              `json:"evidence_file_name,omitempty"`
+	EvidenceFilePath   string              `json:"-"`
+	EvidenceMimeType   string              `json:"evidence_mime_type,omitempty"`
+	EvidenceUploadDate *time.Time          `json:"evidence_upload_date,omitempty"`
 }
 
 type CreatePublicClaimRequest struct {

@@ -90,6 +90,9 @@ export interface PublicClaim {
   assigned_category?: string;
   resolution_type?: string;
   is_automatic: boolean;
+  evidence_file_name?: string;
+  evidence_mime_type?: string;
+  evidence_upload_date?: string;
 }
 
 export interface CreatePublicClaimPayload {
@@ -98,6 +101,8 @@ export interface CreatePublicClaimPayload {
   description: string;
   created_by: string;
   dni: string;
+  damage_subtypes: string;
+  evidence?: File | null;
 }
 
 export const publicTrackingApi = {
@@ -109,8 +114,19 @@ export const publicTrackingApi = {
     api.get<Branch[]>("/public/branches").then((r) => r.data),
   getStats: () =>
     api.get<PublicStats>("/public/stats").then((r) => r.data),
-  createClaim: (payload: CreatePublicClaimPayload) =>
-    api.post<PublicClaim>("/public/claims", payload).then((r) => r.data),
+  createClaim: (payload: CreatePublicClaimPayload) => {
+    const formData = new FormData();
+    formData.append("tracking_id", payload.tracking_id);
+    formData.append("claim_type", payload.claim_type);
+    formData.append("description", payload.description);
+    formData.append("created_by", payload.created_by);
+    formData.append("dni", payload.dni);
+    formData.append("damage_subtypes", payload.damage_subtypes);
+    if (payload.evidence) {
+      formData.append("evidence", payload.evidence);
+    }
+    return api.post<PublicClaim>("/public/claims", formData).then((r) => r.data);
+  },
   getClaim: (id: string) =>
     api.get<PublicClaim>(`/public/claims/${id}`).then((r) => r.data),
 };

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -38,7 +40,7 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 		Description: "Demora en la entrega del paquete",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim 1: %v", err)
 	}
@@ -48,7 +50,7 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 		Description: "Paquete llegó con daños visibles",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim 2: %v", err)
 	}
@@ -70,7 +72,7 @@ func TestCreatePublicClaim_AppendsShipmentEvent(t *testing.T) {
 		Description: "Demora en la entrega del paquete",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
 	}
@@ -101,7 +103,7 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 		Description: "Demora en la entrega del paquete",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
 	}
@@ -115,6 +117,88 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 	}
 }
 
+func TestCreatePublicClaim_WithEvidenceStoresMetadata(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get wd: %v", err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDamage,
+		Description: "Producto dañado en el transporte",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, &ClaimEvidenceUpload{
+		FileName: "evidencia.pdf",
+		MimeType: "application/pdf",
+		Data:     []byte("demo-pdf-bytes"),
+	})
+	if err != nil {
+		t.Fatalf("create claim with evidence: %v", err)
+	}
+	if claim.EvidenceFileName == "" || claim.EvidenceFilePath == "" || claim.EvidenceMimeType == "" || claim.EvidenceUploadDate == nil {
+		t.Fatalf("expected evidence metadata on claim, got %+v", claim)
+	}
+	if _, err := os.Stat(filepath.Clean(claim.EvidenceFilePath)); err != nil {
+		t.Fatalf("expected evidence file on disk: %v", err)
+	}
+	stored, err := claimSvc.GetByID(claim.ID)
+	if err != nil {
+		t.Fatalf("get claim: %v", err)
+	}
+	if stored.EvidenceFileName != claim.EvidenceFileName || stored.EvidenceMimeType != claim.EvidenceMimeType {
+		t.Fatalf("expected stored evidence metadata, got %+v", stored)
+	}
+}
+
+func TestCreatePublicClaim_WithImageEvidenceInfersExtension(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get wd: %v", err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDamage,
+		Description: "Imagen de evidencia para el reclamo",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, &ClaimEvidenceUpload{
+		FileName: "captura",
+		MimeType: "image/png",
+		Data:     []byte("png-bytes"),
+	})
+	if err != nil {
+		t.Fatalf("create claim with image evidence: %v", err)
+	}
+	if !strings.HasSuffix(strings.ToLower(claim.EvidenceFileName), ".png") {
+		t.Fatalf("expected png extension, got %q", claim.EvidenceFileName)
+	}
+	if !strings.HasSuffix(strings.ToLower(claim.EvidenceFilePath), ".png") {
+		t.Fatalf("expected png file path, got %q", claim.EvidenceFilePath)
+	}
+	if _, err := os.Stat(filepath.Clean(claim.EvidenceFilePath)); err != nil {
+		t.Fatalf("expected image evidence file on disk: %v", err)
+	}
+}
+
 func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
@@ -125,7 +209,7 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 		Description: "Demora en la entrega del paquete",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
 	}
@@ -160,7 +244,7 @@ func TestMarkInReview_TransitionsFromPendingCustomer(t *testing.T) {
 		Description: "Demora en la entrega del paquete",
 		CreatedBy:   "Alice Sender",
 		DNI:         "12345678",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
 	}

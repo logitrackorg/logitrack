@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   CLAIM_MAIN_OPTIONS,
   DAMAGE_SUBTYPE_OPTIONS,
   DELIVERY_SUBTYPE_OPTIONS,
   damageSubtypeRequiresEvidence,
+  isAllowedClaimEvidenceFile,
   type ClaimMainCategory,
   type DamageSubtype,
   type DeliverySubtype,
@@ -26,17 +27,7 @@ interface Props {
 }
 
 export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!values.evidence?.type.startsWith("image/")) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(values.evidence);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [values.evidence]);
+  const [evidenceError, setEvidenceError] = useState<string>("");
 
   const toggleDamageSubtype = (subtype: DamageSubtype) => {
     const next = values.damageSubtypes.includes(subtype)
@@ -47,10 +38,26 @@ export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
 
   const evidenceRequired =
     values.category === "incomplete_damage" && damageSubtypeRequiresEvidence(values.damageSubtypes);
-  const evidenceOptional =
-    values.category === "incomplete_damage" &&
-    values.damageSubtypes.includes("missing_products") &&
-    !evidenceRequired;
+
+  const handleEvidenceChange = (file: File | null) => {
+    if (!file) {
+      setEvidenceError("");
+      onChange({ evidence: null });
+      return;
+    }
+    if (!isAllowedClaimEvidenceFile(file)) {
+      setEvidenceError("La evidencia debe ser un archivo TXT o PDF.");
+      onChange({ evidence: null });
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setEvidenceError("La evidencia no puede superar 1 MB.");
+      onChange({ evidence: null });
+      return;
+    }
+    setEvidenceError("");
+    onChange({ evidence: file });
+  };
 
   return (
     <div className="pt-claim-form-fields">
@@ -100,23 +107,22 @@ export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
           <label className="pt-claim-field pt-claim-evidence-field">
             <span className="pt-claim-label">
               Adjuntar evidencia
-              {evidenceRequired && <span className="pt-claim-required"> (obligatorio para daños)</span>}
-              {evidenceOptional && !evidenceRequired && (
-                <span className="pt-claim-optional"> (opcional para faltantes)</span>
-              )}
+              {evidenceRequired && <span className="pt-claim-required"> (obligatorio para producto dañado)</span>}
+              {!evidenceRequired && <span className="pt-claim-optional"> (opcional)</span>}
             </span>
             <input
               className="pt-claim-input pt-claim-file"
               type="file"
-              accept="image/*"
-              onChange={(e) => onChange({ evidence: e.target.files?.[0] ?? null })}
+              accept="image/*,.txt,.pdf"
+              onChange={(e) => handleEvidenceChange(e.target.files?.[0] ?? null)}
               disabled={disabled}
             />
             {values.evidence && (
               <span className="pt-claim-hint">Archivo: {values.evidence.name}</span>
             )}
-            {previewUrl && (
-              <img src={previewUrl} alt="Vista previa de evidencia" className="pt-claim-evidence-preview" />
+            <span className="pt-claim-hint">Formatos admitidos: imágenes pequeñas, .txt o .pdf, máximo 1 MB.</span>
+            {evidenceError && (
+              <span className="pt-claim-required">{evidenceError}</span>
             )}
           </label>
         </fieldset>

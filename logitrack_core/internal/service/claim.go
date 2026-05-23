@@ -3,7 +3,11 @@ package service
 import (
 	"errors"
 	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/clock"
@@ -12,6 +16,12 @@ import (
 )
 
 var ErrClaimForbidden = errors.New("reclamo fuera de sucursal")
+
+type ClaimEvidenceUpload struct {
+	FileName string
+	MimeType string
+	Data     []byte
+}
 
 type ClaimService struct {
 	claimRepo      repository.ClaimRepository
@@ -34,7 +44,7 @@ func NewClaimService(
 	}
 }
 
-func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest) (model.Claim, error) {
+func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
 	trackingID := strings.TrimSpace(req.TrackingID)
 	if trackingID == "" {
 		return model.Claim{}, fmt.Errorf("tracking_id es requerido")
@@ -74,25 +84,60 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest) (mo
 	}
 
 	now := clock.Now().UTC()
+	var evidenceFileName, evidenceFilePath, evidenceMimeType string
+	var evidenceUploadDate *time.Time
+	if evidence != nil && len(evidence.Data) > 0 {
+		evidenceDir := filepath.Join("uploads", "claims")
+		if err := os.MkdirAll(evidenceDir, 0o755); err != nil {
+			return model.Claim{}, err
+		}
+		safeName := sanitizeEvidenceFileName(evidence.FileName)
+		if ext := strings.ToLower(filepath.Ext(safeName)); ext == "" {
+			safeName += evidenceFileExtension(evidence.MimeType)
+		}
+		evidenceFileName = safeName
+		evidenceFilePath = filepath.Join(evidenceDir, fmt.Sprintf("%s_%s", claimID, safeName))
+		evidenceMimeType = strings.TrimSpace(evidence.MimeType)
+		if evidenceMimeType == "" {
+			evidenceMimeType = mime.TypeByExtension(filepath.Ext(evidenceFileName))
+			if evidenceMimeType == "" {
+				evidenceMimeType = "application/octet-stream"
+			}
+		}
+		if err := os.WriteFile(evidenceFilePath, evidence.Data, 0o644); err != nil {
+			return model.Claim{}, err
+		}
+		evidenceUploadDate = &now
+	}
 	claim := model.Claim{
-		ID:               claimID,
-		TrackingID:       trackingID,
-		ClaimType:        req.ClaimType,
-		Status:           model.ClaimStatusOpen,
-		Description:      description,
-		CreatedBy:        createdBy,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		AssignedCategory: "",
-		ResolutionType:   "",
-		IsAutomatic:      false,
+		ID:                 claimID,
+		TrackingID:         trackingID,
+		ClaimType:          req.ClaimType,
+		Status:             model.ClaimStatusOpen,
+		Description:        description,
+		CreatedBy:          createdBy,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		AssignedCategory:   "",
+		ResolutionType:     "",
+		IsAutomatic:        false,
+		EvidenceFileName:   evidenceFileName,
+		EvidenceFilePath:   evidenceFilePath,
+		EvidenceMimeType:   evidenceMimeType,
+		EvidenceUploadDate: evidenceUploadDate,
 	}
 	if err := s.claimRepo.Create(claim); err != nil {
+		if evidenceFilePath != "" {
+			_ = os.Remove(evidenceFilePath)
+		}
 		return model.Claim{}, err
 	}
 
 	rollbackClaim := func() {
 		_ = s.claimRepo.Delete(claim.ID)
+		if evidenceFilePath != "" {
+			_ = os.Remove(evidenceFilePath)
+		}
 	}
 
 	if err := s.appendClaimEvent(model.DomainEvent{
@@ -126,6 +171,59 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest) (mo
 	}
 
 	return claim, nil
+}
+
+func evidenceFileExtension(mimeType string) string {
+	switch {
+	case strings.EqualFold(mimeType, "application/pdf"):
+		return ".pdf"
+	case strings.EqualFold(mimeType, "text/plain"):
+		return ".txt"
+	case strings.HasPrefix(mimeType, "image/"):
+		switch mimeType {
+		case "image/jpeg":
+			return ".jpg"
+		case "image/png":
+			return ".png"
+		case "image/gif":
+			return ".gif"
+		case "image/webp":
+			return ".webp"
+		case "image/bmp":
+			return ".bmp"
+		default:
+			return ".img"
+		}
+	default:
+		return ".bin"
+	}
+}
+
+func sanitizeEvidenceFileName(name string) string {
+	base := filepath.Base(strings.TrimSpace(name))
+	if base == "" || base == "." || base == string(filepath.Separator) {
+		return "evidence.txt"
+	}
+	var builder strings.Builder
+	for _, r := range base {
+		switch {
+		case r >= 'a' && r <= 'z':
+			builder.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			builder.WriteRune(r)
+		case r >= '0' && r <= '9':
+			builder.WriteRune(r)
+		case r == '.' || r == '-' || r == '_':
+			builder.WriteRune(r)
+		default:
+			builder.WriteRune('_')
+		}
+	}
+	cleaned := strings.Trim(builder.String(), "._")
+	if cleaned == "" {
+		return "evidence.txt"
+	}
+	return cleaned
 }
 
 func (s *ClaimService) GetByID(id string) (model.Claim, error) {

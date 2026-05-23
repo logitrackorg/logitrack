@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { BadgeCheck, BarChart3, ClipboardList, Clock3, RefreshCw } from "lucide-react";
+import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, RefreshCw } from "lucide-react";
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
@@ -267,6 +267,22 @@ export function Claims() {
     });
   };
 
+  const handleDownloadEvidence = async (claimId: string, fileName: string) => {
+    try {
+      const blob = await claimsApi.downloadEvidence(claimId);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError("No se pudo descargar la evidencia del reclamo.");
+    }
+  };
+
   return (
     <div className="max-w-[1100px] mx-auto p-6 md:px-8">
       <PageHeader
@@ -478,6 +494,39 @@ export function Claims() {
                     <div><strong>Resolución:</strong> {claim.resolution_type ? CLAIM_STATUS_LABELS[claim.status] : "Pendiente"}</div>
                     <div><strong>Automático:</strong> {claim.is_automatic ? "Sí" : "No"}</div>
                   </div>
+
+                  {claim.evidence_file_name && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", border: "1px solid #e2e8f0", borderRadius: 16, padding: "14px 16px", background: "#f8fafc" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5 }}>Evidencia adjunta</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", wordBreak: "break-word" }}>{claim.evidence_file_name}</div>
+                        {claim.evidence_upload_date && (
+                          <div style={{ fontSize: 12, color: "#64748b" }}>Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadEvidence(claim.id, claim.evidence_file_name ?? "evidencia")}
+                        style={{
+                          background: "linear-gradient(180deg, #1e3a5f 0%, #162b49 100%)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 12,
+                          padding: "10px 14px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 8px 18px rgba(30,58,95,0.14)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Download className="w-4 h-4" />
+                        Descargar evidencia
+                      </button>
+                    </div>
+                  )}
 
                   {!isManager && (
                     <div style={{ display: "grid", gap: 12, borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>

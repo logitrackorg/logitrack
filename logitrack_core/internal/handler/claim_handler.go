@@ -1,7 +1,13 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -281,12 +287,12 @@ func (h *ClaimHandler) GetClaimEvents(c *gin.Context) {
 // @Failure      404   {object}  map[string]string
 // @Router       /public/claims [post]
 func (h *ClaimHandler) CreatePublicClaim(c *gin.Context) {
-	var req model.CreatePublicClaimRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	req, evidence, err := parsePublicClaimRequest(c)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	claim, err := h.svc.CreatePublicClaim(req)
+	claim, err := h.svc.CreatePublicClaim(req, evidence)
 	if err != nil {
 		if err.Error() == "envio no encontrado" {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -296,6 +302,97 @@ func (h *ClaimHandler) CreatePublicClaim(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, claim)
+}
+
+func parsePublicClaimRequest(c *gin.Context) (model.CreatePublicClaimRequest, *service.ClaimEvidenceUpload, error) {
+	if strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+		return parseMultipartPublicClaimRequest(c)
+	}
+	var req model.CreatePublicClaimRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		return model.CreatePublicClaimRequest{}, nil, err
+	}
+	return req, nil, nil
+}
+
+func parseMultipartPublicClaimRequest(c *gin.Context) (model.CreatePublicClaimRequest, *service.ClaimEvidenceUpload, error) {
+	if err := c.Request.ParseMultipartForm(2 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return model.CreatePublicClaimRequest{}, nil, err
+	}
+	req := model.CreatePublicClaimRequest{
+		TrackingID:  strings.TrimSpace(c.PostForm("tracking_id")),
+		ClaimType:   model.ClaimType(strings.TrimSpace(c.PostForm("claim_type"))),
+		Description: strings.TrimSpace(c.PostForm("description")),
+		CreatedBy:   strings.TrimSpace(c.PostForm("created_by")),
+		DNI:         strings.TrimSpace(c.PostForm("dni")),
+	}
+	damageSubtypes := splitCSV(strings.TrimSpace(c.PostForm("damage_subtypes")))
+	fileHeader, err := c.FormFile("evidence")
+	if err != nil && !errors.Is(err, http.ErrMissingFile) {
+		return model.CreatePublicClaimRequest{}, nil, err
+	}
+	var evidence *service.ClaimEvidenceUpload
+	if fileHeader != nil {
+		if fileHeader.Size > 1<<20 {
+			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe pesar como maximo 1 MB")
+		}
+		ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+		mimeType := fileHeader.Header.Get("Content-Type")
+		if mimeType == "" {
+			mimeType = mime.TypeByExtension(ext)
+		}
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		if ext != ".txt" && ext != ".pdf" && !strings.HasPrefix(mimeType, "image/") {
+			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe ser un archivo .txt, .pdf o una imagen")
+		}
+		file, err := fileHeader.Open()
+		if err != nil {
+			return model.CreatePublicClaimRequest{}, nil, err
+		}
+		defer file.Close()
+		data, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
+		if err != nil {
+			return model.CreatePublicClaimRequest{}, nil, err
+		}
+		if int64(len(data)) > 1<<20 {
+			return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia debe pesar como maximo 1 MB")
+		}
+		evidence = &service.ClaimEvidenceUpload{
+			FileName: fileHeader.Filename,
+			MimeType: mimeType,
+			Data:     data,
+		}
+	}
+	if req.ClaimType == model.ClaimTypeDamage && containsAny(damageSubtypes, "product_damaged") && evidence == nil {
+		return model.CreatePublicClaimRequest{}, nil, fmt.Errorf("la evidencia es obligatoria para producto dañado")
+	}
+	return req, evidence, nil
+}
+
+func splitCSV(value string) []string {
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func containsAny(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 // GetPublicClaim returns a public claim by ID.
@@ -319,4 +416,42 @@ func (h *ClaimHandler) GetPublicClaim(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, claim)
+}
+
+// DownloadClaimEvidence returns the uploaded evidence file for a claim.
+//
+// @Summary      Download claim evidence
+// @Description  Downloads the evidence attached to a claim. Operator and supervisor only.
+// @Tags         claims
+// @Produce      application/octet-stream
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Claim ID"
+// @Success      200  {file}    file
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /claims/{id}/evidence/download [get]
+func (h *ClaimHandler) DownloadClaimEvidence(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.GetByIDForBranch(c.Param("id"), user.BranchID)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(claim.EvidenceFilePath) == "" || strings.TrimSpace(claim.EvidenceFileName) == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "el reclamo no tiene evidencia adjunta"})
+		return
+	}
+	if _, err := os.Stat(claim.EvidenceFilePath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "la evidencia no está disponible"})
+		return
+	}
+	c.FileAttachment(claim.EvidenceFilePath, filepath.Base(claim.EvidenceFileName))
 }

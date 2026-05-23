@@ -351,6 +351,7 @@ func main() {
 	protected.GET("/claims", claimRead, claimHandler.ListClaims)
 	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
+	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)

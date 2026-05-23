@@ -25,7 +25,18 @@ export const DELIVERY_SUBTYPE_OPTIONS: { value: DeliverySubtype; label: string }
 ];
 
 export function damageSubtypeRequiresEvidence(subtypes: DamageSubtype[]): boolean {
-  return subtypes.some((s) => s === "product_damaged" || s === "packaging_damaged");
+  return subtypes.includes("product_damaged");
+}
+
+export function isAllowedClaimEvidenceFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return (
+    lowerName.endsWith(".txt") ||
+    lowerName.endsWith(".pdf") ||
+    file.type === "text/plain" ||
+    file.type === "application/pdf" ||
+    file.type.startsWith("image/")
+  );
 }
 
 export function resolveClaimType(
@@ -106,10 +117,13 @@ export function validatePublicClaimForm(input: {
   if (category === "incomplete_damage") {
     if (damageSubtypes.length === 0) return "Seleccioná al menos un subtipo.";
     if (damageSubtypeRequiresEvidence(damageSubtypes) && !evidence) {
-      return "Adjuntá una imagen como evidencia (obligatorio para daños).";
+      return "Adjuntá un archivo TXT, PDF o una imagen pequeña como evidencia (obligatorio para producto dañado).";
     }
-    if (evidence && !evidence.type.startsWith("image/")) {
-      return "La evidencia para daños debe ser una imagen.";
+    if (evidence && !isAllowedClaimEvidenceFile(evidence)) {
+      return "La evidencia debe ser un archivo TXT, PDF o una imagen pequeña.";
+    }
+    if (evidence && evidence.size > 1024 * 1024) {
+      return "La evidencia no puede superar 1 MB.";
     }
     const desc = buildClaimDescription({
       category,

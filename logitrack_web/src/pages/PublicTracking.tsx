@@ -340,6 +340,8 @@ export function PublicTracking() {
         description,
         created_by: claimForm.createdBy,
         dni: claimForm.dni,
+        damage_subtypes: claimForm.damageSubtypes.join(","),
+        evidence: claimForm.evidence,
       });
       setClaimResult(createdClaim);
       setClaimOpen(false);

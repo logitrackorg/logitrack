@@ -160,7 +160,11 @@ func RunMigrations(db *sql.DB) error {
 			updated_at        TIMESTAMPTZ  NOT NULL,
 			assigned_category TEXT,
 			resolution_type   TEXT,
-			is_automatic      BOOLEAN      NOT NULL DEFAULT FALSE
+			is_automatic      BOOLEAN      NOT NULL DEFAULT FALSE,
+			evidence_file_name TEXT,
+			evidence_file_path TEXT,
+			evidence_mime_type TEXT,
+			evidence_upload_date TIMESTAMPTZ
 		);
 		CREATE INDEX IF NOT EXISTS idx_claims_tracking_id ON shipment_claims(tracking_id);
 
@@ -405,6 +409,10 @@ func RunMigrations(db *sql.DB) error {
 			PERFORM setval('shipment_claim_id_seq', max_n, true);
 		END
 		$migrate_claim_seq$;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_name   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_path   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
 		CREATE TABLE IF NOT EXISTS claim_events (
 			id         VARCHAR(50)  PRIMARY KEY,
 			claim_id   VARCHAR(50)  NOT NULL,
