@@ -150,6 +150,30 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (retiro en sucursal)", org.Email)
 }
 
+// SendDeliveryConfirmedNotification sends a delivery confirmation email to the shipment's sender.
+// CA-01: called when a shipment transitions to "delivered".
+// CA-02: only the sender is notified; the recipient does not receive this email.
+// CA-03: includes tracking ID, recipient name, delivery date/time, and a link to the shipment.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
+	if s == nil {
+		return
+	}
+	if shipment.Sender.Email == "" {
+		log.Printf("[email] entrega confirmada: remitente de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	deliveredAt := time.Now().UTC()
+	if shipment.DeliveredAt != nil {
+		deliveredAt = *shipment.DeliveredAt
+	}
+	subj := fmt.Sprintf("Tu envío %s fue entregado exitosamente — %s", shipment.TrackingID, org.Name)
+	body := renderDeliveryConfirmedNotification(shipment, deliveredAt, trackURL, org)
+	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (entrega confirmada)", org.Email)
+}
+
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {

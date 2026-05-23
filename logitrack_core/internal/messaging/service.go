@@ -36,15 +36,21 @@ type PickupEmailFallback interface {
 	SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time)
 }
 
+// DeliveryConfirmedEmailFallback is the minimal interface for the email fallback on delivery confirmed.
+type DeliveryConfirmedEmailFallback interface {
+	SendDeliveryConfirmedNotification(shipment model.Shipment)
+}
+
 // Service sends out-for-delivery notifications to recipients.
 type Service struct {
-	twilioSID       string
-	twilioToken     string
-	twilioFrom      string // e.g. "whatsapp:+14155238886"
-	trackBaseURL    string
-	emailSvc        LastMileEmailSender
-	pickupEmailSvc  PickupEmailFallback
-	routingCfg      RoutingConfigGetter
+	twilioSID          string
+	twilioToken        string
+	twilioFrom         string // e.g. "whatsapp:+14155238886"
+	trackBaseURL       string
+	emailSvc           LastMileEmailSender
+	pickupEmailSvc     PickupEmailFallback
+	deliveryEmailSvc   DeliveryConfirmedEmailFallback
+	routingCfg         RoutingConfigGetter
 }
 
 // New returns a Service ready to use.
@@ -65,6 +71,12 @@ func New(twilioSID, twilioToken, twilioFrom, trackBaseURL string, emailSvc LastM
 // SetPickupEmailFallback wires the email service used when WhatsApp is unavailable
 // for ready-for-pickup notifications.
 func (s *Service) SetPickupEmailFallback(svc PickupEmailFallback) { s.pickupEmailSvc = svc }
+
+// SetDeliveryConfirmedEmailFallback wires the email service used when WhatsApp is unavailable
+// for delivery-confirmed notifications to the sender.
+func (s *Service) SetDeliveryConfirmedEmailFallback(svc DeliveryConfirmedEmailFallback) {
+	s.deliveryEmailSvc = svc
+}
 
 // SendOutForDeliveryNotification notifies the recipient that their shipment is out for delivery.
 // CA-01: called when shipment transitions to out_for_delivery with delivery_method ultima_milla.
@@ -137,6 +149,36 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 			return
 		}
 		s.pickupEmailSvc.SendReadyForPickupNotification(shipment, branch, deadlineDate)
+	}
+}
+
+// SendDeliveryConfirmedNotification notifies the sender that their shipment was delivered.
+// CA-01: called when shipment transitions to delivered.
+// CA-02: only the sender is notified; the recipient does not receive this message.
+// CA-03: content includes tracking ID, recipient name, delivery date/time, and tracking URL.
+// Tries WhatsApp first (CA-02); falls back to email when unavailable (CA-03).
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
+	sender := shipment.Sender
+	sentViaWhatsApp := false
+
+	if sender.Phone != "" && s.whatsappConfigured() {
+		msg := buildDeliveryConfirmedWhatsAppMessage(shipment, s.trackBaseURL)
+		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp entrega confirmada falló para %s (%s): %v — usando email como fallback",
+				shipment.TrackingID, sender.Phone, err)
+		} else {
+			sentViaWhatsApp = true
+			log.Printf("[messaging] WhatsApp entrega confirmada enviado a %s para %s", sender.Phone, shipment.TrackingID)
+		}
+	}
+
+	if !sentViaWhatsApp {
+		if s.deliveryEmailSvc == nil {
+			log.Printf("[messaging] sin canal disponible para notificar entrega de %s al remitente — omitido", shipment.TrackingID)
+			return
+		}
+		s.deliveryEmailSvc.SendDeliveryConfirmedNotification(shipment)
 	}
 }
 
@@ -229,6 +271,32 @@ func buildPickupWhatsAppMessage(trackingID string, branch model.Branch, deadline
 	msg += "\nPresentate con tu DNI para retirar el paquete."
 	if trackURL != "" {
 		msg += "\n\nSeguí tu envío en: " + trackURL
+	}
+	return msg
+}
+
+func buildDeliveryConfirmedWhatsAppMessage(shipment model.Shipment, trackBaseURL string) string {
+	deliveredAt := time.Now().UTC()
+	if shipment.DeliveredAt != nil {
+		deliveredAt = *shipment.DeliveredAt
+	}
+	months := [...]string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+	dateStr := fmt.Sprintf("%d de %s de %d, %02d:%02d hs",
+		deliveredAt.Day(), months[deliveredAt.Month()-1], deliveredAt.Year(),
+		deliveredAt.Hour(), deliveredAt.Minute())
+
+	msg := fmt.Sprintf("✅ Tu envío *%s* fue entregado exitosamente.\n\n", shipment.TrackingID)
+	msg += fmt.Sprintf("👤 *Recibido por:* %s\n", shipment.Recipient.Name)
+	msg += fmt.Sprintf("🕐 *Fecha y hora:* %s\n", dateStr)
+	trackURL := ""
+	if trackBaseURL != "" {
+		trackURL = trackBaseURL + "/track?id=" + shipment.TrackingID
+	}
+	if trackURL != "" {
+		msg += "\nVer detalle del envío: " + trackURL
 	}
 	return msg
 }

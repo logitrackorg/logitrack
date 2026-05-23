@@ -133,6 +133,12 @@ type ReadyForPickupNotifier interface {
 	SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time)
 }
 
+// DeliveryConfirmedNotifier sends delivery-confirmed notifications to the sender.
+// CA-01/CA-02: only the sender is notified; satisfied by *messaging.Service.
+type DeliveryConfirmedNotifier interface {
+	SendDeliveryConfirmedNotification(shipment model.Shipment)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -143,9 +149,10 @@ type ShipmentService struct {
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
 	notifSvc     *NotificationService
-	emailSvc        EmailConfirmationSender
-	messagingSvc    OutForDeliveryNotifier
-	pickupEmailSvc  ReadyForPickupNotifier
+	emailSvc            EmailConfirmationSender
+	messagingSvc        OutForDeliveryNotifier
+	pickupEmailSvc      ReadyForPickupNotifier
+	deliveryNotifSvc    DeliveryConfirmedNotifier
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
@@ -153,6 +160,7 @@ func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { 
 func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)           { s.emailSvc = svc }
 func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
 func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) { s.deliveryNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -907,6 +915,11 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
 		s.messagingSvc != nil {
 		go s.messagingSvc.SendOutForDeliveryNotification(updated)
+	}
+
+	// CA-01/CA-02: envío entregado → notificar al remitente (solo) por WhatsApp/email.
+	if targetStatus == model.StatusDelivered && s.deliveryNotifSvc != nil {
+		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
 	}
 
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.

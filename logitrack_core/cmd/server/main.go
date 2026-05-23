@@ -197,9 +197,11 @@ func main() {
 		emailSvc,
 		routingCfgSvc,
 	)
-	messagingSvc.SetPickupEmailFallback(emailSvc) // email fallback para ready_for_pickup
+	messagingSvc.SetPickupEmailFallback(emailSvc)              // email fallback para ready_for_pickup
+	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc)   // email fallback para entrega confirmada
 	shipmentSvc.SetMessagingService(messagingSvc)
-	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)    // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)      // WhatsApp primero, email fallback (CA-01/CA-02)
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {
