@@ -166,6 +166,7 @@ export function BranchList() {
                 <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Nombre{sortIcon("name")}</button></th>
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
+                <th style={isMobile ? { display: "none" } : thStyle}>Horarios</th>
                 <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
                 {canViewCapacity && <th style={isMobile ? { display: "none" } : thStyle}>Capacidad</th>}
                 <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
@@ -180,6 +181,9 @@ export function BranchList() {
                   </td>
                   <td style={tdStyle}>{b.address.city}, {b.province}</td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>
+                  <td style={isMobile ? { display: "none" } : { ...tdStyle, color: b.hours ? "#374151" : "#9ca3af", fontSize: 13 }}>
+                    {b.hours || "—"}
+                  </td>
                   <td style={tdStyle}>
                     <span style={{
                       display: "inline-block", padding: "2px 10px", borderRadius: 12,
@@ -328,6 +332,7 @@ function BranchFormModal({
     province: initial?.province ?? initial?.address.province ?? "",
     postal_code: initial?.address.postal_code ?? "",
     max_capacity: initial?.max_capacity ?? 50,
+    hours: initial?.hours ?? "",
   });
   const [step, setStep] = useState<"form" | "confirm">("form");
   const [submitting, setSubmitting] = useState(false);
@@ -475,6 +480,14 @@ function BranchFormModal({
             />
           </Field>
         </div>
+        <Field label="Horarios de atención">
+          <input
+            style={inputStyle}
+            value={form.hours}
+            onChange={(e) => set("hours", e.target.value)}
+            placeholder="ej. Lunes a Viernes 9:00-18:00hs"
+          />
+        </Field>
         {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>

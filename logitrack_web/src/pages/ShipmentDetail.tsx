@@ -292,6 +292,15 @@ export function ShipmentDetail() {
   }, [trackingId, reload]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:pickup-success', handler);
+    return () => window.removeEventListener('chatbot:pickup-success', handler);
+  }, [trackingId, reload]);
+
+  useEffect(() => {
     if (shipment?.status === "draft" && shipment.receiving_branch_id) {
       branchApi.getCapacity(shipment.receiving_branch_id).then(setBranchCapacity).catch(() => {});
     } else {
@@ -725,7 +734,13 @@ export function ShipmentDetail() {
                       ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
                       : <InfoRow label="Ventana horaria" value={twLabel} />;
                   })()}
-                  <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
+                  {(() => {
+                    const changedByChat = events.some(ev => ev.notes === "Destinatario solicitó retiro en sucursal vía chatbot");
+                    const dmLabel = (shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)";
+                    return changedByChat
+                      ? <InfoRowEx label="Método de entrega" value="Retiro en sucursal" original="Última milla (a domicilio)" corrected />
+                      : <InfoRow label="Método de entrega" value={dmLabel} />;
+                  })()}
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
