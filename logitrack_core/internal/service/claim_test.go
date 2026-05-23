@@ -36,7 +36,8 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDelay,
 		Description: "Demora en la entrega del paquete",
-		CreatedBy:   "Cliente Test",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
 	})
 	if err != nil {
 		t.Fatalf("create claim 1: %v", err)
@@ -45,7 +46,8 @@ func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDamage,
 		Description: "Paquete llegó con daños visibles",
-		CreatedBy:   "Cliente Test",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
 	})
 	if err != nil {
 		t.Fatalf("create claim 2: %v", err)
@@ -66,7 +68,8 @@ func TestCreatePublicClaim_AppendsShipmentEvent(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDelay,
 		Description: "Demora en la entrega del paquete",
-		CreatedBy:   "Cliente Test",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
 	})
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
@@ -96,7 +99,8 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDelay,
 		Description: "Demora en la entrega del paquete",
-		CreatedBy:   "Cliente Test",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
 	})
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
@@ -119,13 +123,14 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 		TrackingID:  ship.TrackingID,
 		ClaimType:   model.ClaimTypeDelay,
 		Description: "Demora en la entrega del paquete",
-		CreatedBy:   "Cliente Test",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
 	})
 	if err != nil {
 		t.Fatalf("create claim: %v", err)
 	}
 
-	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "")
+	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "", "Reclamo revisado y rechazado por falta de evidencia")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -139,5 +144,8 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	}
 	if events[1].EventType != model.EventClaimResolved {
 		t.Errorf("expected claim_resolved, got %s", events[1].EventType)
+	}
+	if events[1].Notes != "Reclamo revisado y rechazado por falta de evidencia" {
+		t.Errorf("expected notes to be stored, got %q", events[1].Notes)
 	}
 }

@@ -95,7 +95,7 @@ func (h *ClaimHandler) UpdateClaimCategory(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claim, err := h.svc.UpdateCategory(c.Param("id"), req.AssignedCategory, user.Username, user.BranchID)
+	claim, err := h.svc.UpdateCategory(c.Param("id"), req.AssignedCategory, user.Username, user.BranchID, req.Notes)
 	if err != nil {
 		if err == repository.ErrClaimNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -133,7 +133,7 @@ func (h *ClaimHandler) ResolveClaim(c *gin.Context) {
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claim, err := h.svc.Resolve(c.Param("id"), req.ResolutionType, user.Username, user.BranchID)
+	claim, err := h.svc.Resolve(c.Param("id"), req.ResolutionType, user.Username, user.BranchID, req.Notes)
 	if err != nil {
 		if err == repository.ErrClaimNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

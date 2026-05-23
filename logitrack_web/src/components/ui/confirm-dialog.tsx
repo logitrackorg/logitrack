@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 
 interface ConfirmDialogProps {
@@ -7,9 +7,10 @@ interface ConfirmDialogProps {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
-  onConfirm: () => void;
+  onConfirm: (notes?: string) => void;
   onCancel: () => void;
   variant?: "default" | "danger";
+  requireComment?: boolean;
 }
 
 export function ConfirmDialog({
@@ -21,7 +22,10 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   variant = "default",
+  requireComment = false,
 }: ConfirmDialogProps) {
+  const [notes, setNotes] = useState("");
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -32,7 +36,14 @@ export function ConfirmDialog({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onCancel]);
 
+  useEffect(() => {
+    if (isOpen) setNotes("");
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const trimmedNotes = notes.trim();
+  const canConfirm = !requireComment || trimmedNotes.length >= 15;
 
   return (
     <div
@@ -147,6 +158,30 @@ export function ConfirmDialog({
             >
               {message}
             </p>
+            {requireComment && (
+              <div style={{ marginTop: 12 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+                  Comentario obligatorio
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Escribí al menos 15 caracteres con la justificación de la decisión"
+                  style={{
+                    width: "100%",
+                    borderRadius: 8,
+                    border: "1px solid #e2e8f0",
+                    padding: 8,
+                    fontSize: 13,
+                    resize: "vertical",
+                  }}
+                />
+                <div style={{ marginTop: 6, fontSize: 12, color: canConfirm ? "#64748b" : "#b45309" }}>
+                  Mínimo 15 caracteres. Llevás {trimmedNotes.length}/15.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -175,7 +210,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => onConfirm(requireComment ? trimmedNotes : undefined)}
             style={{
               padding: "10px 20px",
               borderRadius: "8px",
@@ -187,6 +222,7 @@ export function ConfirmDialog({
               cursor: "pointer",
               transition: "background 0.2s",
             }}
+            disabled={!canConfirm}
           >
             {confirmLabel}
           </button>
