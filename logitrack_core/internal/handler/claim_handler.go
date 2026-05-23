@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
@@ -31,10 +32,26 @@ func NewClaimHandler(svc *service.ClaimService) *ClaimHandler {
 // @Router       /claims [get]
 func (h *ClaimHandler) ListClaims(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claims, err := h.svc.ListByOriginBranch(user.BranchID)
+	// allow manager to pass optional branch_id query param; others are scoped to their branch
+	branchID := strings.TrimSpace(c.Query("branch_id"))
+	status := strings.TrimSpace(c.Query("status"))
+	if user.Role != model.RoleManager {
+		branchID = user.BranchID
+	}
+	claims, err := h.svc.ListByOriginBranch(branchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	// filter by status if provided
+	if status != "" {
+		filtered := make([]model.Claim, 0, len(claims))
+		for _, c := range claims {
+			if string(c.Status) == status {
+				filtered = append(filtered, c)
+			}
+		}
+		claims = filtered
 	}
 	if claims == nil {
 		claims = []model.Claim{}

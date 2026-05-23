@@ -68,7 +68,7 @@ function Nav() {
       {!hasRole("admin") && (
         <NavLink to="/" end style={navStyle}>Envíos</NavLink>
       )}
-      {hasRole("operator", "supervisor") && (
+      {hasRole("operator", "supervisor", "manager") && (
         <NavLink to="/claims" style={navStyle}>Reclamos</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
@@ -241,12 +241,12 @@ function AppRoutes() {
           } />
 
           <Route path="/claims" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <Claims />
             </ProtectedRoute>
           } />
           <Route path="/claims/:id" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <Claims />
             </ProtectedRoute>
           } />
