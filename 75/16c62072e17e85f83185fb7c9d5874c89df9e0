@@ -1,0 +1,37 @@
+logitrack_core/internal/service/routing_multihop_test.go
+  s_da806c210c1ff4::t_0c8ba24d9143aa 279-416
+  s_da806c210c1ff4::t_32570ccb63f62d 93,179,231,272
+logitrack_core/internal/service/routing.go
+  s_da806c210c1ff4::t_7dacac69fd1055 1864-1911
+  s_0c1474516137b1::t_e0e09120fb651b 1747
+  s_da806c210c1ff4::t_8597832e274b71 1734-1739,1743-1746
+  s_da806c210c1ff4::t_efb0b6d079ffcf 2532
+CLAUDE.md
+  s_da806c210c1ff4::t_129f88c460bd88 285,294,302,306-308,310-319,321,323,330-338,340-346,355-359
+  s_da806c210c1ff4::t_f0fb20cbaed389 339
+  s_da806c210c1ff4::t_ac4b428ecc5345 495-497,499
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "7516c62072e17e85f83185fb7c9d5874c89df9e0",
+  "prompts": {},
+  "sessions": {
+    "s_0c1474516137b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "974d4412-0470-4387-a814-d999049a182b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null
+    },
+    "s_da806c210c1ff4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "abf55f87-bffd-46f8-9cf2-0099cda2ae24",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
