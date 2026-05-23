@@ -263,7 +263,7 @@ export function PublicTracking() {
 
   const resetClaimForm = () => {
     setClaimOpen(false);
-    setClaimForm(emptyClaimFormValues());
+    setClaimForm(emptyClaimFormValues);
     setClaimSubmitting(false);
     setClaimError("");
     setClaimResult(null);
@@ -310,62 +310,66 @@ export function PublicTracking() {
 
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shipment) return;
+    setClaimSubmitting(true);
     setClaimError("");
 
-    const validationError = validatePublicClaimForm({
-      category: claimForm.category,
-      damageSubtypes: claimForm.damageSubtypes,
-      deliverySubtype: claimForm.deliverySubtype,
-      staffDescription: claimForm.staffDescription,
-      evidence: claimForm.evidence,
-      createdBy: claimForm.createdBy,
-      dni: claimForm.dni,
-    });
+    const validationError = validatePublicClaimForm(claimForm);
     if (validationError) {
       setClaimError(validationError);
+      setClaimSubmitting(false);
       return;
     }
 
-    const example = EXAMPLE_TRACKING_IDS.find((item) => item.trackingId === shipment.tracking_id);
-    if (example) {
-      const dni = claimForm.dni.trim();
-      const name = claimForm.createdBy.trim();
-      const matchesSender = example.sender.dni === dni && example.sender.name === name;
-      const matchesRecipient = example.recipient.dni === dni && example.recipient.name === name;
-      if (!matchesSender && !matchesRecipient) {
-        setClaimError("El nombre y apellido no coincide con el DNI ingresado para este envío.");
-        return;
-      }
+    if (!shipment) {
+      setClaimError("No se pudo encontrar el envío para asociar el reclamo.");
+      setClaimSubmitting(false);
+      return;
     }
 
-    const category = claimForm.category;
-    if (!category) return;
+    if (!claimForm.category) {
+      setClaimError("Seleccioná qué problema tuviste con el envío.");
+      setClaimSubmitting(false);
+      return;
+    }
 
+    const claimType = resolveClaimType(
+      claimForm.category,
+      claimForm.damageSubtypes,
+      claimForm.deliverySubtype
+    );
     const description = buildClaimDescription({
-      category,
+      category: claimForm.category,
       damageSubtypes: claimForm.damageSubtypes,
       deliverySubtype: claimForm.deliverySubtype,
       staffDescription: claimForm.staffDescription,
       evidenceName: claimForm.evidence?.name,
     });
-    const claimType = resolveClaimType(category, claimForm.damageSubtypes, claimForm.deliverySubtype);
 
-    setClaimSubmitting(true);
+    if (!claimType || !description) {
+      setClaimError("No se pudo determinar el tipo o la descripción del reclamo.");
+      setClaimSubmitting(false);
+      return;
+    }
+
     try {
-      const created = await publicTrackingApi.createClaim({
+      const createdClaim = await publicTrackingApi.createClaim({
         tracking_id: shipment.tracking_id,
         claim_type: claimType,
         description,
-        created_by: claimForm.createdBy.trim(),
+        created_by: claimForm.createdBy,
+        dni: claimForm.dni,
       });
-      setClaimResult(created);
+      setClaimResult(createdClaim);
       setClaimOpen(false);
-      setClaimForm(emptyClaimFormValues());
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setClaimError(msg ?? "No pudimos registrar el reclamo. Intentá nuevamente.");
+    } catch (error: any) {
+      const msg = error.response?.data?.error ?? error.response?.data?.message;
+      if (msg?.includes("no coinciden")) {
+        setClaimError("Datos incorrectos");
+      } else {
+        setClaimError(
+          msg ?? "No pudimos registrar el reclamo. Intentá nuevamente."
+        );
+      }
     } finally {
       setClaimSubmitting(false);
     }

@@ -187,7 +187,7 @@ export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
   );
 }
 
-export const emptyClaimFormValues = (): PublicClaimFormValues => ({
+export const emptyClaimFormValues: PublicClaimFormValues = {
   createdBy: "",
   dni: "",
   category: "",
@@ -195,5 +195,5 @@ export const emptyClaimFormValues = (): PublicClaimFormValues => ({
   deliverySubtype: "",
   staffDescription: "",
   evidence: null,
-});
+};
 
