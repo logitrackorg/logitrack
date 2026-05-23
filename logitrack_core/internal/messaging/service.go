@@ -41,6 +41,11 @@ type DeliveryConfirmedEmailFallback interface {
 	SendDeliveryConfirmedNotification(shipment model.Shipment)
 }
 
+// RejectedEmailFallback is the minimal interface for the email fallback on shipment rejected.
+type RejectedEmailFallback interface {
+	SendRejectedNotification(shipment model.Shipment, notes string)
+}
+
 // Service sends out-for-delivery notifications to recipients.
 type Service struct {
 	twilioSID          string
@@ -50,6 +55,7 @@ type Service struct {
 	emailSvc           LastMileEmailSender
 	pickupEmailSvc     PickupEmailFallback
 	deliveryEmailSvc   DeliveryConfirmedEmailFallback
+	rejectedEmailSvc   RejectedEmailFallback
 	routingCfg         RoutingConfigGetter
 }
 
@@ -76,6 +82,12 @@ func (s *Service) SetPickupEmailFallback(svc PickupEmailFallback) { s.pickupEmai
 // for delivery-confirmed notifications to the sender.
 func (s *Service) SetDeliveryConfirmedEmailFallback(svc DeliveryConfirmedEmailFallback) {
 	s.deliveryEmailSvc = svc
+}
+
+// SetRejectedEmailFallback wires the email service used when WhatsApp is unavailable
+// for rejected-shipment notifications to the sender.
+func (s *Service) SetRejectedEmailFallback(svc RejectedEmailFallback) {
+	s.rejectedEmailSvc = svc
 }
 
 // SendOutForDeliveryNotification notifies the recipient that their shipment is out for delivery.
@@ -297,6 +309,57 @@ func buildDeliveryConfirmedWhatsAppMessage(shipment model.Shipment, trackBaseURL
 	}
 	if trackURL != "" {
 		msg += "\nVer detalle del envío: " + trackURL
+	}
+	return msg
+}
+
+// SendRejectedNotification notifies the sender that the recipient rejected their shipment.
+// CA-01: called when shipment transitions to rechazado.
+// CA-02: only the sender is notified.
+// CA-03: includes tracking ID, rejection reason, date/time, and branch contact instructions.
+// Tries WhatsApp first; falls back to email when unavailable.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string) {
+	sender := shipment.Sender
+	sentViaWhatsApp := false
+
+	if sender.Phone != "" && s.whatsappConfigured() {
+		msg := buildRejectedWhatsAppMessage(shipment, notes, s.trackBaseURL)
+		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp rechazo falló para %s (%s): %v — usando email como fallback",
+				shipment.TrackingID, sender.Phone, err)
+		} else {
+			sentViaWhatsApp = true
+			log.Printf("[messaging] WhatsApp rechazo enviado a %s para %s", sender.Phone, shipment.TrackingID)
+		}
+	}
+
+	if !sentViaWhatsApp {
+		if s.rejectedEmailSvc == nil {
+			log.Printf("[messaging] sin canal disponible para notificar rechazo de %s al remitente — omitido", shipment.TrackingID)
+			return
+		}
+		s.rejectedEmailSvc.SendRejectedNotification(shipment, notes)
+	}
+}
+
+func buildRejectedWhatsAppMessage(shipment model.Shipment, notes string, trackBaseURL string) string {
+	now := time.Now().UTC()
+	months := [...]string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+	dateStr := fmt.Sprintf("%d de %s de %d, %02d:%02d hs",
+		now.Day(), months[now.Month()-1], now.Year(), now.Hour(), now.Minute())
+
+	msg := fmt.Sprintf("🚫 Tu envío *%s* fue rechazado por el destinatario.\n\n", shipment.TrackingID)
+	if notes != "" {
+		msg += fmt.Sprintf("📋 *Motivo:* %s\n", notes)
+	}
+	msg += fmt.Sprintf("🕐 *Fecha y hora:* %s\n", dateStr)
+	msg += "\nEl envío está siendo devuelto. Contactate con tu sucursal más cercana para coordinar una solución."
+	if trackBaseURL != "" {
+		msg += "\n\nSeguí tu envío en: " + trackBaseURL + "/track?id=" + shipment.TrackingID
 	}
 	return msg
 }

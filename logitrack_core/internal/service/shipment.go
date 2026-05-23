@@ -139,6 +139,12 @@ type DeliveryConfirmedNotifier interface {
 	SendDeliveryConfirmedNotification(shipment model.Shipment)
 }
 
+// RejectedNotifier sends rejection notifications to the sender (LOGITRACK-429).
+// CA-01/CA-02: only the sender is notified; satisfied by *messaging.Service.
+type RejectedNotifier interface {
+	SendRejectedNotification(shipment model.Shipment, notes string)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -153,6 +159,7 @@ type ShipmentService struct {
 	messagingSvc        OutForDeliveryNotifier
 	pickupEmailSvc      ReadyForPickupNotifier
 	deliveryNotifSvc    DeliveryConfirmedNotifier
+	rejectedNotifSvc    RejectedNotifier
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
@@ -161,6 +168,7 @@ func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)          
 func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
 func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
 func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                  { s.rejectedNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -922,6 +930,12 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
 	}
 
+	// LOGITRACK-429 CA-01/CA-02: envío rechazado → notificar al remitente (solo) por WhatsApp/email.
+	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
+		notes := req.Notes
+		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
+	}
+
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.
 	if targetStatus == model.StatusReadyForPickup && s.pickupEmailSvc != nil {
 		branch, _ := s.branchRepo.GetByID(updated.ReceivingBranchID)
@@ -991,8 +1005,27 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
-	// Auto-transition: no_entregado/rechazado → at_hub (keeping the intermediate state in history)
-	if targetStatus == model.StatusNoEntregado || targetStatus == model.StatusRechazado {
+	// rechazado: extiende ETA y marca is_returning, pero NO auto-transiciona a at_hub.
+	// El envío queda visible en ese estado para el chofer y el operador decide el siguiente paso.
+	if targetStatus == model.StatusRechazado {
+		nowET := clock.Now().UTC()
+		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
+		if extended, etaErr := s.repo.ExtendETA(repository.ExtendETACmd{
+			TrackingID: trackingID,
+			OldETA:     updated.EstimatedDeliveryAt,
+			NewETA:     *newETA,
+			AddedDays:  model.ReturnETAExtraDays,
+			Reason:     "shipment_returning_to_sender",
+			ChangedBy:  req.ChangedBy,
+			Timestamp:  nowET,
+		}); etaErr == nil {
+			updated = extended
+		}
+		return updated, nil
+	}
+
+	// Auto-transition: no_entregado → at_hub (el envío vuelve al depósito para reintento).
+	if targetStatus == model.StatusNoEntregado {
 		// El envío empieza un retorno → extender la fecha estimada de entrega 10 días.
 		nowET := clock.Now().UTC()
 		newETA := returnETA(nowET, updated.EstimatedDeliveryAt)
@@ -1032,12 +1065,7 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 			}
 		}
 
-		var autoNotes string
-		if targetStatus == model.StatusNoEntregado {
-			autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
-		} else {
-			autoNotes = "Destinatario rechazó el envío — devuelto a sucursal"
-		}
+		const autoNotes = "Plazo de retiro vencido — envío devuelto a sucursal"
 
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 			TrackingID: trackingID,
@@ -1430,6 +1458,7 @@ func isValidTransition(from, to model.Status) bool {
 		model.StatusOutForDelivery: {
 			model.StatusDelivered,
 			model.StatusDeliveryFailed,
+			model.StatusRechazado, // destinatario rechaza activamente en el momento de la entrega
 			model.StatusLost,
 			model.StatusDestroyed,
 		},

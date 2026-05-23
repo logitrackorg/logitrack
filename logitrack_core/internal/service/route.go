@@ -43,6 +43,8 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(sh.DeliveredAt.In(clock.LocalTZ)).Equal(routeDate)
+	case model.StatusRechazado:
+		return true
 	}
 	return false
 }
@@ -144,7 +146,7 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 	if !route.HasShipment(trackingID) {
 		return fmt.Errorf("el envío no está en tu ruta")
 	}
-	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost {
+	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost && status != model.StatusRechazado {
 		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado, fallo de entrega o extraviado")
 	}
 	return nil
