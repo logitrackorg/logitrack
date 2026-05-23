@@ -1,4 +1,4 @@
-import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map } from "lucide-react";
+import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map, Ban } from "lucide-react";
 import { googleMapsSingleStop, googleMapsRoute } from "../../utils/googleMaps";
 import type { GeoPoint } from "../../utils/googleMaps";
 
@@ -19,6 +19,7 @@ interface NextStopCardProps {
   canAct: boolean;
   onDeliver: () => void;
   onFailed: () => void;
+  onRejected: () => void;
 }
 
 export function NextStopCard({
@@ -29,6 +30,7 @@ export function NextStopCard({
   canAct,
   onDeliver,
   onFailed,
+  onRejected,
 }: NextStopCardProps) {
   const truncated = allPendingStops.length > 9;
 
@@ -97,6 +99,16 @@ export function NextStopCard({
           </>
         )}
       </div>
+
+      {/* Acción secundaria: rechazo activo del destinatario */}
+      {canAct && (
+        <div className="nsc-secondary-actions">
+          <button onClick={onRejected} className="nsc-btn nsc-rejected" style={{ width: "100%" }}>
+            <Ban className="w-4 h-4" />
+            Rechazado por destinatario
+          </button>
+        </div>
+      )}
 
       {/* Ruta completa en Google Maps */}
       <a
