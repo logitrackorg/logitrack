@@ -1731,9 +1731,19 @@ func (s *RoutingService) addMultiHopStops(plan *model.RoutingPlan, branchID stri
 // dispatches multi-hop (A) cuando A ya pasa por el origen de B y el destino de
 // B está en el path remanente de A. Solo opción C: B debe quedar completamente
 // vacío (todos sus envíos se mueven a A). B debe ser single-hop.
-func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRoutingPlan) {
+//
+// SLA safety: si algún envío de B está dentro del horizonte SLA-forzado
+// (isSLACriticalETA), la absorción solo procede si el ETA del envío vía la
+// ruta de A no supera su EstimatedDeliveryAt. Esto evita que la espera por la
+// llegada de A al origen de B rompa un SLA crítico.
+func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRoutingPlan, cfg model.RoutingConfig) {
 	if s.graphSvc == nil {
 		return
+	}
+	now := clock.Now()
+	avgSpeed := cfg.AvgSpeedKmh
+	if avgSpeed <= 0 {
+		avgSpeed = 25.0
 	}
 
 	// Índice global (branchPlanIdx, dispatchIdx) para encontrar dispatches por vehicleID
@@ -1849,6 +1859,54 @@ func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRout
 					}
 					if !fits {
 						continue
+					}
+
+					// SLA safety: si algún envío de B es SLA-crítico, no consolidar
+					// salvo que el ETA estimado vía la ruta de A respete su deadline.
+					// El envío esperaría a que A llegue al origen de B antes de salir,
+					// y esa espera puede romper el SLA.
+					shipmentsB := make([]model.Shipment, 0, len(B.Shipments))
+					hasSLACritical := false
+					for _, tid := range B.Shipments {
+						sh, ok := s.lookupShipment(tid)
+						if !ok {
+							continue
+						}
+						shipmentsB = append(shipmentsB, sh)
+						if isSLACriticalETA(sh, cfg, now) {
+							hasSLACritical = true
+						}
+					}
+					if hasSLACritical {
+						// Distancia total desde el origen de A hasta el destino de B
+						// recorriendo el path: origen → pathA[0] → ... → pathA[destMatch].
+						aOrigin := plan.BranchPlans[bpA].BranchID
+						totalDistKm := 0.0
+						prev := aOrigin
+						for k := 0; k <= destMatch; k++ {
+							d := s.branchDistance(prev, pathA[k])
+							if d > 0 {
+								totalDistKm += d
+							}
+							prev = pathA[k]
+						}
+						// Mismo factor de detour 1.3 que usa buildDurationMatrix.
+						travelHours := (totalDistKm * 1.3) / avgSpeed
+						etaAtDest := now.Add(time.Duration(travelHours * float64(time.Hour)))
+
+						slaBreaches := false
+						for _, sh := range shipmentsB {
+							if sh.EstimatedDeliveryAt == nil {
+								continue
+							}
+							if etaAtDest.After(*sh.EstimatedDeliveryAt) {
+								slaBreaches = true
+								break
+							}
+						}
+						if slaBreaches {
+							continue
+						}
 					}
 
 					// Match: mover envíos de B a A
@@ -2471,7 +2529,7 @@ func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalR
 	// Consolidación cross-branch: absorber dispatches single-hop dentro de
 	// multi-hops que ya pasan por su sucursal de origen (opción C: solo si B
 	// queda completamente vacío y se puede cancelar).
-	s.consolidateCrossBranchDispatches(plan)
+	s.consolidateCrossBranchDispatches(plan, cfg)
 
 	// Utilización mínima del tramo: eliminar paradas adicionales cuyo tramo
 	// no alcanza el fill_rate configurado, salvo que haya SLA forzado.
