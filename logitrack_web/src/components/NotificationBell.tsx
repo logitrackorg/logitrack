@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin, UserCheck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -27,8 +27,9 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "chatbot_pickup_requested") return <Bot           size={16} color="#a78bfa" />;
   if (type === "min_fill_reached")         return <Truck         size={16} color="#7c3aed" />;
-  if (type === "route_assigned")           return <MapPin        size={16} color="#0ea5e9" />;
-  if (type === "route_reassigned")         return <MapPin        size={16} color="#f59e0b" />;
+  if (type === "route_assigned")           return <MapPin     size={16} color="#0ea5e9" />;
+  if (type === "route_reassigned")         return <MapPin     size={16} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")     return <UserCheck  size={16} color="#10b981" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -102,7 +103,7 @@ function GroupIcon({ type }: { type: string }) {
   if (type === "fatigue_alert")       return <AlertTriangle size={16} color={color} />;
   if (type === "route_assigned")        return <MapPin size={16} color={color} />;
   if (type === "route_reassigned")      return <MapPin size={16} color={color} />;
-  if (type === "trip_driver_assigned")  return <Truck  size={16} color={color} />;
+  if (type === "trip_driver_assigned")  return <UserCheck size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 

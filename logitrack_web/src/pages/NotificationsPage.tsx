@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck, MapPin } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck, MapPin, UserCheck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -51,7 +51,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "min_fill_reached")    return <Truck        size={18} color="#7c3aed" />;
   if (type === "route_assigned")        return <MapPin size={18} color="#0ea5e9" />;
   if (type === "route_reassigned")      return <MapPin size={18} color="#f59e0b" />;
-  if (type === "trip_driver_assigned")  return <Truck  size={18} color="#10b981" />;
+  if (type === "trip_driver_assigned")  return <UserCheck size={18} color="#10b981" />;
   return <Bell size={18} color="#94a3b8" />;
 }
 
