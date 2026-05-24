@@ -1,0 +1,23 @@
+logitrack_web/src/pages/PublicTracking.tsx
+  s_d676902d1d7193::t_3b1af001011e10 17
+  s_d676902d1d7193::t_034aff36b2f788 367-369
+logitrack_web/src/utils/publicClaimForm.ts
+  s_d676902d1d7193::t_257b7de223b7d8 2
+  s_d676902d1d7193::t_c9eafa98f92ca7 43-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "33af58e584b6c91f6a2b2cd819529d0027e35a5b",
+  "prompts": {},
+  "sessions": {
+    "s_d676902d1d7193": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "113b83c2-9c76-4d10-b227-54661eb8d577",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
