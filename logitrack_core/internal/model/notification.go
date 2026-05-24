@@ -15,6 +15,9 @@ const (
 	NotificationFatigueAlert           NotificationType = "fatigue_alert"            // score de riesgo del chofer en nivel ROJO
 	NotificationChatbotPickupRequested NotificationType = "chatbot_pickup_requested" // destinatario cambió método de entrega a retiro en sucursal vía chatbot
 	NotificationMinFillReached         NotificationType = "min_fill_reached"          // volumen mínimo de despacho alcanzado (LOGITRACK-409)
+	NotificationRouteAssigned          NotificationType = "route_assigned"            // ruta asignada al chofer (LOGITRACK-453)
+	NotificationRouteReassigned        NotificationType = "route_reassigned"          // ruta reasignada a otro chofer (LOGITRACK-453)
+	NotificationTripDriverAssigned     NotificationType = "trip_driver_assigned"      // chofer reclamó un viaje vía QR — avisa a operadores de sucursales involucradas
 )
 
 type Notification struct {

@@ -4,6 +4,7 @@ import { Truck, MapPin, AlertCircle, RefreshCw, Package, Filter, QrCode, X } fro
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi, type InterBranchTrip, type TripStop } from "../api/interBranchTrips";
 import { branchApi, branchLabelById, type Branch } from "../api/branches";
+import { usersApi, type UserProfile } from "../api/users";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent } from "../components/ui/card";
@@ -14,6 +15,7 @@ export function InterBranchTripsList() {
   const navigate = useNavigate();
   const [trips, setTrips] = useState<InterBranchTrip[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [driverMap, setDriverMap] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("");
@@ -48,6 +50,11 @@ export function InterBranchTripsList() {
 
   useEffect(() => {
     branchApi.list("activo").then(setBranches).catch(() => {});
+    usersApi.listDrivers().then((drivers) => {
+      const map: Record<string, UserProfile> = {};
+      drivers.forEach((d) => { map[d.id] = d; });
+      setDriverMap(map);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -222,6 +229,7 @@ export function InterBranchTripsList() {
             trip={trip}
             branches={branches}
             myBranchId={myBranchId}
+            driverMap={driverMap}
           />
         ))}
       </div>
@@ -305,10 +313,12 @@ function TripCard({
   trip,
   branches,
   myBranchId,
+  driverMap,
 }: {
   trip: InterBranchTrip;
   branches: Branch[];
   myBranchId: string;
+  driverMap: Record<string, UserProfile>;
 }) {
   const stops = useMemo<TripStop[]>(() => {
     if (trip.stops && trip.stops.length > 0) return trip.stops;
@@ -438,9 +448,16 @@ function TripCard({
             <MapPin className="w-3 h-3" />
             {trip.total_weight_kg.toFixed(1)} kg
           </span>
-          {trip.driver_id && (
-            <span className="ml-auto text-[11px] text-slate-400">Chofer: {trip.driver_id}</span>
-          )}
+          {trip.driver_id && (() => {
+            const driver = driverMap[trip.driver_id];
+            const label  = driver ? (driver.full_name || driver.username) : "–";
+            return (
+              <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                <Truck className="w-3 h-3 text-slate-400" />
+                {label}
+              </span>
+            );
+          })()}
         </div>
       </CardContent>
     </Card>

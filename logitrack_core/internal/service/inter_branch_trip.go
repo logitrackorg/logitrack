@@ -16,6 +16,7 @@ type InterBranchTripService struct {
 	authRepo    repository.AuthRepository
 	shipmentSvc *ShipmentService
 	routeSvc    *RouteService
+	notifSvc    *NotificationService
 }
 
 func NewInterBranchTripService(
@@ -34,6 +35,10 @@ func NewInterBranchTripService(
 
 func (s *InterBranchTripService) SetRouteService(svc *RouteService) {
 	s.routeSvc = svc
+}
+
+func (s *InterBranchTripService) SetNotificationService(svc *NotificationService) {
+	s.notifSvc = svc
 }
 
 type CreateInterBranchTripCmd struct {
@@ -166,6 +171,20 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 		return model.InterBranchTrip{}, fmt.Errorf("el viaje ya fue reclamado por otro chofer")
 	}
 	trip.DriverID = &driverID
+
+	// Notificar a operadores/supervisores de las sucursales involucradas.
+	if s.notifSvc != nil {
+		driver, err := s.authRepo.GetUserByID(driverID)
+		driverUsername := driverID
+		if err == nil {
+			driverUsername = driver.Username
+		}
+		branchIDs := []string{trip.OriginBranchID}
+		if trip.Kind == model.TripKindInterBranch && trip.DestinationBranchID != nil {
+			branchIDs = append(branchIDs, *trip.DestinationBranchID)
+		}
+		go s.notifSvc.NotifyTripClaimed(trip.ID, driverUsername, branchIDs)
+	}
 
 	// For last-mile trips, assign route and auto-start the trip so shipments
 	// transition loaded → out_for_delivery immediately when the driver claims the vehicle.

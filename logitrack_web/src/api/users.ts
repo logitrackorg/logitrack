@@ -56,8 +56,10 @@ function toUserProfile(u: RawDriverUser): UserProfile {
 
 export const usersApi = {
   getMe: () => api.get<UserProfile>("/users/me").then((r) => r.data),
-  listDrivers: (branchId?: string) => {
-    const params = branchId ? { branch_id: branchId } : {};
+  listDrivers: (branchId?: string, driverType?: string) => {
+    const params: Record<string, string> = {};
+    if (branchId)    params.branch_id    = branchId;
+    if (driverType)  params.driver_type  = driverType;
     return api
       .get<{ drivers: RawDriverUser[] }>("/users/drivers", { params })
       .then((r) => (r.data.drivers ?? []).map(toUserProfile));

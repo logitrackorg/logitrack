@@ -134,6 +134,9 @@ func (r *fakeNotifRepo) MarkAllRead(_ string) error           { return nil }
 func (r *fakeNotifRepo) ExistsRecent(_ model.NotificationType, _ string, _ time.Time) (bool, error) {
 	return false, nil
 }
+func (r *fakeNotifRepo) ExistsForUser(_ model.NotificationType, _, _ string, _ time.Time) (bool, error) {
+	return false, nil
+}
 func (r *fakeNotifRepo) GetUsersByBranchAndRoles(branchID string, _ []model.Role) ([]model.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
