@@ -106,7 +106,6 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
     };
   }
 
-
   const loc = ev.location;
   const branch = loc
     ? (branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc))

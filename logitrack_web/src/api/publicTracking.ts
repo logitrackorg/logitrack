@@ -55,13 +55,13 @@ export interface PublicShipmentEvent {
   from_status?: ShipmentStatus;
   to_status: ShipmentStatus;
   location?: string;
-  notes?: string; 
+  notes?: string;
   timestamp: string;
   claim_status?: ClaimStatus;
   claim_updated_at?: string;
   current_location?: EventLocation;
   rescheduled_date?: string;
-  via?: string; // "chatbot" | "manual" | "system"
+  via?: string;
 }
 
 export interface PublicStats {

@@ -106,16 +106,14 @@ func (s *Shipment) ToPublicView() PublicShipmentView {
 // ToPublicEvent strips operator/notes data from a ShipmentEvent.
 func (e ShipmentEvent) ToPublicEvent() PublicShipmentEvent {
 	return PublicShipmentEvent{
-		ID:         e.ID,
-		TrackingID: e.TrackingID,
-		EventType:  e.EventType,
-		FromStatus: e.FromStatus,
-		ToStatus:   e.ToStatus,
-		Location:   e.Location,
-		Notes:      e.Notes, 
-		Timestamp:  e.Timestamp,
-		
-		
+		ID:              e.ID,
+		TrackingID:      e.TrackingID,
+		EventType:       e.EventType,
+		FromStatus:      e.FromStatus,
+		ToStatus:        e.ToStatus,
+		Location:        e.Location,
+		Notes:           e.Notes,
+		Timestamp:       e.Timestamp,
 		CurrentLocation: e.CurrentLocation,
 		RescheduledDate: e.RescheduledDate,
 		Via:             e.Via,
