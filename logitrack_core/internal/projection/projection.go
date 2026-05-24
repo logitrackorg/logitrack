@@ -16,6 +16,7 @@ type Projector interface {
 	Stats(filter model.ShipmentFilter) (model.Stats, error)
 	StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error)
 	CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error)
+	AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error)
 	// ReserveForTrip marca el envío como reservado por un trip multi-hop
 	// (para pickup cross-branch). Opera solo sobre la proyección, no event-sourced.
 	ReserveForTrip(trackingID, tripID string) error

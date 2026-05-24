@@ -1290,6 +1290,10 @@ func (s *ShipmentService) CancellationStats(dateFrom, dateTo *time.Time, branchI
 	return s.repo.CancellationStats(dateFrom, dateTo, branchID)
 }
 
+func (s *ShipmentService) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	return s.repo.AvgTimePerStatus(dateFrom, dateTo)
+}
+
 func (s *ShipmentService) estimatedDelivery(from time.Time, originBranchID, finalBranchID, shipmentType string) *time.Time {
 	var distKm float64
 	origin, okO := s.branchRepo.GetByID(originBranchID)

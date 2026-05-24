@@ -736,3 +736,31 @@ func (h *ShipmentHandler) CancellationStats(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+// AvgTimePerStatus returns average time spent in each shipment status.
+func (h *ShipmentHandler) AvgTimePerStatus(c *gin.Context) {
+	var dateFrom, dateTo *time.Time
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
+			return
+		}
+		dateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
+			return
+		}
+		dateTo = &t
+	}
+
+	result, err := h.svc.AvgTimePerStatus(dateFrom, dateTo)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}

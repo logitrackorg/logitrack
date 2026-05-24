@@ -245,6 +245,12 @@ func (p *ShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, bran
 	}, nil
 }
 
+func (p *ShipmentProjection) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.AvgTimePerStatus{}, nil
+}
+
 func (p *ShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

@@ -11,8 +11,8 @@ type StatCardProps = {
   hint?: React.ReactNode;
   icon?: React.ReactNode;
   tone?: "default" | "success" | "warning" | "danger" | "info";
-  /** Hex color for a left accent strip (e.g. status badge color) */
   accentColor?: string;
+  extra?: React.ReactNode;
   className?: string;
   onClick?: () => void;
 };
@@ -25,7 +25,7 @@ const TONE_STYLES: Record<NonNullable<StatCardProps["tone"]>, { iconBg: string; 
   info: { iconBg: "bg-sky-50", iconColor: "text-sky-600" },
 };
 
-export function StatCard({ label, value, hint, icon, tone = "default", accentColor, className, onClick }: StatCardProps) {
+export function StatCard({ label, value, hint, icon, tone = "default", accentColor, extra, className, onClick }: StatCardProps) {
   const t = TONE_STYLES[tone];
   return (
     <div
@@ -55,6 +55,7 @@ export function StatCard({ label, value, hint, icon, tone = "default", accentCol
       </div>
       <p className={cn("text-3xl font-bold tabular-nums tracking-tight text-slate-900", accentColor && "pl-2")}>{value}</p>
       {hint && <p className={cn("mt-1 text-xs text-slate-500", accentColor && "pl-2")}>{hint}</p>}
+      {extra && <div className="mt-2">{extra}</div>}
     </div>
   );
 }

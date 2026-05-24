@@ -457,16 +457,37 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 
 	branchFilter := filter.ReceivingBranchID
 
-	// Main totals query.
+	// Build WHERE clauses for totals queries — respect date range when provided.
+	type whereBuilder struct {
+		clauses []string
+		args    []interface{}
+		idx     int
+	}
+	wb := whereBuilder{idx: 1}
+
+	wb.clauses = append(wb.clauses, "status != 'expired'")
+	if branchFilter != "" {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("receiving_branch_id = $%d", wb.idx))
+		wb.args = append(wb.args, branchFilter)
+		wb.idx++
+	}
+	if filter.DateFrom != nil {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("created_at >= $%d", wb.idx))
+		wb.args = append(wb.args, *filter.DateFrom)
+		wb.idx++
+	}
+	if filter.DateTo != nil {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("created_at <= $%d", wb.idx))
+		wb.args = append(wb.args, *filter.DateTo)
+		wb.idx++
+	}
+	whereTotal := strings.Join(wb.clauses, " AND ")
+
 	var (
 		rows *sql.Rows
 		err  error
 	)
-	if branchFilter != "" {
-		rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
-	} else {
-		rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE status != 'expired'`)
-	}
+	rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE `+whereTotal, wb.args...)
 	if err != nil {
 		return model.Stats{}, err
 	}
@@ -502,51 +523,65 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		stats.SuccessRate = &rate
 	}
 	if totalDelivered > 0 {
-		var row *sql.Row
+		// Reuse the same date filter for cycle time query (filter on created_at).
+		cycleClauses := []string{"status = 'delivered'", "delivered_at IS NOT NULL"}
+		cycleArgs := []interface{}{}
+		ci := 1
 		if branchFilter != "" {
-			row = p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
-				FROM shipments WHERE status = 'delivered' AND delivered_at IS NOT NULL AND receiving_branch_id = $1`, branchFilter)
-		} else {
-			row = p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
-				FROM shipments WHERE status = 'delivered' AND delivered_at IS NOT NULL`)
+			cycleClauses = append(cycleClauses, fmt.Sprintf("receiving_branch_id = $%d", ci))
+			cycleArgs = append(cycleArgs, branchFilter)
+			ci++
 		}
+		if filter.DateFrom != nil {
+			cycleClauses = append(cycleClauses, fmt.Sprintf("created_at >= $%d", ci))
+			cycleArgs = append(cycleArgs, *filter.DateFrom)
+			ci++
+		}
+		if filter.DateTo != nil {
+			cycleClauses = append(cycleClauses, fmt.Sprintf("created_at <= $%d", ci))
+			cycleArgs = append(cycleArgs, *filter.DateTo)
+			ci++
+		}
+		row := p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
+			FROM shipments WHERE `+strings.Join(cycleClauses, " AND "), cycleArgs...)
 		var avg float64
 		if err := row.Scan(&avg); err == nil {
 			stats.AvgCycleTimeHours = &avg
 		}
 	}
 
-	// Recent shipments (last 5, no drafts).
-	var recentRows *sql.Rows
+	// Recent shipments (last 5, no drafts, within date range when provided).
+	recentClauses := []string{"status != 'expired'", "status != 'draft'"}
+	recentArgs := []interface{}{}
+	ri := 1
 	if branchFilter != "" {
-		recentRows, err = p.db.Query(`
-			SELECT tracking_id, status, current_location, weight_kg, package_type,
-			       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
-			       created_at, updated_at, estimated_delivery_at, delivered_at,
-			       sender, recipient, corrections,
-			       shipment_type, time_window,
-			       priority, priority_score, priority_confidence, priority_factors,
-			       has_incident, incident_type,
-			       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-			       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
-			FROM shipments
-			WHERE status != 'expired' AND status != 'draft' AND receiving_branch_id = $1
-			ORDER BY created_at DESC LIMIT 5`, branchFilter)
-	} else {
-		recentRows, err = p.db.Query(`
-			SELECT tracking_id, status, current_location, weight_kg, package_type,
-			       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
-			       created_at, updated_at, estimated_delivery_at, delivered_at,
-			       sender, recipient, corrections,
-			       shipment_type, time_window,
-			       priority, priority_score, priority_confidence, priority_factors,
-			       has_incident, incident_type,
-			       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-			       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
-			FROM shipments
-			WHERE status != 'expired' AND status != 'draft'
-			ORDER BY created_at DESC LIMIT 5`)
+		recentClauses = append(recentClauses, fmt.Sprintf("receiving_branch_id = $%d", ri))
+		recentArgs = append(recentArgs, branchFilter)
+		ri++
 	}
+	if filter.DateFrom != nil {
+		recentClauses = append(recentClauses, fmt.Sprintf("created_at >= $%d", ri))
+		recentArgs = append(recentArgs, *filter.DateFrom)
+		ri++
+	}
+	if filter.DateTo != nil {
+		recentClauses = append(recentClauses, fmt.Sprintf("created_at <= $%d", ri))
+		recentArgs = append(recentArgs, *filter.DateTo)
+		ri++
+	}
+	recentRows, err := p.db.Query(`
+		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
+		       created_at, updated_at, estimated_delivery_at, delivered_at,
+		       sender, recipient, corrections,
+		       shipment_type, time_window,
+		       priority, priority_score, priority_confidence, priority_factors,
+		       has_incident, incident_type,
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		FROM shipments
+		WHERE `+strings.Join(recentClauses, " AND ")+`
+		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
 	if err != nil {
 		return model.Stats{}, err
 	}
@@ -754,6 +789,64 @@ func (p *PostgresShipmentProjection) CancellationStats(dateFrom, dateTo *time.Ti
 		result.Total = computedTotal
 	}
 
+	return result, nil
+}
+
+// AvgTimePerStatus returns average hours spent in each status within the given date range.
+func (p *PostgresShipmentProjection) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	from := dateFrom
+	to := dateTo
+	now := time.Now()
+	if from == nil {
+		f := now.AddDate(0, 0, -30)
+		from = &f
+	}
+	if to == nil {
+		to = &now
+	}
+
+	rows, err := p.db.Query(`
+		WITH ordered AS (
+			SELECT tracking_id,
+			       e.payload->>'FromStatus' AS from_status,
+			       e.timestamp,
+			       LEAD(e.timestamp) OVER (PARTITION BY e.tracking_id ORDER BY e.timestamp ASC) AS next_ts
+			FROM events e
+			WHERE e.event_type = 'status_changed'
+			  AND e.timestamp >= $1 AND e.timestamp <= $2
+		)
+		SELECT from_status,
+		       COALESCE(AVG(EXTRACT(EPOCH FROM (next_ts - timestamp)) / 3600), 0) AS avg_hours
+		FROM ordered
+		WHERE next_ts IS NOT NULL
+		  AND from_status != ''
+		GROUP BY from_status
+		ORDER BY avg_hours DESC`, *from, *to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result model.AvgTimePerStatus
+	for rows.Next() {
+		var status string
+		var avgHours float64
+		if err := rows.Scan(&status, &avgHours); err != nil {
+			return nil, err
+		}
+		result = append(result, model.AvgTimePerStatusItem{
+			Status:   model.Status(status),
+			AvgHours: avgHours,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Mark the bottleneck (highest avg time).
+	if len(result) > 0 {
+		result[0].IsBottleneck = true
+	}
 	return result, nil
 }
 

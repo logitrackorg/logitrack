@@ -200,6 +200,10 @@ func (r *eventSourcedShipmentRepository) CancellationStats(dateFrom, dateTo *tim
 	return r.projection.CancellationStats(dateFrom, dateTo, branchID)
 }
 
+func (r *eventSourcedShipmentRepository) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	return r.projection.AvgTimePerStatus(dateFrom, dateTo)
+}
+
 func (r *eventSourcedShipmentRepository) RequestPayment(cmd RequestPaymentCmd) (model.Shipment, error) {
 	event := model.DomainEvent{
 		ID:         uuid.NewString(),

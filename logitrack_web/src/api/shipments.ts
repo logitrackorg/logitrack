@@ -127,6 +127,14 @@ export interface ShipmentEvent {
   timestamp: string;
 }
 
+export interface AvgTimePerStatusItem {
+  status: ShipmentStatus;
+  avg_hours: number;
+  is_bottleneck: boolean;
+}
+
+export type AvgTimePerStatus = AvgTimePerStatusItem[];
+
 export interface CancellationStats {
   by_day: Record<string, number>;
   total: number;
@@ -249,6 +257,8 @@ export const shipmentApi = {
     api.get<Stats>("/stats", { params }).then((r) => r.data),
   cancellationStats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<CancellationStats>("/stats/cancellations", { params }).then((r) => r.data),
+  avgTimePerStatus: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<AvgTimePerStatus>("/stats/avg-time-per-status", { params }).then((r) => r.data),
   statsDetail: (params?: { status?: string; date_from?: string; date_to?: string }) =>
     api.get<Record<string, number>>("/stats/detail", { params }).then((r) => r.data),
   bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>

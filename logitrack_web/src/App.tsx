@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { useState } from "react";
+import { Users, AlertTriangle, DollarSign, BarChart3, Clock, Undo2, TrendingUp, ChevronDown } from "lucide-react";
 import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -35,6 +37,13 @@ import { Repartos } from "./pages/Repartos";
 import OperatorTripReception from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
+import { ReportDrivers } from "./pages/ReportDrivers";
+import { ReportIncidents } from "./pages/ReportIncidents";
+import { ReportBilling } from "./pages/ReportBilling";
+import { ReportRanking } from "./pages/ReportRanking";
+import { ReportVolumeByWindow } from "./pages/ReportVolumeByWindow";
+import { ReportReturnMetrics } from "./pages/ReportReturnMetrics";
+import { ReportSuccessRate } from "./pages/ReportSuccessRate";
 
 const ROLE_LABELS: Record<string, string> = {
   operator: "Operador",
@@ -47,7 +56,18 @@ const ROLE_LABELS: Record<string, string> = {
 function Nav() {
   const { user, logout, hasRole } = useAuth();
   const isMobile = useIsMobile();
+  const [reportesOpen, setReportesOpen] = useState(false);
   if (!user) return null;
+
+  const reportItems = [
+    { label: "Rendimiento de Choferes", icon: <Users className="w-4 h-4" />, to: "/reports/drivers" },
+    { label: "Reclamos por Sucursal", icon: <AlertTriangle className="w-4 h-4" />, to: "/reports/incidents" },
+    { label: "Métricas de Facturación", icon: <DollarSign className="w-4 h-4" />, to: "/reports/billing" },
+    { label: "Ranking de Sucursales", icon: <BarChart3 className="w-4 h-4" />, to: "/reports/branch-ranking" },
+    { label: "Volumen por Ventana", icon: <Clock className="w-4 h-4" />, to: "/reports/volume-by-window" },
+    { label: "Métricas de Retorno", icon: <Undo2 className="w-4 h-4" />, to: "/reports/return-metrics" },
+    { label: "Tasa de Éxito por Sucursal", icon: <TrendingUp className="w-4 h-4" />, to: "/reports/success-rate" },
+  ];
 
   return (
     <nav style={{
@@ -62,6 +82,54 @@ function Nav() {
       {hasRole("supervisor", "manager") && (
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
+
+      {hasRole("supervisor", "manager", "admin") && (
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setReportesOpen(!reportesOpen)}
+            style={{
+              background: "none", border: "none", color: reportesOpen ? "#93c5fd" : "#cbd5e1",
+              fontWeight: 500, fontSize: 14, cursor: "pointer", padding: 0,
+              display: "flex", alignItems: "center", gap: 3,
+              fontFamily: "inherit",
+            }}
+          >
+            Reportes <ChevronDown className="w-3.5 h-3.5" style={{ transition: "transform 0.15s", transform: reportesOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
+          </button>
+          {reportesOpen && (
+            <>
+              <div style={{ position: "fixed", inset: 0, zIndex: 9 }} onClick={() => setReportesOpen(false)} />
+              <div style={{
+                position: "absolute", top: "100%", left: 0, zIndex: 10,
+                background: "#fff", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+                minWidth: 260, padding: "6px 0", marginTop: 8,
+              }}>
+                {reportItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setReportesOpen(false)}
+                    style={({ isActive }: { isActive: boolean }): React.CSSProperties => ({
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 14px",
+                      color: isActive ? "#1e3a5f" : "#475569",
+                      background: isActive ? "#eff6ff" : "transparent",
+                      textDecoration: "none", fontSize: 13, fontWeight: isActive ? 600 : 400,
+                      transition: "background 0.1s",
+                    })}
+                    onMouseEnter={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.background = "#f1f5f9"; }}
+                    onMouseLeave={(e) => { if (!e.currentTarget.classList.contains("active")) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {hasRole("supervisor", "manager") && (
         <NavLink to="/supervisor/fatigue" style={navStyle}>Fatiga</NavLink>
       )}
@@ -311,6 +379,42 @@ function AppRoutes() {
           <Route path="/viajes" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <InterBranchTripsList />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/reports/drivers" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportDrivers />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/incidents" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportIncidents />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/billing" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportBilling />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/branch-ranking" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportRanking />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/volume-by-window" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportVolumeByWindow />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/return-metrics" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportReturnMetrics />
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/success-rate" element={
+            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+              <ReportSuccessRate />
             </ProtectedRoute>
           } />
 
