@@ -71,9 +71,24 @@ func (r *postgresNotificationRepository) ListByUser(userID string, filters Notif
 		offset = 0
 	}
 
+	// Priority ordering derived from notification type (no DB column needed).
+	// Lower number = shown first. Unread notifications always surface above read ones.
+	//   1 — critical : fatigue_alert, sla_expired
+	//   2 — high     : sla_risk, return_completed, chatbot_pickup_requested
+	//   3 — normal   : everything else
+	const priorityCase = `
+		CASE type
+			WHEN 'fatigue_alert'            THEN 1
+			WHEN 'sla_expired'              THEN 1
+			WHEN 'sla_risk'                 THEN 2
+			WHEN 'return_completed'         THEN 2
+			WHEN 'chatbot_pickup_requested' THEN 2
+			ELSE                                 3
+		END`
+
 	listQuery := fmt.Sprintf(
-		"SELECT id, user_id, type, title, body, resource_id, read_at, created_at FROM notifications %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
-		where, argIdx, argIdx+1,
+		"SELECT id, user_id, type, title, body, resource_id, read_at, created_at FROM notifications %s ORDER BY (read_at IS NULL) DESC, %s ASC, created_at DESC LIMIT $%d OFFSET $%d",
+		where, priorityCase, argIdx, argIdx+1,
 	)
 	args = append(args, limit, offset)
 
