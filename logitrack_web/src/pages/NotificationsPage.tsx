@@ -34,8 +34,9 @@ function typeAccent(type: string): string {
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   if (type === "min_fill_reached")    return "#7c3aed";
-  if (type === "route_assigned")      return "#0ea5e9";
-  if (type === "route_reassigned")    return "#f59e0b";
+  if (type === "route_assigned")        return "#0ea5e9";
+  if (type === "route_reassigned")      return "#f59e0b";
+  if (type === "trip_driver_assigned")  return "#10b981";
   return "#3b82f6";
 }
 
@@ -48,8 +49,9 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
   if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
   if (type === "min_fill_reached")    return <Truck        size={18} color="#7c3aed" />;
-  if (type === "route_assigned")      return <MapPin       size={18} color="#0ea5e9" />;
-  if (type === "route_reassigned")    return <MapPin       size={18} color="#f59e0b" />;
+  if (type === "route_assigned")        return <MapPin size={18} color="#0ea5e9" />;
+  if (type === "route_reassigned")      return <MapPin size={18} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")  return <Truck  size={18} color="#10b981" />;
   return <Bell size={18} color="#94a3b8" />;
 }
 
@@ -167,6 +169,8 @@ export function NotificationsPage() {
         navigate(`/${n.resource_id}`);
       } else if (n.type === "route_assigned" || n.type === "route_reassigned") {
         navigate("/driver/route");
+      } else if (n.type === "trip_driver_assigned") {
+        navigate("/viajes");
       } else {
         navigate(`/shipments/${n.resource_id}`);
       }

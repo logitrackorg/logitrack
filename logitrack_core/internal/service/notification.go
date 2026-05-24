@@ -530,3 +530,55 @@ func (s *NotificationService) NotifyRouteReassigned(oldDriverID, tripID, tripDat
 		s.hub.Push(oldDriverID)
 	}
 }
+
+// NotifyTripClaimed notifica a los operadores/supervisores de las sucursales
+// involucradas en el viaje cuando un chofer lo reclama vía QR.
+// branchIDs es la lista de sucursales a notificar (origen + destino cuando aplica).
+// Diseñado para llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, branchIDs []string) {
+	// Dedup: si ya se notificó este viaje en los últimos 5 minutos, saltar.
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationTripDriverAssigned, tripID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyTripClaimed ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	title := "Chofer asignado al viaje"
+	body := fmt.Sprintf("@%s tomó el viaje %s", driverUsername, tripID)
+
+	now := clock.Now().UTC()
+	notified := map[string]bool{}
+	for _, branchID := range branchIDs {
+		users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+			model.RoleOperator,
+			model.RoleSupervisor,
+		})
+		if err != nil {
+			log.Printf("[NotificationService] NotifyTripClaimed GetUsersByBranchAndRoles error for branch %s: %v", branchID, err)
+			continue
+		}
+		for _, u := range users {
+			if notified[u.ID] {
+				continue
+			}
+			notified[u.ID] = true
+			n := model.Notification{
+				ID:         uuid.NewString(),
+				UserID:     u.ID,
+				Type:       model.NotificationTripDriverAssigned,
+				Title:      title,
+				Body:       body,
+				ResourceID: tripID,
+				CreatedAt:  now,
+			}
+			if err := s.repo.Create(n); err != nil {
+				log.Printf("[NotificationService] NotifyTripClaimed Create error for user %s: %v", u.ID, err)
+			} else if s.hub != nil {
+				s.hub.Push(u.ID)
+			}
+		}
+	}
+}

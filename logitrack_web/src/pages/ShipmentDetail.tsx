@@ -522,6 +522,10 @@ export function ShipmentDetail() {
   ).filter(
     () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
   ).filter(
+    // out_for_delivery solo puede asignarse por el sistema de reparto (plan → vehículo → QR).
+    // Operadores y supervisores no pueden dispararlo manualmente.
+    (s) => !(hasRole("operator", "supervisor") && s === "out_for_delivery")
+  ).filter(
     (s) => s !== "redelivery_scheduled" || (shipment.delivery_attempts ?? 0) < maxDeliveryAttempts
   ).filter(
     // Restringir at_hub según delivery_method elegido al crear el pedido.
