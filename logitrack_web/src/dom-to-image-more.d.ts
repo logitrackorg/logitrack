@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 declare module "dom-to-image-more" {
   interface Options {
     quality?: number;

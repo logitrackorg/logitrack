@@ -1,5 +1,6 @@
 import type { ShipmentStatus } from "../api/shipments";
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const STATUS_BADGE_CONFIG: Record<ShipmentStatus, { label: string; bg: string }> = {
   draft:                 { label: "Borrador",              bg: "#9ca3af" },
   pending_payment:       { label: "Pago pendiente",        bg: "#d97706" },
