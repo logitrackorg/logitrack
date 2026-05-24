@@ -692,7 +692,8 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments
 		WHERE `+strings.Join(recentClauses, " AND ")+`
 		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
