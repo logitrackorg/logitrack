@@ -71,9 +71,9 @@ export default function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) 
       Total: b.total,
       Entregados: b.delivered,
       Fallidos: b.failed,
-      "Tasa de \u00c9xito (%)": b.success_rate,
+      "Tasa de Éxito (%)": b.success_rate,
     }));
-    exportToExcel([{ name: "Tasa de \u00c9xito", data: rows }], `tasa_exito_sucursal_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportToExcel([{ name: "Tasa de Éxito", data: rows }], `tasa_exito_sucursal_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }, [data]);
 
   return (

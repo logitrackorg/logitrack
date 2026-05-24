@@ -99,9 +99,9 @@ export default function FacturacionTab({ dateFrom, dateTo, branchId }: Facturaci
       Sucursal: r.branchName,
       "Total Facturado": r.revenue,
       "Ticket Promedio": r.avg_ticket,
-      "Cantidad Env\u00edos": r.count,
+      "Cantidad Envíos": r.count,
     }));
-    exportToExcel([{ name: "Facturaci\u00f3n por Sucursal", data: rows }], `facturacion_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportToExcel([{ name: "Facturación por Sucursal", data: rows }], `facturacion_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }, [data, branchRows]);
 
   return (

@@ -106,10 +106,10 @@ export function ReportReturnMetrics() {
     const sheets: { name: string; data: Record<string, unknown>[] }[] = [];
 
     const summaryRows = [
-      { M\u00e9trica: "Total retornados", Valor: data.total_returned },
-      { M\u00e9trica: "Listos para retorno", Valor: data.total_ready_for_return },
-      { M\u00e9trica: "Elegibles", Valor: data.total_return_eligible },
-      { M\u00e9trica: "Tasa de retorno %", Valor: data.return_rate !== null ? data.return_rate.toFixed(1) : "\u2014" },
+      { Métrica: "Total retornados", Valor: data.total_returned },
+      { Métrica: "Listos para retorno", Valor: data.total_ready_for_return },
+      { Métrica: "Elegibles", Valor: data.total_return_eligible },
+      { Métrica: "Tasa de retorno %", Valor: data.return_rate !== null ? data.return_rate.toFixed(1) : "\u2014" },
     ];
     sheets.push({ name: "Resumen", data: summaryRows });
 

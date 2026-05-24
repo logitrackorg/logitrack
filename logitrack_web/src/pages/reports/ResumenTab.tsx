@@ -27,21 +27,21 @@ import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
 const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "success" | "warning" | "danger" | "info" }> = {
   draft: { label: "Borradores", tone: "default" },
   at_origin_hub: { label: "En sucursal de origen", tone: "warning" },
-  loaded: { label: "Cargado en veh\u00edculo", tone: "info" },
-  in_transit: { label: "En tr\u00e1nsito", tone: "info" },
+  loaded: { label: "Cargado en vehículo", tone: "info" },
+  in_transit: { label: "En tránsito", tone: "info" },
   at_hub: { label: "En sucursal", tone: "info" },
-  out_for_delivery: { label: "\u00daltima milla", tone: "warning" },
+  out_for_delivery: { label: "Última milla", tone: "warning" },
   delivery_failed: { label: "Entrega fallida", tone: "danger" },
   redelivery_scheduled: { label: "Reentrega programada", tone: "warning" },
   no_entregado: { label: "No entregados", tone: "danger" },
   rechazado: { label: "Rechazados", tone: "danger" },
   delivered: { label: "Entregados", tone: "success" },
   ready_for_pickup: { label: "Listos para retiro", tone: "info" },
-  ready_for_return: { label: "Listos para devoluci\u00f3n", tone: "warning" },
+  ready_for_return: { label: "Listos para devolución", tone: "warning" },
   returned: { label: "Devueltos", tone: "default" },
   cancelled: { label: "Cancelados", tone: "danger" },
   lost: { label: "Extraviados", tone: "danger" },
-  destroyed: { label: "Da\u00f1o total", tone: "danger" },
+  destroyed: { label: "Daño total", tone: "danger" },
   expired: { label: "Borrador expirado", tone: "default" },
   pending_payment: { label: "Pago pendiente", tone: "warning" },
 };
@@ -202,18 +202,18 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
         <div className="flex items-start gap-3">
           <GradientCardIcon><Box className="w-5 h-5" /></GradientCardIcon>
           <div className="flex-1 min-w-0">
-            <GradientCardLabel>Total de env\u00edos</GradientCardLabel>
+            <GradientCardLabel>Total de envíos</GradientCardLabel>
             <GradientCardValue className="mt-1">{totalShipments}</GradientCardValue>
             {sparklineData.total?.length>0 && <Sparkline data={sparklineData.total} color="rgba(255,255,255,0.7)" width={100} height={28} />}
           </div>
         </div>
       </GradientCard>
-      <StatCard label="En curso" value={inProgress} hint="Cargado en veh\u00edculo + en tr\u00e1nsito + \u00faltima milla" icon={<Truck className="w-4 h-4"/>} tone="info" accentColor="#3b82f6"
+      <StatCard label="En curso" value={inProgress} hint="Cargado en vehículo + en tránsito + última milla" icon={<Truck className="w-4 h-4"/>} tone="info" accentColor="#3b82f6"
         extra={sparklineData.inProgress?.length>0 ? <Sparkline data={sparklineData.inProgress} color="#3b82f6" width={100} height={28} /> : undefined} />
-      <StatCard label="Entregados" value={delivered} hint="Completados con \u00e9xito" icon={<CheckCircle2 className="w-4 h-4"/>} tone="success" accentColor="#10b981"
+      <StatCard label="Entregados" value={delivered} hint="Completados con éxito" icon={<CheckCircle2 className="w-4 h-4"/>} tone="success" accentColor="#10b981"
         onClick={()=>navigate(`/kpi-detail?kpi=delivered&date_from=${dateFrom}&date_to=${dateTo}${branchId?`&branch_id=${branchId}`:""}`)}
         extra={sparklineData.delivered?.length>0 ? <Sparkline data={sparklineData.delivered} color="#10b981" width={100} height={28} /> : undefined} />
-      <StatCard label="Problemas" value={issues} hint="Fallidos + extraviados + da\u00f1ados" icon={<AlertCircle className="w-4 h-4"/>} tone="danger" accentColor="#ef4444"
+      <StatCard label="Problemas" value={issues} hint="Fallidos + extraviados + dañados" icon={<AlertCircle className="w-4 h-4"/>} tone="danger" accentColor="#ef4444"
         onClick={()=>navigate(`/kpi-detail?kpi=issues&date_from=${dateFrom}&date_to=${dateTo}${branchId?`&branch_id=${branchId}`:""}`)}
         extra={sparklineData.issues?.length>0 ? <Sparkline data={sparklineData.issues} color="#ef4444" width={100} height={28} /> : undefined} />
     </div>
@@ -222,8 +222,8 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   const renderOperationMetrics = () => !loading && stats && (stats.success_rate!=null||stats.avg_cycle_time_hours!=null) ? (
     <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 px-5 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">M\u00e9tricas de operaci\u00f3n</span>
-        {stats.success_rate!=null&&<span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-sm text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />Tasa de \u00e9xito: <strong className="tab-nums">{stats.success_rate.toFixed(1)}%</strong></span>}
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Métricas de operación</span>
+        {stats.success_rate!=null&&<span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-sm text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5 shrink-0" />Tasa de éxito: <strong className="tab-nums">{stats.success_rate.toFixed(1)}%</strong></span>}
         {stats.avg_cycle_time_hours!=null&&<span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-sm text-blue-700"><Clock className="w-3.5 h-3.5 shrink-0" />Ciclo promedio: <strong className="tab-nums">{stats.avg_cycle_time_hours.toFixed(1)} h</strong></span>}
         {stats.open_incidents>0&&<span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-200 px-3 py-1 text-sm text-rose-700"><AlertCircle className="w-3.5 h-3.5 shrink-0" />Incidentes abiertos: <strong className="tab-nums">{stats.open_incidents}</strong></span>}
       </div>
@@ -244,7 +244,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       {doughnutItems.length>0&&<Card>
         <div className="px-5 pt-5 pb-3 flex items-center gap-2 border-b border-slate-100">
           <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#10b981]" />
-          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribuci\u00f3n por sucursal</h2>
+          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por sucursal</h2>
         </div>
         <div className="p-5 flex items-center justify-center">
           <Doughnut data={doughnutItems} centerLabel="Total" centerValue={doughnutTotal} />
@@ -258,7 +258,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       <div className="px-5 pt-5 pb-3 flex items-baseline justify-between border-b border-slate-100">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#1e3a5f]" />
-          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribuci\u00f3n por estado</h2>
+          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por estado</h2>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-slate-500 hidden sm:block">Click en una tarjeta para filtrar</p>
@@ -292,7 +292,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       <div className="px-5 pt-5 pb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#10b981]" />
-          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Env\u00edos creados vs entregados por d\u00eda</h2>
+          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos creados vs entregados por día</h2>
         </div>
       </div>
       <div className="p-5">
@@ -301,7 +301,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <LayoutDashboard className="w-10 h-10 text-slate-300 mb-3" />
             <p className="text-sm text-slate-500 mb-1">No hay datos en este rango</p>
-            <p className="text-xs text-slate-400">Ajust\u00e1 las fechas para ver el gr\u00e1fico</p>
+            <p className="text-xs text-slate-400">Ajustá las fechas para ver el gráfico</p>
           </div>
         ) : (
           <div className="rounded-xl bg-white border border-slate-100 p-4">
@@ -311,7 +311,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                 <XAxis dataKey="date" tick={{fontSize:10,fill:"#94a3b8",fontWeight:500}} tickFormatter={v=>String(v).slice(5)}
                   interval={Math.max(0,Math.floor(chartData.length/12))} axisLine={{stroke:"#e2e8f0"}} tickLine={false} />
                 <YAxis tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l)=>toDateLabel(l as string)} formatter={(v, n)=>[v,n==="creados"?"Creados":"Entregados"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l)=>toDateLabel(l as string)} formatter={(v, n) => [v, n]} />
                 <Bar dataKey="creados" fill="#2563eb" radius={[3,3,0,0]} name="Creados" maxBarSize={32} />
                 <Bar dataKey="entregados" fill="#10b981" radius={[3,3,0,0]} name="Entregados" maxBarSize={32} />
               </BarChart>
@@ -343,7 +343,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
             <h2 className="text-base font-semibold text-slate-900 tracking-tight">Cancelaciones</h2>
           </div>
         </div>
-        <div className="px-5 pb-5"><p className="text-xs text-slate-400 text-center py-4">Sin cancelaciones en el per\u00edodo</p></div>
+        <div className="px-5 pb-5"><p className="text-xs text-slate-400 text-center py-4">Sin cancelaciones en el período</p></div>
       </Card>
     );
     const maxVal = Math.max(...lineData.map(d=>d.cancelaciones),1);
@@ -352,7 +352,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       const {cx,cy,payload}=props;
       if (!payload||!cx||!cy) return null;
       if (payload.date!==peakEntry?.date||payload.cancelaciones===0) return <circle cx={cx} cy={cy} r={2} fill="#ef4444" />;
-      return <g><circle cx={cx} cy={cy} r={8} fill="#fee2e2" stroke="#ef4444" strokeWidth={1.5} /><text x={cx} y={cy+4} textAnchor="middle" fontSize={11} fill="#dc2626" fontWeight="bold">\u26a0</text></g>;
+      return <g><circle cx={cx} cy={cy} r={8} fill="#fee2e2" stroke="#ef4444" strokeWidth={1.5} /><text x={cx} y={cy+4} textAnchor="middle" fontSize={11} fill="#dc2626" fontWeight="bold">⚠</text></g>;
     };
     return (
       <Card>
@@ -420,7 +420,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-gradient-to-b from-slate-400 to-slate-300" />
-          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Env\u00edos recientes</h2>
+          <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos recientes</h2>
         </div>
         <button onClick={()=>navigate("/")}
           className="inline-flex items-center gap-1 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 rounded">
@@ -431,8 +431,8 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       : (stats?.recent_shipments?.length??0)===0 ? (
         <div className="p-12 text-center">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3"><Package className="w-6 h-6 text-slate-400" /></div>
-          <p className="text-sm font-semibold text-slate-600 mb-1">Sin env\u00edos recientes</p>
-          <p className="text-xs text-slate-400">Los env\u00edos aparecer\u00e1n ac\u00e1 a medida que se creen.</p>
+          <p className="text-sm font-semibold text-slate-600 mb-1">Sin envíos recientes</p>
+          <p className="text-xs text-slate-400">Los envíos aparecerán acá a medida que se creen.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">

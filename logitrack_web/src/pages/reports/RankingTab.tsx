@@ -146,11 +146,11 @@ export default function RankingTab({ dateFrom, dateTo, branchId }: RankingTabPro
 
   const exportExcel = useCallback(() => {
     const rows = sorted.map((r, i) => ({
-      Posici\u00f3n: i + 1,
+      Posición: i + 1,
       Sucursal: r.branch_name,
       "Vol. Confirmados": r.volume_confirmed,
       Entregados: r.delivered,
-      "Tasa \u00c9xito (%)": r.success_rate !== null ? r.success_rate.toFixed(1) : "\u2014",
+      "Tasa Éxito (%)": r.success_rate !== null ? r.success_rate.toFixed(1) : "\u2014",
       "Score Compuesto": r.composite_score.toFixed(2),
     }));
     exportToExcel([{ name: "Ranking Sucursales", data: rows }], `ranking_sucursales_${new Date().toISOString().slice(0, 10)}.xlsx`);

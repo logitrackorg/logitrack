@@ -51,7 +51,7 @@ function valueToAngle(value: number, min: number, max: number): number {
  */
 function angleToPoint(angleDeg: number): [number, number] {
   // SVG angle: 0° = 3 o'clock. We want 0° = 9 o'clock (left), 180° = 3 o'clock (right).
-  const svgAngle = (180 + angleDeg) * (Math.PI / 180);
+  const svgAngle = (180 - angleDeg) * (Math.PI / 180);
   return [
     ARC_CENTER_X + ARC_RADIUS * Math.cos(svgAngle),
     ARC_CENTER_Y - ARC_RADIUS * Math.sin(svgAngle),

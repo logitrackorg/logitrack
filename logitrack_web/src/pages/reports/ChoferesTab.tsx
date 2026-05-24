@@ -73,7 +73,7 @@ export default function ChoferesTab({ dateFrom, dateTo, branchId }: ChoferesTabP
       Asignados: d.total_assigned,
       Entregados: d.delivered,
       Fallidos: d.delivery_failed,
-      "\u00c9xito %": d.success_rate !== null ? d.success_rate.toFixed(1) : "\u2014",
+      "Éxito %": d.success_rate !== null ? d.success_rate.toFixed(1) : "\u2014",
       "Promedio horas": d.avg_delivery_hours !== null ? d.avg_delivery_hours.toFixed(1) : "\u2014",
     }));
     exportToExcel([{ name: "Rendimiento Choferes", data: rows }], `rendimiento_choferes_${new Date().toISOString().slice(0, 10)}.xlsx`);
