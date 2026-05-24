@@ -44,9 +44,10 @@ type RoutingService struct {
 	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
-	graphSvc        *BranchGraphService  // nullable; used for stale-replan
-	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
-	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
+	graphSvc           *BranchGraphService      // nullable; used for stale-replan
+	zoneSvc            *ZoneService             // nullable; needed for safe-route mode
+	notifSvc           *NotificationService     // nullable; SLA risk notifications (LOGITRACK-404)
+	dispatchVolumeSvc  DispatchVolumeNotifier   // nullable; LOGITRACK-409 CA-05 reset after apply
 }
 
 func NewRoutingService(
@@ -79,6 +80,11 @@ func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) 
 
 func (s *RoutingService) SetNotificationService(svc *NotificationService) {
 	s.notifSvc = svc
+}
+
+// SetDispatchVolumeService inyecta el checker de volumen mínimo para reset post-apply (CA-05).
+func (s *RoutingService) SetDispatchVolumeService(svc DispatchVolumeNotifier) {
+	s.dispatchVolumeSvc = svc
 }
 
 func (s *RoutingService) SetZoneService(svc *ZoneService) {
@@ -3413,6 +3419,13 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 			resp.FailedCount++
 		}
 	}
+
+	// LOGITRACK-409 CA-05: después de aplicar el plan, re-evaluar el volumen pendiente
+	// de despacho para resetear pares cuyo volumen cayó por debajo del umbral.
+	if s.dispatchVolumeSvc != nil && resp.AppliedCount > 0 {
+		go s.dispatchVolumeSvc.CheckAfterDispatch(branchID)
+	}
+
 	return resp, nil
 }
 

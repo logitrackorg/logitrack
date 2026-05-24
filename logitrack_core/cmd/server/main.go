@@ -257,6 +257,24 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
+	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
+	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
+	dispatchVolumeChecker := service.NewDispatchVolumeChecker(
+		shipmentRepo, vehicleRepo, branchRepo, dispatchVolumeRepo, notifRepo, routingCfgSvc,
+	)
+	dispatchVolumeChecker.SetHub(notifHub)
+	shipmentSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	routingSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	vehicleHandler.SetDispatchVolumeService(dispatchVolumeChecker)
+
+	// Evaluar volumen existente en la DB al arrancar (envíos cargados vía seed o
+	// acumulados antes del deploy de LOGITRACK-409).
+	go func() {
+		for _, b := range branchRepo.List() {
+			dispatchVolumeChecker.Check(b.ID)
+		}
+	}()
+
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
 	// del grafo de sucursales.

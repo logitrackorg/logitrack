@@ -14,6 +14,7 @@ const (
 	NotificationSLAExpired             NotificationType = "sla_expired"              // envío venció su SLA
 	NotificationFatigueAlert           NotificationType = "fatigue_alert"            // score de riesgo del chofer en nivel ROJO
 	NotificationChatbotPickupRequested NotificationType = "chatbot_pickup_requested" // destinatario cambió método de entrega a retiro en sucursal vía chatbot
+	NotificationMinFillReached         NotificationType = "min_fill_reached"          // volumen mínimo de despacho alcanzado (LOGITRACK-409)
 )
 
 type Notification struct {

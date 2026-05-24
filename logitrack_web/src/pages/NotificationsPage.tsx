@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -33,6 +33,7 @@ function typeAccent(type: string): string {
   if (type === "return_completed")    return "#f59e0b";
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
+  if (type === "min_fill_reached")    return "#7c3aed";
   return "#3b82f6";
 }
 
@@ -44,6 +45,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "return_completed")    return <PackageCheck  size={18} color="#f59e0b" />;
   if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
   if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
+  if (type === "min_fill_reached")    return <Truck        size={18} color="#7c3aed" />;
   return <Bell size={18} color="#94a3b8" />;
 }
 
@@ -157,7 +159,11 @@ export function NotificationsPage() {
       );
     }
     if (n.resource_id) {
-      navigate(`/shipments/${n.resource_id}`);
+      if (n.type === "min_fill_reached") {
+        navigate(`/${n.resource_id}`);
+      } else {
+        navigate(`/shipments/${n.resource_id}`);
+      }
     }
   };
 
@@ -321,14 +327,14 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : "#eff6ff",
-                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid #f59e0b" : "3px solid transparent",
+                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff",
+                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid #f59e0b" : n.type === "min_fill_reached" && !n.read_at ? "3px solid #7c3aed" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
