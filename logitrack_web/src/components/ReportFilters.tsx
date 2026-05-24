@@ -3,9 +3,9 @@ import type { Branch } from "../api/branches";
 import { ReportExport } from "./ReportExport";
 
 const inputClass =
-  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all duration-200 cursor-pointer";
 
-const selectClass = inputClass + " appearance-none cursor-pointer pr-8";
+const selectClass = inputClass + " appearance-none pr-8";
 
 interface ReportFiltersProps {
   dateFrom: string;
@@ -70,7 +70,7 @@ export function ReportFilters({
   })();
 
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-2">
       {isSupervisor ? (
         <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f] shadow-sm">
           <MapPin className="w-3.5 h-3.5" />
@@ -126,8 +126,8 @@ export function ReportFilters({
         />
       )}
       {showAutoRefresh && lastRefresh && (
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 ml-1 whitespace-nowrap">
-          {isRefreshing && <RefreshCw className="w-3 h-3 animate-spin" />}
+        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 whitespace-nowrap">
+          <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
           Última actualización:{" "}
           {lastRefresh.toLocaleTimeString("es-AR", {
             hour: "2-digit",
@@ -135,6 +135,6 @@ export function ReportFilters({
           })}
         </span>
       )}
-    </>
+    </div>
   );
 }

@@ -86,7 +86,7 @@ export function DashboardHost() {
     <div className="min-h-screen bg-slate-50">
       {/* Header + tab bar (sticky) */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 pt-5 pb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-0">
           <PageHeader
             icon={<LayoutDashboard className="h-6 w-6" />}
             title="Dashboard"
@@ -111,7 +111,7 @@ export function DashboardHost() {
             }
           />
         </div>
-        <div className="max-w-7xl mx-auto px-6 mt-3 flex gap-0 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-3 flex gap-0 overflow-x-auto scroll-smooth scrollbar-hide">
           {tabs.map((t) => {
             const Icon = t.icon;
             return (
@@ -129,25 +129,27 @@ export function DashboardHost() {
       </div>
 
       {/* Contenido del tab activo */}
-      <div className="max-w-7xl mx-auto p-6">
-        <Suspense fallback={<Skeleton className="h-96" />}>
-          {activeTab === "resumen" && (
-            <ResumenTab
-              ref={resumenTabRef}
-              {...sharedProps}
-              onRefresh={onRefresh}
-              lastRefresh={lastRefresh}
-              isRefreshing={isRefreshing}
-            />
-          )}
-          {activeTab === "choferes" && <ChoferesTab {...sharedProps} />}
-          {activeTab === "reclamos" && <ReclamosTab {...sharedProps} />}
-          {activeTab === "facturacion" && <FacturacionTab {...sharedProps} />}
-          {activeTab === "ranking" && <RankingTab {...sharedProps} />}
-          {activeTab === "volumen" && <VolumenTab {...sharedProps} />}
-          {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
-          {activeTab === "exito" && <ExitoTab {...sharedProps} />}
-        </Suspense>
+      <div className="max-w-7xl mx-auto p-4 sm:p-6">
+        <div key={activeTab} className="animate-fade-in">
+          <Suspense fallback={<Skeleton className="h-96" />}>
+            {activeTab === "resumen" && (
+              <ResumenTab
+                ref={resumenTabRef}
+                {...sharedProps}
+                onRefresh={onRefresh}
+                lastRefresh={lastRefresh}
+                isRefreshing={isRefreshing}
+              />
+            )}
+            {activeTab === "choferes" && <ChoferesTab {...sharedProps} />}
+            {activeTab === "reclamos" && <ReclamosTab {...sharedProps} />}
+            {activeTab === "facturacion" && <FacturacionTab {...sharedProps} />}
+            {activeTab === "ranking" && <RankingTab {...sharedProps} />}
+            {activeTab === "volumen" && <VolumenTab {...sharedProps} />}
+            {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
+            {activeTab === "exito" && <ExitoTab {...sharedProps} />}
+          </Suspense>
+        </div>
       </div>
     </div>
   );
@@ -165,10 +167,10 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`h-11 px-4 flex items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap ${
+      className={`h-11 px-4 flex items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:ring-inset rounded-t-md ${
         active
-          ? "border-[#2563eb] text-[#2563eb] font-semibold"
-          : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300 font-medium"
+          ? "border-[#2563eb] text-[#2563eb] font-semibold bg-blue-50/50"
+          : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50/60 font-medium"
       }`}
     >
       {children}
