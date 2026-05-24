@@ -1,0 +1,22 @@
+logitrack_core/internal/projection/postgres_shipment.go
+  s_69c2d0f92853a5::t_0f9237ac8f11c4 416
+  s_69c2d0f92853a5::t_c18293328e440f 687,695-696
+logitrack_core/internal/db/migrate.go
+  s_69c2d0f92853a5::t_789bf477e30d26 428-446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "1035fe351de320495848a567d861b2d79cac9691",
+  "prompts": {},
+  "sessions": {
+    "s_69c2d0f92853a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24ccd635-0a77-4276-9f2b-050f1db3a485",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
