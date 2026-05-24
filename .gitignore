@@ -49,6 +49,16 @@ opencode.json
 /logitrack_web/.kiro
 .claude/settings.local.json
 
+# ── Python / cache ─────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# ── Agent / IDE temp files ────────────────────────────────────────────────────
+.omo/
+.sisyphus/
+user_context/
+token-usage-output.txt
+
 # ── Gradle / Android  ────────────────
 .gradle/
 **/.gradle/

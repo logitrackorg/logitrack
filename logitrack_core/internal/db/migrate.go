@@ -425,6 +425,25 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
 
+		-- Ensure branches table exists before branch_zones FK can reference it
+		CREATE TABLE IF NOT EXISTS branches (
+			id          VARCHAR(50) PRIMARY KEY,
+			name        VARCHAR(100) UNIQUE NOT NULL,
+			street      VARCHAR(255),
+			city        VARCHAR(100),
+			province    VARCHAR(100),
+			postal_code VARCHAR(20),
+			status      VARCHAR(30) NOT NULL DEFAULT 'activo',
+			created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_by  VARCHAR(100),
+			max_capacity INT NOT NULL DEFAULT 50
+		);
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS max_capacity INT NOT NULL DEFAULT 50;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS latitude  DOUBLE PRECISION;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS hours TEXT NOT NULL DEFAULT '';
+
 		-- Branch zones (ubicaciones internas de sucursal)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS current_zone TEXT;
 

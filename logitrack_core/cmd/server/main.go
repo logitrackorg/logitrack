@@ -90,6 +90,8 @@ func main() {
 	// Event-sourced shipment repository
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
 
+	statsExtendedRepo := repository.NewPostgresStatsExtendedRepository(database)
+
 	// Branch zones (ubicaciones internas de sucursal)
 	branchZoneRepo := repository.NewPostgresBranchZoneRepository(database)
 	branchZoneSvc := service.NewBranchZoneService(branchZoneRepo, shipmentRepo, eventStore, shipmentProj)
@@ -253,6 +255,9 @@ func main() {
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
+
+	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
+	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
 
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
@@ -450,6 +455,16 @@ func main() {
 	// Stats / dashboard — supervisor, manager
 	canViewStats := middleware.RequireRoles(model.RoleSupervisor, model.RoleManager)
 	protected.GET("/stats", canViewStats, shipmentHandler.Stats)
+	protected.GET("/stats/detail", canViewStats, shipmentHandler.StatsDetail)
+	protected.GET("/stats/cancellations", canViewStats, shipmentHandler.CancellationStats)
+	protected.GET("/stats/avg-time-per-status", canViewStats, shipmentHandler.AvgTimePerStatus)
+	protected.GET("/stats/driver-performance", canViewStats, statsExtendedHandler.DriverPerformance)
+	protected.GET("/stats/incidents-by-branch", canViewStats, statsExtendedHandler.IncidentsByBranch)
+	protected.GET("/stats/billing-metrics", canViewStats, statsExtendedHandler.BillingMetrics)
+	protected.GET("/stats/branch-ranking", canViewStats, statsExtendedHandler.BranchRanking)
+	protected.GET("/stats/volume-by-time-window", canViewStats, statsExtendedHandler.VolumeByTimeWindow)
+	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
+	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 
 	// Driver route — driver only

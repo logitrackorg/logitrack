@@ -285,7 +285,7 @@ export function ShipmentList() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar por ID, remitente, destinatario o ciudad…"
-              className={`${inputClass} w-full pl-9 pr-${query ? "10" : "3"}`}
+               className={`${inputClass} w-full pl-9 ${query ? "pr-10" : "pr-3"}`}
             />
             {query && (
               <button

@@ -256,6 +256,12 @@ func (r *fakeDispatchShipmentRepo) ReserveForTrip(_, _ string) error            
 func (r *fakeDispatchShipmentRepo) ReleaseFromTrip(_ string) error                           { return nil }
 func (r *fakeDispatchShipmentRepo) SetSLANotified(_ string, _ *time.Time) error              { return nil }
 func (r *fakeDispatchShipmentRepo) SetSLAExpiredNotified(_ string, _ *time.Time) error       { return nil }
+func (r *fakeDispatchShipmentRepo) AvgTimePerStatus(_, _ *time.Time) (model.AvgTimePerStatus, error) {
+	return model.AvgTimePerStatus{}, nil
+}
+func (r *fakeDispatchShipmentRepo) CancellationStats(_, _ *time.Time, _ string) (model.CancellationStats, error) {
+	return model.CancellationStats{}, nil
+}
 func (r *fakeDispatchShipmentRepo) SetConfirmationEmailSent(_ string) (bool, error)          { return true, nil }
 func (r *fakeDispatchShipmentRepo) AuthenticateRecipient(_ repository.AuthenticateRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
@@ -277,6 +283,9 @@ func (r *fakeDispatchShipmentRepo) GetEvents(_ string) ([]model.ShipmentEvent, e
 	return nil, nil
 }
 func (r *fakeDispatchShipmentRepo) Stats(_ model.ShipmentFilter) (model.Stats, error) { return model.Stats{}, nil }
+func (r *fakeDispatchShipmentRepo) StatsDetail(_ string, _ *time.Time, _ *time.Time) (map[string]int, error) {
+	return nil, nil
+}
 
 // ─── tests ────────────────────────────────────────────────────────────────────
 

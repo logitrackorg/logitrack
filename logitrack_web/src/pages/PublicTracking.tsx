@@ -259,8 +259,7 @@ export function PublicTracking() {
   useEffect(() => {
     const id = searchParams.get("id");
     if (id) runSearch(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams]);
 
   const resetClaimForm = () => {
     setClaimOpen(false);

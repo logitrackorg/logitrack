@@ -78,6 +78,15 @@ func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Ti
 func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
 	return nil
 }
+func (f *fakeShipmentRepo) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	return model.AvgTimePerStatus{}, nil
+}
+func (f *fakeShipmentRepo) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	return model.CancellationStats{}, nil
+}
+func (f *fakeShipmentRepo) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	return nil, nil
+}
 func (f *fakeShipmentRepo) SetConfirmationEmailSent(trackingID string) (bool, error) {
 	return true, nil
 }
