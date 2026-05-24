@@ -265,6 +265,7 @@ func main() {
 	dispatchVolumeChecker.SetHub(notifHub)
 	shipmentSvc.SetDispatchVolumeService(dispatchVolumeChecker)
 	routingSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	vehicleHandler.SetDispatchVolumeService(dispatchVolumeChecker)
 
 	// Evaluar volumen existente en la DB al arrancar (envíos cargados vía seed o
 	// acumulados antes del deploy de LOGITRACK-409).
