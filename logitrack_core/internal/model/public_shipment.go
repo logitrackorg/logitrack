@@ -48,10 +48,17 @@ type PublicShipmentView struct {
 type PublicShipmentEvent struct {
 	ID         string    `json:"id"`
 	TrackingID string    `json:"tracking_id"`
+	EventType  string    `json:"event_type,omitempty"`
 	FromStatus *Status   `json:"from_status,omitempty"`
 	ToStatus   Status    `json:"to_status"`
 	Location   string    `json:"location,omitempty"`
+	Notes      string    `json:"notes,omitempty"` 
 	Timestamp  time.Time `json:"timestamp"`
+	
+	
+	CurrentLocation *EventLocation `json:"current_location,omitempty"`
+	RescheduledDate *time.Time     `json:"rescheduled_date,omitempty"`
+	Via             string         `json:"via,omitempty"`
 }
 
 // ToPublicView builds a PublicShipmentView from a Shipment, applying any
@@ -101,9 +108,16 @@ func (e ShipmentEvent) ToPublicEvent() PublicShipmentEvent {
 	return PublicShipmentEvent{
 		ID:         e.ID,
 		TrackingID: e.TrackingID,
+		EventType:  e.EventType,
 		FromStatus: e.FromStatus,
 		ToStatus:   e.ToStatus,
 		Location:   e.Location,
+		Notes:      e.Notes, 
 		Timestamp:  e.Timestamp,
+		
+		
+		CurrentLocation: e.CurrentLocation,
+		RescheduledDate: e.RescheduledDate,
+		Via:             e.Via,
 	}
 }

@@ -60,6 +60,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price                NUMERIC(12,2);
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS chatbot_metadata     JSONB;
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
@@ -371,6 +372,27 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Retorno de última milla: flag para delivery_failed con rechazo explícito del destinatario
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS rejected_by_recipient BOOLEAN NOT NULL DEFAULT FALSE;
+			-- ✅ AGREGAR COLUMNAS PARA EVENTOS DE REPROGRAMACIÓN
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_type VARCHAR(50);
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_code VARCHAR(20);
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_name VARCHAR(255);
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_status VARCHAR(100);
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS rescheduled_date TIMESTAMP;
+	ALTER TABLE events ADD COLUMN IF NOT EXISTS via VARCHAR(20);
+
+	-- Índices para mejorar performance
+	CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+	CREATE INDEX IF NOT EXISTS idx_events_rescheduled 
+		ON events(tracking_id, event_type) 
+		WHERE event_type = 'rescheduled';
+
+	-- Comentarios para documentación
+	COMMENT ON COLUMN events.current_location_type IS 'Tipo de ubicación: ORIGIN_BRANCH, DESTINATION_BRANCH, IN_TRANSIT';
+	COMMENT ON COLUMN events.current_location_code IS 'Código de sucursal: CDBA-01, CORD-01, etc';
+	COMMENT ON COLUMN events.current_location_name IS 'Nombre legible de la ubicación';
+	COMMENT ON COLUMN events.current_location_status IS 'Estado descriptivo: En sucursal origen, Disponible para retiro, etc';
+	COMMENT ON COLUMN events.rescheduled_date IS 'Nueva fecha de entrega programada';
+	COMMENT ON COLUMN events.via IS 'Origen de la reprogramación: chatbot, manual, system';
 	`)
 	return err
 }
