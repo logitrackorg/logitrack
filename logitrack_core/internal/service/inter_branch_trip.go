@@ -16,6 +16,7 @@ type InterBranchTripService struct {
 	authRepo    repository.AuthRepository
 	shipmentSvc *ShipmentService
 	routeSvc    *RouteService
+	notifSvc    *NotificationService
 }
 
 func NewInterBranchTripService(
@@ -34,6 +35,10 @@ func NewInterBranchTripService(
 
 func (s *InterBranchTripService) SetRouteService(svc *RouteService) {
 	s.routeSvc = svc
+}
+
+func (s *InterBranchTripService) SetNotificationService(svc *NotificationService) {
+	s.notifSvc = svc
 }
 
 type CreateInterBranchTripCmd struct {
@@ -122,10 +127,20 @@ func (s *InterBranchTripService) AssignDriver(tripID, driverID, requestorBranchI
 	if trip.Kind == model.TripKindInterBranch && driver.DriverType != model.DriverTypeInterBranch {
 		return model.InterBranchTrip{}, fmt.Errorf("el chofer no está habilitado para viajes intersucursales")
 	}
+	// CA-06: si ya había un chofer distinto, notificar reasignación.
+	if trip.DriverID != nil && *trip.DriverID != driverID && s.notifSvc != nil {
+		tripDate := trip.CreatedAt.In(clock.LocalTZ).Format("02/01/2006")
+		go s.notifSvc.NotifyRouteReassigned(*trip.DriverID, tripID, tripDate)
+	}
 	if err := s.repo.SetDriver(tripID, driverID); err != nil {
 		return model.InterBranchTrip{}, err
 	}
 	trip.DriverID = &driverID
+	// CA-01: notificar al nuevo chofer asignado.
+	if s.notifSvc != nil {
+		stopCount := len(trip.ShipmentIDs)
+		go s.notifSvc.NotifyRouteAssigned(driverID, tripID, stopCount, 0)
+	}
 	return trip, nil
 }
 
@@ -166,6 +181,12 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 		return model.InterBranchTrip{}, fmt.Errorf("el viaje ya fue reclamado por otro chofer")
 	}
 	trip.DriverID = &driverID
+
+	// CA-01: notificar al chofer que reclamó la ruta (LOGITRACK-453).
+	if s.notifSvc != nil {
+		stopCount := len(trip.ShipmentIDs)
+		go s.notifSvc.NotifyRouteAssigned(driverID, trip.ID, stopCount, 0)
+	}
 
 	// For last-mile trips, assign route and auto-start the trip so shipments
 	// transition loaded → out_for_delivery immediately when the driver claims the vehicle.

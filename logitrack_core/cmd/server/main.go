@@ -247,6 +247,7 @@ func main() {
 	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
 	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
 	interBranchTripSvc.SetRouteService(routeSvc)
+	interBranchTripSvc.SetNotificationService(notifSvc)
 	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
 	vehicleHandler.SetTripService(interBranchTripSvc)
 

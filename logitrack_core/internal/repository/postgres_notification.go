@@ -133,6 +133,15 @@ func (r *postgresNotificationRepository) ExistsRecent(notifType model.Notificati
 	return exists, err
 }
 
+func (r *postgresNotificationRepository) ExistsForUser(notifType model.NotificationType, resourceID, userID string, since time.Time) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM notifications WHERE type = $1 AND resource_id = $2 AND user_id = $3 AND created_at > $4)`,
+		string(notifType), resourceID, userID, since,
+	).Scan(&exists)
+	return exists, err
+}
+
 func (r *postgresNotificationRepository) GetAdmins() ([]model.User, error) {
 	rows, err := r.db.Query(
 		`SELECT id FROM users WHERE role = $1 AND status = 'activo'`,

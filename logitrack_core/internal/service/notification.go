@@ -468,3 +468,65 @@ func (s *NotificationService) MarkRead(id, userID string) error {
 func (s *NotificationService) MarkAllRead(userID string) error {
 	return s.repo.MarkAllRead(userID)
 }
+
+// NotifyRouteAssigned crea una notificación in-app para el chofer cuando se le
+// asigna una ruta. tripID se usa como resourceID y como clave de dedup (CA-07).
+// stopCount es la cantidad de envíos/paradas. departureMin es minutos desde
+// medianoche en hora local (0 = no disponible, se omite del body).
+// Diseñado para llamarse como goroutine (fire-and-forget). LOGITRACK-453.
+func (s *NotificationService) NotifyRouteAssigned(driverID, tripID string, stopCount, departureMin int) {
+	// CA-07: idempotencia — no re-notificar al mismo chofer por el mismo viaje.
+	since := clock.Now().Add(-23 * time.Hour)
+	exists, err := s.repo.ExistsForUser(model.NotificationRouteAssigned, tripID, driverID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyRouteAssigned ExistsForUser error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	body := fmt.Sprintf("%d paradas", stopCount)
+	if departureMin > 0 {
+		h := departureMin / 60
+		m := departureMin % 60
+		body += fmt.Sprintf(" · Salida sugerida: %02d:%02d", h, m)
+	}
+
+	n := model.Notification{
+		ID:         uuid.NewString(),
+		UserID:     driverID,
+		Type:       model.NotificationRouteAssigned,
+		Title:      "Tenés una ruta para hoy",
+		Body:       body,
+		ResourceID: tripID,
+		CreatedAt:  clock.Now().UTC(),
+	}
+	if err := s.repo.Create(n); err != nil {
+		log.Printf("[NotificationService] NotifyRouteAssigned Create error for driver %s: %v", driverID, err)
+		return
+	}
+	if s.hub != nil {
+		s.hub.Push(driverID)
+	}
+}
+
+// NotifyRouteReassigned crea una notificación in-app para el chofer anterior
+// cuando su ruta es reasignada a otro chofer. LOGITRACK-453 CA-06.
+func (s *NotificationService) NotifyRouteReassigned(oldDriverID, tripID, tripDate string) {
+	n := model.Notification{
+		ID:         uuid.NewString(),
+		UserID:     oldDriverID,
+		Type:       model.NotificationRouteReassigned,
+		Title:      "Tu ruta fue reasignada",
+		Body:       fmt.Sprintf("La ruta del %s fue asignada a otro chofer.", tripDate),
+		ResourceID: tripID,
+		CreatedAt:  clock.Now().UTC(),
+	}
+	if err := s.repo.Create(n); err != nil {
+		log.Printf("[NotificationService] NotifyRouteReassigned Create error for driver %s: %v", oldDriverID, err)
+		return
+	}
+	if s.hub != nil {
+		s.hub.Push(oldDriverID)
+	}
+}
