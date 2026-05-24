@@ -160,6 +160,37 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_incidents_tracking_id ON shipment_incidents(tracking_id);
 
+		CREATE TABLE IF NOT EXISTS shipment_claims (
+			id                VARCHAR(50)  PRIMARY KEY,
+			tracking_id       VARCHAR(50)  NOT NULL,
+			claim_type        TEXT         NOT NULL,
+			status            TEXT         NOT NULL,
+			description       TEXT         NOT NULL,
+			created_by        VARCHAR(100) NOT NULL,
+			created_at        TIMESTAMPTZ  NOT NULL,
+			updated_at        TIMESTAMPTZ  NOT NULL,
+			assigned_category TEXT,
+			resolution_type   TEXT,
+			is_automatic      BOOLEAN      NOT NULL DEFAULT FALSE,
+			evidence_file_name TEXT,
+			evidence_file_path TEXT,
+			evidence_mime_type TEXT,
+			evidence_upload_date TIMESTAMPTZ
+		);
+		CREATE INDEX IF NOT EXISTS idx_claims_tracking_id ON shipment_claims(tracking_id);
+
+		CREATE TABLE IF NOT EXISTS claim_events (
+			id         VARCHAR(50)  PRIMARY KEY,
+			claim_id   VARCHAR(50)  NOT NULL,
+			event_type TEXT         NOT NULL,
+			payload    JSONB        NOT NULL DEFAULT '{}',
+			changed_by VARCHAR(100) NOT NULL,
+			timestamp  TIMESTAMPTZ  NOT NULL,
+			version    INT          NOT NULL,
+			UNIQUE (claim_id, version)
+		);
+		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
+
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
 			tracking_id TEXT NOT NULL,
@@ -377,6 +408,23 @@ func RunMigrations(db *sql.DB) error {
 		-- Email transaccional: deduplicación de emails de confirmación de envío (CA-05)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
 
+		-- Reclamos: IDs secuenciales únicos (REC-NNNNN) y historial de eventos
+		CREATE SEQUENCE IF NOT EXISTS shipment_claim_id_seq START WITH 10000;
+		DO $migrate_claim_seq$
+		DECLARE max_n BIGINT;
+		BEGIN
+			SELECT COALESCE(MAX(CAST(SUBSTRING(id FROM 5) AS BIGINT)), 9999)
+			INTO max_n
+			FROM shipment_claims
+			WHERE id ~ '^REC-[0-9]+$';
+			PERFORM setval('shipment_claim_id_seq', max_n, true);
+		END
+		$migrate_claim_seq$;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_name   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_path   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
+
 		-- Branch zones (ubicaciones internas de sucursal)
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS current_zone TEXT;
 
@@ -395,27 +443,17 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Retorno de última milla: flag para delivery_failed con rechazo explícito del destinatario
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS rejected_by_recipient BOOLEAN NOT NULL DEFAULT FALSE;
-			-- ✅ AGREGAR COLUMNAS PARA EVENTOS DE REPROGRAMACIÓN
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_type VARCHAR(50);
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_code VARCHAR(20);
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_name VARCHAR(255);
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_status VARCHAR(100);
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS rescheduled_date TIMESTAMP;
-	ALTER TABLE events ADD COLUMN IF NOT EXISTS via VARCHAR(20);
 
-	-- Índices para mejorar performance
-	CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-	CREATE INDEX IF NOT EXISTS idx_events_rescheduled 
-		ON events(tracking_id, event_type) 
-		WHERE event_type = 'rescheduled';
+		-- Columnas para eventos de reprogramación (chatbot)
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_type   VARCHAR(50);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_code   VARCHAR(20);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_name   VARCHAR(255);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_status VARCHAR(100);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS rescheduled_date        TIMESTAMP;
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS via                     VARCHAR(20);
 
-	-- Comentarios para documentación
-	COMMENT ON COLUMN events.current_location_type IS 'Tipo de ubicación: ORIGIN_BRANCH, DESTINATION_BRANCH, IN_TRANSIT';
-	COMMENT ON COLUMN events.current_location_code IS 'Código de sucursal: CDBA-01, CORD-01, etc';
-	COMMENT ON COLUMN events.current_location_name IS 'Nombre legible de la ubicación';
-	COMMENT ON COLUMN events.current_location_status IS 'Estado descriptivo: En sucursal origen, Disponible para retiro, etc';
-	COMMENT ON COLUMN events.rescheduled_date IS 'Nueva fecha de entrega programada';
-	COMMENT ON COLUMN events.via IS 'Origen de la reprogramación: chatbot, manual, system';
+		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+		CREATE INDEX IF NOT EXISTS idx_events_rescheduled ON events(tracking_id, event_type) WHERE event_type = 'rescheduled';
 	`)
 	return err
 }

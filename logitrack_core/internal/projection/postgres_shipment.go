@@ -442,8 +442,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			delivery_method       = EXCLUDED.delivery_method,
 			price                 = COALESCE(EXCLUDED.price, shipments.price),
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
-			price_currency        = EXCLUDED.price_currency`,
-			rejected_by_recipient = EXCLUDED.rejected_by_recipient`,
+			price_currency        = EXCLUDED.price_currency,
+			rejected_by_recipient = EXCLUDED.rejected_by_recipient,
+			chatbot_metadata      = EXCLUDED.chatbot_metadata`,
 			s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -544,8 +545,7 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient
-		       price, price_breakdown, price_currency, reserved_for_trip_id,  chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1

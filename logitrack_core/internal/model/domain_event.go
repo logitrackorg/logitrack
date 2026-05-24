@@ -94,6 +94,11 @@ type IncidentReportedPayload struct {
 	Description  string
 }
 
+type ShipmentClaimCreatedPayload struct {
+	ClaimID   string
+	ClaimType ClaimType
+}
+
 type PaymentRequestedPayload struct {
 	PaymentID      string
 	MPPreferenceID string

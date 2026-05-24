@@ -48,3 +48,7 @@ reset.sh
 opencode.json
 /logitrack_web/.kiro
 .claude/settings.local.json
+
+# ── Gradle / Android  ────────────────
+.gradle/
+**/.gradle/
