@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "sla_expired")              return <AlertOctagon  size={16} color="#b91c1c" />;
   if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "chatbot_pickup_requested") return <Bot           size={16} color="#a78bfa" />;
+  if (type === "min_fill_reached")         return <Truck         size={16} color="#7c3aed" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -49,6 +50,7 @@ function groupAccent(type: string): string {
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   if (type === "fatigue_alert")       return "#ef4444";
+  if (type === "min_fill_reached")    return "#7c3aed";
   return "#94a3b8";
 }
 
@@ -256,6 +258,8 @@ export function NotificationBell() {
     }
     if (n.type === "fatigue_alert") {
       navigate("/supervisor/fatigue");
+    } else if (n.type === "min_fill_reached" && n.resource_id) {
+      navigate(`/${n.resource_id}`);
     } else if (n.resource_id) {
       navigate(`/shipments/${n.resource_id}`);
     }

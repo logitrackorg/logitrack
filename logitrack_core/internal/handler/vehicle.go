@@ -24,6 +24,11 @@ type VehicleHandler struct {
 	branchRepo    repository.BranchRepository
 	tripSvc       *service.InterBranchTripService
 	branchZoneSvc *service.BranchZoneService
+	dispatchVolumeSvc   service.DispatchVolumeNotifier
+}
+
+func (h *VehicleHandler) SetDispatchVolumeService(svc service.DispatchVolumeNotifier) {
+	h.dispatchVolumeSvc = svc
 }
 
 // effectiveWeight returns the shipment's weight. Weight is now locked at creation
@@ -121,6 +126,10 @@ func (h *VehicleHandler) Create(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al crear el vehículo"})
 		return
+	}
+
+	if h.dispatchVolumeSvc != nil {
+		go h.dispatchVolumeSvc.Check(branchID)
 	}
 
 	c.JSON(http.StatusCreated, vehicle)
@@ -229,6 +238,12 @@ func (h *VehicleHandler) UpdateStatusByPlate(c *gin.Context) {
 	}
 
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+
+	if h.dispatchVolumeSvc != nil && req.Status == model.VehicleStatusAvailable &&
+		updatedVehicle.AssignedBranch != nil {
+		go h.dispatchVolumeSvc.Check(*updatedVehicle.AssignedBranch)
+	}
+
 	c.JSON(http.StatusOK, buildVehicleResponse(updatedVehicle))
 }
 
@@ -659,6 +674,11 @@ func (h *VehicleHandler) AssignBranch(c *gin.Context) {
 	}
 
 	updatedVehicle, _ := h.repo.GetByID(vehicle.ID)
+
+	if h.dispatchVolumeSvc != nil {
+		go h.dispatchVolumeSvc.Check(branchID)
+	}
+
 	resp := buildVehicleResponse(updatedVehicle)
 	resp["message"] = "Vehículo asignado exitosamente al branch"
 	c.JSON(http.StatusOK, resp)

@@ -109,9 +109,10 @@ type Shipment struct {
 	DeliveredAt         *time.Time `json:"delivered_at,omitempty"`
 
 	// Counter-shipment & return tracking
-	ParentShipmentID *string `json:"parent_shipment_id,omitempty"` // set when this is a counter-shipment
-	DeliveryAttempts int     `json:"delivery_attempts,omitempty"`  // incremented on every delivery_failed
-	IsReturning      bool    `json:"is_returning,omitempty"`       // true for counter-shipments and return-mode shipments
+	ParentShipmentID    *string `json:"parent_shipment_id,omitempty"`    // set when this is a counter-shipment
+	DeliveryAttempts    int     `json:"delivery_attempts,omitempty"`     // incremented on every delivery_failed
+	IsReturning         bool    `json:"is_returning,omitempty"`          // true for counter-shipments and return-mode shipments
+	RejectedByRecipient bool    `json:"rejected_by_recipient,omitempty"` // delivery_failed because recipient explicitly refused
 
 	// Corrections: typed non-destructive field overrides; original data is never modified.
 	Corrections *ShipmentCorrections `json:"corrections,omitempty"`

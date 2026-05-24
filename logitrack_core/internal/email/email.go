@@ -30,6 +30,24 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
+// BranchAddressString formats a Branch address into a single human-readable line.
+func BranchAddressString(b model.Branch) string {
+	parts := []string{}
+	if b.Address.Street != "" {
+		parts = append(parts, b.Address.Street)
+	}
+	if b.Address.City != "" {
+		parts = append(parts, b.Address.City)
+	}
+	if b.Address.Province != "" {
+		parts = append(parts, b.Address.Province)
+	}
+	if b.Address.PostalCode != "" {
+		parts = append(parts, b.Address.PostalCode)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // OrgConfigProvider is the minimal interface this package needs to render
 // the org name, contact info, and reply-to address in every email.
 type OrgConfigProvider interface {
@@ -112,6 +130,95 @@ func (s *Service) SendLastMileNotification(recipient model.Customer, trackingID,
 	subj := fmt.Sprintf("Tu envío %s está en camino — llegará hoy", trackingID)
 	body := renderLastMileNotification(trackingID, timeWindowText, trackURL, org)
 	s.sendOne(recipient.Email, subj, body, trackingID, "destinatario (última milla)", org.Email)
+}
+
+// SendReadyForPickupNotification sends an email to the recipient when their shipment
+// is ready to be picked up at a branch. Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time) {
+	if s == nil {
+		return
+	}
+	if shipment.Recipient.Email == "" {
+		log.Printf("[email] retiro en sucursal: destinatario de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	branchAddr := BranchAddressString(branch)
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	subj := fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", shipment.TrackingID)
+	body := renderReadyForPickupNotification(shipment, branch.Name, branchAddr, branch.Hours, deadlineDate, trackURL, org)
+	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (retiro en sucursal)", org.Email)
+}
+
+// SendDeliveryConfirmedNotification sends a delivery confirmation email to the shipment's sender.
+// CA-01: called when a shipment transitions to "delivered".
+// CA-02: only the sender is notified; the recipient does not receive this email.
+// CA-03: includes tracking ID, recipient name, delivery date/time, and a link to the shipment.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
+	if s == nil {
+		return
+	}
+	if shipment.Sender.Email == "" {
+		log.Printf("[email] entrega confirmada: remitente de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	deliveredAt := time.Now().UTC()
+	if shipment.DeliveredAt != nil {
+		deliveredAt = *shipment.DeliveredAt
+	}
+	subj := fmt.Sprintf("Tu envío %s fue entregado exitosamente — %s", shipment.TrackingID, org.Name)
+	body := renderDeliveryConfirmedNotification(shipment, deliveredAt, trackURL, org)
+	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (entrega confirmada)", org.Email)
+}
+
+// SendDeliveryFailedNotification sends a failed-delivery notification email to the shipment's
+// recipient. Called on every delivery_failed transition (CA-01/CA-02).
+// When attemptsUsed < maxAttempts the email indicates remaining attempts and branch pickup option (CA-03).
+// When attemptsUsed >= maxAttempts the email indicates pickup-only with branch details (CA-04).
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch) {
+	if s == nil {
+		return
+	}
+	if shipment.Recipient.Email == "" {
+		log.Printf("[email] entrega fallida: destinatario de %s sin email registrado — email omitido", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	branchAddr := BranchAddressString(branch)
+	attemptsLeft := maxAttempts - attemptsUsed
+	if attemptsLeft < 0 {
+		attemptsLeft = 0
+	}
+	attemptDate := formatDeliveredAt(time.Now().UTC())
+	subj := fmt.Sprintf("No pudimos entregar tu envío %s — %s", shipment.TrackingID, org.Name)
+	body := renderDeliveryFailedNotification(shipment, attemptDate, attemptsLeft, maxAttempts, branch.Name, branchAddr, branch.Hours, trackURL, org)
+	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (entrega fallida)", org.Email)
+}
+
+// SendRejectedNotification sends a rejection notification email to the shipment's sender.
+// CA-01: called when a shipment transitions to "rechazado".
+// CA-02: only the sender is notified.
+// CA-03: includes tracking ID, rejection reason, date/time, and branch contact instructions.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string) {
+	if s == nil {
+		return
+	}
+	if shipment.Sender.Email == "" {
+		log.Printf("[email] rechazo: remitente de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	rejectedAt := time.Now().UTC()
+	subj := fmt.Sprintf("Tu envío %s fue rechazado por el destinatario — %s", shipment.TrackingID, org.Name)
+	body := renderRejectedNotification(shipment, notes, rejectedAt, trackURL, org)
+	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (rechazo)", org.Email)
 }
 
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).

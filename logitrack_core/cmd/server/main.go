@@ -9,6 +9,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
@@ -204,7 +205,8 @@ func main() {
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
 	}
-	// Mensajería de última milla — WhatsApp (Twilio) con fallback a email (CA-02/CA-03).
+
+	// Mensajería — WhatsApp (Twilio) con fallback a email para última milla y retiro en sucursal.
 	messagingSvc := messaging.New(
 		os.Getenv("TWILIO_ACCOUNT_SID"),
 		os.Getenv("TWILIO_AUTH_TOKEN"),
@@ -213,7 +215,16 @@ func main() {
 		emailSvc,
 		routingCfgSvc,
 	)
+	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
+	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
+	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)  // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)    // WhatsApp primero, email fallback (CA-01/CA-02)
+	shipmentSvc.SetRejectedService(messagingSvc)             // WhatsApp primero, email fallback (LOGITRACK-429)
+	shipmentSvc.SetDeliveryFailedService(messagingSvc)       // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {
@@ -266,6 +277,24 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
+	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
+	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
+	dispatchVolumeChecker := service.NewDispatchVolumeChecker(
+		shipmentRepo, vehicleRepo, branchRepo, dispatchVolumeRepo, notifRepo, routingCfgSvc,
+	)
+	dispatchVolumeChecker.SetHub(notifHub)
+	shipmentSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	routingSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	vehicleHandler.SetDispatchVolumeService(dispatchVolumeChecker)
+
+	// Evaluar volumen existente en la DB al arrancar (envíos cargados vía seed o
+	// acumulados antes del deploy de LOGITRACK-409).
+	go func() {
+		for _, b := range branchRepo.List() {
+			dispatchVolumeChecker.Check(b.ID)
+		}
+	}()
+
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
 	// del grafo de sucursales.
@@ -277,12 +306,24 @@ func main() {
 
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
-	// Generar plan global al arrancar para que el plan del día esté disponible
-	// desde el primer request, sin esperar el cron de las 08:00.
-	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
-		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	// Generar plan global al arrancar solo si no existe uno para hoy,
+	// para no sobreescribir un plan ya aplicado entre reinicios del servidor.
+	{
+		local := clock.Now().In(clock.LocalTZ)
+		planDate := local.Format("2006-01-02")
+		existing, err := routingPlanRepo.GetByDate(planDate)
+		if err != nil {
+			log.Fatalf("no se pudo verificar plan existente: %v", err)
+		}
+		if existing == nil {
+			if _, err := routingSvc.GenerateAndPersistGlobalPlan(context.Background()); err != nil {
+				log.Fatalf("no se pudo generar el plan inicial: %v", err)
+			}
+			log.Println("[startup] plan global del día generado correctamente")
+		} else {
+			log.Printf("[startup] plan del día ya existe (status: %s), no se regenera", existing.Status)
+		}
 	}
-	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)

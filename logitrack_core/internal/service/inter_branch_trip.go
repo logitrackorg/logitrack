@@ -175,7 +175,10 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 			for _, tid := range trip.ShipmentIDs {
 				_ = s.routeSvc.AddShipmentToDriverRoute(driverID, tid, today)
 			}
-			_, _ = s.routeSvc.StartRoute(driverID)
+			if _, err := s.routeSvc.StartRoute(driverID); err != nil {
+				// Route may be finalized from a previous run — reopen it for the new run.
+				_ = s.routeSvc.ReopenRoute(driverID)
+			}
 		}
 		if started, err := s.Start(trip.ID, driverID); err == nil {
 			trip = started
@@ -437,6 +440,14 @@ func (s *InterBranchTripService) FinishByScan(tripID, operatorUserID, operatorBr
 		return model.InterBranchTrip{}, fmt.Errorf("vehículo no encontrado")
 	}
 
+	// Last-mile: retorno al depósito de origen. Cerrar el viaje completo.
+	if trip.Kind == model.TripKindLastMile {
+		if trip.OriginBranchID != operatorBranchID {
+			return model.InterBranchTrip{}, fmt.Errorf("este viaje de última milla no corresponde a tu sucursal")
+		}
+		return s.finishTrip(trip, vehicle, operatorUserID, operatorBranchID)
+	}
+
 	// Multi-hop: validar que el operador esté en la parada actual y avanzar.
 	if len(trip.Stops) > 0 {
 		if trip.CurrentStopIndex >= len(trip.Stops) {
@@ -524,8 +535,10 @@ func (s *InterBranchTripService) finishTrip(trip model.InterBranchTrip, vehicle 
 	}
 
 	if trip.Kind == model.TripKindLastMile {
-		// Last-mile: shipments already transitioned to out_for_delivery/delivered/failed
-		// at start time. Just release the vehicle — don't forcibly move remaining shipments.
+		// Auto-transition delivery_failed shipments: rechazado / ready_for_pickup / redelivery_scheduled
+		for _, tid := range trip.ShipmentIDs {
+			_ = s.shipmentSvc.FinalizeLastMileTripReturn(tid, operatorUserID)
+		}
 	} else {
 		// Inter-branch: solo transicionar los envíos que están físicamente en el
 		// vehículo en este momento. trip.ShipmentIDs incluye todos los envíos del
