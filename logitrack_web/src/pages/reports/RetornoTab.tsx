@@ -216,9 +216,9 @@ export default function RetornoTab({ dateFrom, dateTo, branchId }: RetornoTabPro
                         />
                         <Tooltip
                           contentStyle={TOOLTIP_STYLE}
-formatter={(value: number) => [value, "Retornos"]}
-labelFormatter={(v: string) =>
-                          new Date(v + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
+formatter={(value) => [value, "Retornos"]}
+labelFormatter={(v) =>
+                          new Date(String(v) + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
                         }
                         />
                         <Area
