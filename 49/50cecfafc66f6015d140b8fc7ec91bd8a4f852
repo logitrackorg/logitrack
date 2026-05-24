@@ -1,0 +1,21 @@
+logitrack_web/package.json
+  s_69c2d0f92853a5::t_91046d2e9a099d 40-45
+logitrack_web/pnpm-lock.yaml
+  ai_agent 7-11,305-306,3429-3430,3432-3433,3911,6852,7007,7009,7011,7021
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "4950cecfafc66f6015d140b8fc7ec91bd8a4f852",
+  "prompts": {},
+  "sessions": {
+    "s_69c2d0f92853a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24ccd635-0a77-4276-9f2b-050f1db3a485",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
