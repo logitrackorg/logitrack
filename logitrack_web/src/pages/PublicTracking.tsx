@@ -4,9 +4,21 @@ import {
   publicTrackingApi,
   type PublicShipment,
   type PublicShipmentEvent,
+  type PublicClaim,
+  type ClaimStatus,
 } from "../api/publicTracking";
 import type { ShipmentStatus } from "../api/shipments";
 import type { Branch } from "../api/branches";
+import {
+  PublicClaimFormFields,
+  type PublicClaimFormValues,
+} from "../components/PublicClaimFormFields";
+import {
+  emptyClaimFormValues,
+  buildClaimDescription,
+  resolveClaimType,
+  validatePublicClaimForm,
+} from "../utils/publicClaimForm";
 import { fmtDateTime, fmtRelative } from "../utils/date";
 import "./PublicTracking.css";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
@@ -35,6 +47,35 @@ const STATUS_BLURBS: Record<ShipmentStatus, string> = {
   pending_payment:      "Tu envío está pendiente de confirmación de pago.",
 };
 
+const EXAMPLE_TRACKING_IDS = [
+  {
+    trackingId: "LT-LM00001",
+    sender: { name: "Carlos Mendez", dni: "27845123" },
+    recipient: { name: "Laura Gómez", dni: "31204567" },
+  },
+  {
+    trackingId: "LT-DELIVER01",
+    sender: { name: "Tech Store SA", dni: "20111222" },
+    recipient: { name: "Marcela Suárez", dni: "30123456" },
+  },
+  {
+    trackingId: "LT-PICKUP01",
+    sender: { name: "MercadoLocal", dni: "27554433" },
+    recipient: { name: "Sebastián Moyano", dni: "33112233" },
+  },
+];
+
+const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
+  open: "Abierto",
+  in_review: "En revisión",
+  pending_customer: "Pendiente del cliente",
+  derived: "Derivado",
+  resolved_operativa: "Resuelto",
+  resolved_comercial: "Resuelto",
+  resolved_rrhh: "Resuelto",
+  resolved_improcedente: "Resuelto",
+};
+
 interface EventDescription {
   icon: string;
   title: string;
@@ -42,20 +83,22 @@ interface EventDescription {
 }
 
 function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescription {
-  
+  if (ev.event_type === "claim_created") {
+    const statusLabel = ev.claim_status ? CLAIM_STATUS_LABELS[ev.claim_status] ?? "Abierto" : "Abierto";
+    return { icon: "🧾", title: `En Reclamo · ${statusLabel}` };
+  }
+
   if (ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date) {
     const locationText = ev.current_location.type === "DESTINATION_BRANCH"
       ? "En Sucursal Destino"
       : ev.current_location.type === "ORIGIN_BRANCH"
       ? `En Sucursal Origen (${ev.current_location.branch_code})`
       : "En tránsito";
-    
     const formattedDate = new Date(ev.rescheduled_date).toLocaleDateString('es-AR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
-    
     return {
       icon: "📍",
       title: `${locationText} - ${ev.current_location.status}`,
@@ -63,7 +106,6 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
     };
   }
 
-  
   const loc = ev.location;
   const branch = loc
     ? (branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc))
@@ -204,6 +246,11 @@ export function PublicTracking() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [claimForm, setClaimForm] = useState<PublicClaimFormValues>(emptyClaimFormValues);
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimError, setClaimError] = useState("");
+  const [claimResult, setClaimResult] = useState<PublicClaim | null>(null);
 
   useEffect(() => {
     publicTrackingApi.getBranches().then(setBranches).catch(() => {});
@@ -214,11 +261,24 @@ export function PublicTracking() {
     if (id) runSearch(id);
   }, [searchParams]);
 
+  const resetClaimForm = () => {
+    setClaimOpen(false);
+    setClaimForm(emptyClaimFormValues);
+    setClaimSubmitting(false);
+    setClaimError("");
+    setClaimResult(null);
+  };
+
+  const patchClaimForm = (patch: Partial<PublicClaimFormValues>) => {
+    setClaimForm((prev) => ({ ...prev, ...patch }));
+  };
+
   const runSearch = async (trackingId: string) => {
     setLoading(true);
     setError("");
     setShipment(null);
     setEvents([]);
+    resetClaimForm();
     try {
       const id = trackingId.trim().toUpperCase();
       const [s, ev] = await Promise.all([
@@ -239,6 +299,83 @@ export function PublicTracking() {
     if (!query.trim()) return;
     setSearchParams({ id: query.trim().toUpperCase() });
     runSearch(query.trim());
+  };
+
+  const handleExampleClick = (id: string) => {
+    const normalized = id.trim().toUpperCase();
+    setQuery(normalized);
+    setSearchParams({ id: normalized });
+    runSearch(normalized);
+  };
+
+  const handleClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setClaimSubmitting(true);
+    setClaimError("");
+
+    const validationError = validatePublicClaimForm(claimForm);
+    if (validationError) {
+      setClaimError(validationError);
+      setClaimSubmitting(false);
+      return;
+    }
+
+    if (!shipment) {
+      setClaimError("No se pudo encontrar el envío para asociar el reclamo.");
+      setClaimSubmitting(false);
+      return;
+    }
+
+    if (!claimForm.category) {
+      setClaimError("Seleccioná qué problema tuviste con el envío.");
+      setClaimSubmitting(false);
+      return;
+    }
+
+    const claimType = resolveClaimType(
+      claimForm.category,
+      claimForm.damageSubtypes,
+      claimForm.deliverySubtype
+    );
+    const description = buildClaimDescription({
+      category: claimForm.category,
+      damageSubtypes: claimForm.damageSubtypes,
+      deliverySubtype: claimForm.deliverySubtype,
+      staffDescription: claimForm.staffDescription,
+      evidenceName: claimForm.evidence?.name,
+    });
+
+    if (!claimType || !description) {
+      setClaimError("No se pudo determinar el tipo o la descripción del reclamo.");
+      setClaimSubmitting(false);
+      return;
+    }
+
+    try {
+      const createdClaim = await publicTrackingApi.createClaim({
+        tracking_id: shipment.tracking_id,
+        claim_type: claimType,
+        description,
+        created_by: claimForm.createdBy,
+        dni: claimForm.dni,
+        damage_subtypes: claimForm.damageSubtypes.join(","),
+        evidence: claimForm.evidence,
+      });
+      setClaimResult(createdClaim);
+      setClaimOpen(false);
+    } catch (error) {
+      const e = error as { response?: { data?: { error?: string; message?: string } } };
+      const msg = e.response?.data?.error ?? e.response?.data?.message;
+      if (msg?.includes("no coinciden")) {
+        setClaimError("Datos incorrectos");
+      } else {
+        setClaimError(
+          msg ?? "No pudimos registrar el reclamo. Intentá nuevamente."
+        );
+      }
+    } finally {
+      setClaimSubmitting(false);
+    }
   };
 
   const chronological = useMemo(() => [...events].reverse(), [events]);
@@ -285,6 +422,25 @@ export function PublicTracking() {
             {loading ? "Buscando..." : "Rastrear"}
           </button>
         </form>
+        <details className="pt-example-box">
+          <summary>Ejemplos válidos para probar</summary>
+          <div className="pt-example-list">
+            {EXAMPLE_TRACKING_IDS.map((item) => (
+              <button
+                key={item.trackingId}
+                type="button"
+                className="pt-example-btn"
+                onClick={() => handleExampleClick(item.trackingId)}
+                disabled={loading}
+              >
+                <span className="pt-example-id">{item.trackingId}</span>
+                <span className="pt-example-meta">
+                  Remitente: {item.sender.name} (DNI {item.sender.dni}) · Destinatario: {item.recipient.name} (DNI {item.recipient.dni})
+                </span>
+              </button>
+            ))}
+          </div>
+        </details>
         <p className="pt-search-hint">Tu número aparece en el comprobante o en el mail de confirmación.</p>
       </section>
 
@@ -432,6 +588,9 @@ export function PublicTracking() {
                   {chronological.map((ev, i) => {
                     const isCurrent = i === 0;
                     const desc = describeEvent(ev, branches);
+                    const eventTime = ev.event_type === "claim_created" && ev.claim_updated_at
+                      ? ev.claim_updated_at
+                      : ev.timestamp;
                     return (
                       <li key={ev.id} className="pt-event" data-current={isCurrent || undefined}>
                         <div className="pt-event-dot" aria-current={isCurrent ? "step" : undefined} aria-hidden="true">
@@ -441,7 +600,7 @@ export function PublicTracking() {
                           <div className="pt-event-title">{desc.title}</div>
                           {desc.subtitle && <div className="pt-event-loc">📍 {desc.subtitle}</div>}
                           <div className="pt-event-time">
-                            {fmtDateTime(ev.timestamp)} · <span className="pt-event-time-rel">{fmtRelative(ev.timestamp)}</span>
+                            {fmtDateTime(eventTime)} · <span className="pt-event-time-rel">{fmtRelative(eventTime)}</span>
                           </div>
                         </div>
                       </li>
@@ -450,6 +609,53 @@ export function PublicTracking() {
                 </ol>
               </section>
             )}
+
+            <section className="pt-claim-card" aria-label="Reclamos">
+              <div className="pt-claim-header">
+                <div>
+                  <h2 className="pt-claim-title">¿Tuviste algún inconveniente con este envío?</h2>
+                  <p className="pt-claim-sub">Podemos ayudarte con un reclamo y darte seguimiento.</p>
+                </div>
+                <button
+                  type="button"
+                  className="pt-claim-toggle"
+                  onClick={() => setClaimOpen((prev) => !prev)}
+                  disabled={claimSubmitting || !!claimResult}
+                >
+                  Solicitar ayuda
+                </button>
+              </div>
+
+              {claimResult && (
+                <div className="pt-claim-success" role="status">
+                  <div className="pt-claim-success-title">Reclamo creado</div>
+                  <div className="pt-claim-success-body">
+                    Código: <strong>{claimResult.id}</strong> · Estado: {CLAIM_STATUS_LABELS[claimResult.status]}
+                  </div>
+                </div>
+              )}
+
+              {claimOpen && !claimResult && (
+                <form className="pt-claim-form" onSubmit={handleClaimSubmit}>
+                  <PublicClaimFormFields
+                    values={claimForm}
+                    onChange={patchClaimForm}
+                    disabled={claimSubmitting}
+                  />
+
+                  {claimError && <div className="pt-claim-error" role="alert">{claimError}</div>}
+
+                  <div className="pt-claim-actions">
+                    <button type="button" className="pt-claim-cancel" onClick={() => setClaimOpen(false)}>
+                      Cancelar
+                    </button>
+                    <button type="submit" className="pt-claim-submit" disabled={claimSubmitting}>
+                      {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
           </>
         )}
 

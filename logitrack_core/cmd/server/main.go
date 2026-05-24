@@ -13,10 +13,10 @@ import (
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
-	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
@@ -84,12 +84,28 @@ func main() {
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
+	claimRepo := repository.NewPostgresClaimRepository(database)
 	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
 
 	statsExtendedRepo := repository.NewPostgresStatsExtendedRepository(database)
+
+	// Branch zones (ubicaciones internas de sucursal)
+	branchZoneRepo := repository.NewPostgresBranchZoneRepository(database)
+	branchZoneSvc := service.NewBranchZoneService(branchZoneRepo, shipmentRepo, eventStore, shipmentProj)
+	branchZoneHandler := handler.NewBranchZoneHandler(branchZoneSvc)
+	inspectionHandler := handler.NewInspectionHandler(branchZoneSvc)
+
+	// Ensure zones exist for every active branch (idempotent)
+	for _, b := range branchRepo.List() {
+		if b.Status == model.BranchStatusActive {
+			if err := branchZoneSvc.EnsureZonesForBranch(b.ID); err != nil {
+				log.Printf("[startup] error asegurando zonas para sucursal %s: %v", b.ID, err)
+			}
+		}
+	}
 
 	// Services & handlers
 	modelPath := os.Getenv("ML_MODEL_PATH")
@@ -154,9 +170,12 @@ func main() {
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
+	claimEventRepo := repository.NewPostgresClaimEventRepository(database)
+	claimSvc := service.NewClaimService(claimRepo, claimEventRepo, shipmentRepo, eventStore)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+	branchZoneSvc.SetShipmentService(shipmentSvc)
 	paymentRepo := repository.NewPostgresPaymentRepository(database)
 	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
@@ -219,15 +238,18 @@ func main() {
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
+	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
-	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc)
+	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
 	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
+	claimHandler := handler.NewClaimHandler(claimSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
+	vehicleHandler.SetBranchZoneService(branchZoneSvc)
 	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
@@ -252,6 +274,7 @@ func main() {
 	interBranchTripRepo := repository.NewPostgresInterBranchTripRepository(database)
 	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
 	interBranchTripSvc.SetRouteService(routeSvc)
+	interBranchTripSvc.SetNotificationService(notifSvc)
 	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
 	vehicleHandler.SetTripService(interBranchTripSvc)
 
@@ -259,6 +282,7 @@ func main() {
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
+	routingSvc.SetBranchZoneService(branchZoneSvc)
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
@@ -349,6 +373,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -405,6 +431,16 @@ func main() {
 	protected.GET("/shipments/:tracking_id/incidents", shipmentDetailRead, incidentHandler.GetIncidents)
 	protected.POST("/shipments/:tracking_id/incidents", shipmentWrite, incidentHandler.ReportIncident)
 
+	// Claims — list/detail/derive/resolve for operator/supervisor
+	protected.GET("/claims", claimRead, claimHandler.ListClaims)
+	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
+	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
+	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
+	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
+	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
+	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)
+
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
 	protected.POST("/shipments/:tracking_id/cancel", shipmentWrite, shipmentHandler.CancelShipment)
@@ -438,8 +474,8 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
-	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
-	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)    // US4: tactile events
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
 	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
@@ -519,11 +555,20 @@ func main() {
 	protected.PATCH("/zones/:id", adminOnly, zoneHandler.Update)
 	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
 
+	// Branch zones — read: all authenticated, move: operator/supervisor
+	protected.GET("/branches/:id/zones", authenticated, branchZoneHandler.ListZones)
+	protected.POST("/shipments/:tracking_id/move-zone", shipmentWrite, branchZoneHandler.MoveZone)
+
+	// Inspection (supervisor-only) — approve from Revision or classify lost/destroyed
+	supervisorOnly := middleware.RequireRoles(model.RoleSupervisor)
+	protected.POST("/shipments/:tracking_id/approve-revision", supervisorOnly, inspectionHandler.ApproveFromRevision)
+	protected.POST("/shipments/:tracking_id/classify", supervisorOnly, inspectionHandler.Classify)
+
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
-	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
+	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
@@ -545,6 +590,8 @@ func main() {
 	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetPublicEvents)
 	publicAPI.GET("/branches", branchHandler.List)
 	publicAPI.GET("/stats", shipmentHandler.PublicStats)
+	publicAPI.POST("/claims", claimHandler.CreatePublicClaim)
+	publicAPI.GET("/claims/:id", claimHandler.GetPublicClaim)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	chatbotHandler.RegisterRoutes(publicAPI)

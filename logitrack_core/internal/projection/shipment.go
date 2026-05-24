@@ -208,6 +208,38 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.ChatbotMetadata.CancellationReason = payload.Reason
 		shipment.ChatbotMetadata.LastChatbotInteraction = &now
 		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentZoned:
+		payload, ok := event.Payload.(model.ShipmentZonedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		zone := string(payload.Zone)
+		shipment.CurrentZone = &zone
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentMoved:
+		payload, ok := event.Payload.(model.ShipmentMovedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		if payload.ToZone == "" {
+			shipment.CurrentZone = nil
+		} else {
+			zone := string(payload.ToZone)
+			shipment.CurrentZone = &zone
+		}
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
 	}
 }
 

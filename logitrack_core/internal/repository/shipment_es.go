@@ -391,6 +391,17 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			Timestamp:  de.Timestamp,
 		}, true
 
+	case model.EventClaimCreated:
+		payload := de.Payload.(model.ShipmentClaimCreatedPayload)
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			EventType:  model.EventClaimCreated,
+			ChangedBy:  de.ChangedBy,
+			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, payload.ClaimType),
+			Timestamp:  de.Timestamp,
+		}, true
+
 	case model.EventPaymentRequested:
 		from := model.StatusDraft
 		return model.ShipmentEvent{

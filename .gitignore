@@ -58,3 +58,7 @@ __pycache__/
 .sisyphus/
 user_context/
 token-usage-output.txt
+
+# ── Gradle / Android  ────────────────
+.gradle/
+**/.gradle/
