@@ -7,7 +7,7 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { NotificationBell } from "./components/NotificationBell";
 import { NotificationsPage } from "./pages/NotificationsPage";
-import { Dashboard } from "./pages/Dashboard";
+import { DashboardHost } from "./pages/DashboardHost";
 import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
@@ -294,8 +294,9 @@ function AppRoutes() {
           <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : user.role === "manager" ? "/dashboard" : "/"} replace /> : <Login />} />
 
           <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <Dashboard />
+            <ProtectedRoute roles={["supervisor", "manager"]}
+>
+              <DashboardHost />
             </ProtectedRoute>
           } />
 
