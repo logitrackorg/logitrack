@@ -413,7 +413,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency,
 			rejected_by_recipient, chatbot_metadata
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -684,7 +684,7 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		ri++
 	}
 	recentRows, err := p.db.Query(`
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -692,7 +692,8 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments
 		WHERE `+strings.Join(recentClauses, " AND ")+`
 		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
