@@ -256,6 +256,8 @@ export function NotificationBell() {
     }
     if (n.type === "fatigue_alert") {
       navigate("/supervisor/fatigue");
+    } else if (n.type === "min_fill_reached" && n.resource_id) {
+      navigate(`/${n.resource_id}`);
     } else if (n.resource_id) {
       navigate(`/shipments/${n.resource_id}`);
     }
