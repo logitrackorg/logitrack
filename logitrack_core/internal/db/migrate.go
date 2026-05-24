@@ -127,6 +127,16 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS service_time_minutes         INTEGER       NOT NULL DEFAULT 10;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS avg_speed_kmh                NUMERIC(6,2)  NOT NULL DEFAULT 25.0;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS last_mile_packing_strategy   TEXT          NOT NULL DEFAULT 'maximize_capacity';
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_last_mile_rate     NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_inter_branch_rate  NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+
+		CREATE TABLE IF NOT EXISTS dispatch_volume_state (
+			origin_branch_id  TEXT        NOT NULL,
+			dest_key          TEXT        NOT NULL,
+			trip_type         TEXT        NOT NULL,
+			notified_at       TIMESTAMPTZ,
+			PRIMARY KEY (origin_branch_id, dest_key, trip_type)
+		);
 
 		CREATE TABLE IF NOT EXISTS routing_plans (
 			id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),

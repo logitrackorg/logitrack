@@ -168,14 +168,15 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
-	notifSvc              *NotificationService
-	emailSvc              EmailConfirmationSender
-	whatsappConfirm       ConfirmationWhatsAppSender
-	messagingSvc          OutForDeliveryNotifier
-	pickupEmailSvc        ReadyForPickupNotifier
-	deliveryNotifSvc      DeliveryConfirmedNotifier
-	rejectedNotifSvc      RejectedNotifier
+	notifSvc               *NotificationService
+	emailSvc               EmailConfirmationSender
+	whatsappConfirm        ConfirmationWhatsAppSender
+	messagingSvc           OutForDeliveryNotifier
+	pickupEmailSvc         ReadyForPickupNotifier
+	deliveryNotifSvc       DeliveryConfirmedNotifier
+	rejectedNotifSvc       RejectedNotifier
 	deliveryFailedNotifSvc DeliveryFailedNotifier
+	dispatchVolumeSvc      DispatchVolumeNotifier // LOGITRACK-409
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                   { s.graphSvc = g }
@@ -187,6 +188,7 @@ func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifi
 func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)      { s.deliveryNotifSvc = svc }
 func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                       { s.rejectedNotifSvc = svc }
 func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier)            { s.deliveryFailedNotifSvc = svc }
+func (s *ShipmentService) SetDispatchVolumeService(svc DispatchVolumeNotifier)            { s.dispatchVolumeSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -513,6 +515,12 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	}
 	s.upsertParties(created)
 	go s.sendConfirmationEmails(created) // CA-01/02/03/04/05
+
+	// LOGITRACK-409 CA-01: evaluar volumen mínimo al crear/confirmar un envío en su sucursal de origen.
+	if s.dispatchVolumeSvc != nil && created.OriginBranchID != "" {
+		go s.dispatchVolumeSvc.Check(created.OriginBranchID)
+	}
+
 	return created, nil
 }
 
@@ -770,6 +778,11 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	s.upsertParties(confirmed)
 	go s.sendConfirmationEmails(confirmed) // CA-01/02/03/04/05
 
+	// LOGITRACK-409 CA-01: evaluar volumen mínimo al confirmar un envío en su sucursal de origen.
+	if s.dispatchVolumeSvc != nil && confirmed.OriginBranchID != "" {
+		go s.dispatchVolumeSvc.Check(confirmed.OriginBranchID)
+	}
+
 	// Auto-transición: origen == destino → el envío ya está en su hub final.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
@@ -991,6 +1004,19 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 				originBranchID = updated.ReceivingBranchID
 			}
 			go s.notifSvc.NotifyReturnCompleted(updated, originBranchID)
+		}
+	}
+
+	// LOGITRACK-409 CA-01/CA-02: evaluar volumen mínimo de despacho en tiempo real
+	// cuando un envío llega a una sucursal (at_origin_hub o at_hub).
+	if s.dispatchVolumeSvc != nil &&
+		(targetStatus == model.StatusAtOriginHub || targetStatus == model.StatusAtHub) {
+		checkBranchID := resolvedLocation
+		if checkBranchID == "" {
+			checkBranchID = updated.CurrentLocation
+		}
+		if checkBranchID != "" {
+			go s.dispatchVolumeSvc.Check(checkBranchID)
 		}
 	}
 
