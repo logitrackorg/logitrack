@@ -95,9 +95,10 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET status = $1, updated_at = $2,
-				    delivery_attempts = delivery_attempts + 1
-				WHERE tracking_id = $3`,
-				string(payload.ToStatus), event.Timestamp, event.TrackingID,
+				    delivery_attempts = delivery_attempts + 1,
+				    rejected_by_recipient = $3
+				WHERE tracking_id = $4`,
+				string(payload.ToStatus), event.Timestamp, payload.RejectedByRecipient, event.TrackingID,
 			)
 			return err
 		}
@@ -327,8 +328,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			has_incident, incident_type,
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
-			price, price_breakdown, price_currency
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+			price, price_breakdown, price_currency,
+			rejected_by_recipient
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -356,7 +358,8 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			delivery_method       = EXCLUDED.delivery_method,
 			price                 = COALESCE(EXCLUDED.price, shipments.price),
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
-			price_currency        = EXCLUDED.price_currency`,
+			price_currency        = EXCLUDED.price_currency,
+			rejected_by_recipient = EXCLUDED.rejected_by_recipient`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -367,6 +370,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
 		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
+		s.RejectedByRecipient,
 	)
 	return err
 }
@@ -390,7 +394,8 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -405,7 +410,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -453,7 +459,8 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -622,6 +629,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+		&s.RejectedByRecipient,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -709,6 +717,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+			&s.RejectedByRecipient,
 		)
 		if err != nil {
 			return nil, err

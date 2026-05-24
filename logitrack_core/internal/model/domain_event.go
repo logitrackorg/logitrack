@@ -65,11 +65,12 @@ type DraftConfirmedPayload struct {
 }
 
 type StatusChangedPayload struct {
-	FromStatus Status
-	ToStatus   Status
-	Location   string // already resolved to branch ID
-	Notes      string
-	DriverID   string
+	FromStatus          Status
+	ToStatus            Status
+	Location            string // already resolved to branch ID
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool // delivery_failed: recipient explicitly refused
 }
 
 type ShipmentCorrectedPayload struct {

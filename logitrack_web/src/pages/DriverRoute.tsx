@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { interBranchTripsApi } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
@@ -184,9 +185,10 @@ export function DriverRoute() {
     setActionError("");
     try {
       await shipmentApi.updateStatus(rejectedShipment.tracking_id, {
-        status: "rechazado",
+        status: "delivery_failed",
         location: "",
         notes: note,
+        rejected_by_recipient: true,
       });
       closeSheets();
       await checkReTestGate();
@@ -255,19 +257,16 @@ export function DriverRoute() {
 
   const pendingList = data.shipments.filter((s) => s.status === "out_for_delivery");
   const completedList = data.shipments.filter(
-    (s) => s.status === "delivered" || s.status === "delivery_failed" || s.status === "rechazado",
+    (s) => s.status === "delivered" || s.status === "delivery_failed",
   );
   const total = data.shipments.length;
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  const hasDeliveryFailedRemaining = data.shipments.some(
-    (s) => s.status === "delivery_failed" || s.status === "rechazado",
-  );
   const routeEffectivelyDone =
-    routeStatus === "finalizada" ||
-    (routeStatus === "en_curso" && pending === 0 && !hasDeliveryFailedRemaining && total > 0);
+    (routeStatus === "finalizada" && pending === 0) ||
+    (routeStatus === "en_curso" && pending === 0 && total > 0);
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} />;
   }
@@ -1021,9 +1020,70 @@ function RejectedSheet({
 function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
   const navigate = useNavigate();
   const done = data.shipments.filter((s) => s.status === "delivered").length;
-  const failed = data.shipments.filter(
-    (s) => s.status === "delivery_failed" || s.status === "rechazado",
-  ).length;
+  const failedShipments = data.shipments.filter((s) => s.status === "delivery_failed");
+  const failed = failedShipments.length;
+
+  const [tripId, setTripId] = useState<string | null>(null);
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+
+  useEffect(() => {
+    if (failed === 0) return;
+    setQrLoading(true);
+    interBranchTripsApi.getMyTrip()
+      .then((trip) => {
+        setTripId(trip.id);
+        return interBranchTripsApi.getQR(trip.id);
+      })
+      .then((qr) => setQrBase64(qr.qr_code_base64))
+      .catch(() => {})
+      .finally(() => setQrLoading(false));
+  }, [failed]);
+
+  // Viaje ya recibido por el operador (failed=0, ningún delivery_failed activo)
+  if (failed === 0) {
+    return (
+      <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
+        <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
+          <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+            <Truck className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
+            <p className="mt-1 text-sm text-slate-500">{today}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 mb-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider opacity-90">Jornada completada</p>
+              <p className="mt-1 text-xl font-bold leading-tight">
+                {done} {done === 1 ? "entrega completada" : "entregas completadas"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center">
+          <div className="w-12 h-12 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center">
+            <Truck className="w-6 h-6" />
+          </div>
+          <p className="text-sm font-bold text-slate-900">¿Empezás otro reparto?</p>
+          <p className="text-xs text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
+          <button
+            onClick={() => navigate("/driver/scan")}
+            className="h-10 px-6 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
+          >
+            Escanear vehículo
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
@@ -1056,6 +1116,36 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
         </div>
       </div>
 
+      {/* QR de retorno — solo cuando hay envíos no entregados */}
+      {failed > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 mb-5">
+          <p className="text-sm font-bold text-amber-900 mb-1">Mostrá este código al operador</p>
+          <p className="text-xs text-amber-700 mb-4">
+            Al regresar a la sucursal, el operador escanea o ingresa este ID para recibir los{" "}
+            {failed} {failed === 1 ? "envío pendiente" : "envíos pendientes"} y registrar su estado final.
+          </p>
+          {qrLoading && (
+            <div className="flex justify-center py-4">
+              <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {qrBase64 && (
+            <div className="flex flex-col items-center gap-3">
+              <img
+                src={`data:image/png;base64,${qrBase64}`}
+                alt="QR de retorno"
+                className="w-48 h-48 rounded-xl border border-amber-200"
+              />
+              {tripId && (
+                <p className="text-xs font-mono text-amber-800 bg-amber-100 px-3 py-1.5 rounded-lg">
+                  {tripId}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
         Resumen del día
       </p>
@@ -1063,7 +1153,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
         {data.shipments.map((shipment) => {
           const { name } = recipientView(shipment);
           const delivered = shipment.status === "delivered";
-          const rejected = shipment.status === "rechazado";
+          const rejected = shipment.status === "delivery_failed" && shipment.rejected_by_recipient;
           return (
             <Card
               key={shipment.tracking_id}
@@ -1088,6 +1178,9 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>
                 <code className="text-[10px] font-mono text-slate-400">{shipment.tracking_id}</code>
+                {rejected && (
+                  <p className="text-[10px] text-amber-600 font-medium">Rechazado por destinatario</p>
+                )}
               </div>
               <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
             </Card>

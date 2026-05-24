@@ -348,6 +348,49 @@ func (s *ShipmentService) maxDeliveryAttempts() int {
 	return 3
 }
 
+// FinalizeLastMileTripReturn auto-transitions a delivery_failed shipment when the
+// last-mile driver returns to the branch. Called by InterBranchTripService.finishTrip.
+// For rechazado: chains rechazado → at_hub so the routing algorithm can dispatch the return.
+func (s *ShipmentService) FinalizeLastMileTripReturn(shipmentID, operatorUserID string) error {
+	sh, err := s.GetByTrackingID(shipmentID)
+	if err != nil || sh.Status != model.StatusDeliveryFailed {
+		return nil
+	}
+	var targetStatus model.Status
+	switch {
+	case sh.RejectedByRecipient:
+		targetStatus = model.StatusRechazado
+	case sh.DeliveryAttempts >= s.maxDeliveryAttempts():
+		targetStatus = model.StatusReadyForPickup
+	default:
+		targetStatus = model.StatusRedeliveryScheduled
+	}
+	_, err = s.UpdateStatus(shipmentID, model.UpdateStatusRequest{
+		Status:           targetStatus,
+		ChangedBy:        operatorUserID,
+		Notes:            "Recibido en sucursal tras retorno de última milla.",
+		SystemTransition: true,
+	})
+	if err != nil {
+		return err
+	}
+	// rechazado needs one more hop: rechazado → at_hub so routing picks it up for the return trip.
+	if targetStatus == model.StatusRechazado {
+		branchCity := sh.ReceivingBranchID
+		if b, ok := s.branchRepo.GetByID(sh.ReceivingBranchID); ok {
+			branchCity = b.Address.City
+		}
+		_, err = s.UpdateStatus(shipmentID, model.UpdateStatusRequest{
+			Status:           model.StatusAtHub,
+			ChangedBy:        operatorUserID,
+			Location:         branchCity,
+			Notes:            "Paquete rechazado disponible para despacho de retorno.",
+			SystemTransition: true,
+		})
+	}
+	return err
+}
+
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
 	if shipment.Sender.DNI != "" {
 		s.customerRepo.Upsert(shipment.Sender)
@@ -902,14 +945,15 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	}
 
 	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
-		TrackingID: trackingID,
-		FromStatus: current.Status,
-		ToStatus:   targetStatus,
-		Location:   resolvedLocation,
-		ChangedBy:  req.ChangedBy,
-		Notes:      req.Notes,
-		DriverID:   req.DriverID,
-		Timestamp:  clock.Now().UTC(),
+		TrackingID:          trackingID,
+		FromStatus:          current.Status,
+		ToStatus:            targetStatus,
+		Location:            resolvedLocation,
+		ChangedBy:           req.ChangedBy,
+		Notes:               req.Notes,
+		DriverID:            req.DriverID,
+		RejectedByRecipient: req.RejectedByRecipient && targetStatus == model.StatusDeliveryFailed,
+		Timestamp:           clock.Now().UTC(),
 	})
 	if err != nil {
 		return model.Shipment{}, err

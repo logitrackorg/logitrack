@@ -368,6 +368,9 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
+
+		-- Retorno de última milla: flag para delivery_failed con rechazo explícito del destinatario
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS rejected_by_recipient BOOLEAN NOT NULL DEFAULT FALSE;
 	`)
 	return err
 }

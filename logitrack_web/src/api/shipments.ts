@@ -109,6 +109,7 @@ export interface Shipment {
   parent_shipment_id?: string;
   delivery_attempts?: number;
   is_returning?: boolean;
+  rejected_by_recipient?: boolean;
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
@@ -203,6 +204,7 @@ export interface UpdateStatusPayload {
   driver_id?: string;
   recipient_dni?: string;
   sender_dni?: string;
+  rejected_by_recipient?: boolean;
 }
 
 export const shipmentApi = {

@@ -15,14 +15,15 @@ type ShipmentEvent struct {
 }
 
 type UpdateStatusRequest struct {
-	Status           Status `json:"status"        binding:"required"`
-	ChangedBy        string `json:"changed_by"`
-	Location         string `json:"location"`
-	Notes            string `json:"notes"`
-	DriverID         string `json:"driver_id"`     // required when status = "out_for_delivery"
-	RecipientDNI     string `json:"recipient_dni"` // required when status = "delivered"
-	SenderDNI        string `json:"sender_dni"`    // required when status = "returned"
-	SystemTransition bool   `json:"-"`             // skips driver_id requirement for system-initiated transitions
+	Status              Status `json:"status"                binding:"required"`
+	ChangedBy           string `json:"changed_by"`
+	Location            string `json:"location"`
+	Notes               string `json:"notes"`
+	DriverID            string `json:"driver_id"`            // required when status = "out_for_delivery"
+	RecipientDNI        string `json:"recipient_dni"`        // required when status = "delivered"
+	SenderDNI           string `json:"sender_dni"`           // required when status = "returned"
+	RejectedByRecipient bool   `json:"rejected_by_recipient"` // delivery_failed: recipient explicitly refused
+	SystemTransition    bool   `json:"-"`                    // skips driver_id requirement for system-initiated transitions
 }
 
 type BulkStatusRequest struct {

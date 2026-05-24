@@ -83,14 +83,15 @@ type ConfirmDraftCmd struct {
 }
 
 type StatusUpdateCmd struct {
-	TrackingID string
-	FromStatus model.Status
-	ToStatus   model.Status
-	Location   string // already resolved to branch ID
-	ChangedBy  string
-	Notes      string
-	DriverID   string
-	Timestamp  time.Time
+	TrackingID          string
+	FromStatus          model.Status
+	ToStatus            model.Status
+	Location            string // already resolved to branch ID
+	ChangedBy           string
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool
+	Timestamp           time.Time
 }
 
 type CorrectCmd struct {
