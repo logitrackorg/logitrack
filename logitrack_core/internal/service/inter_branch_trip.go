@@ -182,12 +182,6 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 	}
 	trip.DriverID = &driverID
 
-	// CA-01: notificar al chofer que reclamó la ruta (LOGITRACK-453).
-	if s.notifSvc != nil {
-		stopCount := len(trip.ShipmentIDs)
-		go s.notifSvc.NotifyRouteAssigned(driverID, trip.ID, stopCount, 0)
-	}
-
 	// For last-mile trips, assign route and auto-start the trip so shipments
 	// transition loaded → out_for_delivery immediately when the driver claims the vehicle.
 	if trip.Kind == model.TripKindLastMile && len(trip.ShipmentIDs) > 0 {
