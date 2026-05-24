@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense, lazy } from "react";
+import { useState, useEffect, useCallback, Suspense, lazy, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 import { ReportFilters } from "../components/ReportFilters";
 import { PageHeader } from "../components/ui/page-header";
 import { defaultRange, Skeleton } from "../utils/dashboard";
+import type { ResumenTabRef } from "./reports/ResumenTab";
 
 const ResumenTab = lazy(() => import("./reports/ResumenTab"));
 const ChoferesTab = lazy(() => import("./reports/ChoferesTab"));
@@ -72,10 +73,13 @@ export function DashboardHost() {
     }, 500);
   }, []);
 
+  const resumenTabRef = useRef<ResumenTabRef>(null);
+
   const sharedProps = {
     dateFrom,
     dateTo,
     branchId: effectiveBranch,
+    branches,
   };
 
   return (
@@ -97,6 +101,9 @@ export function DashboardHost() {
                 onBranchChange={setSelectedBranch}
                 branches={branches}
                 isSupervisor={isSupervisor}
+                showExport={activeTab === "resumen"}
+                onExportPDF={() => resumenTabRef.current?.exportPDF()}
+                onExportExcel={() => resumenTabRef.current?.exportExcel()}
                 showAutoRefresh={activeTab === "resumen"}
                 lastRefresh={lastRefresh}
                 isRefreshing={isRefreshing}
@@ -126,6 +133,7 @@ export function DashboardHost() {
         <Suspense fallback={<Skeleton className="h-96" />}>
           {activeTab === "resumen" && (
             <ResumenTab
+              ref={resumenTabRef}
               {...sharedProps}
               onRefresh={onRefresh}
               lastRefresh={lastRefresh}
