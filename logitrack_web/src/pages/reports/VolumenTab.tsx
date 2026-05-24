@@ -171,8 +171,8 @@ export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabPro
                     labelFormatter={(label) => `${label}`}
                   />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={80}>
-                    {chartData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.fill} />
+                    {chartData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.fill} />
                     ))}
                     <LabelList
                       dataKey="count"

@@ -18,7 +18,7 @@ import { Card } from "../components/ui/card";
 import { StatCard } from "../components/ui/stat-card";
 import { ReportFilters } from "../components/ReportFilters";
 import { ReportExport } from "../components/ReportExport";
-import { toDateInput, defaultRange, Skeleton } from "../utils/dashboard";
+import { defaultRange, Skeleton } from "../utils/dashboard";
 import { exportToPDF, exportToExcel } from "../utils/exportHelpers";
 
 const TOOLTIP_STYLE = {

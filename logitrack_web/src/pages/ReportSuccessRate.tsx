@@ -19,7 +19,7 @@ import { Card } from "../components/ui/card";
 import { ReportFilters } from "../components/ReportFilters";
 import { ReportExport } from "../components/ReportExport";
 import { toast } from "../utils/toast";
-import { toDateInput, defaultRange, Skeleton } from "../utils/dashboard";
+import { defaultRange, Skeleton } from "../utils/dashboard";
 import { exportToPDF, exportToExcel } from "../utils/exportHelpers";
 
 export function ReportSuccessRate() {
@@ -176,8 +176,8 @@ export function ReportSuccessRate() {
                     stackId="rate"
                     radius={[4, 0, 0, 4]}
                   >
-                    {chartData.map((_entry, idx) => (
-                      <Cell key={idx} fill="#22c55e" />
+                    {chartData.map((_entry) => (
+                      <Cell key={_entry.name} fill="#22c55e" />
                     ))}
                     <LabelList
                       dataKey="successRate"
@@ -191,8 +191,8 @@ export function ReportSuccessRate() {
                     stackId="rate"
                     radius={[0, 4, 4, 0]}
                   >
-                    {chartData.map((_entry, idx) => (
-                      <Cell key={idx} fill="#ef4444" />
+                    {chartData.map((_entry) => (
+                      <Cell key={`${_entry.name}-failure`} fill="#ef4444" />
                     ))}
                   </Bar>
                 </BarChart>

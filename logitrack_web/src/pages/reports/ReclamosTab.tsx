@@ -208,8 +208,8 @@ export default function ReclamosTab({ dateFrom, dateTo, branchId }: ReclamosTabP
                       radius={[0, 4, 4, 0]}
                       maxBarSize={28}
                     >
-                      {chartData.map((entry, idx) => (
-                        <Cell key={idx} fill={getBarColor(entry.total)} />
+                      {chartData.map((entry) => (
+                        <Cell key={entry.branch_name} fill={getBarColor(entry.total)} />
                       ))}
                     </Bar>
                   </BarChart>

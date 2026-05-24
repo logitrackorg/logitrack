@@ -123,9 +123,15 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   useEffect(() => {
     fetchDashboard(true);
     const interval = setInterval(() => fetchDashboard(false), 60000);
-    const onVisible = () => { if (!document.hidden) fetchDashboard(false); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
+    let visibilityTimeout: ReturnType<typeof setTimeout>;
+    const onVisibleDebounced = () => {
+      if (!document.hidden) {
+        clearTimeout(visibilityTimeout);
+        visibilityTimeout = setTimeout(() => fetchDashboard(false), 300);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibleDebounced);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisibleDebounced); clearTimeout(visibilityTimeout); };
   }, [fetchDashboard]);
 
   useEffect(() => {
@@ -305,7 +311,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                 <XAxis dataKey="date" tick={{fontSize:10,fill:"#94a3b8",fontWeight:500}} tickFormatter={v=>String(v).slice(5)}
                   interval={Math.max(0,Math.floor(chartData.length/12))} axisLine={{stroke:"#e2e8f0"}} tickLine={false} />
                 <YAxis tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l:any)=>toDateLabel(l)} formatter={(v:any,n:any)=>[v,n==="creados"?"Creados":"Entregados"]} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={(l: any)=>toDateLabel(l)} formatter={(v: any, n: any)=>[v,n==="creados"?"Creados":"Entregados"]} />
                 <Bar dataKey="creados" fill="#2563eb" radius={[3,3,0,0]} name="Creados" maxBarSize={32} />
                 <Bar dataKey="entregados" fill="#10b981" radius={[3,3,0,0]} name="Entregados" maxBarSize={32} />
               </BarChart>
@@ -370,7 +376,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                   interval={Math.max(0,Math.floor(lineData.length/8))} axisLine={false} tickLine={false} />
                 <YAxis domain={[0,maxVal+1]} allowDecimals={false} tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{fontSize:12,borderRadius:8,border:"1px solid #e2e8f0",boxShadow:"0 4px 12px rgba(0,0,0,0.08)",padding:"8px 12px",background:"rgba(255,255,255,0.97)"}}
-                  formatter={(v:any)=>[v,"Cancelaciones"]} labelFormatter={(v:any)=>toDateLabel(v)} />
+                  formatter={(v: any)=>[v,"Cancelaciones"]} labelFormatter={(v: any)=>toDateLabel(v)} />
                 <Area type="monotone" dataKey="cancelaciones" stroke="#ef4444" strokeWidth={2} fill="url(#cancelGrad)" dot={<CustomPeakDot/>} activeDot={{r:5,fill:"#ef4444"}} />
               </AreaChart>
             </ResponsiveContainer>
@@ -396,11 +402,11 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} unit="h" />
               <YAxis type="category" dataKey="label" tick={{fontSize:11,fill:"#475569",fontWeight:500}} axisLine={false} tickLine={false} width={120} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v:any)=>[`${Number(v).toFixed(1)}h`,"Promedio"]} labelFormatter={(l:any)=>l} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any)=>[`${Number(v).toFixed(1)}h`,"Promedio"]} labelFormatter={(l: any)=>l} />
               <Bar dataKey="avg_hours" name="Tiempo promedio" radius={[0,4,4,0]} maxBarSize={28}
-                shape={(p:any)=>{const {x,y,width,height,payload}=p; const fill=payload.is_bottleneck?"#f59e0b":"#1e3a5f";
-                  return <g><rect x={x} y={y} width={width} height={height} rx={4} fill={fill} /><text x={x+width+6} y={y+height/2+4} fontSize={11} fill="#475569" fontWeight={600} textAnchor="start">{Number(payload.avg_hours).toFixed(1)}h</text></g>;}}>
-                {avgTimeData.map((e,i)=><Cell key={i} fill={e.is_bottleneck?"#f59e0b":"#1e3a5f"} />)}
+                shape={(p: any)=>{const x=p?.x??0,y=p?.y??0,width=p?.width??0,height=p?.height??0,payload=p?.payload??{}; const fill=payload?.is_bottleneck?"#f59e0b":"#1e3a5f";
+                  return <g><rect x={x} y={y} width={width} height={height} rx={4} fill={fill} /><text x={x+width+6} y={y+height/2+4} fontSize={11} fill="#475569" fontWeight={600} textAnchor="start">{Number(payload?.avg_hours??0).toFixed(1)}h</text></g>;}}>
+                {avgTimeData.map((e)=><Cell key={e.status} fill={e.is_bottleneck?"#f59e0b":"#1e3a5f"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

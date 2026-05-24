@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { TrendingUp, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -140,8 +140,8 @@ export default function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) 
                     stackId="rate"
                     radius={[4, 0, 0, 4]}
                   >
-                    {chartData.map((_entry, idx) => (
-                      <Cell key={idx} fill="#22c55e" />
+                    {chartData.map((_entry) => (
+                      <Cell key={_entry.name} fill="#22c55e" />
                     ))}
                     <LabelList
                       dataKey="successRate"
@@ -155,8 +155,8 @@ export default function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) 
                     stackId="rate"
                     radius={[0, 4, 4, 0]}
                   >
-                    {chartData.map((_entry, idx) => (
-                      <Cell key={idx} fill="#ef4444" />
+                    {chartData.map((_entry) => (
+                      <Cell key={`${_entry.name}-failure`} fill="#ef4444" />
                     ))}
                   </Bar>
                 </BarChart>

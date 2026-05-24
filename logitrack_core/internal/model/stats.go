@@ -139,8 +139,6 @@ type SuccessRateByBranchItem struct {
 	Delivered   int     `json:"delivered"`
 	Failed      int     `json:"failed"`
 	SuccessRate float64 `json:"success_rate"`
-	SuccessPct  float64 `json:"success_pct"`
-	FailurePct  float64 `json:"failure_pct"`
 }
 
 type SuccessRateByBranchResponse struct {

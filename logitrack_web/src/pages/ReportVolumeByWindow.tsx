@@ -19,7 +19,7 @@ import { Card } from "../components/ui/card";
 import { ReportFilters } from "../components/ReportFilters";
 import { ReportExport } from "../components/ReportExport";
 import { toast } from "../utils/toast";
-import { toDateInput, defaultRange, Skeleton } from "../utils/dashboard";
+import { defaultRange, Skeleton } from "../utils/dashboard";
 import { exportToPDF, exportToExcel } from "../utils/exportHelpers";
 
 const WINDOW_LABELS: Record<string, string> = {
@@ -206,8 +206,8 @@ export function ReportVolumeByWindow() {
                     labelFormatter={(label) => `${label}`}
                   />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={80}>
-                    {chartData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.fill} />
+                    {chartData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.fill} />
                     ))}
                     <LabelList
                       dataKey="count"

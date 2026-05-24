@@ -116,8 +116,6 @@ export interface SuccessRateByBranchItem {
   delivered: number;
   failed: number;
   success_rate: number;
-  success_pct: number;
-  failure_pct: number;
 }
 
 export interface SuccessRateByBranchResponse {

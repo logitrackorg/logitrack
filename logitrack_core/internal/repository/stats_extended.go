@@ -566,8 +566,6 @@ func (r *postgresStatsExtendedRepository) SuccessRateByBranch(dateFrom, dateTo *
 		item.Failed = item.Total - item.Delivered
 		if item.Total > 0 {
 			item.SuccessRate = (float64(item.Delivered) / float64(item.Total)) * 100
-			item.SuccessPct = item.SuccessRate
-			item.FailurePct = 100.0 - item.SuccessPct
 		}
 		result.Branches = append(result.Branches, item)
 	}

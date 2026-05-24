@@ -11,7 +11,7 @@ import { StatCard } from "../components/ui/stat-card";
 import { Sparkline, type SparklineDataPoint } from "../components/charts/Sparkline";
 import { ReportFilters } from "../components/ReportFilters";
 import { ReportExport } from "../components/ReportExport";
-import { toDateInput, defaultRange, Skeleton } from "../utils/dashboard";
+import { defaultRange, Skeleton } from "../utils/dashboard";
 import { exportToPDF, exportToExcel } from "../utils/exportHelpers";
 
 function formatARS(value: number): string {

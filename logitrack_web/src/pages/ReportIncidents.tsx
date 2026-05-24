@@ -12,7 +12,6 @@ import { ReportFilters } from "../components/ReportFilters";
 import { ReportExport } from "../components/ReportExport";
 import { Card } from "../components/ui/card";
 import { StatCard } from "../components/ui/stat-card";
-import { toast } from "../utils/toast";
 import { defaultRange, Skeleton } from "../utils/dashboard";
 import { exportToPDF, exportToExcel } from "../utils/exportHelpers";
 
@@ -243,8 +242,8 @@ export function ReportIncidents() {
                       radius={[0, 4, 4, 0]}
                       maxBarSize={28}
                     >
-                      {chartData.map((entry, idx) => (
-                        <Cell key={idx} fill={getBarColor(entry.total)} />
+                      {chartData.map((entry) => (
+                        <Cell key={entry.branch_name} fill={getBarColor(entry.total)} />
                       ))}
                     </Bar>
                   </BarChart>

@@ -214,7 +214,7 @@ export function ShipmentDetail() {
       const vehicles = await vehicleApi.listAvailable({ branch_id: branchId ?? undefined });
       // Filter by available remaining capacity
       const eligible = vehicles.filter(v => {
-        const usedKg = (v.assigned_shipments ?? []).reduce((acc, s) => acc + (s.weight_kg ?? 0), 0);
+        const usedKg = 0;
         return v.capacity_kg - usedKg >= effectiveWeightKg(s);
       });
       setAvailableVehicles(eligible);
