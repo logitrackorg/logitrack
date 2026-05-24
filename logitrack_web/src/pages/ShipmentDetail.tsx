@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
@@ -14,6 +14,7 @@ import {
   INCIDENT_TYPE_LABELS,
   TERMINAL_INCIDENT_STATUS,
 } from "../api/shipments";
+import { CLAIM_EVENT_LABELS, type ClaimEventType } from "../api/claims";
 import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
@@ -82,6 +83,27 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
 
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: "Sobre", box: "Caja",
+};
+
+const formatShipmentEventLabel = (ev: ShipmentEvent) => {
+  const claimEventType = ev.event_type as ClaimEventType | undefined;
+  if (claimEventType && claimEventType in CLAIM_EVENT_LABELS) {
+    return CLAIM_EVENT_LABELS[claimEventType];
+  }
+
+  if (ev.event_type === "incident_reported") {
+    return "Incidencia reportada";
+  }
+
+  if (ev.event_type === "edited") {
+    return STATUS_LABELS[ev.to_status];
+  }
+
+  if (ev.from_status) {
+    return `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`;
+  }
+
+  return ev.to_status ? STATUS_LABELS[ev.to_status] : "Evento registrado";
 };
 
 export function ShipmentDetail() {
@@ -953,54 +975,60 @@ export function ShipmentDetail() {
                 background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
               }} />
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-  {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-        <span style={{ fontWeight: 600 }}>
-          {ev.current_location.type === "DESTINATION_BRANCH"
-            ? "En Sucursal Destino"
-            : ev.current_location.type === "ORIGIN_BRANCH"
-            ? `En Sucursal Origen (${ev.current_location.branch_code})`
-            : "En tránsito"} — {ev.current_location.status}
-        </span>
-        <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-      </div>
-      <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-        <span>por <strong>{ev.changed_by?.startsWith('chatbot-recipient') ? 'chatbot-Destinatario' : (ev.changed_by || "sistema")}</strong></span>
-      </div>
-      <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
-        Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString('es-AR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        })}
-      </p>
-    </>
-  ) : (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-        <span style={{ fontWeight: 600 }}>
-          {ev.event_type === "edited"
-            ? STATUS_LABELS[ev.to_status]
-            : ev.from_status
-              ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
-              : STATUS_LABELS[ev.to_status]}
-        </span>
-        <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-      </div>
-      <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-         <span>por <strong>{ev.changed_by?.startsWith('chatbot-recipient') ? 'chatbot-Destinatario' : (ev.changed_by || "sistema")}</strong></span>
-        {ev.location && (() => {
-          const b = branches.find(x => x.id === ev.location);
-          return (
-            <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
-          );
-        })()}
-      </div>
-      {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
-    </>
-  )}
-</div>
+                {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {ev.current_location.type === "DESTINATION_BRANCH"
+                          ? "En Sucursal Destino"
+                          : ev.current_location.type === "ORIGIN_BRANCH"
+                          ? `En Sucursal Origen (${ev.current_location.branch_code})`
+                          : "En tránsito"} — {ev.current_location.status}
+                      </span>
+                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                    </div>
+                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
+                    </div>
+                    <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
+                      Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{formatShipmentEventLabel(ev)}</span>
+                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                    </div>
+                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
+                      {ev.location && (() => {
+                        const b = branches.find(x => x.id === ev.location);
+                        return (
+                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+                        );
+                      })()}
+                    </div>
+                    {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                    {ev.event_type === "claim_created" && ev.notes && (() => {
+                      const m = ev.notes.match(/REC-\d+/);
+                      if (m) {
+                        const claimId = m[0];
+                        return (
+                          <p style={{ margin: "6px 0 0" }}>
+                            <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -13,10 +13,10 @@ import (
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
-	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
 	"github.com/logitrack/core/internal/projection"
@@ -84,6 +84,7 @@ func main() {
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
+	claimRepo := repository.NewPostgresClaimRepository(database)
 	accessLogRepo := repository.NewPostgresAccessLogRepository(database)
 
 	// Event-sourced shipment repository
@@ -152,6 +153,8 @@ func main() {
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
+	claimEventRepo := repository.NewPostgresClaimEventRepository(database)
+	claimSvc := service.NewClaimService(claimRepo, claimEventRepo, shipmentRepo, eventStore)
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
@@ -218,11 +221,12 @@ func main() {
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
-	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc)
+	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
 	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
+	claimHandler := handler.NewClaimHandler(claimSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
@@ -345,6 +349,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -401,6 +407,16 @@ func main() {
 	protected.GET("/shipments/:tracking_id/incidents", shipmentDetailRead, incidentHandler.GetIncidents)
 	protected.POST("/shipments/:tracking_id/incidents", shipmentWrite, incidentHandler.ReportIncident)
 
+	// Claims — list/detail/derive/resolve for operator/supervisor
+	protected.GET("/claims", claimRead, claimHandler.ListClaims)
+	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
+	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
+	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
+	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
+	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
+	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)
+
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
 	protected.POST("/shipments/:tracking_id/cancel", shipmentWrite, shipmentHandler.CancelShipment)
@@ -424,8 +440,8 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
-	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
-	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)    // US4: tactile events
+	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
+	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
 	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
@@ -509,7 +525,7 @@ func main() {
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
-	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)         // operator+supervisor: su sucursal
+	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
@@ -531,6 +547,8 @@ func main() {
 	publicAPI.GET("/track/:tracking_id/events", shipmentHandler.GetPublicEvents)
 	publicAPI.GET("/branches", branchHandler.List)
 	publicAPI.GET("/stats", shipmentHandler.PublicStats)
+	publicAPI.POST("/claims", claimHandler.CreatePublicClaim)
+	publicAPI.GET("/claims/:id", claimHandler.GetPublicClaim)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	chatbotHandler.RegisterRoutes(publicAPI)
