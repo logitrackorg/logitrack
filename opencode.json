@@ -6,8 +6,5 @@
     "edit": "allow"
   },
   "plugin": [
-    "oh-my-opencode",
-    "opencode-supermemory",
-    "opencode-shell-strategy"
   ]
 }

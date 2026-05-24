@@ -34,6 +34,10 @@ const (
 	EventPickupRequested      = "pickup_requested"       
 	EventDeliveryRescheduled  = "delivery_rescheduled"   
 	EventCancelledByRecipient = "cancelled_by_recipient" 
+
+	// Branch zone events
+	EventShipmentZoned  = "shipment_zoned"   // automatic assignment to Entrada on arrival
+	EventShipmentMoved  = "shipment_moved"   // manual zone-to-zone movement
 )
 
 // ReturnETAExtraDays is added to the estimated_delivery_at when a shipment
@@ -128,6 +132,22 @@ type ShipmentETAExtendedPayload struct {
 	Reason    string
 }
 
+
+// ShipmentZonedPayload se emite cuando el sistema asigna automáticamente un envío
+// a la zona Entrada al llegar a una sucursal (fin de viaje).
+type ShipmentZonedPayload struct {
+	BranchID string         `json:"branch_id"`
+	Zone     BranchZoneType `json:"zone"`
+}
+
+// ShipmentMovedPayload se emite cuando un operador/supervisor mueve manualmente
+// un envío entre zonas dentro de una sucursal.
+type ShipmentMovedPayload struct {
+	FromZone BranchZoneType `json:"from_zone"`
+	ToZone   BranchZoneType `json:"to_zone"`
+	BranchID string         `json:"branch_id"`
+	Notes    string         `json:"notes,omitempty"`
+}
 
 // ==========================================
 // CHATBOT EVENT PAYLOADS

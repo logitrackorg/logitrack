@@ -424,18 +424,20 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_path   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
-		CREATE TABLE IF NOT EXISTS claim_events (
-			id         VARCHAR(50)  PRIMARY KEY,
-			claim_id   VARCHAR(50)  NOT NULL,
-			event_type TEXT         NOT NULL,
-			payload    JSONB        NOT NULL DEFAULT '{}',
-			changed_by VARCHAR(100) NOT NULL,
-			timestamp  TIMESTAMPTZ  NOT NULL,
-			version    INT          NOT NULL,
-			UNIQUE (claim_id, version)
-		);
-		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
 
+		-- Branch zones (ubicaciones internas de sucursal)
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS current_zone TEXT;
+
+		CREATE TABLE IF NOT EXISTS branch_zones (
+			id         TEXT PRIMARY KEY,
+			branch_id  TEXT NOT NULL REFERENCES branches(id),
+			zone_type  TEXT NOT NULL,
+			name       TEXT NOT NULL,
+			active     BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(branch_id, zone_type)
+		);
 		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
 

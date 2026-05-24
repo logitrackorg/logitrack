@@ -48,6 +48,7 @@ export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
 export type DeliveryMethod = "ultima_milla" | "retiro_sucursal";
 export type Priority = "alta" | "media" | "baja";
+export type BranchZoneType = "entrada" | "salida" | "revision" | "devolucion";
 
 export interface PriorityFactorDetail {
   value: string | number;
@@ -98,6 +99,7 @@ export interface Shipment {
   origin_branch_id?: string;
   final_branch_id?: string;
   current_location?: string; // branch ID of current location
+  current_zone?: BranchZoneType;
   status: ShipmentStatus;
   created_at: string;
   updated_at: string;
@@ -256,4 +258,10 @@ export const shipmentApi = {
     api.get<ShipmentIncident[]>(`/shipments/${trackingId}/incidents`).then((r) => r.data),
   reportIncident: (trackingId: string, incidentType: IncidentType, description: string) =>
     api.post<ShipmentIncident>(`/shipments/${trackingId}/incidents`, { incident_type: incidentType, description }).then((r) => r.data),
+  moveZone: (trackingId: string, zone: BranchZoneType, notes?: string) =>
+    api.post(`/shipments/${trackingId}/move-zone`, { zone, notes }).then((r) => r.data),
+  approveFromRevision: (trackingId: string, notes?: string) =>
+    api.post(`/shipments/${trackingId}/approve-revision`, { notes }).then((r) => r.data),
+  classifyShipment: (trackingId: string, classification: "lost" | "destroyed", notes?: string) =>
+    api.post(`/shipments/${trackingId}/classify`, { classification, notes }).then((r) => r.data),
 };

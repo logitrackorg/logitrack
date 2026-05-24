@@ -90,6 +90,21 @@ func main() {
 	// Event-sourced shipment repository
 	shipmentRepo := repository.NewEventSourcedShipmentRepository(eventStore, shipmentProj)
 
+	// Branch zones (ubicaciones internas de sucursal)
+	branchZoneRepo := repository.NewPostgresBranchZoneRepository(database)
+	branchZoneSvc := service.NewBranchZoneService(branchZoneRepo, shipmentRepo, eventStore, shipmentProj)
+	branchZoneHandler := handler.NewBranchZoneHandler(branchZoneSvc)
+	inspectionHandler := handler.NewInspectionHandler(branchZoneSvc)
+
+	// Ensure zones exist for every active branch (idempotent)
+	for _, b := range branchRepo.List() {
+		if b.Status == model.BranchStatusActive {
+			if err := branchZoneSvc.EnsureZonesForBranch(b.ID); err != nil {
+				log.Printf("[startup] error asegurando zonas para sucursal %s: %v", b.ID, err)
+			}
+		}
+	}
+
 	// Services & handlers
 	modelPath := os.Getenv("ML_MODEL_PATH")
 	if modelPath == "" {
@@ -158,6 +173,7 @@ func main() {
 	shipmentSvc := service.NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, mlClient)
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
+	branchZoneSvc.SetShipmentService(shipmentSvc)
 	paymentRepo := repository.NewPostgresPaymentRepository(database)
 	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
@@ -220,6 +236,7 @@ func main() {
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
+	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
 	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc)
@@ -230,6 +247,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
+	vehicleHandler.SetBranchZoneService(branchZoneSvc)
 	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
@@ -259,6 +277,7 @@ func main() {
 	routingSvc := service.NewRoutingService(routingCfgSvc, shipmentRepo, vehicleRepo, branchRepo, authRepo, routeSvc, shipmentSvc, routingPlanRepo, osrmClient)
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
+	routingSvc.SetBranchZoneService(branchZoneSvc)
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
@@ -520,6 +539,15 @@ func main() {
 	protected.POST("/zones", adminOnly, zoneHandler.Create)
 	protected.PATCH("/zones/:id", adminOnly, zoneHandler.Update)
 	protected.DELETE("/zones/:id", adminOnly, zoneHandler.Delete)
+
+	// Branch zones — read: all authenticated, move: operator/supervisor
+	protected.GET("/branches/:id/zones", authenticated, branchZoneHandler.ListZones)
+	protected.POST("/shipments/:tracking_id/move-zone", shipmentWrite, branchZoneHandler.MoveZone)
+
+	// Inspection (supervisor-only) — approve from Revision or classify lost/destroyed
+	supervisorOnly := middleware.RequireRoles(model.RoleSupervisor)
+	protected.POST("/shipments/:tracking_id/approve-revision", supervisorOnly, inspectionHandler.ApproveFromRevision)
+	protected.POST("/shipments/:tracking_id/classify", supervisorOnly, inspectionHandler.Classify)
 
 	// Routing — operativo (operator + supervisor restringido por sucursal en handler); config admin-only.
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
