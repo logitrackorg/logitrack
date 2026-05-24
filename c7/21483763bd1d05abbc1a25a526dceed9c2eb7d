@@ -1,0 +1,161 @@
+logitrack_web/src/components/ui/MapView.tsx
+  ai_agent 57,516-518
+logitrack_core/internal/service/route_test.go
+  ai_agent 87
+logitrack_web/src/pages/BranchList.tsx
+  ai_agent 169,184-186,335,483-490
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  ai_agent 7,22,49,53-54,118-145,176,211-216,346-362,364-365,367-368,394-404,568-644
+logitrack_web/src/pages/OperatorTripReception.tsx
+  ai_agent 31-33,118-133,191-272
+logitrack_core/internal/service/routing_test.go
+  s_0c1474516137b1::t_6ba638e9043311 434,436-441,443-444,455-483,485,580-581,588,590,595,603-604,610-619
+logitrack_web/src/api/chatbot.ts
+  ai_agent 1-74
+logitrack_web/src/api/systemConfig.ts
+  ai_agent 18-19
+logitrack_core/internal/repository/shipment.go
+  ai_agent 43-48,86-94,166-202
+logitrack_core/internal/model/system_config.go
+  ai_agent 11-13,21
+logitrack_web/src/types/chatbot.ts
+  ai_agent 1-102
+logitrack_web/src/pages/SystemConfig.tsx
+  ai_agent 145-146,368-425
+CLAUDE.md
+  ai_agent 285,294,302,306-308,310-319,321,323,330-346,355-359,495-497,499
+logitrack_core/internal/service/notification.go
+  ai_agent 159-199,441
+logitrack_core/internal/repository/shipment_es.go
+  ai_agent 4,103-108,431-477,483-659
+logitrack_web/src/pages/NotificationsPage.tsx
+  ai_agent 3,36,48,162-166,330-331,337
+logitrack_core/internal/model/fatigue_config.go
+  ai_agent 31-36
+logitrack_core/internal/repository/postgres_branch.go
+  ai_agent 34,45,51,86-88,92,149-150,154,185-186,189
+logitrack_core/internal/model/branch.go
+  ai_agent 22,49,62
+logitrack_web/src/components/ui/NextStopCard.tsx
+  ai_agent 1,22,33,103-111
+logitrack_core/data/fatigue_audit_logs.json
+  ai_agent 1-26
+logitrack_core/internal/projection/shipment.go
+  ai_agent 135-210
+logitrack_web/src/pages/DriverRoute.tsx
+  ai_agent 6,16,31,53-55,60,64-65,70-86,100,104-105,108-113,115-116,118-119,123-131,147,170,179-202,240,268-269,435-441,470,473,491-493,519-529,575,578,584,587,590,592,594,600-601,605,616-621,623-626,629,673-678,734-750,752-753,755-756,758,831,837,915,921,933-1019,1025-1043,1075-1124,1132,1139-1152,1157-1159
+logitrack_web/src/pages/PublicTracking.css
+  ai_agent 738-775
+logitrack_core/internal/service/route.go
+  ai_agent 46-47,149,247-258
+logitrack_core/internal/model/event_helpers.go
+  ai_agent 1-163
+logitrack_web/src/pages/FatigueConfig.tsx
+  ai_agent 190-220
+logitrack_core/data/checkins.json
+  ai_agent 1-160
+logitrack_core/internal/service/dispatch_volume.go
+  ai_agent 1-371
+logitrack_core/internal/seed/branch_seed.go
+  ai_agent 13-15,17-18,20
+logitrack_core/internal/model/notification.go
+  ai_agent 8-17
+logitrack_web/src/components/chatbot/ChatMessage.tsx
+  ai_agent 1-40
+logitrack_core/internal/db/migrate.go
+  ai_agent 63,131-140,438-454
+logitrack_core/cmd/server/main.go
+  ai_agent 12,17,195-220,225,265-282,294-310,445,448,553
+logitrack_core/internal/repository/postgres_event_store.go
+  ai_agent 242-258,314-322
+logitrack_core/internal/email/email.go
+  ai_agent 33-50,118-221
+logitrack_core/internal/service/routing_multihop_test.go
+  ai_agent 93,179,231,272,279-413
+logitrack_core/internal/messaging/service.go
+  ai_agent 1-551
+logitrack_core/internal/email/templates.go
+  ai_agent 148-281,293-377,379-386,445-469,520-659
+logitrack_core/internal/service/inter_branch_trip.go
+  ai_agent 178-181,443-450,538-541
+logitrack_core/internal/service/dispatch_volume_test.go
+  ai_agent 1-637
+logitrack_web/src/api/branches.ts
+  ai_agent 20,43,53
+logitrack_core/go.mod
+  ai_agent 9,12
+logitrack_core/internal/handler/chatbot_handler.go
+  ai_agent 1-407
+logitrack_core/internal/service/routing.go
+  ai_agent 47-50,85-89,150-152,1740-1745,1749-1753,1870-1917,2138-2139,2538,3422-3428
+logitrack_core/internal/service/branch.go
+  ai_agent 97,164
+logitrack_web/src/components/ui/MapView.css
+  ai_agent 520-529
+logitrack_core/internal/projection/postgres_shipment.go
+  ai_agent 98-101,254-342,398-400,428-431,442-443,466-467,482-483,531-533,691,703,755-761,787,799,848-855,861-862,938-947
+logitrack_core/internal/handler/driver.go
+  ai_agent 139-153,573,575-579,605,607,616-633,637-642,645-646,657-691
+logitrack_web/src/components/NotificationBell.tsx
+  ai_agent 3,20-29,53,261-262
+logitrack_web/src/api/driver.ts
+  ai_agent 93,103-104,141,145-152
+logitrack_core/internal/repository/dispatch_volume.go
+  ai_agent 1-105
+logitrack_core/internal/model/public_shipment.go
+  ai_agent 49-61,115,117-121,123
+logitrack_core/internal/repository/system_config.go
+  ai_agent 25,27,37-40,45
+logitrack_web/package.json
+  ai_agent 42
+logitrack_web/pnpm-lock.yaml
+  ai_agent 55,71,76-77,86,113,1598-1600,3800,3802-3803,3805,3807,3811,3817,3821,3823,4795,4800,4845-4848,4956,4964,5894,5896,6315,6336,6568,6577
+logitrack_core/internal/model/domain_event.go
+  ai_agent 34-36,68-73,130-163
+logitrack_web/src/components/KssCheckIn.tsx
+  ai_agent 38-39,42,53-55,91-96,129-140
+logitrack_web/src/components/chatbot/chatbot.css
+  ai_agent 1-340
+logitrack_web/src/utils/driverActions.ts
+  ai_agent 134-143
+logitrack_web/src/pages/NewShipment.tsx
+  ai_agent 56-77,322,355,503-509,567-573
+logitrack_core/internal/service/system_config.go
+  ai_agent 32-34
+logitrack_web/src/api/shipments.ts
+  ai_agent 112,119-125,129-130,136-140,219
+logitrack_web/src/pages/RoutingConfig.tsx
+  ai_agent 38-39,45-59
+logitrack_core/internal/service/shipment_test.go
+  ai_agent 697,704,706,708-711,713-719,865-866,1644-2071
+logitrack_core/internal/service/shipment.go
+  ai_agent 124-161,171-179,182-191,198-199,202-203,209,213,216-229,353-395,518-523,781-785,961-969,1010-1096,1121-1141,1181,1574
+logitrack_web/src/components/chatbot/ChatInput.tsx
+  ai_agent 1-38
+logitrack_web/src/components/chatbot/ChatbotWidget.tsx
+  ai_agent 1-556
+logitrack_core/internal/service/routing_stale_test.go
+  ai_agent 84-95
+logitrack_core/internal/model/shipment.go
+  ai_agent 25-28,111-114,127-133,307,331-456
+logitrack_web/src/api/fatigueConfig.ts
+  ai_agent 33-35
+logitrack_web/src/components/PVTCheckIn.tsx
+  ai_agent 5,20,140,222,232,338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "c721483763bd1d05abbc1a25a526dceed9c2eb7d",
+  "prompts": {},
+  "sessions": {
+    "s_0c1474516137b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "974d4412-0470-4387-a814-d999049a182b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null
+    }
+  }
+}
