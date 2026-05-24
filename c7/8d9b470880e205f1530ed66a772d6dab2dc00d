@@ -1,0 +1,24 @@
+logitrack_web/src/components/StatusBadge.tsx
+  s_589bb18cb0d406::t_9a96b9aa1a2313 3
+logitrack_web/src/dom-to-image-more.d.ts
+  s_589bb18cb0d406::t_02edd86f6ceb74 1
+logitrack_web/src/utils/dashboard.tsx
+  s_589bb18cb0d406::t_24462f34dd21a2 1
+  s_589bb18cb0d406::t_68bad0c8cb5774 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "c78d9b470880e205f1530ed66a772d6dab2dc00d",
+  "prompts": {},
+  "sessions": {
+    "s_589bb18cb0d406": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c3c9a11-e6f1-41db-888d-d018a1e3f8f9",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
