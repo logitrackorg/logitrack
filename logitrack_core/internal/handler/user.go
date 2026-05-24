@@ -32,6 +32,16 @@ func NewUserHandler(authRepo repository.AuthRepository, userSvc *service.UserSer
 // @Router       /users/drivers [get]
 func (h *UserHandler) ListDrivers(c *gin.Context) {
 	drivers := h.authRepo.ListByRole(model.RoleDriver, c.Query("branch_id"))
+	// Filtrar por driver_type si el caller lo especifica (ej: "last_mile", "inter_sucursal").
+	if dt := c.Query("driver_type"); dt != "" {
+		filtered := drivers[:0]
+		for _, d := range drivers {
+			if string(d.DriverType) == dt {
+				filtered = append(filtered, d)
+			}
+		}
+		drivers = filtered
+	}
 	c.JSON(http.StatusOK, gin.H{"drivers": drivers})
 }
 

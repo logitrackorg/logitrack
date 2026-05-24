@@ -827,7 +827,7 @@ export function ShipmentDetail() {
                   } else {
                     setNewStatus(s);
                     if (s === "out_for_delivery") {
-                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id).then(setDrivers);
+                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id, "last_mile").then(setDrivers);
                     }
                   }
                 }}
