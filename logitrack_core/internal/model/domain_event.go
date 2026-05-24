@@ -31,6 +31,9 @@ const (
 	EventPaymentRequested    = "payment_requested"
 	EventPaymentConfirmed    = "payment_confirmed"
 	EventReturnedToDraft     = "returned_to_draft"
+	EventPickupRequested      = "pickup_requested"       
+	EventDeliveryRescheduled  = "delivery_rescheduled"   
+	EventCancelledByRecipient = "cancelled_by_recipient" 
 )
 
 // ReturnETAExtraDays is added to the estimated_delivery_at when a shipment
@@ -62,11 +65,12 @@ type DraftConfirmedPayload struct {
 }
 
 type StatusChangedPayload struct {
-	FromStatus Status
-	ToStatus   Status
-	Location   string // already resolved to branch ID
-	Notes      string
-	DriverID   string
+	FromStatus          Status
+	ToStatus            Status
+	Location            string // already resolved to branch ID
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool // delivery_failed: recipient explicitly refused
 }
 
 type ShipmentCorrectedPayload struct {
@@ -118,3 +122,37 @@ type ShipmentETAExtendedPayload struct {
 	AddedDays int
 	Reason    string
 }
+
+
+// ==========================================
+// CHATBOT EVENT PAYLOADS
+// ==========================================
+
+// PickupRequestedPayload registra cuando el destinatario solicita retiro en sucursal vía chatbot
+type PickupRequestedPayload struct {
+	RecipientDNI   string         `json:"recipient_dni"`
+	PreviousMethod DeliveryMethod `json:"previous_method"`
+	FinalBranchID  string         `json:"final_branch_id"`
+	RequestedVia   string         `json:"requested_via"` // "chatbot"
+}
+
+// DeliveryRescheduledPayload registra cuando el destinatario reprograma la entrega vía chatbot
+type DeliveryRescheduledPayload struct {
+	RecipientDNI     string     `json:"recipient_dni"`
+	OldDeliveryDate  *time.Time `json:"old_delivery_date"`
+	NewDeliveryDate  time.Time  `json:"new_delivery_date"`
+	OriginalDate     *time.Time `json:"original_date"`
+	RescheduleCount  int        `json:"reschedule_count"`
+	DaysFromOriginal int        `json:"days_from_original"`
+	RequestedVia     string     `json:"requested_via"` // "chatbot"
+	CurrentLocation  *EventLocation `json:"current_location,omitempty"`
+}
+
+// CancelledByRecipientPayload registra cuando el destinatario cancela el envío vía chatbot
+type CancelledByRecipientPayload struct {
+	RecipientDNI string `json:"recipient_dni"`
+	FromStatus   Status `json:"from_status"`
+	Reason       string `json:"reason"`
+	RequestedVia string `json:"requested_via"` // "chatbot"
+}
+

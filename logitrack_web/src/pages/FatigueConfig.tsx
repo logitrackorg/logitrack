@@ -187,6 +187,37 @@ export function FatigueConfig() {
         icon={<Brain className="w-5 h-5" />}
       />
 
+      {/* ── Hora de inicio del día (daily_reset_hour) ─────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Hora de inicio del día para check-in</CardTitle>
+          <CardDescription>
+            Define a partir de qué hora (ART, 0–23) empieza un nuevo "día lógico"
+            para el gate de check-in. Con valor 0 el día comienza a medianoche
+            (comportamiento por defecto). Con valor 6, un check-in hecho a las 05:00
+            ya no es válido una vez que pasan las 06:00.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldRow
+            label="Hora de reset diario (daily_reset_hour)"
+            hint="Entero de 0 a 23. 0 = medianoche (default). Ejemplo: 6 = los check-ins se renuevan a las 6 AM."
+          >
+            <input
+              type="number"
+              min={0}
+              max={23}
+              step={1}
+              value={draft.daily_reset_hour ?? 0}
+              onChange={(e) =>
+                setDraft({ ...draft, daily_reset_hour: Math.min(23, Math.max(0, parseInt(e.target.value, 10) || 0)) })
+              }
+              className={inputClass}
+            />
+          </FieldRow>
+        </CardContent>
+      </Card>
+
       {/* ── Umbrales de riesgo ─────────────────────────────────────────── */}
       <Card>
         <CardHeader>

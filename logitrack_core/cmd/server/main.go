@@ -9,9 +9,11 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
+	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/mercadopago"
@@ -126,10 +128,6 @@ func main() {
 	} else {
 		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
 	}
-	if os.Getenv("MP_SIMULATE_ENABLED") == "true" {
-		log.Println("[mercadopago] modo simulación HABILITADO (MP_SIMULATE_ENABLED=true)")
-	}
-
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	// También se dispara el chequeo de SLA en riesgo/vencido para que las
@@ -193,10 +191,37 @@ func main() {
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
 	}
+
+	// Mensajería — WhatsApp (Twilio) con fallback a email para última milla y retiro en sucursal.
+	messagingSvc := messaging.New(
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		os.Getenv("TRACK_BASE_URL"),
+		emailSvc,
+		routingCfgSvc,
+	)
+	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
+	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
+	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
+	shipmentSvc.SetMessagingService(messagingSvc)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)  // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)    // WhatsApp primero, email fallback (CA-01/CA-02)
+	shipmentSvc.SetRejectedService(messagingSvc)             // WhatsApp primero, email fallback (LOGITRACK-429)
+	shipmentSvc.SetDeliveryFailedService(messagingSvc)       // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
+	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
+		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
+	} else {
+		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
+	}
+
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -238,6 +263,24 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
+	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
+	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
+	dispatchVolumeChecker := service.NewDispatchVolumeChecker(
+		shipmentRepo, vehicleRepo, branchRepo, dispatchVolumeRepo, notifRepo, routingCfgSvc,
+	)
+	dispatchVolumeChecker.SetHub(notifHub)
+	shipmentSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	routingSvc.SetDispatchVolumeService(dispatchVolumeChecker)
+	vehicleHandler.SetDispatchVolumeService(dispatchVolumeChecker)
+
+	// Evaluar volumen existente en la DB al arrancar (envíos cargados vía seed o
+	// acumulados antes del deploy de LOGITRACK-409).
+	go func() {
+		for _, b := range branchRepo.List() {
+			dispatchVolumeChecker.Check(b.ID)
+		}
+	}()
+
 	// Branch graph: necesario para multi-hop (addMultiHopStops, addCrossBranchPickups,
 	// consolidateCrossBranchDispatches). El seed inicializa aristas auto-derivadas
 	// del grafo de sucursales.
@@ -249,12 +292,24 @@ func main() {
 
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
-	// Generar plan global al arrancar para que el plan del día esté disponible
-	// desde el primer request, sin esperar el cron de las 08:00.
-	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
-		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	// Generar plan global al arrancar solo si no existe uno para hoy,
+	// para no sobreescribir un plan ya aplicado entre reinicios del servidor.
+	{
+		local := clock.Now().In(clock.LocalTZ)
+		planDate := local.Format("2006-01-02")
+		existing, err := routingPlanRepo.GetByDate(planDate)
+		if err != nil {
+			log.Fatalf("no se pudo verificar plan existente: %v", err)
+		}
+		if existing == nil {
+			if _, err := routingSvc.GenerateAndPersistGlobalPlan(context.Background()); err != nil {
+				log.Fatalf("no se pudo generar el plan inicial: %v", err)
+			}
+			log.Println("[startup] plan global del día generado correctamente")
+		} else {
+			log.Printf("[startup] plan del día ya existe (status: %s), no se regenera", existing.Status)
+		}
 	}
-	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)
@@ -340,7 +395,7 @@ func main() {
 	protected.POST("/shipments/:tracking_id/back-to-draft", shipmentWrite, paymentHandler.BackToDraft)
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
 	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
-	protected.POST("/shipments/:tracking_id/simulate-payment", shipmentWrite, paymentHandler.SimulatePayment)
+	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
@@ -386,8 +441,10 @@ func main() {
 	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)         // US6: PVT mini-game
 	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)    // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
+	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
+	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
@@ -490,6 +547,7 @@ func main() {
 	publicAPI.GET("/stats", shipmentHandler.PublicStats)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
+	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

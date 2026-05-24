@@ -120,7 +120,10 @@ func (s *postgresEventStore) applyPaymentConfirmed(event model.DomainEvent) erro
 
 func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent, error) {
 	rows, err := s.db.Query(`
-		SELECT id, tracking_id, event_type, payload, changed_by, timestamp, version
+		SELECT 
+			id, tracking_id, event_type, payload, changed_by, timestamp, version,
+			current_location_type, current_location_code, current_location_name, current_location_status,
+			rescheduled_date, via
 		FROM events
 		WHERE tracking_id = $1
 		ORDER BY version ASC`,
@@ -137,15 +140,51 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 			e           model.DomainEvent
 			payloadJSON []byte
 			ts          time.Time
+			// ✅ NUEVOS CAMPOS
+			currentLocType   sql.NullString
+			currentLocCode   sql.NullString
+			currentLocName   sql.NullString
+			currentLocStatus sql.NullString
+			rescheduledDate  sql.NullTime
+			via              sql.NullString
 		)
-		if err := rows.Scan(&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version); err != nil {
+		
+		if err := rows.Scan(
+			&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version,
+			&currentLocType, &currentLocCode, &currentLocName, &currentLocStatus,
+			&rescheduledDate, &via,
+		); err != nil {
 			return nil, err
 		}
+		
 		e.Timestamp = ts
 		e.Payload, err = unmarshalPayload(e.EventType, payloadJSON)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal payload for event %s: %w", e.ID, err)
 		}
+		
+		// ✅ NUEVO: Si es un evento de reprogramación, agregar los campos del evento
+		if e.EventType == model.EventDeliveryRescheduled {
+			if payload, ok := e.Payload.(model.DeliveryRescheduledPayload); ok {
+				// Si hay ubicación en las columnas, usarla (sobrescribe la del payload)
+				if currentLocType.Valid {
+					payload.CurrentLocation = &model.EventLocation{
+						Type:       currentLocType.String,
+						BranchCode: currentLocCode.String,
+						BranchName: currentLocName.String,
+						Status:     currentLocStatus.String,
+					}
+				}
+				if rescheduledDate.Valid {
+					payload.NewDeliveryDate = rescheduledDate.Time
+				}
+				if via.Valid {
+					payload.RequestedVia = via.String
+				}
+				e.Payload = payload
+			}
+		}
+		
 		events = append(events, e)
 	}
 	if len(events) == 0 {
@@ -156,7 +195,10 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 
 func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 	rows, err := s.db.Query(`
-		SELECT id, tracking_id, event_type, payload, changed_by, timestamp, version
+		SELECT 
+			id, tracking_id, event_type, payload, changed_by, timestamp, version,
+			current_location_type, current_location_code, current_location_name, current_location_status,
+			rescheduled_date, via
 		FROM events
 		ORDER BY timestamp ASC, version ASC`,
 	)
@@ -171,15 +213,49 @@ func (s *postgresEventStore) LoadAll() ([]model.DomainEvent, error) {
 			e           model.DomainEvent
 			payloadJSON []byte
 			ts          time.Time
+			currentLocType   sql.NullString
+			currentLocCode   sql.NullString
+			currentLocName   sql.NullString
+			currentLocStatus sql.NullString
+			rescheduledDate  sql.NullTime
+			via              sql.NullString
 		)
-		if err := rows.Scan(&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version); err != nil {
+		
+		if err := rows.Scan(
+			&e.ID, &e.TrackingID, &e.EventType, &payloadJSON, &e.ChangedBy, &ts, &e.Version,
+			&currentLocType, &currentLocCode, &currentLocName, &currentLocStatus,
+			&rescheduledDate, &via,
+		); err != nil {
 			return nil, err
 		}
+		
 		e.Timestamp = ts
 		e.Payload, err = unmarshalPayload(e.EventType, payloadJSON)
 		if err != nil {
 			return nil, fmt.Errorf("unmarshal payload for event %s: %w", e.ID, err)
 		}
+		
+		// ✅ NUEVO: Enriquecer eventos de reprogramación
+		if e.EventType == model.EventDeliveryRescheduled {
+			if payload, ok := e.Payload.(model.DeliveryRescheduledPayload); ok {
+				if currentLocType.Valid {
+					payload.CurrentLocation = &model.EventLocation{
+						Type:       currentLocType.String,
+						BranchCode: currentLocCode.String,
+						BranchName: currentLocName.String,
+						Status:     currentLocStatus.String,
+					}
+				}
+				if rescheduledDate.Valid {
+					payload.NewDeliveryDate = rescheduledDate.Time
+				}
+				if via.Valid {
+					payload.RequestedVia = via.String
+				}
+				e.Payload = payload
+			}
+		}
+		
 		events = append(events, e)
 	}
 	return events, rows.Err()
@@ -231,6 +307,15 @@ func unmarshalPayload(eventType string, data []byte) (interface{}, error) {
 		return p, json.Unmarshal(data, &p)
 	case model.EventReturnedToDraft:
 		var p model.ReturnedToDraftPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventPickupRequested:
+		var p model.PickupRequestedPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventDeliveryRescheduled:
+		var p model.DeliveryRescheduledPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventCancelledByRecipient:
+		var p model.CancelledByRecipientPayload
 		return p, json.Unmarshal(data, &p)
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", eventType)

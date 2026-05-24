@@ -17,6 +17,7 @@ export interface Branch {
   province: string;
   status: "activo" | "inactivo" | "fuera_de_servicio";
   max_capacity: number;
+  hours?: string;
   latitude?: number;
   longitude?: number;
   created_at: string;
@@ -39,6 +40,7 @@ export interface CreateBranchPayload {
   province: string;
   postal_code: string;
   max_capacity?: number;
+  hours?: string;
 }
 
 export interface UpdateBranchPayload {
@@ -48,6 +50,7 @@ export interface UpdateBranchPayload {
   province: string;
   postal_code: string;
   max_capacity?: number;
+  hours?: string;
 }
 
 export const branchApi = {

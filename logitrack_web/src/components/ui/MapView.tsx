@@ -54,6 +54,7 @@ interface MapViewProps {
     onExit?: () => void;
     speedMultiplier?: number;
     onCycleSpeed?: () => void;
+    onFastForwardTime?: () => void;
   };
   zones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
@@ -510,6 +511,11 @@ export function MapView({
               {simulationControls.onCycleSpeed && (
                 <button onClick={simulationControls.onCycleSpeed} className="sim-btn" title="Cambiar velocidad de simulación">
                   ⚡ x{simulationControls.speedMultiplier ?? 1}
+                </button>
+              )}
+              {simulationControls.onFastForwardTime && (
+                <button onClick={simulationControls.onFastForwardTime} className="sim-btn" title="Simular paso de 2 horas (test de fatiga)">
+                  ⏩ +2h
                 </button>
               )}
               {simulationControls.onExit && (

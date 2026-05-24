@@ -35,9 +35,11 @@ function kssBandLabel(v: number): { text: string; cls: string } {
 interface Props {
   driverId: string;
   onDone: () => void;
+  /** Cantidad de misfires que dispararon este check-in. Se muestra en el toast de skip. */
+  misfireCount?: number;
 }
 
-export function KssCheckIn({ driverId, onDone }: Props) {
+export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
   const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(4);
@@ -47,6 +49,9 @@ export function KssCheckIn({ driverId, onDone }: Props) {
   const [showInfo, setShowInfo] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [skipping, setSkipping] = useState(false);
+
+  // Toast post-skip con conteo de misfires.
+  const [showSkipToast, setShowSkipToast] = useState(false);
 
   // Toast que aparece cuando el chofer intenta retroceder con el botón atrás.
   const [showBackWarning, setShowBackWarning] = useState(false);
@@ -83,7 +88,12 @@ export function KssCheckIn({ driverId, onDone }: Props) {
     } finally {
       setSkipping(false);
       setShowSkipConfirm(false);
-      onDone();
+      // Mostrar toast informativo con el conteo de misfires, luego cerrar.
+      setShowSkipToast(true);
+      setTimeout(() => {
+        setShowSkipToast(false);
+        onDone();
+      }, 3000);
     }
   };
 
@@ -115,6 +125,19 @@ export function KssCheckIn({ driverId, onDone }: Props) {
 
   return (
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
+
+      {/* ── Toast: check-in saltado + conteo de misfires ────────────────── */}
+      {showSkipToast && (
+        <div className="absolute top-4 inset-x-4 z-[5000] flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/20 border border-amber-500/40 shadow-lg backdrop-blur-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300 leading-snug flex-1">
+            Check-in omitido.{" "}
+            {misfireCount > 0
+              ? <>Registraste <strong className="text-amber-200">{misfireCount}</strong> {misfireCount === 1 ? "toque erróneo" : "toques erróneos"} en esta entrega.</>
+              : "El salto quedó registrado en tu historial."}
+          </p>
+        </div>
+      )}
 
       {/* ── Toast: intento de retroceso ──────────────────────────────────── */}
       {showBackWarning && (

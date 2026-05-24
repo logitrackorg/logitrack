@@ -156,6 +156,47 @@ func (s *NotificationService) NotifyDestinationArrival(shipment model.Shipment, 
 	}
 }
 
+// NotifyChatbotPickupRequested notifica a operadores y supervisores de la sucursal destino
+// cuando el destinatario cambia el método de entrega a retiro en sucursal vía chatbot.
+func (s *NotificationService) NotifyChatbotPickupRequested(shipment model.Shipment) {
+	if shipment.FinalBranchID == "" {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(shipment.FinalBranchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyChatbotPickupRequested GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "Cambio de método de entrega"
+	body := fmt.Sprintf("%s · El destinatario cambió el método de entrega a retiro en sucursal vía chatbot", shipment.TrackingID)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationChatbotPickupRequested,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyChatbotPickupRequested Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // NotifySLARisk crea una notificación de SLA en riesgo para los operadores y supervisores
 // de la sucursal del envío. Si no hay ninguno, se notifica a los administradores (CA-02).
 // La deduplicación por ciclo se controla externamente mediante shipment.SLANotifiedAt (CA-04).
@@ -184,8 +225,6 @@ func (s *NotificationService) NotifySLARisk(shipment model.Shipment, branchID st
 	}
 
 	title := "⚠️ SLA en riesgo"
-	// El ETA ISO se incrusta al final del body para que el frontend calcule el
-	// countdown en tiempo real. Formato: "TID · origen → destino · eta:RFC3339"
 	body := fmt.Sprintf("%s · %s → %s",
 		shipment.TrackingID,
 		shipment.Sender.Address.City,
@@ -370,7 +409,6 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, driverFullName string, score int) {
-	// Dedup: skip if an alert for the same driver was already sent within the last hour.
 	since := clock.Now().Add(-1 * time.Hour)
 	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
 	if err != nil {
@@ -400,7 +438,7 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, drive
 			Type:       model.NotificationFatigueAlert,
 			Title:      title,
 			Body:       body,
-			ResourceID: driverUsername, // usado para dedup y navegación en el frontend
+			ResourceID: driverUsername,
 			CreatedAt:  now,
 		}
 		if err := s.repo.Create(n); err != nil {

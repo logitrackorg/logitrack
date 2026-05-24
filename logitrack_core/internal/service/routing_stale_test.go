@@ -90,6 +90,18 @@ func (f *fakeShipmentRepo) StatsDetail(statusFilter string, dateFrom, dateTo *ti
 func (f *fakeShipmentRepo) SetConfirmationEmailSent(trackingID string) (bool, error) {
 	return true, nil
 }
+func (f *fakeShipmentRepo) AuthenticateRecipient(cmd repository.AuthenticateRecipientCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) RequestPickup(cmd repository.RequestPickupCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) RescheduleDelivery(cmd repository.RescheduleDeliveryCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) CancelByRecipient(cmd repository.CancelByRecipientCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
 
 // newMinimalRoutingService arma un RoutingService con solo lo necesario para stale-replan.
 func newMinimalRoutingService(shipments []model.Shipment, edges []model.BranchEdge) *RoutingService {
