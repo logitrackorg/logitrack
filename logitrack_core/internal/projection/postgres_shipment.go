@@ -396,8 +396,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency,
-			rejected_by_recipient
-			price, price_breakdown, price_currency, chatbot_metadata
+			rejected_by_recipient, chatbot_metadata
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
@@ -428,8 +427,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
 			price_currency        = EXCLUDED.price_currency,
 			rejected_by_recipient = EXCLUDED.rejected_by_recipient`,
-			chatbot_metadata      = EXCLUDED.chatbot_metadata,
-			price_currency        = EXCLUDED.price_currency`,
+			
 			
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
@@ -440,10 +438,10 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.HasIncident, string(s.IncidentType),
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
 		s.FinalBranchID, string(deliveryMethod),
+		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
-		s.RejectedByRecipient,
-		serializeChatbotMetadata(s.ChatbotMetadata),
-	)
+		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
+)
 	return err
 }
 
@@ -467,8 +465,7 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient
-		       price, price_breakdown, price_currency, reserved_for_trip_id, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -484,8 +481,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient
-		       price, price_breakdown, price_currency, reserved_for_trip_id, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -693,7 +689,6 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		reservedForTripID    sql.NullString
 		slaNotifiedAt        *time.Time
 		slaExpiredNotifiedAt *time.Time
-		reservedForTripID   sql.NullString
 		chatbotMetadataJSON []byte 
 	)
 	err := row.Scan(
@@ -706,9 +701,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
-		&s.RejectedByRecipient,
-		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
-		&chatbotMetadataJSON,
+		&s.RejectedByRecipient,	&chatbotMetadataJSON,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -792,7 +785,6 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			reservedForTripID    sql.NullString
 			slaNotifiedAt        *time.Time
 			slaExpiredNotifiedAt *time.Time
-			reservedForTripID   sql.NullString
 			chatbotMetadataJSON []byte
 		)
 		err := rows.Scan(
@@ -805,8 +797,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
-			&s.RejectedByRecipient,
-			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &chatbotMetadataJSON,
+			&s.RejectedByRecipient, &chatbotMetadataJSON,
 		)
 		if err != nil {
 			return nil, err
@@ -944,6 +935,7 @@ func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string)
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
 // serializeChatbotMetadata serializa ChatbotMetadata a JSON
 func serializeChatbotMetadata(metadata *model.ChatbotMetadata) interface{} {
 	if metadata == nil {
