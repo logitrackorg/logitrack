@@ -96,6 +96,13 @@
         "reaction_time_ms": 1137,
         "misfires": 0,
         "recorded_at": "2026-05-24T11:32:13.726353-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00003",
+        "action": "entregado",
+        "reaction_time_ms": 692,
+        "misfires": 0,
+        "recorded_at": "2026-05-24T11:36:50.018885-03:00"
       }
     ]
   },
