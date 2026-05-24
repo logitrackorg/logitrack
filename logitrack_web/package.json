@@ -37,7 +37,12 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "msw"
-    ]
+    ],
+    "overrides": {
+      "tldts": "7.0.30",
+      "tldts-core": "7.0.30",
+      "@dotenvx/dotenvx": "1.65.0"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
