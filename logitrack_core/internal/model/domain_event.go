@@ -144,6 +144,7 @@ type DeliveryRescheduledPayload struct {
 	RescheduleCount  int        `json:"reschedule_count"`
 	DaysFromOriginal int        `json:"days_from_original"`
 	RequestedVia     string     `json:"requested_via"` // "chatbot"
+	CurrentLocation  *EventLocation `json:"current_location,omitempty"`
 }
 
 // CancelledByRecipientPayload registra cuando el destinatario cancela el envío vía chatbot

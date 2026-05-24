@@ -42,6 +42,28 @@ interface EventDescription {
 }
 
 function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescription {
+  
+  if (ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date) {
+    const locationText = ev.current_location.type === "DESTINATION_BRANCH"
+      ? "En Sucursal Destino"
+      : ev.current_location.type === "ORIGIN_BRANCH"
+      ? `En Sucursal Origen (${ev.current_location.branch_code})`
+      : "En tránsito";
+    
+    const formattedDate = new Date(ev.rescheduled_date).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    
+    return {
+      icon: "📍",
+      title: `${locationText} - ${ev.current_location.status}`,
+      subtitle: `Entrega reprogramada para el ${formattedDate}`
+    };
+  }
+
+  
   const loc = ev.location;
   const branch = loc
     ? (branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc))

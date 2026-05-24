@@ -287,6 +287,7 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		newStatus = string(model.StatusRedeliveryScheduled)
 	}
 	
+	// ✅ ACTUALIZAR: Guardar también en la tabla de eventos con ubicación
 	_, err = p.db.Exec(`
 		UPDATE shipments 
 		SET estimated_delivery_at = $1, 
@@ -300,6 +301,36 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		event.Timestamp,
 		event.TrackingID,
 	)
+	
+	// ✅ NUEVO: Guardar evento con ubicación en la tabla events
+	if err == nil && payload.CurrentLocation != nil {
+		var locationTypeStr, locationCodeStr, locationNameStr, locationStatusStr interface{}
+		locationTypeStr = payload.CurrentLocation.Type
+		locationCodeStr = payload.CurrentLocation.BranchCode
+		locationNameStr = payload.CurrentLocation.BranchName
+		locationStatusStr = payload.CurrentLocation.Status
+		
+		// Actualizar evento en la tabla events
+		_, err = p.db.Exec(`
+			UPDATE events 
+			SET current_location_type = $1,
+			    current_location_code = $2,
+			    current_location_name = $3,
+			    current_location_status = $4,
+			    rescheduled_date = $5,
+			    via = $6
+			WHERE tracking_id = $7 AND id = $8`,
+			locationTypeStr,
+			locationCodeStr,
+			locationNameStr,
+			locationStatusStr,
+			payload.NewDeliveryDate,
+			payload.RequestedVia,
+			event.TrackingID,
+			event.ID,
+		)
+	}
+	
 	return err
 
 	case model.EventCancelledByRecipient:

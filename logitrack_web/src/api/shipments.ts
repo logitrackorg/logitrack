@@ -115,16 +115,28 @@ export interface Shipment {
   reserved_for_trip_id?: string;
 }
 
+export interface EventLocation {
+  type: 'ORIGIN_BRANCH' | 'DESTINATION_BRANCH' | 'IN_TRANSIT';
+  branch_code: string;
+  branch_name: string;
+  status: string;
+}
+
 export interface ShipmentEvent {
   id: string;
   tracking_id: string;
-  event_type?: string; // "status_change" | "edited"
-  from_status?: ShipmentStatus; // absent for initial creation events
+  event_type?: string; // "status_change" | "edited" | "rescheduled"
+  from_status?: ShipmentStatus;
   to_status: ShipmentStatus;
   changed_by: string;
   location?: string;
   notes?: string;
   timestamp: string;
+  
+  // ✅ NUEVOS CAMPOS para eventos de reprogramación
+  current_location?: EventLocation;
+  rescheduled_date?: string;
+  via?: string;
 }
 
 export interface Stats {

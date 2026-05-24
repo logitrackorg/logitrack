@@ -947,27 +947,54 @@ export function ShipmentDetail() {
                 background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
               }} />
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600 }}>
-                    {ev.event_type === "edited"
-                      ? STATUS_LABELS[ev.to_status]
-                      : ev.from_status
-                        ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
-                        : STATUS_LABELS[ev.to_status]}
-                  </span>
-                  <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-                </div>
-                <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                  <span>por <strong>{ev.changed_by || "sistema"}</strong></span>
-                  {ev.location && (() => {
-                    const b = branches.find(x => x.id === ev.location);
-                    return (
-                      <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
-                    );
-                  })()}
-                </div>
-                {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
-              </div>
+  {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+        <span style={{ fontWeight: 600 }}>
+          {ev.current_location.type === "DESTINATION_BRANCH"
+            ? "En Sucursal Destino"
+            : ev.current_location.type === "ORIGIN_BRANCH"
+            ? `En Sucursal Origen (${ev.current_location.branch_code})`
+            : "En tránsito"} — {ev.current_location.status}
+        </span>
+        <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+      </div>
+      <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+        <span>por <strong>{ev.changed_by?.startsWith('chatbot-recipient') ? 'chatbot-Destinatario' : (ev.changed_by || "sistema")}</strong></span>
+      </div>
+      <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
+        Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString('es-AR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        })}
+      </p>
+    </>
+  ) : (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+        <span style={{ fontWeight: 600 }}>
+          {ev.event_type === "edited"
+            ? STATUS_LABELS[ev.to_status]
+            : ev.from_status
+              ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
+              : STATUS_LABELS[ev.to_status]}
+        </span>
+        <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+      </div>
+      <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+         <span>por <strong>{ev.changed_by?.startsWith('chatbot-recipient') ? 'chatbot-Destinatario' : (ev.changed_by || "sistema")}</strong></span>
+        {ev.location && (() => {
+          const b = branches.find(x => x.id === ev.location);
+          return (
+            <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+          );
+        })()}
+      </div>
+      {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+    </>
+  )}
+</div>
             </div>
           ))}
         </div>

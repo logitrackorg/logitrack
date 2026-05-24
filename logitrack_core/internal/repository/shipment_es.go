@@ -421,14 +421,24 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 		}, true
 
 	case model.EventDeliveryRescheduled:
-		payload := de.Payload.(model.DeliveryRescheduledPayload)
-		return model.ShipmentEvent{
-			ID:         de.ID,
-			TrackingID: de.TrackingID,
-			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Entrega reprogramada para %s vía chatbot", payload.NewDeliveryDate.Format("02/01/2006")),
-			Timestamp:  de.Timestamp,
-		}, true
+	payload := de.Payload.(model.DeliveryRescheduledPayload)
+	
+	// ✅ NUEVO: Preparar fecha de reprogramación
+	rescheduledDate := payload.NewDeliveryDate
+	
+	return model.ShipmentEvent{
+		ID:         de.ID,
+		TrackingID: de.TrackingID,
+		EventType:  "rescheduled", // ✅ NUEVO: Especificar tipo
+		ChangedBy:  de.ChangedBy,
+		Notes:      fmt.Sprintf("Entrega reprogramada para el %s", payload.NewDeliveryDate.Format("02/01/2006")),
+		Timestamp:  de.Timestamp,
+		
+		// ✅ NUEVOS CAMPOS
+		CurrentLocation: payload.CurrentLocation,
+		RescheduledDate: &rescheduledDate,
+		Via:             payload.RequestedVia,
+	}, true
 
 	case model.EventCancelledByRecipient:
 		payload := de.Payload.(model.CancelledByRecipientPayload)
@@ -526,6 +536,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	if err != nil {
 		return model.Shipment{}, err
 	}
+	
 	// Inicializar metadata si no existe
 	if shipment.ChatbotMetadata == nil {
 		shipment.InitializeChatbotMetadata()
@@ -550,15 +561,16 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 		return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
 	}
 
-	
-
 	// Calcular días desde la fecha original
 	daysFromOriginal := 0
 	if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
 		daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
 	}
 
-	// Crear evento
+	// ✅ NUEVO: Obtener ubicación actual del envío
+	currentLocation := model.GetCurrentLocation(&shipment)
+
+	// Crear evento CON UBICACIÓN
 	event := model.DomainEvent{
 		ID:         uuid.NewString(),
 		TrackingID: cmd.TrackingID,
@@ -571,6 +583,8 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 			RescheduleCount:  shipment.ChatbotMetadata.RescheduleCount + 1,
 			DaysFromOriginal: daysFromOriginal,
 			RequestedVia:     "chatbot",
+			// ✅ NUEVO: Agregar ubicación actual
+			CurrentLocation:  currentLocation,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
