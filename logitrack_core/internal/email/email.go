@@ -174,6 +174,32 @@ func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
 	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (entrega confirmada)", org.Email)
 }
 
+// SendDeliveryFailedNotification sends a failed-delivery notification email to the shipment's
+// recipient. Called on every delivery_failed transition (CA-01/CA-02).
+// When attemptsUsed < maxAttempts the email indicates remaining attempts and branch pickup option (CA-03).
+// When attemptsUsed >= maxAttempts the email indicates pickup-only with branch details (CA-04).
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch) {
+	if s == nil {
+		return
+	}
+	if shipment.Recipient.Email == "" {
+		log.Printf("[email] entrega fallida: destinatario de %s sin email registrado — email omitido", shipment.TrackingID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	branchAddr := BranchAddressString(branch)
+	attemptsLeft := maxAttempts - attemptsUsed
+	if attemptsLeft < 0 {
+		attemptsLeft = 0
+	}
+	attemptDate := formatDeliveredAt(time.Now().UTC())
+	subj := fmt.Sprintf("No pudimos entregar tu envío %s — %s", shipment.TrackingID, org.Name)
+	body := renderDeliveryFailedNotification(shipment, attemptDate, attemptsLeft, maxAttempts, branch.Name, branchAddr, branch.Hours, trackURL, org)
+	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (entrega fallida)", org.Email)
+}
+
 // SendRejectedNotification sends a rejection notification email to the shipment's sender.
 // CA-01: called when a shipment transitions to "rechazado".
 // CA-02: only the sender is notified.

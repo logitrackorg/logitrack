@@ -152,6 +152,13 @@ type RejectedNotifier interface {
 	SendRejectedNotification(shipment model.Shipment, notes string)
 }
 
+// DeliveryFailedNotifier sends delivery-failed notifications to the recipient (LOGITRACK-437).
+// CA-01/CA-02: only the recipient is notified via both email + WhatsApp (if phone exists).
+// Satisfied by *messaging.Service.
+type DeliveryFailedNotifier interface {
+	SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -161,23 +168,25 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
-	notifSvc         *NotificationService
-	emailSvc         EmailConfirmationSender
-	whatsappConfirm  ConfirmationWhatsAppSender
-	messagingSvc     OutForDeliveryNotifier
-	pickupEmailSvc   ReadyForPickupNotifier
-	deliveryNotifSvc DeliveryConfirmedNotifier
-	rejectedNotifSvc RejectedNotifier
+	notifSvc              *NotificationService
+	emailSvc              EmailConfirmationSender
+	whatsappConfirm       ConfirmationWhatsAppSender
+	messagingSvc          OutForDeliveryNotifier
+	pickupEmailSvc        ReadyForPickupNotifier
+	deliveryNotifSvc      DeliveryConfirmedNotifier
+	rejectedNotifSvc      RejectedNotifier
+	deliveryFailedNotifSvc DeliveryFailedNotifier
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                  { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService)               { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                   { s.emailSvc = svc }
-func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender) { s.whatsappConfirm = svc }
-func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                { s.messagingSvc = svc }
-func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)      { s.pickupEmailSvc = svc }
-func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)     { s.deliveryNotifSvc = svc }
-func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                      { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                   { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService)                { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                    { s.emailSvc = svc }
+func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender)  { s.whatsappConfirm = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                 { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)       { s.pickupEmailSvc = svc }
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)      { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                       { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier)            { s.deliveryFailedNotifSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -957,6 +966,17 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
 		notes := req.Notes
 		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
+	}
+
+	// LOGITRACK-437 CA-01/CA-02: entrega fallida → notificar al destinatario por email + WhatsApp.
+	if targetStatus == model.StatusDeliveryFailed && s.deliveryFailedNotifSvc != nil {
+		attemptsUsed := updated.DeliveryAttempts // ya incrementado por la proyección
+		maxAttempts := s.maxDeliveryAttempts()
+		branch, _ := s.branchRepo.GetByID(updated.FinalBranchID)
+		if branch.ID == "" {
+			branch, _ = s.branchRepo.GetByID(updated.ReceivingBranchID)
+		}
+		go s.deliveryFailedNotifSvc.SendDeliveryFailedNotification(updated, attemptsUsed, maxAttempts, branch)
 	}
 
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.

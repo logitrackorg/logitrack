@@ -46,17 +46,24 @@ type RejectedEmailFallback interface {
 	SendRejectedNotification(shipment model.Shipment, notes string)
 }
 
+// DeliveryFailedEmailSender is the interface for sending delivery-failed emails to the recipient.
+// CA-02: email always fires (not a fallback — both WhatsApp and email fire independently).
+type DeliveryFailedEmailSender interface {
+	SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch)
+}
+
 // Service sends out-for-delivery notifications to recipients.
 type Service struct {
-	twilioSID          string
-	twilioToken        string
-	twilioFrom         string // e.g. "whatsapp:+14155238886"
-	trackBaseURL       string
-	emailSvc           LastMileEmailSender
-	pickupEmailSvc     PickupEmailFallback
-	deliveryEmailSvc   DeliveryConfirmedEmailFallback
-	rejectedEmailSvc   RejectedEmailFallback
-	routingCfg         RoutingConfigGetter
+	twilioSID              string
+	twilioToken            string
+	twilioFrom             string // e.g. "whatsapp:+14155238886"
+	trackBaseURL           string
+	emailSvc               LastMileEmailSender
+	pickupEmailSvc         PickupEmailFallback
+	deliveryEmailSvc       DeliveryConfirmedEmailFallback
+	rejectedEmailSvc       RejectedEmailFallback
+	deliveryFailedEmailSvc DeliveryFailedEmailSender
+	routingCfg             RoutingConfigGetter
 }
 
 // New returns a Service ready to use.
@@ -88,6 +95,12 @@ func (s *Service) SetDeliveryConfirmedEmailFallback(svc DeliveryConfirmedEmailFa
 // for rejected-shipment notifications to the sender.
 func (s *Service) SetRejectedEmailFallback(svc RejectedEmailFallback) {
 	s.rejectedEmailSvc = svc
+}
+
+// SetDeliveryFailedEmailService wires the email service for delivery-failed notifications.
+// Unlike other notifications, email always fires here (not a fallback — CA-02).
+func (s *Service) SetDeliveryFailedEmailService(svc DeliveryFailedEmailSender) {
+	s.deliveryFailedEmailSvc = svc
 }
 
 // SendOutForDeliveryNotification notifies the recipient that their shipment is out for delivery.
@@ -381,6 +394,80 @@ func timeWindowText(tw model.TimeWindow, cfg model.RoutingConfig) string {
 	default:
 		return "a lo largo del día"
 	}
+}
+
+// ── Entrega fallida (LOGITRACK-437) ───────────────────────────────────────────
+
+// SendDeliveryFailedNotification notifies the recipient that their shipment could not be delivered.
+// CA-01: called when shipment transitions to delivery_failed.
+// CA-02: BOTH channels fire independently — email always + WhatsApp if recipient has phone.
+// CA-03: when attempts remain, message includes remaining count and branch pickup option.
+// CA-04: when attempts exhausted, message indicates pickup-only with branch details.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch) {
+	trackURL := ""
+	if s.trackBaseURL != "" {
+		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	}
+
+	// CA-02: WhatsApp si el destinatario tiene teléfono (independiente del email).
+	if shipment.Recipient.Phone != "" && s.whatsappConfigured() {
+		msg := buildDeliveryFailedWhatsAppMessage(shipment, attemptsUsed, maxAttempts, branch, trackURL)
+		if err := s.sendWhatsApp(shipment.Recipient.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp entrega fallida falló para %s (%s): %v",
+				shipment.TrackingID, shipment.Recipient.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp entrega fallida enviado a %s para %s",
+				shipment.Recipient.Phone, shipment.TrackingID)
+		}
+	}
+
+	// CA-02: email siempre (no es fallback — se envía aunque WhatsApp haya funcionado).
+	if s.deliveryFailedEmailSvc != nil {
+		s.deliveryFailedEmailSvc.SendDeliveryFailedNotification(shipment, attemptsUsed, maxAttempts, branch)
+	} else {
+		log.Printf("[messaging] email entrega fallida no configurado para %s — email omitido", shipment.TrackingID)
+	}
+}
+
+func buildDeliveryFailedWhatsAppMessage(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch, trackURL string) string {
+	now := time.Now().UTC()
+	months := [...]string{
+		"enero", "febrero", "marzo", "abril", "mayo", "junio",
+		"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+	}
+	dateStr := fmt.Sprintf("%d de %s de %d", now.Day(), months[now.Month()-1], now.Year())
+	attemptsLeft := maxAttempts - attemptsUsed
+
+	msg := fmt.Sprintf("📦 No pudimos entregar tu envío *%s* el %s.\n\n", shipment.TrackingID, dateStr)
+
+	if attemptsLeft > 0 {
+		msg += fmt.Sprintf("⚠️ *Intentos restantes:* %d de %d\n", attemptsLeft, maxAttempts)
+		msg += "Coordinaremos un nuevo intento automáticamente.\n"
+	} else {
+		msg += "❌ *Se agotaron los intentos de entrega.*\n"
+	}
+
+	msg += fmt.Sprintf("\n🏢 *Retiro en sucursal:* %s", branch.Name)
+	if branch.Address.Street != "" || branch.Address.City != "" {
+		addr := branch.Address.Street
+		if branch.Address.City != "" {
+			if addr != "" {
+				addr += ", "
+			}
+			addr += branch.Address.City
+		}
+		msg += fmt.Sprintf("\n📍 *Dirección:* %s", addr)
+	}
+	if branch.Hours != "" {
+		msg += fmt.Sprintf("\n🕐 *Horarios:* %s", branch.Hours)
+	}
+	msg += "\nPresentate con tu DNI para retirar el paquete."
+
+	if trackURL != "" {
+		msg += "\n\nSeguí tu envío en: " + trackURL
+	}
+	return msg
 }
 
 // ── Confirmación de registro (LOGITRACK-406) ──────────────────────────────────
