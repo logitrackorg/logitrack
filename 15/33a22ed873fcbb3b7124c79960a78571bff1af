@@ -1,0 +1,11 @@
+logitrack_core/internal/model/public_shipment.go
+  ai_agent 109-116,121
+logitrack_core/internal/db/migrate.go
+  ai_agent 453,456-491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "1533a22ed873fcbb3b7124c79960a78571bff1af",
+  "prompts": {}
+}
