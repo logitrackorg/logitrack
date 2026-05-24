@@ -1,4 +1,5 @@
 import type { ClaimType } from "../api/publicTracking";
+import type { PublicClaimFormValues } from "../components/PublicClaimFormFields";
 
 export type ClaimMainCategory = "incomplete_damage" | "delivery_problem" | "staff_conduct";
 
@@ -38,6 +39,16 @@ export function isAllowedClaimEvidenceFile(file: File): boolean {
     file.type.startsWith("image/")
   );
 }
+
+export const emptyClaimFormValues: PublicClaimFormValues = {
+  createdBy: "",
+  dni: "",
+  category: "",
+  damageSubtypes: [],
+  deliverySubtype: "",
+  staffDescription: "",
+  evidence: null,
+};
 
 export function resolveClaimType(
   category: ClaimMainCategory,

@@ -193,13 +193,4 @@ export function PublicClaimFormFields({ values, onChange, disabled }: Props) {
   );
 }
 
-export const emptyClaimFormValues: PublicClaimFormValues = {
-  createdBy: "",
-  dni: "",
-  category: "",
-  damageSubtypes: [],
-  deliverySubtype: "",
-  staffDescription: "",
-  evidence: null,
-};
 

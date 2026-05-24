@@ -11,10 +11,10 @@ import type { ShipmentStatus } from "../api/shipments";
 import type { Branch } from "../api/branches";
 import {
   PublicClaimFormFields,
-  emptyClaimFormValues,
   type PublicClaimFormValues,
 } from "../components/PublicClaimFormFields";
 import {
+  emptyClaimFormValues,
   buildClaimDescription,
   resolveClaimType,
   validatePublicClaimForm,
@@ -364,8 +364,9 @@ export function PublicTracking() {
       });
       setClaimResult(createdClaim);
       setClaimOpen(false);
-    } catch (error: any) {
-      const msg = error.response?.data?.error ?? error.response?.data?.message;
+    } catch (error) {
+      const e = error as { response?: { data?: { error?: string; message?: string } } };
+      const msg = e.response?.data?.error ?? e.response?.data?.message;
       if (msg?.includes("no coinciden")) {
         setClaimError("Datos incorrectos");
       } else {
