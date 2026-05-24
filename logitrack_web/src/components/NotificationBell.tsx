@@ -50,6 +50,7 @@ function groupAccent(type: string): string {
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   if (type === "fatigue_alert")       return "#ef4444";
+  if (type === "min_fill_reached")    return "#7c3aed";
   return "#94a3b8";
 }
 
