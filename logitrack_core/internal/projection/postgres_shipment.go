@@ -397,7 +397,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency,
 			rejected_by_recipient, chatbot_metadata
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -437,7 +437,6 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.Priority, s.PriorityScore, s.PriorityConfidence, nullableBytes(priorityFactors),
 		s.HasIncident, string(s.IncidentType),
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
-		s.FinalBranchID, string(deliveryMethod),
 		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
 		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),

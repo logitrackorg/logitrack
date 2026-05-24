@@ -9,6 +9,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/db"
 	"github.com/logitrack/core/internal/email"
 	"github.com/logitrack/core/internal/handler"
@@ -286,12 +287,24 @@ func main() {
 
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
-	// Generar plan global al arrancar para que el plan del día esté disponible
-	// desde el primer request, sin esperar el cron de las 08:00.
-	if _, err := routingSvc.RegenerateTodayPlan(context.Background()); err != nil {
-		log.Fatalf("no se pudo generar el plan inicial: %v", err)
+	// Generar plan global al arrancar solo si no existe uno para hoy,
+	// para no sobreescribir un plan ya aplicado entre reinicios del servidor.
+	{
+		local := clock.Now().In(clock.LocalTZ)
+		planDate := local.Format("2006-01-02")
+		existing, err := routingPlanRepo.GetByDate(planDate)
+		if err != nil {
+			log.Fatalf("no se pudo verificar plan existente: %v", err)
+		}
+		if existing == nil {
+			if _, err := routingSvc.GenerateAndPersistGlobalPlan(context.Background()); err != nil {
+				log.Fatalf("no se pudo generar el plan inicial: %v", err)
+			}
+			log.Println("[startup] plan global del día generado correctamente")
+		} else {
+			log.Printf("[startup] plan del día ya existe (status: %s), no se regenera", existing.Status)
+		}
 	}
-	log.Println("[startup] plan global del día generado correctamente")
 
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
 	sched := scheduler.New(routingSvc)
