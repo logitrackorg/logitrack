@@ -282,7 +282,7 @@ Endpoints:
 
 ### Daily routing (intelligent dispatch)
 
-Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de una sucursal corre al inicio del día desde `/routing`. **No persiste plan** — el plan vive en memoria del cliente entre `Generate` y `Apply`.
+Motor de ruteo en `internal/service/routing.go`. El plan es **global**: cubre todas las sucursales activas a la vez y se persiste en la tabla `routing_plans`. Se genera automáticamente a las 08:00 por un scheduler; también se puede regenerar manualmente. Los operadores/supervisores ven y editan el plan de su sucursal desde `/routing`; managers y admins ven el plan completo de la red.
 
 **`RoutingConfig`** (singleton tabla `routing_config` id=1, admin-editable desde `/routing-config`):
 
@@ -291,7 +291,7 @@ Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de 
 | `sla_force_horizon_hours` | 24 | 1–168 | SLA crítico fuerza despacho. |
 | `priority_force_threshold` | 0.75 | 0–1 | Score que dispara despacho forzado. |
 | `min_fill_rate` | 0.40 | 0.1–1 | % capacidad del vehículo más grande para consolidar. |
-| `enforce_time_windows` | false | bool | Si true, envíos fuera de ventana quedan unassigned. Si false, se incluyen con warning. |
+| `enforce_time_windows` | true | bool | Si true, envíos fuera de ventana quedan unassigned. Si false, se incluyen con warning. |
 | `morning_window_start_hour` | 8 | 0–23 | Hora de inicio (24h) de la ventana "morning". |
 | `morning_window_end_hour` | 14 | 1–24 | Hora de fin de la ventana "morning" (> start). |
 | `afternoon_window_start_hour` | 12 | 0–23 | Hora de inicio de la ventana "afternoon". Puede solapar con morning. |
@@ -299,23 +299,51 @@ Greedy algorithm in `internal/service/routing.go` que el operador/supervisor de 
 | `service_time_minutes` | 10 | 1–60 | Tiempo de entrega por parada (timbre + firma). |
 | `avg_speed_kmh` | 25 | 5–120 | Velocidad promedio del chofer entre paradas. |
 | `last_mile_packing_strategy` | `maximize_capacity` | `balanced` \| `maximize_capacity` | Estrategia de asignación a choferes. |
+| `fleet_projection_horizon_hours` | 0 | ≥0 | WIP: ventana de horas para usar vehículos entrantes en despacho proyectado. 0 = deshabilitado. |
 
 Tope de peso por chofer: **150 kg hardcodeado** en `routing.go` (`MaxWeightKg`). No es configurable hoy.
 
-**Flujo del algoritmo** (`GeneratePlan(branchID)`):
+**Modos de vehículos**: cada vehículo tiene un `mode` que determina en qué pool participa:
+- `ultima_milla`: solo asignado a rutas de última milla.
+- `inter_sucursal`: solo asignado a despachos entre sucursales.
 
-1. **Filtrar candidatos**: shipments con `receiving_branch_id == branchID && status ∈ {at_origin_hub, at_hub}`. Excluir `delivery_method == retiro_sucursal`.
+**Modos de ruta de última milla** (`RouteMode`, seleccionable por el operador por chofer):
+- `ventanas` (default): maximiza entregas dentro de la franja horaria contratada.
+- `segura`: igual a `ventanas` pero penaliza arcos que atraviesan polígonos de riesgo (usa ORS `avoid_polygons` si hay `ORS_API_KEY`, o fallback OSRM + waypoints).
+- `costo`: minimiza distancia/duración total sin considerar franjas horarias. Las paradas fuera de ventana se marcan visualmente pero no se excluyen.
+
+**Flujo del algoritmo** — por sucursal, luego pases globales:
+
+**Por sucursal** (`generatePlan(branchID)`):
+
+1. **Filtrar candidatos**: shipments con `receiving_branch_id == branchID && status ∈ {at_origin_hub, at_hub, redelivery_scheduled}`. Excluir `retiro_sucursal` solo si `final_branch_id == branchID`. Excluir shipments con `reserved_for_trip_id != nil` (reservados para cross-branch pickup de un viaje multi-hop en curso).
 2. **Particionar**:
-   - Última milla: `final_branch_id == branchID && delivery_method == ultima_milla && status == at_hub && !is_returning`.
+   - Última milla: `final_branch_id == branchID && delivery_method == ultima_milla && status ∈ {at_hub, redelivery_scheduled} && !is_returning`.
    - Inter-sucursal: el resto. Para `is_returning` el destino es `origin_branch_id`; para el resto, `final_branch_id`.
-3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Estrategia configurable: `balanced` (load-balancing entre choferes) o `maximize_capacity` (saturar el primer chofer hasta 150 kg antes de abrir el siguiente).
+3. **Bin-packing última milla**: orden estable `priority_score DESC, time_window (morning>afternoon>flexible), created_at ASC`. Estrategia configurable: `balanced` o `maximize_capacity`.
 4. **Scheduling con ventanas (última milla)**: para cada chofer asignado, probar horarios candidatos (cada hora entera entre `morning_window_start_hour` y `afternoon_window_end_hour - 1`). Por cada horario, ejecutar VRP con `departureMin` ajustado y ventanas blandas; elegir el horario con mejor score `(entregas_dentro_de_ventana DESC, espera_total ASC)`. Si ningún horario logra 100% en ventana, abrir un nuevo chofer (si hay disponible) y redistribuir según estrategia. Resultado: `SuggestedStartTime` por chofer + orden óptimo de paradas, persistidos en `Route` al hacer `Apply`.
 5. **Despacho inter-sucursal por destino** (3 reglas):
    - **SLA forced**: alguno cumple `EstimatedDeliveryAt - now < sla_force_horizon_hours` o `priority_score >= priority_force_threshold`.
    - **Consolidación**: `sum(peso) >= min_fill_rate × largest_vehicle_capacity_in_pool`.
    - Sin regla → `unassigned` con motivo `esperando_consolidacion`.
 6. **Selección de vehículo**: el más chico que cubre el peso total. Si ninguno cubre, el más grande con bin-packing por prioridad (excedente a `unassigned` con `sobrepeso_excede_vehiculo`).
-7. **Pasada piggyback**: para cada `unassigned` por motivo de inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino del envío que la sucursal actual (Haversine de lat/lng de branches, fallback a distancia entre provincias). Cualquier mejora cuenta. Elige la mayor.
+7. **Multi-hop** (`addMultiHopStops`): agrega hasta `MaxTripStops = 3` paradas totales (incluyendo la primaria) a despachos inter-sucursal ya armados. Para cada despacho, busca envíos sin asignar cuyo shortest-path (grafo de sucursales via `BranchGraphService`) pase por el destino actual; los bin-packea en la capacidad restante. El fill-rate mínimo se aplica por tramo; envíos SLA-forzados pueden saltarlo.
+8. **Piggyback**: para cada `unassigned` por motivo inter-sucursal, busca despacho ya armado cuyo destino esté **estrictamente más cerca** del destino final del envío (Haversine, fallback a distancia entre provincias). Cualquier mejora cuenta; elige la mayor mejora. Aplica encadenamiento de saltos: un piggyback puede crear el salto que habilita otro.
+9. **Cross-branch pickups locales** (`addCrossBranchPickupsForBranch`): en paradas intermedias de viajes multi-hop, levanta envíos disponibles (`at_hub`/`at_origin_hub`) de esas sucursales cuyo destino final esté más adelante en el path del vehículo. Usa `reserved_for_trip_id` para evitar que esos envíos entren en otros planes.
+10. **Despacho proyectado** (`tryProjectedDispatch`, WIP): si `fleet_projection_horizon_hours > 0`, usa vehículos `en_transito` con `estimated_arrival_at` conocido para rescatar envíos `sin_vehiculos_disponibles` o `sin_vehiculos_para_destino`.
+11. **Backhauling** (`matchBackhauls`, WIP): identifica envíos en la sucursal de destino que necesitan volver al origen del viaje (`next_hop_branch_id == branchID`), los propone como carga de retorno en el mismo vehículo.
+
+**Pases globales** (después de generar todas las sucursales, en `GenerateGlobalPlan`):
+
+- **Cross-branch pickups globales** (`addCrossBranchPickups`): misma lógica que el paso local pero con visibilidad de toda la red — coordina pickups entre sucursales que el pase local no puede ver.
+- **Consolidación cross-branch** (`consolidateCrossBranchDispatches`): absorbe despachos single-hop dentro de multi-hops que ya pasan por su sucursal de origen, cuando el dispatch B queda completamente vacío y puede cancelarse. **SLA safety**: si algún envío de B es SLA-crítico (`isSLACriticalETA`), la absorción solo procede si el ETA estimado vía la ruta de A (distancia × 1.3 / `avg_speed_kmh`) no supera el `EstimatedDeliveryAt` del envío — de lo contrario B se despacha de forma independiente.
+- **Utilización mínima por tramo** (`enforceMinSegmentUtilization`): elimina paradas adicionales cuyo tramo no alcanza `min_fill_rate`, salvo que haya envíos SLA-forzados. Los envíos removidos vuelven a `unassigned` con motivo `tramo_subutilizado`.
+
+**Vehículos en tránsito** — al leer el plan del día (`GetTodayPlan`):
+- Vehículos ya `en_transito` se marcan como `InTransit=true`; sus envíos no aplicados pasan a `unassigned` con motivo `vehiculo_en_viaje`.
+- La lista `IncomingVehicles` muestra los vehículos `en_transito` con destino a la sucursal (otra sucursal que viene hacia acá), con patente, origen, shipments a bordo y peso. Es informativo y base del despacho proyectado (WIP).
+
+**SLA risk check** (`RunSLARiskCheck` / `checkSLARisk`): evalúa todos los envíos activos de la sucursal en cada generación de plan y dispara/resetea notificaciones internas según riesgo de incumplimiento de SLA (LOGITRACK-404).
 
 **`ApplyPlan`** — per-item best-effort (no transaccional, son 3 stores distintos):
 - Re-fetcheo de cada shipment y vehicle antes de mutar.
@@ -324,12 +352,13 @@ Tope de peso por chofer: **150 kg hardcodeado** en `routing.go` (`MaxWeightKg`).
 - Última milla: usa flujo existente `UpdateStatus(out_for_delivery, driver_id)` + `RouteService.AddShipmentToDriverRoute`. Persiste `SuggestedStartTime` y orden óptimo de paradas en la `Route` creada.
 
 Endpoints:
-- `POST /routing/plan` — operator/supervisor (su propia sucursal). Genera plan en memoria.
-- `POST /routing/apply` — operator/supervisor (su propia sucursal). Aplica plan editado.
+- `GET /routing/plan/today` — operator/supervisor (su sucursal), manager/admin (toda la red). Devuelve el plan persistido del día.
+- `POST /routing/regenerate` — operator/supervisor (su sucursal). Regenera el plan de la sucursal propia dentro del plan global y lo persiste.
+- `POST /routing/regenerate/global` — admin only. Regenera el plan completo de toda la red.
+- `POST /routing/apply` — operator/supervisor (su propia sucursal). Aplica plan editado, devuelve resumen per-item.
+- `POST /routing/last-mile/recompute` — operator/supervisor. Recalcula el orden de paradas de un chofer específico con un `RouteMode` dado, sin aplicar.
 - `GET /routing/config` — admin only.
 - `PATCH /routing/config` — admin only. Valida rangos de cada parámetro.
-
-**Limitación MVP**: rutea un solo hop. La regla de piggyback mitiga esto cuando un despacho intermedio acerca el envío a su destino final.
 
 ### Adding a new endpoint
 
@@ -463,8 +492,11 @@ Full route list is in `cmd/server/main.go`. Key public endpoints:
 | GET | /api/v1/public/track/:id/events | no auth |
 | GET | /api/v1/public/branches | no auth |
 | POST | /api/v1/auth/login | returns token + user |
-| POST | /api/v1/routing/plan | operator/supervisor (su sucursal). Genera plan en memoria. |
+| GET | /api/v1/routing/plan/today | operator/supervisor (su sucursal), manager/admin (toda la red). Plan persistido del día. |
+| POST | /api/v1/routing/regenerate | operator/supervisor (su sucursal). Regenera plan de la sucursal dentro del global. |
+| POST | /api/v1/routing/regenerate/global | admin only. Regenera el plan completo de toda la red. |
 | POST | /api/v1/routing/apply | operator/supervisor (su sucursal). Aplica plan editado, devuelve resumen per-item. |
+| POST | /api/v1/routing/last-mile/recompute | operator/supervisor. Recalcula orden de paradas de un chofer con un RouteMode dado. |
 | GET | /api/v1/routing/config | admin only. |
 | PATCH | /api/v1/routing/config | admin only. Valida rangos. |
 | GET | /health | health check |

@@ -28,6 +28,9 @@ export default function OperatorTripReception() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  // Last-mile return: simple finish (no stop checklist)
+  const isLastMile = trip?.kind === "last_mile";
+
   const [unloadChecked, setUnloadChecked] = useState<Record<string, boolean>>({});
   const [loadChecked, setLoadChecked] = useState<Record<string, boolean>>({});
   // IDs de pickups que ya no están disponibles (estado terminal)
@@ -112,6 +115,22 @@ export default function OperatorTripReception() {
   const isLastStop = stopIdx === totalStops - 1;
   const prevPickups = filteredPrevPickups;
 
+  const handleLastMileFinish = async () => {
+    if (!trip || !user) return;
+    setBusy(true);
+    setSubmitError("");
+    try {
+      const res = await interBranchTripsApi.finishByScan(trip.id);
+      setTrip(res.trip);
+      setSuccessMsg(res.message);
+      setDone(true);
+    } catch (err: unknown) {
+      setSubmitError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Error al recibir al chofer.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (!trip || !user) return;
     setBusy(true);
@@ -149,10 +168,6 @@ export default function OperatorTripReception() {
     </div>
   );
 
-  if (!trip || !currentStop) return (
-    <div className="p-6 max-w-lg mx-auto text-sm text-slate-500">Viaje no encontrado.</div>
-  );
-
   if (done) return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <div className="flex flex-col items-center gap-4 py-12">
@@ -171,6 +186,90 @@ export default function OperatorTripReception() {
         </button>
       </div>
     </div>
+  );
+
+  if (!trip) return (
+    <div className="p-6 max-w-lg mx-auto text-sm text-slate-500">Viaje no encontrado.</div>
+  );
+
+  // ── Vista simplificada para retorno de última milla ──────────────────────
+  if (isLastMile) {
+    const failedIds = trip.shipment_ids ?? [];
+    return (
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Recepción de chofer</h1>
+            <p className="text-xs text-slate-500 font-mono mt-0.5">{trip.id}</p>
+          </div>
+          <button
+            onClick={() => navigate(-1)}
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer transition-colors shrink-0"
+          >
+            <X className="w-4 h-4 text-slate-600" />
+          </button>
+        </div>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+              <Truck className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-900">
+                {trip.license_plate} · Retorno de última milla
+              </p>
+              <p className="text-xs text-slate-500">
+                {branches.find((b) => b.id === trip.origin_branch_id)?.name ?? trip.origin_branch_id}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {failedIds.length > 0 && (
+          <Card className="p-4 space-y-3">
+            <p className="text-sm font-bold text-slate-900">
+              {failedIds.length} {failedIds.length === 1 ? "envío pendiente" : "envíos pendientes"}
+            </p>
+            <p className="text-xs text-slate-500">
+              Al confirmar, el sistema asigna el estado final de cada envío según los intentos de entrega y si fue rechazado por el destinatario.
+            </p>
+            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 overflow-hidden">
+              {failedIds.map((tid) => (
+                <div key={tid} className="px-3 py-2.5 flex items-center gap-2">
+                  <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="text-xs font-mono text-slate-700 flex-1">{tid}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {submitError && (
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {submitError}
+          </div>
+        )}
+
+        <button
+          onClick={handleLastMileFinish}
+          disabled={busy}
+          className="w-full h-11 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        >
+          {busy ? "Procesando…" : (
+            <>
+              <CheckCircle2 className="w-4 h-4" />
+              Confirmar recepción
+            </>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  if (!currentStop) return (
+    <div className="p-6 max-w-lg mx-auto text-sm text-slate-500">Viaje no encontrado.</div>
   );
 
   const totalUnload = currentStop.shipment_ids.length + prevPickups.length;

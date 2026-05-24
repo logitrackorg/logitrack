@@ -601,28 +601,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: model.StatusInTransit, to: model.StatusAtHub, changedBy: "op_caba", location: "caba", notes: "Llegó a CABA", hoursAgo: 8},
 			},
 		},
-		// Delivered en CABA (history para dashboard)
-		{
-			trackingID:         "LT-DEL00001",
-			sender:             model.Customer{DNI: "20567412", Name: "Roberto Silva", Phone: "543513334455", Email: "rsilva@distribuidora.com", Address: model.Address{Street: "Colón 1010", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000", Latitude: fPtr(-31.4178), Longitude: fPtr(-64.1843)}},
-			recipient:          model.Customer{DNI: "34128956", Name: "Camila Rodríguez", Phone: "541166778899", Email: "camila.r@gmail.com", Address: model.Address{Street: "Av. Cabildo 3456", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1429", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)}},
-			weightKg:           4.0,
-			packageType:        model.PackageBox,
-			shipmentType:       model.ShipmentTypeNormal,
-			timeWindow:         model.TimeWindowFlexible,
-			receivingBranchID:  "caba",
-			priority:           "media",
-			priorityScore:      0.40,
-			priorityConfidence: 0.71,
-			events: []eventSeed{
-				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado", hoursAgo: 96},
-				{from: model.StatusAtOriginHub, to: model.StatusLoaded, changedBy: "op_cordoba", location: "cordoba", notes: "Cargado en EF456GH", hoursAgo: 94},
-				{from: model.StatusLoaded, to: model.StatusInTransit, changedBy: "sup_cordoba", location: "caba", notes: "Vehículo partió hacia CABA", hoursAgo: 90},
-				{from: model.StatusInTransit, to: model.StatusAtHub, changedBy: "op_caba", location: "caba", notes: "Llegó a CABA", hoursAgo: 48},
-				{from: model.StatusAtHub, to: model.StatusOutForDelivery, changedBy: "sup_caba", location: "", notes: "Asignado a chofer", hoursAgo: 30, driverID: "5"},
-				{from: model.StatusOutForDelivery, to: model.StatusDelivered, changedBy: "chofer_caba", location: "", notes: "Entregado al destinatario", hoursAgo: 24, driverID: "5"},
-			},
-		},
 		// At_hub en Córdoba — pendiente de reparto, para que op_cordoba vea algo
 		{
 			trackingID:         "LT-CDB00001",
@@ -897,16 +875,6 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 	allEvents, _ := store.LoadAll()
 	proj.Rebuild(allEvents)
 
-	// Seed driver route for today — chofer (ID: 5) has LT-DELIVER01 out for delivery
-	_, _ = routeRepo.Create(model.Route{
-		ID:          "ROUTE-SEED0001",
-		Date:        model.NewDateOnly(now),
-		DriverID:    "5",
-		ShipmentIDs: []string{"LT-DELIVER01"},
-		CreatedBy:   "supervisor1",
-		CreatedAt:   now.Add(-1 * time.Hour),
-		Status:      model.RouteStatusPending,
-	})
 }
 
 func estimateDeliverySeed(from time.Time, originBranchID, finalBranchID, shipmentType string, repo repository.BranchRepository) *time.Time {

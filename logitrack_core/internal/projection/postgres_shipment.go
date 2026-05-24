@@ -95,9 +95,10 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET status = $1, updated_at = $2,
-				    delivery_attempts = delivery_attempts + 1
-				WHERE tracking_id = $3`,
-				string(payload.ToStatus), event.Timestamp, event.TrackingID,
+				    delivery_attempts = delivery_attempts + 1,
+				    rejected_by_recipient = $3
+				WHERE tracking_id = $4`,
+				string(payload.ToStatus), event.Timestamp, payload.RejectedByRecipient, event.TrackingID,
 			)
 			return err
 		}
@@ -250,6 +251,95 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			string(model.StatusDraft), event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventPickupRequested:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, delivery_method = $2, updated_at = $3 WHERE tracking_id = $4`,
+			string(model.StatusReadyForPickup), string(model.DeliveryMethodBranchPickup), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventDeliveryRescheduled:
+	payload := event.Payload.(model.DeliveryRescheduledPayload)
+	
+	chatbotMetadata := map[string]interface{}{
+		"reschedule_count":         payload.RescheduleCount,
+		"max_reschedules":          2,
+		"original_delivery_date":   payload.OriginalDate,
+		"scheduled_delivery_date":  payload.NewDeliveryDate,
+		"last_chatbot_interaction": event.Timestamp,
+	}
+	
+	metadataJSON, err := json.Marshal(chatbotMetadata)
+	if err != nil {
+		return err
+	}
+	
+	// Obtener el estado actual
+	var currentStatus string
+	err = p.db.QueryRow(`SELECT status FROM shipments WHERE tracking_id = $1`, event.TrackingID).Scan(&currentStatus)
+	if err != nil {
+		return err
+	}
+	
+	// Solo cambiar a redelivery_scheduled si viene de delivery_failed
+	newStatus := currentStatus
+	if currentStatus == string(model.StatusDeliveryFailed) {
+		newStatus = string(model.StatusRedeliveryScheduled)
+	}
+	
+	// ✅ ACTUALIZAR: Guardar también en la tabla de eventos con ubicación
+	_, err = p.db.Exec(`
+		UPDATE shipments 
+		SET estimated_delivery_at = $1, 
+		    status = $2,
+		    chatbot_metadata = $3,
+		    updated_at = $4 
+		WHERE tracking_id = $5`,
+		payload.NewDeliveryDate,
+		newStatus,
+		metadataJSON,
+		event.Timestamp,
+		event.TrackingID,
+	)
+	
+	// ✅ NUEVO: Guardar evento con ubicación en la tabla events
+	if err == nil && payload.CurrentLocation != nil {
+		var locationTypeStr, locationCodeStr, locationNameStr, locationStatusStr interface{}
+		locationTypeStr = payload.CurrentLocation.Type
+		locationCodeStr = payload.CurrentLocation.BranchCode
+		locationNameStr = payload.CurrentLocation.BranchName
+		locationStatusStr = payload.CurrentLocation.Status
+		
+		// Actualizar evento en la tabla events
+		_, err = p.db.Exec(`
+			UPDATE events 
+			SET current_location_type = $1,
+			    current_location_code = $2,
+			    current_location_name = $3,
+			    current_location_status = $4,
+			    rescheduled_date = $5,
+			    via = $6
+			WHERE tracking_id = $7 AND id = $8`,
+			locationTypeStr,
+			locationCodeStr,
+			locationNameStr,
+			locationStatusStr,
+			payload.NewDeliveryDate,
+			payload.RequestedVia,
+			event.TrackingID,
+			event.ID,
+		)
+	}
+	
+	return err
+
+	case model.EventCancelledByRecipient:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(model.StatusCancelled), event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }
@@ -305,8 +395,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			has_incident, incident_type,
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
-			price, price_breakdown, price_currency
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+			price, price_breakdown, price_currency,
+			rejected_by_recipient, chatbot_metadata
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -334,7 +425,10 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			delivery_method       = EXCLUDED.delivery_method,
 			price                 = COALESCE(EXCLUDED.price, shipments.price),
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
-			price_currency        = EXCLUDED.price_currency`,
+			price_currency        = EXCLUDED.price_currency,
+			rejected_by_recipient = EXCLUDED.rejected_by_recipient`,
+			
+			
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -345,7 +439,8 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
 		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
-	)
+		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
+)
 	return err
 }
 
@@ -368,7 +463,8 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
@@ -383,7 +479,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -431,7 +528,9 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient
+		       price, price_breakdown, price_currency, reserved_for_trip_id,  chatbot_metadata
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -589,6 +688,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		reservedForTripID    sql.NullString
 		slaNotifiedAt        *time.Time
 		slaExpiredNotifiedAt *time.Time
+		chatbotMetadataJSON []byte 
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -600,6 +700,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+		&s.RejectedByRecipient,	&chatbotMetadataJSON,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -651,6 +752,13 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		}
 		s.PriorityFactors = f
 	}
+	if len(chatbotMetadataJSON) > 0 {
+		var metadata model.ChatbotMetadata
+		if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
+			return model.Shipment{}, err
+		}
+		s.ChatbotMetadata = &metadata
+	}
 	return s, nil
 }
 
@@ -676,6 +784,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			reservedForTripID    sql.NullString
 			slaNotifiedAt        *time.Time
 			slaExpiredNotifiedAt *time.Time
+			chatbotMetadataJSON []byte
 		)
 		err := rows.Scan(
 			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
@@ -687,6 +796,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+			&s.RejectedByRecipient, &chatbotMetadataJSON,
 		)
 		if err != nil {
 			return nil, err
@@ -735,11 +845,21 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			}
 			s.PriorityFactors = f
 		}
+
+		if len(chatbotMetadataJSON) > 0 {
+		var metadata model.ChatbotMetadata
+		if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
+			return nil, err
+		}
+		s.ChatbotMetadata = &metadata
+	}
 		result = append(result, s)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].TrackingID < result[j].TrackingID
 	})
+
+	
 	return result, rows.Err()
 }
 
@@ -814,4 +934,15 @@ func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string)
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+// serializeChatbotMetadata serializa ChatbotMetadata a JSON
+func serializeChatbotMetadata(metadata *model.ChatbotMetadata) interface{} {
+	if metadata == nil {
+		return nil
+	}
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return nil
+	}
+	return data
 }

@@ -21,6 +21,7 @@ import {
 } from "../utils/publicClaimForm";
 import { fmtDateTime, fmtRelative } from "../utils/date";
 import "./PublicTracking.css";
+import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
 
 // User-facing one-liner explanation for each status. Shown under the badge in
 // the summary card. Friendlier than the operational labels in StatusBadge.
@@ -86,6 +87,25 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
     const statusLabel = ev.claim_status ? CLAIM_STATUS_LABELS[ev.claim_status] ?? "Abierto" : "Abierto";
     return { icon: "🧾", title: `En Reclamo · ${statusLabel}` };
   }
+
+  if (ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date) {
+    const locationText = ev.current_location.type === "DESTINATION_BRANCH"
+      ? "En Sucursal Destino"
+      : ev.current_location.type === "ORIGIN_BRANCH"
+      ? `En Sucursal Origen (${ev.current_location.branch_code})`
+      : "En tránsito";
+    const formattedDate = new Date(ev.rescheduled_date).toLocaleDateString('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    return {
+      icon: "📍",
+      title: `${locationText} - ${ev.current_location.status}`,
+      subtitle: `Entrega reprogramada para el ${formattedDate}`
+    };
+  }
+
 
   const loc = ev.location;
   const branch = loc
@@ -653,6 +673,7 @@ export function PublicTracking() {
       <footer className="pt-footer">
         © {new Date().getFullYear()} LogiTrack · Seguimiento de envíos
       </footer>
+        <ChatbotWidget />
     </div>
   );
 }

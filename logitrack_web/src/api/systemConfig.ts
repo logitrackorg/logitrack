@@ -15,6 +15,8 @@ export interface SystemConfig {
   draft_retention_days: number;
   /** Days after expiration before PII is irreversibly anonymized (default 30). */
   draft_purge_days: number;
+  /** Days a shipment can be held at ready_for_pickup before return. 0 = no limit (default). */
+  pickup_deadline_days: number;
 }
 
 export const systemConfigApi = {

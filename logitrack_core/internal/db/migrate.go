@@ -60,6 +60,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price                NUMERIC(12,2);
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS chatbot_metadata     JSONB;
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
@@ -127,6 +128,16 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS service_time_minutes         INTEGER       NOT NULL DEFAULT 10;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS avg_speed_kmh                NUMERIC(6,2)  NOT NULL DEFAULT 25.0;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS last_mile_packing_strategy   TEXT          NOT NULL DEFAULT 'maximize_capacity';
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_last_mile_rate     NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_inter_branch_rate  NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+
+		CREATE TABLE IF NOT EXISTS dispatch_volume_state (
+			origin_branch_id  TEXT        NOT NULL,
+			dest_key          TEXT        NOT NULL,
+			trip_type         TEXT        NOT NULL,
+			notified_at       TIMESTAMPTZ,
+			PRIMARY KEY (origin_branch_id, dest_key, trip_type)
+		);
 
 		CREATE TABLE IF NOT EXISTS routing_plans (
 			id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -424,6 +435,23 @@ func RunMigrations(db *sql.DB) error {
 			UNIQUE (claim_id, version)
 		);
 		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
+
+		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
+
+		-- Retorno de última milla: flag para delivery_failed con rechazo explícito del destinatario
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS rejected_by_recipient BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- Columnas para eventos de reprogramación (chatbot)
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_type   VARCHAR(50);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_code   VARCHAR(20);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_name   VARCHAR(255);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_status VARCHAR(100);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS rescheduled_date        TIMESTAMP;
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS via                     VARCHAR(20);
+
+		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+		CREATE INDEX IF NOT EXISTS idx_events_rescheduled ON events(tracking_id, event_type) WHERE event_type = 'rescheduled';
 	`)
 	return err
 }

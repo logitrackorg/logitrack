@@ -84,7 +84,7 @@ func TestValidateDriver_ValidStatuses(t *testing.T) {
 	ship := mustCreate(t, ts)
 	routeRepo.Create(todayRoute("driver-01", []string{ship.TrackingID}))
 
-	for _, status := range []model.Status{model.StatusDelivered, model.StatusDeliveryFailed} {
+	for _, status := range []model.Status{model.StatusDelivered, model.StatusDeliveryFailed, model.StatusRechazado} {
 		err := routeSvc.ValidateDriverCanUpdateShipment("driver-01", ship.TrackingID, status)
 		if err != nil {
 			t.Errorf("status %s should be allowed for driver, got: %v", status, err)

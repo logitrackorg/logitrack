@@ -136,6 +136,21 @@ func todayAR() string {
 	return time.Now().In(time.FixedZone("ART", -3*60*60)).Format("2006-01-02")
 }
 
+// logicalDateAR returns the YYYY-MM-DD date key for the current "logical day"
+// given a daily reset hour (0–23, ART timezone). When resetHour = 0 the
+// behaviour is identical to todayAR().
+//
+// Logic: if the current ART hour is < resetHour, the logical day started
+// yesterday at resetHour, so we key on yesterday's calendar date.
+func logicalDateAR(resetHour int) string {
+	art := time.FixedZone("ART", -3*60*60)
+	now := time.Now().In(art)
+	if resetHour > 0 && now.Hour() < resetHour {
+		return now.AddDate(0, 0, -1).Format("2006-01-02")
+	}
+	return now.Format("2006-01-02")
+}
+
 // skipGracePeriod is how long a "saltar" choice suppresses the fatigue gate.
 const skipGracePeriod = 3 * time.Hour
 
@@ -555,8 +570,13 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 //
 //	?is_trip_start=true   — inicio de viaje inter-sucursal (siempre requiere test)
 //	?stopped_minutes=N    — minutos detenido en ruta inter-sucursal (>= 6 requiere test)
+//	?misfires=N           — última milla: misfires del paquete actual (enviado por el frontend)
 //
-// Choferes de última milla se evalúan por tiempo desde último check-in y misfires.
+// Choferes de última milla se evalúan por misfires del paquete actual y tiempo
+// desde el último check-in formal (KSS completado o saltado). Si pasaron > 1 hora
+// desde el check-in Y hay >= 5 misfires en el paquete, se requiere re-test.
+// Choferes inter-sucursal se evalúan por tiempo detenido >= 6 min: se exige
+// re-test si no hubo check-in ese día o el último fue hace más de 2 horas.
 func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
@@ -582,11 +602,9 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 			return
 		}
 		if stoppedMinutes >= 6 {
-			// Solo forzar el re-test si el último check-in fue hace más de 3 horas
-			// (o si nunca hubo check-in hoy). Paradas cortas de descanso dentro
-			// de las primeras 3h del turno no interrumpen el viaje innecesariamente.
+			// Forzar re-test si no hubo check-in hoy o el último fue hace más de 2 horas.
 			rec, ok := h.checkinRepo.Get(user.ID, todayAR())
-			if !ok || time.Since(rec.RecordedAt) > 3*time.Hour {
+			if !ok || time.Since(rec.RecordedAt) > 2*time.Hour {
 				c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "stopped_too_long"})
 				return
 			}
@@ -595,24 +613,37 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 
 	// ── Última milla ─────────────────────────────────────────────────────────
 	case model.DriverTypeLastMile:
-		rec, ok := h.checkinRepo.Get(user.ID, todayAR())
-		if !ok {
-			// Sin check-in: la intercepción de scan ya se encarga de mostrarlo.
+		cfg := h.fatigueSvc.Get()
+		rec, hasRec := h.checkinRepo.Get(user.ID, logicalDateAR(cfg.DailyResetHour))
+
+		// Leer misfires del query param (enviado por el frontend antes de resetear)
+		// o caer al último evento registrado en DB como fallback.
+		latestMisfires := 0
+		if raw := c.Query("misfires"); raw != "" {
+			if v, err := strconv.Atoi(raw); err == nil {
+				latestMisfires = v
+			}
+		} else if hasRec {
+			if n := len(rec.TouchEvents); n > 0 {
+				latestMisfires = rec.TouchEvents[n-1].Misfires
+			}
+		}
+
+		// Gate A: menos de 5 misfires → no hay problema táctil.
+		if latestMisfires < 5 {
 			c.JSON(http.StatusOK, gin.H{"require_test": false})
 			return
 		}
-		// Condición 1: más de 3 horas desde el último check-in.
-		if time.Since(rec.RecordedAt) > 3*time.Hour {
-			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+
+		// Gate B: 5+ misfires — exige re-test si no hay check-in formal ese día
+		// o si el último fue hace más de 1 hora.
+		hadFormalCheckin := hasRec && (rec.KSSLevel > 0 || rec.Skipped)
+		if !hadFormalCheckin {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "tactile_and_time"})
 			return
 		}
-		// Condición 2: más de 5 misfires acumulados en el día.
-		totalMisfires := 0
-		for _, e := range rec.TouchEvents {
-			totalMisfires += e.Misfires
-		}
-		if totalMisfires > 5 {
-			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "time_or_misfires"})
+		if time.Since(rec.RecordedAt) > 1*time.Hour {
+			c.JSON(http.StatusOK, gin.H{"require_test": true, "reason": "tactile_and_time"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"require_test": false})
@@ -621,6 +652,43 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 	default:
 		c.JSON(http.StatusOK, gin.H{"require_test": false})
 	}
+}
+
+// ResetMisfires pone a 0 el contador de misfires del último touch event del día.
+// Se llama desde el frontend después de confirmar una entrega para que el próximo
+// paquete arranque con slate limpio.
+func (h *DriverHandler) ResetMisfires(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	today := todayAR()
+	rec, ok := h.checkinRepo.Get(user.ID, today)
+	if !ok || len(rec.TouchEvents) == 0 {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+	rec.TouchEvents[len(rec.TouchEvents)-1].Misfires = 0
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo resetear los misfires"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// FastForwardCheckinTime resta 2h01m al RecordedAt del check-in de hoy para
+// simular que pasaron más de 2 horas desde el último check-in. Solo para testing.
+func (h *DriverHandler) FastForwardCheckinTime(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	today := todayAR()
+	rec, ok := h.checkinRepo.Get(user.ID, today)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		return
+	}
+	rec.RecordedAt = rec.RecordedAt.Add(-2*time.Hour - time.Minute)
+	if err := h.checkinRepo.Upsert(rec); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo modificar el tiempo"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "new_recorded_at": rec.RecordedAt})
 }
 
 // updateBaseline computes a simple running average between the existing baseline

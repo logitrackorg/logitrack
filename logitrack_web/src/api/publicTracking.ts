@@ -41,16 +41,27 @@ export interface PublicShipment {
   incident_type?: IncidentType;
 }
 
+export interface EventLocation {
+  type: 'ORIGIN_BRANCH' | 'DESTINATION_BRANCH' | 'IN_TRANSIT';
+  branch_code: string;
+  branch_name: string;
+  status: string;
+}
+
 export interface PublicShipmentEvent {
   id: string;
   tracking_id: string;
-  event_type?: string;
+  event_type?: string; // "rescheduled" | "status_change" | "edited" | "claim_created"
   from_status?: ShipmentStatus;
   to_status: ShipmentStatus;
   location?: string;
+  notes?: string; 
   timestamp: string;
   claim_status?: ClaimStatus;
   claim_updated_at?: string;
+  current_location?: EventLocation;
+  rescheduled_date?: string;
+  via?: string; // "chatbot" | "manual" | "system"
 }
 
 export interface PublicStats {

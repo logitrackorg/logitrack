@@ -90,7 +90,7 @@ export interface TouchEventPayload {
 // US4+: respuesta del gate de re-test en ruta
 export interface TestEligibilityResponse {
   require_test: boolean;
-  reason?: "time_or_misfires" | "trip_start" | "stopped_too_long" | "checkpoint";
+  reason?: "tactile_and_time" | "trip_start" | "stopped_too_long" | "checkpoint";
 }
 
 export interface TestEligibilityParams {
@@ -100,6 +100,8 @@ export interface TestEligibilityParams {
   stopped_minutes?: number;
   /** Geocerca de checkpoint (peaje, balanza, estación) → require_test: true */
   checkpoint?: boolean;
+  /** Última milla: misfires del paquete actual (enviado antes del reseteo) */
+  misfires?: number;
 }
 
 // US6: PVT (Psychomotor Vigilance Task)
@@ -136,10 +138,18 @@ export const driverApi = {
   submitPVT: (payload: PVTPayload) =>
     api.post<{ ok: boolean; pvt: PVTResult }>("/driver/pvt-test", payload).then((r) => r.data),
   /** Consulta si el chofer debe realizar las pruebas de fatiga.
-   *  · Última milla: evalúa tiempo desde check-in y misfires acumulados.
+   *  · Última milla: evalúa misfires del paquete actual y tiempo desde check-in.
    *  · Inter-sucursal: evalúa inicio de viaje o tiempo detenido >= 6 min. */
   getTestEligibility: (params?: TestEligibilityParams) =>
     api.get<TestEligibilityResponse>("/driver/test-eligibility", { params }).then((r) => r.data),
+  /** Resetea el contador de misfires del último touch event del día.
+   *  Se llama después de confirmar una entrega para que el próximo paquete
+   *  arranque con contador limpio. */
+  resetMisfires: () =>
+    api.post<{ ok: boolean }>("/driver/reset-misfires").then((r) => r.data),
+  /** DEV: resta 2h01m al timestamp del check-in del día para simular paso de tiempo. */
+  fastForwardCheckinTime: () =>
+    api.post<{ ok: boolean; new_recorded_at: string }>("/dev/simulator/fast-forward-time").then((r) => r.data),
   getControlPhrase: () =>
     api.get<{ phrase: string }>("/driver/control-phrase").then((r) => r.data),
   uploadVoice: (audioBlob: Blob) => {

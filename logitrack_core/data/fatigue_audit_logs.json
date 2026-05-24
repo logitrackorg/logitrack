@@ -1,0 +1,26 @@
+[
+  {
+    "id": "af954713b359c8b8",
+    "created_at": "2026-05-23T12:54:35.506059-03:00",
+    "created_by": "chofer_inter_1",
+    "action": "SUBMIT_CHECKIN",
+    "details": {
+      "driver_id": "15",
+      "date": "2026-05-23",
+      "kss_level": 2,
+      "horas_sueno": 8
+    }
+  },
+  {
+    "id": "e576270f790a6f44",
+    "created_at": "2026-05-23T12:56:59.176144-03:00",
+    "created_by": "chofer_caba2",
+    "action": "SUBMIT_CHECKIN",
+    "details": {
+      "driver_id": "12",
+      "date": "2026-05-23",
+      "kss_level": 6,
+      "horas_sueno": 3
+    }
+  }
+]

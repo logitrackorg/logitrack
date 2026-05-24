@@ -40,6 +40,12 @@ type ShipmentRepository interface {
 	// Devuelve (true, nil) si fue el primer llamado para ese tracking ID; (false, nil) si ya estaba marcado.
 	SetConfirmationEmailSent(trackingID string) (bool, error)
 
+	// Chatbot operations
+	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)
+	RequestPickup(cmd RequestPickupCmd) (model.Shipment, error)
+	RescheduleDelivery(cmd RescheduleDeliveryCmd) (model.Shipment, error)
+	CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error)
+
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
 	List(filter model.ShipmentFilter) ([]model.Shipment, error)
@@ -77,14 +83,15 @@ type ConfirmDraftCmd struct {
 }
 
 type StatusUpdateCmd struct {
-	TrackingID string
-	FromStatus model.Status
-	ToStatus   model.Status
-	Location   string // already resolved to branch ID
-	ChangedBy  string
-	Notes      string
-	DriverID   string
-	Timestamp  time.Time
+	TrackingID          string
+	FromStatus          model.Status
+	ToStatus            model.Status
+	Location            string // already resolved to branch ID
+	ChangedBy           string
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool
+	Timestamp           time.Time
 }
 
 type CorrectCmd struct {
@@ -155,4 +162,41 @@ type PathPlannedCmd struct {
 	HopIndex        int
 	PathRevision    int
 	Reason          string
+}
+
+
+// ==========================================
+// CHATBOT COMMANDS
+// ==========================================
+
+// AuthenticateRecipientCmd valida tracking ID y DNI del destinatario
+type AuthenticateRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+}
+
+// RequestPickupCmd cambia el método de entrega a retiro en sucursal
+type RequestPickupCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	ChangedBy    string
+	Timestamp    time.Time
+}
+
+// RescheduleDeliveryCmd reprograma la fecha de entrega (máx 2 veces, +3 días)
+type RescheduleDeliveryCmd struct {
+	TrackingID      string
+	RecipientDNI    string
+	NewDeliveryDate time.Time
+	ChangedBy       string
+	Timestamp       time.Time
+}
+
+// CancelByRecipientCmd cancela el envío por solicitud del destinatario
+type CancelByRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	Reason       string
+	ChangedBy    string
+	Timestamp    time.Time
 }
