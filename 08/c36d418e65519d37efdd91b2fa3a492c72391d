@@ -1,0 +1,34 @@
+logitrack_core/internal/db/migrate.go
+  ai_agent 163-193,411-427,446-456
+logitrack_web/android/capacitor-cordova-android-plugins/.gradle/buildOutputCleanup/cache.properties
+  ai_agent 1-2
+logitrack_core/internal/repository/inmemory.go
+  s_d676902d1d7193::t_a52934d48cff1b 594-751
+logitrack_core/internal/projection/postgres_shipment.go
+  s_589bb18cb0d406::t_8fcac6520daa46 548
+  s_589bb18cb0d406::t_95253ee4f11d6a 445-447
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "08c36d418e65519d37efdd91b2fa3a492c72391d",
+  "prompts": {},
+  "sessions": {
+    "s_589bb18cb0d406": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1c3c9a11-e6f1-41db-888d-d018a1e3f8f9",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_d676902d1d7193": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "113b83c2-9c76-4d10-b227-54661eb8d577",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
