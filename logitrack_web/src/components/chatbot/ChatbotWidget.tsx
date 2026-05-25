@@ -226,7 +226,6 @@ export const ChatbotWidget: React.FC = () => {
   // Función para limpiar la sesión
   const clearSession = () => {
     setSessionActive(false);
-    setState('initial');
     setShipment(null);
     setRecipientDni('');
     setSenderDni('');
@@ -234,10 +233,9 @@ export const ChatbotWidget: React.FC = () => {
     setAwaitingDni(false);
     setTrackingId('');
 
-
     addBotMessage(
       '⏱️ Tu sesión ha expirado por seguridad.\n\n' +
-      'Por favor, vuelve a autenticarte para continuar.'
+      'Por favor, ingresá nuevamente tu ID de envío para continuar.'
     );
 
     // Limpiar el timer
@@ -245,6 +243,9 @@ export const ChatbotWidget: React.FC = () => {
       clearTimeout(sessionTimeoutRef.current);
       sessionTimeoutRef.current = null;
     }
+
+    // Volver a authenticating para que el usuario pueda reingresar sus datos
+    setState('authenticating');
   };
 
   // Función para reiniciar el timer de inactividad
