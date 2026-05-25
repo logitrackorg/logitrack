@@ -582,3 +582,31 @@ func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, b
 		}
 	}
 }
+
+// NotifyDataAccessRequest notifica a todos los admins cuando un chofer solicita sus datos (Ley 25.326).
+func (s *NotificationService) NotifyDataAccessRequest(requesterID string, requesterUsername string, requesterFullName string) {
+	admins, err := s.repo.GetAdmins()
+	if err != nil || len(admins) == 0 {
+		log.Printf("[NotificationService] NotifyDataAccessRequest: no admins or error: %v", err)
+		return
+	}
+	now := clock.Now().UTC()
+	title := "Solicitud de datos personales (Ley 25.326)"
+	body := fmt.Sprintf("El chofer %s (%s) solicito acceso a sus datos de monitoreo.", requesterFullName, requesterUsername)
+	for _, admin := range admins {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     admin.ID,
+			Type:       model.NotificationDataAccessRequest,
+			Title:      title,
+			Body:       body,
+			ResourceID: requesterID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyDataAccessRequest create error for admin %s: %v", admin.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
