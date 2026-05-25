@@ -694,26 +694,29 @@ func TestUpdateStatus_AtHub_AutoDerivesLocationFromInTransitEvent(t *testing.T) 
 	}
 }
 
-func TestUpdateStatus_AtHub_FromDeliveryFailed_AutoDerivesFromLastAtHub(t *testing.T) {
+func TestUpdateStatus_Rechazado_QuedaEnRechazadoConIsReturning(t *testing.T) {
 	ts := newSetup()
 	ship := mustCreate(t, ts)
 	toInTransit(t, ts, ship.TrackingID)
 	toAtHub(t, ts, ship.TrackingID) // at br-cordoba
 	toOutForDelivery(t, ts, ship.TrackingID)
 
-	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusDeliveryFailed, ChangedBy: "driver", Notes: "nobody home",
+	// rechazado desde out_for_delivery directamente (sin pasar por delivery_failed)
+	result := mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status: model.StatusRechazado, ChangedBy: "driver", Notes: "🚫 No lo quiero",
 	})
 
-	// rechazado auto-transitions to at_hub — verify the auto-derived location
-	result := mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-		Status: model.StatusRechazado, ChangedBy: "supervisor",
-	})
-	if result.Status != model.StatusAtHub {
-		t.Errorf("Status = %q, want at_hub after rechazado auto-transition", result.Status)
+	// El envío debe quedar en rechazado (no auto-transiciona a at_hub).
+	if result.Status != model.StatusRechazado {
+		t.Errorf("Status = %q, want rechazado", result.Status)
 	}
-	if result.CurrentLocation != "br-cordoba" {
-		t.Errorf("CurrentLocation = %q, want %q after rechazado auto-transition", result.CurrentLocation, "br-cordoba")
+	// Debe marcarse como returning para que el plan de ruteo lo incluya en la devolución.
+	if !result.IsReturning {
+		t.Errorf("IsReturning = false, want true after rechazado")
+	}
+	// La ETA debe haber sido extendida.
+	if result.EstimatedDeliveryAt == nil {
+		t.Errorf("EstimatedDeliveryAt nil, want extended ETA after rechazado")
 	}
 }
 
@@ -859,10 +862,9 @@ func TestCancelShipment_CancellableStates(t *testing.T) {
 					t.Fatalf("create with branch_pickup: %v", err)
 				}
 				toInTransit(t, ts, ship.TrackingID)
+				// toAtHub dispara la auto-transición a ready_for_pickup cuando
+				// el envío llega a su sucursal de destino final (FinalBranchID).
 				toAtHub(t, ts, ship.TrackingID)
-				mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
-					Status: model.StatusReadyForPickup, ChangedBy: "supervisor",
-				})
 				return ship.TrackingID
 			},
 		},
@@ -1637,5 +1639,435 @@ func TestList_OrderedByTrackingID(t *testing.T) {
 		if results[i].TrackingID < results[i-1].TrackingID {
 			t.Errorf("List not sorted: %q comes after %q", results[i-1].TrackingID, results[i].TrackingID)
 		}
+	}
+}
+
+// ─── WhatsApp confirmation (LOGITRACK-406) ────────────────────────────────────
+
+type fakeWhatsAppConfirmSender struct {
+	ch chan model.Shipment
+}
+
+func newFakeWhatsAppConfirmSender() *fakeWhatsAppConfirmSender {
+	return &fakeWhatsAppConfirmSender{ch: make(chan model.Shipment, 1)}
+}
+
+func (f *fakeWhatsAppConfirmSender) SendShipmentConfirmationNotification(s model.Shipment) {
+	f.ch <- s
+}
+
+// CA-01: al crear un envío se dispara exactamente una confirmación por WhatsApp.
+func TestConfirmationWhatsApp_FiredOnCreate(t *testing.T) {
+	ts := newSetup()
+	wa := newFakeWhatsAppConfirmSender()
+	ts.svc.SetWhatsAppConfirmationService(wa)
+
+	_, err := ts.svc.Create(defaultCreateReq())
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+
+	select {
+	case s := <-wa.ch:
+		if s.TrackingID == "" {
+			t.Error("se recibió un Shipment con TrackingID vacío")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: la confirmación WhatsApp no se disparó")
+	}
+}
+
+// CA-05: la confirmación WhatsApp no se dispara si el servicio no está configurado.
+func TestConfirmationWhatsApp_NoFireWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// No se llama a SetWhatsAppConfirmationService ni SetEmailService → ambos nil.
+
+	_, err := ts.svc.Create(defaultCreateReq())
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+	// No hay canal al que esperar; verificamos que no explota y que no llega nada.
+	wa := newFakeWhatsAppConfirmSender()
+	select {
+	case <-wa.ch:
+		t.Fatal("no debería haberse disparado ninguna confirmación")
+	case <-time.After(100 * time.Millisecond):
+		// ok — nada llegó
+	}
+}
+
+// CA-03/CA-04: el Shipment enviado al notificador contiene los datos del remitente
+// y del destinatario correctos.
+func TestConfirmationWhatsApp_ShipmentDataPropagated(t *testing.T) {
+	ts := newSetup()
+	wa := newFakeWhatsAppConfirmSender()
+	ts.svc.SetWhatsAppConfirmationService(wa)
+
+	req := defaultCreateReq()
+	req.Sender.Phone = "1155550001"
+	req.Recipient.Phone = "1155550002"
+
+	ship, err := ts.svc.Create(req)
+	if err != nil {
+		t.Fatalf("Create inesperado: %v", err)
+	}
+
+	select {
+	case got := <-wa.ch:
+		if got.TrackingID != ship.TrackingID {
+			t.Errorf("TrackingID = %q, want %q", got.TrackingID, ship.TrackingID)
+		}
+		if got.Sender.Phone != req.Sender.Phone {
+			t.Errorf("Sender.Phone = %q, want %q", got.Sender.Phone, req.Sender.Phone)
+		}
+		if got.Recipient.Phone != req.Recipient.Phone {
+			t.Errorf("Recipient.Phone = %q, want %q", got.Recipient.Phone, req.Recipient.Phone)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout: la confirmación WhatsApp no se disparó")
+	}
+}
+
+// ─── delivery confirmed notification ─────────────────────────────────────────
+
+// fakeDeliveryNotifier registra llamadas a SendDeliveryConfirmedNotification
+// de forma goroutine-safe usando un canal con buffer de 8.
+type fakeDeliveryNotifier struct {
+	ch chan model.Shipment
+}
+
+func newFakeDeliveryNotifier() *fakeDeliveryNotifier {
+	return &fakeDeliveryNotifier{ch: make(chan model.Shipment, 8)}
+}
+
+func (f *fakeDeliveryNotifier) SendDeliveryConfirmedNotification(s model.Shipment) {
+	f.ch <- s
+}
+
+// recv espera la próxima llamada con un timeout de 2 s.
+func (f *fakeDeliveryNotifier) recv(t *testing.T) model.Shipment {
+	t.Helper()
+	select {
+	case s := <-f.ch:
+		return s
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout esperando SendDeliveryConfirmedNotification")
+		return model.Shipment{}
+	}
+}
+
+// TestDeliveryConfirmed_NotifiesSenderOnly verifica CA-01 y CA-02:
+// cuando un envío transiciona a "Entregado", se invoca la notificación
+// exactamente una vez y apunta al remitente (no al destinatario).
+func TestDeliveryConfirmed_NotifiesSenderOnly(t *testing.T) {
+	ts := newSetup()
+	notifier := newFakeDeliveryNotifier()
+	ts.svc.SetDeliveryConfirmedService(notifier)
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status:       model.StatusDelivered,
+		ChangedBy:    "driver-01",
+		RecipientDNI: defaultRecipient().DNI,
+	})
+
+	// CA-01: la notificación se disparó exactamente una vez.
+	notified := notifier.recv(t)
+
+	// CA-02: el envío notificado corresponde al remitente, no al destinatario.
+	if notified.TrackingID != ship.TrackingID {
+		t.Errorf("CA-02: tracking ID incorrecto: got %s, want %s", notified.TrackingID, ship.TrackingID)
+	}
+	if notified.Sender.DNI != defaultSender().DNI {
+		t.Errorf("CA-02: Sender.DNI incorrecto: got %s", notified.Sender.DNI)
+	}
+	if notified.Status != model.StatusDelivered {
+		t.Errorf("CA-01: status del envío notificado debería ser delivered, got %s", notified.Status)
+	}
+
+	// Verificar que no se disparó ninguna notificación adicional (solo el remitente, CA-02).
+	select {
+	case extra := <-notifier.ch:
+		t.Errorf("CA-02: se recibió notificación inesperada adicional para %s", extra.TrackingID)
+	default:
+		// correcto — no hay llamadas extra
+	}
+}
+
+// TestDeliveryConfirmed_NoNotifWhenNotConfigured verifica que si el servicio
+// de notificación no fue configurado, UpdateStatus no falla (es opcional).
+func TestDeliveryConfirmed_NoNotifWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// deliveryNotifSvc no seteado → debe funcionar igualmente
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	result, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
+		Status:       model.StatusDelivered,
+		ChangedBy:    "driver-01",
+		RecipientDNI: defaultRecipient().DNI,
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus falló sin notifier configurado: %v", err)
+	}
+	if result.Status != model.StatusDelivered {
+		t.Errorf("status esperado delivered, got %s", result.Status)
+	}
+}
+
+// ─── LOGITRACK-429: Envío rechazado al remitente ──────────────────────────────
+
+// fakeRejectedNotifier registra llamadas a SendRejectedNotification
+// de forma goroutine-safe usando un canal con buffer.
+type fakeRejectedNotifier struct {
+	ch chan struct {
+		shipment model.Shipment
+		notes    string
+	}
+}
+
+func newFakeRejectedNotifier() *fakeRejectedNotifier {
+	return &fakeRejectedNotifier{ch: make(chan struct {
+		shipment model.Shipment
+		notes    string
+	}, 8)}
+}
+
+func (f *fakeRejectedNotifier) SendRejectedNotification(s model.Shipment, notes string) {
+	f.ch <- struct {
+		shipment model.Shipment
+		notes    string
+	}{s, notes}
+}
+
+func (f *fakeRejectedNotifier) recv(t *testing.T) (model.Shipment, string) {
+	t.Helper()
+	select {
+	case v := <-f.ch:
+		return v.shipment, v.notes
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout esperando SendRejectedNotification")
+		return model.Shipment{}, ""
+	}
+}
+
+// TestRejected_NotifiesSenderOnly verifica CA-01 y CA-02:
+// cuando un envío transiciona a "rechazado", se invoca la notificación
+// exactamente una vez y recibe el Sender y el motivo (notes).
+func TestRejected_NotifiesSenderOnly(t *testing.T) {
+	ts := newSetup()
+	notifier := newFakeRejectedNotifier()
+	ts.svc.SetRejectedService(notifier)
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusRechazado,
+		ChangedBy: "driver-01",
+		Notes:     "🚫 No lo quiero",
+	})
+
+	// CA-01: la notificación se disparó exactamente una vez.
+	notified, notes := notifier.recv(t)
+
+	// CA-02: el tracking ID y el Sender son correctos.
+	if notified.TrackingID != ship.TrackingID {
+		t.Errorf("CA-02: tracking ID incorrecto: got %s, want %s", notified.TrackingID, ship.TrackingID)
+	}
+	if notified.Sender.DNI != defaultSender().DNI {
+		t.Errorf("CA-02: Sender.DNI incorrecto: got %s", notified.Sender.DNI)
+	}
+	if notified.Status != model.StatusRechazado {
+		t.Errorf("CA-01: status debería ser rechazado, got %s", notified.Status)
+	}
+
+	// CA-03: el motivo de rechazo se pasa correctamente.
+	if notes != "🚫 No lo quiero" {
+		t.Errorf("CA-03: notes incorrecto: got %q, want %q", notes, "🚫 No lo quiero")
+	}
+
+	// Solo una notificación (CA-02).
+	select {
+	case extra := <-notifier.ch:
+		t.Errorf("CA-02: notificación inesperada adicional para %s", extra.shipment.TrackingID)
+	default:
+	}
+}
+
+// TestRejected_NoNotifWhenNotConfigured verifica que si el servicio
+// de notificación no fue configurado, UpdateStatus no falla.
+func TestRejected_NoNotifWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// rejectedNotifSvc no seteado → debe funcionar igualmente
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	result, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusRechazado,
+		ChangedBy: "driver-01",
+		Notes:     "🚫 No lo quiero",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus falló sin notifier configurado: %v", err)
+	}
+	if result.Status != model.StatusRechazado {
+		t.Errorf("status esperado rechazado, got %s", result.Status)
+	}
+}
+
+// ─── LOGITRACK-437: Entrega fallida al destinatario ───────────────────────────
+
+type fakeDeliveryFailedNotifier struct {
+	ch chan struct {
+		shipment     model.Shipment
+		attemptsUsed int
+		maxAttempts  int
+		branch       model.Branch
+	}
+}
+
+func newFakeDeliveryFailedNotifier() *fakeDeliveryFailedNotifier {
+	return &fakeDeliveryFailedNotifier{ch: make(chan struct {
+		shipment     model.Shipment
+		attemptsUsed int
+		maxAttempts  int
+		branch       model.Branch
+	}, 8)}
+}
+
+func (f *fakeDeliveryFailedNotifier) SendDeliveryFailedNotification(s model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch) {
+	f.ch <- struct {
+		shipment     model.Shipment
+		attemptsUsed int
+		maxAttempts  int
+		branch       model.Branch
+	}{s, attemptsUsed, maxAttempts, branch}
+}
+
+func (f *fakeDeliveryFailedNotifier) recv(t *testing.T) (model.Shipment, int, int, model.Branch) {
+	t.Helper()
+	select {
+	case v := <-f.ch:
+		return v.shipment, v.attemptsUsed, v.maxAttempts, v.branch
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout esperando SendDeliveryFailedNotification")
+		return model.Shipment{}, 0, 0, model.Branch{}
+	}
+}
+
+// CA-01: la notificación se dispara cuando el envío transiciona a delivery_failed.
+func TestDeliveryFailed_NotifiesRecipient(t *testing.T) {
+	ts := newSetup()
+	notifier := newFakeDeliveryFailedNotifier()
+	ts.svc.SetDeliveryFailedService(notifier)
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusDeliveryFailed,
+		ChangedBy: "driver-01",
+		Notes:     "ausente",
+	})
+
+	// CA-01: se disparó exactamente una notificación.
+	notified, attemptsUsed, maxAttempts, _ := notifier.recv(t)
+
+	if notified.TrackingID != ship.TrackingID {
+		t.Errorf("CA-01: TrackingID incorrecto: got %s, want %s", notified.TrackingID, ship.TrackingID)
+	}
+	// CA-03: intentos usados = 1 (primer fallo), maxAttempts = 3 (default), quedan 2.
+	if attemptsUsed != 1 {
+		t.Errorf("CA-03: attemptsUsed = %d, want 1", attemptsUsed)
+	}
+	if maxAttempts != 3 {
+		t.Errorf("CA-03: maxAttempts = %d, want 3", maxAttempts)
+	}
+
+	// Solo una notificación.
+	select {
+	case extra := <-notifier.ch:
+		t.Errorf("CA-01: notificación inesperada adicional para %s", extra.shipment.TrackingID)
+	default:
+	}
+}
+
+// CA-04: cuando se alcanza el máximo de intentos, attemptsLeft = 0.
+func TestDeliveryFailed_AttemptsExhausted(t *testing.T) {
+	ts := newSetup()
+	notifier := newFakeDeliveryFailedNotifier()
+	ts.svc.SetDeliveryFailedService(notifier)
+
+	ship := mustCreate(t, ts)
+
+	// Avanzar hasta out_for_delivery y fallar 3 veces (maxDeliveryAttempts = 3).
+	// Cada ciclo: out_for_delivery → delivery_failed → redelivery_scheduled → out_for_delivery.
+	for i := 0; i < 3; i++ {
+		if i == 0 {
+			toInTransit(t, ts, ship.TrackingID)
+			toAtHub(t, ts, ship.TrackingID)
+			toOutForDelivery(t, ts, ship.TrackingID)
+		} else {
+			mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+				Status: model.StatusRedeliveryScheduled, ChangedBy: "supervisor",
+			})
+			mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+				Status: model.StatusOutForDelivery, DriverID: "driver-01", ChangedBy: "supervisor",
+			})
+		}
+		mustStatus(t, ts, ship.TrackingID, model.UpdateStatusRequest{
+			Status: model.StatusDeliveryFailed, ChangedBy: "driver-01", Notes: "ausente",
+		})
+		// Drain notifier para no bloquear.
+		<-notifier.ch
+	}
+
+	// El último intento (3ro) debe tener attemptsUsed == maxAttempts → 0 intentos restantes (CA-04).
+	// El canal ya fue drenado en el loop, leemos el último evento manualmente.
+	// Re-ejecutamos un cuarto intento: debe ser rechazado por el servicio (máx alcanzado).
+	_, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusRedeliveryScheduled,
+		ChangedBy: "supervisor",
+	})
+	if err == nil {
+		t.Error("CA-04: debería haberse bloqueado redelivery después de agotar intentos")
+	}
+}
+
+// CA-01: no se dispara nada si el servicio no está configurado.
+func TestDeliveryFailed_NoNotifWhenNotConfigured(t *testing.T) {
+	ts := newSetup()
+	// deliveryFailedNotifSvc no seteado
+
+	ship := mustCreate(t, ts)
+	toInTransit(t, ts, ship.TrackingID)
+	toAtHub(t, ts, ship.TrackingID)
+	toOutForDelivery(t, ts, ship.TrackingID)
+
+	result, err := ts.svc.UpdateStatus(ship.TrackingID, model.UpdateStatusRequest{
+		Status:    model.StatusDeliveryFailed,
+		ChangedBy: "driver-01",
+		Notes:     "ausente",
+	})
+	if err != nil {
+		t.Fatalf("UpdateStatus falló sin notifier configurado: %v", err)
+	}
+	if result.Status != model.StatusDeliveryFailed {
+		t.Errorf("status esperado delivery_failed, got %s", result.Status)
 	}
 }

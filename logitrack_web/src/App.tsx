@@ -5,9 +5,11 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { NotificationBell } from "./components/NotificationBell";
 import { NotificationsPage } from "./pages/NotificationsPage";
-import { Dashboard } from "./pages/Dashboard";
+import { DashboardHost } from "./pages/DashboardHost";
+import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
+import { Claims } from "./pages/Claims";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
@@ -61,11 +63,15 @@ function Nav() {
       {hasRole("supervisor", "manager") && (
         <NavLink to="/dashboard" style={navStyle}>Dashboard</NavLink>
       )}
+
       {hasRole("supervisor", "manager") && (
         <NavLink to="/supervisor/fatigue" style={navStyle}>Fatiga</NavLink>
       )}
       {!hasRole("admin") && (
         <NavLink to="/" end style={navStyle}>Envíos</NavLink>
+      )}
+      {hasRole("operator", "supervisor", "manager") && (
+        <NavLink to="/claims" style={navStyle}>Reclamos</NavLink>
       )}
       {hasRole("operator", "supervisor", "manager", "admin") && (
         <NavLink to="/vehicles" style={navStyle}>Flota</NavLink>
@@ -222,17 +228,34 @@ function AppRoutes() {
       <Nav />
       <main>
         <Routes>
-          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace /> : <Login />} />
+          <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin/users" : user.role === "manager" ? "/dashboard" : "/"} replace /> : <Login />} />
 
           <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <Dashboard />
+            <ProtectedRoute roles={["supervisor", "manager"]}
+>
+              <DashboardHost />
             </ProtectedRoute>
           } />
 
+          <Route path="/kpi-detail" element={
+            <ProtectedRoute roles={["supervisor", "manager"]}>
+              <KpiDetail />
+            </ProtectedRoute>
+          } />
           <Route path="/" element={
             <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
               <ShipmentList />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/claims" element={
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+              <Claims />
+            </ProtectedRoute>
+          } />
+          <Route path="/claims/:id" element={
+            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+              <Claims />
             </ProtectedRoute>
           } />
 
@@ -307,6 +330,14 @@ function AppRoutes() {
               <InterBranchTripsList />
             </ProtectedRoute>
           } />
+
+          <Route path="/reports/drivers" element={<Navigate to="/dashboard?tab=choferes" replace />} />
+          <Route path="/reports/incidents" element={<Navigate to="/dashboard?tab=reclamos" replace />} />
+          <Route path="/reports/billing" element={<Navigate to="/dashboard?tab=facturacion" replace />} />
+          <Route path="/reports/branch-ranking" element={<Navigate to="/dashboard?tab=ranking" replace />} />
+          <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
+          <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
+          <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
 
           {/* Legacy redirects */}
           <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />

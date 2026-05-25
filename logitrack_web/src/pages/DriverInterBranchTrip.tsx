@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -16,9 +16,13 @@ import {
   X,
 } from "lucide-react";
 import { interBranchTripsApi, type InterBranchTrip, type TripQRResponse } from "../api/interBranchTrips";
+import { driverApi } from "../api/driver";
 import { publicTrackingApi } from "../api/publicTracking";
 import type { Branch } from "../api/branches";
 import { Card } from "../components/ui/card";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
+import { useGeolocation } from "../hooks/useGeolocation";
 
 // ---------------------------------------------------------------------------
 // Haversine
@@ -69,6 +73,7 @@ function formatDuration(hours: number): string {
 // ---------------------------------------------------------------------------
 export function DriverInterBranchTrip() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<InterBranchTrip | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,6 +81,17 @@ export function DriverInterBranchTrip() {
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
+
+  // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
+  const [midTripCheckin, setMidTripCheckin] = useState(false);
+  // Evita disparar múltiples consultas al gate cuando el vehículo está detenido.
+  const stopGateCheckedRef = useRef(false);
+  // Índices de checkpoints ya procesados en esta jornada (no repetir la alerta).
+  const checkpointPassedRef = useRef<Set<number>>(new Set());
+  // Último current_stop_index conocido; permite detectar el avance de parada.
+  const prevStopIndexRef = useRef<number | null>(null);
+  // Ref estable al trip actual — usado en handleCheckinDone sin necesitar deps.
+  const tripRef = useRef<typeof trip>(null);
 
   // QR modal state
   const [qrOpen, setQrOpen] = useState(false);
@@ -93,6 +109,43 @@ export function DriverInterBranchTrip() {
   const mapInstanceRef = useRef<unknown>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
+  // Los routePoints se derivan del trip y las branches. Mientras no haya datos
+  // el hook recibe [] y no inicia el intervalo (ver implementación).
+  const routePoints = useMemo(() => {
+    if (!trip || !branches.length) return [];
+    const origin = branches.find((b) => b.id === trip.origin_branch_id);
+    if (!origin?.latitude) return [];
+    const pts: { lat: number; lng: number }[] = [
+      { lat: origin.latitude!, lng: origin.longitude! },
+    ];
+    const stops = trip.stops ?? [];
+    stops.forEach((s) => {
+      const b = branches.find((br) => br.id === s.branch_id);
+      if (b?.latitude) pts.push({ lat: b.latitude!, lng: b.longitude! });
+    });
+    return pts;
+  }, [trip, branches]);
+
+  // Checkpoints sintéticos: punto medio entre cada par de stops de la ruta.
+  // En un despliegue real estos vendrían de la API (peajes, balanzas, estaciones).
+  // Cuando la posición simulada entra en 500 m de uno de estos puntos, se
+  // consulta el backend y — si el check-in lleva >3h — se fuerza el re-test.
+  const checkpoints = useMemo(() => {
+    if (routePoints.length < 2) return [];
+    const midpoints: { lat: number; lng: number }[] = [];
+    for (let i = 0; i < routePoints.length - 1; i++) {
+      const a = routePoints[i];
+      const b = routePoints[i + 1];
+      midpoints.push({ lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+    }
+    return midpoints;
+  }, [routePoints]);
+
+  const { stoppedTimeMs, position } = useGeolocation(routePoints, undefined, 80);
+
+  useEffect(() => { tripRef.current = trip; }, [trip]);
 
   const load = useCallback(async () => {
     try {
@@ -167,6 +220,94 @@ export function DriverInterBranchTrip() {
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [qrOpen, trip, branches]);
 
+  // Gate de fatiga por tiempo detenido (solo en modo simulación activa y viaje en tránsito).
+  // Cuando stoppedTimeMs vuelve a 0 el ref se resetea para detectar la próxima parada larga.
+  // La consulta al backend solo se dispara UNA VEZ por parada (al cruzar el umbral de 6 min).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito" || midTripCheckin) return;
+
+    if (stoppedTimeMs === 0) {
+      stopGateCheckedRef.current = false; // vehículo en movimiento → resetear para próxima parada
+      return;
+    }
+    if (stoppedTimeMs < 6 * 60 * 1000) return; // todavía bajo el umbral
+    if (stopGateCheckedRef.current) return;     // ya consultamos para esta parada
+
+    stopGateCheckedRef.current = true;
+    driverApi
+      .getTestEligibility({ stopped_minutes: Math.floor(stoppedTimeMs / 60_000) })
+      .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+      .catch(() => { /* error de red — no bloquear al chofer */ });
+  }, [stoppedTimeMs, trip, midTripCheckin]);
+
+  // Check-in obligatorio al salir de cada parada intermedia.
+  // Trigger: cuando current_stop_index avanza en tiempo real (el operador
+  // escaneó el QR de recepción en la sucursal de destino).
+  //
+  // IMPORTANTE — NO incluir midTripCheckin en las deps:
+  // El overlay no cambia `trip`, así que el efecto no re-corre mientras está
+  // activo. Incluirlo causaba un loop infinito: al cerrar el overlay,
+  // midTripCheckin volvía a false y el efecto re-disparaba con el ref
+  // desactualizado (era early-return durante el overlay y no se actualizaba).
+  useEffect(() => {
+    if (!trip) return;
+
+    // Al completar el viaje: limpiar la entrada de localStorage.
+    if (trip.status === "completado") {
+      localStorage.removeItem(`trip_checkin_${trip.id}`);
+      prevStopIndexRef.current = null;
+      return;
+    }
+
+    if (trip.status !== "en_transito") {
+      prevStopIndexRef.current = null;
+      return;
+    }
+
+    const curIdx = trip.current_stop_index ?? 0;
+
+    if (prevStopIndexRef.current === null) {
+      // ── Carga inicial (o re-login) ───────────────────────────────────────
+      // Comparar el índice actual contra el último guardado en localStorage.
+      // Si el supervisor avanzó el índice mientras el chofer estaba fuera,
+      // curIdx > stored → mostrar el check-in pendiente.
+      const stored = parseInt(localStorage.getItem(`trip_checkin_${trip.id}`) ?? "0", 10);
+      if (curIdx > stored) {
+        setMidTripCheckin(true);
+      }
+      prevStopIndexRef.current = curIdx;
+      return;
+    }
+
+    if (curIdx > prevStopIndexRef.current) {
+      // El índice subió en tiempo real → nueva parada confirmada por QR.
+      // Mostrar check-in antes de que el chofer salga hacia la siguiente.
+      setMidTripCheckin(true);
+    }
+
+    // Actualizar SIEMPRE el ref, incluso si setMidTripCheckin fue llamado.
+    prevStopIndexRef.current = curIdx;
+  }, [trip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocercas de checkpoints (Regla 5): al entrar en 500 m de un checkpoint
+  // sintético y el viaje está en tránsito, consultar elegibilidad y forzar
+  // el re-test si el último check-in fue hace más de 3 horas.
+  useEffect(() => {
+    if (!position || !trip || trip.status !== "en_transito" || midTripCheckin) return;
+    for (let idx = 0; idx < checkpoints.length; idx++) {
+      if (checkpointPassedRef.current.has(idx)) continue; // ya procesado
+      const distM = haversineKm(position, checkpoints[idx]) * 1000;
+      if (distM <= 500) {
+        checkpointPassedRef.current.add(idx); // marcar como visitado
+        driverApi
+          .getTestEligibility({ checkpoint: true })
+          .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+          .catch(() => {});
+        break; // procesar un checkpoint por tick
+      }
+    }
+  }, [position, trip, midTripCheckin, checkpoints]);
+
   // Mapa Leaflet
   useEffect(() => {
     if (!trip || !mapRef.current || !branches.length) return;
@@ -227,14 +368,57 @@ export function DriverInterBranchTrip() {
           .bindPopup(`<b>${p.label}</b><br>${p.branch?.name ?? ""}<br>${p.branch?.address.city ?? ""}`);
       });
 
-      for (let i = 0; i < points.length - 1; i++) {
-        L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-          color: points[i + 1].completed ? "#059669" : "#1e3a5f",
-          weight: 3,
-          dashArray: points[i + 1].completed ? undefined : "8 6",
-        }).addTo(map);
-      }
-      map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [40, 40] });
+      const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] });
+
+      // Ruta real por carretera vía OSRM — usa legs para colorear por segmento
+      const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(";");
+      fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false&geometries=geojson&steps=false&alternatives=false&annotations=false`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.code !== "Ok" || !data.routes?.[0]?.legs) throw new Error("no route");
+          // Pedir geometría por leg individual para colorear completados vs pendientes
+          const legRequests: Promise<Response>[] = [];
+          for (let i = 0; i < points.length - 1; i++) {
+            const from = `${points[i].lng},${points[i].lat}`;
+            const to = `${points[i + 1].lng},${points[i + 1].lat}`;
+            legRequests.push(fetch(`https://router.project-osrm.org/route/v1/driving/${from};${to}?overview=full&geometries=geojson`));
+          }
+          return Promise.all(legRequests).then((responses) =>
+            Promise.all(responses.map((r) => r.json()))
+          ).then((legs) => {
+            legs.forEach((legData, i) => {
+              if (legData.code !== "Ok" || !legData.routes?.[0]) {
+                // fallback línea recta para este segmento
+                L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+                  color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                  weight: 3,
+                  dashArray: points[i + 1].completed ? undefined : "8 6",
+                }).addTo(map);
+                return;
+              }
+              const coords: [number, number][] = legData.routes[0].geometry.coordinates.map(
+                (c: number[]) => [c[1], c[0]] as [number, number],
+              );
+              L.polyline(coords, {
+                color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                weight: 3,
+                opacity: 0.8,
+                dashArray: points[i + 1].completed ? undefined : "8 6",
+              }).addTo(map);
+            });
+          });
+        })
+        .catch(() => {
+          // fallback: líneas rectas si OSRM no responde
+          for (let i = 0; i < points.length - 1; i++) {
+            L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+              color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+              weight: 3,
+              dashArray: points[i + 1].completed ? undefined : "8 6",
+            }).addTo(map);
+          }
+        });
     }).catch(() => {});
 
     return () => {
@@ -255,7 +439,7 @@ export function DriverInterBranchTrip() {
     }
   };
 
-  const handleStart = async () => {
+  const doStartTrip = async () => {
     if (!trip) return;
     setStarting(true);
     setError("");
@@ -269,6 +453,35 @@ export function DriverInterBranchTrip() {
       setStarting(false);
     }
   };
+
+  const handleStart = async () => {
+    // El check-in del inicio del viaje (Buenos Aires) no se requiere.
+    // Los check-ins se disparan en cada PARADA INTERMEDIA, no en el origen.
+    await doStartTrip();
+  };
+
+  // Callback que recibe KssCheckIn al terminar (completar o saltear).
+  // Persiste el índice actual en localStorage para que, si el chofer cierra
+  // sesión y vuelve a entrar, el sistema sepa hasta qué parada ya hizo el test.
+  const handleCheckinDone = useCallback(() => {
+    setMidTripCheckin(false);
+    const t = tripRef.current;
+    if (t) {
+      const curIdx = t.current_stop_index ?? 0;
+      localStorage.setItem(`trip_checkin_${t.id}`, String(curIdx));
+    }
+  }, []);
+
+  // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
+  // el viaje o cuando lleva más de 6 minutos detenido en ruta.
+  if (midTripCheckin && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        onDone={handleCheckinDone}
+      />
+    );
+  }
 
   if (loading) return <TripSkeleton />;
   if (noTrip) return <NoTripView />;

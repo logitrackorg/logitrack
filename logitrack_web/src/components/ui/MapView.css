@@ -517,6 +517,16 @@
   border: 2px solid #fca5a5;
 }
 
+.nsc-rejected {
+  background: #fffbeb;
+  color: #b45309;
+  border: 2px solid #fcd34d;
+}
+
+.nsc-secondary-actions {
+  margin-bottom: 10px;
+}
+
 .nsc-full-route {
   display: flex;
   align-items: center;

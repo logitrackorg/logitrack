@@ -43,6 +43,8 @@ func isVisibleForDriver(sh model.Shipment, routeDate model.DateOnly) bool {
 		return true
 	case model.StatusDelivered:
 		return sh.DeliveredAt != nil && model.NewDateOnly(sh.DeliveredAt.In(clock.LocalTZ)).Equal(routeDate)
+	case model.StatusRechazado:
+		return true
 	}
 	return false
 }
@@ -144,7 +146,7 @@ func (s *RouteService) ValidateDriverCanUpdateShipment(driverID, trackingID stri
 	if !route.HasShipment(trackingID) {
 		return fmt.Errorf("el envío no está en tu ruta")
 	}
-	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost {
+	if status != model.StatusDelivered && status != model.StatusDeliveryFailed && status != model.StatusLost && status != model.StatusRechazado {
 		return fmt.Errorf("los choferes solo pueden marcar envíos como entregado, fallo de entrega o extraviado")
 	}
 	return nil
@@ -240,6 +242,20 @@ func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
 	route.Status = model.RouteStatusActive
 	route.StartedAt = &now
 	return route, nil
+}
+
+// ReopenRoute reactivates a finished route so the driver can start a second run on the same day.
+// Called when the driver claims a new last-mile vehicle after completing a previous route.
+func (s *RouteService) ReopenRoute(driverID string) error {
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+	route, err := s.repo.GetByDriverAndDate(driverID, today)
+	if err != nil {
+		return fmt.Errorf("no tenés una ruta asignada para hoy")
+	}
+	if route.Status != model.RouteStatusFinished {
+		return nil // already active or pending — nothing to do
+	}
+	return s.repo.UpdateStatus(route.ID, model.RouteStatusActive, route.StartedAt)
 }
 
 // CheckAndFinalizeRoute finalizes the route if all shipments reached a terminal delivery state.

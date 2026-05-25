@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,10 +11,6 @@ import (
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
-
-func simulateEnabled() bool {
-	return os.Getenv("MP_SIMULATE_ENABLED") == "true"
-}
 
 // PaymentService orchestrates the payment lifecycle for shipments:
 // request (draft → pending_payment), webhook confirmation (pending_payment → at_origin_hub),
@@ -111,8 +106,6 @@ func (s *PaymentService) RequestPayment(trackingID, username string) (model.Paym
 		CreatedAt:      now,
 	}
 
-	payment.SimulateEnabled = simulateEnabled()
-
 	if err := s.paymentRepo.Create(payment); err != nil {
 		return model.Payment{}, fmt.Errorf("error al guardar pago: %w", err)
 	}
@@ -200,6 +193,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 	}
 
 	s.shipmentSvc.upsertParties(confirmed)
+	go s.shipmentSvc.sendConfirmationEmails(confirmed)
 
 	// Auto-transition: if origin == final branch, skip at_origin_hub → at_hub.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
@@ -255,12 +249,7 @@ func (s *PaymentService) BackToDraft(trackingID, username string) error {
 
 // GetByTrackingID returns the most recent payment record for a shipment.
 func (s *PaymentService) GetByTrackingID(trackingID string) (model.Payment, error) {
-	p, err := s.paymentRepo.GetByTrackingID(trackingID)
-	if err != nil {
-		return p, err
-	}
-	p.SimulateEnabled = simulateEnabled()
-	return p, nil
+	return s.paymentRepo.GetByTrackingID(trackingID)
 }
 
 // ExpirePending reverts to draft all pending_payment shipments older than cutoff.

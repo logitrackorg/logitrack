@@ -132,6 +132,114 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.EstimatedDeliveryAt = &newETA
 		shipment.UpdatedAt = event.Timestamp
 		p.shipments[event.TrackingID] = shipment
+
+	
+		case model.EventPickupRequested:
+		_ = event.Payload.(model.PickupRequestedPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		// Cambiar método de entrega a retiro en sucursal
+		shipment.DeliveryMethod = model.DeliveryMethodBranchPickup
+		// Cambiar estado a ready_for_pickup
+		shipment.Status = model.StatusReadyForPickup
+		// Actualizar timestamp y metadata
+		shipment.UpdatedAt = event.Timestamp
+		if shipment.ChatbotMetadata == nil {
+			shipment.ChatbotMetadata = &model.ChatbotMetadata{
+				MaxReschedules: 2,
+			}
+		}
+		now := event.Timestamp
+		shipment.ChatbotMetadata.LastChatbotInteraction = &now
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventDeliveryRescheduled:
+		payload := event.Payload.(model.DeliveryRescheduledPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		// Actualizar fecha de entrega estimada
+		newDate := payload.NewDeliveryDate
+		shipment.EstimatedDeliveryAt = &newDate
+		shipment.UpdatedAt = event.Timestamp
+		
+		// Actualizar metadata del chatbot
+		if shipment.ChatbotMetadata == nil {
+			shipment.ChatbotMetadata = &model.ChatbotMetadata{
+				MaxReschedules: 2,
+			}
+		}
+		shipment.ChatbotMetadata.RescheduleCount = payload.RescheduleCount
+		shipment.ChatbotMetadata.ScheduledDeliveryDate = &newDate
+		if shipment.ChatbotMetadata.OriginalDeliveryDate == nil && payload.OriginalDate != nil {
+			shipment.ChatbotMetadata.OriginalDeliveryDate = payload.OriginalDate
+		}
+		now := event.Timestamp
+		shipment.ChatbotMetadata.LastChatbotInteraction = &now
+		
+		// Si el estado es "redelivery_scheduled", mantenerlo; sino cambiarlo
+		if shipment.Status != model.StatusRedeliveryScheduled {
+			shipment.Status = model.StatusRedeliveryScheduled
+		}
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventCancelledByRecipient:
+		payload := event.Payload.(model.CancelledByRecipientPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		// Cambiar estado a cancelado
+		shipment.Status = model.StatusCancelled
+		shipment.UpdatedAt = event.Timestamp
+		
+		// Actualizar metadata del chatbot
+		if shipment.ChatbotMetadata == nil {
+			shipment.ChatbotMetadata = &model.ChatbotMetadata{
+				MaxReschedules: 2,
+			}
+		}
+		now := event.Timestamp
+		shipment.ChatbotMetadata.CancelledAt = &now
+		shipment.ChatbotMetadata.CancelledBy = "RECIPIENT"
+		shipment.ChatbotMetadata.CancellationReason = payload.Reason
+		shipment.ChatbotMetadata.LastChatbotInteraction = &now
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentZoned:
+		payload, ok := event.Payload.(model.ShipmentZonedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		zone := string(payload.Zone)
+		shipment.CurrentZone = &zone
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentMoved:
+		payload, ok := event.Payload.(model.ShipmentMovedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		if payload.ToZone == "" {
+			shipment.CurrentZone = nil
+		} else {
+			zone := string(payload.ToZone)
+			shipment.CurrentZone = &zone
+		}
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
 	}
 }
 
@@ -236,6 +344,42 @@ func (p *ShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, er
 	return stats, nil
 }
 
+func (p *ShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.CancellationStats{
+		ByDay:            map[string]int{},
+		ReasonsBreakdown: map[string]int{},
+	}, nil
+}
+
+func (p *ShipmentProjection) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.AvgTimePerStatus{}, nil
+}
+
+func (p *ShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	result := map[string]int{}
+	for _, s := range p.shipments {
+		if statusFilter != "" && string(s.Status) != statusFilter {
+			continue
+		}
+		if dateFrom != nil && s.CreatedAt.Before(*dateFrom) {
+			continue
+		}
+		if dateTo != nil && s.CreatedAt.After(*dateTo) {
+			continue
+		}
+		if s.ReceivingBranchID != "" {
+			result[s.ReceivingBranchID]++
+		}
+	}
+	return result, nil
+}
+
 func (p *ShipmentProjection) ReserveForTrip(trackingID, tripID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -262,4 +406,46 @@ func (p *ShipmentProjection) ReleaseFromTrip(trackingID string) error {
 	s.ReservedForTripID = nil
 	p.shipments[trackingID] = s
 	return nil
+}
+
+func (p *ShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	s.SLANotifiedAt = notifiedAt
+	p.shipments[trackingID] = s
+	return nil
+}
+
+func (p *ShipmentProjection) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return fmt.Errorf("shipment not found")
+	}
+	s.SLAExpiredNotifiedAt = notifiedAt
+	p.shipments[trackingID] = s
+	return nil
+}
+
+// SetConfirmationEmailSent marca el envío como notificado por email (CA-05 dedup, in-memory).
+// Devuelve true si fue el primer llamado (no estaba marcado).
+func (p *ShipmentProjection) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.shipments[trackingID]
+	if !ok {
+		return false, fmt.Errorf("shipment not found")
+	}
+	if s.ConfirmationEmailSentAt != nil {
+		return false, nil // ya enviado
+	}
+	now := time.Now().UTC()
+	s.ConfirmationEmailSentAt = &now
+	p.shipments[trackingID] = s
+	return true, nil
 }

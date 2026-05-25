@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck } from "lucide-react";
-import { notificationApi, type Notification } from "../api/notifications";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck, MapPin, UserCheck } from "lucide-react";
+import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function relativeTime(dateStr: string, clockOffsetMs = 0): string {
+  const diff = (Date.now() + clockOffsetMs) - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "ahora";
   if (mins < 60) return `hace ${mins} min`;
@@ -26,11 +26,56 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function typeAccent(type: string): string {
+  if (type === "destination_arrival") return "#34d399";
+  if (type === "return_arrival")      return "#fb923c";
+  if (type === "return_started")      return "#f97316";
+  if (type === "return_completed")    return "#f59e0b";
+  if (type === "sla_risk")            return "#ef4444";
+  if (type === "sla_expired")         return "#b91c1c";
+  if (type === "min_fill_reached")    return "#7c3aed";
+  if (type === "route_assigned")        return "#0ea5e9";
+  if (type === "route_reassigned")      return "#f59e0b";
+  if (type === "trip_driver_assigned")  return "#10b981";
+  return "#3b82f6";
+}
+
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received") {
-    return <Package size={18} color="#60a5fa" />;
-  }
+  if (type === "shipment_received")   return <Package      size={18} color="#60a5fa" />;
+  if (type === "destination_arrival") return <Building2    size={18} color="#34d399" />;
+  if (type === "return_arrival")      return <RotateCcw     size={18} color="#fb923c" />;
+  if (type === "return_started")      return <RotateCcw     size={18} color="#f97316" />;
+  if (type === "return_completed")    return <PackageCheck  size={18} color="#f59e0b" />;
+  if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
+  if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
+  if (type === "min_fill_reached")    return <Truck        size={18} color="#7c3aed" />;
+  if (type === "route_assigned")        return <MapPin size={18} color="#0ea5e9" />;
+  if (type === "route_reassigned")      return <MapPin size={18} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")  return <UserCheck size={18} color="#10b981" />;
   return <Bell size={18} color="#94a3b8" />;
+}
+
+function parseSLAEta(body: string): Date | null {
+  const match = body.match(/eta:([^\s·]+)$/);
+  if (!match) return null;
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function bodyWithoutEta(body: string): string {
+  return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
+}
+
+function slaCountdown(eta: Date, clockOffsetMs = 0): string {
+  const serverNow = Date.now() + clockOffsetMs;
+  const diff = eta.getTime() - serverNow;
+  if (diff <= 0) return "venció";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `vence en ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `vence en ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `vence en ${days} d`;
 }
 
 export function NotificationsPage() {
@@ -40,6 +85,7 @@ export function NotificationsPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [clockOffsetMs, setClockOffsetMs] = useState(0); // offset reloj servidor vs browser
 
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -82,6 +128,15 @@ export function NotificationsPage() {
     fetchPage(offset, appliedSearch, appliedDateFrom, appliedDateTo);
   }, [fetchPage, offset, appliedSearch, appliedDateFrom, appliedDateTo]);
 
+  // Carga el offset del reloj del servidor al montar y cada 30 s para que el
+  // countdown refleje el reloj admin aunque el browser muestre otra hora.
+  useEffect(() => {
+    const refresh = () => fetchServerClockOffsetMs().then(setClockOffsetMs);
+    refresh();
+    const id = setInterval(refresh, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const handleSearch = () => {
     setAppliedSearch(search);
     setAppliedDateFrom(dateFrom);
@@ -110,7 +165,15 @@ export function NotificationsPage() {
       );
     }
     if (n.resource_id) {
-      navigate(`/shipments/${n.resource_id}`);
+      if (n.type === "min_fill_reached") {
+        navigate(`/${n.resource_id}`);
+      } else if (n.type === "route_assigned" || n.type === "route_reassigned") {
+        navigate("/driver/route");
+      } else if (n.type === "trip_driver_assigned") {
+        navigate("/viajes");
+      } else {
+        navigate(`/shipments/${n.resource_id}`);
+      }
     }
   };
 
@@ -274,13 +337,14 @@ export function NotificationsPage() {
                 alignItems: "flex-start",
                 padding: "14px 20px",
                 borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : "#eff6ff",
+                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff",
+                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid #f59e0b" : n.type === "min_fill_reached" && !n.read_at ? "3px solid #7c3aed" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -307,14 +371,40 @@ export function NotificationsPage() {
                   </span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
                     <span style={{ color: "#94a3b8", fontSize: 11 }}>
-                      {relativeTime(n.created_at)}
+                      {relativeTime(n.created_at, clockOffsetMs)}
                     </span>
                     <span style={{ color: "#cbd5e1", fontSize: 11 }}>
                       {formatDate(n.created_at)}
                     </span>
                   </div>
                 </div>
-                <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>{n.body}</div>
+                <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>
+                  {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
+                </div>
+                {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
+                {n.type === "sla_risk" && (() => {
+                  const eta = parseSLAEta(n.body);
+                  if (!eta) return null;
+                  const label = slaCountdown(eta, clockOffsetMs);
+                  if (label === "venció") return null; // sla_expired ya cubre este estado
+                  return (
+                    <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
+                      {label}
+                    </div>
+                  );
+                })()}
+                {/* Label para sla_expired */}
+                {n.type === "sla_expired" && (
+                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: typeAccent(n.type) }}>
+                    SLA vencido
+                  </div>
+                )}
+                {/* Acción requerida para return_completed y return_arrival — CA-05 */}
+                {(n.type === "return_completed" || n.type === "return_arrival") && (
+                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+                    Acción requerida: coordinar entrega con remitente
+                  </div>
+                )}
                 {n.resource_id && (
                   <div style={{ fontSize: 11, color: "#60a5fa", marginTop: 4 }}>
                     #{n.resource_id}
@@ -327,7 +417,7 @@ export function NotificationsPage() {
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    background: "#3b82f6",
+                    background: typeAccent(n.type),
                     flexShrink: 0,
                     marginTop: 7,
                   }}

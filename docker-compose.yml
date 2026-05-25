@@ -45,6 +45,7 @@ services:
       DB_NAME: logitrack
       DB_SSLMODE: disable
       FRONTEND_URL: http://localhost:5173
+      # SMTP y TRACK_BASE_URL se cargan desde logitrack_core/.env vía env_file.
     ports:
       - "8080:8080"
     volumes:

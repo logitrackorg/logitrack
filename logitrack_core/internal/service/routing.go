@@ -44,8 +44,11 @@ type RoutingService struct {
 	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
 	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
-	graphSvc        *BranchGraphService // nullable; used for stale-replan
-	zoneSvc         *ZoneService        // nullable; needed for safe-route mode
+	graphSvc        *BranchGraphService  // nullable; used for stale-replan
+	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
+	branchZoneSvc   *BranchZoneService   // nullable; auto-move entrada→salida on ApplyPlan
+	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
+	dispatchVolumeSvc  DispatchVolumeNotifier   // nullable; LOGITRACK-409 CA-05 reset after apply
 }
 
 func NewRoutingService(
@@ -76,8 +79,21 @@ func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) 
 	s.interBranchTripSvc = svc
 }
 
+func (s *RoutingService) SetNotificationService(svc *NotificationService) {
+	s.notifSvc = svc
+}
+
+// SetDispatchVolumeService inyecta el checker de volumen mínimo para reset post-apply (CA-05).
+func (s *RoutingService) SetDispatchVolumeService(svc DispatchVolumeNotifier) {
+	s.dispatchVolumeSvc = svc
+}
+
 func (s *RoutingService) SetZoneService(svc *ZoneService) {
 	s.zoneSvc = svc
+}
+
+func (s *RoutingService) SetBranchZoneService(svc *BranchZoneService) {
+	s.branchZoneSvc = svc
 }
 
 func (s *RoutingService) SetORSClient(c *ors.Client) {
@@ -136,7 +152,9 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 		if sh.Status != model.StatusAtHub && sh.Status != model.StatusAtOriginHub && sh.Status != model.StatusRedeliveryScheduled {
 			continue
 		}
-		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
+		// retiro_sucursal: solo excluir si ya está en su sucursal de retiro final.
+		// Si FinalBranchID está en otra sucursal, necesita transporte inter-sucursal igual.
+		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup && sh.FinalBranchID == branchID {
 			continue
 		}
 		// Si el envío está reservado por un trip multi-hop (cross-branch pickup),
@@ -175,6 +193,10 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 		}
 		// Edge: at_origin_hub + final == branch (no es ruteable hoy) → no entra al plan
 	}
+
+	// SLA risk check: evalúa todos los envíos activos de la sucursal y dispara/resetea
+	// notificaciones según CA-01 a CA-04 (LOGITRACK-404).
+	s.checkSLARisk(all, cfg, now)
 
 	// 2) Última milla — asignar a vehículos de modo ultima_milla
 	plan.LastMile, plan.Unassigned = s.binPackLastMileVehicles(lastMileQ, branchID, plan.Unassigned)
@@ -911,16 +933,23 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				continue
 			}
 
-			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
-				items = append(items, failedItem(tid, target, err.Error()))
+		// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+		if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+			if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+				items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
 				continue
 			}
-			_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-				Status:    model.StatusLoaded,
-				ChangedBy: username,
-				Location:  branchID,
-				Notes:     "Cargado en " + v.LicensePlate + " vía planificador (última milla)",
-			})
+		}
+
+		if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+			items = append(items, failedItem(tid, target, err.Error()))
+			continue
+		}
+		_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
+			Status:    model.StatusLoaded,
+			ChangedBy: username,
+			Notes:     "Carga automática al aplicar plan de ruteo inter-sucursal",
+		})
 			if err != nil {
 				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
 				items = append(items, failedItem(tid, target, err.Error()))
@@ -1051,6 +1080,14 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 			if currentLoad+sh.WeightKg > v.CapacityKg {
 				items = append(items, failedItem(tid, target, "capacidad_excedida"))
 				continue
+			}
+
+			// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+			if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+				if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+					items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
+					continue
+				}
 			}
 
 			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
@@ -1262,6 +1299,116 @@ func anyForced(group []model.Shipment, cfg model.RoutingConfig, now time.Time) b
 		}
 	}
 	return false
+}
+
+// isSLAActive returns true if the shipment is in an active (non-terminal) state.
+func isSLAActive(sh model.Shipment) bool {
+	if model.IsTerminalStatus(sh.Status) {
+		return false
+	}
+	if sh.Status == model.StatusExpired || sh.Status == model.StatusRechazado {
+		return false
+	}
+	return sh.EstimatedDeliveryAt != nil
+}
+
+// isSLAExpired returns true when the shipment's ETA has already passed and it's still active.
+func isSLAExpired(sh model.Shipment, now time.Time) bool {
+	return isSLAActive(sh) && now.After(*sh.EstimatedDeliveryAt)
+}
+
+// isSLACriticalETA returns true if the shipment is within the SLA forced horizon
+// but has NOT yet expired.
+func isSLACriticalETA(sh model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
+	if !isSLAActive(sh) {
+		return false
+	}
+	slaHorizon := time.Duration(cfg.SLAForceHorizonHours) * time.Hour
+	remaining := sh.EstimatedDeliveryAt.Sub(now)
+	return remaining >= 0 && remaining < slaHorizon
+}
+
+// RunSLARiskCheck fetches all shipments and runs the SLA risk state machine
+// immediately using the current system clock. Called by the admin clock handler
+// so that advancing the clock triggers notifications without waiting for the
+// next scheduled plan regeneration.
+func (s *RoutingService) RunSLARiskCheck() {
+	if s.notifSvc == nil {
+		return
+	}
+	cfg := s.cfgSvc.Get()
+	all, err := s.shipmentRepo.List(model.ShipmentFilter{})
+	if err != nil {
+		log.Printf("[RoutingService] RunSLARiskCheck: list shipments error: %v", err)
+		return
+	}
+	s.checkSLARisk(all, cfg, clock.Now().UTC())
+}
+
+// checkSLARisk evaluates SLA state for each shipment and fires/resets notifications.
+//
+// State machine per shipment:
+//   inactive  → nothing
+//   active, remaining >= horizon → reset both flags (exited risk window)
+//   active, 0 <= remaining < horizon → sla_risk once (CA-04); reset expired flag if set
+//   active, remaining < 0 (expired) → sla_expired once; sla_risk flag stays
+func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.RoutingConfig, now time.Time) {
+	if s.notifSvc == nil {
+		return
+	}
+	for _, sh := range shipments {
+		if !isSLAActive(sh) {
+			continue
+		}
+
+		expired := isSLAExpired(sh, now)
+		critical := !expired && isSLACriticalETA(sh, cfg, now)
+
+		branchID := sh.CurrentLocation
+		if branchID == "" {
+			branchID = sh.ReceivingBranchID
+		}
+
+		if expired {
+			// Send expired notification once
+			if sh.SLAExpiredNotifiedAt == nil {
+				t := now
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, &t); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLAExpired(shCopy, branchID)
+			}
+		} else if critical {
+			// Send at-risk notification once per entry into risk window (CA-04)
+			if sh.SLANotifiedAt == nil {
+				t := now
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, &t); err != nil {
+					log.Printf("[RoutingService] SetSLANotified error for %s: %v", sh.TrackingID, err)
+					continue
+				}
+				// Reset expired flag in case ETA was extended and re-entered risk window
+				if sh.SLAExpiredNotifiedAt != nil {
+					_ = s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil)
+				}
+				shCopy := sh
+				go s.notifSvc.NotifySLARisk(shCopy, branchID)
+			}
+		} else {
+			// Outside risk window — reset both flags so re-entry re-notifies (CA-04)
+			if sh.SLANotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLANotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLANotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+			if sh.SLAExpiredNotifiedAt != nil {
+				if err := s.shipmentRepo.SetSLAExpiredNotified(sh.TrackingID, nil); err != nil {
+					log.Printf("[RoutingService] SetSLAExpiredNotified reset error for %s: %v", sh.TrackingID, err)
+				}
+			}
+		}
+	}
 }
 
 func vehiclesAcceptingDest(pool []model.Vehicle, dest string, used map[string]bool) []model.Vehicle {
@@ -1610,9 +1757,19 @@ func (s *RoutingService) addMultiHopStops(plan *model.RoutingPlan, branchID stri
 // dispatches multi-hop (A) cuando A ya pasa por el origen de B y el destino de
 // B está en el path remanente de A. Solo opción C: B debe quedar completamente
 // vacío (todos sus envíos se mueven a A). B debe ser single-hop.
-func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRoutingPlan) {
+//
+// SLA safety: si algún envío de B está dentro del horizonte SLA-forzado
+// (isSLACriticalETA), la absorción solo procede si el ETA del envío vía la
+// ruta de A no supera su EstimatedDeliveryAt. Esto evita que la espera por la
+// llegada de A al origen de B rompa un SLA crítico.
+func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRoutingPlan, cfg model.RoutingConfig) {
 	if s.graphSvc == nil {
 		return
+	}
+	now := clock.Now()
+	avgSpeed := cfg.AvgSpeedKmh
+	if avgSpeed <= 0 {
+		avgSpeed = 25.0
 	}
 
 	// Índice global (branchPlanIdx, dispatchIdx) para encontrar dispatches por vehicleID
@@ -1728,6 +1885,54 @@ func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRout
 					}
 					if !fits {
 						continue
+					}
+
+					// SLA safety: si algún envío de B es SLA-crítico, no consolidar
+					// salvo que el ETA estimado vía la ruta de A respete su deadline.
+					// El envío esperaría a que A llegue al origen de B antes de salir,
+					// y esa espera puede romper el SLA.
+					shipmentsB := make([]model.Shipment, 0, len(B.Shipments))
+					hasSLACritical := false
+					for _, tid := range B.Shipments {
+						sh, ok := s.lookupShipment(tid)
+						if !ok {
+							continue
+						}
+						shipmentsB = append(shipmentsB, sh)
+						if isSLACriticalETA(sh, cfg, now) {
+							hasSLACritical = true
+						}
+					}
+					if hasSLACritical {
+						// Distancia total desde el origen de A hasta el destino de B
+						// recorriendo el path: origen → pathA[0] → ... → pathA[destMatch].
+						aOrigin := plan.BranchPlans[bpA].BranchID
+						totalDistKm := 0.0
+						prev := aOrigin
+						for k := 0; k <= destMatch; k++ {
+							d := s.branchDistance(prev, pathA[k])
+							if d > 0 {
+								totalDistKm += d
+							}
+							prev = pathA[k]
+						}
+						// Mismo factor de detour 1.3 que usa buildDurationMatrix.
+						travelHours := (totalDistKm * 1.3) / avgSpeed
+						etaAtDest := now.Add(time.Duration(travelHours * float64(time.Hour)))
+
+						slaBreaches := false
+						for _, sh := range shipmentsB {
+							if sh.EstimatedDeliveryAt == nil {
+								continue
+							}
+							if etaAtDest.After(*sh.EstimatedDeliveryAt) {
+								slaBreaches = true
+								break
+							}
+						}
+						if slaBreaches {
+							continue
+						}
 					}
 
 					// Match: mover envíos de B a A
@@ -1950,9 +2155,8 @@ func (s *RoutingService) snapshotAtHubInventory() map[string][]model.Shipment {
 		if sh.IsReturning {
 			continue
 		}
-		if sh.DeliveryMethod == model.DeliveryMethodBranchPickup {
-			continue
-		}
+		// retiro_sucursal ya en destino final: no necesita más transporte.
+		// retiro_sucursal con destino en otra sucursal: sí es levantable por un multi-hop.
 		if sh.FinalBranchID == "" || sh.FinalBranchID == sh.ReceivingBranchID {
 			continue
 		}
@@ -2351,7 +2555,7 @@ func (s *RoutingService) GenerateGlobalPlan(ctx context.Context) (*model.GlobalR
 	// Consolidación cross-branch: absorber dispatches single-hop dentro de
 	// multi-hops que ya pasan por su sucursal de origen (opción C: solo si B
 	// queda completamente vacío y se puede cancelar).
-	s.consolidateCrossBranchDispatches(plan)
+	s.consolidateCrossBranchDispatches(plan, cfg)
 
 	// Utilización mínima del tramo: eliminar paradas adicionales cuyo tramo
 	// no alcanza el fill_rate configurado, salvo que haya SLA forzado.
@@ -3235,6 +3439,13 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 			resp.FailedCount++
 		}
 	}
+
+	// LOGITRACK-409 CA-05: después de aplicar el plan, re-evaluar el volumen pendiente
+	// de despacho para resetear pares cuyo volumen cayó por debajo del umbral.
+	if s.dispatchVolumeSvc != nil && resp.AppliedCount > 0 {
+		go s.dispatchVolumeSvc.CheckAfterDispatch(branchID)
+	}
+
 	return resp, nil
 }
 

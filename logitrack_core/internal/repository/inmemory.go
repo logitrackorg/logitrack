@@ -591,3 +591,161 @@ func (r *inMemoryRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 	r.set = true
 	return nil
 }
+
+// ── InMemory ClaimRepository ──────────────────────────────────────────────────
+
+type inMemoryClaimRepository struct {
+	mu      sync.RWMutex
+	claims  []model.Claim
+	nextSeq int64
+}
+
+func NewInMemoryClaimRepository() ClaimRepository {
+	return &inMemoryClaimRepository{nextSeq: 10000}
+}
+
+func (r *inMemoryClaimRepository) NextID() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.nextSeq++
+	return fmt.Sprintf("REC-%d", r.nextSeq), nil
+}
+
+func (r *inMemoryClaimRepository) Create(claim model.Claim) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.claims = append(r.claims, claim)
+	return nil
+}
+
+func (r *inMemoryClaimRepository) Delete(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, c := range r.claims {
+		if c.ID == id {
+			r.claims = append(r.claims[:i], r.claims[i+1:]...)
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) GetByID(id string) (model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, c := range r.claims {
+		if c.ID == id {
+			return c, nil
+		}
+	}
+	return model.Claim{}, ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) GetLatestByTrackingID(trackingID string) (model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var latest *model.Claim
+	for i := range r.claims {
+		if r.claims[i].TrackingID != trackingID {
+			continue
+		}
+		if latest == nil || r.claims[i].UpdatedAt.After(latest.UpdatedAt) {
+			candidate := r.claims[i]
+			latest = &candidate
+		}
+	}
+	if latest == nil {
+		return model.Claim{}, ErrClaimNotFound
+	}
+	return *latest, nil
+}
+
+func (r *inMemoryClaimRepository) ListAll() ([]model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]model.Claim, len(r.claims))
+	copy(out, r.claims)
+	return out, nil
+}
+
+func (r *inMemoryClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].AssignedCategory = category
+			r.claims[i].Status = status
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].ResolutionType = resolutionType
+			r.claims[i].Status = status
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) UpdateStatus(id string, status model.ClaimStatus, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].Status = status
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+// ── InMemory ClaimEventRepository ─────────────────────────────────────────────
+
+type inMemoryClaimEventRepository struct {
+	mu     sync.RWMutex
+	events []model.DomainEvent
+}
+
+func NewInMemoryClaimEventRepository() ClaimEventRepository {
+	return &inMemoryClaimEventRepository{}
+}
+
+func (r *inMemoryClaimEventRepository) Append(event model.DomainEvent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	maxVer := 0
+	for _, e := range r.events {
+		if e.TrackingID == event.TrackingID && e.Version > maxVer {
+			maxVer = e.Version
+		}
+	}
+	event.Version = maxVer + 1
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *inMemoryClaimEventRepository) LoadStream(claimID string) ([]model.DomainEvent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var out []model.DomainEvent
+	for _, e := range r.events {
+		if e.TrackingID == claimID {
+			out = append(out, e)
+		}
+	}
+	if len(out) == 0 {
+		return nil, ErrClaimEventStreamNotFound
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out, nil
+}

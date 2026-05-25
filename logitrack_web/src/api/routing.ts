@@ -36,6 +36,8 @@ export interface RoutingConfig {
   sla_force_horizon_hours: number;
   priority_force_threshold: number;
   min_fill_rate: number;
+  min_fill_last_mile_rate: number;
+  min_fill_inter_branch_rate: number;
   enforce_time_windows: boolean;
   morning_window_start_hour: number;
   morning_window_end_hour: number;

@@ -36,7 +36,14 @@ type NotificationRepository interface {
 	// was created after `since`.
 	ExistsRecent(notifType model.NotificationType, resourceID string, since time.Time) (bool, error)
 
+	// ExistsForUser returns true if a notification of the given type and resourceID
+	// already exists for a specific user, created after `since`. Used for per-user dedup.
+	ExistsForUser(notifType model.NotificationType, resourceID, userID string, since time.Time) (bool, error)
+
 	// GetUsersByBranchAndRoles returns users belonging to branchID with any of
 	// the given roles and status 'activo'.
 	GetUsersByBranchAndRoles(branchID string, roles []model.Role) ([]model.User, error)
+
+	// GetAdmins returns all active users with role 'admin' (fallback for CA-02).
+	GetAdmins() ([]model.User, error)
 }

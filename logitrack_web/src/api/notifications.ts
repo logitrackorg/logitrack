@@ -28,6 +28,17 @@ export interface NotificationsResponse {
   offset: number;
 }
 
+/** Retorna el offset en ms entre el reloj del servidor y el reloj real.
+ *  Si el admin no activó ningún override, devuelve 0. */
+export async function fetchServerClockOffsetMs(): Promise<number> {
+  try {
+    const r = await api.get<{ offset_ms: number }>("/admin/clock");
+    return r.data.offset_ms ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export const notificationApi = {
   list: (params?: {
     search?: string;

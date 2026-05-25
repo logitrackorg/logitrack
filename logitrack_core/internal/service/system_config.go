@@ -29,6 +29,9 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 	if cfg.DraftPurgeDays < 1 || cfg.DraftPurgeDays > 1825 {
 		return model.SystemConfig{}, fmt.Errorf("draft_purge_days debe estar entre 1 y 1825 (5 años)")
 	}
+	if cfg.PickupDeadlineDays < 0 || cfg.PickupDeadlineDays > 365 {
+		return model.SystemConfig{}, fmt.Errorf("pickup_deadline_days debe estar entre 0 y 365 (0 = sin límite)")
+	}
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err
 	}

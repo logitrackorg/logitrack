@@ -72,6 +72,36 @@ func (f *fakeShipmentRepo) GetEvents(id string) ([]model.ShipmentEvent, error) {
 func (f *fakeShipmentRepo) Stats(f2 model.ShipmentFilter) (model.Stats, error) {
 	return model.Stats{}, nil
 }
+func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	return nil
+}
+func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	return nil
+}
+func (f *fakeShipmentRepo) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	return model.AvgTimePerStatus{}, nil
+}
+func (f *fakeShipmentRepo) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	return model.CancellationStats{}, nil
+}
+func (f *fakeShipmentRepo) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	return nil, nil
+}
+func (f *fakeShipmentRepo) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	return true, nil
+}
+func (f *fakeShipmentRepo) AuthenticateRecipient(cmd repository.AuthenticateRecipientCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) RequestPickup(cmd repository.RequestPickupCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) RescheduleDelivery(cmd repository.RescheduleDeliveryCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) CancelByRecipient(cmd repository.CancelByRecipientCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
 
 // newMinimalRoutingService arma un RoutingService con solo lo necesario para stale-replan.
 func newMinimalRoutingService(shipments []model.Shipment, edges []model.BranchEdge) *RoutingService {

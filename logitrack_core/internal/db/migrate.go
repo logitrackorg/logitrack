@@ -60,6 +60,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price                NUMERIC(12,2);
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS chatbot_metadata     JSONB;
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
@@ -127,6 +128,16 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS service_time_minutes         INTEGER       NOT NULL DEFAULT 10;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS avg_speed_kmh                NUMERIC(6,2)  NOT NULL DEFAULT 25.0;
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS last_mile_packing_strategy   TEXT          NOT NULL DEFAULT 'maximize_capacity';
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_last_mile_rate     NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS min_fill_inter_branch_rate  NUMERIC(4,3)  NOT NULL DEFAULT 0.400;
+
+		CREATE TABLE IF NOT EXISTS dispatch_volume_state (
+			origin_branch_id  TEXT        NOT NULL,
+			dest_key          TEXT        NOT NULL,
+			trip_type         TEXT        NOT NULL,
+			notified_at       TIMESTAMPTZ,
+			PRIMARY KEY (origin_branch_id, dest_key, trip_type)
+		);
 
 		CREATE TABLE IF NOT EXISTS routing_plans (
 			id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -148,6 +159,37 @@ func RunMigrations(db *sql.DB) error {
 			created_at    TIMESTAMPTZ  NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_incidents_tracking_id ON shipment_incidents(tracking_id);
+
+		CREATE TABLE IF NOT EXISTS shipment_claims (
+			id                VARCHAR(50)  PRIMARY KEY,
+			tracking_id       VARCHAR(50)  NOT NULL,
+			claim_type        TEXT         NOT NULL,
+			status            TEXT         NOT NULL,
+			description       TEXT         NOT NULL,
+			created_by        VARCHAR(100) NOT NULL,
+			created_at        TIMESTAMPTZ  NOT NULL,
+			updated_at        TIMESTAMPTZ  NOT NULL,
+			assigned_category TEXT,
+			resolution_type   TEXT,
+			is_automatic      BOOLEAN      NOT NULL DEFAULT FALSE,
+			evidence_file_name TEXT,
+			evidence_file_path TEXT,
+			evidence_mime_type TEXT,
+			evidence_upload_date TIMESTAMPTZ
+		);
+		CREATE INDEX IF NOT EXISTS idx_claims_tracking_id ON shipment_claims(tracking_id);
+
+		CREATE TABLE IF NOT EXISTS claim_events (
+			id         VARCHAR(50)  PRIMARY KEY,
+			claim_id   VARCHAR(50)  NOT NULL,
+			event_type TEXT         NOT NULL,
+			payload    JSONB        NOT NULL DEFAULT '{}',
+			changed_by VARCHAR(100) NOT NULL,
+			timestamp  TIMESTAMPTZ  NOT NULL,
+			version    INT          NOT NULL,
+			UNIQUE (claim_id, version)
+		);
+		CREATE INDEX IF NOT EXISTS idx_claim_events_claim_id ON claim_events(claim_id);
 
 		CREATE TABLE IF NOT EXISTS comments (
 			id          TEXT NOT NULL,
@@ -358,6 +400,79 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 		CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read_at) WHERE read_at IS NULL;
+
+		-- SLA en riesgo (LOGITRACK-404): columnas para deduplicación de notificaciones por ciclo
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS sla_notified_at         TIMESTAMPTZ;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS sla_expired_notified_at TIMESTAMPTZ;
+
+		-- Email transaccional: deduplicación de emails de confirmación de envío (CA-05)
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
+
+		-- Reclamos: IDs secuenciales únicos (REC-NNNNN) y historial de eventos
+		CREATE SEQUENCE IF NOT EXISTS shipment_claim_id_seq START WITH 10000;
+		DO $migrate_claim_seq$
+		DECLARE max_n BIGINT;
+		BEGIN
+			SELECT COALESCE(MAX(CAST(SUBSTRING(id FROM 5) AS BIGINT)), 9999)
+			INTO max_n
+			FROM shipment_claims
+			WHERE id ~ '^REC-[0-9]+$';
+			PERFORM setval('shipment_claim_id_seq', max_n, true);
+		END
+		$migrate_claim_seq$;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_name   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_path   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
+
+		-- Ensure branches table exists before branch_zones FK can reference it
+		CREATE TABLE IF NOT EXISTS branches (
+			id          VARCHAR(50) PRIMARY KEY,
+			name        VARCHAR(100) UNIQUE NOT NULL,
+			street      VARCHAR(255),
+			city        VARCHAR(100),
+			province    VARCHAR(100),
+			postal_code VARCHAR(20),
+			status      VARCHAR(30) NOT NULL DEFAULT 'activo',
+			created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_by  VARCHAR(100),
+			max_capacity INT NOT NULL DEFAULT 50
+		);
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS max_capacity INT NOT NULL DEFAULT 50;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS latitude  DOUBLE PRECISION;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS hours TEXT NOT NULL DEFAULT '';
+
+		-- Branch zones (ubicaciones internas de sucursal)
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS current_zone TEXT;
+
+		CREATE TABLE IF NOT EXISTS branch_zones (
+			id         TEXT PRIMARY KEY,
+			branch_id  TEXT NOT NULL REFERENCES branches(id),
+			zone_type  TEXT NOT NULL,
+			name       TEXT NOT NULL,
+			active     BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(branch_id, zone_type)
+		);
+		-- Notificación de retiro en sucursal: plazo máximo de retiro configurable
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS pickup_deadline_days INTEGER NOT NULL DEFAULT 0;
+
+		-- Retorno de última milla: flag para delivery_failed con rechazo explícito del destinatario
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS rejected_by_recipient BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- Columnas para eventos de reprogramación (chatbot)
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_type   VARCHAR(50);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_code   VARCHAR(20);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_name   VARCHAR(255);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS current_location_status VARCHAR(100);
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS rescheduled_date        TIMESTAMP;
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS via                     VARCHAR(20);
+
+		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+		CREATE INDEX IF NOT EXISTS idx_events_rescheduled ON events(tracking_id, event_type) WHERE event_type = 'rescheduled';
 	`)
 	return err
 }

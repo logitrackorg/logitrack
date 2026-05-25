@@ -32,6 +32,19 @@ type ShipmentRepository interface {
 	ReserveForTrip(trackingID, tripID string) error
 	// ReleaseFromTrip libera la reserva del envío.
 	ReleaseFromTrip(trackingID string) error
+	// SetSLANotified actualiza sla_notified_at (nil = reset, &t = notificado) para CA-04.
+	SetSLANotified(trackingID string, notifiedAt *time.Time) error
+	// SetSLAExpiredNotified actualiza sla_expired_notified_at.
+	SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error
+	// SetConfirmationEmailSent marca el envío como ya notificado por email para dedup (CA-05).
+	// Devuelve (true, nil) si fue el primer llamado para ese tracking ID; (false, nil) si ya estaba marcado.
+	SetConfirmationEmailSent(trackingID string) (bool, error)
+
+	// Chatbot operations
+	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)
+	RequestPickup(cmd RequestPickupCmd) (model.Shipment, error)
+	RescheduleDelivery(cmd RescheduleDeliveryCmd) (model.Shipment, error)
+	CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error)
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
@@ -39,6 +52,9 @@ type ShipmentRepository interface {
 	Search(query string) ([]model.Shipment, error)
 	GetEvents(trackingID string) ([]model.ShipmentEvent, error)
 	Stats(filter model.ShipmentFilter) (model.Stats, error)
+	StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error)
+	CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error)
+	AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error)
 }
 
 // Command structs — carry all data the repo needs to persist an event.
@@ -70,14 +86,15 @@ type ConfirmDraftCmd struct {
 }
 
 type StatusUpdateCmd struct {
-	TrackingID string
-	FromStatus model.Status
-	ToStatus   model.Status
-	Location   string // already resolved to branch ID
-	ChangedBy  string
-	Notes      string
-	DriverID   string
-	Timestamp  time.Time
+	TrackingID          string
+	FromStatus          model.Status
+	ToStatus            model.Status
+	Location            string // already resolved to branch ID
+	ChangedBy           string
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool
+	Timestamp           time.Time
 }
 
 type CorrectCmd struct {
@@ -148,4 +165,41 @@ type PathPlannedCmd struct {
 	HopIndex        int
 	PathRevision    int
 	Reason          string
+}
+
+
+// ==========================================
+// CHATBOT COMMANDS
+// ==========================================
+
+// AuthenticateRecipientCmd valida tracking ID y DNI del destinatario
+type AuthenticateRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+}
+
+// RequestPickupCmd cambia el método de entrega a retiro en sucursal
+type RequestPickupCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	ChangedBy    string
+	Timestamp    time.Time
+}
+
+// RescheduleDeliveryCmd reprograma la fecha de entrega (máx 2 veces, +3 días)
+type RescheduleDeliveryCmd struct {
+	TrackingID      string
+	RecipientDNI    string
+	NewDeliveryDate time.Time
+	ChangedBy       string
+	Timestamp       time.Time
+}
+
+// CancelByRecipientCmd cancela el envío por solicitud del destinatario
+type CancelByRecipientCmd struct {
+	TrackingID   string
+	RecipientDNI string
+	Reason       string
+	ChangedBy    string
+	Timestamp    time.Time
 }

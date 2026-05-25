@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
@@ -14,11 +14,13 @@ import {
   INCIDENT_TYPE_LABELS,
   TERMINAL_INCIDENT_STATUS,
 } from "../api/shipments";
+import { CLAIM_EVENT_LABELS, type ClaimEventType } from "../api/claims";
 import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { ZoneBadge } from "../components/ZoneBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
@@ -28,6 +30,7 @@ import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } 
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
+import PaymentMethodsPanel from '../components/PaymentMethodsPanel';
 import { qrService, type QRResponse } from '../api/qrService';
 import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
@@ -81,6 +84,27 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
 
 const PACKAGE_LABELS: Record<string, string> = {
   envelope: "Sobre", box: "Caja",
+};
+
+const formatShipmentEventLabel = (ev: ShipmentEvent) => {
+  const claimEventType = ev.event_type as ClaimEventType | undefined;
+  if (claimEventType && claimEventType in CLAIM_EVENT_LABELS) {
+    return CLAIM_EVENT_LABELS[claimEventType];
+  }
+
+  if (ev.event_type === "incident_reported") {
+    return "Incidencia reportada";
+  }
+
+  if (ev.event_type === "edited") {
+    return STATUS_LABELS[ev.to_status];
+  }
+
+  if (ev.from_status) {
+    return `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`;
+  }
+
+  return ev.to_status ? STATUS_LABELS[ev.to_status] : "Evento registrado";
 };
 
 export function ShipmentDetail() {
@@ -138,6 +162,7 @@ export function ShipmentDetail() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrError, setQRError] = useState<string>('');
   const [generatingQR, setGeneratingQR] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   // Estados para impresión de alta
   const [printingDoc, setPrintingDoc] = useState(false);
@@ -214,7 +239,7 @@ export function ShipmentDetail() {
       const vehicles = await vehicleApi.listAvailable({ branch_id: branchId ?? undefined });
       // Filter by available remaining capacity
       const eligible = vehicles.filter(v => {
-        const usedKg = (v.assigned_shipments ?? []).reduce((acc: number) => acc, 0);
+        const usedKg = 0;
         return v.capacity_kg - usedKg >= effectiveWeightKg(s);
       });
       setAvailableVehicles(eligible);
@@ -288,6 +313,15 @@ export function ShipmentDetail() {
     branchApi.list().then(setBranches);
     organizationApi.get().then(setOrgConfig).catch(() => {});
     systemConfigApi.get().then((cfg) => setMaxDeliveryAttempts(cfg.max_delivery_attempts)).catch(() => {});
+  }, [trackingId, reload]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:pickup-success', handler);
+    return () => window.removeEventListener('chatbot:pickup-success', handler);
   }, [trackingId, reload]);
 
   useEffect(() => {
@@ -512,6 +546,10 @@ export function ShipmentDetail() {
   ).filter(
     () => !(hasRole("operator", "supervisor") && shipment.status === "out_for_delivery")
   ).filter(
+    // out_for_delivery solo puede asignarse por el sistema de reparto (plan → vehículo → QR).
+    // Operadores y supervisores no pueden dispararlo manualmente.
+    (s) => !(hasRole("operator", "supervisor") && s === "out_for_delivery")
+  ).filter(
     (s) => s !== "redelivery_scheduled" || (shipment.delivery_attempts ?? 0) < maxDeliveryAttempts
   ).filter(
     // Restringir at_hub según delivery_method elegido al crear el pedido.
@@ -724,7 +762,13 @@ export function ShipmentDetail() {
                       ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
                       : <InfoRow label="Ventana horaria" value={twLabel} />;
                   })()}
-                  <InfoRow label="Método de entrega" value={(shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)"} />
+                  {(() => {
+                    const changedByChat = events.some(ev => ev.notes === "Destinatario solicitó retiro en sucursal vía chatbot");
+                    const dmLabel = (shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)";
+                    return changedByChat
+                      ? <InfoRowEx label="Método de entrega" value="Retiro en sucursal" original="Última milla (a domicilio)" corrected />
+                      : <InfoRow label="Método de entrega" value={dmLabel} />;
+                  })()}
                   {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
                   <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />
                   {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
@@ -735,6 +779,9 @@ export function ShipmentDetail() {
                   {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
                     <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
+                  )}
+                  {shipment.current_zone && (
+                    <InfoRow label="Zona" value={<ZoneBadge zone={shipment.current_zone} />} />
                   )}
                 </Card>
               </>;
@@ -788,6 +835,47 @@ export function ShipmentDetail() {
   </button>
 )}
 
+      {/* Zona actions — mover entre zonas internas de sucursal */}
+      {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
+        <div style={{ ...cardStyle, marginBottom: 16, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>
+              Zona actual: <ZoneBadge zone={shipment.current_zone} />
+            </span>
+            {shipment.current_zone === "entrada" && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                  Mover a Salida
+                </button>
+                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                  Mover a Revisión
+                </button>
+              </>
+            )}
+            {shipment.current_zone === "salida" && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                  Mover a Revisión
+                </button>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #3b82f6", background: "#fff", color: "#1e40af" }}>
+                  Reingresar a Entrada
+                </button>
+              </>
+            )}
+            {shipment.current_zone === "revision" && hasRole("supervisor") && (
+              <>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                  Aprobar (→ Salida)
+                </button>
+                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #ef4444", background: "#fff", color: "#991b1b" }}>
+                  Clasificar (Perdido/Destruido)
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Status update — supervisor y operador (no admin) */}
       {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
         <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
@@ -811,7 +899,7 @@ export function ShipmentDetail() {
                   } else {
                     setNewStatus(s);
                     if (s === "out_for_delivery") {
-                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id).then(setDrivers);
+                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id, "last_mile").then(setDrivers);
                     }
                   }
                 }}
@@ -933,26 +1021,59 @@ export function ShipmentDetail() {
                 background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
               }} />
               <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600 }}>
-                    {ev.event_type === "edited"
-                      ? STATUS_LABELS[ev.to_status]
-                      : ev.from_status
-                        ? `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`
-                        : STATUS_LABELS[ev.to_status]}
-                  </span>
-                  <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-                </div>
-                <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                  <span>por <strong>{ev.changed_by || "sistema"}</strong></span>
-                  {ev.location && (() => {
-                    const b = branches.find(x => x.id === ev.location);
-                    return (
-                      <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
-                    );
-                  })()}
-                </div>
-                {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {ev.current_location.type === "DESTINATION_BRANCH"
+                          ? "En Sucursal Destino"
+                          : ev.current_location.type === "ORIGIN_BRANCH"
+                          ? `En Sucursal Origen (${ev.current_location.branch_code})`
+                          : "En tránsito"} — {ev.current_location.status}
+                      </span>
+                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                    </div>
+                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
+                    </div>
+                    <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
+                      Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600 }}>{formatShipmentEventLabel(ev)}</span>
+                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                    </div>
+                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
+                      {ev.location && (() => {
+                        const b = branches.find(x => x.id === ev.location);
+                        return (
+                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+                        );
+                      })()}
+                    </div>
+                    {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                    {ev.event_type === "claim_created" && ev.notes && (() => {
+                      const m = ev.notes.match(/REC-\d+/);
+                      if (m) {
+                        const claimId = m[0];
+                        return (
+                          <p style={{ margin: "6px 0 0" }}>
+                            <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -2376,10 +2497,7 @@ function PendingPaymentPanel({
 }) {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [reverting, setReverting] = useState(false);
-  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState("");
-  const [showPaymentQR, setShowPaymentQR] = useState(false);
-  const [paymentQRBase64, setPaymentQRBase64] = useState("");
 
   useEffect(() => {
     paymentApi.get(trackingId).then(setPayment).catch(() => {});
@@ -2401,75 +2519,35 @@ function PendingPaymentPanel({
   return (
     <div style={{
       background: "#fffbeb", border: "1px solid #fcd34d",
-      borderRadius: 10, padding: 20, marginBottom: 16,
+      borderRadius: 12, padding: 20, marginBottom: 16,
     }}>
-      <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e", marginBottom: 8 }}>
-        💳 Pago pendiente
-      </div>
-      {payment ? (
-        <>
-          <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>
+          💳 Pago pendiente
+        </div>
+        {payment && (
+          <div style={{ fontSize: 13, color: "#78350f" }}>
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
             </strong>
-          </p>
-          {payment.init_point && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-              <CopyPaymentLink url={payment.init_point} />
-              <button
-                onClick={async () => {
-                  try {
-                    const { qr_code_base64 } = await paymentApi.getQR(trackingId);
-                    setPaymentQRBase64(qr_code_base64);
-                    setShowPaymentQR(true);
-                  } catch {
-                    setError("No se pudo generar el QR de pago.");
-                  }
-                }}
-                style={{
-                  background: "#fff", color: "#009ee3",
-                  border: "1px solid #009ee3", borderRadius: 8,
-                  padding: "8px 18px", fontWeight: 700, fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                📱 Mostrar QR de cobro
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <p style={{ fontSize: 13, color: "#78350f", marginBottom: 12 }}>Cargando información de pago…</p>
-      )}
-      {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {payment?.simulate_enabled && (
-          <button
-            onClick={async () => {
-              setSimulating(true);
-              setError("");
-              try {
-                const result = await paymentApi.simulateApproved(trackingId);
-                window.location.href = `/shipments/${result.tracking_id}`;
-              } catch (e: unknown) {
-                const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-                setError(msg ?? "Error al simular pago.");
-                setSimulating(false);
-              }
-            }}
-            disabled={simulating}
-            style={{
-              border: "1px dashed #86efac", borderRadius: 8,
-              background: "#f0fdf4", color: "#16a34a",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              padding: "8px 16px",
-              opacity: simulating ? 0.6 : 1,
-            }}
-          >
-            {simulating ? "Procesando…" : "⚡ Simular pago aprobado (demo)"}
-          </button>
+          </div>
         )}
+      </div>
+      {payment ? (
+        <PaymentMethodsPanel
+          payment={payment}
+          trackingId={trackingId}
+          onCashConfirmed={(newTrackingId) => {
+            window.location.href = `/shipments/${newTrackingId}`;
+          }}
+          onError={setError}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: "#78350f" }}>Cargando información de pago…</p>
+      )}
+      {error && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a", display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={handleBackToDraft}
           disabled={reverting}
@@ -2481,42 +2559,9 @@ function PendingPaymentPanel({
             opacity: reverting ? 0.6 : 1,
           }}
         >
-          {reverting ? "Procesando…" : "Volver a borrador"}
+          {reverting ? "Procesando…" : "← Volver a borrador"}
         </button>
       </div>
-      <ShipmentQRModal
-        isOpen={showPaymentQR}
-        onClose={() => setShowPaymentQR(false)}
-        trackingId={trackingId}
-        qrCodeBase64={paymentQRBase64}
-        title="💳 QR de cobro"
-        subtitle="El remitente puede escanear este código con su celular para completar el pago."
-        variant="payment"
-      />
     </div>
-  );
-}
-
-function CopyPaymentLink({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(url).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        });
-      }}
-      style={{
-        background: copied ? "#f0fdf4" : "#fff",
-        color: copied ? "#16a34a" : "#374151",
-        border: `1px solid ${copied ? "#86efac" : "#d1d5db"}`,
-        borderRadius: 8, padding: "8px 18px",
-        fontWeight: 600, fontSize: 13, cursor: "pointer",
-        transition: "all 0.2s",
-      }}
-    >
-      {copied ? "✓ Copiado" : "Copiar link de pago"}
-    </button>
   );
 }

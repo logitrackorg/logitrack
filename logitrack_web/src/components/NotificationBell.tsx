@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
-import { notificationApi, type Notification } from "../api/notifications";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin, UserCheck } from "lucide-react";
+import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function relativeTime(dateStr: string, clockOffsetMs = 0): string {
+  const diff = (Date.now() + clockOffsetMs) - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "ahora";
   if (mins < 60) return `hace ${mins} min`;
@@ -17,9 +17,19 @@ function relativeTime(dateStr: string): string {
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Warehouse  size={16} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2  size={16} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw  size={16} color="#fb923c" />;
+  if (type === "shipment_received")        return <Warehouse     size={16} color="#60a5fa" />;
+  if (type === "destination_arrival")      return <Building2     size={16} color="#34d399" />;
+  if (type === "return_arrival")           return <RotateCcw     size={16} color="#fb923c" />;
+  if (type === "return_started")           return <RotateCcw     size={16} color="#f97316" />;
+  if (type === "return_completed")         return <PackageCheck  size={16} color="#f59e0b" />;
+  if (type === "sla_risk")                 return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "sla_expired")              return <AlertOctagon  size={16} color="#b91c1c" />;
+  if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
+  if (type === "chatbot_pickup_requested") return <Bot           size={16} color="#a78bfa" />;
+  if (type === "min_fill_reached")         return <Truck         size={16} color="#7c3aed" />;
+  if (type === "route_assigned")           return <MapPin     size={16} color="#0ea5e9" />;
+  if (type === "route_reassigned")         return <MapPin     size={16} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")     return <UserCheck  size={16} color="#10b981" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -27,6 +37,13 @@ function groupLabel(type: string, count: number): string {
   if (type === "destination_arrival") return `Llegaron ${count} envíos a su sucursal destino final`;
   if (type === "shipment_received")   return `Llegaron ${count} envíos a una sucursal intermedia`;
   if (type === "return_arrival")      return `${count} envíos en devolución llegaron a sucursal de origen`;
+  if (type === "return_started")      return `${count} envíos listos para devolución`;
+  if (type === "return_completed")    return `${count} envíos devueltos — coordinar entrega con remitente`;
+  if (type === "sla_risk")            return `${count} envíos en riesgo de SLA`;
+  if (type === "sla_expired")         return `${count} envíos con SLA vencido`;
+  if (type === "route_assigned")        return `${count} rutas asignadas`;
+  if (type === "route_reassigned")      return `${count} rutas reasignadas`;
+  if (type === "trip_driver_assigned")  return `${count} choferes asignados a viajes`;
   return `${count} notificaciones`;
 }
 
@@ -34,23 +51,69 @@ function groupAccent(type: string): string {
   if (type === "destination_arrival") return "#34d399";
   if (type === "shipment_received")   return "#60a5fa";
   if (type === "return_arrival")      return "#fb923c";
+  if (type === "return_started")      return "#f97316";
+  if (type === "return_completed")    return "#f59e0b";
+  if (type === "sla_risk")            return "#ef4444";
+  if (type === "sla_expired")         return "#b91c1c";
+  if (type === "fatigue_alert")       return "#ef4444";
+  if (type === "min_fill_reached")    return "#7c3aed";
+  if (type === "route_assigned")        return "#0ea5e9";
+  if (type === "route_reassigned")      return "#f59e0b";
+  if (type === "trip_driver_assigned")  return "#10b981";
   return "#94a3b8";
+}
+
+// ─── SLA countdown helpers ────────────────────────────────────────────────────
+
+/** Extrae el ETA ISO del body de una notificación sla_risk (formato "... · eta:RFC3339"). */
+function parseSLAEta(body: string): Date | null {
+  const match = body.match(/eta:([^\s·]+)$/);
+  if (!match) return null;
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Devuelve el texto del body sin el sufijo eta:... */
+function bodyWithoutEta(body: string): string {
+  return body.replace(/\s*·\s*eta:[^\s·]+$/, "");
+}
+
+/** Countdown en tiempo real a partir del ETA, usando el reloj del servidor. */
+function slaCountdown(eta: Date, clockOffsetMs = 0): string {
+  const serverNow = Date.now() + clockOffsetMs;
+  const diff = eta.getTime() - serverNow;
+  if (diff <= 0) return "venció";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `vence en ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `vence en ${hrs} h`;
+  const days = Math.floor(hrs / 24);
+  return `vence en ${days} d`;
 }
 
 function GroupIcon({ type }: { type: string }) {
   const color = groupAccent(type);
-  if (type === "destination_arrival") return <Building2 size={16} color={color} />;
-  if (type === "shipment_received")   return <Warehouse  size={16} color={color} />;
-  if (type === "return_arrival")      return <RotateCcw  size={16} color={color} />;
+  if (type === "destination_arrival") return <Building2     size={16} color={color} />;
+  if (type === "shipment_received")   return <Warehouse     size={16} color={color} />;
+  if (type === "return_arrival")      return <RotateCcw     size={16} color={color} />;
+  if (type === "return_started")      return <RotateCcw     size={16} color={color} />;
+  if (type === "return_completed")    return <PackageCheck  size={16} color={color} />;
+  if (type === "sla_risk")            return <AlertTriangle size={16} color={color} />;
+  if (type === "sla_expired")         return <AlertOctagon  size={16} color={color} />;
+  if (type === "fatigue_alert")       return <AlertTriangle size={16} color={color} />;
+  if (type === "route_assigned")        return <MapPin size={16} color={color} />;
+  if (type === "route_reassigned")      return <MapPin size={16} color={color} />;
+  if (type === "trip_driver_assigned")  return <UserCheck size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
 // ─── Grouping ────────────────────────────────────────────────────────────────
 // Consecutive notifications of the same groupable type within a 5-minute window
 // collapse into an expandable card.
+// fatigue_alert is intentionally excluded — each alert is individual and urgent.
 
 const GROUP_WINDOW_MS  = 5 * 60 * 1000;
-const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival"]);
+const GROUPABLE_TYPES  = new Set(["destination_arrival", "shipment_received", "return_arrival", "return_started", "sla_risk", "sla_expired"]);
 
 type SingleItem  = { kind: "single"; n: Notification };
 type GroupItem   = { kind: "group";  items: Notification[]; key: string };
@@ -95,6 +158,9 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount]       = useState(0);
   const [notifications, setNotifications]   = useState<Notification[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [clockOffsetMs, setClockOffsetMs]   = useState(0); // offset reloj servidor vs browser
+  // Primera alerta de fatiga sin leer — dispara el banner crítico.
+  const [criticalAlert, setCriticalAlert]   = useState<Notification | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -109,7 +175,11 @@ export function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     try {
       const data = await notificationApi.list({ limit: 20, offset: 0 });
-      setNotifications(data.notifications ?? []);
+      const notifs = data.notifications ?? [];
+      setNotifications(notifs);
+      // Detectar la primera alerta de fatiga sin leer para mostrar el banner crítico.
+      const firstCritical = notifs.find((n) => n.type === "fatigue_alert" && !n.read_at);
+      setCriticalAlert(firstCritical ?? null);
     } catch { /* silently ignore */ }
   }, []);
 
@@ -125,7 +195,10 @@ export function NotificationBell() {
 
     const startSSE = () => {
       es = new EventSource(url);
-      es.addEventListener("notification", () => fetchCount());
+      es.addEventListener("notification", () => {
+        fetchCount();
+        fetchNotifications(); // actualiza el banner crítico en tiempo real
+      });
       es.onerror = () => {
         es?.close(); es = null;
         if (!pollInterval) pollInterval = setInterval(fetchCount, 60_000);
@@ -136,7 +209,7 @@ export function NotificationBell() {
     else pollInterval = setInterval(fetchCount, 60_000);
 
     return () => { es?.close(); if (pollInterval) clearInterval(pollInterval); };
-  }, [fetchCount]);
+  }, [fetchCount, fetchNotifications]);
 
   // Refetch on SPA navigation and tab/window focus.
   useEffect(() => { fetchCount(); }, [location.pathname, fetchCount]);
@@ -150,6 +223,16 @@ export function NotificationBell() {
       window.removeEventListener("focus", onFocus);
     };
   }, [fetchCount]);
+
+  // Carga el offset del reloj del servidor al montar (antes de que el usuario
+  // abra el panel) y lo refresca cada 30 s. Así el tiempo relativo ya es
+  // correcto desde el primer render del panel, sin esperar la promesa.
+  useEffect(() => {
+    const refresh = () => fetchServerClockOffsetMs().then(setClockOffsetMs);
+    refresh();
+    const id = setInterval(refresh, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Close panel on outside click.
   useEffect(() => {
@@ -183,9 +266,32 @@ export function NotificationBell() {
           item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item
         )
       );
+      if (n.type === "fatigue_alert") setCriticalAlert(null);
     }
-    if (n.resource_id) navigate(`/shipments/${n.resource_id}`);
+    if (n.type === "fatigue_alert") {
+      navigate("/supervisor/fatigue");
+    } else if (n.type === "min_fill_reached" && n.resource_id) {
+      navigate(`/${n.resource_id}`);
+    } else if (n.type === "route_assigned" || n.type === "route_reassigned") {
+      navigate("/driver/route");
+    } else if (n.type === "trip_driver_assigned") {
+      navigate("/viajes");
+    } else if (n.resource_id) {
+      navigate(`/shipments/${n.resource_id}`);
+    }
     setOpen(false);
+  };
+
+  const dismissCriticalAlert = async () => {
+    if (!criticalAlert) return;
+    await notificationApi.markRead(criticalAlert.id);
+    setUnreadCount((c) => Math.max(0, c - 1));
+    setNotifications((prev) =>
+      prev.map((item) =>
+        item.id === criticalAlert.id ? { ...item, read_at: new Date().toISOString() } : item
+      )
+    );
+    setCriticalAlert(null);
   };
 
   const toggleGroup = (key: string) => {
@@ -207,29 +313,79 @@ export function NotificationBell() {
     transition: "background 0.15s",
   };
 
-  const renderSingle = (n: Notification) => (
-    <div
-      key={n.id}
-      onClick={() => handleItemClick(n)}
-      style={{ ...rowBase, cursor: "pointer", background: n.read_at ? "transparent" : `${groupAccent(n.type)}12` }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : `${groupAccent(n.type)}12`)}
-    >
-      <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-          <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {n.title}
-          </span>
-          <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at)}</span>
+  const renderSingle = (n: Notification) => {
+    const isSLARisk         = n.type === "sla_risk";
+    const isSLAExpired      = n.type === "sla_expired";
+    const isFatigue         = n.type === "fatigue_alert";
+    const isReturnCompleted = n.type === "return_completed";
+    const isReturnArrival   = n.type === "return_arrival";
+    const eta               = isSLARisk ? parseSLAEta(n.body) : null;
+    const displayBody       = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+    const accent            = groupAccent(n.type);
+    const unreadBg          = isReturnCompleted ? "rgba(245,158,11,0.12)" : `${accent}12`;
+
+    return (
+      <div
+        key={n.id}
+        onClick={() => handleItemClick(n)}
+        style={{
+          ...rowBase,
+          cursor: "pointer",
+          background: n.read_at ? "transparent" : unreadBg,
+          borderLeft: (isFatigue || isReturnCompleted) && !n.read_at
+            ? `3px solid ${accent}`
+            : "3px solid transparent",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : unreadBg)}
+      >
+        <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <span style={{ color: (isFatigue || isReturnCompleted) ? "#fcd34d" : "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {n.title}
+            </span>
+            <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs)}</span>
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {displayBody}
+          </div>
+          {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
+          {isSLARisk && eta && (() => {
+            const label = slaCountdown(eta, clockOffsetMs);
+            if (label === "venció") return null; // sla_expired ya cubre este estado
+            return (
+              <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
+                {label}
+              </div>
+            );
+          })()}
+          {/* Label fijo para sla_expired */}
+          {isSLAExpired && (
+            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>
+              SLA vencido
+            </div>
+          )}
+          {/* Botón de acción para return_completed y return_arrival — CA-05: requiere acción */}
+          {(isReturnCompleted || isReturnArrival) && (
+            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+              Acción requerida: coordinar entrega con remitente
+            </div>
+          )}
+          {/* Botón exclusivo para las alertas de fatiga */}
+          {isFatigue && (
+            <button
+              onClick={(e) => { e.stopPropagation(); navigate("/supervisor/fatigue"); setOpen(false); }}
+              style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: "#f87171", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, padding: "2px 8px", cursor: "pointer" }}
+            >
+              Ver historial del chofer →
+            </button>
+          )}
         </div>
-        <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {n.body}
-        </div>
+        {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
       </div>
-      {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: groupAccent(n.type), flexShrink: 0, marginTop: 6 }} />}
-    </div>
-  );
+    );
+  };
 
   const renderGroup = (items: Notification[], key: string) => {
     const type      = items[0].type;
@@ -237,8 +393,19 @@ export function NotificationBell() {
     const hasUnread = items.some((n) => !n.read_at);
     const accent    = groupAccent(type);
     const Chevron   = expanded ? ChevronUp : ChevronDown;
-    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)" : "rgba(96,165,250,0.07)";
-    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)" : "rgba(96,165,250,0.05)";
+    const isSLA     = type === "sla_risk" || type === "sla_expired";
+    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)"
+                    : type === "return_arrival"       ? "rgba(251,146,60,0.07)"
+                    : type === "return_started"       ? "rgba(249,115,22,0.07)"
+                    : type === "return_completed"     ? "rgba(245,158,11,0.12)"
+                    : isSLA                           ? `${accent}12`
+                    : "rgba(96,165,250,0.07)";
+    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)"
+                    : type === "return_arrival"       ? "rgba(251,146,60,0.05)"
+                    : type === "return_started"       ? "rgba(249,115,22,0.05)"
+                    : type === "return_completed"     ? "rgba(245,158,11,0.08)"
+                    : isSLA                           ? `${accent}0d`
+                    : "rgba(96,165,250,0.05)";
 
     return (
       <div key={key}>
@@ -255,7 +422,7 @@ export function NotificationBell() {
               <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: hasUnread ? 600 : 400 }}>
                 {groupLabel(type, items.length)}
               </span>
-              <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at)}</span>
+              <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at, clockOffsetMs)}</span>
             </div>
             <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
               {expanded ? "Tocá cada envío para ver el detalle" : `${items.length} envíos · expandir`}
@@ -268,22 +435,36 @@ export function NotificationBell() {
         </div>
 
         {/* Expanded sub-items */}
-        {expanded && items.map((n) => (
-          <div
-            key={n.id}
-            onClick={() => handleItemClick(n)}
-            style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
-                {n.body}
-              </span>
+        {expanded && items.map((n) => {
+          const isSLARisk    = n.type === "sla_risk";
+          const isSLAExpired = n.type === "sla_expired";
+          const eta          = isSLARisk ? parseSLAEta(n.body) : null;
+          const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+          return (
+            <div
+              key={n.id}
+              onClick={() => handleItemClick(n)}
+              style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+                  {displayBody}
+                </span>
+                {isSLARisk && eta && (() => {
+                  const label = slaCountdown(eta, clockOffsetMs);
+                  if (label === "venció") return null;
+                  return <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>{label}</span>;
+                })()}
+                {isSLAExpired && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>SLA vencido</span>
+                )}
+              </div>
+              {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
             </div>
-            {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -293,6 +474,43 @@ export function NotificationBell() {
   // ── JSX ─────────────────────────────────────────────────────────────────
 
   return (
+    <>
+      {/* ── Banner crítico de fatiga — fijo en la parte superior de la pantalla ── */}
+      {criticalAlert && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
+          background: "linear-gradient(90deg, #7f1d1d, #991b1b)",
+          borderBottom: "2px solid #ef4444",
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "10px 16px",
+          boxShadow: "0 4px 20px rgba(239,68,68,0.4)",
+          animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
+        }}>
+          <AlertTriangle size={20} color="#fca5a5" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ color: "#fca5a5", fontWeight: 700, fontSize: 13 }}>
+              {criticalAlert.title}
+            </span>
+            <span style={{ color: "#fecaca", fontSize: 12, marginLeft: 10 }}>
+              {criticalAlert.body}
+            </span>
+          </div>
+          <button
+            onClick={() => { navigate("/supervisor/fatigue"); dismissCriticalAlert(); }}
+            style={{ flexShrink: 0, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            Ver historial del chofer
+          </button>
+          <button
+            onClick={dismissCriticalAlert}
+            title="Descartar"
+            style={{ flexShrink: 0, background: "none", border: "none", color: "#fca5a5", cursor: "pointer", display: "flex", padding: 4 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
     <div ref={panelRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
       {/* Bell button */}
       <button
@@ -348,5 +566,6 @@ export function NotificationBell() {
         </div>
       )}
     </div>
+    </>
   );
 }

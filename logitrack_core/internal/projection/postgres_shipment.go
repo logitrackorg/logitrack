@@ -95,9 +95,10 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			_, err := p.db.Exec(`
 				UPDATE shipments
 				SET status = $1, updated_at = $2,
-				    delivery_attempts = delivery_attempts + 1
-				WHERE tracking_id = $3`,
-				string(payload.ToStatus), event.Timestamp, event.TrackingID,
+				    delivery_attempts = delivery_attempts + 1,
+				    rejected_by_recipient = $3
+				WHERE tracking_id = $4`,
+				string(payload.ToStatus), event.Timestamp, payload.RejectedByRecipient, event.TrackingID,
 			)
 			return err
 		}
@@ -250,6 +251,111 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			string(model.StatusDraft), event.Timestamp, event.TrackingID,
 		)
 		return err
+
+	case model.EventPickupRequested:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, delivery_method = $2, updated_at = $3 WHERE tracking_id = $4`,
+			string(model.StatusReadyForPickup), string(model.DeliveryMethodBranchPickup), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventDeliveryRescheduled:
+	payload := event.Payload.(model.DeliveryRescheduledPayload)
+	
+	chatbotMetadata := map[string]interface{}{
+		"reschedule_count":         payload.RescheduleCount,
+		"max_reschedules":          2,
+		"original_delivery_date":   payload.OriginalDate,
+		"scheduled_delivery_date":  payload.NewDeliveryDate,
+		"last_chatbot_interaction": event.Timestamp,
+	}
+	
+	metadataJSON, err := json.Marshal(chatbotMetadata)
+	if err != nil {
+		return err
+	}
+	
+	// Obtener el estado actual
+	var currentStatus string
+	err = p.db.QueryRow(`SELECT status FROM shipments WHERE tracking_id = $1`, event.TrackingID).Scan(&currentStatus)
+	if err != nil {
+		return err
+	}
+	
+	// Solo cambiar a redelivery_scheduled si viene de delivery_failed
+	newStatus := currentStatus
+	if currentStatus == string(model.StatusDeliveryFailed) {
+		newStatus = string(model.StatusRedeliveryScheduled)
+	}
+	
+	// ✅ ACTUALIZAR: Guardar también en la tabla de eventos con ubicación
+	_, err = p.db.Exec(`
+		UPDATE shipments 
+		SET estimated_delivery_at = $1, 
+		    status = $2,
+		    chatbot_metadata = $3,
+		    updated_at = $4 
+		WHERE tracking_id = $5`,
+		payload.NewDeliveryDate,
+		newStatus,
+		metadataJSON,
+		event.Timestamp,
+		event.TrackingID,
+	)
+	
+	// ✅ NUEVO: Guardar evento con ubicación en la tabla events
+	if err == nil && payload.CurrentLocation != nil {
+		var locationTypeStr, locationCodeStr, locationNameStr, locationStatusStr interface{}
+		locationTypeStr = payload.CurrentLocation.Type
+		locationCodeStr = payload.CurrentLocation.BranchCode
+		locationNameStr = payload.CurrentLocation.BranchName
+		locationStatusStr = payload.CurrentLocation.Status
+		
+		// Actualizar evento en la tabla events
+		_, err = p.db.Exec(`
+			UPDATE events 
+			SET current_location_type = $1,
+			    current_location_code = $2,
+			    current_location_name = $3,
+			    current_location_status = $4,
+			    rescheduled_date = $5,
+			    via = $6
+			WHERE tracking_id = $7 AND id = $8`,
+			locationTypeStr,
+			locationCodeStr,
+			locationNameStr,
+			locationStatusStr,
+			payload.NewDeliveryDate,
+			payload.RequestedVia,
+			event.TrackingID,
+			event.ID,
+		)
+	}
+	
+	return err
+
+	case model.EventCancelledByRecipient:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(model.StatusCancelled), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventShipmentZoned:
+		payload := event.Payload.(model.ShipmentZonedPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET current_zone = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(payload.Zone), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventShipmentMoved:
+		payload := event.Payload.(model.ShipmentMovedPayload)
+		_, err := p.db.Exec(`
+			UPDATE shipments SET current_zone = $1, updated_at = $2 WHERE tracking_id = $3`,
+			string(payload.ToZone), event.Timestamp, event.TrackingID,
+		)
+		return err
 	}
 	return nil
 }
@@ -296,7 +402,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 
 	_, err = p.db.Exec(`
 		INSERT INTO shipments (
-			tracking_id, status, current_location, weight_kg, package_type,
+			tracking_id, status, current_location, current_zone, weight_kg, package_type,
 			is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 			created_at, updated_at, estimated_delivery_at, delivered_at,
 			sender, recipient, corrections,
@@ -305,11 +411,13 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			has_incident, incident_type,
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
-			price, price_breakdown, price_currency
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+			price, price_breakdown, price_currency,
+			rejected_by_recipient, chatbot_metadata
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
+			current_zone          = EXCLUDED.current_zone,
 			weight_kg             = EXCLUDED.weight_kg,
 			package_type          = EXCLUDED.package_type,
 			is_fragile            = EXCLUDED.is_fragile,
@@ -334,8 +442,10 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			delivery_method       = EXCLUDED.delivery_method,
 			price                 = COALESCE(EXCLUDED.price, shipments.price),
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
-			price_currency        = EXCLUDED.price_currency`,
-		s.TrackingID, string(s.Status), s.CurrentLocation, s.WeightKg, string(s.PackageType),
+			price_currency        = EXCLUDED.price_currency,
+			rejected_by_recipient = EXCLUDED.rejected_by_recipient,
+			chatbot_metadata      = EXCLUDED.chatbot_metadata`,
+			s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
@@ -345,7 +455,8 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.ParentShipmentID, s.DeliveryAttempts, s.IsReturning,
 		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
-	)
+		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
+)
 	return err
 }
 
@@ -360,7 +471,7 @@ func (p *PostgresShipmentProjection) Rebuild(events []model.DomainEvent) {
 
 func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, error) {
 	row := p.db.QueryRow(`
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -368,14 +479,15 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	return scanShipment(row)
 }
 
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
 	selectCols := `
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -383,7 +495,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -423,7 +536,7 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, error) {
 	q := "%" + strings.ToLower(query) + "%"
 	rows, err := p.db.Query(`
-		SELECT tracking_id, status, current_location, weight_kg, package_type,
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
 		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
 		       created_at, updated_at, estimated_delivery_at, delivered_at,
 		       sender, recipient, corrections,
@@ -431,7 +544,8 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       priority, priority_score, priority_confidence, priority_factors,
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
-		       price, price_breakdown, price_currency, reserved_for_trip_id
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -457,22 +571,47 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 
 	branchFilter := filter.ReceivingBranchID
 
-	// Main totals query.
-	var rows *sql.Rows
-	var err error
-	if branchFilter != "" {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired' AND receiving_branch_id = $1`, branchFilter)
-	} else {
-		rows, err = p.db.Query(`SELECT status, current_location FROM shipments WHERE status != 'expired'`)
+	// Build WHERE clauses for totals queries — respect date range when provided.
+	type whereBuilder struct {
+		clauses []string
+		args    []interface{}
+		idx     int
 	}
+	wb := whereBuilder{idx: 1}
+
+	wb.clauses = append(wb.clauses, "status != 'expired'")
+	if branchFilter != "" {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("receiving_branch_id = $%d", wb.idx))
+		wb.args = append(wb.args, branchFilter)
+		wb.idx++
+	}
+	if filter.DateFrom != nil {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("created_at >= $%d", wb.idx))
+		wb.args = append(wb.args, *filter.DateFrom)
+		wb.idx++
+	}
+	if filter.DateTo != nil {
+		wb.clauses = append(wb.clauses, fmt.Sprintf("created_at <= $%d", wb.idx))
+		wb.args = append(wb.args, *filter.DateTo)
+		wb.idx++
+	}
+	whereTotal := strings.Join(wb.clauses, " AND ")
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	rows, err = p.db.Query(`SELECT status, current_location, has_incident FROM shipments WHERE `+whereTotal, wb.args...)
 	if err != nil {
 		return model.Stats{}, err
 	}
 	defer rows.Close()
 
+	totalDelivered := 0
 	for rows.Next() {
 		var status, location string
-		if err := rows.Scan(&status, &location); err != nil {
+		var hasIncident bool
+		if err := rows.Scan(&status, &location, &hasIncident); err != nil {
 			return model.Stats{}, err
 		}
 		stats.Total++
@@ -481,10 +620,92 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		if s != model.StatusDelivered && s != model.StatusReturned && location != "" {
 			stats.ByBranch[location]++
 		}
+		if s == model.StatusDelivered {
+			totalDelivered++
+		}
+		if hasIncident {
+			stats.OpenIncidents++
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return model.Stats{}, err
 	}
+
+	// Cycle time & success rate.
+	if stats.Total > 0 {
+		rate := (float64(totalDelivered) / float64(stats.Total)) * 100
+		stats.SuccessRate = &rate
+	}
+	if totalDelivered > 0 {
+		// Reuse the same date filter for cycle time query (filter on created_at).
+		cycleClauses := []string{"status = 'delivered'", "delivered_at IS NOT NULL"}
+		cycleArgs := []interface{}{}
+		ci := 1
+		if branchFilter != "" {
+			cycleClauses = append(cycleClauses, fmt.Sprintf("receiving_branch_id = $%d", ci))
+			cycleArgs = append(cycleArgs, branchFilter)
+			ci++
+		}
+		if filter.DateFrom != nil {
+			cycleClauses = append(cycleClauses, fmt.Sprintf("created_at >= $%d", ci))
+			cycleArgs = append(cycleArgs, *filter.DateFrom)
+			ci++
+		}
+		if filter.DateTo != nil {
+			cycleClauses = append(cycleClauses, fmt.Sprintf("created_at <= $%d", ci))
+			cycleArgs = append(cycleArgs, *filter.DateTo)
+			ci++
+		}
+		row := p.db.QueryRow(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at)) / 3600)::numeric, 2)::float8
+			FROM shipments WHERE `+strings.Join(cycleClauses, " AND "), cycleArgs...)
+		var avg float64
+		if err := row.Scan(&avg); err == nil {
+			stats.AvgCycleTimeHours = &avg
+		}
+	}
+
+	// Recent shipments (last 5, no drafts, within date range when provided).
+	recentClauses := []string{"status != 'expired'", "status != 'draft'"}
+	recentArgs := []interface{}{}
+	ri := 1
+	if branchFilter != "" {
+		recentClauses = append(recentClauses, fmt.Sprintf("receiving_branch_id = $%d", ri))
+		recentArgs = append(recentArgs, branchFilter)
+		ri++
+	}
+	if filter.DateFrom != nil {
+		recentClauses = append(recentClauses, fmt.Sprintf("created_at >= $%d", ri))
+		recentArgs = append(recentArgs, *filter.DateFrom)
+		ri++
+	}
+	if filter.DateTo != nil {
+		recentClauses = append(recentClauses, fmt.Sprintf("created_at <= $%d", ri))
+		recentArgs = append(recentArgs, *filter.DateTo)
+		ri++
+	}
+	recentRows, err := p.db.Query(`
+		SELECT tracking_id, status, current_location, current_zone, weight_kg, package_type,
+		       is_fragile, special_instructions, receiving_branch_id, origin_branch_id,
+		       created_at, updated_at, estimated_delivery_at, delivered_at,
+		       sender, recipient, corrections,
+		       shipment_type, time_window,
+		       priority, priority_score, priority_confidence, priority_factors,
+		       has_incident, incident_type,
+		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
+		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
+		       rejected_by_recipient, chatbot_metadata
+		FROM shipments
+		WHERE `+strings.Join(recentClauses, " AND ")+`
+		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
+	if err != nil {
+		return model.Stats{}, err
+	}
+	defer recentRows.Close()
+	recent, err := scanShipments(recentRows)
+	if err != nil {
+		return model.Stats{}, err
+	}
+	stats.RecentShipments = recent
 
 	// Pre-fill zeros for every day in the requested range.
 	if filter.DateFrom != nil && filter.DateTo != nil {
@@ -557,6 +778,193 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 	return stats, nil
 }
 
+// StatsDetail returns KPI breakdown by branch for drill-down.
+func (p *PostgresShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	args := []interface{}{}
+	where := "status != 'expired'"
+	i := 1
+
+	if statusFilter != "" {
+		where += fmt.Sprintf(" AND status = $%d", i)
+		args = append(args, statusFilter)
+		i++
+	}
+	if dateFrom != nil {
+		where += fmt.Sprintf(" AND created_at >= $%d", i)
+		args = append(args, *dateFrom)
+		i++
+	}
+	if dateTo != nil {
+		where += fmt.Sprintf(" AND created_at <= $%d", i)
+		args = append(args, *dateTo)
+		i++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT receiving_branch_id, COUNT(*) AS cnt
+		FROM shipments
+		WHERE %s AND receiving_branch_id != ''
+		GROUP BY receiving_branch_id
+		ORDER BY cnt DESC`, where)
+
+	rows, err := p.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]int{}
+	for rows.Next() {
+		var branchID string
+		var cnt int
+		if err := rows.Scan(&branchID, &cnt); err != nil {
+			return nil, err
+		}
+		result[branchID] = cnt
+	}
+	return result, rows.Err()
+}
+
+// CancellationStats returns cancellations grouped by day and reason.
+func (p *PostgresShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	result := model.CancellationStats{
+		ByDay:            map[string]int{},
+		ReasonsBreakdown: map[string]int{},
+	}
+
+	// Default to last 30 days if no range specified.
+	from := dateFrom
+	to := dateTo
+	now := time.Now()
+	if from == nil {
+		f := now.AddDate(0, 0, -30)
+		from = &f
+	}
+	if to == nil {
+		to = &now
+	}
+
+	// Pre-fill zeros for every day in the requested range.
+	for d := from.Truncate(24 * time.Hour); !d.After(*to); d = d.AddDate(0, 0, 1) {
+		result.ByDay[d.Format("2006-01-02")] = 0
+	}
+
+	// Query the events table for shipment_cancelled events,
+	// joining with shipments to support branch filtering.
+	whereBranch := ""
+	args := []interface{}{}
+	if branchID != "" {
+		whereBranch = " AND s.receiving_branch_id = $3"
+		args = append(args, branchID)
+	}
+
+	rows, err := p.db.Query(`
+		SELECT DATE(e.timestamp)::text AS day,
+		       e.payload->>'Reason' AS reason,
+		       COUNT(*) AS cnt
+		FROM events e
+		JOIN shipments s ON s.tracking_id = e.tracking_id
+		WHERE e.event_type = 'shipment_cancelled'
+		  AND e.timestamp >= $1 AND e.timestamp <= $2`+whereBranch+`
+		GROUP BY DATE(e.timestamp), e.payload->>'Reason'
+		ORDER BY day`, append([]interface{}{*from, *to}, args...)...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var day, reason string
+		var cnt int
+		if err := rows.Scan(&day, &reason, &cnt); err != nil {
+			return result, err
+		}
+		result.ByDay[day] += cnt
+		result.ReasonsBreakdown[reason] += cnt
+		result.Total += cnt
+	}
+	if err := rows.Err(); err != nil {
+		return result, err
+	}
+
+	// Compute top reason.
+	if result.Total > 0 {
+		maxCount := 0
+		for reason, count := range result.ReasonsBreakdown {
+			if count > maxCount {
+				maxCount = count
+				result.TopReason = reason
+			}
+		}
+		// If zero-fill days inflated the total, recount from reasons.
+		computedTotal := 0
+		for _, count := range result.ReasonsBreakdown {
+			computedTotal += count
+		}
+		result.Total = computedTotal
+	}
+
+	return result, nil
+}
+
+// AvgTimePerStatus returns average hours spent in each status within the given date range.
+func (p *PostgresShipmentProjection) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	from := dateFrom
+	to := dateTo
+	now := time.Now()
+	if from == nil {
+		f := now.AddDate(0, 0, -30)
+		from = &f
+	}
+	if to == nil {
+		to = &now
+	}
+
+	rows, err := p.db.Query(`
+		WITH ordered AS (
+			SELECT tracking_id,
+			       e.payload->>'FromStatus' AS from_status,
+			       e.timestamp,
+			       LEAD(e.timestamp) OVER (PARTITION BY e.tracking_id ORDER BY e.timestamp ASC) AS next_ts
+			FROM events e
+			WHERE e.event_type = 'status_changed'
+			  AND e.timestamp >= $1 AND e.timestamp <= $2
+		)
+		SELECT from_status,
+		       COALESCE(AVG(EXTRACT(EPOCH FROM (next_ts - timestamp)) / 3600), 0) AS avg_hours
+		FROM ordered
+		WHERE next_ts IS NOT NULL
+		  AND from_status != ''
+		GROUP BY from_status
+		ORDER BY avg_hours DESC`, *from, *to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result model.AvgTimePerStatus
+	for rows.Next() {
+		var status string
+		var avgHours float64
+		if err := rows.Scan(&status, &avgHours); err != nil {
+			return nil, err
+		}
+		result = append(result, model.AvgTimePerStatusItem{
+			Status:   model.Status(status),
+			AvgHours: avgHours,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Mark the bottleneck (highest avg time).
+	if len(result) > 0 {
+		result[0].IsBottleneck = true
+	}
+	return result, nil
+}
+
 // CountActiveByBranch returns the number of non-terminal shipments assigned to a branch.
 func (p *PostgresShipmentProjection) CountActiveByBranch(branchID string) int {
 	var count int
@@ -586,10 +994,13 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		price               sql.NullFloat64
 		priceBreakdownJSON  []byte
 		priceCurrency       string
-		reservedForTripID   sql.NullString
+		reservedForTripID    sql.NullString
+		slaNotifiedAt        *time.Time
+		slaExpiredNotifiedAt *time.Time
+		chatbotMetadataJSON []byte 
 	)
 	err := row.Scan(
-		&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
+		&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
 		&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 		&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 		&senderJSON, &recipientJSON, &correctionsJSON,
@@ -597,7 +1008,8 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+		&s.RejectedByRecipient,	&chatbotMetadataJSON,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -608,6 +1020,8 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 	if reservedForTripID.Valid {
 		s.ReservedForTripID = &reservedForTripID.String
 	}
+	s.SLANotifiedAt = slaNotifiedAt
+	s.SLAExpiredNotifiedAt = slaExpiredNotifiedAt
 	s.Status = model.Status(status)
 	s.PackageType = model.PackageType(packageType)
 	s.ShipmentType = model.ShipmentType(shipmentType)
@@ -647,6 +1061,13 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		}
 		s.PriorityFactors = f
 	}
+	if len(chatbotMetadataJSON) > 0 {
+		var metadata model.ChatbotMetadata
+		if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
+			return model.Shipment{}, err
+		}
+		s.ChatbotMetadata = &metadata
+	}
 	return s, nil
 }
 
@@ -669,10 +1090,13 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			price               sql.NullFloat64
 			priceBreakdownJSON  []byte
 			priceCurrency       string
-			reservedForTripID   sql.NullString
+			reservedForTripID    sql.NullString
+			slaNotifiedAt        *time.Time
+			slaExpiredNotifiedAt *time.Time
+			chatbotMetadataJSON []byte
 		)
 		err := rows.Scan(
-			&s.TrackingID, &status, &s.CurrentLocation, &s.WeightKg, &packageType,
+			&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
 			&s.IsFragile, &s.SpecialInstructions, &s.ReceivingBranchID, &s.OriginBranchID,
 			&s.CreatedAt, &s.UpdatedAt, &estimatedAt, &s.DeliveredAt,
 			&senderJSON, &recipientJSON, &correctionsJSON,
@@ -680,7 +1104,8 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.Priority, &s.PriorityScore, &s.PriorityConfidence, &priorityFactorsJSON,
 			&s.HasIncident, &incidentType,
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
-			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID,
+			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
+			&s.RejectedByRecipient, &chatbotMetadataJSON,
 		)
 		if err != nil {
 			return nil, err
@@ -688,6 +1113,8 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 		if reservedForTripID.Valid {
 			s.ReservedForTripID = &reservedForTripID.String
 		}
+		s.SLANotifiedAt = slaNotifiedAt
+		s.SLAExpiredNotifiedAt = slaExpiredNotifiedAt
 		s.Status = model.Status(status)
 		s.PackageType = model.PackageType(packageType)
 		s.ShipmentType = model.ShipmentType(shipmentType)
@@ -727,11 +1154,21 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			}
 			s.PriorityFactors = f
 		}
+
+		if len(chatbotMetadataJSON) > 0 {
+		var metadata model.ChatbotMetadata
+		if err := json.Unmarshal(chatbotMetadataJSON, &metadata); err != nil {
+			return nil, err
+		}
+		s.ChatbotMetadata = &metadata
+	}
 		result = append(result, s)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].TrackingID < result[j].TrackingID
 	})
+
+	
 	return result, rows.Err()
 }
 
@@ -773,4 +1210,48 @@ func (p *PostgresShipmentProjection) ReleaseFromTrip(trackingID string) error {
 		trackingID,
 	)
 	return err
+}
+
+// SetSLANotified actualiza sla_notified_at del envío (nil = resetear, &t = marcar notificado).
+func (p *PostgresShipmentProjection) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET sla_notified_at = $1 WHERE tracking_id = $2`,
+		notifiedAt, trackingID,
+	)
+	return err
+}
+
+// SetSLAExpiredNotified actualiza sla_expired_notified_at del envío.
+func (p *PostgresShipmentProjection) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	_, err := p.db.Exec(
+		`UPDATE shipments SET sla_expired_notified_at = $1 WHERE tracking_id = $2`,
+		notifiedAt, trackingID,
+	)
+	return err
+}
+
+// SetConfirmationEmailSent marca el envío como notificado por email de forma atómica (CA-05).
+// Solo actualiza si confirmation_email_sent_at aún es NULL. Devuelve true si fue el primer
+// llamado para ese tracking ID (el UPDATE afectó una fila), false si ya estaba marcado.
+func (p *PostgresShipmentProjection) SetConfirmationEmailSent(trackingID string) (bool, error) {
+	res, err := p.db.Exec(
+		`UPDATE shipments SET confirmation_email_sent_at = NOW() WHERE tracking_id = $1 AND confirmation_email_sent_at IS NULL`,
+		trackingID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+// serializeChatbotMetadata serializa ChatbotMetadata a JSON
+func serializeChatbotMetadata(metadata *model.ChatbotMetadata) interface{} {
+	if metadata == nil {
+		return nil
+	}
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return nil
+	}
+	return data
 }

@@ -102,20 +102,20 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	c.JSON(http.StatusOK, payment)
 }
 
-// SimulatePayment godoc
-// @Summary      Simular pago aprobado (solo demo)
-// @Description  Confirma un pago pendiente sin llamar a Mercado Pago. Solo para testing/demo.
+// ConfirmCashPayment godoc
+// @Summary      Confirmar pago en efectivo
+// @Description  Confirma un pago pendiente como pagado en efectivo por el cliente, sin pasar por Mercado Pago.
 // @Tags         payments
 // @Produce      json
 // @Security     BearerAuth
 // @Param        tracking_id  path      string  true  "Tracking ID en pending_payment"
 // @Success      200          {object}  model.Shipment
 // @Failure      400          {object}  map[string]string
-// @Router       /shipments/{tracking_id}/simulate-payment [post]
-func (h *PaymentHandler) SimulatePayment(c *gin.Context) {
+// @Router       /shipments/{tracking_id}/cash-payment [post]
+func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
-	shipment, err := h.svc.SimulatePaymentApproved(trackingID, user.Username)
+	shipment, err := h.svc.ConfirmCashPayment(trackingID, user.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

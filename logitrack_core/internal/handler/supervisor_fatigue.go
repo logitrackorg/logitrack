@@ -77,10 +77,11 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	}
 
 	status := model.DriverFatigueStatus{
-		DriverID:  driver.ID,
-		FullName:  fullName,
-		Username:  driver.Username,
-		RiskLevel: model.RiskPending,
+		DriverID:   driver.ID,
+		FullName:   fullName,
+		Username:   driver.Username,
+		DriverType: driver.DriverType,
+		RiskLevel:  model.RiskPending,
 	}
 
 	// Today's check-in
@@ -101,7 +102,16 @@ func (h *SupervisorFatigueHandler) buildStatus(
 			status.HasVoice = checkin.VoiceMetrics != nil
 			status.PVTMetrics = checkin.PVTMetrics
 
-			score, level := fatigueRiskScore(checkin, cfg)
+			// Los choferes inter-sucursal no realizan entregas directas al
+			// destinatario, por lo que nunca generan touch events.
+			// Excluir la prueba táctil de su cálculo para que el peso no se
+			// redistribuya artificialmente entre las otras pruebas.
+			effectiveCfg := cfg
+			if driver.DriverType == model.DriverTypeInterBranch {
+				effectiveCfg.TactileEnabled = false
+			}
+
+			score, level := fatigueRiskScore(checkin, effectiveCfg)
 			status.RiskScore = &score
 			status.RiskLevel = level
 		}
@@ -123,12 +133,14 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	return status
 }
 
-// normalizeKSS maps the KSS level (1–9) to a fixed 0–100 risk scale.
-// KSS 1–4 = alert (0 risk), KSS 5–7 = moderate (50 risk), KSS 8–9 = high (100 risk).
-// The mapping is hardcoded; the admin no longer configures per-range penalties.
+// normalizeKSS maps the 8-point KSS level to a fixed 0–100 risk scale.
+// The scale excludes the original neutral midpoint (old level 5).
+//   1–4 (alert)                                  →   0 risk
+//   5–6 (signs of drowsiness / moderate effort)  →  50 risk
+//   7–8 (high drowsiness / fighting sleep)        → 100 risk
 func normalizeKSS(level int) float64 {
 	switch {
-	case level >= 8:
+	case level >= 7:
 		return 100
 	case level >= 5:
 		return 50

@@ -90,7 +90,7 @@ func TestConsolidate_AbsorbsSingleHopIntoMultiHop(t *testing.T) {
 		},
 	})
 
-	svc.consolidateCrossBranchDispatches(plan)
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
 
 	// El dispatch B debe haber desaparecido del plan de Córdoba.
 	corPlan := findBranchPlan(plan, "cordoba")
@@ -176,7 +176,7 @@ func TestConsolidate_RejectsWhenBExceedsAvailableCapacityInSegment(t *testing.T)
 		},
 	})
 
-	svc.consolidateCrossBranchDispatches(plan)
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
 
 	corPlan := findBranchPlan(plan, "cordoba")
 	if len(corPlan.InterBranch) != 1 {
@@ -228,7 +228,7 @@ func TestConsolidate_RejectsIfBIsMultiHop(t *testing.T) {
 		},
 	})
 
-	svc.consolidateCrossBranchDispatches(plan)
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
 
 	corPlan := findBranchPlan(plan, "cordoba")
 	if len(corPlan.InterBranch) != 1 {
@@ -269,10 +269,148 @@ func TestConsolidate_RejectsIfBOriginNotInAPath(t *testing.T) {
 		},
 	})
 
-	svc.consolidateCrossBranchDispatches(plan)
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
 	rosPlan := findBranchPlan(plan, "rosario")
 	if len(rosPlan.InterBranch) != 1 {
 		t.Errorf("B en Rosario no debería consolidarse (A es single-hop), got %d", len(rosPlan.InterBranch))
+	}
+}
+
+// newMultiHopServiceWithCoords es como newMultiHopService pero setea lat/lng
+// en caba/cordoba/mendoza para tener un branchDistance determinístico
+// (necesario para validar el SLA safety check).
+func newMultiHopServiceWithCoords(shipments []model.Shipment) *RoutingService {
+	lat0, lat1, lat2 := 0.0, 1.0, 2.0
+	lng := 0.0
+	branches := map[string]model.Branch{
+		"caba":    {ID: "caba", Status: model.BranchStatusActive, Latitude: &lat0, Longitude: &lng},
+		"cordoba": {ID: "cordoba", Status: model.BranchStatusActive, Latitude: &lat1, Longitude: &lng},
+		"mendoza": {ID: "mendoza", Status: model.BranchStatusActive, Latitude: &lat2, Longitude: &lng},
+	}
+	branchRepo := &fakeBranchRepo{branches: branches}
+	graphSvc := NewBranchGraphService(&fakeBranchGraphRepo{edges: nil}, branchRepo)
+	return &RoutingService{
+		branchRepo:   branchRepo,
+		shipmentRepo: &fakeShipmentRepo{shipments: shipments},
+		graphSvc:     graphSvc,
+	}
+}
+
+func TestConsolidate_RejectsWhenBHasSLACriticalShipmentThatBreachesViaARoute(t *testing.T) {
+	// Setup: A: CABA → Córdoba → Mendoza. B: Córdoba → Mendoza, single-hop, con un envío SLA-crítico.
+	// Distancia total CABA→Córdoba→Mendoza ≈ 2 × 111 km × 1.3 detour = 288.6 km.
+	// A 25 km/h → ~11.5h. Si el envío SLA-crítico vence en 5h, la ruta de A
+	// rompería el SLA y la consolidación debe rechazarse.
+	now := clock.Now()
+	slaDeadline := now.Add(5 * time.Hour)
+	shipments := []model.Shipment{
+		shipAtHub("LT-CB1", "caba", "cordoba", 100),
+		shipAtHub("LT-MZ1", "caba", "mendoza", 50),
+		{
+			TrackingID:         "LT-B1",
+			Status:             model.StatusAtHub,
+			ReceivingBranchID:  "cordoba",
+			FinalBranchID:      "mendoza",
+			WeightKg:           50,
+			DeliveryMethod:     model.DeliveryMethodLastMile,
+			EstimatedDeliveryAt: &slaDeadline,
+		},
+	}
+	svc := newMultiHopServiceWithCoords(shipments)
+	plan := newGlobalPlan(map[string]model.RoutingPlan{
+		"caba": {
+			InterBranch: []model.InterBranchAssignment{
+				{
+					VehicleID:         "V-CABA",
+					DestinationBranch: "cordoba",
+					Shipments:         []string{"LT-CB1", "LT-MZ1"},
+					TotalWeightKg:     150,
+					CapacityKg:        2000,
+					AdditionalStops: []model.AssignmentStop{
+						{BranchID: "mendoza", Shipments: []string{"LT-MZ1"}, TotalWeightKg: 50},
+					},
+				},
+			},
+		},
+		"cordoba": {
+			InterBranch: []model.InterBranchAssignment{
+				{
+					VehicleID:         "V-COR",
+					DestinationBranch: "mendoza",
+					Shipments:         []string{"LT-B1"},
+					TotalWeightKg:     50,
+					CapacityKg:        500,
+				},
+			},
+		},
+	})
+
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
+
+	corPlan := findBranchPlan(plan, "cordoba")
+	if len(corPlan.InterBranch) != 1 {
+		t.Fatalf("B con SLA crítico no debería consolidarse — debería seguir como dispatch independiente, got %d", len(corPlan.InterBranch))
+	}
+	cabaPlan := findBranchPlan(plan, "caba")
+	if len(cabaPlan.InterBranch[0].PrimaryPickupShipments) > 0 {
+		t.Errorf("A no debería tener pickups (B preservado), got %v", cabaPlan.InterBranch[0].PrimaryPickupShipments)
+	}
+}
+
+func TestConsolidate_AbsorbsWhenSLAFitsInARoute(t *testing.T) {
+	// Mismo setup que el test anterior, pero el SLA del envío vence en 48h:
+	// está dentro del horizonte forzado (24h) NO, así que no aplica la verificación
+	// — se absorbe normalmente. Caso de control: cuando ningún envío de B es
+	// SLA-crítico, el comportamiento previo se mantiene.
+	now := clock.Now()
+	farDeadline := now.Add(48 * time.Hour)
+	shipments := []model.Shipment{
+		shipAtHub("LT-CB1", "caba", "cordoba", 100),
+		shipAtHub("LT-MZ1", "caba", "mendoza", 50),
+		{
+			TrackingID:         "LT-B1",
+			Status:             model.StatusAtHub,
+			ReceivingBranchID:  "cordoba",
+			FinalBranchID:      "mendoza",
+			WeightKg:           50,
+			DeliveryMethod:     model.DeliveryMethodLastMile,
+			EstimatedDeliveryAt: &farDeadline,
+		},
+	}
+	svc := newMultiHopServiceWithCoords(shipments)
+	plan := newGlobalPlan(map[string]model.RoutingPlan{
+		"caba": {
+			InterBranch: []model.InterBranchAssignment{
+				{
+					VehicleID:         "V-CABA",
+					DestinationBranch: "cordoba",
+					Shipments:         []string{"LT-CB1", "LT-MZ1"},
+					TotalWeightKg:     150,
+					CapacityKg:        2000,
+					AdditionalStops: []model.AssignmentStop{
+						{BranchID: "mendoza", Shipments: []string{"LT-MZ1"}, TotalWeightKg: 50},
+					},
+				},
+			},
+		},
+		"cordoba": {
+			InterBranch: []model.InterBranchAssignment{
+				{
+					VehicleID:         "V-COR",
+					DestinationBranch: "mendoza",
+					Shipments:         []string{"LT-B1"},
+					TotalWeightKg:     50,
+					CapacityKg:        500,
+				},
+			},
+		},
+	})
+
+	svc.consolidateCrossBranchDispatches(plan, model.DefaultRoutingConfig())
+
+	corPlan := findBranchPlan(plan, "cordoba")
+	if len(corPlan.InterBranch) != 0 {
+		t.Errorf("B sin SLA crítico debería consolidarse, sigue en Córdoba: %d", len(corPlan.InterBranch))
 	}
 }
 
