@@ -121,14 +121,16 @@ export function DriverRoute() {
       // error de red → continuar sin bloquear
     }
     const capturedMisfires = misfireRef.current;
-    misfireRef.current = 0;                   // resetear contador local
-    driverApi.resetMisfires().catch(() => {}); // resetear historial backend
+    misfireRef.current = 0; // resetear contador local siempre
     if (requireTest) {
-      setCheckinMisfires(capturedMisfires); // guardar para el toast de skip
-      pause();                  // detener el camión inmediatamente
-      setMidRouteCheckin(true); // desplegar overlay bloqueante
+      // No resetear el backend todavía: SubmitCheckin leerá los misfires
+      // almacenados y los incluirá en el registro. El reset se hace en onDone.
+      setCheckinMisfires(capturedMisfires);
+      pause();
+      setMidRouteCheckin(true);
       return;
     }
+    driverApi.resetMisfires().catch(() => {}); // sin gate: resetear para el próximo paquete
     play();
     load();
   };
@@ -240,7 +242,8 @@ export function DriverRoute() {
         misfireCount={checkinMisfires}
         onDone={() => {
           setMidRouteCheckin(false);
-          play(); // reanudar simulación recién aquí, cuando el check-in terminó
+          driverApi.resetMisfires().catch(() => {}); // resetear tras el check-in, no antes
+          play();
           load();
         }}
       />

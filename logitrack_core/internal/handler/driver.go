@@ -186,8 +186,11 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	today := todayAR()
 
-	// Preserve any previously stored baseline voice data so it isn't wiped by a skip.
+	// Preserve existing data; archive previous formal submission before overwriting.
 	existing, _ := h.checkinRepo.Get(user.ID, today)
+	if existing.KSSLevel > 0 || existing.Skipped {
+		_ = h.checkinRepo.Archive(existing)
+	}
 
 	rec := model.DriverCheckin{
 		DriverID:      user.ID,
@@ -197,6 +200,8 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 		VoiceMetrics:  existing.VoiceMetrics,
 		DriftScore:    existing.DriftScore,
 		BaselineVoice: existing.BaselineVoice,
+		TouchEvents:   existing.TouchEvents,
+		PVTMetrics:    existing.PVTMetrics,
 	}
 	if err := h.checkinRepo.Upsert(rec); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el salto"})
@@ -244,8 +249,14 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 
 	today := todayAR()
 
-	// Preserve existing voice data if the driver already uploaded audio today.
+	// Preserve existing data accumulated today (voice, touch events, PVT).
 	existing, _ := h.checkinRepo.Get(user.ID, today)
+
+	// Archive the previous formal submission before overwriting, so history
+	// accumulates multiple check-ins per day when the gate fires more than once.
+	if existing.KSSLevel > 0 || existing.Skipped {
+		_ = h.checkinRepo.Archive(existing)
+	}
 
 	rec := model.DriverCheckin{
 		DriverID:      user.ID,
@@ -256,6 +267,8 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		VoiceMetrics:  existing.VoiceMetrics,
 		DriftScore:    existing.DriftScore,
 		BaselineVoice: existing.BaselineVoice,
+		TouchEvents:   existing.TouchEvents,
+		PVTMetrics:    existing.PVTMetrics,
 	}
 	if err := h.checkinRepo.Upsert(rec); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el check-in"})
