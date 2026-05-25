@@ -542,7 +542,7 @@ func (r *postgresStatsExtendedRepository) SuccessRateByBranch(dateFrom, dateTo *
 		SELECT
 			b.id AS branch_id,
 			b.name AS branch_name,
-			COUNT(s.tracking_id) FILTER (WHERE s.status NOT IN ('draft', 'cancelled', 'expired')) AS total,
+			COUNT(s.tracking_id) FILTER (WHERE s.status IN ('delivered', 'delivery_failed', 'no_entregado', 'rechazado', 'lost', 'destroyed')) AS total,
 			COUNT(s.tracking_id) FILTER (WHERE s.status = 'delivered') AS delivered
 		FROM branches b
 		LEFT JOIN shipments s ON s.receiving_branch_id = b.id
