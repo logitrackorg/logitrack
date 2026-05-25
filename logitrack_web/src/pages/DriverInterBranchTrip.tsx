@@ -369,7 +369,13 @@ export function DriverInterBranchTrip() {
       });
 
       const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
-      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] });
+      // Fit to remaining route: from the last completed stop (or origin) to the end.
+      // This keeps the driver focused on what's ahead after each stop is confirmed.
+      const remainingLatlngs = points.slice(curIdx).map((p) => [p.lat, p.lng] as [number, number]);
+      map.fitBounds(
+        L.latLngBounds(remainingLatlngs.length >= 2 ? remainingLatlngs : latlngs),
+        { padding: [40, 40] },
+      );
 
       // Ruta real por carretera vía OSRM — usa legs para colorear por segmento
       const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(";");
@@ -622,7 +628,7 @@ export function DriverInterBranchTrip() {
         )}
 
         {/* ── MAPA ── */}
-        {(origin?.latitude || currentStopBranch?.latitude) && (
+        {!!origin?.latitude && (
           <Card className="overflow-hidden p-0">
             <div ref={mapRef} className="h-44 w-full" />
           </Card>

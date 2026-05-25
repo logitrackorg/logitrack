@@ -89,6 +89,9 @@ function ScoreBar({
 function HistoryRow({ record, isInterBranch }: { record: CheckinRecord; isInterBranch: boolean }) {
   const [yy, mm, dd] = record.date.split("-");
   const dateLabel = `${dd}/${mm}/${yy}`;
+  const timeLabel = record.recorded_at
+    ? new Date(record.recorded_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   const totalMisfires =
     record.touch_events && record.touch_events.length > 0
@@ -97,9 +100,12 @@ function HistoryRow({ record, isInterBranch }: { record: CheckinRecord; isInterB
 
   return (
     <tr className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
-      {/* Fecha */}
+      {/* Fecha y hora */}
       <td className="py-2 px-3 text-xs text-slate-600 tabular-nums font-medium whitespace-nowrap">
-        {dateLabel}
+        <span>{dateLabel}</span>
+        {timeLabel && (
+          <span className="ml-1 text-slate-400">{timeLabel}</span>
+        )}
       </td>
 
       {record.skipped ? (
@@ -269,7 +275,7 @@ function DriverRow({
                   <tbody>
                     {(driver.history ?? []).map((rec) => (
                       <HistoryRow
-                        key={rec.date}
+                        key={rec.recorded_at || rec.date}
                         record={rec}
                         isInterBranch={driver.driver_type === "intersucursal"}
                       />

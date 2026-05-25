@@ -9,6 +9,7 @@ import {
   Clock,
   Undo2,
   TrendingUp,
+  Activity,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -25,6 +26,7 @@ const RankingTab = lazy(() => import("./reports/RankingTab"));
 const VolumenTab = lazy(() => import("./reports/VolumenTab"));
 const RetornoTab = lazy(() => import("./reports/RetornoTab"));
 const ExitoTab = lazy(() => import("./reports/ExitoTab"));
+const FatigaTab = lazy(() => import("./reports/FatigaTab"));
 
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -35,6 +37,7 @@ const tabs = [
   { id: "volumen", label: "Vol. por Ventana", icon: Clock },
   { id: "retorno", label: "Retorno", icon: Undo2 },
   { id: "exito", label: "Tasa de Éxito", icon: TrendingUp },
+  { id: "fatiga", label: "Fatiga", icon: Activity },
 ];
 
 const VALID_TABS = new Set(tabs.map((t) => t.id));
@@ -148,6 +151,7 @@ export function DashboardHost() {
             {activeTab === "volumen" && <VolumenTab {...sharedProps} />}
             {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
+            {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
           </Suspense>
         </div>
       </div>

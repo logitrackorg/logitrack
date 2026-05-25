@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -70,6 +71,22 @@ func (r *CheckinRepository) AllForDriver(driverID string) []model.DriverCheckin 
 		}
 	}
 	return out
+}
+
+// Archive stores a snapshot of an existing check-in under a timestamped key
+// so that multiple submissions on the same day are preserved in history.
+// The active daily record (keyed by date only) is NOT affected.
+func (r *CheckinRepository) Archive(c model.DriverCheckin) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	records, err := r.load()
+	if err != nil {
+		return err
+	}
+	archiveKey := c.DriverID + "|" + c.Date + "|" + strconv.FormatInt(c.RecordedAt.Unix(), 10)
+	records[archiveKey] = c
+	return r.save(records)
 }
 
 // ── private helpers ──────────────────────────────────────────────────────────
