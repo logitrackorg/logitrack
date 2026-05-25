@@ -42,9 +42,11 @@ type ShipmentRepository interface {
 
 	// Chatbot operations
 	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)
+	AuthenticateSender(cmd AuthenticateSenderCmd) (model.Shipment, error)
 	RequestPickup(cmd RequestPickupCmd) (model.Shipment, error)
 	RescheduleDelivery(cmd RescheduleDeliveryCmd) (model.Shipment, error)
 	CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error)
+	CancelBySender(cmd CancelBySenderCmd) (model.Shipment, error)
 
 	// Reads
 	GetByTrackingID(trackingID string) (model.Shipment, error)
@@ -202,4 +204,19 @@ type CancelByRecipientCmd struct {
 	Reason       string
 	ChangedBy    string
 	Timestamp    time.Time
+}
+
+// AuthenticateSenderCmd valida tracking ID y DNI del remitente
+type AuthenticateSenderCmd struct {
+	TrackingID string
+	SenderDNI  string
+}
+
+// CancelBySenderCmd cancela el envío por solicitud del remitente vía chatbot
+type CancelBySenderCmd struct {
+	TrackingID string
+	SenderDNI  string
+	Reason     string
+	ChangedBy  string
+	Timestamp  time.Time
 }

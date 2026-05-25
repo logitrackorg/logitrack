@@ -192,19 +192,32 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if !ok {
 			return
 		}
-		// Cambiar estado a cancelado
 		shipment.Status = model.StatusCancelled
 		shipment.UpdatedAt = event.Timestamp
-		
-		// Actualizar metadata del chatbot
 		if shipment.ChatbotMetadata == nil {
-			shipment.ChatbotMetadata = &model.ChatbotMetadata{
-				MaxReschedules: 2,
-			}
+			shipment.ChatbotMetadata = &model.ChatbotMetadata{MaxReschedules: 2}
 		}
 		now := event.Timestamp
 		shipment.ChatbotMetadata.CancelledAt = &now
 		shipment.ChatbotMetadata.CancelledBy = "RECIPIENT"
+		shipment.ChatbotMetadata.CancellationReason = payload.Reason
+		shipment.ChatbotMetadata.LastChatbotInteraction = &now
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventCancelledBySender:
+		payload := event.Payload.(model.CancelledBySenderPayload)
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		shipment.Status = model.StatusCancelled
+		shipment.UpdatedAt = event.Timestamp
+		if shipment.ChatbotMetadata == nil {
+			shipment.ChatbotMetadata = &model.ChatbotMetadata{MaxReschedules: 2}
+		}
+		now := event.Timestamp
+		shipment.ChatbotMetadata.CancelledAt = &now
+		shipment.ChatbotMetadata.CancelledBy = "SENDER"
 		shipment.ChatbotMetadata.CancellationReason = payload.Reason
 		shipment.ChatbotMetadata.LastChatbotInteraction = &now
 		p.shipments[event.TrackingID] = shipment

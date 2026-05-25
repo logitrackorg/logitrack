@@ -82,7 +82,9 @@ func (r *postgresNotificationRepository) ListByUser(userID string, filters Notif
 			WHEN 'sla_expired'              THEN 1
 			WHEN 'sla_risk'                 THEN 2
 			WHEN 'return_completed'         THEN 2
-			WHEN 'chatbot_pickup_requested' THEN 2
+			WHEN 'chatbot_pickup_requested'      THEN 2
+			WHEN 'chatbot_rejected_by_recipient'  THEN 2
+			WHEN 'chatbot_cancelled_by_sender'    THEN 2
 			ELSE                                 3
 		END`
 

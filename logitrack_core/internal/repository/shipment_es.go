@@ -632,6 +632,64 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	return r.projection.Get(cmd.TrackingID)
 }
 
+func (r *eventSourcedShipmentRepository) AuthenticateSender(cmd AuthenticateSenderCmd) (model.Shipment, error) {
+	shipment, err := r.projection.Get(cmd.TrackingID)
+	if err != nil {
+		return model.Shipment{}, fmt.Errorf("envío no encontrado")
+	}
+
+	// Obtener DNI del remitente (considerar correcciones)
+	senderDNI := shipment.Sender.DNI
+	if shipment.Corrections != nil && shipment.Corrections.SenderDNI != nil {
+		senderDNI = *shipment.Corrections.SenderDNI
+	}
+
+	if senderDNI == "" {
+		return model.Shipment{}, fmt.Errorf("este envío no tiene datos del remitente registrados")
+	}
+	if senderDNI != cmd.SenderDNI {
+		return model.Shipment{}, fmt.Errorf("los datos ingresados no coinciden con nuestros registros")
+	}
+
+	return shipment, nil
+}
+
+func (r *eventSourcedShipmentRepository) CancelBySender(cmd CancelBySenderCmd) (model.Shipment, error) {
+	shipment, err := r.AuthenticateSender(AuthenticateSenderCmd{
+		TrackingID: cmd.TrackingID,
+		SenderDNI:  cmd.SenderDNI,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	canCancel, reason := shipment.CanCancel()
+	if !canCancel {
+		return model.Shipment{}, errors.New(reason)
+	}
+
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: cmd.TrackingID,
+		EventType:  model.EventCancelledBySender,
+		Payload: model.CancelledBySenderPayload{
+			SenderDNI:    cmd.SenderDNI,
+			FromStatus:   shipment.Status,
+			Reason:       cmd.Reason,
+			RequestedVia: "chatbot",
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Timestamp,
+	}
+
+	if err := r.store.Append(event); err != nil {
+		return model.Shipment{}, err
+	}
+
+	r.projection.Apply(event)
+	return r.projection.Get(cmd.TrackingID)
+}
+
 func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipientCmd) (model.Shipment, error) {
 	// Autenticar primero
 	shipment, err := r.AuthenticateRecipient(AuthenticateRecipientCmd{
