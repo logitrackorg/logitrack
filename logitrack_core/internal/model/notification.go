@@ -18,7 +18,6 @@ const (
 	NotificationRouteAssigned          NotificationType = "route_assigned"            // ruta asignada al chofer (LOGITRACK-453)
 	NotificationRouteReassigned        NotificationType = "route_reassigned"          // ruta reasignada a otro chofer (LOGITRACK-453)
 	NotificationTripDriverAssigned     NotificationType = "trip_driver_assigned"      // chofer reclamó un viaje vía QR — avisa a operadores de sucursales involucradas
-	NotificationDataAccessRequest      NotificationType = "data_access_request"       // chofer solicitó sus datos de monitoreo (Ley 25.326)
 )
 
 type Notification struct {
