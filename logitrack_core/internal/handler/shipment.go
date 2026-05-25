@@ -47,10 +47,17 @@ type ShipmentHandler struct {
 	routeSvc   *service.RouteService
 	commentSvc *service.CommentService
 	branchSvc  *service.BranchService
+	claimSvc   *service.ClaimService
 }
 
-func NewShipmentHandler(svc *service.ShipmentService, routeSvc *service.RouteService, commentSvc *service.CommentService, branchSvc *service.BranchService) *ShipmentHandler {
-	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc, branchSvc: branchSvc}
+func NewShipmentHandler(
+	svc *service.ShipmentService,
+	routeSvc *service.RouteService,
+	commentSvc *service.CommentService,
+	branchSvc *service.BranchService,
+	claimSvc *service.ClaimService,
+) *ShipmentHandler {
+	return &ShipmentHandler{svc: svc, routeSvc: routeSvc, commentSvc: commentSvc, branchSvc: branchSvc, claimSvc: claimSvc}
 }
 
 func (h *ShipmentHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -166,7 +173,6 @@ func (h *ShipmentHandler) UpdateDraft(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, shipment)
 }
-
 
 // List returns all shipments, optionally filtered by date range.
 //
@@ -476,11 +482,26 @@ func (h *ShipmentHandler) GetPublicEvents(c *gin.Context) {
 		return
 	}
 	out := make([]model.PublicShipmentEvent, 0, len(events))
+	var latestClaim *model.Claim
+	claimFetched := false
 	for _, ev := range events {
 		if ev.EventType == "edited" {
 			continue
 		}
-		out = append(out, ev.ToPublicEvent())
+		publicEvent := ev.ToPublicEvent()
+		if ev.EventType == model.EventClaimCreated {
+			if !claimFetched && h.claimSvc != nil {
+				if claim, err := h.claimSvc.GetLatestByTrackingID(trackingID); err == nil {
+					latestClaim = &claim
+				}
+				claimFetched = true
+			}
+			if latestClaim != nil {
+				publicEvent.ClaimStatus = latestClaim.Status
+				publicEvent.ClaimUpdatedAt = &latestClaim.UpdatedAt
+			}
+		}
+		out = append(out, publicEvent)
 	}
 	c.JSON(http.StatusOK, out)
 }
@@ -651,4 +672,116 @@ func (h *ShipmentHandler) Stats(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, stats)
+}
+
+// StatsDetail returns KPI breakdown by branch for drill-down.
+//
+// @Summary      KPI drill-down detail
+// @Description  Returns a per-branch breakdown of shipments for a given status filter. Used for Capa 2 drill-down from the dashboard. Supervisor, manager, and admin only.
+// @Tags         shipments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        status     query  string  false  "Status filter (e.g. delivered, in_transit)"
+// @Param        date_from  query  string  false  "Start date (YYYY-MM-DD)"
+// @Param        date_to    query  string  false  "End date (YYYY-MM-DD)"
+// @Success      200        {object}  map[string]int
+// @Failure      401        {object}  map[string]string
+// @Failure      403        {object}  map[string]string
+// @Failure      500        {object}  map[string]string
+// @Router       /stats/detail [get]
+func (h *ShipmentHandler) StatsDetail(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	statusFilter := c.Query("status")
+	var dateFrom, dateTo *time.Time
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
+			return
+		}
+		dateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
+			return
+		}
+		dateTo = &t
+	}
+	result, err := h.svc.StatsDetail(statusFilter, dateFrom, dateTo)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	// Supervisors see only their branch.
+	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+		if count, ok := result[user.BranchID]; ok {
+			result = map[string]int{user.BranchID: count}
+		} else {
+			result = map[string]int{user.BranchID: 0}
+		}
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// CancellationStats returns cancellations grouped by day and reason.
+func (h *ShipmentHandler) CancellationStats(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	var dateFrom, dateTo *time.Time
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
+			return
+		}
+		dateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
+			return
+		}
+		dateTo = &t
+	}
+	branchID := c.Query("branch_id")
+	if user.Role == model.RoleSupervisor && user.BranchID != "" {
+		branchID = user.BranchID
+	}
+
+	result, err := h.svc.CancellationStats(dateFrom, dateTo, branchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// AvgTimePerStatus returns average time spent in each shipment status.
+func (h *ShipmentHandler) AvgTimePerStatus(c *gin.Context) {
+	var dateFrom, dateTo *time.Time
+	if raw := c.Query("date_from"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_from, usá AAAA-MM-DD"})
+			return
+		}
+		dateFrom = &t
+	}
+	if raw := c.Query("date_to"); raw != "" {
+		t, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "formato inválido para date_to, usá AAAA-MM-DD"})
+			return
+		}
+		dateTo = &t
+	}
+
+	result, err := h.svc.AvgTimePerStatus(dateFrom, dateTo)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }

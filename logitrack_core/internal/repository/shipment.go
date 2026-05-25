@@ -52,6 +52,9 @@ type ShipmentRepository interface {
 	Search(query string) ([]model.Shipment, error)
 	GetEvents(trackingID string) ([]model.ShipmentEvent, error)
 	Stats(filter model.ShipmentFilter) (model.Stats, error)
+	StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error)
+	CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error)
+	AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error)
 }
 
 // Command structs — carry all data the repo needs to persist an event.
@@ -83,14 +86,15 @@ type ConfirmDraftCmd struct {
 }
 
 type StatusUpdateCmd struct {
-	TrackingID string
-	FromStatus model.Status
-	ToStatus   model.Status
-	Location   string // already resolved to branch ID
-	ChangedBy  string
-	Notes      string
-	DriverID   string
-	Timestamp  time.Time
+	TrackingID          string
+	FromStatus          model.Status
+	ToStatus            model.Status
+	Location            string // already resolved to branch ID
+	ChangedBy           string
+	Notes               string
+	DriverID            string
+	RejectedByRecipient bool
+	Timestamp           time.Time
 }
 
 type CorrectCmd struct {

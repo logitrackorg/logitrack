@@ -16,7 +16,7 @@ export function Card({ className, variant = "default", ...props }: CardProps) {
       className={cn(
         "rounded-xl border transition-shadow",
         variant === "default"
-          ? "bg-white border-slate-200 shadow-sm"
+          ? "bg-white border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
           : "bg-slate-50 border-slate-200",
         className,
       )}

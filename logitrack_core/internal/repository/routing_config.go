@@ -28,7 +28,8 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 		       morning_window_start_hour, morning_window_end_hour,
 		       afternoon_window_start_hour, afternoon_window_end_hour,
 		       service_time_minutes, avg_speed_kmh,
-		       last_mile_packing_strategy
+		       last_mile_packing_strategy,
+		       min_fill_last_mile_rate, min_fill_inter_branch_rate
 		FROM routing_config WHERE id = 1`).
 		Scan(
 			&cfg.SLAForceHorizonHours, &cfg.PriorityForceThreshold,
@@ -37,6 +38,7 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 			&cfg.AfternoonWindowStartHour, &cfg.AfternoonWindowEndHour,
 			&cfg.ServiceTimeMinutes, &cfg.AvgSpeedKmh,
 			&strategy,
+			&cfg.MinFillLastMileRate, &cfg.MinFillInterBranchRate,
 		)
 	if err != nil {
 		return model.DefaultRoutingConfig()
@@ -58,7 +60,9 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 			afternoon_window_end_hour      = $8,
 			service_time_minutes           = $9,
 			avg_speed_kmh                  = $10,
-			last_mile_packing_strategy     = $11
+			last_mile_packing_strategy     = $11,
+			min_fill_last_mile_rate        = $12,
+			min_fill_inter_branch_rate     = $13
 		WHERE id = 1`,
 		cfg.SLAForceHorizonHours, cfg.PriorityForceThreshold,
 		cfg.MinFillRate, cfg.EnforceTimeWindows,
@@ -66,6 +70,7 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 		cfg.AfternoonWindowStartHour, cfg.AfternoonWindowEndHour,
 		cfg.ServiceTimeMinutes, cfg.AvgSpeedKmh,
 		string(cfg.LastMilePackingStrategy),
+		cfg.MinFillLastMileRate, cfg.MinFillInterBranchRate,
 	)
 	return err
 }

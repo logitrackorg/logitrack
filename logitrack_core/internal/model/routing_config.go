@@ -17,7 +17,11 @@ const (
 type RoutingConfig struct {
 	SLAForceHorizonHours   int     `json:"sla_force_horizon_hours"`  // forzar despacho si SLA dentro de N horas
 	PriorityForceThreshold float64 `json:"priority_force_threshold"` // forzar despacho si priority_score >= X
-	MinFillRate            float64 `json:"min_fill_rate"`            // % mínimo de capacidad del vehículo más grande para consolidar
+	MinFillRate            float64 `json:"min_fill_rate"`            // % mínimo de capacidad del vehículo más grande para consolidar (legado, reemplazado por los dos siguientes)
+
+	// CA-07 (LOGITRACK-409): tasas independientes por tipo de viaje.
+	MinFillLastMileRate    float64 `json:"min_fill_last_mile_rate"`    // tasa mínima para despacho de última milla (default 0.40)
+	MinFillInterBranchRate float64 `json:"min_fill_inter_branch_rate"` // tasa mínima para despacho intersucursal (default 0.40)
 
 	// Si EnforceTimeWindows=true, los envíos fuera de ventana quedan unassigned.
 	// Si EnforceTimeWindows=false, se incluyen en la ruta con un aviso visible.
@@ -45,6 +49,8 @@ func DefaultRoutingConfig() RoutingConfig {
 		SLAForceHorizonHours:     24,
 		PriorityForceThreshold:   0.75,
 		MinFillRate:              0.40,
+		MinFillLastMileRate:      0.40,
+		MinFillInterBranchRate:   0.40,
 		EnforceTimeWindows:       true,
 		MorningWindowStartHour:   8,
 		MorningWindowEndHour:     14,

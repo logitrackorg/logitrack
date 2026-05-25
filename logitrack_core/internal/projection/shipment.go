@@ -208,6 +208,38 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		shipment.ChatbotMetadata.CancellationReason = payload.Reason
 		shipment.ChatbotMetadata.LastChatbotInteraction = &now
 		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentZoned:
+		payload, ok := event.Payload.(model.ShipmentZonedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		zone := string(payload.Zone)
+		shipment.CurrentZone = &zone
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
+
+	case model.EventShipmentMoved:
+		payload, ok := event.Payload.(model.ShipmentMovedPayload)
+		if !ok {
+			return
+		}
+		shipment, ok := p.shipments[event.TrackingID]
+		if !ok {
+			return
+		}
+		if payload.ToZone == "" {
+			shipment.CurrentZone = nil
+		} else {
+			zone := string(payload.ToZone)
+			shipment.CurrentZone = &zone
+		}
+		shipment.UpdatedAt = event.Timestamp
+		p.shipments[event.TrackingID] = shipment
 	}
 }
 
@@ -310,6 +342,42 @@ func (p *ShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, er
 		}
 	}
 	return stats, nil
+}
+
+func (p *ShipmentProjection) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.CancellationStats{
+		ByDay:            map[string]int{},
+		ReasonsBreakdown: map[string]int{},
+	}, nil
+}
+
+func (p *ShipmentProjection) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return model.AvgTimePerStatus{}, nil
+}
+
+func (p *ShipmentProjection) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	result := map[string]int{}
+	for _, s := range p.shipments {
+		if statusFilter != "" && string(s.Status) != statusFilter {
+			continue
+		}
+		if dateFrom != nil && s.CreatedAt.Before(*dateFrom) {
+			continue
+		}
+		if dateTo != nil && s.CreatedAt.After(*dateTo) {
+			continue
+		}
+		if s.ReceivingBranchID != "" {
+			result[s.ReceivingBranchID]++
+		}
+	}
+	return result, nil
 }
 
 func (p *ShipmentProjection) ReserveForTrip(trackingID, tripID string) error {

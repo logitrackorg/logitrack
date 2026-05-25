@@ -244,6 +244,20 @@ func (s *RouteService) StartRoute(driverID string) (model.Route, error) {
 	return route, nil
 }
 
+// ReopenRoute reactivates a finished route so the driver can start a second run on the same day.
+// Called when the driver claims a new last-mile vehicle after completing a previous route.
+func (s *RouteService) ReopenRoute(driverID string) error {
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+	route, err := s.repo.GetByDriverAndDate(driverID, today)
+	if err != nil {
+		return fmt.Errorf("no tenés una ruta asignada para hoy")
+	}
+	if route.Status != model.RouteStatusFinished {
+		return nil // already active or pending — nothing to do
+	}
+	return s.repo.UpdateStatus(route.ID, model.RouteStatusActive, route.StartedAt)
+}
+
 // CheckAndFinalizeRoute finalizes the route if all shipments reached a terminal delivery state.
 // Called after each driver status update; errors are intentionally ignored by callers.
 func (s *RouteService) CheckAndFinalizeRoute(driverID string) {

@@ -121,6 +121,13 @@ type EmailConfirmationSender interface {
 	SendShipmentConfirmation(shipment model.Shipment)
 }
 
+// ConfirmationWhatsAppSender sends WhatsApp confirmation messages to both the
+// recipient and the sender when a shipment is registered (CA-03/CA-04).
+// Satisfied by *messaging.Service.
+type ConfirmationWhatsAppSender interface {
+	SendShipmentConfirmationNotification(shipment model.Shipment)
+}
+
 // OutForDeliveryNotifier sends last-mile notifications to recipients (CA-01).
 // Satisfied by *messaging.Service.
 type OutForDeliveryNotifier interface {
@@ -145,6 +152,13 @@ type RejectedNotifier interface {
 	SendRejectedNotification(shipment model.Shipment, notes string)
 }
 
+// DeliveryFailedNotifier sends delivery-failed notifications to the recipient (LOGITRACK-437).
+// CA-01/CA-02: only the recipient is notified via both email + WhatsApp (if phone exists).
+// Satisfied by *messaging.Service.
+type DeliveryFailedNotifier interface {
+	SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch)
+}
+
 type ShipmentService struct {
 	repo         repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
@@ -154,45 +168,65 @@ type ShipmentService struct {
 	sysConfig    SystemConfigProvider
 	pricingSvc   *PricingService
 	graphSvc     *BranchGraphService // WIP: multi-hop path recording
-	notifSvc     *NotificationService
-	emailSvc            EmailConfirmationSender
-	messagingSvc        OutForDeliveryNotifier
-	pickupEmailSvc      ReadyForPickupNotifier
-	deliveryNotifSvc    DeliveryConfirmedNotifier
-	rejectedNotifSvc    RejectedNotifier
+	notifSvc               *NotificationService
+	emailSvc               EmailConfirmationSender
+	whatsappConfirm        ConfirmationWhatsAppSender
+	messagingSvc           OutForDeliveryNotifier
+	pickupEmailSvc         ReadyForPickupNotifier
+	deliveryNotifSvc       DeliveryConfirmedNotifier
+	rejectedNotifSvc       RejectedNotifier
+	deliveryFailedNotifSvc DeliveryFailedNotifier
+	dispatchVolumeSvc      DispatchVolumeNotifier // LOGITRACK-409
 }
 
-func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)       { s.graphSvc = g }
-func (s *ShipmentService) SetNotificationService(svc *NotificationService)    { s.notifSvc = svc }
-func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)           { s.emailSvc = svc }
-func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)        { s.messagingSvc = svc }
-func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier) { s.pickupEmailSvc = svc }
-func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier) { s.deliveryNotifSvc = svc }
-func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                  { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                   { s.graphSvc = g }
+func (s *ShipmentService) SetNotificationService(svc *NotificationService)                { s.notifSvc = svc }
+func (s *ShipmentService) SetEmailService(svc EmailConfirmationSender)                    { s.emailSvc = svc }
+func (s *ShipmentService) SetWhatsAppConfirmationService(svc ConfirmationWhatsAppSender)  { s.whatsappConfirm = svc }
+func (s *ShipmentService) SetMessagingService(svc OutForDeliveryNotifier)                 { s.messagingSvc = svc }
+func (s *ShipmentService) SetReadyForPickupEmailService(svc ReadyForPickupNotifier)       { s.pickupEmailSvc = svc }
+func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotifier)      { s.deliveryNotifSvc = svc }
+func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                       { s.rejectedNotifSvc = svc }
+func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier)            { s.deliveryFailedNotifSvc = svc }
+func (s *ShipmentService) SetDispatchVolumeService(svc DispatchVolumeNotifier)            { s.dispatchVolumeSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
 	return s.repo.ReleaseFromTrip(trackingID)
 }
 
-// sendConfirmationEmails envía emails de confirmación al destinatario y al remitente (CA-03/CA-04).
+// sendConfirmationNotifications envía emails y mensajes WhatsApp de confirmación
+// al destinatario y al remitente (CA-01/CA-02/CA-03/CA-04).
 // Usa dedup atómica en DB para evitar duplicados aunque se llame más de una vez (CA-05).
 // Se llama siempre como goroutine (fire-and-forget) — los errores son silenciosos (CA-02).
-func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
-	if s.emailSvc == nil {
+func (s *ShipmentService) sendConfirmationNotifications(shipment model.Shipment) {
+	if s.emailSvc == nil && s.whatsappConfirm == nil {
 		return
 	}
 	// Dedup (CA-05): marca atómicamente la fila; si ya estaba marcada, omite el envío.
 	sent, err := s.repo.SetConfirmationEmailSent(shipment.TrackingID)
 	if err != nil {
-		log.Printf("[email] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
+		log.Printf("[confirmation] SetConfirmationEmailSent error para %s: %v", shipment.TrackingID, err)
 		return
 	}
 	if !sent {
-		log.Printf("[email] confirmación de envío para %s ya enviada anteriormente — omitida (CA-05)", shipment.TrackingID)
+		log.Printf("[confirmation] ya enviada para %s — omitida (CA-05)", shipment.TrackingID)
 		return
 	}
-	s.emailSvc.SendShipmentConfirmation(shipment)
+	// Email al destinatario y remitente (CA-03/CA-04).
+	if s.emailSvc != nil {
+		s.emailSvc.SendShipmentConfirmation(shipment)
+	}
+	// WhatsApp al destinatario y remitente (CA-03/CA-04).
+	if s.whatsappConfirm != nil {
+		s.whatsappConfirm.SendShipmentConfirmationNotification(shipment)
+	}
+}
+
+// sendConfirmationEmails es un alias de sendConfirmationNotifications mantenido
+// para compatibilidad con payment.go y payment_simulate.go.
+func (s *ShipmentService) sendConfirmationEmails(shipment model.Shipment) {
+	s.sendConfirmationNotifications(shipment)
 }
 
 // maybeRecordPath is a WIP feature: records a planned multi-hop path when a shipment moves.
@@ -314,6 +348,49 @@ func (s *ShipmentService) maxDeliveryAttempts() int {
 		return s.sysConfig.Get().MaxDeliveryAttempts
 	}
 	return 3
+}
+
+// FinalizeLastMileTripReturn auto-transitions a delivery_failed shipment when the
+// last-mile driver returns to the branch. Called by InterBranchTripService.finishTrip.
+// For rechazado: chains rechazado → at_hub so the routing algorithm can dispatch the return.
+func (s *ShipmentService) FinalizeLastMileTripReturn(shipmentID, operatorUserID string) error {
+	sh, err := s.GetByTrackingID(shipmentID)
+	if err != nil || sh.Status != model.StatusDeliveryFailed {
+		return nil
+	}
+	var targetStatus model.Status
+	switch {
+	case sh.RejectedByRecipient:
+		targetStatus = model.StatusRechazado
+	case sh.DeliveryAttempts >= s.maxDeliveryAttempts():
+		targetStatus = model.StatusReadyForPickup
+	default:
+		targetStatus = model.StatusRedeliveryScheduled
+	}
+	_, err = s.UpdateStatus(shipmentID, model.UpdateStatusRequest{
+		Status:           targetStatus,
+		ChangedBy:        operatorUserID,
+		Notes:            "Recibido en sucursal tras retorno de última milla.",
+		SystemTransition: true,
+	})
+	if err != nil {
+		return err
+	}
+	// rechazado needs one more hop: rechazado → at_hub so routing picks it up for the return trip.
+	if targetStatus == model.StatusRechazado {
+		branchCity := sh.ReceivingBranchID
+		if b, ok := s.branchRepo.GetByID(sh.ReceivingBranchID); ok {
+			branchCity = b.Address.City
+		}
+		_, err = s.UpdateStatus(shipmentID, model.UpdateStatusRequest{
+			Status:           model.StatusAtHub,
+			ChangedBy:        operatorUserID,
+			Location:         branchCity,
+			Notes:            "Paquete rechazado disponible para despacho de retorno.",
+			SystemTransition: true,
+		})
+	}
+	return err
 }
 
 func (s *ShipmentService) upsertParties(shipment model.Shipment) {
@@ -438,6 +515,12 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	}
 	s.upsertParties(created)
 	go s.sendConfirmationEmails(created) // CA-01/02/03/04/05
+
+	// LOGITRACK-409 CA-01: evaluar volumen mínimo al crear/confirmar un envío en su sucursal de origen.
+	if s.dispatchVolumeSvc != nil && created.OriginBranchID != "" {
+		go s.dispatchVolumeSvc.Check(created.OriginBranchID)
+	}
+
 	return created, nil
 }
 
@@ -695,6 +778,11 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	s.upsertParties(confirmed)
 	go s.sendConfirmationEmails(confirmed) // CA-01/02/03/04/05
 
+	// LOGITRACK-409 CA-01: evaluar volumen mínimo al confirmar un envío en su sucursal de origen.
+	if s.dispatchVolumeSvc != nil && confirmed.OriginBranchID != "" {
+		go s.dispatchVolumeSvc.Check(confirmed.OriginBranchID)
+	}
+
 	// Auto-transición: origen == destino → el envío ya está en su hub final.
 	if confirmed.OriginBranchID != "" && confirmed.OriginBranchID == confirmed.FinalBranchID {
 		autoUpdated, autoErr := s.repo.UpdateStatus(repository.StatusUpdateCmd{
@@ -870,14 +958,15 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	}
 
 	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
-		TrackingID: trackingID,
-		FromStatus: current.Status,
-		ToStatus:   targetStatus,
-		Location:   resolvedLocation,
-		ChangedBy:  req.ChangedBy,
-		Notes:      req.Notes,
-		DriverID:   req.DriverID,
-		Timestamp:  clock.Now().UTC(),
+		TrackingID:          trackingID,
+		FromStatus:          current.Status,
+		ToStatus:            targetStatus,
+		Location:            resolvedLocation,
+		ChangedBy:           req.ChangedBy,
+		Notes:               req.Notes,
+		DriverID:            req.DriverID,
+		RejectedByRecipient: req.RejectedByRecipient && targetStatus == model.StatusDeliveryFailed,
+		Timestamp:           clock.Now().UTC(),
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -918,6 +1007,19 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
+	// LOGITRACK-409 CA-01/CA-02: evaluar volumen mínimo de despacho en tiempo real
+	// cuando un envío llega a una sucursal (at_origin_hub o at_hub).
+	if s.dispatchVolumeSvc != nil &&
+		(targetStatus == model.StatusAtOriginHub || targetStatus == model.StatusAtHub) {
+		checkBranchID := resolvedLocation
+		if checkBranchID == "" {
+			checkBranchID = updated.CurrentLocation
+		}
+		if checkBranchID != "" {
+			go s.dispatchVolumeSvc.Check(checkBranchID)
+		}
+	}
+
 	// CA-01: envío transicionó a última milla → notificar al destinatario por WhatsApp/email.
 	if targetStatus == model.StatusOutForDelivery &&
 		updated.DeliveryMethod == model.DeliveryMethodLastMile &&
@@ -934,6 +1036,17 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	if targetStatus == model.StatusRechazado && s.rejectedNotifSvc != nil {
 		notes := req.Notes
 		go s.rejectedNotifSvc.SendRejectedNotification(updated, notes)
+	}
+
+	// LOGITRACK-437 CA-01/CA-02: entrega fallida → notificar al destinatario por email + WhatsApp.
+	if targetStatus == model.StatusDeliveryFailed && s.deliveryFailedNotifSvc != nil {
+		attemptsUsed := updated.DeliveryAttempts // ya incrementado por la proyección
+		maxAttempts := s.maxDeliveryAttempts()
+		branch, _ := s.branchRepo.GetByID(updated.FinalBranchID)
+		if branch.ID == "" {
+			branch, _ = s.branchRepo.GetByID(updated.ReceivingBranchID)
+		}
+		go s.deliveryFailedNotifSvc.SendDeliveryFailedNotification(updated, attemptsUsed, maxAttempts, branch)
 	}
 
 	// CA-01: envío transicionó a listo para retiro en sucursal → notificar al destinatario por WhatsApp/email.
@@ -1389,6 +1502,18 @@ func (s *ShipmentService) GetEvents(trackingID string) ([]model.ShipmentEvent, e
 
 func (s *ShipmentService) Stats(filter model.ShipmentFilter) (model.Stats, error) {
 	return s.repo.Stats(filter)
+}
+
+func (s *ShipmentService) StatsDetail(statusFilter string, dateFrom, dateTo *time.Time) (map[string]int, error) {
+	return s.repo.StatsDetail(statusFilter, dateFrom, dateTo)
+}
+
+func (s *ShipmentService) CancellationStats(dateFrom, dateTo *time.Time, branchID string) (model.CancellationStats, error) {
+	return s.repo.CancellationStats(dateFrom, dateTo, branchID)
+}
+
+func (s *ShipmentService) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {
+	return s.repo.AvgTimePerStatus(dateFrom, dateTo)
 }
 
 func (s *ShipmentService) estimatedDelivery(from time.Time, originBranchID, finalBranchID, shipmentType string) *time.Time {

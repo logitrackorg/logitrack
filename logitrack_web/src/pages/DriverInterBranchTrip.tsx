@@ -368,14 +368,57 @@ export function DriverInterBranchTrip() {
           .bindPopup(`<b>${p.label}</b><br>${p.branch?.name ?? ""}<br>${p.branch?.address.city ?? ""}`);
       });
 
-      for (let i = 0; i < points.length - 1; i++) {
-        L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-          color: points[i + 1].completed ? "#059669" : "#1e3a5f",
-          weight: 3,
-          dashArray: points[i + 1].completed ? undefined : "8 6",
-        }).addTo(map);
-      }
-      map.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [40, 40] });
+      const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40] });
+
+      // Ruta real por carretera vía OSRM — usa legs para colorear por segmento
+      const coordStr = points.map((p) => `${p.lng},${p.lat}`).join(";");
+      fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false&geometries=geojson&steps=false&alternatives=false&annotations=false`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.code !== "Ok" || !data.routes?.[0]?.legs) throw new Error("no route");
+          // Pedir geometría por leg individual para colorear completados vs pendientes
+          const legRequests: Promise<Response>[] = [];
+          for (let i = 0; i < points.length - 1; i++) {
+            const from = `${points[i].lng},${points[i].lat}`;
+            const to = `${points[i + 1].lng},${points[i + 1].lat}`;
+            legRequests.push(fetch(`https://router.project-osrm.org/route/v1/driving/${from};${to}?overview=full&geometries=geojson`));
+          }
+          return Promise.all(legRequests).then((responses) =>
+            Promise.all(responses.map((r) => r.json()))
+          ).then((legs) => {
+            legs.forEach((legData, i) => {
+              if (legData.code !== "Ok" || !legData.routes?.[0]) {
+                // fallback línea recta para este segmento
+                L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+                  color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                  weight: 3,
+                  dashArray: points[i + 1].completed ? undefined : "8 6",
+                }).addTo(map);
+                return;
+              }
+              const coords: [number, number][] = legData.routes[0].geometry.coordinates.map(
+                (c: number[]) => [c[1], c[0]] as [number, number],
+              );
+              L.polyline(coords, {
+                color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                weight: 3,
+                opacity: 0.8,
+                dashArray: points[i + 1].completed ? undefined : "8 6",
+              }).addTo(map);
+            });
+          });
+        })
+        .catch(() => {
+          // fallback: líneas rectas si OSRM no responde
+          for (let i = 0; i < points.length - 1; i++) {
+            L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
+              color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+              weight: 3,
+              dashArray: points[i + 1].completed ? undefined : "8 6",
+            }).addTo(map);
+          }
+        });
     }).catch(() => {});
 
     return () => {

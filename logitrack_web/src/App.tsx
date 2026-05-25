@@ -9,8 +9,10 @@ import { Topbar } from "./components/Topbar";
 import { TopbarProvider } from "./components/topbarContext";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { Dashboard } from "./pages/Dashboard";
+import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
+import { Claims } from "./pages/Claims";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
@@ -165,9 +167,27 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/kpi-detail" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <KpiDetail />
+          </ProtectedRoute>
+        } />
+
         <Route path="/" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
             <ShipmentList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/claims" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <Claims />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/claims/:id" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <Claims />
           </ProtectedRoute>
         } />
 
@@ -242,6 +262,14 @@ function AppRoutes() {
             <InterBranchTripsList />
           </ProtectedRoute>
         } />
+
+        <Route path="/reports/drivers" element={<Navigate to="/dashboard?tab=choferes" replace />} />
+        <Route path="/reports/incidents" element={<Navigate to="/dashboard?tab=reclamos" replace />} />
+        <Route path="/reports/billing" element={<Navigate to="/dashboard?tab=facturacion" replace />} />
+        <Route path="/reports/branch-ranking" element={<Navigate to="/dashboard?tab=ranking" replace />} />
+        <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
+        <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
+        <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
 
         {/* Legacy redirects */}
         <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />

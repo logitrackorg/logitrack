@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot } from "lucide-react";
+import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin, UserCheck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -26,6 +26,10 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "sla_expired")              return <AlertOctagon  size={16} color="#b91c1c" />;
   if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "chatbot_pickup_requested") return <Bot           size={16} color="#a78bfa" />;
+  if (type === "min_fill_reached")         return <Truck         size={16} color="#7c3aed" />;
+  if (type === "route_assigned")           return <MapPin     size={16} color="#0ea5e9" />;
+  if (type === "route_reassigned")         return <MapPin     size={16} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")     return <UserCheck  size={16} color="#10b981" />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -37,6 +41,9 @@ function groupLabel(type: string, count: number): string {
   if (type === "return_completed")    return `${count} envíos devueltos — coordinar entrega con remitente`;
   if (type === "sla_risk")            return `${count} envíos en riesgo de SLA`;
   if (type === "sla_expired")         return `${count} envíos con SLA vencido`;
+  if (type === "route_assigned")        return `${count} rutas asignadas`;
+  if (type === "route_reassigned")      return `${count} rutas reasignadas`;
+  if (type === "trip_driver_assigned")  return `${count} choferes asignados a viajes`;
   return `${count} notificaciones`;
 }
 
@@ -49,6 +56,10 @@ function groupAccent(type: string): string {
   if (type === "sla_risk")            return "#ef4444";
   if (type === "sla_expired")         return "#b91c1c";
   if (type === "fatigue_alert")       return "#ef4444";
+  if (type === "min_fill_reached")    return "#7c3aed";
+  if (type === "route_assigned")        return "#0ea5e9";
+  if (type === "route_reassigned")      return "#f59e0b";
+  if (type === "trip_driver_assigned")  return "#10b981";
   return "#94a3b8";
 }
 
@@ -90,6 +101,9 @@ function GroupIcon({ type }: { type: string }) {
   if (type === "sla_risk")            return <AlertTriangle size={16} color={color} />;
   if (type === "sla_expired")         return <AlertOctagon  size={16} color={color} />;
   if (type === "fatigue_alert")       return <AlertTriangle size={16} color={color} />;
+  if (type === "route_assigned")        return <MapPin size={16} color={color} />;
+  if (type === "route_reassigned")      return <MapPin size={16} color={color} />;
+  if (type === "trip_driver_assigned")  return <UserCheck size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -256,6 +270,12 @@ export function NotificationBell() {
     }
     if (n.type === "fatigue_alert") {
       navigate("/supervisor/fatigue");
+    } else if (n.type === "min_fill_reached" && n.resource_id) {
+      navigate(`/${n.resource_id}`);
+    } else if (n.type === "route_assigned" || n.type === "route_reassigned") {
+      navigate("/driver/route");
+    } else if (n.type === "trip_driver_assigned") {
+      navigate("/viajes");
     } else if (n.resource_id) {
       navigate(`/shipments/${n.resource_id}`);
     }

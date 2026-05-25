@@ -91,14 +91,35 @@ function InterBranchRouteMap({
       }).bindPopup(`<b>Parada ${i + 1}: ${b.name}</b>`).addTo(layer);
     });
 
-    if (points.length >= 2) {
-      L.polyline(points, { color: "#1e3a5f", weight: 3, opacity: 0.65, dashArray: "7,5" }).addTo(layer);
-      try {
-        map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
-      } catch { /* bounds vacíos */ }
-    } else if (points.length === 1) {
-      map.setView(points[0], 8);
+    if (points.length < 2) {
+      if (points.length === 1) map.setView(points[0], 8);
+      return;
     }
+
+    try {
+      map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+    } catch { /* bounds vacíos */ }
+
+    // Trazar ruta real por carretera vía OSRM; fallback a línea recta si falla
+    const osrmCoords = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
+    fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!layerRef.current) return;
+        if (data.code === "Ok" && data.routes?.[0]) {
+          const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
+            (c: number[]) => [c[1], c[0]] as [number, number],
+          );
+          L.polyline(coords, { color: "#1e3a5f", weight: 3, opacity: 0.75, dashArray: "7,5" }).addTo(layerRef.current);
+        } else {
+          L.polyline(points, { color: "#1e3a5f", weight: 3, opacity: 0.65, dashArray: "7,5" }).addTo(layerRef.current);
+        }
+      })
+      .catch(() => {
+        if (layerRef.current) {
+          L.polyline(points, { color: "#1e3a5f", weight: 3, opacity: 0.65, dashArray: "7,5" }).addTo(layerRef.current);
+        }
+      });
   }, [originBranch, stops, branches]);
 
   return (

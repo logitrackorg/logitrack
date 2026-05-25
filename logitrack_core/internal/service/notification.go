@@ -468,3 +468,117 @@ func (s *NotificationService) MarkRead(id, userID string) error {
 func (s *NotificationService) MarkAllRead(userID string) error {
 	return s.repo.MarkAllRead(userID)
 }
+
+// NotifyRouteAssigned crea una notificación in-app para el chofer cuando se le
+// asigna una ruta. tripID se usa como resourceID y como clave de dedup (CA-07).
+// stopCount es la cantidad de envíos/paradas. departureMin es minutos desde
+// medianoche en hora local (0 = no disponible, se omite del body).
+// Diseñado para llamarse como goroutine (fire-and-forget). LOGITRACK-453.
+func (s *NotificationService) NotifyRouteAssigned(driverID, tripID string, stopCount, departureMin int) {
+	// CA-07: idempotencia — no re-notificar al mismo chofer por el mismo viaje.
+	since := clock.Now().Add(-23 * time.Hour)
+	exists, err := s.repo.ExistsForUser(model.NotificationRouteAssigned, tripID, driverID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyRouteAssigned ExistsForUser error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	body := fmt.Sprintf("%d paradas", stopCount)
+	if departureMin > 0 {
+		h := departureMin / 60
+		m := departureMin % 60
+		body += fmt.Sprintf(" · Salida sugerida: %02d:%02d", h, m)
+	}
+
+	n := model.Notification{
+		ID:         uuid.NewString(),
+		UserID:     driverID,
+		Type:       model.NotificationRouteAssigned,
+		Title:      "Tenés una ruta para hoy",
+		Body:       body,
+		ResourceID: tripID,
+		CreatedAt:  clock.Now().UTC(),
+	}
+	if err := s.repo.Create(n); err != nil {
+		log.Printf("[NotificationService] NotifyRouteAssigned Create error for driver %s: %v", driverID, err)
+		return
+	}
+	if s.hub != nil {
+		s.hub.Push(driverID)
+	}
+}
+
+// NotifyRouteReassigned crea una notificación in-app para el chofer anterior
+// cuando su ruta es reasignada a otro chofer. LOGITRACK-453 CA-06.
+func (s *NotificationService) NotifyRouteReassigned(oldDriverID, tripID, tripDate string) {
+	n := model.Notification{
+		ID:         uuid.NewString(),
+		UserID:     oldDriverID,
+		Type:       model.NotificationRouteReassigned,
+		Title:      "Tu ruta fue reasignada",
+		Body:       fmt.Sprintf("La ruta del %s fue asignada a otro chofer.", tripDate),
+		ResourceID: tripID,
+		CreatedAt:  clock.Now().UTC(),
+	}
+	if err := s.repo.Create(n); err != nil {
+		log.Printf("[NotificationService] NotifyRouteReassigned Create error for driver %s: %v", oldDriverID, err)
+		return
+	}
+	if s.hub != nil {
+		s.hub.Push(oldDriverID)
+	}
+}
+
+// NotifyTripClaimed notifica a los operadores/supervisores de las sucursales
+// involucradas en el viaje cuando un chofer lo reclama vía QR.
+// branchIDs es la lista de sucursales a notificar (origen + destino cuando aplica).
+// Diseñado para llamarse como goroutine (fire-and-forget).
+func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, branchIDs []string) {
+	// Dedup: si ya se notificó este viaje en los últimos 5 minutos, saltar.
+	since := clock.Now().Add(-5 * time.Minute)
+	exists, err := s.repo.ExistsRecent(model.NotificationTripDriverAssigned, tripID, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyTripClaimed ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
+	}
+
+	title := "Chofer asignado al viaje"
+	body := fmt.Sprintf("@%s tomó el viaje %s", driverUsername, tripID)
+
+	now := clock.Now().UTC()
+	notified := map[string]bool{}
+	for _, branchID := range branchIDs {
+		users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+			model.RoleOperator,
+			model.RoleSupervisor,
+		})
+		if err != nil {
+			log.Printf("[NotificationService] NotifyTripClaimed GetUsersByBranchAndRoles error for branch %s: %v", branchID, err)
+			continue
+		}
+		for _, u := range users {
+			if notified[u.ID] {
+				continue
+			}
+			notified[u.ID] = true
+			n := model.Notification{
+				ID:         uuid.NewString(),
+				UserID:     u.ID,
+				Type:       model.NotificationTripDriverAssigned,
+				Title:      title,
+				Body:       body,
+				ResourceID: tripID,
+				CreatedAt:  now,
+			}
+			if err := s.repo.Create(n); err != nil {
+				log.Printf("[NotificationService] NotifyTripClaimed Create error for user %s: %v", u.ID, err)
+			} else if s.hub != nil {
+				s.hub.Push(u.ID)
+			}
+		}
+	}
+}

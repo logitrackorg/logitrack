@@ -48,6 +48,7 @@ export type ShipmentType = "normal" | "express";
 export type TimeWindow = "morning" | "afternoon" | "flexible";
 export type DeliveryMethod = "ultima_milla" | "retiro_sucursal";
 export type Priority = "alta" | "media" | "baja";
+export type BranchZoneType = "entrada" | "salida" | "revision" | "devolucion";
 
 export interface PriorityFactorDetail {
   value: string | number;
@@ -98,6 +99,7 @@ export interface Shipment {
   origin_branch_id?: string;
   final_branch_id?: string;
   current_location?: string; // branch ID of current location
+  current_zone?: BranchZoneType;
   status: ShipmentStatus;
   created_at: string;
   updated_at: string;
@@ -109,22 +111,50 @@ export interface Shipment {
   parent_shipment_id?: string;
   delivery_attempts?: number;
   is_returning?: boolean;
+  rejected_by_recipient?: boolean;
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
   reserved_for_trip_id?: string;
 }
 
+export interface EventLocation {
+  type: 'ORIGIN_BRANCH' | 'DESTINATION_BRANCH' | 'IN_TRANSIT';
+  branch_code: string;
+  branch_name: string;
+  status: string;
+}
+
 export interface ShipmentEvent {
   id: string;
   tracking_id: string;
-  event_type?: string; // "status_change" | "edited"
-  from_status?: ShipmentStatus; // absent for initial creation events
+  event_type?: string; // "status_change" | "edited" | "rescheduled"
+  from_status?: ShipmentStatus;
   to_status: ShipmentStatus;
   changed_by: string;
   location?: string;
   notes?: string;
   timestamp: string;
+  
+  // ✅ NUEVOS CAMPOS para eventos de reprogramación
+  current_location?: EventLocation;
+  rescheduled_date?: string;
+  via?: string;
+}
+
+export interface AvgTimePerStatusItem {
+  status: ShipmentStatus;
+  avg_hours: number;
+  is_bottleneck: boolean;
+}
+
+export type AvgTimePerStatus = AvgTimePerStatusItem[];
+
+export interface CancellationStats {
+  by_day: Record<string, number>;
+  total: number;
+  top_reason: string;
+  reasons_breakdown: Record<string, number>;
 }
 
 export interface Stats {
@@ -133,6 +163,10 @@ export interface Stats {
   by_branch: Record<string, number>;         // branch ID → active shipment count
   by_day: Record<string, number>;            // YYYY-MM-DD → shipments created that day
   by_day_delivered: Record<string, number>;  // YYYY-MM-DD → shipments delivered that day
+  avg_cycle_time_hours: number | null;       // average hours from creation to delivery
+  success_rate: number | null;               // delivery success rate 0–100
+  open_incidents: number;                    // shipments with has_incident = true
+  recent_shipments: Shipment[];              // last 5 created (no drafts)
 }
 
 export interface CreateShipmentPayload {
@@ -203,6 +237,7 @@ export interface UpdateStatusPayload {
   driver_id?: string;
   recipient_dni?: string;
   sender_dni?: string;
+  rejected_by_recipient?: boolean;
 }
 
 export const shipmentApi = {
@@ -236,10 +271,22 @@ export const shipmentApi = {
     api.post<Shipment>(`/shipments/${trackingId}/cancel`, { reason }).then((r) => r.data),
   stats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
     api.get<Stats>("/stats", { params }).then((r) => r.data),
+  cancellationStats: (params?: { date_from?: string; date_to?: string; branch_id?: string }) =>
+    api.get<CancellationStats>("/stats/cancellations", { params }).then((r) => r.data),
+  avgTimePerStatus: (params?: { date_from?: string; date_to?: string }) =>
+    api.get<AvgTimePerStatus>("/stats/avg-time-per-status", { params }).then((r) => r.data),
+  statsDetail: (params?: { status?: string; date_from?: string; date_to?: string }) =>
+    api.get<Record<string, number>>("/stats/detail", { params }).then((r) => r.data),
   bulkUpdateStatus: (payload: { tracking_ids: string[]; status: ShipmentStatus; driver_id?: string }) =>
     api.post<{ updated: number; skipped: { tracking_id: string; reason: string }[] }>("/shipments/bulk-status", payload).then((r) => r.data),
   getIncidents: (trackingId: string) =>
     api.get<ShipmentIncident[]>(`/shipments/${trackingId}/incidents`).then((r) => r.data),
   reportIncident: (trackingId: string, incidentType: IncidentType, description: string) =>
     api.post<ShipmentIncident>(`/shipments/${trackingId}/incidents`, { incident_type: incidentType, description }).then((r) => r.data),
+  moveZone: (trackingId: string, zone: BranchZoneType, notes?: string) =>
+    api.post(`/shipments/${trackingId}/move-zone`, { zone, notes }).then((r) => r.data),
+  approveFromRevision: (trackingId: string, notes?: string) =>
+    api.post(`/shipments/${trackingId}/approve-revision`, { notes }).then((r) => r.data),
+  classifyShipment: (trackingId: string, classification: "lost" | "destroyed", notes?: string) =>
+    api.post(`/shipments/${trackingId}/classify`, { classification, notes }).then((r) => r.data),
 };
