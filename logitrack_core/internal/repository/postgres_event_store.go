@@ -187,9 +187,6 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 		
 		events = append(events, e)
 	}
-	if len(events) == 0 {
-		return nil, fmt.Errorf("stream not found: %s", trackingID)
-	}
 	return events, rows.Err()
 }
 

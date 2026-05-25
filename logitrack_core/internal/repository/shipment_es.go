@@ -298,7 +298,9 @@ func (r *eventSourcedShipmentRepository) SetConfirmationEmailSent(trackingID str
 func (r *eventSourcedShipmentRepository) GetEvents(trackingID string) ([]model.ShipmentEvent, error) {
 	domainEvents, err := r.store.LoadStream(trackingID)
 	if err != nil {
-		return nil, fmt.Errorf("envío no encontrado")
+		// Stream vacío (envíos de seed o sin historial aún): devolver lista vacía en lugar de error.
+		// LoadStream retorna error cuando no hay eventos para el tracking ID.
+		return []model.ShipmentEvent{}, nil
 	}
 
 	result := make([]model.ShipmentEvent, 0)
