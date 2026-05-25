@@ -1,0 +1,78 @@
+logitrack_core/internal/model/event.go
+  bc9b125765569b5c 41-47,64
+logitrack_core/internal/service/routing.go
+  s_0c1474516137b1::t_2fe549ea3a8f79 49,51
+  s_0c1474516137b1::t_f602e507459689 3445-3447
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_0c1474516137b1::t_e17751c662cf92 3
+  s_0c1474516137b1::t_51c880dc1f9e81 89-109
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_0c1474516137b1::t_0954fd3026a1e4 44-61
+logitrack_core/internal/repository/inmemory.go
+  s_0c1474516137b1::t_bea48aac121c53 736
+  f2cab9f34c5b0de6 735
+logitrack_core/internal/repository/routing_config.go
+  s_0c1474516137b1::t_32cc9e46091179 64-65
+  s_0c1474516137b1::t_f7de2ed82066b6 31-32
+  s_0c1474516137b1::t_14d3e5e040c55b 63,73
+  s_0c1474516137b1::t_84442eba02564a 41
+logitrack_core/internal/service/shipment.go
+  s_0c1474516137b1::t_c37a7d49f42a09 182
+  s_0c1474516137b1::t_14bebbfff1c666 1041
+  s_0c1474516137b1::t_7855cc907613fc 198-199,202-203,209,213,216-229
+logitrack_web/src/components/ReviewInterBranchModal.tsx
+  s_72c763d34cac73::t_1c746cc6bec64f 94-96,98-122
+logitrack_web/src/api/shipments.ts
+  s_0c1474516137b1::t_da2404832e3053 123-125
+logitrack_web/src/pages/DriverInterBranchTrip.tsx
+  s_72c763d34cac73::t_eab50d14cebc34 371-421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "2bb2cdb4257bc67c16f50573597d88429e90a774",
+  "prompts": {
+    "bc9b125765569b5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0dbfab40-2949-4e94-a9ad-636fcf475c14",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null,
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 275,
+      "overriden_lines": 0
+    },
+    "f2cab9f34c5b0de6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4151d2bb-1ba0-4006-84df-3d83ca298ca4",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 445,
+      "overriden_lines": 0
+    }
+  },
+  "sessions": {
+    "s_0c1474516137b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "974d4412-0470-4387-a814-d999049a182b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null
+    },
+    "s_72c763d34cac73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3d348fa-648c-4073-b3a1-763febc6b50c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
