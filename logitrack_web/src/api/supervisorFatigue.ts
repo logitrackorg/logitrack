@@ -74,11 +74,45 @@ export interface FatigueDashboardResponse {
   red_min: number;
 }
 
+export interface FatigueDailyMetric {
+  date: string;
+  verde: number;
+  amarillo: number;
+  rojo: number;
+  salteado: number;
+  avg_horas_sueno: number;
+  avg_risk_score: number;
+}
+
+export interface DriverRankingItem {
+  driver_id: string;
+  full_name: string;
+  username: string;
+  avg_risk_score: number;
+  avg_horas_sueno: number;
+  total_checkins: number;
+  risk_level: string;
+}
+
+export interface FatigueHistoryResponse {
+  branch_id: string;
+  daily_metrics: FatigueDailyMetric[];
+  driver_ranking: DriverRankingItem[];
+  green_max: number;
+  red_min: number;
+}
+
 export const supervisorFatigueApi = {
   getDashboard: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
     return api
       .get<FatigueDashboardResponse>("/supervisor/fatigue-dashboard", { params })
+      .then((r) => r.data);
+  },
+  getHistory: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api
+      .get<FatigueHistoryResponse>("/supervisor/fatigue-history", { params })
       .then((r) => r.data);
   },
 };

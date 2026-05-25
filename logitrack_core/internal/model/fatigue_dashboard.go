@@ -40,3 +40,34 @@ type FatigueDashboardResponse struct {
 	GreenMax int                   `json:"green_max"` // threshold copied from config
 	RedMin   int                   `json:"red_min"`   // threshold copied from config
 }
+
+// FatigueDailyMetric aggregates all drivers' risk levels for a single calendar day.
+type FatigueDailyMetric struct {
+	Date          string  `json:"date"`           // YYYY-MM-DD
+	Verde         int     `json:"verde"`
+	Amarillo      int     `json:"amarillo"`
+	Rojo          int     `json:"rojo"`
+	Salteado      int     `json:"salteado"`
+	AvgHorasSueno float64 `json:"avg_horas_sueno"`
+	AvgRiskScore  float64 `json:"avg_risk_score"`
+}
+
+// DriverRankingItem is one entry in the driver risk ranking.
+type DriverRankingItem struct {
+	DriverID      string  `json:"driver_id"`
+	FullName      string  `json:"full_name"`
+	Username      string  `json:"username"`
+	AvgRiskScore  float64 `json:"avg_risk_score"`
+	AvgHorasSueno float64 `json:"avg_horas_sueno"`
+	TotalCheckins int     `json:"total_checkins"`
+	RiskLevel     string  `json:"risk_level"`
+}
+
+// FatigueHistoryResponse is returned by GET /supervisor/fatigue-history.
+type FatigueHistoryResponse struct {
+	BranchID      string               `json:"branch_id"`
+	DailyMetrics  []FatigueDailyMetric `json:"daily_metrics"`  // sorted ascending by date
+	DriverRanking []DriverRankingItem  `json:"driver_ranking"` // sorted by avg risk descending
+	GreenMax      int                  `json:"green_max"`
+	RedMin        int                  `json:"red_min"`
+}

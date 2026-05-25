@@ -133,6 +133,155 @@ func (h *SupervisorFatigueHandler) buildStatus(
 	return status
 }
 
+// GetHistory returns aggregated fatigue metrics for the branch over the last 30 days.
+// Used by the Dashboard "Fatiga" tab (supervisor + manager).
+func (h *SupervisorFatigueHandler) GetHistory(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	branchID := user.BranchID
+	if branchID == "" {
+		branchID = c.Query("branch_id")
+	}
+
+	cfg := h.fatigueSvc.Get()
+	drivers := h.authRepo.ListByRole(model.RoleDriver, branchID)
+
+	type dailyEntry struct {
+		verde, amarillo, rojo, salteado int
+		totalSueno                      float64
+		suenoCount                      int
+		totalRisk                       float64
+		riskCount                       int
+	}
+
+	dailyMap := map[string]*dailyEntry{}
+	ranking := make([]model.DriverRankingItem, 0, len(drivers))
+
+	for _, d := range drivers {
+		if d.Status == model.UserStatusInactive {
+			continue
+		}
+		fullName := strings.TrimSpace(d.FirstName + " " + d.LastName)
+		if fullName == "" {
+			fullName = d.Username
+		}
+
+		all := h.checkinRepo.AllForDriver(d.ID)
+
+		var driverTotalRisk float64
+		var driverRiskCount int
+		var driverTotalSueno float64
+		var driverSuenoCount int
+
+		for _, checkin := range all {
+			entry, ok := dailyMap[checkin.Date]
+			if !ok {
+				entry = &dailyEntry{}
+				dailyMap[checkin.Date] = entry
+			}
+
+			if checkin.Skipped {
+				entry.salteado++
+			} else {
+				effectiveCfg := cfg
+				if d.DriverType == model.DriverTypeInterBranch {
+					effectiveCfg.TactileEnabled = false
+				}
+				score, level := fatigueRiskScore(checkin, effectiveCfg)
+
+				switch level {
+				case model.RiskGreen:
+					entry.verde++
+				case model.RiskAmber:
+					entry.amarillo++
+				case model.RiskRed:
+					entry.rojo++
+				}
+
+				f := float64(score)
+				entry.totalRisk += f
+				entry.riskCount++
+				driverTotalRisk += f
+				driverRiskCount++
+			}
+
+			entry.totalSueno += float64(checkin.HorasSueno)
+			entry.suenoCount++
+			driverTotalSueno += float64(checkin.HorasSueno)
+			driverSuenoCount++
+		}
+
+		item := model.DriverRankingItem{
+			DriverID:      d.ID,
+			FullName:      fullName,
+			Username:      d.Username,
+			TotalCheckins: len(all),
+			RiskLevel:     string(model.RiskPending),
+		}
+		if driverRiskCount > 0 {
+			avg := driverTotalRisk / float64(driverRiskCount)
+			item.AvgRiskScore = math.Round(avg*10) / 10
+			switch {
+			case avg >= float64(cfg.RiskThresholds.RedMin):
+				item.RiskLevel = string(model.RiskRed)
+			case avg > float64(cfg.RiskThresholds.GreenMax):
+				item.RiskLevel = string(model.RiskAmber)
+			default:
+				item.RiskLevel = string(model.RiskGreen)
+			}
+		}
+		if driverSuenoCount > 0 {
+			item.AvgHorasSueno = math.Round(driverTotalSueno/float64(driverSuenoCount)*10) / 10
+		}
+		ranking = append(ranking, item)
+	}
+
+	// Sort ranking by avg risk score descending, then by name ascending.
+	sort.Slice(ranking, func(i, j int) bool {
+		if ranking[i].AvgRiskScore != ranking[j].AvgRiskScore {
+			return ranking[i].AvgRiskScore > ranking[j].AvgRiskScore
+		}
+		return ranking[i].FullName < ranking[j].FullName
+	})
+
+	// Build sorted daily slice (ascending by date), capped at last 30 days.
+	dates := make([]string, 0, len(dailyMap))
+	for date := range dailyMap {
+		dates = append(dates, date)
+	}
+	sort.Strings(dates)
+	if len(dates) > 30 {
+		dates = dates[len(dates)-30:]
+	}
+
+	dailyMetrics := make([]model.FatigueDailyMetric, 0, len(dates))
+	for _, date := range dates {
+		e := dailyMap[date]
+		m := model.FatigueDailyMetric{
+			Date:     date,
+			Verde:    e.verde,
+			Amarillo: e.amarillo,
+			Rojo:     e.rojo,
+			Salteado: e.salteado,
+		}
+		if e.suenoCount > 0 {
+			m.AvgHorasSueno = math.Round(e.totalSueno/float64(e.suenoCount)*10) / 10
+		}
+		if e.riskCount > 0 {
+			m.AvgRiskScore = math.Round(e.totalRisk/float64(e.riskCount)*10) / 10
+		}
+		dailyMetrics = append(dailyMetrics, m)
+	}
+
+	c.JSON(http.StatusOK, model.FatigueHistoryResponse{
+		BranchID:      branchID,
+		DailyMetrics:  dailyMetrics,
+		DriverRanking: ranking,
+		GreenMax:      cfg.RiskThresholds.GreenMax,
+		RedMin:        cfg.RiskThresholds.RedMin,
+	})
+}
+
 // normalizeKSS maps the 8-point KSS level to a fixed 0–100 risk scale.
 // The scale excludes the original neutral midpoint (old level 5).
 //   1–4 (alert)                                  →   0 risk
