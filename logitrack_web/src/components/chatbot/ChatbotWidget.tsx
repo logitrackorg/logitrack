@@ -452,6 +452,8 @@ export const ChatbotWidget: React.FC = () => {
 
     addBotMessage(`✅ ${response.message}`);
 
+    window.dispatchEvent(new CustomEvent('chatbot:cancel-success', { detail: { trackingId } }));
+
     setState('authenticated');
     addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
       { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }
