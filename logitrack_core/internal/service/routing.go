@@ -177,6 +177,18 @@ func (s *RoutingService) generatePlan(_ context.Context, branchID string, forGlo
 
 		if sh.FinalBranchID == branchID && sh.DeliveryMethod == model.DeliveryMethodLastMile &&
 			(sh.Status == model.StatusAtHub || sh.Status == model.StatusRedeliveryScheduled) {
+			// Si el destinatario solicitó explícitamente una fecha via chatbot y esa fecha
+			// aún no llegó, no incluir en el plan de hoy.
+			if scheduledDate := chatbotScheduledDate(sh); scheduledDate != nil && scheduledDate.After(now) {
+				plan.Unassigned = append(plan.Unassigned, model.UnassignedShipment{
+					TrackingID:  sh.TrackingID,
+					Destination: "(última milla)",
+					Reason:      "esperando_fecha_solicitada",
+					WeightKg:    sh.WeightKg,
+					Priority:    sh.Priority,
+				})
+				continue
+			}
 			lastMileQ = append(lastMileQ, sh)
 			shipmentByTID[sh.TrackingID] = sh
 			continue
@@ -490,16 +502,7 @@ func (s *RoutingService) scheduleLastMileAssignments(
 
 		a.Shipments = shipIDs
 		a.OrderedStops = stops
-		// Para segura y costo el horario no influye en el orden (el orden lo
-		// determina la matriz de penalty/distancia). Por defecto sugerimos 8am
-		// — el operador puede ajustar manual si quiere ganar cobertura de
-		// ventana. Para ventanas el horario SÍ es la métrica clave, así que
-		// usamos el horario óptimo que devolvió el solver.
-		if mode == model.RouteModeSegura || mode == model.RouteModeCosto {
-			a.SuggestedDepartureMin = int(morningStartMin)
-		} else {
-			a.SuggestedDepartureMin = int(bestDep + 0.5)
-		}
+		a.SuggestedDepartureMin = int(bestDep + 0.5)
 		a.WindowCoverage = coverage
 		a.RouteMode = mode.Normalize()
 		// Geometría real del trayecto vía OSRM (sigue calles, no líneas rectas).
@@ -1262,9 +1265,14 @@ func sortShipmentsForRouting(s []model.Shipment) {
 // La ventana horaria es un compromiso contractual con el destinatario y puede tener
 // recargo (`time_window_multiplier`); por eso queda como criterio primario por encima
 // del score de prioridad. La prioridad sigue ordenando dentro de la misma ventana.
+//
+// Excepción: envíos con ScheduledDeliveryDate == hoy (solicitado explícitamente via
+// chatbot) se tratan como si tuvieran ventana "afternoon" en caso de ser flexible,
+// ya que representan un compromiso con el destinatario.
 func sortShipmentsForLastMile(s []model.Shipment) {
+	now := clock.Now().UTC()
 	sort.SliceStable(s, func(i, j int) bool {
-		if r := timeWindowRank(s[i].TimeWindow) - timeWindowRank(s[j].TimeWindow); r != 0 {
+		if r := effectiveTimeWindowRank(s[i], now) - effectiveTimeWindowRank(s[j], now); r != 0 {
 			return r < 0
 		}
 		if s[i].PriorityScore != s[j].PriorityScore {
@@ -1277,6 +1285,20 @@ func sortShipmentsForLastMile(s []model.Shipment) {
 	})
 }
 
+// effectiveTimeWindowRank devuelve el rank de ordenación considerando la fecha
+// solicitada via chatbot: si el envío es flexible pero el destinatario pidió entrega
+// hoy explícitamente, se eleva al mismo nivel que "afternoon".
+func effectiveTimeWindowRank(sh model.Shipment, now time.Time) int {
+	base := timeWindowRank(sh.TimeWindow)
+	// Solo aplica el boost a flexible; morning y afternoon ya tienen compromiso contractual.
+	if base == 2 {
+		if d := chatbotScheduledDate(sh); d != nil && isSameDay(*d, now) {
+			return 1 // equipara con afternoon
+		}
+	}
+	return base
+}
+
 func timeWindowRank(tw model.TimeWindow) int {
 	switch tw {
 	case model.TimeWindowMorning:
@@ -1286,6 +1308,23 @@ func timeWindowRank(tw model.TimeWindow) int {
 	default: // flexible o vacío
 		return 2
 	}
+}
+
+// chatbotScheduledDate devuelve la fecha solicitada por el destinatario via chatbot,
+// truncada a medianoche UTC, o nil si no hay solicitud explícita.
+func chatbotScheduledDate(sh model.Shipment) *time.Time {
+	if sh.ChatbotMetadata == nil || sh.ChatbotMetadata.ScheduledDeliveryDate == nil {
+		return nil
+	}
+	d := sh.ChatbotMetadata.ScheduledDeliveryDate.UTC().Truncate(24 * time.Hour)
+	return &d
+}
+
+// isSameDay reporta si dos instantes pertenecen al mismo día calendario UTC.
+func isSameDay(a, b time.Time) bool {
+	ay, am, ad := a.UTC().Date()
+	by, bm, bd := b.UTC().Date()
+	return ay == by && am == bm && ad == bd
 }
 
 func anyForced(group []model.Shipment, cfg model.RoutingConfig, now time.Time) bool {
@@ -3491,16 +3530,8 @@ func (s *RoutingService) RecomputeLastMileAssignment(ctx context.Context, branch
 	}
 
 	cfg := s.cfgSvc.Get()
-	// Para el recompute usamos el inicio de la ventana morning como referencia
-	// en lugar de la hora actual. Así el operador puede recalcular a cualquier
-	// hora del día (incluso de noche) y siempre obtiene un plan con candidatos
-	// de salida válidos. La hora de inicio que devuelve el VRP igual refleja
-	// el horario óptimo dentro de la ventana operativa.
-	local := clock.Now().In(clock.LocalTZ)
-	morningStart := time.Date(local.Year(), local.Month(), local.Day(),
-		cfg.MorningWindowStartHour, 0, 0, 0, clock.LocalTZ).UTC()
 	assignments := []model.LastMileAssignment{a}
-	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, morningStart, mode)
+	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, clock.Now().UTC(), mode)
 
 	return assignments[0], nil
 }
