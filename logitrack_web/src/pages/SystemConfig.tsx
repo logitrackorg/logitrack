@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { Settings, AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { fmtDateTimeSeconds } from "../utils/date";
 
@@ -148,12 +147,6 @@ export function SystemConfig() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-5">
-      <PageHeader
-        title="Configuración del sistema"
-        description="Parámetros operativos globales del sistema logístico."
-        icon={<Settings className="w-5 h-5" />}
-      />
-
       {loading ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-slate-500">Cargando…</p>

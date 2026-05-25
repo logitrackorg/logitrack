@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Tag, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { pricingApi, type PricingConfig as PricingConfigType } from "../api/pricing";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
 interface FieldDef {
@@ -81,12 +80,6 @@ export function PricingConfig() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <PageHeader
-        title="Tarifario"
-        description="Parámetros del cálculo de precio. Los cambios afectan a envíos nuevos — los precios ya cobrados no se recalculan."
-        icon={<Tag className="w-5 h-5" />}
-      />
-
       {loading ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-slate-500">Cargando…</p>

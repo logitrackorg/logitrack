@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
-  Brain,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -12,7 +11,6 @@ import {
   type AuditLog,
   type FatigueConfig as FatigueConfigType,
 } from "../api/fatigueConfig";
-import { PageHeader } from "../components/ui/page-header";
 import {
   Card,
   CardContent,
@@ -181,12 +179,6 @@ export function FatigueConfig() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-5">
-      <PageHeader
-        title="Config. modelo de fatiga"
-        description="Parámetros del modelo de detección de fatiga. Cambios impactan en todos los check-ins futuros."
-        icon={<Brain className="w-5 h-5" />}
-      />
-
       {/* ── Hora de inicio del día (daily_reset_hour) ─────────────────── */}
       <Card>
         <CardHeader>

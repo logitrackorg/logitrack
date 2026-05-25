@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { ScrollText, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, ChevronDown, ChevronRight } from "lucide-react";
 import { accessLogApi, type AccessLog, type AccessEventType } from "../api/accessLog";
 import { fmtDateTime } from "../utils/date";
-import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
 
 const EVENT_LABELS: Record<AccessEventType, string> = {
@@ -82,12 +81,6 @@ export function AccessLog() {
 
   return (
     <div className="p-6 max-w-[1100px] mx-auto">
-      <PageHeader
-        title="Registro de accesos"
-        description="Auditoría de solo lectura de inicios y cierres de sesión del sistema."
-        icon={<ScrollText className="w-5 h-5" />}
-      />
-
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[220px]">

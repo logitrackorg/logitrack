@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, UserCog } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
 import { toast } from "../utils/toast";
-import { PageHeader } from "../components/ui/page-header";
 
 export function UserProfile() {
   const navigate = useNavigate();
@@ -70,12 +69,6 @@ export function UserProfile() {
         <ArrowLeft className="w-4 h-4" />
         Volver
       </button>
-      <PageHeader
-        title="Perfil de usuario"
-        description="Tus datos personales y configuración de seguridad"
-        icon={<UserCog className="w-5 h-5" />}
-      />
-
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
         <div style={{ flex: "0 0 240px", minWidth: 220 }}>
           <div style={{ marginBottom: 24 }}>

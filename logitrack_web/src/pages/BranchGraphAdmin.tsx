@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { GitBranch, RefreshCw, AlertCircle, CheckCircle2, Eye, EyeOff, Plus } from "lucide-react";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { branchGraphApi, type BranchEdge } from "../api/branchGraph";
 import { branchApi, type Branch } from "../api/branches";
@@ -99,14 +98,6 @@ export function BranchGraphAdmin({ embedded = false }: { embedded?: boolean } = 
   };
 
   const body = (<>
-    {!embedded && (
-      <PageHeader
-        icon={<GitBranch className="h-6 w-6" />}
-        title="Grafo de sucursales"
-        description="Aristas del grafo de ruteo multi-hop. Las aristas auto-derivadas se generan del historial de tránsitos. Las manuales conservan su estado al correr el auto-derive."
-      />
-    )}
-
         {/* Acciones */}
         <Card>
           <CardContent className="pt-6">

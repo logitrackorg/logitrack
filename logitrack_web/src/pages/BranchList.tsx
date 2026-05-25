@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Plus, Search, AlertCircle, Filter } from "lucide-react";
+import { Plus, Search, AlertCircle, Filter } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { fmtDateTime } from "../utils/date";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
 
 const PROVINCES = [
@@ -99,22 +99,17 @@ export function BranchList() {
 
   return (
     <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1200px] mx-auto`}>
-      <PageHeader
-        title="Sucursales"
-        description="Red de sucursales operativas y su estado"
-        icon={<Building2 className="w-5 h-5" />}
-        actions={
-          isAdmin ? (
-            <button
-              onClick={() => { setShowCreate(true); setError(""); }}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Nueva sucursal
-            </button>
-          ) : undefined
-        }
-      />
+      {isAdmin && (
+        <TopbarActions>
+          <button
+            onClick={() => { setShowCreate(true); setError(""); }}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Nueva sucursal
+          </button>
+        </TopbarActions>
+      )}
 
       {/* Filters */}
       <Card className="mb-4 p-4">

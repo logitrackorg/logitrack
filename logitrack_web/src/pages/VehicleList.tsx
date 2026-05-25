@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Truck, Plus, Filter } from "lucide-react";
+import { Plus, Filter } from "lucide-react";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { interBranchTripsApi, type InterBranchTrip } from "../api/interBranchTrips";
 import { shipmentApi } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
 
 const inputClass =
@@ -294,24 +294,17 @@ const handleAddShipment = async () => {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
-      <PageHeader
-        title="Gestión de flota"
-        description="Vehículos, asignación a sucursales y trips operativos"
-        icon={<Truck className="w-5 h-5" />}
-        actions={
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                onClick={() => setShowForm(!showForm)}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Nuevo vehículo
-              </button>
-            )}
-          </div>
-        }
-      />
+      {isAdmin && (
+        <TopbarActions>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Nuevo vehículo
+          </button>
+        </TopbarActions>
+      )}
 
       {/* New Vehicle modal */}
       {showForm && isAdmin && (

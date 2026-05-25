@@ -7,7 +7,7 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { systemConfigApi } from "../api/systemConfig";
 import { clockApi } from "../api/clock";
 import { fmtDateTime } from "../utils/date";
-import { PageHeader } from "../components/ui/page-header";
+import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
@@ -105,21 +105,16 @@ export function DraftList() {
 
   return (
     <div className="p-6 max-w-[1000px] mx-auto">
-      <PageHeader
-        title="Borradores"
-        description="Envíos guardados sin confirmar"
-        icon={<FileText className="w-5 h-5" />}
-        actions={
-          hasRole("operator", "supervisor") ? (
-            <button
-              onClick={() => navigate("/new")}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
-            >
-              Nuevo envío
-            </button>
-          ) : undefined
-        }
-      />
+      {hasRole("operator", "supervisor") && (
+        <TopbarActions>
+          <button
+            onClick={() => navigate("/new")}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          >
+            Nuevo envío
+          </button>
+        </TopbarActions>
+      )}
 
       {/* Filters */}
       <Card className="mb-4 p-4">

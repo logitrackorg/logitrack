@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertCircle, BarChart3, RefreshCw } from "lucide-react";
-import { PageHeader } from "../components/ui/page-header";
+import { Activity, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { branchApi, type Branch } from "../api/branches";
 import { routingMetricsApi, type RoutingMetricsSummary } from "../api/routingMetrics";
@@ -98,14 +97,6 @@ export function RoutingMetrics({ embedded = false }: { embedded?: boolean } = {}
   }, [summary]);
 
   const body = (<>
-    {!embedded && (
-      <PageHeader
-        icon={<BarChart3 className="h-6 w-6" />}
-        title="Métricas de ruteo"
-        description="Observabilidad Phase 0 — calidad de planes, aplicaciones, drift y override rate por sucursal y fecha."
-      />
-    )}
-
         {/* Filtros */}
         <Card>
           <CardContent className="pt-6">

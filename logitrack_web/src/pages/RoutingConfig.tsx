@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Route, AlertCircle, CheckCircle2, RefreshCw, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle2, RefreshCw, Clock } from "lucide-react";
 import { routingApi, type RoutingConfig as RoutingConfigType, type GlobalPlanLog, type LastMilePackingStrategy } from "../api/routing";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
 interface NumberFieldDef {
@@ -327,12 +326,6 @@ export function RoutingConfig() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <PageHeader
-        title="Configuración de ruteo"
-        description="Parámetros del algoritmo de planificación diario. Los cambios afectan los planes generados a partir de ahora."
-        icon={<Route className="w-5 h-5" />}
-      />
-
       {loading ? (
         <Card className="p-10 text-center">
           <p className="text-sm text-slate-500">Cargando…</p>
