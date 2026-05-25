@@ -1,0 +1,23 @@
+logitrack_core/internal/service/routing.go
+  s_f69f65f5f07baf::t_212051442095e0 180-183,189-191
+  s_f69f65f5f07baf::t_656412d43a815d 1268-1271,1273,1275,1288-1301,1313-1327
+  s_f69f65f5f07baf::t_1cc5a549e260f9 184-188
+  s_f69f65f5f07baf::t_adcd2846ebe3f8 3534
+  s_f69f65f5f07baf::t_6a807b8a2eb759 505
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "539d28c40dfe94ab81eaa4bb35a5bc620af70bd1",
+  "prompts": {},
+  "sessions": {
+    "s_f69f65f5f07baf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89939f75-3822-4979-8599-4305ed60d413",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
