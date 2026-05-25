@@ -93,10 +93,12 @@ export interface ChatOption {
   action: ChatAction;
 }
 
-export type ChatAction = 
+export type ChatAction =
   | 'pickup'
   | 'reschedule'
   | 'cancel'
   | 'select_date'
   | 'confirm_cancel'
-  | 'restart';
+  | 'restart'
+  | 'as_recipient'
+  | 'as_sender';
