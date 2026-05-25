@@ -1,0 +1,19 @@
+logitrack_web/android/app/src/main/AndroidManifest.xml
+  s_ff9b610eec0357::t_5f430060d9270d 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "65d0aa7006d7d0271d5ef78494944367ac6aa7fe",
+  "prompts": {},
+  "sessions": {
+    "s_ff9b610eec0357": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e8d46799-74ac-40da-86e6-286f7c5be30f",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
