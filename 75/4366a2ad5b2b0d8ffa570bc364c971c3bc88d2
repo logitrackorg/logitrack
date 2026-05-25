@@ -1,0 +1,19 @@
+logitrack_core/internal/repository/stats_extended.go
+  s_6ba1ece4b41770::t_a84b064713dca2 545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "754366a2ad5b2b0d8ffa570bc364c971c3bc88d2",
+  "prompts": {},
+  "sessions": {
+    "s_6ba1ece4b41770": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe67c173-f8fd-4e01-b8ef-4b0db3c8983d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
