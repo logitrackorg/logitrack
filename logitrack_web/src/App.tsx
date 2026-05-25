@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -43,6 +43,7 @@ import { InterBranchTripsList } from "./pages/InterBranchTripsList";
 function DriverNav() {
   const { user, logout } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   if (!user) return null;
 
   const isInterBranch = user.driver_type === "intersucursal";
@@ -64,15 +65,25 @@ function DriverNav() {
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
         {isMobile ? (
-          <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          <button
+            onClick={() => navigate("/driver/profile")}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#e2e8f0", fontWeight: 600, padding: 0 }}
+          >
+            {user.username}
+          </button>
         ) : (
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>
-            <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
-            {" · "}
-            <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
-              {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+          <button
+            onClick={() => navigate("/driver/profile")}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            <span style={{ fontSize: 13, color: "#94a3b8" }}>
+              <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
+              {" · "}
+              <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
+                {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+              </span>
             </span>
-          </span>
+          </button>
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
@@ -130,6 +141,11 @@ function AppRoutes() {
             <Route path="/driver/scan" element={
               <ProtectedRoute roles={["driver"]}>
                 <DriverScanVehicle />
+              </ProtectedRoute>
+            } />
+            <Route path="/driver/profile" element={
+              <ProtectedRoute roles={["driver"]}>
+                <UserProfile />
               </ProtectedRoute>
             } />
             <Route path="/shipments/:trackingId" element={

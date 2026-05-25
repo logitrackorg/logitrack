@@ -7,8 +7,11 @@ import {
   Clock,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Users,
+  X,
 } from "lucide-react";
+import { dataAccessRequestsApi, type DataAccessRequest } from "../api/dataAccessRequests";
 import {
   supervisorFatigueApi,
   type CheckinRecord,
@@ -296,6 +299,9 @@ export function SupervisorFatigue() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [dataRequests, setDataRequests] = useState<DataAccessRequest[]>([]);
+  const [dataRequestsLoading, setDataRequestsLoading] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   // Sync the ref with selectedBranch so the polling interval always reads the
   // latest value without stale-closure issues. Writing to a ref must happen in
@@ -334,6 +340,50 @@ export function SupervisorFatigue() {
       branchApi.listActive().then(setBranches).catch(() => {});
     }
   }, [isSupervisor]);
+
+  // Cargar solicitudes de datos de choferes (solo supervisor)
+  const loadDataRequests = useCallback(async () => {
+    if (!isSupervisor) return;
+    setDataRequestsLoading(true);
+    try {
+      const reqs = await dataAccessRequestsApi.listPending();
+      setDataRequests(reqs);
+    } catch {
+      // silencioso — no bloquea el panel principal
+    } finally {
+      setDataRequestsLoading(false);
+    }
+  }, [isSupervisor]);
+
+  useEffect(() => { loadDataRequests(); }, [loadDataRequests]);
+
+  const handleAccept = async (id: string) => {
+    setReviewingId(id);
+    try {
+      await dataAccessRequestsApi.accept(id);
+      setDataRequests((prev) =>
+        prev.map((r) => r.id === id ? { ...r, status: "accepted" } : r)
+      );
+    } catch {
+      // silencioso
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    setReviewingId(id);
+    try {
+      await dataAccessRequestsApi.reject(id);
+      setDataRequests((prev) =>
+        prev.map((r) => r.id === id ? { ...r, status: "rejected" } : r)
+      );
+    } catch {
+      // silencioso
+    } finally {
+      setReviewingId(null);
+    }
+  };
 
   // Refetch cuando el manager cambia de sucursal
   useEffect(() => {
@@ -473,9 +523,116 @@ export function SupervisorFatigue() {
         </Card>
       )}
 
+      {/* Panel de solicitudes de datos — solo supervisor */}
+      {isSupervisor && (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-slate-500" />
+                Solicitudes de datos personales (Ley 25.326)
+              </CardTitle>
+              <button
+                onClick={loadDataRequests}
+                disabled={dataRequestsLoading}
+                className="h-7 px-2 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 text-xs inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${dataRequestsLoading ? "animate-spin" : ""}`} />
+                Actualizar
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {dataRequestsLoading ? (
+              <p className="text-sm text-slate-400 p-6 text-center">Cargando solicitudes...</p>
+            ) : dataRequests.length === 0 ? (
+              <p className="text-sm text-slate-400 p-6 text-center italic">
+                No hay solicitudes de datos registradas para tu sucursal.
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {dataRequests.map((req) => (
+                  <DataRequestRow
+                    key={req.id}
+                    req={req}
+                    busy={reviewingId === req.id}
+                    onAccept={() => handleAccept(req.id)}
+                    onReject={() => handleReject(req.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <p className="text-[11px] text-slate-400 text-center">
         Actualización automática cada 60 segundos · Hacé clic en una fila para ver el historial
       </p>
+    </div>
+  );
+}
+
+// ── DataRequestRow ────────────────────────────────────────────────────────────
+
+function DataRequestRow({
+  req,
+  busy,
+  onAccept,
+  onReject,
+}: {
+  req: DataAccessRequest;
+  busy: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const isPending = req.status === "pending";
+
+  const statusBadge: Record<DataAccessRequest["status"], { cls: string; label: string }> = {
+    pending:  { cls: "bg-amber-50 text-amber-700 border-amber-200",   label: "Pendiente" },
+    accepted: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Aceptada" },
+    rejected: { cls: "bg-rose-50 text-rose-700 border-rose-200",      label: "Rechazada" },
+  };
+  const badge = statusBadge[req.status];
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-slate-50/60 transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900 leading-snug truncate">
+          {req.driver_name}
+        </p>
+        <p className="text-[11px] text-slate-400 mt-0.5">
+          Solicitado el {fmtDateTime(req.requested_at)}
+          {req.reviewed_by && ` · Revisado por ${req.reviewed_by}`}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-bold ${badge.cls}`}>
+          {badge.label}
+        </span>
+
+        {isPending && (
+          <>
+            <button
+              onClick={onAccept}
+              disabled={busy}
+              className="h-7 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Aceptar
+            </button>
+            <button
+              onClick={onReject}
+              disabled={busy}
+              className="h-7 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-rose-600 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Rechazar
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

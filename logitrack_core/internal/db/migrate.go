@@ -473,6 +473,20 @@ func RunMigrations(db *sql.DB) error {
 
 		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 		CREATE INDEX IF NOT EXISTS idx_events_rescheduled ON events(tracking_id, event_type) WHERE event_type = 'rescheduled';
+
+		CREATE TABLE IF NOT EXISTS data_access_requests (
+			id           TEXT PRIMARY KEY,
+			driver_id    TEXT NOT NULL,
+			driver_name  TEXT NOT NULL DEFAULT '',
+			branch_id    TEXT NOT NULL DEFAULT '',
+			status       TEXT NOT NULL DEFAULT 'pending',
+			requested_at TIMESTAMPTZ NOT NULL,
+			reviewed_at  TIMESTAMPTZ,
+			reviewed_by  TEXT NOT NULL DEFAULT '',
+			checkin_data JSONB
+		);
+		CREATE INDEX IF NOT EXISTS idx_dar_driver   ON data_access_requests(driver_id);
+		CREATE INDEX IF NOT EXISTS idx_dar_branch   ON data_access_requests(branch_id, status);
 	`)
 	return err
 }
