@@ -254,6 +254,9 @@ func main() {
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
+	checkinRepo := repository.NewCheckinRepository()
+	dataAccessRepo := repository.NewDataAccessRequestRepository(database)
+	dataAccessHandler := handler.NewDataAccessRequestHandler(dataAccessRepo, checkinRepo, notifSvc)
 	customerHandler := handler.NewCustomerHandler(customerRepo)
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
@@ -505,6 +508,11 @@ func main() {
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
 	protected.GET("/users/me", authenticated, userHandler.GetMe)
 	protected.POST("/users/me/password", authenticated, userHandler.ChangePassword)
+	protected.POST("/users/me/data-request", authenticated, dataAccessHandler.Create)
+	protected.GET("/users/me/data-requests", authenticated, dataAccessHandler.ListMine)
+	protected.GET("/supervisor/data-requests", middleware.RequireRoles(model.RoleSupervisor), dataAccessHandler.ListPending)
+	protected.PATCH("/supervisor/data-requests/:id/accept", middleware.RequireRoles(model.RoleSupervisor), dataAccessHandler.Accept)
+	protected.PATCH("/supervisor/data-requests/:id/reject", middleware.RequireRoles(model.RoleSupervisor), dataAccessHandler.Reject)
 
 	// Customers — autocomplete by DNI used during shipment creation
 	protected.GET("/customers", shipmentWrite, customerHandler.GetByDNI)
