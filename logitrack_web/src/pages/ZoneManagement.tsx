@@ -5,7 +5,6 @@ import {
   AlertTriangle, MapPin, Plus, Trash2, Edit3, Power, X, Check, Undo2, Pencil,
 } from "lucide-react";
 import { zoneApi, ZONE_COLOR, type Zone } from "../api/zones";
-import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
 
 delete (L.Icon.Default.prototype as typeof L.Icon.Default.prototype & { _getIconUrl?: unknown })._getIconUrl;
@@ -304,7 +303,6 @@ export function ZoneManagement() {
   useLayoutEffect(() => { selectZoneRef.current = selectZone; });
 
   const totalCount = zones.length;
-  const activeCount = zones.filter((z) => z.active).length;
   const visibleZones = showInactive ? zones : zones.filter((z) => z.active);
   const isDrawing = drawingMode !== "none";
 
@@ -313,11 +311,6 @@ export function ZoneManagement() {
       {/* Sidebar */}
       <div className="w-80 shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-hidden">
         <div className="p-4 border-b border-slate-200">
-          <PageHeader
-            title="Zonas peligrosas"
-            description={`${activeCount} de ${totalCount} activa${activeCount !== 1 ? "s" : ""}`}
-            icon={<AlertTriangle className="w-5 h-5" />}
-          />
           {!isDrawing ? (
             <button
               onClick={startDrawingNew}

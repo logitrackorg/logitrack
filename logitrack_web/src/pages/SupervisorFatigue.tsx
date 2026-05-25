@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Activity,
   AlertCircle,
   CheckCircle2,
   ChevronDown,
@@ -19,7 +18,6 @@ import {
 } from "../api/supervisorFatigue";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { fmtDateTime, fmtDateTimeSeconds } from "../utils/date";
 
@@ -357,12 +355,6 @@ export function SupervisorFatigue() {
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <PageHeader
-          title="Fatiga de choferes"
-          description="Estado de riesgo en tiempo real para los conductores de la sucursal."
-          icon={<Activity className="w-5 h-5" />}
-        />
-
         <div className="flex items-center gap-2 shrink-0">
           {lastUpdated && (
             <span className="text-[11px] text-slate-400 tabular-nums hidden sm:block">

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { Building, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { organizationApi, type OrganizationConfig as OrganizationConfigType } from "../api/organizationApi";
 import { fmtDateTime } from "../utils/date";
-import { PageHeader } from "../components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
 const inputClass =
@@ -63,12 +62,6 @@ export function OrganizationConfig() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <PageHeader
-        title="Organización"
-        description="Información que aparece en los comprobantes de alta de envíos generados por el sistema."
-        icon={<Building className="w-5 h-5" />}
-      />
-
       <form onSubmit={handleSave}>
         <Card>
           <CardHeader>
