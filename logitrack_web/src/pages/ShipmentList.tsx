@@ -167,6 +167,8 @@ export function ShipmentList() {
       const cutoff = slaCutoff;
       if (s.priority !== "alta" || !s.estimated_delivery_at || new Date(s.estimated_delivery_at).getTime() >= cutoff) return false;
       if (["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status)) return false;
+    } else if (statusFilter === "at_hub") {
+      if (s.status !== "at_hub" && s.status !== "at_origin_hub") return false;
     } else if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
     if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
     if (!dateRangeInvalid) {
