@@ -66,7 +66,7 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
   URL.revokeObjectURL(url);
 }
 
-type StatusFilter = ShipmentStatus | "active" | "expired" | "";
+type StatusFilter = ShipmentStatus | "active" | "expired" | "sla_risk" | "";
 
 const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 
@@ -162,7 +162,11 @@ export function ShipmentList() {
     // even if the server returned them (e.g. during a filter transition).
     if (statusFilter !== "expired" && s.status === "expired") return false;
     if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
-    if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
+    if (statusFilter === "sla_risk") {
+      const cutoff = Date.now() + 24 * 60 * 60 * 1000;
+      if (s.priority !== "alta" || !s.estimated_delivery_at || new Date(s.estimated_delivery_at).getTime() >= cutoff) return false;
+      if (["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status)) return false;
+    } else if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
     if (branchFilter && s.receiving_branch_id !== branchFilter && !(s.status === "in_transit" && s.current_location === branchFilter)) return false;
     if (!dateRangeInvalid) {
       const created = localDate(s.created_at);

@@ -6,7 +6,7 @@ type KPI = {
   color: string;
   bg: string;
   border: string;
-  filterValue: ShipmentStatus | "active" | "problem" | "";
+  filterValue: ShipmentStatus | "active" | "sla_risk" | "problem" | "";
   count: (list: Shipment[]) => number;
 };
 
@@ -45,7 +45,7 @@ const KPIS: KPI[] = [
     color: "#b45309",
     bg: "#fff7ed",
     border: "#fed7aa",
-    filterValue: "active",
+    filterValue: "sla_risk",
     count: (list) => {
       const cutoff = Date.now() + 24 * 60 * 60 * 1000;
       return list.filter(
@@ -62,7 +62,7 @@ const KPIS: KPI[] = [
 type Props = {
   shipments: Shipment[];
   activeFilter: string;
-  onFilter: (v: ShipmentStatus | "active" | "") => void;
+  onFilter: (v: ShipmentStatus | "active" | "sla_risk" | "") => void;
 };
 
 export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
@@ -76,7 +76,7 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
         return (
           <button
             key={kpi.key}
-            onClick={() => onFilter(isActive ? "active" : kpi.filterValue as ShipmentStatus | "active" | "")}
+            onClick={() => onFilter(isActive ? "active" : kpi.filterValue as ShipmentStatus | "active" | "sla_risk" | "")}
             className="text-left rounded-xl p-3.5 border transition-all cursor-pointer"
             style={{
               background: isActive ? kpi.bg : "#fff",
