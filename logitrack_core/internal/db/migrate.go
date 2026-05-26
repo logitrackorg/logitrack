@@ -487,6 +487,41 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_dar_driver   ON data_access_requests(driver_id);
 		CREATE INDEX IF NOT EXISTS idx_dar_branch   ON data_access_requests(branch_id, status);
+
+		CREATE TABLE IF NOT EXISTS auto_report_schedules (
+			id              TEXT PRIMARY KEY,
+			owner_user_id   TEXT NOT NULL,
+			name            TEXT NOT NULL,
+			frequency       TEXT NOT NULL,
+			time_of_day     TEXT NOT NULL,
+			day_of_week     INT,
+			day_of_month    INT,
+			metrics         JSONB NOT NULL DEFAULT '[]',
+			branch_id       TEXT NOT NULL DEFAULT '',
+			email           TEXT NOT NULL DEFAULT '',
+			active          BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+			updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+			last_run_at     TIMESTAMPTZ
+		);
+		CREATE INDEX IF NOT EXISTS idx_auto_report_schedules_owner  ON auto_report_schedules(owner_user_id);
+		CREATE INDEX IF NOT EXISTS idx_auto_report_schedules_active ON auto_report_schedules(active);
+
+		CREATE TABLE IF NOT EXISTS auto_report_generated (
+			id             TEXT PRIMARY KEY,
+			schedule_id    TEXT NOT NULL REFERENCES auto_report_schedules(id) ON DELETE CASCADE,
+			schedule_name  TEXT NOT NULL,
+			frequency      TEXT NOT NULL,
+			period_from    TIMESTAMPTZ NOT NULL,
+			period_to      TIMESTAMPTZ NOT NULL,
+			branch_id      TEXT NOT NULL DEFAULT '',
+			email          TEXT NOT NULL DEFAULT '',
+			generated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			has_data       BOOLEAN NOT NULL DEFAULT TRUE,
+			snapshot       JSONB NOT NULL DEFAULT '{}'
+		);
+		CREATE INDEX IF NOT EXISTS idx_auto_report_generated_schedule ON auto_report_generated(schedule_id);
+		CREATE INDEX IF NOT EXISTS idx_auto_report_generated_at       ON auto_report_generated(generated_at DESC);
 	`)
 	return err
 }

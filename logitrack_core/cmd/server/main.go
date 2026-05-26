@@ -262,6 +262,14 @@ func main() {
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
 
+	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
+	// schedules; el scheduler in-process dispara la generación y guarda el snapshot.
+	autoReportRepo := repository.NewPostgresAutoReportRepository(database)
+	autoReportSvc := service.NewAutoReportService(autoReportRepo, statsExtendedSvc, notifSvc)
+	autoReportHandler := handler.NewAutoReportHandler(autoReportSvc)
+	autoReportScheduler := service.NewAutoReportScheduler(autoReportSvc)
+	autoReportScheduler.Start()
+
 	// OSRM público (sin SLA, dev-only). Si falla, el VRP cae automáticamente
 	// a Haversine. Para producción conviene self-hostear y cambiar la URL.
 	osrmClient := osrm.NewClient("https://router.project-osrm.org")
@@ -466,10 +474,23 @@ func main() {
 	protected.GET("/stats/billing-metrics", canViewStats, statsExtendedHandler.BillingMetrics)
 	protected.GET("/stats/branch-ranking", canViewStats, statsExtendedHandler.BranchRanking)
 	protected.GET("/stats/volume-by-time-window", canViewStats, statsExtendedHandler.VolumeByTimeWindow)
+	protected.GET("/stats/volume-by-shipment-type", canViewStats, statsExtendedHandler.VolumeByShipmentType)
+	protected.GET("/stats/volume-by-delivery-method", canViewStats, statsExtendedHandler.VolumeByDeliveryMethod)
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
+
+	// Reportes automáticos — manager + admin. Operadores y choferes reciben 403 (CA-03).
+	managerAdmin := middleware.RequireRoles(model.RoleManager, model.RoleAdmin)
+	protected.GET("/auto-reports/schedules", managerAdmin, autoReportHandler.ListSchedules)
+	protected.POST("/auto-reports/schedules", managerAdmin, autoReportHandler.CreateSchedule)
+	protected.PATCH("/auto-reports/schedules/:id", managerAdmin, autoReportHandler.UpdateSchedule)
+	protected.DELETE("/auto-reports/schedules/:id", managerAdmin, autoReportHandler.DeleteSchedule)
+	protected.POST("/auto-reports/schedules/:id/run", managerAdmin, autoReportHandler.RunNow)
+	protected.GET("/auto-reports/generated", managerAdmin, autoReportHandler.ListGenerated)
+	protected.GET("/auto-reports/generated/:id", managerAdmin, autoReportHandler.GetGenerated)
+	protected.GET("/auto-reports/generated/:id/csv", managerAdmin, autoReportHandler.DownloadCSV)
 
 	// Driver route — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)

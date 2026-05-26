@@ -596,6 +596,27 @@ func (s *NotificationService) GetForUser(userID string, filters repository.Notif
 	return s.repo.ListByUser(userID, filters)
 }
 
+// CreateForUser persiste una notificación arbitraria y la empuja por SSE si hay hub.
+// Pensada para flujos donde el destinatario ya se conoce (p.ej. reportes automáticos).
+func (s *NotificationService) CreateForUser(userID string, notifType model.NotificationType, title, body, resourceID string) error {
+	n := model.Notification{
+		ID:         uuid.NewString(),
+		UserID:     userID,
+		Type:       notifType,
+		Title:      title,
+		Body:       body,
+		ResourceID: resourceID,
+		CreatedAt:  clock.Now().UTC(),
+	}
+	if err := s.repo.Create(n); err != nil {
+		return err
+	}
+	if s.hub != nil {
+		s.hub.Push(userID)
+	}
+	return nil
+}
+
 // UnreadCount returns the count of unread notifications for a user.
 func (s *NotificationService) UnreadCount(userID string) (int, error) {
 	return s.repo.UnreadCount(userID)

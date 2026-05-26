@@ -33,6 +33,7 @@ import { UserProfile } from "./pages/UserProfile";
 import { DraftList } from "./pages/DraftList";
 import { ZoneManagement } from "./pages/ZoneManagement";
 import { FatigueConfig } from "./pages/FatigueConfig";
+import { AutoReports } from "./pages/AutoReports";
 import { SupervisorFatigue } from "./pages/SupervisorFatigue";
 import DriverScanVehicle from "./pages/DriverScanVehicle";
 import { Repartos } from "./pages/Repartos";
@@ -348,6 +349,12 @@ function AppRoutes() {
         <Route path="/notifications" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
             <NotificationsPage />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/auto-reports" element={
+          <ProtectedRoute roles={["manager", "admin"]}>
+            <AutoReports />
           </ProtectedRoute>
         } />
 
