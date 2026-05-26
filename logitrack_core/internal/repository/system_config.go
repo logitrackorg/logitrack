@@ -22,9 +22,11 @@ func NewPostgresSystemConfigRepository(db *sql.DB) SystemConfigRepository {
 func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 	var cfg model.SystemConfig
 	err := r.db.QueryRow(`
-		SELECT max_delivery_attempts, draft_retention_days, draft_purge_days, pickup_deadline_days
+		SELECT max_delivery_attempts, draft_retention_days, draft_purge_days, pickup_deadline_days,
+		       force_email_notifications
 		FROM system_config WHERE id = 1`).
-		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays, &cfg.PickupDeadlineDays)
+		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays, &cfg.PickupDeadlineDays,
+			&cfg.ForceEmailNotifications)
 	if err != nil {
 		return model.DefaultSystemConfig()
 	}
@@ -34,15 +36,17 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 	_, err := r.db.Exec(
 		`UPDATE system_config
-		 SET max_delivery_attempts  = $1,
-		     draft_retention_days   = $2,
-		     draft_purge_days       = $3,
-		     pickup_deadline_days   = $4
+		 SET max_delivery_attempts       = $1,
+		     draft_retention_days        = $2,
+		     draft_purge_days            = $3,
+		     pickup_deadline_days        = $4,
+		     force_email_notifications   = $5
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
 		cfg.DraftPurgeDays,
 		cfg.PickupDeadlineDays,
+		cfg.ForceEmailNotifications,
 	)
 	return err
 }

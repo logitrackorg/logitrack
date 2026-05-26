@@ -17,6 +17,8 @@ export interface SystemConfig {
   draft_purge_days: number;
   /** Days a shipment can be held at ready_for_pickup before return. 0 = no limit (default). */
   pickup_deadline_days: number;
+  /** When true, WhatsApp is skipped and all customer notifications go via email only. */
+  force_email_notifications: boolean;
 }
 
 export const systemConfigApi = {
