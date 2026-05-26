@@ -209,38 +209,6 @@ export function SystemConfig() {
               </div>
             </div>
 
-            {error && (
-              <div className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="flex items-center gap-2 mb-3 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Configuración guardada correctamente.
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-              >
-                {saving ? "Guardando…" : "Guardar cambios"}
-              </button>
-              {isDirty && (
-                <button
-                  onClick={() => setDraft(config)}
-                  disabled={saving}
-                  className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-                >
-                  Descartar
-                </button>
-              )}
-            </div>
           </CardContent>
         </Card>
 
@@ -465,6 +433,39 @@ export function SystemConfig() {
             )}
           </CardContent>
         </Card>
+        {/* Save / discard — always below all config cards */}
+        <div className="space-y-2">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              Configuración guardada correctamente.
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving || !isDirty}
+              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            >
+              {saving ? "Guardando…" : "Guardar cambios"}
+            </button>
+            {isDirty && (
+              <button
+                onClick={() => setDraft(config)}
+                disabled={saving}
+                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+              >
+                Descartar
+              </button>
+            )}
+          </div>
+        </div>
         </>
       )}
 
