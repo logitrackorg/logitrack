@@ -1,0 +1,19 @@
+logitrack_web/src/pages/ShipmentList.tsx
+  s_a57e0d908a6274::t_5de6dfaa965a67 170-171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8bd285e5a83efa1af2a6caeb39d510e916787d24",
+  "prompts": {},
+  "sessions": {
+    "s_a57e0d908a6274": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "afc492b6-910c-476a-b250-91246c31773d",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
