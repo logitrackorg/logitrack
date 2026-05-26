@@ -18,6 +18,7 @@ import {
   Briefcase,
   FileBarChart,
   FileText,
+  ClipboardList,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -54,12 +55,13 @@ const SECTIONS: NavSection[] = [
   {
     title: "Operación",
     items: [
+      { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
       { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager", "admin"] },
-      { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
       { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor", "manager"] },
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor", "manager"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
+      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
     ],
   },
   {
