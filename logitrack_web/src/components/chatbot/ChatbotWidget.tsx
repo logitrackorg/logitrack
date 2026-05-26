@@ -187,7 +187,7 @@ export const ChatbotWidget: React.FC = () => {
         action: 'reschedule',
       },
       cancel: {
-        label: '❌ Cancelar envío',
+        label: userType === 'sender' ? '❌ Cancelar envío' : '❌ Rechazar envío',
         value: 'cancel',
         action: 'cancel',
       },
@@ -424,6 +424,8 @@ export const ChatbotWidget: React.FC = () => {
       `📅 Nueva fecha de entrega: ${formatDate(response.new_delivery_date)}`
     );
 
+    window.dispatchEvent(new CustomEvent('chatbot:reschedule-success', { detail: { trackingId } }));
+
     setState('authenticated');
     addBotMessage('¿Necesitas algo más?', [
       { label: '🏠 Volver al menú', value: 'menu', action: 'restart' }
@@ -466,6 +468,23 @@ export const ChatbotWidget: React.FC = () => {
       sessionTimeoutRef.current = null;
     }
     if (shipment) {
+      // Remitente: solo mostrar opciones del remitente
+      if (userType === 'sender') {
+        const canCancel = !isTerminalStatus(shipment.status);
+        if (canCancel) {
+          setState('authenticated');
+          addBotMessage('¿En qué puedo ayudarte?', [
+            { label: '❌ Cancelar envío', value: 'cancel', action: 'cancel' },
+          ]);
+        } else {
+          setState('authenticated');
+          addBotMessage(getNoActionsMessage(shipment.status), [
+            { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' },
+          ]);
+        }
+        return;
+      }
+      // Destinatario: mostrar menú completo
       const menuOptions = buildMenuOptions(getAvailableActions());
       if (menuOptions.length > 0) {
         setState('authenticated');
@@ -527,7 +546,8 @@ export const ChatbotWidget: React.FC = () => {
   };
 
   const isTerminalStatus = (status: string): boolean => {
-    return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed'].includes(status);
+    return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed',
+            'rechazado', 'no_entregado', 'expired'].includes(status);
   };
 
   const getNoActionsMessage = (status: string): string => {

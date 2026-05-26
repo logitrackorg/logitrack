@@ -116,6 +116,13 @@ export interface Shipment {
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
   reserved_for_trip_id?: string;
+  chatbot_metadata?: {
+    reschedule_count: number;
+    max_reschedules: number;
+    original_delivery_date?: string;
+    scheduled_delivery_date?: string;
+    last_chatbot_interaction?: string;
+  };
 }
 
 export interface EventLocation {

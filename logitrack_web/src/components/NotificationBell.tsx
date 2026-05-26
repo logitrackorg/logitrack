@@ -25,9 +25,10 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "sla_risk")                 return <AlertTriangle size={16} color="#ef4444" />;
   if (type === "sla_expired")              return <AlertOctagon  size={16} color="#b91c1c" />;
   if (type === "fatigue_alert")            return <AlertTriangle size={16} color="#ef4444" />;
-  if (type === "chatbot_pickup_requested")     return <Bot size={16} color="#a78bfa" />;
-  if (type === "chatbot_rejected_by_recipient") return <Bot size={16} color="#f97316" />;
-  if (type === "chatbot_cancelled_by_sender")   return <Bot size={16} color="#ef4444" />;
+  if (type === "chatbot_pickup_requested")       return <Bot size={16} color="#a78bfa" />;
+  if (type === "chatbot_rejected_by_recipient")  return <Bot size={16} color="#f97316" />;
+  if (type === "chatbot_cancelled_by_sender")    return <Bot size={16} color="#ef4444" />;
+  if (type === "chatbot_delivery_rescheduled")   return <Bot size={16} color="#38bdf8" />;
   if (type === "min_fill_reached")         return <Truck         size={16} color="#7c3aed" />;
   if (type === "route_assigned")           return <MapPin     size={16} color="#0ea5e9" />;
   if (type === "route_reassigned")         return <MapPin     size={16} color="#f59e0b" />;
@@ -46,8 +47,9 @@ function groupLabel(type: string, count: number): string {
   if (type === "route_assigned")        return `${count} rutas asignadas`;
   if (type === "route_reassigned")      return `${count} rutas reasignadas`;
   if (type === "trip_driver_assigned")          return `${count} choferes asignados a viajes`;
-  if (type === "chatbot_rejected_by_recipient") return `${count} envíos rechazados por el destinatario`;
-  if (type === "chatbot_cancelled_by_sender")   return `${count} envíos cancelados por el remitente`;
+  if (type === "chatbot_rejected_by_recipient")  return `${count} envíos rechazados por el destinatario`;
+  if (type === "chatbot_cancelled_by_sender")    return `${count} envíos cancelados por el remitente`;
+  if (type === "chatbot_delivery_rescheduled")   return `${count} entregas reprogramadas por el destinatario`;
   return `${count} notificaciones`;
 }
 
@@ -64,8 +66,9 @@ function groupAccent(type: string): string {
   if (type === "route_assigned")        return "#0ea5e9";
   if (type === "route_reassigned")      return "#f59e0b";
   if (type === "trip_driver_assigned")          return "#10b981";
-  if (type === "chatbot_rejected_by_recipient") return "#f97316";
-  if (type === "chatbot_cancelled_by_sender")   return "#ef4444";
+  if (type === "chatbot_rejected_by_recipient")  return "#f97316";
+  if (type === "chatbot_cancelled_by_sender")    return "#ef4444";
+  if (type === "chatbot_delivery_rescheduled")   return "#38bdf8";
   return "#94a3b8";
 }
 
@@ -110,8 +113,9 @@ function GroupIcon({ type }: { type: string }) {
   if (type === "route_assigned")        return <MapPin size={16} color={color} />;
   if (type === "route_reassigned")      return <MapPin size={16} color={color} />;
   if (type === "trip_driver_assigned")          return <UserCheck size={16} color={color} />;
-  if (type === "chatbot_rejected_by_recipient") return <Bot size={16} color={color} />;
-  if (type === "chatbot_cancelled_by_sender")   return <Bot size={16} color={color} />;
+  if (type === "chatbot_rejected_by_recipient")  return <Bot size={16} color={color} />;
+  if (type === "chatbot_cancelled_by_sender")    return <Bot size={16} color={color} />;
+  if (type === "chatbot_delivery_rescheduled")   return <Bot size={16} color={color} />;
   return <Bell size={16} color="#94a3b8" />;
 }
 
@@ -324,11 +328,13 @@ export function NotificationBell() {
   };
 
   const renderSingle = (n: Notification) => {
-    const isSLARisk         = n.type === "sla_risk";
-    const isSLAExpired      = n.type === "sla_expired";
-    const isFatigue         = n.type === "fatigue_alert";
-    const isReturnCompleted = n.type === "return_completed";
-    const isReturnArrival   = n.type === "return_arrival";
+    const isSLARisk           = n.type === "sla_risk";
+    const isSLAExpired        = n.type === "sla_expired";
+    const isFatigue           = n.type === "fatigue_alert";
+    const isReturnCompleted   = n.type === "return_completed";
+    const isReturnArrival     = n.type === "return_arrival";
+    const isRescheduled       = n.type === "chatbot_delivery_rescheduled";
+    const rescheduledDate     = isRescheduled ? (n.body.match(/para el (\d{2}\/\d{2}\/\d{4})/)?.[1] ?? null) : null;
     const eta               = isSLARisk ? parseSLAEta(n.body) : null;
     const displayBody       = isSLARisk ? bodyWithoutEta(n.body) : n.body;
     const accent            = groupAccent(n.type);
@@ -380,6 +386,12 @@ export function NotificationBell() {
           {(isReturnCompleted || isReturnArrival) && (
             <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
               Acción requerida: coordinar entrega con remitente
+            </div>
+          )}
+          {/* Chip de nueva fecha para reprogramaciones del chatbot */}
+          {isRescheduled && rescheduledDate && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 700, color: "#38bdf8", background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.3)", borderRadius: 5, padding: "2px 7px" }}>
+              📅 Nueva fecha: {rescheduledDate}
             </div>
           )}
           {/* Botón exclusivo para las alertas de fatiga */}
