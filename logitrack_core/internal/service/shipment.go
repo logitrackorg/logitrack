@@ -1391,16 +1391,25 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		return updated, nil
 	}
 
-	// Create counter-shipment
+	s.createCounterShipment(shipment, username, now)
+
+	body := fmt.Sprintf("[Cancelación] %s — Contra-envío generado", reason)
+	_, _ = s.commentSvc.AddComment(trackingID, username, body)
+	return updated, nil
+}
+
+// createCounterShipment generates and persists a return shipment after a cancellation.
+// It is a best-effort operation: errors creating the counter are ignored so the
+// original cancellation is never rolled back.
+func (s *ShipmentService) createCounterShipment(shipment model.Shipment, username string, now time.Time) {
+	trackingID := shipment.TrackingID
+
 	counterID := generateTrackingID()
 	counterLocation := shipment.CurrentLocation
 	if counterLocation == "" {
 		counterLocation = shipment.ReceivingBranchID
 	}
 
-	// Counter-shipment starts at:
-	//   - at_origin_hub (with auto-transition to ready_for_return) if already at origin
-	//   - at_hub otherwise
 	counterStatus := model.StatusAtHub
 	originID := shipment.OriginBranchID
 	if originID == "" {
@@ -1413,8 +1422,8 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 	parentID := trackingID
 	counter := model.Shipment{
 		TrackingID:          counterID,
-		Sender:              model.Customer{}, // no sender for counter-shipments
-		Recipient:           shipment.Sender,  // original sender becomes recipient
+		Sender:              model.Customer{},
+		Recipient:           shipment.Sender,
 		WeightKg:            shipment.WeightKg,
 		PackageType:         shipment.PackageType,
 		IsFragile:           shipment.IsFragile,
@@ -1437,48 +1446,89 @@ func (s *ShipmentService) CancelShipment(trackingID, username, reason string) (m
 		setPriority(&counter, pred)
 	}
 
-	_, err = s.repo.Create(repository.CreateShipmentCmd{
+	_, err := s.repo.Create(repository.CreateShipmentCmd{
 		Shipment:  counter,
 		ChangedBy: username,
 		Notes:     fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID),
 	})
 	if err != nil {
-		// Log but don't fail the cancellation
-		_ = err
-	} else {
-		// Notificar a la sucursal de origen apenas se cancela — sin esperar ready_for_return.
-		if s.notifSvc != nil {
-			if counterStatus == model.StatusAtOriginHub {
-				// Cancelado EN la sucursal de origen: el paquete ya está ahí, acción inmediata.
-				go s.notifSvc.NotifyReturnCompleted(counter, originID,
-					fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
-			} else {
-				// Cancelado en otra sucursal: el contra-envío viene en camino a origen.
-				go s.notifSvc.NotifyReturnStarted(counter, originID,
-					fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
-			}
-		}
-
-		// If counter-shipment is at origin, auto-transition to ready_for_return (sin notificación extra).
-		if counterStatus == model.StatusAtOriginHub {
-			_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
-				TrackingID: counterID,
-				FromStatus: model.StatusAtOriginHub,
-				ToStatus:   model.StatusReadyForReturn,
-				Location:   counterLocation,
-				ChangedBy:  username,
-				Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
-				Timestamp:  now,
-			})
-		}
-
-		_, _ = s.commentSvc.AddComment(counterID, username,
-			fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
+		return
 	}
 
-	body := fmt.Sprintf("[Cancelación] %s — Contra-envío generado: %s", reason, counterID)
-	_, _ = s.commentSvc.AddComment(trackingID, username, body)
-	return updated, nil
+	if s.notifSvc != nil {
+		if counterStatus == model.StatusAtOriginHub {
+			go s.notifSvc.NotifyReturnCompleted(counter, originID,
+				fmt.Sprintf("El envío %s fue cancelado y ya se encuentra en tu sucursal.", trackingID))
+		} else {
+			go s.notifSvc.NotifyReturnStarted(counter, originID,
+				fmt.Sprintf("Envío cancelado — contra-envío %s en camino a tu sucursal", counterID))
+		}
+	}
+
+	if counterStatus == model.StatusAtOriginHub {
+		_, _ = s.repo.UpdateStatus(repository.StatusUpdateCmd{
+			TrackingID: counterID,
+			FromStatus: model.StatusAtOriginHub,
+			ToStatus:   model.StatusReadyForReturn,
+			Location:   counterLocation,
+			ChangedBy:  username,
+			Notes:      "Envío de retorno en sucursal de origen — listo para devolución",
+			Timestamp:  now,
+		})
+	}
+
+	_, _ = s.commentSvc.AddComment(counterID, username,
+		fmt.Sprintf("[Contra-envío] Generado por cancelación de %s", trackingID))
+}
+
+// CancelByRecipient cancels a shipment on behalf of the recipient (chatbot flow) and
+// creates a counter-shipment to return the package to the sender.
+func (s *ShipmentService) CancelByRecipient(trackingID, recipientDNI, reason, changedBy string) (model.Shipment, error) {
+	if reason == "" {
+		reason = "Cancelado por el destinatario vía chatbot"
+	}
+	now := clock.Now().UTC()
+	shipment, err := s.repo.CancelByRecipient(repository.CancelByRecipientCmd{
+		TrackingID:   trackingID,
+		RecipientDNI: recipientDNI,
+		Reason:       reason,
+		ChangedBy:    changedBy,
+		Timestamp:    now,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	s.createCounterShipment(shipment, changedBy, now)
+
+	body := fmt.Sprintf("[Cancelación] %s — Contra-envío generado", reason)
+	_, _ = s.commentSvc.AddComment(trackingID, changedBy, body)
+	return shipment, nil
+}
+
+// CancelBySender cancels a shipment on behalf of the sender (chatbot flow) and
+// creates a counter-shipment to return the package.
+func (s *ShipmentService) CancelBySender(trackingID, senderDNI, reason, changedBy string) (model.Shipment, error) {
+	if reason == "" {
+		reason = "Cancelado por el remitente vía chatbot"
+	}
+	now := clock.Now().UTC()
+	shipment, err := s.repo.CancelBySender(repository.CancelBySenderCmd{
+		TrackingID: trackingID,
+		SenderDNI:  senderDNI,
+		Reason:     reason,
+		ChangedBy:  changedBy,
+		Timestamp:  now,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	s.createCounterShipment(shipment, changedBy, now)
+
+	body := fmt.Sprintf("[Cancelación] %s — Contra-envío generado", reason)
+	_, _ = s.commentSvc.AddComment(trackingID, changedBy, body)
+	return shipment, nil
 }
 
 func (s *ShipmentService) GetByTrackingID(trackingID string) (model.Shipment, error) {

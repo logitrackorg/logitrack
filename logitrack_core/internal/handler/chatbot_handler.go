@@ -2,8 +2,8 @@ package handler
 
 import (
 	"net/http"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
@@ -39,13 +39,15 @@ type ChatbotHandler struct {
 	shipmentRepo repository.ShipmentRepository
 	branchRepo   repository.BranchRepository
 	notifSvc     *service.NotificationService
+	shipmentSvc  *service.ShipmentService
 }
 
-func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository, notifSvc *service.NotificationService) *ChatbotHandler {
+func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository, notifSvc *service.NotificationService, shipmentSvc *service.ShipmentService) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
 		branchRepo:   branchRepo,
 		notifSvc:     notifSvc,
+		shipmentSvc:  shipmentSvc,
 	}
 }
 
@@ -363,24 +365,14 @@ type CancelResponse struct {
 // @Failure      403   {object}  map[string]string
 // @Router       /public/chatbot/cancel [post]
 func (h *ChatbotHandler) CancelShipment(c *gin.Context) {
-	var req ChatbotCancelRequest  
+	var req ChatbotCancelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
 		return
 	}
 
-	if req.Reason == "" {
-		req.Reason = "Cancelado por el destinatario vía chatbot"
-	}
-
-	shipment, err := h.shipmentRepo.CancelByRecipient(repository.CancelByRecipientCmd{
-		TrackingID:   req.TrackingID,
-		RecipientDNI: req.RecipientDNI,
-		Reason:       req.Reason,
-		ChangedBy:    "chatbot-recipient:" + req.RecipientDNI,
-		Timestamp:    time.Now(),
-	})
-
+	changedBy := "chatbot-recipient:" + req.RecipientDNI
+	shipment, err := h.shipmentSvc.CancelByRecipient(req.TrackingID, req.RecipientDNI, req.Reason, changedBy)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -453,17 +445,8 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 		return
 	}
 
-	if req.Reason == "" {
-		req.Reason = "Cancelado por el remitente vía chatbot"
-	}
-
-	shipment, err := h.shipmentRepo.CancelBySender(repository.CancelBySenderCmd{
-		TrackingID: req.TrackingID,
-		SenderDNI:  req.SenderDNI,
-		Reason:     req.Reason,
-		ChangedBy:  "chatbot-sender:" + req.SenderDNI,
-		Timestamp:  time.Now(),
-	})
+	changedBy := "chatbot-sender:" + req.SenderDNI
+	shipment, err := h.shipmentSvc.CancelBySender(req.TrackingID, req.SenderDNI, req.Reason, changedBy)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
