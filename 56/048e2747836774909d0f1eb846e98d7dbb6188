@@ -1,0 +1,11 @@
+logitrack_web/src/pages/UserProfile.tsx
+  ai_agent 3,9,28,33,53,73-112,115,117,119,121,126-189,193,206,210,212,214-272,296
+logitrack_web/src/App.tsx
+  ai_agent 1,68,70-74,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "56048e2747836774909d0f1eb846e98d7dbb6188",
+  "prompts": {}
+}
