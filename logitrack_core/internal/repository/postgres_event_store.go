@@ -317,6 +317,9 @@ func unmarshalPayload(eventType string, data []byte) (interface{}, error) {
 	case model.EventCancelledByRecipient:
 		var p model.CancelledByRecipientPayload
 		return p, json.Unmarshal(data, &p)
+	case model.EventCancelledBySender:
+		var p model.CancelledBySenderPayload
+		return p, json.Unmarshal(data, &p)
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", eventType)
 	}

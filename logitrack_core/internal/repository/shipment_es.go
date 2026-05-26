@@ -483,6 +483,19 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
+			ToStatus:   model.StatusRechazado,
+			ChangedBy:  de.ChangedBy,
+			Notes:      payload.Reason,
+			Timestamp:  de.Timestamp,
+		}, true
+
+	case model.EventCancelledBySender:
+		payload := de.Payload.(model.CancelledBySenderPayload)
+		from := payload.FromStatus
+		return model.ShipmentEvent{
+			ID:         de.ID,
+			TrackingID: de.TrackingID,
+			FromStatus: &from,
 			ToStatus:   model.StatusCancelled,
 			ChangedBy:  de.ChangedBy,
 			Notes:      payload.Reason,
@@ -702,9 +715,9 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 		return model.Shipment{}, err
 	}
 
-	// Validar que se puede cancelar
-	canCancel, reason := shipment.CanCancel()
-	if !canCancel {
+	// Validar que se puede rechazar
+	canReject, reason := shipment.CanReject()
+	if !canReject {
 		return model.Shipment{}, errors.New(reason)
 	}
 

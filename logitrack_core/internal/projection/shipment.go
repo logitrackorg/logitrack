@@ -192,7 +192,11 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if !ok {
 			return
 		}
-		shipment.Status = model.StatusCancelled
+		shipment.Status = model.StatusRechazado
+		shipment.IsReturning = true
+		if shipment.OriginBranchID != "" {
+			shipment.FinalBranchID = shipment.OriginBranchID
+		}
 		shipment.UpdatedAt = event.Timestamp
 		if shipment.ChatbotMetadata == nil {
 			shipment.ChatbotMetadata = &model.ChatbotMetadata{MaxReschedules: 2}

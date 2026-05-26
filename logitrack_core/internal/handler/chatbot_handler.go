@@ -328,6 +328,8 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 		return
 	}
 
+	go h.notifSvc.NotifyChatbotDeliveryRescheduled(shipment)
+
 	c.JSON(http.StatusOK, RescheduleResponse{
 		Success:         true,
 		Message:         "Tu entrega ha sido reprogramada exitosamente",
@@ -487,7 +489,7 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 		actions = append(actions, "reschedule")
 	}
 
-	if canCancel, _ := shipment.CanCancel(); canCancel {
+	if canReject, _ := shipment.CanReject(); canReject {
 		actions = append(actions, "cancel")
 	}
 
