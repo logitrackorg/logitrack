@@ -157,13 +157,14 @@ export function ShipmentList() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
+  const slaCutoff = new Date().getTime() + 24 * 60 * 60 * 1000;
   const filtered = shipments.filter((s) => {
     // Expired drafts are never shown outside the explicit "expired" filter,
     // even if the server returned them (e.g. during a filter transition).
     if (statusFilter !== "expired" && s.status === "expired") return false;
     if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
     if (statusFilter === "sla_risk") {
-      const cutoff = Date.now() + 24 * 60 * 60 * 1000;
+      const cutoff = slaCutoff;
       if (s.priority !== "alta" || !s.estimated_delivery_at || new Date(s.estimated_delivery_at).getTime() >= cutoff) return false;
       if (["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status)) return false;
     } else if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;
