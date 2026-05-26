@@ -1,0 +1,19 @@
+logitrack_web/src/api/chatbot.ts
+  s_937c33e2a6fb9b::t_e640e85aa843ce 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dddf9d457bf1c54f9a2c0e18636675fd8c6ef51c",
+  "prompts": {},
+  "sessions": {
+    "s_937c33e2a6fb9b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4735c10-f9b2-4059-a323-407e81aa1d0a",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
