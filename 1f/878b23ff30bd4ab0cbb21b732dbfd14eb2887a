@@ -1,0 +1,78 @@
+logitrack_core/internal/model/stats.go
+  s_c389c8e7fabdc2::t_58f73497bda3ac 120-137
+logitrack_core/internal/model/notification.go
+  s_c389c8e7fabdc2::t_3c31de805f6b70 25
+logitrack_core/internal/service/stats_extended.go
+  s_c389c8e7fabdc2::t_9e090064c6580c 39-46
+logitrack_web/src/pages/reports/MetodoEntregaTab.tsx
+  s_c389c8e7fabdc2::t_205f62c6cd26e0 1-243
+logitrack_web/src/api/autoReports.ts
+  s_c389c8e7fabdc2::t_f228b608e3cccb 1-103
+logitrack_web/src/api/reports.ts
+  s_c389c8e7fabdc2::t_d7c2787cc3f532 97-116
+  s_c389c8e7fabdc2::t_3228e9b7ade88c 162-165
+logitrack_core/internal/repository/auto_report.go
+  s_c389c8e7fabdc2::t_34c75c8ffc6c9b 1-273
+logitrack_core/cmd/server/main.go
+  s_c389c8e7fabdc2::t_5b27690e883cda 484-494
+  s_c389c8e7fabdc2::t_200d8003209688 477-478
+  s_c389c8e7fabdc2::t_c8fedf417545bd 265-272
+logitrack_core/internal/model/auto_report.go
+  s_c389c8e7fabdc2::t_f4ec484c2a6339 1-92
+logitrack_core/internal/handler/stats_extended.go
+  s_c389c8e7fabdc2::t_b1e9f14b8108d4 188-255
+logitrack_web/src/pages/AutoReports.tsx
+  s_c389c8e7fabdc2::t_ae81ca2741750d 129-130
+  s_c389c8e7fabdc2::t_e976a590dd27ca 189
+  s_c389c8e7fabdc2::t_678dddd8b8fed3 145-147
+  s_c389c8e7fabdc2::t_7e45a194ffbf98 4
+  s_c389c8e7fabdc2::t_56fbfe890c3989 632
+  s_c389c8e7fabdc2::t_079b3660b9428c 57
+  s_c389c8e7fabdc2::t_e7982e692300ef 2-3,5-56,58-128,131-144,148-188,190-383,385-386,388-631
+  s_c389c8e7fabdc2::t_072ef9eec21293 1
+  s_c389c8e7fabdc2::t_cda0f1df29ea71 384,387
+  s_c389c8e7fabdc2::t_642357ff970f2c 633-1367
+logitrack_web/src/App.tsx
+  s_c389c8e7fabdc2::t_288b99bad7b237 36
+  s_c389c8e7fabdc2::t_2ddb67cd795f86 355-360
+logitrack_web/src/pages/reports/TipoEnvioTab.tsx
+  s_c389c8e7fabdc2::t_dda925c8bb8d86 1-243
+logitrack_web/src/components/Sidebar.tsx
+  s_c389c8e7fabdc2::t_5a40cb0f00ae95 19
+  s_c389c8e7fabdc2::t_58a9e25eb5d84a 58
+logitrack_core/internal/service/auto_report_scheduler.go
+  s_c389c8e7fabdc2::t_9a274eeb2eb4c3 1-103
+logitrack_core/internal/handler/auto_report.go
+  s_c389c8e7fabdc2::t_3be4233dd1c0a8 184-185,189-517,519-522,524,527-530,532,535-560,562-591
+  s_c389c8e7fabdc2::t_bdff333187dd7f 1-9,11-183,186-188,518,523,525-526,531,533-534,561,592-618
+  s_c389c8e7fabdc2::t_8bf64802befabd 10
+logitrack_core/internal/db/migrate.go
+  s_c389c8e7fabdc2::t_f8e4f4d2fee77a 490-524
+logitrack_core/internal/service/auto_report.go
+  s_c389c8e7fabdc2::t_782c64890a12e1 1-343
+logitrack_core/internal/service/notification.go
+  s_c389c8e7fabdc2::t_e28d4c25a66bdb 599-619
+logitrack_web/src/pages/DashboardHost.tsx
+  s_c389c8e7fabdc2::t_29f3e26bbd6d4c 13-14
+  s_c389c8e7fabdc2::t_617dec8971aa03 29-30,42-43
+  s_c389c8e7fabdc2::t_c3422a28b79c11 158-159
+logitrack_core/internal/repository/stats_extended.go
+  s_c389c8e7fabdc2::t_105ecdf5481622 17-18
+  s_c389c8e7fabdc2::t_bbc3ab76dabfce 436-549
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1f878b23ff30bd4ab0cbb21b732dbfd14eb2887a",
+  "prompts": {},
+  "sessions": {
+    "s_c389c8e7fabdc2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "350f703a-79bd-48a6-bc4e-614b4c57c2cd",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
