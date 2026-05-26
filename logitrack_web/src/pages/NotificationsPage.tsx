@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck, MapPin, UserCheck } from "lucide-react";
+import { Bell, Package, CheckCheck, Building2, RotateCcw, PackageCheck, AlertTriangle, AlertOctagon, Truck, MapPin, UserCheck, Bot } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
 
 const PAGE_SIZE = 20;
@@ -36,22 +36,26 @@ function typeAccent(type: string): string {
   if (type === "min_fill_reached")    return "#7c3aed";
   if (type === "route_assigned")        return "#0ea5e9";
   if (type === "route_reassigned")      return "#f59e0b";
-  if (type === "trip_driver_assigned")  return "#10b981";
+  if (type === "trip_driver_assigned")          return "#10b981";
+  if (type === "chatbot_rejected_by_recipient") return "#f97316";
+  if (type === "chatbot_cancelled_by_sender")   return "#ef4444";
   return "#3b82f6";
 }
 
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")   return <Package      size={18} color="#60a5fa" />;
-  if (type === "destination_arrival") return <Building2    size={18} color="#34d399" />;
-  if (type === "return_arrival")      return <RotateCcw     size={18} color="#fb923c" />;
-  if (type === "return_started")      return <RotateCcw     size={18} color="#f97316" />;
-  if (type === "return_completed")    return <PackageCheck  size={18} color="#f59e0b" />;
-  if (type === "sla_risk")            return <AlertTriangle size={18} color="#ef4444" />;
-  if (type === "sla_expired")         return <AlertOctagon size={18} color="#b91c1c" />;
-  if (type === "min_fill_reached")    return <Truck        size={18} color="#7c3aed" />;
-  if (type === "route_assigned")        return <MapPin size={18} color="#0ea5e9" />;
-  if (type === "route_reassigned")      return <MapPin size={18} color="#f59e0b" />;
-  if (type === "trip_driver_assigned")  return <UserCheck size={18} color="#10b981" />;
+  if (type === "shipment_received")             return <Package      size={18} color="#60a5fa" />;
+  if (type === "destination_arrival")           return <Building2    size={18} color="#34d399" />;
+  if (type === "return_arrival")                return <RotateCcw    size={18} color="#fb923c" />;
+  if (type === "return_started")                return <RotateCcw    size={18} color="#f97316" />;
+  if (type === "return_completed")              return <PackageCheck size={18} color="#f59e0b" />;
+  if (type === "sla_risk")                      return <AlertTriangle size={18} color="#ef4444" />;
+  if (type === "sla_expired")                   return <AlertOctagon size={18} color="#b91c1c" />;
+  if (type === "min_fill_reached")              return <Truck        size={18} color="#7c3aed" />;
+  if (type === "route_assigned")                return <MapPin       size={18} color="#0ea5e9" />;
+  if (type === "route_reassigned")              return <MapPin       size={18} color="#f59e0b" />;
+  if (type === "trip_driver_assigned")          return <UserCheck    size={18} color="#10b981" />;
+  if (type === "chatbot_rejected_by_recipient") return <Bot          size={18} color="#f97316" />;
+  if (type === "chatbot_cancelled_by_sender")   return <Bot          size={18} color="#ef4444" />;
   return <Bell size={18} color="#94a3b8" />;
 }
 

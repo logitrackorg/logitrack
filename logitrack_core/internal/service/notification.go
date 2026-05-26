@@ -197,6 +197,148 @@ func (s *NotificationService) NotifyChatbotPickupRequested(shipment model.Shipme
 	}
 }
 
+// NotifyChatbotRejectedByRecipient notifica a operadores y supervisores de la sucursal donde
+// se encuentra el envío cuando el destinatario lo rechaza vía chatbot (LOGITRACK-457).
+func (s *NotificationService) NotifyChatbotRejectedByRecipient(shipment model.Shipment) {
+	branchID := shipment.CurrentLocation
+	if branchID == "" {
+		branchID = shipment.FinalBranchID
+	}
+	if branchID == "" {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyChatbotRejectedByRecipient GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "Envío rechazado por el destinatario"
+	body := fmt.Sprintf("%s · El destinatario ha rechazado el envío vía chatbot", shipment.TrackingID)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationChatbotRejectedByRecipient,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyChatbotRejectedByRecipient Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifyChatbotCancelledBySender notifica a operadores y supervisores de la sucursal donde
+// se encuentra el envío cuando el remitente lo cancela vía chatbot (LOGITRACK-457).
+func (s *NotificationService) NotifyChatbotCancelledBySender(shipment model.Shipment) {
+	branchID := shipment.CurrentLocation
+	if branchID == "" {
+		branchID = shipment.FinalBranchID
+	}
+	if branchID == "" {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyChatbotCancelledBySender GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	title := "Envío cancelado por el remitente"
+	body := fmt.Sprintf("%s · El remitente ha cancelado el envío vía chatbot", shipment.TrackingID)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationChatbotCancelledBySender,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyChatbotCancelledBySender Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
+// NotifyChatbotDeliveryRescheduled notifica a operadores y supervisores de la sucursal de
+// destino cuando el destinatario reprograma la fecha de entrega vía chatbot.
+func (s *NotificationService) NotifyChatbotDeliveryRescheduled(shipment model.Shipment) {
+	branchID := shipment.FinalBranchID
+	if branchID == "" {
+		branchID = shipment.CurrentLocation
+	}
+	if branchID == "" {
+		return
+	}
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleOperator,
+		model.RoleSupervisor,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyChatbotDeliveryRescheduled GetUsers error: %v", err)
+		return
+	}
+	if len(users) == 0 {
+		return
+	}
+
+	newDate := "—"
+	if shipment.EstimatedDeliveryAt != nil {
+		// Argentina es UTC-3 fijo (sin DST desde 1999)
+		ar := time.FixedZone("ART", -3*60*60)
+		newDate = shipment.EstimatedDeliveryAt.In(ar).Format("02/01/2006")
+	}
+
+	title := "Entrega reprogramada por el destinatario"
+	body := fmt.Sprintf("%s · El destinatario reprogramó la entrega para el %s vía chatbot", shipment.TrackingID, newDate)
+
+	now := clock.Now().UTC()
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationChatbotDeliveryRescheduled,
+			Title:      title,
+			Body:       body,
+			ResourceID: shipment.TrackingID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyChatbotDeliveryRescheduled Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(n.UserID)
+		}
+	}
+}
+
 // NotifySLARisk crea una notificación de SLA en riesgo para los operadores y supervisores
 // de la sucursal del envío. Si no hay ninguno, se notifica a los administradores (CA-02).
 // La deduplicación por ciclo se controla externamente mediante shipment.SLANotifiedAt (CA-04).

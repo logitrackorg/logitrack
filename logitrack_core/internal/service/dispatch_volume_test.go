@@ -275,6 +275,12 @@ func (r *fakeDispatchShipmentRepo) RescheduleDelivery(_ repository.RescheduleDel
 func (r *fakeDispatchShipmentRepo) CancelByRecipient(_ repository.CancelByRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+func (r *fakeDispatchShipmentRepo) AuthenticateSender(_ repository.AuthenticateSenderCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (r *fakeDispatchShipmentRepo) CancelBySender(_ repository.CancelBySenderCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
 func (r *fakeDispatchShipmentRepo) GetByTrackingID(_ string) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }

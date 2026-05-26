@@ -187,9 +187,6 @@ func (s *postgresEventStore) LoadStream(trackingID string) ([]model.DomainEvent,
 		
 		events = append(events, e)
 	}
-	if len(events) == 0 {
-		return nil, fmt.Errorf("stream not found: %s", trackingID)
-	}
 	return events, rows.Err()
 }
 
@@ -319,6 +316,9 @@ func unmarshalPayload(eventType string, data []byte) (interface{}, error) {
 		return p, json.Unmarshal(data, &p)
 	case model.EventCancelledByRecipient:
 		var p model.CancelledByRecipientPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventCancelledBySender:
+		var p model.CancelledBySenderPayload
 		return p, json.Unmarshal(data, &p)
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", eventType)

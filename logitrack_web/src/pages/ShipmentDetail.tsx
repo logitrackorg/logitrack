@@ -325,6 +325,24 @@ export function ShipmentDetail() {
   }, [trackingId, reload]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:cancel-success', handler);
+    return () => window.removeEventListener('chatbot:cancel-success', handler);
+  }, [trackingId, reload]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { trackingId: tid } = (e as CustomEvent).detail ?? {};
+      if (tid && tid === trackingId) reload();
+    };
+    window.addEventListener('chatbot:reschedule-success', handler);
+    return () => window.removeEventListener('chatbot:reschedule-success', handler);
+  }, [trackingId, reload]);
+
+  useEffect(() => {
     if (shipment?.status === "draft" && shipment.receiving_branch_id) {
       branchApi.getCapacity(shipment.receiving_branch_id).then(setBranchCapacity).catch(() => {});
     } else {
@@ -775,7 +793,14 @@ export function ShipmentDetail() {
                 </Card>
                 <Card title="Fechas y ubicación">
                   <InfoRow label="Creado"          value={fmt(shipment.created_at)} />
-                  <InfoRow label="Entrega est."    value={shipment.estimated_delivery_at ? fmt(shipment.estimated_delivery_at) : "—"} />
+                  {(() => {
+                    const rescheduled = (shipment.chatbot_metadata?.reschedule_count ?? 0) > 0;
+                    const originalDate = shipment.chatbot_metadata?.original_delivery_date;
+                    if (rescheduled && originalDate && shipment.estimated_delivery_at) {
+                      return <InfoRowEx label="Entrega est." value={fmt(shipment.estimated_delivery_at)} original={fmt(originalDate)} corrected />;
+                    }
+                    return <InfoRow label="Entrega est." value={shipment.estimated_delivery_at ? fmt(shipment.estimated_delivery_at) : "—"} />;
+                  })()}
                   {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
                     <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />

@@ -31,9 +31,10 @@ const (
 	EventPaymentRequested    = "payment_requested"
 	EventPaymentConfirmed    = "payment_confirmed"
 	EventReturnedToDraft     = "returned_to_draft"
-	EventPickupRequested      = "pickup_requested"       
-	EventDeliveryRescheduled  = "delivery_rescheduled"   
-	EventCancelledByRecipient = "cancelled_by_recipient" 
+	EventPickupRequested      = "pickup_requested"
+	EventDeliveryRescheduled  = "delivery_rescheduled"
+	EventCancelledByRecipient = "cancelled_by_recipient"
+	EventCancelledBySender    = "cancelled_by_sender"
 
 	// Branch zone events
 	EventShipmentZoned  = "shipment_zoned"   // automatic assignment to Entrada on arrival
@@ -173,9 +174,17 @@ type DeliveryRescheduledPayload struct {
 	CurrentLocation  *EventLocation `json:"current_location,omitempty"`
 }
 
-// CancelledByRecipientPayload registra cuando el destinatario cancela el envío vía chatbot
+// CancelledByRecipientPayload registra cuando el destinatario rechaza el envío vía chatbot
 type CancelledByRecipientPayload struct {
 	RecipientDNI string `json:"recipient_dni"`
+	FromStatus   Status `json:"from_status"`
+	Reason       string `json:"reason"`
+	RequestedVia string `json:"requested_via"` // "chatbot"
+}
+
+// CancelledBySenderPayload registra cuando el remitente cancela el envío vía chatbot
+type CancelledBySenderPayload struct {
+	SenderDNI    string `json:"sender_dni"`
 	FromStatus   Status `json:"from_status"`
 	Reason       string `json:"reason"`
 	RequestedVia string `json:"requested_via"` // "chatbot"
