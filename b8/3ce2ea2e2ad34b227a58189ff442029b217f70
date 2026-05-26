@@ -1,0 +1,19 @@
+logitrack_web/src/pages/SystemConfig.tsx
+  s_9e1dc270509c7e::t_d511f602df13ab 436-468
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b83ce2ea2e2ad34b227a58189ff442029b217f70",
+  "prompts": {},
+  "sessions": {
+    "s_9e1dc270509c7e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65a23588-ebec-49bc-8b37-aaa18155caa0",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
