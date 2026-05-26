@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Minus, Plus, Clock, RotateCcw, ShieldCheck, Mail } from "lucide-react";
 import { systemConfigApi, type SystemConfig as SystemConfigType } from "../api/systemConfig";
 import { clockApi, type ClockState } from "../api/clock";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -139,10 +139,11 @@ export function SystemConfig() {
 
   const isDirty =
     draft !== null && config !== null && (
-      draft.max_delivery_attempts !== config.max_delivery_attempts ||
-      draft.draft_retention_days  !== config.draft_retention_days  ||
-      draft.draft_purge_days      !== config.draft_purge_days      ||
-      draft.pickup_deadline_days  !== config.pickup_deadline_days
+      draft.max_delivery_attempts     !== config.max_delivery_attempts     ||
+      draft.draft_retention_days      !== config.draft_retention_days      ||
+      draft.draft_purge_days          !== config.draft_purge_days          ||
+      draft.pickup_deadline_days      !== config.pickup_deadline_days      ||
+      draft.force_email_notifications !== config.force_email_notifications
     );
 
   return (
@@ -417,6 +418,51 @@ export function SystemConfig() {
                 <p className="text-xs text-slate-400">Sin límite — no se muestra fecha en el email.</p>
               )}
             </div>
+          </CardContent>
+        </Card>
+        {/* Notificaciones */}
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-slate-500" />
+              <CardTitle>Canal de notificaciones al cliente</CardTitle>
+            </div>
+            <CardDescription>
+              Cuando está activo, <strong>WhatsApp (Twilio) se saltea completamente</strong> y todas las notificaciones al cliente se envían solo por email. Útil para probar plantillas de email o cuando Twilio presenta problemas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={draft.force_email_notifications}
+                  onChange={(e) =>
+                    setDraft((d) => d ? { ...d, force_email_notifications: e.target.checked } : d)
+                  }
+                />
+                <div
+                  className={`w-11 h-6 rounded-full transition-colors ${
+                    draft.force_email_notifications ? "bg-amber-500" : "bg-slate-200"
+                  }`}
+                />
+                <div
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    draft.force_email_notifications ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </div>
+              <span className="text-sm font-semibold text-slate-700">
+                Forzar notificaciones por email (omitir WhatsApp)
+              </span>
+            </label>
+            {draft.force_email_notifications && (
+              <div className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                WhatsApp deshabilitado — todas las notificaciones se enviarán únicamente por email.
+              </div>
+            )}
           </CardContent>
         </Card>
         </>

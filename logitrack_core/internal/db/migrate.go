@@ -522,6 +522,9 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_auto_report_generated_schedule ON auto_report_generated(schedule_id);
 		CREATE INDEX IF NOT EXISTS idx_auto_report_generated_at       ON auto_report_generated(generated_at DESC);
+
+		-- Notificaciones: forzar canal email (saltear WhatsApp)
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
 	`)
 	return err
 }
