@@ -36,6 +36,14 @@ func (s *StatsExtendedService) VolumeByTimeWindow(dateFrom, dateTo *time.Time, b
 	return s.repo.VolumeByTimeWindow(dateFrom, dateTo, branchID)
 }
 
+func (s *StatsExtendedService) VolumeByShipmentType(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByShipmentTypeResponse, error) {
+	return s.repo.VolumeByShipmentType(dateFrom, dateTo, branchID)
+}
+
+func (s *StatsExtendedService) VolumeByDeliveryMethod(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByDeliveryMethodResponse, error) {
+	return s.repo.VolumeByDeliveryMethod(dateFrom, dateTo, branchID)
+}
+
 func (s *StatsExtendedService) ReturnMetrics(dateFrom, dateTo *time.Time, branchID string) (model.ReturnMetricsResponse, error) {
 	return s.repo.ReturnMetrics(dateFrom, dateTo, branchID)
 }

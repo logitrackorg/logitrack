@@ -336,6 +336,16 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 
 	case model.EventCancelledByRecipient:
 		_, err := p.db.Exec(`
+			UPDATE shipments
+			SET status = $1, updated_at = $2, is_returning = TRUE,
+			    final_branch_id = origin_branch_id
+			WHERE tracking_id = $3`,
+			string(model.StatusRechazado), event.Timestamp, event.TrackingID,
+		)
+		return err
+
+	case model.EventCancelledBySender:
+		_, err := p.db.Exec(`
 			UPDATE shipments SET status = $1, updated_at = $2 WHERE tracking_id = $3`,
 			string(model.StatusCancelled), event.Timestamp, event.TrackingID,
 		)

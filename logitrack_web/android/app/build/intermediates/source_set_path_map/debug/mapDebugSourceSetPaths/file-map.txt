@@ -31,4 +31,4 @@ com.logitrack.driver.app-debug-29 /Users/jirigoin/Desktop/Laboratorio/app/logitr
 com.logitrack.driver.app-debug-30 /Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/app/src/debug/res
 com.logitrack.driver.app-main-31 /Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/app/src/main/res
 com.logitrack.driver.app-debug-32 /Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/capacitor-cordova-android-plugins/build/intermediates/packaged_res/debug/packageDebugResources
-com.logitrack.driver.app-debug-33 /Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/node_modules/.pnpm/@capacitor+android@8.3.3_@capacitor+core@8.3.3/node_modules/@capacitor/android/capacitor/build/intermediates/packaged_res/debug/packageDebugResources
+com.logitrack.driver.app-debug-33 /Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/node_modules/.pnpm/@capacitor+android@8.3.4_@capacitor+core@8.3.4/node_modules/@capacitor/android/capacitor/build/intermediates/packaged_res/debug/packageDebugResources

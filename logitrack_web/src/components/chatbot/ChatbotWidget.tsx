@@ -10,6 +10,7 @@ import type {
 import './chatbot.css';
 
 type ChatState = 'initial' | 'authenticating' | 'authenticated' | 'menu' | 'processing';
+type UserType = 'recipient' | 'sender' | null;
 
 export const ChatbotWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,6 +18,9 @@ export const ChatbotWidget: React.FC = () => {
   const [state, setState] = useState<ChatState>('initial');
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState<string>('');
+  const [senderDni, setSenderDni] = useState<string>('');
+  const [userType, setUserType] = useState<UserType>(null);
+  const [awaitingDni, setAwaitingDni] = useState(false);
   const [trackingId, setTrackingId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(true);
@@ -39,9 +43,6 @@ export const ChatbotWidget: React.FC = () => {
     if (isOpen && messages.length === 0) {
       addBotMessage(
         '¡Hola! 👋 Soy tu asistente virtual de LogiTrack.\n\n' +
-        'Para ayudarte con tu envío, necesito que me proporciones:\n' +
-        '1️⃣ Tu número de seguimiento (ID de envío)\n' +
-        '2️⃣ Tu número de DNI\n\n' +
         'Por favor ingresa tu ID de envío:'
       );
       setState('authenticating');
@@ -121,6 +122,58 @@ export const ChatbotWidget: React.FC = () => {
     }
   };
 
+  const handleSenderAuthenticate = async (trackingId: string, dni: string) => {
+    setLoading(true);
+    try {
+      const response = await chatbotService.authenticateSender(trackingId, dni);
+      setShipment(response.shipment);
+      setSenderDni(dni);
+      setTrackingId(trackingId);
+      setState('authenticated');
+      setSessionActive(true);
+      resetSessionTimer();
+
+      const senderActions = response.available_actions ?? [];
+      const menuOptions = senderActions.map((a: string) => {
+        if (a === 'cancel') return { label: '❌ Cancelar envío', value: 'cancel', action: 'cancel' as const };
+        return null;
+      }).filter(Boolean) as ChatOption[];
+
+      if (menuOptions.length > 0) {
+        addBotMessage(
+          `¡Perfecto, ${response.sender_name}! ✅\n\n` +
+          `Encontré tu envío: ${trackingId}\n` +
+          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+          `¿En qué puedo ayudarte?`,
+          menuOptions
+        );
+      } else {
+        addBotMessage(
+          `¡Hola, ${response.sender_name}! ✅\n\n` +
+          `Encontré tu envío: ${trackingId}\n` +
+          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+          getNoActionsMessage(response.shipment.status),
+          [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }]
+        );
+      }
+    } catch (error) {
+      const apiErr = error as { response?: { data?: { error?: string } } };
+      addBotMessage(
+        '❌ ' + (apiErr.response?.data?.error ||
+          'No pudimos verificar tu identidad. Por favor chequeá los datos e intentá de nuevo.')
+      );
+      setTrackingId('');
+      setUserType(null);
+      setState('initial');
+      setTimeout(() => {
+        addBotMessage('Por favor ingresá nuevamente tu ID de envío:');
+        setState('authenticating');
+      }, 2000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const buildMenuOptions = (availableActions: string[]): ChatOption[] => {
     const optionsMap: Record<string, ChatOption> = {
       request_pickup: {
@@ -134,7 +187,7 @@ export const ChatbotWidget: React.FC = () => {
         action: 'reschedule',
       },
       cancel: {
-        label: '❌ Cancelar envío',
+        label: userType === 'sender' ? '❌ Cancelar envío' : '❌ Rechazar envío',
         value: 'cancel',
         action: 'cancel',
       },
@@ -149,12 +202,23 @@ export const ChatbotWidget: React.FC = () => {
 
     if (state === 'authenticating') {
       if (!trackingId) {
-        // Primer paso: guardar tracking ID
+        // Paso 1: guardar tracking ID y preguntar rol
         setTrackingId(input);
-        addBotMessage('Perfecto. Ahora ingresa tu número de DNI:');
-      } else {
-        // Segundo paso: autenticar con DNI
-        await handleAuthenticate(trackingId, input);
+        addBotMessage(
+          '¿Cómo ingresás al sistema?',
+          [
+            { label: '📦 Soy el destinatario', value: 'recipient', action: 'as_recipient' },
+            { label: '🏢 Soy el remitente',    value: 'sender',    action: 'as_sender'    },
+          ]
+        );
+      } else if (awaitingDni) {
+        // Paso 3: autenticar con el DNI según el rol seleccionado
+        setAwaitingDni(false);
+        if (userType === 'sender') {
+          await handleSenderAuthenticate(trackingId, input);
+        } else {
+          await handleAuthenticate(trackingId, input);
+        }
       }
     }
   };
@@ -162,15 +226,16 @@ export const ChatbotWidget: React.FC = () => {
   // Función para limpiar la sesión
   const clearSession = () => {
     setSessionActive(false);
-    setState('initial');
     setShipment(null);
     setRecipientDni('');
+    setSenderDni('');
+    setUserType(null);
+    setAwaitingDni(false);
     setTrackingId('');
-
 
     addBotMessage(
       '⏱️ Tu sesión ha expirado por seguridad.\n\n' +
-      'Por favor, vuelve a autenticarte para continuar.'
+      'Por favor, ingresá nuevamente tu ID de envío para continuar.'
     );
 
     // Limpiar el timer
@@ -178,6 +243,9 @@ export const ChatbotWidget: React.FC = () => {
       clearTimeout(sessionTimeoutRef.current);
       sessionTimeoutRef.current = null;
     }
+
+    // Volver a authenticating para que el usuario pueda reingresar sus datos
+    setState('authenticating');
   };
 
   // Función para reiniciar el timer de inactividad
@@ -248,6 +316,18 @@ export const ChatbotWidget: React.FC = () => {
 
     try {
       switch (action) {
+        case 'as_recipient':
+          setUserType('recipient');
+          setAwaitingDni(true);
+          addBotMessage('Ingresá tu número de DNI:');
+          setState('authenticating');
+          break;
+        case 'as_sender':
+          setUserType('sender');
+          setAwaitingDni(true);
+          addBotMessage('Ingresá tu número de DNI:');
+          setState('authenticating');
+          break;
         case 'pickup':
           await handlePickupRequest();
           break;
@@ -344,6 +424,8 @@ export const ChatbotWidget: React.FC = () => {
       `📅 Nueva fecha de entrega: ${formatDate(response.new_delivery_date)}`
     );
 
+    window.dispatchEvent(new CustomEvent('chatbot:reschedule-success', { detail: { trackingId } }));
+
     setState('authenticated');
     addBotMessage('¿Necesitas algo más?', [
       { label: '🏠 Volver al menú', value: 'menu', action: 'restart' }
@@ -351,20 +433,28 @@ export const ChatbotWidget: React.FC = () => {
   };
 
   const handleCancelRequest = async () => {
+    const verb = userType === 'sender' ? 'cancelar' : 'rechazar';
     addBotMessage(
-      '⚠️ ¿Estás seguro de que deseas cancelar tu envío?\n\n' +
+      `⚠️ ¿Estás seguro de que deseás ${verb} el envío?\n\n` +
       'Esta acción no se puede deshacer.',
       [
-        { label: '✅ Sí, cancelar', value: 'yes', action: 'confirm_cancel' },
-        { label: '❌ No, volver', value: 'no', action: 'restart' },
+        { label: `✅ Sí, ${verb}`, value: 'yes', action: 'confirm_cancel' },
+        { label: '❌ No, volver',  value: 'no',  action: 'restart' },
       ]
     );
   };
 
   const handleCancelConfirmation = async () => {
-    const response = await chatbotService.cancelShipment(trackingId, recipientDni);
+    let response;
+    if (userType === 'sender') {
+      response = await chatbotService.cancelBySender(trackingId, senderDni);
+    } else {
+      response = await chatbotService.cancelShipment(trackingId, recipientDni);
+    }
 
     addBotMessage(`✅ ${response.message}`);
+
+    window.dispatchEvent(new CustomEvent('chatbot:cancel-success', { detail: { trackingId } }));
 
     setState('authenticated');
     addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
@@ -378,6 +468,23 @@ export const ChatbotWidget: React.FC = () => {
       sessionTimeoutRef.current = null;
     }
     if (shipment) {
+      // Remitente: solo mostrar opciones del remitente
+      if (userType === 'sender') {
+        const canCancel = !isTerminalStatus(shipment.status);
+        if (canCancel) {
+          setState('authenticated');
+          addBotMessage('¿En qué puedo ayudarte?', [
+            { label: '❌ Cancelar envío', value: 'cancel', action: 'cancel' },
+          ]);
+        } else {
+          setState('authenticated');
+          addBotMessage(getNoActionsMessage(shipment.status), [
+            { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' },
+          ]);
+        }
+        return;
+      }
+      // Destinatario: mostrar menú completo
       const menuOptions = buildMenuOptions(getAvailableActions());
       if (menuOptions.length > 0) {
         setState('authenticated');
@@ -397,6 +504,9 @@ export const ChatbotWidget: React.FC = () => {
     // Reset completo: volver al principio para consultar un nuevo envío
     setShipment(null);
     setRecipientDni('');
+    setSenderDni('');
+    setUserType(null);
+    setAwaitingDni(false);
     setTrackingId('');
     setState('authenticating');
     setMessages([]);
@@ -436,7 +546,8 @@ export const ChatbotWidget: React.FC = () => {
   };
 
   const isTerminalStatus = (status: string): boolean => {
-    return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed'].includes(status);
+    return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed',
+            'rechazado', 'no_entregado', 'expired'].includes(status);
   };
 
   const getNoActionsMessage = (status: string): string => {

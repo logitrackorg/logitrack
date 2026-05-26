@@ -117,6 +117,26 @@ type VolumeByTimeWindowResponse struct {
 	Buckets []TimeWindowBucket `json:"buckets"`
 }
 
+type ShipmentTypeBucket struct {
+	ShipmentType string `json:"shipment_type"`
+	Count        int    `json:"count"`
+}
+
+type VolumeByShipmentTypeResponse struct {
+	Total   int                  `json:"total"`
+	Buckets []ShipmentTypeBucket `json:"buckets"`
+}
+
+type DeliveryMethodBucket struct {
+	DeliveryMethod string `json:"delivery_method"`
+	Count          int    `json:"count"`
+}
+
+type VolumeByDeliveryMethodResponse struct {
+	Total   int                    `json:"total"`
+	Buckets []DeliveryMethodBucket `json:"buckets"`
+}
+
 type ReturnBranchMetrics struct {
 	Returned       int `json:"returned"`
 	ReadyForReturn int `json:"ready_for_return"`

@@ -10,6 +10,8 @@ import {
   Undo2,
   TrendingUp,
   Activity,
+  Zap,
+  Truck,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -24,6 +26,8 @@ const ReclamosTab = lazy(() => import("./reports/ReclamosTab"));
 const FacturacionTab = lazy(() => import("./reports/FacturacionTab"));
 const RankingTab = lazy(() => import("./reports/RankingTab"));
 const VolumenTab = lazy(() => import("./reports/VolumenTab"));
+const TipoEnvioTab = lazy(() => import("./reports/TipoEnvioTab"));
+const MetodoEntregaTab = lazy(() => import("./reports/MetodoEntregaTab"));
 const RetornoTab = lazy(() => import("./reports/RetornoTab"));
 const ExitoTab = lazy(() => import("./reports/ExitoTab"));
 const FatigaTab = lazy(() => import("./reports/FatigaTab"));
@@ -35,6 +39,8 @@ const tabs = [
   { id: "facturacion", label: "Facturación", icon: DollarSign },
   { id: "ranking", label: "Ranking", icon: BarChart3 },
   { id: "volumen", label: "Vol. por Ventana", icon: Clock },
+  { id: "tipo-envio", label: "Tipo de Envío", icon: Zap },
+  { id: "metodo-entrega", label: "Método de Entrega", icon: Truck },
   { id: "retorno", label: "Retorno", icon: Undo2 },
   { id: "exito", label: "Tasa de Éxito", icon: TrendingUp },
   { id: "fatiga", label: "Fatiga", icon: Activity },
@@ -149,6 +155,8 @@ export function DashboardHost() {
             {activeTab === "facturacion" && <FacturacionTab {...sharedProps} />}
             {activeTab === "ranking" && <RankingTab {...sharedProps} />}
             {activeTab === "volumen" && <VolumenTab {...sharedProps} />}
+            {activeTab === "tipo-envio" && <TipoEnvioTab {...sharedProps} />}
+            {activeTab === "metodo-entrega" && <MetodoEntregaTab {...sharedProps} />}
             {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}

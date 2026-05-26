@@ -279,7 +279,8 @@ func (s *Shipment) CanGenerateQR() bool {
 // IsTerminalStatus returns true for statuses that accept no further transitions or incidents.
 func IsTerminalStatus(s Status) bool {
 	switch s {
-	case StatusDelivered, StatusReturned, StatusCancelled, StatusLost, StatusDestroyed:
+	case StatusDelivered, StatusReturned, StatusCancelled, StatusLost, StatusDestroyed,
+		StatusRechazado, StatusNoEntregado, StatusExpired:
 		return true
 	}
 	return false
@@ -348,20 +349,20 @@ type ChatbotMetadata struct {
 
 // CanReschedule checks if shipment can be rescheduled via chatbot (US3)
 func (s *Shipment) CanReschedule() (bool, string) {
-	if s.ChatbotMetadata == nil {
-		return true, ""
-	}
-
-	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
-		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
-	}
-
 	if s.Status == StatusOutForDelivery {
 		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
 	}
 
 	if IsTerminalStatus(s.Status) {
 		return false, "Este envío ya no puede ser modificado"
+	}
+
+	if s.ChatbotMetadata == nil {
+		return true, ""
+	}
+
+	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
+		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
 	}
 
 	return true, ""
@@ -393,6 +394,35 @@ func (s *Shipment) CanCancel() (bool, string) {
 	}
 
 	return false, "Este envío no puede ser cancelado en su estado actual"
+}
+
+// CanReject checks if a shipment can be rejected by the recipient via chatbot.
+// Same logic as CanCancel but with recipient-appropriate messaging.
+func (s *Shipment) CanReject() (bool, string) {
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino a tu domicilio y no podemos detener al repartidor. Si no lo deseas, por favor recházalo cuando llegue"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser rechazado"
+	}
+
+	validStatuses := []Status{
+		StatusAtHub,
+		StatusReadyForPickup,
+		StatusRedeliveryScheduled,
+		StatusInTransit,
+		StatusAtOriginHub,
+		StatusLoaded,
+	}
+
+	for _, valid := range validStatuses {
+		if s.Status == valid {
+			return true, ""
+		}
+	}
+
+	return false, "Este envío no puede ser rechazado en su estado actual"
 }
 
 // CanRequestPickup checks if shipment can be changed to pickup mode (US2)

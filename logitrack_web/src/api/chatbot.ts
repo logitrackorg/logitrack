@@ -58,7 +58,7 @@ export const chatbotService = {
     return response.data;
   },
 
-  // US4: Cancelar envío
+  // US4: Rechazar envío (destinatario)
   cancelShipment: async (
     trackingId: string,
     recipientDni: string,
@@ -67,7 +67,30 @@ export const chatbotService = {
     const response = await chatbotAPI.post<CancelResponse>('/cancel', {
       tracking_id: trackingId,
       recipient_dni: recipientDni,
-      reason: reason || 'Cancelado por el destinatario',
+      reason: reason || 'Rechazado por el destinatario',
+    });
+    return response.data;
+  },
+
+  // LOGITRACK-457: Autenticación del remitente
+  authenticateSender: async (trackingId: string, senderDni: string) => {
+    const response = await chatbotAPI.post('/sender/auth', {
+      tracking_id: trackingId,
+      sender_dni: senderDni,
+    });
+    return response.data;
+  },
+
+  // LOGITRACK-457: Cancelar envío (remitente)
+  cancelBySender: async (
+    trackingId: string,
+    senderDni: string,
+    reason?: string
+  ): Promise<CancelResponse> => {
+    const response = await chatbotAPI.post<CancelResponse>('/sender/cancel', {
+      tracking_id: trackingId,
+      sender_dni: senderDni,
+      reason: reason || 'Cancelado por el remitente',
     });
     return response.data;
   },

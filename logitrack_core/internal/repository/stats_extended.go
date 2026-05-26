@@ -14,6 +14,8 @@ type StatsExtendedRepository interface {
 	BillingMetrics(dateFrom, dateTo *time.Time, branchID string) (model.BillingMetricsResponse, error)
 	BranchRanking(dateFrom, dateTo *time.Time, branchID string) (model.BranchRankingResponse, error)
 	VolumeByTimeWindow(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByTimeWindowResponse, error)
+	VolumeByShipmentType(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByShipmentTypeResponse, error)
+	VolumeByDeliveryMethod(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByDeliveryMethodResponse, error)
 	ReturnMetrics(dateFrom, dateTo *time.Time, branchID string) (model.ReturnMetricsResponse, error)
 	SuccessRateByBranch(dateFrom, dateTo *time.Time, branchID string) (model.SuccessRateByBranchResponse, error)
 }
@@ -426,6 +428,120 @@ func (r *postgresStatsExtendedRepository) VolumeByTimeWindow(dateFrom, dateTo *t
 	}
 	if err := rows.Err(); err != nil {
 		return model.VolumeByTimeWindowResponse{}, fmt.Errorf("volume time window rows error: %w", err)
+	}
+
+	return result, nil
+}
+
+func (r *postgresStatsExtendedRepository) VolumeByShipmentType(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByShipmentTypeResponse, error) {
+	from := time.Time{}
+	to := time.Time{}
+	now := time.Now()
+	if dateFrom != nil {
+		from = *dateFrom
+	} else {
+		from = now.AddDate(0, 0, -30)
+	}
+	if dateTo != nil {
+		to = *dateTo
+	} else {
+		to = now
+	}
+
+	result := model.VolumeByShipmentTypeResponse{
+		Buckets: []model.ShipmentTypeBucket{},
+	}
+
+	row := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM shipments
+		WHERE status NOT IN ('draft', 'cancelled', 'expired')
+		  AND created_at >= $1 AND created_at <= $2
+		  AND ($3 = '' OR receiving_branch_id = $3)
+	`, from, to, branchID)
+	if err := row.Scan(&result.Total); err != nil {
+		return model.VolumeByShipmentTypeResponse{}, fmt.Errorf("volume total query failed: %w", err)
+	}
+
+	rows, err := r.db.Query(`
+		SELECT shipment_type, COUNT(*)
+		FROM shipments
+		WHERE status NOT IN ('draft', 'cancelled', 'expired')
+		  AND created_at >= $1 AND created_at <= $2
+		  AND ($3 = '' OR receiving_branch_id = $3)
+		GROUP BY shipment_type
+		ORDER BY shipment_type
+	`, from, to, branchID)
+	if err != nil {
+		return model.VolumeByShipmentTypeResponse{}, fmt.Errorf("volume by shipment type query failed: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bucket model.ShipmentTypeBucket
+		if err := rows.Scan(&bucket.ShipmentType, &bucket.Count); err != nil {
+			return model.VolumeByShipmentTypeResponse{}, fmt.Errorf("scan shipment type row: %w", err)
+		}
+		result.Buckets = append(result.Buckets, bucket)
+	}
+	if err := rows.Err(); err != nil {
+		return model.VolumeByShipmentTypeResponse{}, fmt.Errorf("shipment type rows error: %w", err)
+	}
+
+	return result, nil
+}
+
+func (r *postgresStatsExtendedRepository) VolumeByDeliveryMethod(dateFrom, dateTo *time.Time, branchID string) (model.VolumeByDeliveryMethodResponse, error) {
+	from := time.Time{}
+	to := time.Time{}
+	now := time.Now()
+	if dateFrom != nil {
+		from = *dateFrom
+	} else {
+		from = now.AddDate(0, 0, -30)
+	}
+	if dateTo != nil {
+		to = *dateTo
+	} else {
+		to = now
+	}
+
+	result := model.VolumeByDeliveryMethodResponse{
+		Buckets: []model.DeliveryMethodBucket{},
+	}
+
+	row := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM shipments
+		WHERE status NOT IN ('draft', 'cancelled', 'expired')
+		  AND created_at >= $1 AND created_at <= $2
+		  AND ($3 = '' OR receiving_branch_id = $3)
+	`, from, to, branchID)
+	if err := row.Scan(&result.Total); err != nil {
+		return model.VolumeByDeliveryMethodResponse{}, fmt.Errorf("volume total query failed: %w", err)
+	}
+
+	rows, err := r.db.Query(`
+		SELECT delivery_method, COUNT(*)
+		FROM shipments
+		WHERE status NOT IN ('draft', 'cancelled', 'expired')
+		  AND created_at >= $1 AND created_at <= $2
+		  AND ($3 = '' OR receiving_branch_id = $3)
+		GROUP BY delivery_method
+		ORDER BY delivery_method
+	`, from, to, branchID)
+	if err != nil {
+		return model.VolumeByDeliveryMethodResponse{}, fmt.Errorf("volume by delivery method query failed: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var bucket model.DeliveryMethodBucket
+		if err := rows.Scan(&bucket.DeliveryMethod, &bucket.Count); err != nil {
+			return model.VolumeByDeliveryMethodResponse{}, fmt.Errorf("scan delivery method row: %w", err)
+		}
+		result.Buckets = append(result.Buckets, bucket)
+	}
+	if err := rows.Err(); err != nil {
+		return model.VolumeByDeliveryMethodResponse{}, fmt.Errorf("delivery method rows error: %w", err)
 	}
 
 	return result, nil

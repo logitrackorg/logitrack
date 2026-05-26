@@ -58,6 +58,9 @@ func (h *ChatbotHandler) RegisterRoutes(r *gin.RouterGroup) {
 		chatbot.GET("/reschedule/options", h.GetRescheduleOptions)
 		chatbot.POST("/reschedule", h.RescheduleDelivery)
 		chatbot.POST("/cancel", h.CancelShipment)
+		// Flujo remitente (LOGITRACK-457)
+		chatbot.POST("/sender/auth", h.AuthenticateSender)
+		chatbot.POST("/sender/cancel", h.CancelBySender)
 	}
 }
 
@@ -325,6 +328,8 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 		return
 	}
 
+	go h.notifSvc.NotifyChatbotDeliveryRescheduled(shipment)
+
 	c.JSON(http.StatusOK, RescheduleResponse{
 		Success:         true,
 		Message:         "Tu entrega ha sido reprogramada exitosamente",
@@ -368,7 +373,7 @@ func (h *ChatbotHandler) CancelShipment(c *gin.Context) {
 		req.Reason = "Cancelado por el destinatario vía chatbot"
 	}
 
-	_, err := h.shipmentRepo.CancelByRecipient(repository.CancelByRecipientCmd{
+	shipment, err := h.shipmentRepo.CancelByRecipient(repository.CancelByRecipientCmd{
 		TrackingID:   req.TrackingID,
 		RecipientDNI: req.RecipientDNI,
 		Reason:       req.Reason,
@@ -381,9 +386,94 @@ func (h *ChatbotHandler) CancelShipment(c *gin.Context) {
 		return
 	}
 
+	go h.notifSvc.NotifyChatbotRejectedByRecipient(shipment)
+
 	c.JSON(http.StatusOK, CancelResponse{
 		Success: true,
-		Message: "Tu envío ha sido cancelado. Por favor comunícate con el remitente para coordinar el reembolso si correspondiera",
+		Message: "Tu envío ha sido rechazado. Por favor comunícate con el remitente para coordinar el reembolso si correspondiera",
+	})
+}
+
+// SenderAuthRequest es el payload para autenticar al remitente vía chatbot
+type SenderAuthRequest struct {
+	TrackingID string `json:"tracking_id" binding:"required"`
+	SenderDNI  string `json:"sender_dni"  binding:"required"`
+}
+
+// SenderAuthResponse contiene los datos del envío tras autenticar al remitente
+type SenderAuthResponse struct {
+	Success          bool           `json:"success"`
+	SenderName       string         `json:"sender_name"`
+	Shipment         model.Shipment `json:"shipment"`
+	AvailableActions []string       `json:"available_actions"`
+}
+
+// SenderCancelRequest es el payload para que el remitente cancele el envío
+type SenderCancelRequest struct {
+	TrackingID string `json:"tracking_id" binding:"required"`
+	SenderDNI  string `json:"sender_dni"  binding:"required"`
+	Reason     string `json:"reason"`
+}
+
+// AuthenticateSender valida el tracking ID y DNI del remitente (LOGITRACK-457)
+func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
+	var req SenderAuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
+		return
+	}
+
+	shipment, err := h.shipmentRepo.AuthenticateSender(repository.AuthenticateSenderCmd{
+		TrackingID: req.TrackingID,
+		SenderDNI:  req.SenderDNI,
+	})
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	actions := []string{}
+	if canCancel, _ := shipment.CanCancel(); canCancel {
+		actions = append(actions, "cancel")
+	}
+
+	c.JSON(http.StatusOK, SenderAuthResponse{
+		Success:          true,
+		SenderName:       shipment.Sender.Name,
+		Shipment:         shipment,
+		AvailableActions: actions,
+	})
+}
+
+// CancelBySender cancela el envío por solicitud del remitente vía chatbot (LOGITRACK-457)
+func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
+	var req SenderCancelRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
+		return
+	}
+
+	if req.Reason == "" {
+		req.Reason = "Cancelado por el remitente vía chatbot"
+	}
+
+	shipment, err := h.shipmentRepo.CancelBySender(repository.CancelBySenderCmd{
+		TrackingID: req.TrackingID,
+		SenderDNI:  req.SenderDNI,
+		Reason:     req.Reason,
+		ChangedBy:  "chatbot-sender:" + req.SenderDNI,
+		Timestamp:  time.Now(),
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	go h.notifSvc.NotifyChatbotCancelledBySender(shipment)
+
+	c.JSON(http.StatusOK, CancelResponse{
+		Success: true,
+		Message: "Tu envío ha sido cancelado exitosamente",
 	})
 }
 
@@ -399,7 +489,7 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 		actions = append(actions, "reschedule")
 	}
 
-	if canCancel, _ := shipment.CanCancel(); canCancel {
+	if canReject, _ := shipment.CanReject(); canReject {
 		actions = append(actions, "cancel")
 	}
 

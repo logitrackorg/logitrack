@@ -102,6 +102,12 @@ func (f *fakeShipmentRepo) RescheduleDelivery(cmd repository.RescheduleDeliveryC
 func (f *fakeShipmentRepo) CancelByRecipient(cmd repository.CancelByRecipientCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+func (f *fakeShipmentRepo) AuthenticateSender(cmd repository.AuthenticateSenderCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
+func (f *fakeShipmentRepo) CancelBySender(cmd repository.CancelBySenderCmd) (model.Shipment, error) {
+	return model.Shipment{}, nil
+}
 
 // newMinimalRoutingService arma un RoutingService con solo lo necesario para stale-replan.
 func newMinimalRoutingService(shipments []model.Shipment, edges []model.BranchEdge) *RoutingService {

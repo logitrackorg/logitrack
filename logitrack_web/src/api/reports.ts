@@ -94,6 +94,26 @@ export interface VolumeByTimeWindowResponse {
   buckets: TimeWindowBucket[];
 }
 
+export interface ShipmentTypeBucket {
+  shipment_type: string;
+  count: number;
+}
+
+export interface VolumeByShipmentTypeResponse {
+  total: number;
+  buckets: ShipmentTypeBucket[];
+}
+
+export interface DeliveryMethodBucket {
+  delivery_method: string;
+  count: number;
+}
+
+export interface VolumeByDeliveryMethodResponse {
+  total: number;
+  buckets: DeliveryMethodBucket[];
+}
+
 export interface ReturnBranchMetrics {
   returned: number;
   ready_for_return: number;
@@ -139,6 +159,10 @@ export const reportsApi = {
     api.get<BranchRankingResponse>("/stats/branch-ranking", { params }).then((r) => r.data),
   volumeByTimeWindow: (params?: ReportsQueryParams) =>
     api.get<VolumeByTimeWindowResponse>("/stats/volume-by-time-window", { params }).then((r) => r.data),
+  volumeByShipmentType: (params?: ReportsQueryParams) =>
+    api.get<VolumeByShipmentTypeResponse>("/stats/volume-by-shipment-type", { params }).then((r) => r.data),
+  volumeByDeliveryMethod: (params?: ReportsQueryParams) =>
+    api.get<VolumeByDeliveryMethodResponse>("/stats/volume-by-delivery-method", { params }).then((r) => r.data),
   returnMetrics: (params?: ReportsQueryParams) =>
     api.get<ReturnMetricsResponse>("/stats/return-metrics", { params }).then((r) => r.data),
   successRateByBranch: (params?: ReportsQueryParams) =>
