@@ -84,6 +84,8 @@ export function DriverInterBranchTrip() {
 
   // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
   const [midTripCheckin, setMidTripCheckin] = useState(false);
+  // true si el driver aún no reportó sueño para el día logístico actual.
+  const [requiresSleepData, setRequiresSleepData] = useState(true);
   // Evita disparar múltiples consultas al gate cuando el vehículo está detenido.
   const stopGateCheckedRef = useRef(false);
   // Índices de checkpoints ya procesados en esta jornada (no repetir la alerta).
@@ -109,6 +111,17 @@ export function DriverInterBranchTrip() {
   const mapInstanceRef = useRef<unknown>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Abre el gate de fatiga y consulta si el driver ya registró sueño hoy.
+  const openCheckinGate = useCallback(async () => {
+    try {
+      const status = await driverApi.getTodayCheckin().catch(() => ({ ok: false as const, requires_sleep_data: true }));
+      setRequiresSleepData(status.requires_sleep_data ?? true);
+    } catch {
+      setRequiresSleepData(true);
+    }
+    setMidTripCheckin(true);
+  }, []);
 
   // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
   // Los routePoints se derivan del trip y las branches. Mientras no haya datos
@@ -236,7 +249,7 @@ export function DriverInterBranchTrip() {
     stopGateCheckedRef.current = true;
     driverApi
       .getTestEligibility({ stopped_minutes: Math.floor(stoppedTimeMs / 60_000) })
-      .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+      .then((elig) => { if (elig.require_test) openCheckinGate(); })
       .catch(() => { /* error de red — no bloquear al chofer */ });
   }, [stoppedTimeMs, trip, midTripCheckin]);
 
@@ -273,7 +286,7 @@ export function DriverInterBranchTrip() {
       // curIdx > stored → mostrar el check-in pendiente.
       const stored = parseInt(localStorage.getItem(`trip_checkin_${trip.id}`) ?? "0", 10);
       if (curIdx > stored) {
-        setMidTripCheckin(true);
+        openCheckinGate();
       }
       prevStopIndexRef.current = curIdx;
       return;
@@ -282,7 +295,7 @@ export function DriverInterBranchTrip() {
     if (curIdx > prevStopIndexRef.current) {
       // El índice subió en tiempo real → nueva parada confirmada por QR.
       // Mostrar check-in antes de que el chofer salga hacia la siguiente.
-      setMidTripCheckin(true);
+      openCheckinGate();
     }
 
     // Actualizar SIEMPRE el ref, incluso si setMidTripCheckin fue llamado.
@@ -301,7 +314,7 @@ export function DriverInterBranchTrip() {
         checkpointPassedRef.current.add(idx); // marcar como visitado
         driverApi
           .getTestEligibility({ checkpoint: true })
-          .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+          .then((elig) => { if (elig.require_test) openCheckinGate(); })
           .catch(() => {});
         break; // procesar un checkpoint por tick
       }
@@ -471,6 +484,7 @@ export function DriverInterBranchTrip() {
   // sesión y vuelve a entrar, el sistema sepa hasta qué parada ya hizo el test.
   const handleCheckinDone = useCallback(() => {
     setMidTripCheckin(false);
+    setRequiresSleepData(false); // sueño ya registrado, no pedir de nuevo hoy
     const t = tripRef.current;
     if (t) {
       const curIdx = t.current_stop_index ?? 0;
@@ -484,6 +498,7 @@ export function DriverInterBranchTrip() {
     return (
       <KssCheckIn
         driverId={user.id}
+        requiresSleepData={requiresSleepData}
         onDone={handleCheckinDone}
       />
     );

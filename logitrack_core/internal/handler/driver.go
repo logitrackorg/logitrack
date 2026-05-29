@@ -25,6 +25,7 @@ type DriverHandler struct {
 	routeSvc    *service.RouteService
 	branchRepo  repository.BranchRepository
 	checkinRepo *repository.CheckinRepository
+	sleepRepo   *repository.SleepRepository
 	fatigueSvc  *service.FatigueConfigService
 	auditRepo   *repository.AuditLogRepository
 	notifSvc    *service.NotificationService
@@ -41,6 +42,7 @@ func NewDriverHandler(
 		routeSvc:    routeSvc,
 		branchRepo:  branchRepo,
 		checkinRepo: repository.NewCheckinRepository(),
+		sleepRepo:   repository.NewSleepRepository(),
 		fatigueSvc:  fatigueSvc,
 		auditRepo:   auditRepo,
 		notifSvc:    notifSvc,
@@ -161,23 +163,39 @@ const skipGracePeriod = 3 * time.Hour
 //   - the driver had skipped and the 3-hour grace period has elapsed.
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
+	cfg := h.fatigueSvc.Get()
+	logicalDate := logicalDateAR(cfg.DailyResetHour)
+
 	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":               "sin check-in para hoy",
+			"requires_sleep_data": !hasSleep,
+		})
 		return
 	}
 	// Admin reset: invalidate any check-in recorded before the reset timestamp.
-	if cfg := h.fatigueSvc.Get(); cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "check-in requiere renovación"})
+	if cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":               "check-in requiere renovación",
+			"requires_sleep_data": !hasSleep,
+		})
 		return
 	}
 	// Skipped grace period: after 3 h the gate re-appears so the driver is
 	// prompted again — without deleting the skip record from history.
 	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
-		c.JSON(http.StatusNotFound, gin.H{"error": "período de gracia de salto expirado"})
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":               "período de gracia de salto expirado",
+			"requires_sleep_data": !hasSleep,
+		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+	_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec, "requires_sleep_data": !hasSleep})
 }
 
 // SkipCheckin records that the driver deliberately bypassed the fatigue gate.
@@ -227,23 +245,56 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 }
 
 // SubmitCheckin records (or overwrites) the KSS fatigue check-in for today.
+//
+// Sleep optimization: horas_sueno is only required the first time per logical
+// day. Once a sleep record exists it is reused automatically — the driver is
+// never asked twice. If no record exists and the payload omits horas_sueno,
+// the endpoint responds with requires_sleep_data:true so the frontend can
+// prompt the driver before retrying.
 func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
 	var body struct {
-		HorasSueno int `json:"horas_sueno"`
-		KSSLevel   int `json:"kss_level"`
+		HorasSueno *int `json:"horas_sueno"`
+		KSSLevel   int  `json:"kss_level"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
 		return
 	}
-	if body.HorasSueno < 0 || body.HorasSueno > 10 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
-		return
-	}
 	if body.KSSLevel < 1 || body.KSSLevel > 8 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
+		return
+	}
+
+	cfg := h.fatigueSvc.Get()
+	logicalDate := logicalDateAR(cfg.DailyResetHour)
+
+	// ── Sleep optimization ────────────────────────────────────────────────────
+	// Resolve horas_sueno for this check-in:
+	//  1. If a sleep record already exists for today's logical day → reuse it.
+	//  2. If the payload provides the value → persist it and use it.
+	//  3. Otherwise → tell the frontend to collect the value first.
+	var horasSueno int
+	existing_sleep, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+	if hasSleep {
+		horasSueno = existing_sleep.HorasSueno
+	} else if body.HorasSueno != nil {
+		v := *body.HorasSueno
+		if v < 0 || v > 10 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
+			return
+		}
+		if err := h.sleepRepo.Upsert(user.ID, logicalDate, v); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el registro de sueño"})
+			return
+		}
+		horasSueno = v
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"ok":                  false,
+			"requires_sleep_data": true,
+		})
 		return
 	}
 
@@ -261,7 +312,7 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	rec := model.DriverCheckin{
 		DriverID:      user.ID,
 		Date:          today,
-		HorasSueno:    body.HorasSueno,
+		HorasSueno:    horasSueno,
 		KSSLevel:      body.KSSLevel,
 		RecordedAt:    time.Now(),
 		VoiceMetrics:  existing.VoiceMetrics,
@@ -296,7 +347,7 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec, "requires_sleep_data": false})
 }
 
 // ── US4: Tactile event capture ────────────────────────────────────────────────
