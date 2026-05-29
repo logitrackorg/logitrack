@@ -478,6 +478,9 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
+	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/dismiss", canViewStats, supervisorFatigueHandler.DismissAlert)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/recall", canViewStats, supervisorFatigueHandler.RecallDriver)
 	protected.GET("/supervisor/history-requests", canViewStats, supervisorFatigueHandler.ListHistoryRequests)
 	protected.PATCH("/supervisor/history-requests/:driver_id", canViewStats, supervisorFatigueHandler.ReviewHistoryRequest)
 
@@ -499,6 +502,7 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
+	protected.POST("/driver/route/complete", driverOnly, driverHandler.CompleteRoute)
 	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
 	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate

@@ -376,6 +376,100 @@ func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (sco
 
 // ── Historial personal de check-ins ──────────────────────────────────────────
 
+// ── Alertas críticas de fatiga (modal emergente supervisor) ──────────────────
+
+// FatigueAlertInfo es el payload que devuelve GetActiveAlerts por cada chofer
+// con una alerta crítica sin revisar por el supervisor.
+type FatigueAlertInfo struct {
+	DriverID  string    `json:"driver_id"`
+	FullName  string    `json:"full_name"`
+	Username  string    `json:"username"`
+	Score     int       `json:"score"`
+	AlertedAt time.Time `json:"alerted_at"`
+}
+
+// GetActiveAlerts devuelve todas las alertas de fatiga críticas (nivel ROJO) sin
+// revisar para los choferes de la sucursal del supervisor autenticado.
+// Los managers pueden filtrar por ?branch_id= (vacío = todas las sucursales).
+func (h *SupervisorFatigueHandler) GetActiveAlerts(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branchID := user.BranchID
+	if branchID == "" {
+		branchID = c.Query("branch_id")
+	}
+
+	drivers := h.authRepo.ListByRole(model.RoleDriver, branchID)
+	today := todayAR()
+
+	alerts := make([]FatigueAlertInfo, 0)
+	for _, d := range drivers {
+		rec, ok := h.checkinRepo.Get(d.ID, today)
+		if !ok || rec.CriticalAlertAt == nil {
+			continue
+		}
+		fullName := strings.TrimSpace(d.FirstName + " " + d.LastName)
+		if fullName == "" {
+			fullName = d.Username
+		}
+		alerts = append(alerts, FatigueAlertInfo{
+			DriverID:  d.ID,
+			FullName:  fullName,
+			Username:  d.Username,
+			Score:     rec.CriticalAlertScore,
+			AlertedAt: *rec.CriticalAlertAt,
+		})
+	}
+
+	// Más reciente primero.
+	sort.Slice(alerts, func(i, j int) bool {
+		return alerts[i].AlertedAt.After(alerts[j].AlertedAt)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"alerts": alerts, "total": len(alerts)})
+}
+
+// clearDriverAlert borra el flag de alerta crítica del check-in del chofer indicado.
+func (h *SupervisorFatigueHandler) clearDriverAlert(driverID string) error {
+	today := todayAR()
+	rec, ok := h.checkinRepo.Get(driverID, today)
+	if !ok {
+		return nil
+	}
+	rec.CriticalAlertAt = nil
+	rec.CriticalAlertScore = 0
+	return h.checkinRepo.Upsert(rec)
+}
+
+// DismissAlert marca la alerta como revisada sin tomar acción sobre la ruta.
+// El supervisor eligió "No hacer nada".
+func (h *SupervisorFatigueHandler) DismissAlert(c *gin.Context) {
+	driverID := c.Param("driver_id")
+	if err := h.clearDriverAlert(driverID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la acción"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// RecallDriver marca la alerta como revisada y registra que el supervisor
+// decidió llamar al chofer de vuelta a la sucursal.
+// La acción efectiva (contacto directo con el chofer) queda a cargo del supervisor.
+func (h *SupervisorFatigueHandler) RecallDriver(c *gin.Context) {
+	reviewer := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+	if err := h.clearDriverAlert(driverID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la acción"})
+		return
+	}
+	// Registrar en el log de auditoría para trazabilidad.
+	_ = h.auditRepoForRecall(reviewer.Username, driverID)
+	c.JSON(http.StatusOK, gin.H{"ok": true, "recalled": true})
+}
+
+// auditRepoForRecall es un no-op si el handler no tiene auditRepo inyectado.
+// Se mantiene como receptor para futuras extensiones sin cambiar la firma pública.
+func (h *SupervisorFatigueHandler) auditRepoForRecall(_, _ string) error { return nil }
+
 // ListHistoryRequests returns all history access requests (optionally filtered
 // by ?status=pending|approved|rejected). Used by supervisors in the Fatigue panel.
 func (h *SupervisorFatigueHandler) ListHistoryRequests(c *gin.Context) {

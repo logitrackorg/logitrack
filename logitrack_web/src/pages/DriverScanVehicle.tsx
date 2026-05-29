@@ -4,15 +4,26 @@ import { Truck, QrCode, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
+import { KssCheckIn } from "../components/KssCheckIn";
+import { useAuth } from "../context/AuthContext";
 
 export default function DriverScanVehicle() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const qrRef = useRef<Html5Qrcode | null>(null);
+
+  // Gate de fatiga post-escaneo: se activa solo cuando el chofer ya completó
+  // al menos una ruta hoy (segunda ruta en adelante). Para la primera ruta del
+  // día el gate no aplica aquí. El token QR/patente se guarda para usarlo
+  // después de que el chofer pase el test.
+  const [showGate, setShowGate] = useState(false);
+  const [requiresSleepData, setRequiresSleepData] = useState(false);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
 
   // Si el chofer ya tiene una ruta activa (last-mile) o un viaje intersucursal
   // activo, mandarlo directo a esa pantalla sin pedirle que vuelva a escanear.
@@ -35,8 +46,10 @@ export default function DriverScanVehicle() {
     setTimeout(() => navigate("/driver/route"), 900);
   };
 
-  const handleToken = async (token: string) => {
-    if (loading) return;
+  // Realiza el claim del token (QR o patente) y navega a la pantalla
+  // correspondiente. Se llama después de que el gate de fatiga se resuelve
+  // (ya sea porque no era necesario o porque el chofer lo completó).
+  const claimAndNavigate = async (token: string) => {
     setLoading(true);
     setError("");
     try {
@@ -51,8 +64,6 @@ export default function DriverScanVehicle() {
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
-      // Si el vehículo no tiene viaje pre-armado pero el chofer ya tiene envíos asignados,
-      // intentar iniciar la ruta directamente.
       if (msg.includes("no hay viaje activo")) {
         try {
           await driverApi.startRoute();
@@ -78,6 +89,28 @@ export default function DriverScanVehicle() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToken = async (token: string) => {
+    if (loading) return;
+
+    // Solo para choferes de última milla: evaluar si corresponde el gate de
+    // fatiga antes de reclamar el vehículo.
+    // El gate aplica únicamente para la SEGUNDA ruta en adelante del día;
+    // para la primera ruta el backend devuelve requires_fatigue_test: false.
+    // Los choferes intersucursales tienen su propio gate en DriverInterBranchTrip.
+    if (user?.driver_type !== "intersucursal") {
+      const gateStatus = await driverApi.getCheckinGateStatus();
+      if (gateStatus.needs_test) {
+        stopScanner();
+        setPendingToken(token);
+        setRequiresSleepData(gateStatus.requires_sleep_data);
+        setShowGate(true);
+        return;
+      }
+    }
+
+    await claimAndNavigate(token);
   };
 
   const startScanner = async () => {
@@ -115,6 +148,26 @@ export default function DriverScanVehicle() {
       }
     };
   }, []);
+
+  // Gate de fatiga post-escaneo: se muestra solo para la segunda ruta en
+  // adelante. requiresSleepData siempre es false aquí porque las horas de
+  // sueño ya fueron registradas durante el primer check-in del día.
+  if (showGate && user) {
+    return (
+      <KssCheckIn
+        driverId={user.id}
+        misfireCount={0}
+        requiresSleepData={requiresSleepData}
+        onDone={() => {
+          setShowGate(false);
+          if (pendingToken) {
+            void claimAndNavigate(pendingToken);
+            setPendingToken(null);
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">

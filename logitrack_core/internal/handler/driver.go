@@ -53,12 +53,13 @@ func NewDriverHandler(
 }
 
 // checkAndNotifyFatigueRisk calcula el score de fatiga con los datos disponibles
-// en el check-in y notifica a los supervisores si el nivel es ROJO.
+// en el check-in y, si el nivel es ROJO:
+//   - Notifica a los supervisores de la sucursal.
+//   - Estampa CriticalAlertAt en el check-in del chofer para que el frontend
+//     muestre el modal de alerta crítica (Ojo de Patrón emergente).
+//
 // Debe llamarse en una goroutine (fire-and-forget).
 func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model.DriverCheckin) {
-	if h.notifSvc == nil {
-		return
-	}
 	cfg := h.fatigueSvc.Get()
 	score, level := fatigueRiskScore(checkin, cfg)
 	if level != model.RiskRed {
@@ -68,8 +69,22 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 	if fullName == "" {
 		fullName = user.Username
 	}
-	h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
+	if h.notifSvc != nil {
+		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
+	}
+
+	// Stamp the driver's own check-in so the polling endpoint can surface
+	// the critical alert. Only set if not already alerting (i.e. driver
+	// has not yet acknowledged a prior RED result on this check-in).
+	today := todayAR()
+	if rec, ok := h.checkinRepo.Get(user.ID, today); ok && rec.CriticalAlertAt == nil {
+		now := time.Now()
+		rec.CriticalAlertAt = &now
+		rec.CriticalAlertScore = score
+		_ = h.checkinRepo.Upsert(rec)
+	}
 }
+
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
@@ -159,22 +174,73 @@ func logicalDateAR(resetHour int) string {
 // skipGracePeriod is how long a "saltar" choice suppresses the fatigue gate.
 const skipGracePeriod = 3 * time.Hour
 
+// autoFinalizeAndCount detects whether all of today's route deliveries are done
+// and, if so, transitions the route to finalizada and increments
+// CompletedRoutesToday on the driver's check-in.
+//
+// This is the core fix for the "second route same day" bug: the route record
+// was never explicitly set to finalizada, so the old route-status check always
+// saw "en_curso" and never fired the gate. By persisting the completion count
+// in the check-in JSON we have a reliable signal that survives route resets.
+//
+// Idempotent: LastCompletedRouteStartedAt prevents double-counting on
+// repeated calls (e.g. multiple getTodayCheckin polls after completion).
+func (h *DriverHandler) autoFinalizeAndCount(driverID, today string) {
+	rec, ok := h.checkinRepo.Get(driverID, today)
+	if !ok {
+		return
+	}
+	route, shipments, err := h.routeSvc.GetTodayRoute(driverID)
+	if err != nil || route.StartedAt == nil || route.Status != model.RouteStatusActive {
+		return
+	}
+	if len(route.ShipmentIDs) == 0 {
+		return
+	}
+	// Avoid double-counting: skip if we already recorded this route run.
+	if rec.LastCompletedRouteStartedAt != nil &&
+		!rec.LastCompletedRouteStartedAt.Before(*route.StartedAt) {
+		return
+	}
+	// All visible shipments must have left out_for_delivery.
+	// delivery_failed / delivered / rechazado = terminal for this run.
+	for _, s := range shipments {
+		if s.Status == model.StatusOutForDelivery {
+			return // still pending deliveries
+		}
+	}
+	// Route is effectively complete — persist the counter and finalize.
+	rec.CompletedRoutesToday++
+	startedAt := *route.StartedAt
+	rec.LastCompletedRouteStartedAt = &startedAt
+	_ = h.checkinRepo.Upsert(rec)
+	_ = h.routeSvc.FinishRoute(driverID)
+}
+
 // GetTodayCheckin returns the authenticated driver's check-in for today.
 // Returns 404 (gate re-appears) when:
 //   - no check-in has been recorded yet, OR
 //   - an admin reset was triggered after the existing check-in, OR
 //   - the driver had skipped and the 3-hour grace period has elapsed.
+//
+// Always calls autoFinalizeAndCount first so that CompletedRoutesToday is
+// up-to-date before requires_fatigue_test is computed.
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	cfg := h.fatigueSvc.Get()
 	logicalDate := logicalDateAR(cfg.DailyResetHour)
+	today := todayAR()
 
-	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+	// Detect route completion and persist counter before reading the check-in.
+	h.autoFinalizeAndCount(user.ID, today)
+
+	rec, ok := h.checkinRepo.Get(user.ID, today)
 	if !ok {
 		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
 		c.JSON(http.StatusNotFound, gin.H{
-			"error":               "sin check-in para hoy",
-			"requires_sleep_data": !hasSleep,
+			"error":                 "sin check-in para hoy",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": false, // no check-in → first route of day
 		})
 		return
 	}
@@ -182,8 +248,9 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	if cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
 		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
 		c.JSON(http.StatusNotFound, gin.H{
-			"error":               "check-in requiere renovación",
-			"requires_sleep_data": !hasSleep,
+			"error":                 "check-in requiere renovación",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": false,
 		})
 		return
 	}
@@ -192,13 +259,30 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
 		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
 		c.JSON(http.StatusNotFound, gin.H{
-			"error":               "período de gracia de salto expirado",
-			"requires_sleep_data": !hasSleep,
+			"error":                 "período de gracia de salto expirado",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": false,
 		})
 		return
 	}
+
 	_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec, "requires_sleep_data": !hasSleep})
+	c.JSON(http.StatusOK, gin.H{
+		"ok":                    true,
+		"checkin":               rec,
+		"requires_sleep_data":   !hasSleep,
+		"requires_fatigue_test": rec.CompletedRoutesToday > 0,
+	})
+}
+
+// CompleteRoute is the explicit belt-and-suspenders counterpart to
+// autoFinalizeAndCount. The frontend calls it when it detects routeEffectivelyDone
+// so that CompletedRoutesToday is persisted immediately rather than waiting for
+// the next GetTodayCheckin poll from DriverScanVehicle.
+func (h *DriverHandler) CompleteRoute(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	h.autoFinalizeAndCount(user.ID, todayAR())
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 // SkipCheckin records that the driver deliberately bypassed the fatigue gate.

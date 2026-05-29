@@ -212,6 +212,23 @@ export function DriverRoute() {
   };
 
   // Hooks que necesitan estar antes de cualquier return condicional
+
+  // Marca la ruta como completada en el backend cuando todas las entregas
+  // terminan. Debe estar aquí (antes de los early returns) para cumplir las
+  // reglas de hooks de React. La comprobación interna es null-safe.
+  useEffect(() => {
+    if (!data) return;
+    const status = data.route.status ?? "pendiente";
+    const hasPending = data.shipments.some((s) => s.status === "out_for_delivery");
+    const hasShipments = data.shipments.length > 0;
+    const effectivelyDone =
+      (status === "finalizada" && !hasPending) ||
+      (status === "en_curso" && !hasPending && hasShipments);
+    if (effectivelyDone && status === "en_curso") {
+      driverApi.completeRoute().catch(() => {});
+    }
+  }, [data]);
+
   const routePoints = useMemo(() => {
     const origin = data?.origin;
     const wps = data?.waypoints ?? [];
@@ -281,6 +298,7 @@ export function DriverRoute() {
   const routeEffectivelyDone =
     (routeStatus === "finalizada" && pending === 0) ||
     (routeStatus === "en_curso" && pending === 0 && total > 0);
+
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} />;
   }

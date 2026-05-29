@@ -41,6 +41,22 @@ type DriverCheckin struct {
 	// delivery management (US4). Appended for each "Entregar"/"No Entregado"
 	// action taken during the day.
 	TouchEvents []TouchEventRecord `json:"touch_events,omitempty"`
+
+	// CriticalAlertAt is stamped when the fatigue score reaches RED level.
+	// Non-nil means there is an unacknowledged critical alert for supervisors.
+	// Cleared by the supervisor via POST /supervisor/fatigue-alerts/.../dismiss|recall.
+	CriticalAlertAt    *time.Time `json:"critical_alert_at,omitempty"`
+	CriticalAlertScore int        `json:"critical_alert_score,omitempty"`
+
+	// CompletedRoutesToday counts last-mile routes the driver has finished since
+	// this check-in was recorded. When > 0 the fatigue gate must fire before
+	// any new route start. Resets to 0 whenever a new check-in is submitted.
+	CompletedRoutesToday int `json:"completed_routes_today,omitempty"`
+
+	// LastCompletedRouteStartedAt is the StartedAt of the most recently
+	// auto-detected completed route. Prevents double-counting when
+	// GetTodayCheckin is called multiple times after route completion.
+	LastCompletedRouteStartedAt *time.Time `json:"last_completed_route_started_at,omitempty"`
 }
 
 // TouchEventRecord captures a single delivery interaction event:

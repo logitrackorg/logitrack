@@ -115,6 +115,14 @@ export interface HistoryAccessRequest {
   username?: string;
 }
 
+export interface ActiveFatigueAlert {
+  driver_id: string;
+  full_name: string;
+  username: string;
+  score: number;
+  alerted_at: string;
+}
+
 export const supervisorFatigueApi = {
   getDashboard: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
@@ -128,6 +136,16 @@ export const supervisorFatigueApi = {
       .get<FatigueHistoryResponse>("/supervisor/fatigue-history", { params })
       .then((r) => r.data);
   },
+  getActiveAlerts: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api
+      .get<{ alerts: ActiveFatigueAlert[]; total: number }>("/supervisor/fatigue-alerts", { params })
+      .then((r) => r.data);
+  },
+  dismissAlert: (driverID: string) =>
+    api.post<{ ok: boolean }>(`/supervisor/fatigue-alerts/${driverID}/dismiss`).then((r) => r.data),
+  recallDriver: (driverID: string) =>
+    api.post<{ ok: boolean; recalled: boolean }>(`/supervisor/fatigue-alerts/${driverID}/recall`).then((r) => r.data),
   listHistoryRequests: (status?: HistoryRequestStatus) => {
     const params = status ? { status } : {};
     return api

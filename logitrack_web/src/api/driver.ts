@@ -140,7 +140,36 @@ export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
   getTodayCheckin: () =>
-    api.get<{ ok: boolean; requires_sleep_data: boolean }>("/driver/checkin/today").then((r) => r.data),
+    api.get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today").then((r) => r.data),
+  /** Resolves whether the driver must pass the fatigue gate before their next route.
+   *  Handles both 200 (requires_fatigue_test) and 404 (first route vs. second route).
+   *  Never throws — always returns a safe result.
+   *
+   *  requires_fatigue_test is false when:
+   *    - no route has started yet today (first route of the day), OR
+   *    - the driver is currently on an active route.
+   *  requires_fatigue_test is true when:
+   *    - a prior route was started and is now finished (second route+). */
+  getCheckinGateStatus: async (): Promise<{ needs_test: boolean; requires_sleep_data: boolean }> => {
+    try {
+      const data = await api
+        .get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today")
+        .then((r) => r.data);
+      return {
+        needs_test: !!data.requires_fatigue_test,
+        requires_sleep_data: !!data.requires_sleep_data,
+      };
+    } catch (err: unknown) {
+      // 404 body now includes requires_fatigue_test and requires_sleep_data.
+      // Use them directly — do NOT default needs_test to true, because a 404
+      // on the first route of the day should NOT trigger the gate.
+      const body = (err as { response?: { data?: { requires_fatigue_test?: boolean; requires_sleep_data?: boolean } } })?.response?.data;
+      return {
+        needs_test: !!body?.requires_fatigue_test,
+        requires_sleep_data: body?.requires_sleep_data ?? true,
+      };
+    }
+  },
   submitCheckin: (payload: CheckInPayload) =>
     api.post("/driver/checkin", payload).then((r) => r.data),
   /** Registra que el chofer eligió saltear el check-in de fatiga.
@@ -177,6 +206,11 @@ export const driverApi = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data);
   },
+  /** Marca la ruta del día como completada en el backend.
+   *  Persiste CompletedRoutesToday en el JSON para que el gate de fatiga
+   *  sepa que se necesita un nuevo check-in antes de la siguiente ruta. */
+  completeRoute: () =>
+    api.post<{ ok: boolean }>("/driver/route/complete").then((r) => r.data),
   requestHistory: () =>
     api.post<{ ok: boolean; request: NonNullable<PersonalHistoryResult["request"]> }>("/driver/history-request")
       .then((r) => r.data),

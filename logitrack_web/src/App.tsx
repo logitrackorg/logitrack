@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
+import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -170,6 +171,7 @@ function AppRoutes() {
   }
 
   return (
+    <SupervisorFatigueGuard>
     <AppShell>
       <Routes>
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
@@ -358,6 +360,7 @@ function AppRoutes() {
       </Routes>
       <ToastContainer />
     </AppShell>
+    </SupervisorFatigueGuard>
   );
 }
 
