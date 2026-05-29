@@ -119,6 +119,23 @@ export interface PVTResult {
   recorded_at: string;
 }
 
+export type PersonalHistoryStatus = "pending" | "approved" | "rejected" | "sin_solicitud";
+
+export interface PersonalHistoryResult {
+  ok: boolean;
+  request_status?: PersonalHistoryStatus;
+  history?: import("./supervisorFatigue").CheckinRecord[];
+  total?: number;
+  request?: {
+    driver_id: string;
+    status: PersonalHistoryStatus;
+    request_date: string;
+    reviewed_by?: string;
+    reviewed_at?: string;
+    review_note?: string;
+  };
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
@@ -160,4 +177,14 @@ export const driverApi = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data);
   },
+  requestHistory: () =>
+    api.post<{ ok: boolean; request: NonNullable<PersonalHistoryResult["request"]> }>("/driver/history-request")
+      .then((r) => r.data),
+  getPersonalHistory: (): Promise<PersonalHistoryResult> =>
+    api.get("/driver/history")
+      .then((r) => ({ ok: true as const, ...r.data }))
+      .catch((err) => ({
+        ok: false as const,
+        request_status: (err?.response?.data?.request_status ?? "sin_solicitud") as PersonalHistoryStatus,
+      })),
 };

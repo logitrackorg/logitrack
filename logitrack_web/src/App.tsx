@@ -65,15 +65,19 @@ function DriverNav() {
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
         {isMobile ? (
-          <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          <NavLink to="/profile" style={{ textDecoration: "none" }}>
+            <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          </NavLink>
         ) : (
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>
-            <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
-            {" · "}
-            <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
-              {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+          <NavLink to="/profile" style={{ textDecoration: "none" }}>
+            <span style={{ fontSize: 13, color: "#94a3b8", cursor: "pointer" }}>
+              <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
+              {" · "}
+              <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
+                {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+              </span>
             </span>
-          </span>
+          </NavLink>
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
@@ -136,6 +140,11 @@ function AppRoutes() {
             <Route path="/shipments/:trackingId" element={
               <ProtectedRoute roles={["driver"]}>
                 <DriverShipmentDetail />
+              </ProtectedRoute>
+            } />
+            <Route path="/profile" element={
+              <ProtectedRoute roles={["driver"]}>
+                <UserProfile />
               </ProtectedRoute>
             } />
             <Route path="*" element={<Navigate to={defaultPath} replace />} />

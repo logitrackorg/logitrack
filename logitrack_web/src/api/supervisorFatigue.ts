@@ -102,6 +102,19 @@ export interface FatigueHistoryResponse {
   red_min: number;
 }
 
+export type HistoryRequestStatus = "pending" | "approved" | "rejected";
+
+export interface HistoryAccessRequest {
+  driver_id: string;
+  status: HistoryRequestStatus;
+  request_date: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  review_note?: string;
+  full_name?: string;
+  username?: string;
+}
+
 export const supervisorFatigueApi = {
   getDashboard: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
@@ -115,4 +128,14 @@ export const supervisorFatigueApi = {
       .get<FatigueHistoryResponse>("/supervisor/fatigue-history", { params })
       .then((r) => r.data);
   },
+  listHistoryRequests: (status?: HistoryRequestStatus) => {
+    const params = status ? { status } : {};
+    return api
+      .get<{ requests: HistoryAccessRequest[]; total: number }>("/supervisor/history-requests", { params })
+      .then((r) => r.data);
+  },
+  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", note?: string) =>
+    api
+      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, note })
+      .then((r) => r.data),
 };

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
@@ -18,6 +19,7 @@ const dashboardHistoryLimit = 30
 type SupervisorFatigueHandler struct {
 	authRepo    repository.AuthRepository
 	checkinRepo *repository.CheckinRepository
+	historyRepo *repository.HistoryAccessRequestRepository
 	fatigueSvc  *service.FatigueConfigService
 }
 
@@ -28,6 +30,7 @@ func NewSupervisorFatigueHandler(
 	return &SupervisorFatigueHandler{
 		authRepo:    authRepo,
 		checkinRepo: repository.NewCheckinRepository(),
+		historyRepo: repository.NewHistoryAccessRequestRepository(),
 		fatigueSvc:  fatigueSvc,
 	}
 }
@@ -369,4 +372,103 @@ func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (sco
 		level = model.RiskGreen
 	}
 	return
+}
+
+// ── Historial personal de check-ins ──────────────────────────────────────────
+
+// ListHistoryRequests returns all history access requests (optionally filtered
+// by ?status=pending|approved|rejected). Used by supervisors in the Fatigue panel.
+func (h *SupervisorFatigueHandler) ListHistoryRequests(c *gin.Context) {
+	statusFilter := model.HistoryRequestStatus(c.Query("status"))
+
+	var requests []model.HistoryAccessRequest
+	if statusFilter != "" {
+		requests = h.historyRepo.ListByStatus(statusFilter)
+	} else {
+		requests = h.historyRepo.ListAll()
+	}
+
+	// Enrich with driver name for display.
+	type enriched struct {
+		model.HistoryAccessRequest
+		FullName string `json:"full_name"`
+		Username string `json:"username"`
+	}
+	result := make([]enriched, 0, len(requests))
+	for _, req := range requests {
+		e := enriched{HistoryAccessRequest: req}
+		if driver, err := h.authRepo.GetUserByID(req.DriverID); err == nil {
+			fullName := strings.TrimSpace(driver.FirstName + " " + driver.LastName)
+			if fullName == "" {
+				fullName = driver.Username
+			}
+			e.FullName = fullName
+			e.Username = driver.Username
+		}
+		result = append(result, e)
+	}
+
+	// Sort: pending first, then by request date descending.
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Status != result[j].Status {
+			if result[i].Status == model.HistoryRequestPending {
+				return true
+			}
+			if result[j].Status == model.HistoryRequestPending {
+				return false
+			}
+		}
+		return result[i].RequestDate.After(result[j].RequestDate)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"requests": result, "total": len(result)})
+}
+
+// ReviewHistoryRequest approves or rejects a driver's history access request.
+// Body: { "action": "approve" | "reject", "note": "..." (optional) }
+func (h *SupervisorFatigueHandler) ReviewHistoryRequest(c *gin.Context) {
+	reviewer := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+
+	var body struct {
+		Action string `json:"action" binding:"required"`
+		Note   string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "se requiere el campo 'action'"})
+		return
+	}
+
+	var newStatus model.HistoryRequestStatus
+	switch body.Action {
+	case "approve":
+		newStatus = model.HistoryRequestApproved
+	case "reject":
+		newStatus = model.HistoryRequestRejected
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "acción inválida — debe ser 'approve' o 'reject'"})
+		return
+	}
+
+	req, ok := h.historyRepo.Get(driverID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no existe una solicitud para este chofer"})
+		return
+	}
+	if req.Status != model.HistoryRequestPending {
+		c.JSON(http.StatusConflict, gin.H{"error": "la solicitud ya fue revisada"})
+		return
+	}
+
+	now := time.Now()
+	req.Status = newStatus
+	req.ReviewedBy = reviewer.Username
+	req.ReviewedAt = &now
+	req.ReviewNote = body.Note
+
+	if err := h.historyRepo.Upsert(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la revisión"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "request": req})
 }

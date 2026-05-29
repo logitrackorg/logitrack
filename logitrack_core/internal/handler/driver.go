@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type DriverHandler struct {
 	branchRepo  repository.BranchRepository
 	checkinRepo *repository.CheckinRepository
 	sleepRepo   *repository.SleepRepository
+	historyRepo *repository.HistoryAccessRequestRepository
 	fatigueSvc  *service.FatigueConfigService
 	auditRepo   *repository.AuditLogRepository
 	notifSvc    *service.NotificationService
@@ -43,6 +45,7 @@ func NewDriverHandler(
 		branchRepo:  branchRepo,
 		checkinRepo: repository.NewCheckinRepository(),
 		sleepRepo:   repository.NewSleepRepository(),
+		historyRepo: repository.NewHistoryAccessRequestRepository(),
 		fatigueSvc:  fatigueSvc,
 		auditRepo:   auditRepo,
 		notifSvc:    notifSvc,
@@ -753,6 +756,70 @@ func (h *DriverHandler) FastForwardCheckinTime(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "new_recorded_at": rec.RecordedAt})
+}
+
+// ── Historial personal de check-ins ──────────────────────────────────────────
+
+// RequestHistory creates or resets a pending access request for the driver's
+// personal check-in history. Returns 409 if a pending or approved request already
+// exists. A previously rejected request can be re-submitted.
+func (h *DriverHandler) RequestHistory(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	existing, ok := h.historyRepo.Get(user.ID)
+	if ok {
+		if existing.Status == model.HistoryRequestPending {
+			c.JSON(http.StatusConflict, gin.H{"error": "ya tenés una solicitud pendiente de revisión"})
+			return
+		}
+		if existing.Status == model.HistoryRequestApproved {
+			c.JSON(http.StatusConflict, gin.H{"error": "ya tenés acceso aprobado a tu historial"})
+			return
+		}
+	}
+
+	req := model.HistoryAccessRequest{
+		DriverID:    user.ID,
+		Status:      model.HistoryRequestPending,
+		RequestDate: time.Now(),
+	}
+	if err := h.historyRepo.Upsert(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar la solicitud"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"ok": true, "request": req})
+}
+
+// GetPersonalHistory returns the driver's full check-in history.
+// Returns 403 unless the supervisor has approved the access request.
+func (h *DriverHandler) GetPersonalHistory(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	req, ok := h.historyRepo.Get(user.ID)
+	if !ok || req.Status != model.HistoryRequestApproved {
+		status := "sin_solicitud"
+		if ok {
+			status = string(req.Status)
+		}
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":          "acceso no autorizado — solicitá permiso a tu supervisor",
+			"request_status": status,
+		})
+		return
+	}
+
+	all := h.checkinRepo.AllForDriver(user.ID)
+	// Sort newest first — same order as the supervisor dashboard.
+	sort.Slice(all, func(i, j int) bool { return all[i].Date > all[j].Date })
+	if all == nil {
+		all = []model.DriverCheckin{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"history": all,
+		"total":   len(all),
+		"request": req,
+	})
 }
 
 // updateBaseline computes a simple running average between the existing baseline

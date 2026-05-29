@@ -42,13 +42,17 @@ type User struct {
 }
 
 type UserProfileResponse struct {
-	ID         string `json:"id"`
-	Username   string `json:"username"`
-	FullName   string `json:"full_name"`
-	Email      string `json:"email,omitempty"`
-	Role       Role   `json:"role"`
-	BranchID   string `json:"branch_id,omitempty"`
-	BranchName string `json:"branch_name,omitempty"`
+	ID         string     `json:"id"`
+	Username   string     `json:"username"`
+	FullName   string     `json:"full_name"`
+	Email      string     `json:"email,omitempty"`
+	Role       Role       `json:"role"`
+	Status     UserStatus `json:"status"`
+	BranchID   string     `json:"branch_id,omitempty"`
+	BranchName string     `json:"branch_name,omitempty"`
+	// Driver-specific — omitted for non-driver roles.
+	DriverType DriverType `json:"driver_type,omitempty"`
+	Address    *Address   `json:"address,omitempty"`
 }
 
 type LoginRequest struct {
