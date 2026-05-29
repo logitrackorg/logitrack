@@ -197,7 +197,7 @@ export function NotificationsPage() {
           gap: 12,
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#1e3a5f" }}>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text-heading)" }}>
           Notificaciones
         </h1>
         <button
@@ -232,7 +232,7 @@ export function NotificationsPage() {
         }}
       >
         <div style={{ flex: "1 1 200px", minWidth: 160 }}>
-          <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
             Buscar
           </label>
           <input
@@ -245,14 +245,14 @@ export function NotificationsPage() {
               width: "100%",
               padding: "7px 10px",
               borderRadius: 6,
-              border: "1px solid #cbd5e1",
+              border: "1px solid var(--border)",
               fontSize: 13,
               boxSizing: "border-box",
             }}
           />
         </div>
         <div style={{ flex: "0 1 160px" }}>
-          <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
             Desde
           </label>
           <input
@@ -263,14 +263,14 @@ export function NotificationsPage() {
               width: "100%",
               padding: "7px 10px",
               borderRadius: 6,
-              border: "1px solid #cbd5e1",
+              border: "1px solid var(--border)",
               fontSize: 13,
               boxSizing: "border-box",
             }}
           />
         </div>
         <div style={{ flex: "0 1 160px" }}>
-          <label style={{ display: "block", fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
             Hasta
           </label>
           <input
@@ -281,7 +281,7 @@ export function NotificationsPage() {
               width: "100%",
               padding: "7px 10px",
               borderRadius: 6,
-              border: "1px solid #cbd5e1",
+              border: "1px solid var(--border)",
               fontSize: 13,
               boxSizing: "border-box",
             }}
@@ -307,28 +307,28 @@ export function NotificationsPage() {
 
       {/* List */}
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 40 }}>Cargando...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 40 }}>Cargando...</div>
       ) : notifications.length === 0 ? (
         <div
           style={{
             textAlign: "center",
-            color: "#94a3b8",
+            color: "var(--text-muted)",
             padding: 48,
-            background: "#f8fafc",
+            background: "var(--bg-page)",
             borderRadius: 10,
-            border: "1px dashed #cbd5e1",
+            border: "1px dashed var(--border)",
           }}
         >
-          <Bell size={36} color="#cbd5e1" style={{ marginBottom: 12 }} />
+          <Bell size={36} color="var(--text-faint)" style={{ marginBottom: 12 }} />
           <div style={{ fontSize: 14 }}>No hay notificaciones</div>
         </div>
       ) : (
         <div
           style={{
-            border: "1px solid #e2e8f0",
+            border: "1px solid var(--border)",
             borderRadius: 10,
             overflow: "hidden",
-            background: "#fff",
+            background: "var(--bg-card)",
           }}
         >
           {notifications.map((n, idx) => (
@@ -340,15 +340,15 @@ export function NotificationsPage() {
                 gap: 14,
                 alignItems: "flex-start",
                 padding: "14px 20px",
-                borderBottom: idx < notifications.length - 1 ? "1px solid #f1f5f9" : "none",
-                background: n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff",
-                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid #f59e0b" : n.type === "min_fill_reached" && !n.read_at ? "3px solid #7c3aed" : "3px solid transparent",
+                borderBottom: idx < notifications.length - 1 ? "1px solid var(--bg-inset)" : "none",
+                background: n.read_at ? "var(--bg-card)" : (n.type === "sla_risk" || n.type === "sla_expired") ? "var(--danger-bg)" : (n.type === "return_completed" || n.type === "return_arrival") ? "var(--warn-bg)" : n.type === "min_fill_reached" ? "var(--purple-bg)" : "var(--brand-tint)",
+                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid var(--warn)" : n.type === "min_fill_reached" && !n.read_at ? "3px solid var(--purple)" : "3px solid transparent",
                 cursor: "pointer",
                 transition: "background 0.15s",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "#fff" : (n.type === "sla_risk" || n.type === "sla_expired") ? "#fef2f2" : (n.type === "return_completed" || n.type === "return_arrival") ? "#fffbeb" : n.type === "min_fill_reached" ? "#f5f3ff" : "#eff6ff")
+                (e.currentTarget.style.background = n.read_at ? "var(--bg-card)" : (n.type === "sla_risk" || n.type === "sla_expired") ? "var(--danger-bg)" : (n.type === "return_completed" || n.type === "return_arrival") ? "var(--warn-bg)" : n.type === "min_fill_reached" ? "var(--purple-bg)" : "var(--brand-tint)")
               }
             >
               <div style={{ marginTop: 3, flexShrink: 0 }}>
@@ -368,21 +368,21 @@ export function NotificationsPage() {
                     style={{
                       fontSize: 14,
                       fontWeight: n.read_at ? 400 : 600,
-                      color: "#1e293b",
+                      color: "var(--text-primary)",
                     }}
                   >
                     {n.title}
                   </span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
-                    <span style={{ color: "#94a3b8", fontSize: 11 }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
                       {relativeTime(n.created_at, clockOffsetMs)}
                     </span>
-                    <span style={{ color: "#cbd5e1", fontSize: 11 }}>
+                    <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
                       {formatDate(n.created_at)}
                     </span>
                   </div>
                 </div>
-                <div style={{ fontSize: 13, color: "#475569", marginTop: 3 }}>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 3 }}>
                   {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
                 </div>
                 {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
@@ -405,12 +405,12 @@ export function NotificationsPage() {
                 )}
                 {/* Acción requerida para return_completed y return_arrival — CA-05 */}
                 {(n.type === "return_completed" || n.type === "return_arrival") && (
-                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "var(--warn)" }}>
                     Acción requerida: coordinar entrega con remitente
                   </div>
                 )}
                 {n.resource_id && (
-                  <div style={{ fontSize: 11, color: "#60a5fa", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "var(--info)", marginTop: 4 }}>
                     #{n.resource_id}
                   </div>
                 )}
@@ -444,7 +444,7 @@ export function NotificationsPage() {
             gap: 8,
           }}
         >
-          <span style={{ fontSize: 13, color: "#64748b" }}>
+          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
             {total} resultado{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}
           </span>
           <div style={{ display: "flex", gap: 6 }}>
@@ -454,9 +454,9 @@ export function NotificationsPage() {
               style={{
                 padding: "6px 14px",
                 borderRadius: 6,
-                border: "1px solid #cbd5e1",
-                background: offset === 0 ? "#f8fafc" : "#fff",
-                color: offset === 0 ? "#94a3b8" : "#1e3a5f",
+                border: "1px solid var(--border)",
+                background: offset === 0 ? "var(--bg-page)" : "var(--bg-card)",
+                color: offset === 0 ? "var(--text-muted)" : "var(--text-heading)",
                 cursor: offset === 0 ? "not-allowed" : "pointer",
                 fontSize: 13,
               }}
@@ -469,9 +469,9 @@ export function NotificationsPage() {
               style={{
                 padding: "6px 14px",
                 borderRadius: 6,
-                border: "1px solid #cbd5e1",
-                background: offset + PAGE_SIZE >= total ? "#f8fafc" : "#fff",
-                color: offset + PAGE_SIZE >= total ? "#94a3b8" : "#1e3a5f",
+                border: "1px solid var(--border)",
+                background: offset + PAGE_SIZE >= total ? "var(--bg-page)" : "var(--bg-card)",
+                color: offset + PAGE_SIZE >= total ? "var(--text-muted)" : "var(--text-heading)",
                 cursor: offset + PAGE_SIZE >= total ? "not-allowed" : "pointer",
                 fontSize: 13,
               }}

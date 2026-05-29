@@ -3,7 +3,9 @@ import { Plus, Search, AlertCircle, Filter } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { softBadgeStyle } from "../utils/badgeTone";
 import { fmtDateTime } from "../utils/date";
 import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
@@ -26,6 +28,7 @@ type SortKey = "name" | "city" | "province" | "status" | "updated_at";
 export function BranchList() {
   const isMobile = useIsMobile();
   const { hasRole } = useAuth();
+  const { theme } = useTheme();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -157,7 +160,7 @@ export function BranchList() {
         <Card className="overflow-x-auto">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
-              <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+              <tr style={{ borderBottom: "2px solid var(--border)" }}>
                 <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Nombre{sortIcon("name")}</button></th>
                 <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
                 <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
@@ -170,19 +173,20 @@ export function BranchList() {
             </thead>
             <tbody>
               {filtered.map((b) => (
-                <tr key={b.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                <tr key={b.id} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={tdStyle}>
                     <div style={{ fontWeight: 600 }}>{b.name}</div>
                   </td>
                   <td style={tdStyle}>{b.address.city}, {b.province}</td>
                   <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>
-                  <td style={isMobile ? { display: "none" } : { ...tdStyle, color: b.hours ? "#374151" : "#9ca3af", fontSize: 13 }}>
+                  <td style={isMobile ? { display: "none" } : { ...tdStyle, color: b.hours ? "var(--text-strong)" : "var(--text-muted)", fontSize: 13 }}>
                     {b.hours || "—"}
                   </td>
                   <td style={tdStyle}>
                     <span style={{
                       display: "inline-block", padding: "2px 10px", borderRadius: 12,
-                      fontSize: 12, fontWeight: 600, color: "#fff", background: statusColor(b.status),
+                      fontSize: 12, fontWeight: 600,
+                      ...softBadgeStyle(statusColor(b.status), theme === "dark"),
                     }}>
                       {statusLabel(b.status)}
                     </span>
@@ -194,7 +198,7 @@ export function BranchList() {
                   )}
                   <td style={isMobile ? { display: "none" } : tdStyle}>
                     <div style={{ fontSize: 12 }}>{fmtDateTime(b.updated_at)}</div>
-                    {b.updated_by && <div style={{ fontSize: 11, color: "#9ca3af" }}>por {b.updated_by}</div>}
+                    {b.updated_by && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>por {b.updated_by}</div>}
                   </td>
                   {isAdmin && (
                     <td style={tdStyle}>
@@ -275,12 +279,12 @@ export function BranchList() {
 
 function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
   if (!cap) {
-    return <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>;
+    return <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>;
   }
 
   const pct = Math.min(cap.percentage, 100);
-  const barColor = cap.alert ? "#dc2626" : pct >= 60 ? "#ca8a04" : "#16a34a";
-  const textColor = cap.alert ? "#dc2626" : "#374151";
+  const barColor = cap.alert ? "var(--danger-c)" : pct >= 60 ? "var(--warn)" : "var(--ok)";
+  const textColor = cap.alert ? "var(--danger-text)" : "var(--text-strong)";
 
   return (
     <div style={{ minWidth: 120 }}>
@@ -289,16 +293,16 @@ function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
           {cap.current} / {cap.max_capacity} bultos
         </span>
         {cap.alert && (
-          <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 700, marginLeft: 4 }}>⚠</span>
+          <span style={{ fontSize: 11, color: "var(--danger-text)", fontWeight: 700, marginLeft: 4 }}>⚠</span>
         )}
       </div>
-      <div style={{ background: "#e5e7eb", borderRadius: 4, height: 6, overflow: "hidden" }}>
+      <div style={{ background: "var(--bg-muted)", borderRadius: 4, height: 6, overflow: "hidden" }}>
         <div style={{
           width: `${pct}%`, height: "100%", borderRadius: 4,
           background: barColor, transition: "width 0.3s",
         }} />
       </div>
-      <div style={{ fontSize: 11, color: cap.alert ? "#dc2626" : "#6b7280", marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: cap.alert ? "var(--danger-text)" : "var(--text-secondary)", marginTop: 2 }}>
         {Math.round(pct)}% ocupado
       </div>
     </div>
@@ -379,12 +383,12 @@ function BranchFormModal({
       <Modal onClose={onClose}>
         <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Confirmar cambio de capacidad</h2>
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+          <div style={{ padding: 14, background: "var(--bg-subtle)", borderRadius: 8, border: "1px solid var(--border)" }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>{form.name || initial.name}</div>
-            <div style={{ fontSize: 13, color: "#6b7280", display: "grid", gap: 6 }}>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", display: "grid", gap: 6 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Bultos actuales en el almacén:</span>
-                <strong style={{ color: "#374151" }}>{currentCount} bultos</strong>
+                <strong style={{ color: "var(--text-strong)" }}>{currentCount} bultos</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Capacidad anterior:</span>
@@ -392,29 +396,29 @@ function BranchFormModal({
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Nueva capacidad:</span>
-                <strong style={{ color: "#1e3a5f" }}>{form.max_capacity} bultos</strong>
+                <strong style={{ color: "var(--text-heading)" }}>{form.max_capacity} bultos</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Ocupación con nueva capacidad:</span>
-                <strong style={{ color: overCapacity ? "#dc2626" : newPct >= 80 ? "#ca8a04" : "#16a34a" }}>
+                <strong style={{ color: overCapacity ? "var(--danger-text)" : newPct >= 80 ? "var(--warn-text)" : "var(--ok-text)" }}>
                   {newPct}%
                 </strong>
               </div>
             </div>
           </div>
           {overCapacity && (
-            <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 13, color: "#b91c1c", display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ padding: "10px 14px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, fontSize: 13, color: "var(--danger-text)", display: "flex", gap: 8, alignItems: "flex-start" }}>
               <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
               <span>La nueva capacidad ({form.max_capacity}) es menor que los bultos actuales ({currentCount}). El almacén quedaría con exceso de carga.</span>
             </div>
           )}
           {!overCapacity && newPct >= 80 && (
-            <div style={{ padding: "10px 14px", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ padding: "10px 14px", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, fontSize: 13, color: "var(--warn-text)", display: "flex", gap: 8, alignItems: "flex-start" }}>
               <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
               <span>Con esta capacidad, el almacén quedaría al {newPct}% de ocupación.</span>
             </div>
           )}
-          {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
+          {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
             <button type="button" onClick={() => setStep("form")} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Volver</button>
             <button type="button" onClick={doSubmit} disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
@@ -483,7 +487,7 @@ function BranchFormModal({
             placeholder="ej. Lunes a Viernes 9:00-18:00hs"
           />
         </Field>
-        {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
+        {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
           <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
@@ -526,9 +530,9 @@ function StatusModal({
   return (
     <Modal onClose={onClose}>
       <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Cambiar estado</h2>
-      <div style={{ marginBottom: 16, padding: 12, background: "#f9fafb", borderRadius: 8 }}>
-        <strong>{branch.name}</strong> <span style={{ color: "#9ca3af" }}>— {branch.address.city}</span>
-        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+      <div style={{ marginBottom: 16, padding: 12, background: "var(--bg-subtle)", borderRadius: 8 }}>
+        <strong>{branch.name}</strong> <span style={{ color: "var(--text-muted)" }}>— {branch.address.city}</span>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
           Estado actual: <span style={{ color: statusColor(branch.status), fontWeight: 600 }}>{statusLabel(branch.status)}</span>
         </div>
       </div>
@@ -538,7 +542,7 @@ function StatusModal({
             {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </Field>
-        {(localError || error) && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{localError || error}</p>}
+        {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
           <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
@@ -559,7 +563,7 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
       alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
     }} onClick={onClose}>
       <div style={{
-        background: "#fff", borderRadius: 12, padding: "24px 28px", maxWidth: 520,
+        background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", maxWidth: 520,
         width: "100%", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
       }} onClick={(e) => e.stopPropagation()}>
         {children}
@@ -571,16 +575,16 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "grid", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
+      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>{label}</label>
       {children}
     </div>
   );
 }
 
-const thStyle: React.CSSProperties = { textAlign: "left", padding: "10px 12px", color: "#6b7280", fontWeight: 600, fontSize: 12, textTransform: "uppercase" as const, letterSpacing: 0.5 };
+const thStyle: React.CSSProperties = { textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600, fontSize: 12, textTransform: "uppercase" as const, letterSpacing: 0.5 };
 const tdStyle: React.CSSProperties = { padding: "10px 12px", verticalAlign: "middle" };
 const sortBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, padding: 0 };
-const actionBtn: React.CSSProperties = { background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 500 };
-const inputStyle: React.CSSProperties = { padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, width: "100%", boxSizing: "border-box" as const };
+const actionBtn: React.CSSProperties = { background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 500 };
+const inputStyle: React.CSSProperties = { padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, width: "100%", boxSizing: "border-box" as const };
 const btnPrimary: React.CSSProperties = { background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 };
-const btnSecondary: React.CSSProperties = { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500, fontSize: 14 };
+const btnSecondary: React.CSSProperties = { background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500, fontSize: 14 };

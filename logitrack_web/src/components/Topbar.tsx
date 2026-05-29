@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { NotificationBell } from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useTopbarSlotRef } from "../hooks/useTopbarSlot";
 
@@ -57,10 +58,10 @@ export function Topbar() {
         top: 0,
         zIndex: 50,
         height: 56,
-        background: "rgba(255,255,255,0.92)",
+        background: "var(--topbar-bg)",
         backdropFilter: "saturate(180%) blur(8px)",
         WebkitBackdropFilter: "saturate(180%) blur(8px)",
-        borderBottom: "1px solid #e5e7eb",
+        borderBottom: "1px solid var(--border)",
         display: "flex",
         alignItems: "center",
         gap: 16,
@@ -70,7 +71,7 @@ export function Topbar() {
       <h1 style={{
         fontSize: 15,
         fontWeight: 700,
-        color: "#0f2744",
+        color: "var(--text-heading)",
         margin: 0,
         whiteSpace: "nowrap",
         overflow: "hidden",
@@ -94,6 +95,7 @@ export function Topbar() {
       />
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <ThemeToggle compact={isMobile} />
         <NotificationBell />
       </div>
     </header>

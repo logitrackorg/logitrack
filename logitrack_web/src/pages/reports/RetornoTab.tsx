@@ -25,7 +25,7 @@ interface RetornoTabProps {
 const TOOLTIP_STYLE = {
   fontSize: 12,
   borderRadius: 8,
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--border)",
   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
   padding: "8px 12px",
   background: "rgba(255,255,255,0.97)",

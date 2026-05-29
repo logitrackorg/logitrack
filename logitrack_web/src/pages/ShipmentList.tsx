@@ -10,6 +10,7 @@ import { PriorityBadge } from "../components/PriorityBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/card";
+import { SelectMenu } from "../components/ui/SelectMenu";
 import { TopbarActions } from "../components/topbarContext";
 import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
 
@@ -397,31 +398,27 @@ export function ShipmentList() {
               {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
             </span>
           ) : (
-            <select
+            <SelectMenu
               value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Todas las sucursales</option>
-              {(() => {
-                const byProvince = branches.reduce((acc, b) => {
+              onChange={setBranchFilter}
+              placeholder="Todas las sucursales"
+              ariaLabel="Filtrar por sucursal"
+              className="w-[230px]"
+              groups={Object.entries(
+                branches.reduce((acc, b) => {
                   if (!acc[b.province]) acc[b.province] = [];
                   acc[b.province].push(b);
                   return acc;
-                }, {} as Record<string, Branch[]>);
-                return Object.entries(byProvince)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([province, pBranches]) => (
-                    <optgroup key={province} label={province}>
-                      {[...pBranches]
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(b => (
-                          <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-                        ))}
-                    </optgroup>
-                  ));
-              })()}
-            </select>
+                }, {} as Record<string, Branch[]>)
+              )
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([province, pBranches]) => ({
+                  label: province,
+                  options: [...pBranches]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((b) => ({ value: b.id, label: `${b.name} — ${b.address.city}` })),
+                }))}
+            />
           )}
         </div>
 

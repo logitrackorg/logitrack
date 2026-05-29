@@ -143,7 +143,7 @@ h3 { font-size: 0.9375rem; }
 }
 
 .btn-secondary {
-  background: #fff;
+  background: var(--bg-card);
   color: var(--gray-700);
   border: 1px solid var(--border);
 }
@@ -188,7 +188,7 @@ h3 { font-size: 0.9375rem; }
   border: 1px solid var(--border);
   font-size: 14px;
   font-family: inherit;
-  background: #fff;
+  background: var(--bg-card);
   color: var(--text-primary);
   width: 100%;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -205,6 +205,53 @@ h3 { font-size: 0.9375rem; }
 .input::placeholder,
 .textarea::placeholder {
   color: var(--text-muted);
+}
+
+/* ─── Selects modernos (global) ───
+   Reemplaza la flecha nativa por un chevron propio acorde al tema y quita la
+   apariencia del SO. Cubre tanto `.select` como los <select> con clases
+   Tailwind sueltas. La selectividad de `select:not([multiple])` (0,1,1) gana
+   sobre las utilidades de padding de Tailwind para reservar lugar al chevron. */
+/* Solo a selects "pelados" (sin appearance-none propio). Los que ya traen
+   appearance-none suelen tener su propio ícono de chevron → no duplicar. */
+select:not([multiple]):not(.appearance-none) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%236b7280'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+  background-size: 16px 16px;
+  padding-right: 2.25rem;
+}
+select:not([multiple])::-ms-expand { display: none; }
+.dark select:not([multiple]):not(.appearance-none) {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%2399a6bb'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+}
+/* Opciones del desplegable nativo en oscuro (donde el SO lo respeta) */
+.dark select:not([multiple]) option,
+.dark select:not([multiple]) optgroup {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* ─── Inputs de fecha/hora ───
+   El ícono de calendario y el popup ya se adaptan al tema vía `color-scheme`.
+   Acá solo pulimos el indicador (cursor + opacidad con hover) para que se
+   integre mejor visualmente, en claro y en oscuro. */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="time"]:hover::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator,
+input[type="month"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
 }
 
 .input-error {
@@ -239,7 +286,7 @@ h3 { font-size: 0.9375rem; }
 .card-title {
   font-size: 11px;
   font-weight: 700;
-  color: var(--brand-800);
+  color: var(--text-heading);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -272,7 +319,7 @@ h3 { font-size: 0.9375rem; }
 }
 
 .table tbody tr:hover {
-  background: #f0f9ff;
+  background: var(--bg-hover);
 }
 
 .table-wrap {
@@ -315,9 +362,9 @@ h3 { font-size: 0.9375rem; }
   border: 1px solid;
 }
 
-.badge-alta  { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
-.badge-media { background: #fffbeb; color: #d97706; border-color: #fde68a; }
-.badge-baja  { background: #f0fdf4; color: #16a34a; border-color: #86efac; }
+.badge-alta  { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
+.badge-media { background: var(--warn-bg);   color: var(--warn-text);   border-color: var(--warn-border); }
+.badge-baja  { background: var(--ok-bg);     color: var(--ok-text);     border-color: var(--ok-border); }
 
 /* ─── Modal overlay ──────────────────────────────────────── */
 .modal-overlay {
@@ -332,7 +379,7 @@ h3 { font-size: 0.9375rem; }
 }
 
 .modal {
-  background: #fff;
+  background: var(--bg-elevated);
   border-radius: var(--radius-xl);
   padding: 24px;
   width: 100%;
@@ -351,7 +398,7 @@ h3 { font-size: 0.9375rem; }
 .modal-title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--brand-800);
+  color: var(--text-heading);
 }
 
 .modal-close {
@@ -372,10 +419,10 @@ h3 { font-size: 0.9375rem; }
   border: 1px solid;
 }
 
-.alert-info    { background: var(--brand-50);  border-color: #bfdbfe; color: #1d4ed8; }
-.alert-success { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
-.alert-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
-.alert-danger  { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.alert-info    { background: var(--info-bg);   border-color: var(--info-border);   color: var(--info-text); }
+.alert-success { background: var(--ok-bg);     border-color: var(--ok-border);     color: var(--ok-text); }
+.alert-warning { background: var(--warn-bg);   border-color: var(--warn-border);   color: var(--warn-text); }
+.alert-danger  { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
 
 /* ─── Utility ────────────────────────────────────────────── */
 .text-muted   { color: var(--text-muted); }
@@ -452,3 +499,425 @@ h3 { font-size: 0.9375rem; }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   THEME TOKENS — paleta semántica light/dark
+   Cada token tiene su valor claro (= diseño original) en :root
+   y su equivalente oscuro en .dark. Usar SIEMPRE estos tokens
+   (var(--…)) en lugar de hex crudos para que el modo oscuro
+   funcione automáticamente, incluso en estilos inline.
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  /* Superficies */
+  --bg-page:      #f8fafc;
+  --bg-card:      #ffffff;
+  --bg-elevated:  #ffffff;   /* modales/popovers */
+  --bg-subtle:    #f9fafb;
+  --bg-muted:     #f3f4f6;
+  --bg-inset:     #f1f5f9;
+  --bg-hover:     #f0f9ff;
+
+  /* Bordes */
+  --border:        #e5e7eb;
+  --border-strong: #d1d5db;
+  --border-subtle: #eef0f3;
+
+  /* Texto */
+  --text-primary:   #111827;
+  --text-heading:   #1e3a5f;
+  --text-strong:    #374151;
+  --text-secondary: #6b7280;
+  --text-muted:     #9ca3af;
+  --text-faint:     #cbd5e1;
+
+  /* Marca */
+  --brand:             #2563eb;
+  --brand-strong:      #1d4ed8;
+  --brand-tint:        #eff6ff;
+  --brand-tint-border: #bfdbfe;
+  --on-brand:          #ffffff;
+
+  /* Estado: éxito */
+  --ok:        #10b981;
+  --ok-text:   #166534;
+  --ok-bg:     #f0fdf4;
+  --ok-border: #bbf7d0;
+
+  /* Estado: peligro */
+  --danger-c:      #ef4444;
+  --danger-text:   #dc2626;
+  --danger-bg:     #fef2f2;
+  --danger-border: #fecaca;
+
+  /* Estado: advertencia */
+  --warn:        #f59e0b;
+  --warn-text:   #92400e;
+  --warn-bg:     #fffbeb;
+  --warn-border: #fde68a;
+
+  /* Estado: info */
+  --info:        #3b82f6;
+  --info-text:   #1d4ed8;
+  --info-bg:     #eff6ff;
+  --info-border: #bfdbfe;
+
+  /* Acento púrpura */
+  --purple:        #8b5cf6;
+  --purple-text:   #7c3aed;
+  --purple-bg:     #f5f3ff;
+  --purple-border: #ddd6fe;
+
+  /* Chrome */
+  --topbar-bg:           rgba(255,255,255,0.92);
+  --sidebar-bg:          #0f2744;
+  --sidebar-border:      #1e3a5f;
+  --theme-toggle-border: rgba(0,0,0,0.12);
+}
+
+.dark {
+  /* Neutros base (cascada a .field-label, .table th, etc.) */
+  --gray-900: #e9eef6;
+  --gray-700: #cbd5e1;
+  --gray-500: #99a6bb;
+  --gray-400: #6e7b91;
+  --gray-200: #2a3650;
+  --gray-100: #202a3d;
+  --gray-50:  #1b2436;
+
+  /* Marca: botón primario visible en oscuro */
+  --brand-900: #2563eb;
+  --brand-800: #2563eb;
+  --brand-700: #3b82f6;
+
+  /* Superficies */
+  --bg-page:      #0b111f;
+  --bg-card:      #161f31;
+  --bg-elevated:  #1c2740;
+  --bg-subtle:    #1b2436;
+  --bg-muted:     #202a3d;
+  --bg-inset:     #131c2e;
+  --bg-hover:     #1e2a40;
+
+  /* Bordes */
+  --border:        #2a3650;
+  --border-strong: #3a4866;
+  --border-subtle: #222d44;
+
+  /* Texto */
+  --text-primary:   #e9eef6;
+  --text-heading:   #f1f5fb;
+  --text-strong:    #ccd6e6;
+  --text-secondary: #99a6bb;
+  --text-muted:     #6e7b91;
+  --text-faint:     #4f5d72;
+
+  /* Marca */
+  --brand:             #4d8bf0;
+  --brand-strong:      #3b82f6;
+  --brand-tint:        rgba(59,130,246,0.16);
+  --brand-tint-border: rgba(59,130,246,0.34);
+
+  /* Estado: éxito — el sólido se mantiene vívido; tinte y texto invierten */
+  --ok:        #10b981;
+  --ok-text:   #4ade80;
+  --ok-bg:     rgba(16,185,129,0.15);
+  --ok-border: rgba(16,185,129,0.34);
+
+  /* Estado: peligro */
+  --danger-c:      #ef4444;
+  --danger-text:   #fca5a5;
+  --danger-bg:     rgba(239,68,68,0.15);
+  --danger-border: rgba(239,68,68,0.36);
+
+  /* Estado: advertencia */
+  --warn:        #f59e0b;
+  --warn-text:   #fbbf24;
+  --warn-bg:     rgba(245,158,11,0.15);
+  --warn-border: rgba(245,158,11,0.34);
+
+  /* Estado: info */
+  --info:        #3b82f6;
+  --info-text:   #93c5fd;
+  --info-bg:     rgba(59,130,246,0.15);
+  --info-border: rgba(59,130,246,0.34);
+
+  /* Acento púrpura */
+  --purple:        #8b5cf6;
+  --purple-text:   #c4b5fd;
+  --purple-bg:     rgba(139,92,246,0.16);
+  --purple-border: rgba(139,92,246,0.34);
+
+  /* Estado semántico legacy */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger:  #ef4444;
+  --color-info:    #3b82f6;
+
+  /* Sombras más profundas sobre fondo oscuro */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+  --shadow:    0 4px 12px rgba(0,0,0,0.55);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --shadow-xl: 0 20px 60px rgba(0,0,0,0.7);
+
+  /* Chrome */
+  --topbar-bg:           rgba(13,20,34,0.82);
+  --sidebar-bg:          #0c1424;
+  --sidebar-border:      #1c2842;
+  --theme-toggle-border: rgba(255,255,255,0.18);
+
+  /* Alineación de tokens shadcn (ui/card, ui/button, etc.) con la
+     paleta slate azulada para consistencia visual con el resto. */
+  --background:          #0b111f;
+  --foreground:          #e9eef6;
+  --card:                #161f31;
+  --card-foreground:     #e9eef6;
+  --popover:             #1c2740;
+  --popover-foreground:  #e9eef6;
+  --secondary:           #202a3d;
+  --secondary-foreground:#e9eef6;
+  --muted:               #202a3d;
+  --muted-foreground:    #99a6bb;
+  --accent:              #243047;
+  --accent-foreground:   #e9eef6;
+  --input:               #2a3650;
+
+  color-scheme: dark;
+}
+
+/* ─── Remapeo de utilidades Tailwind neutras en modo oscuro ───
+   Cubre páginas que usan clases utilitarias claras sin tener que
+   editar el markup. Solo neutros (slate/gray/white) — los colores
+   semánticos (emerald, red, etc.) no se tocan acá. */
+.dark .bg-white            { background-color: var(--bg-card) !important; }
+.dark .bg-slate-50,
+.dark .bg-gray-50,
+.dark .bg-neutral-50,
+.dark .bg-zinc-50          { background-color: var(--bg-subtle) !important; }
+.dark .bg-slate-100,
+.dark .bg-gray-100,
+.dark .bg-neutral-100      { background-color: var(--bg-muted) !important; }
+.dark .bg-slate-200,
+.dark .bg-gray-200         { background-color: var(--bg-inset) !important; }
+/* Variantes con opacidad (bg-slate-50/NN) — bandas/secciones sutiles */
+.dark .bg-slate-50\/20,
+.dark .bg-slate-50\/30,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/80     { background-color: var(--bg-subtle) !important; }
+/* Headers/overlays blancos de alta opacidad → superficie de tarjeta.
+   (bg-white/5, /15, /20 NO se tocan: son overlays claros sobre oscuro) */
+.dark .bg-white\/95,
+.dark .bg-white\/97        { background-color: var(--bg-card) !important; }
+
+.dark .text-white          { color: #f8fafc !important; }
+.dark .text-black,
+.dark .text-slate-900,
+.dark .text-gray-900,
+.dark .text-neutral-900,
+.dark .text-zinc-900       { color: var(--text-primary) !important; }
+.dark .text-slate-800,
+.dark .text-gray-800,
+.dark .text-slate-700,
+.dark .text-gray-700,
+.dark .text-neutral-700    { color: var(--text-strong) !important; }
+.dark .text-slate-600,
+.dark .text-gray-600,
+.dark .text-slate-500,
+.dark .text-gray-500,
+.dark .text-neutral-500    { color: var(--text-secondary) !important; }
+.dark .text-slate-400,
+.dark .text-gray-400       { color: var(--text-muted) !important; }
+
+.dark .border-white,
+.dark .border-slate-100,
+.dark .border-gray-100,
+.dark .border-slate-200,
+.dark .border-gray-200,
+.dark .border-neutral-200  { border-color: var(--border) !important; }
+.dark .border-slate-300,
+.dark .border-gray-300     { border-color: var(--border-strong) !important; }
+.dark .divide-slate-200 > * + *,
+.dark .divide-gray-200 > * + * { border-color: var(--border) !important; }
+.dark .ring-slate-200,
+.dark .ring-gray-200       { --tw-ring-color: var(--border) !important; }
+
+/* ─── Tintes/bordes/textos DE COLOR (Tailwind {color}-50/100/200/…) en oscuro ───
+   Los tintes claros de color (bg-blue-50, bg-rose-50, etc.) se convierten en
+   tintes oscuros translúcidos del mismo tono; los bordes y textos de color a su
+   variante oscura. Mantiene la familia de color, legible sobre fondo oscuro. */
+/* Fondos tinte */
+.dark .bg-blue-50, .dark .bg-blue-100,
+.dark .bg-indigo-50, .dark .bg-indigo-100   { background-color: var(--brand-tint) !important; }
+.dark .bg-sky-50, .dark .bg-sky-100,
+.dark .bg-cyan-50, .dark .bg-teal-50        { background-color: var(--info-bg) !important; }
+.dark .bg-emerald-50, .dark .bg-emerald-100,
+.dark .bg-green-50, .dark .bg-lime-50       { background-color: var(--ok-bg) !important; }
+.dark .bg-amber-50, .dark .bg-amber-100,
+.dark .bg-yellow-50,
+.dark .bg-orange-50, .dark .bg-orange-100   { background-color: var(--warn-bg) !important; }
+.dark .bg-red-50, .dark .bg-red-100,
+.dark .bg-rose-50, .dark .bg-rose-100,
+.dark .bg-pink-50                           { background-color: var(--danger-bg) !important; }
+.dark .bg-violet-50, .dark .bg-violet-100,
+.dark .bg-purple-50, .dark .bg-purple-100,
+.dark .bg-fuchsia-50                        { background-color: var(--purple-bg) !important; }
+/* Variantes con opacidad de tintes de color (bg-blue-50/50, etc.) */
+.dark .bg-blue-50\/50, .dark .bg-blue-50\/60, .dark .bg-blue-50\/70,
+.dark .bg-indigo-50\/40                      { background-color: var(--brand-tint) !important; }
+.dark .bg-sky-50\/30, .dark .bg-sky-50\/40, .dark .bg-sky-50\/60,
+.dark .bg-cyan-50\/40                        { background-color: var(--info-bg) !important; }
+.dark .bg-emerald-50\/40, .dark .bg-emerald-50\/60,
+.dark .bg-green-50\/40                       { background-color: var(--ok-bg) !important; }
+.dark .bg-amber-50\/40, .dark .bg-amber-50\/50, .dark .bg-amber-50\/60,
+.dark .bg-orange-50\/40                      { background-color: var(--warn-bg) !important; }
+.dark .bg-rose-50\/40, .dark .bg-rose-50\/50, .dark .bg-rose-50\/60,
+.dark .bg-red-50\/40                         { background-color: var(--danger-bg) !important; }
+.dark .bg-violet-50\/40, .dark .bg-violet-50\/60,
+.dark .bg-purple-50\/40                      { background-color: var(--purple-bg) !important; }
+/* Bordes de color */
+.dark .border-blue-200, .dark .border-blue-300,
+.dark .border-indigo-200, .dark .border-indigo-300 { border-color: var(--brand-tint-border) !important; }
+.dark .border-sky-200, .dark .border-sky-300,
+.dark .border-cyan-200, .dark .border-teal-200     { border-color: var(--info-border) !important; }
+.dark .border-emerald-200, .dark .border-emerald-300,
+.dark .border-green-200                            { border-color: var(--ok-border) !important; }
+.dark .border-amber-200, .dark .border-amber-300,
+.dark .border-yellow-200, .dark .border-orange-200 { border-color: var(--warn-border) !important; }
+.dark .border-red-200, .dark .border-red-300,
+.dark .border-rose-200, .dark .border-rose-300,
+.dark .border-pink-200                             { border-color: var(--danger-border) !important; }
+.dark .border-violet-200, .dark .border-violet-300,
+.dark .border-purple-200                           { border-color: var(--purple-border) !important; }
+/* Textos de color (sobre tinte o como acento) */
+.dark .text-blue-600, .dark .text-blue-700, .dark .text-blue-800, .dark .text-blue-900,
+.dark .text-indigo-700, .dark .text-indigo-800,
+.dark .text-sky-600, .dark .text-sky-700, .dark .text-sky-800, .dark .text-sky-900,
+.dark .text-cyan-700                        { color: var(--info-text) !important; }
+.dark .text-emerald-600, .dark .text-emerald-700, .dark .text-emerald-800, .dark .text-emerald-900,
+.dark .text-green-600, .dark .text-green-700 { color: var(--ok-text) !important; }
+.dark .text-amber-600, .dark .text-amber-700, .dark .text-amber-800, .dark .text-amber-900,
+.dark .text-yellow-700,
+.dark .text-orange-600, .dark .text-orange-700, .dark .text-orange-800, .dark .text-orange-900 { color: var(--warn-text) !important; }
+.dark .text-red-600, .dark .text-red-700, .dark .text-red-800, .dark .text-red-900,
+.dark .text-rose-600, .dark .text-rose-700, .dark .text-rose-800, .dark .text-rose-900 { color: var(--danger-text) !important; }
+.dark .text-violet-600, .dark .text-violet-700, .dark .text-violet-800, .dark .text-violet-900,
+.dark .text-purple-700                      { color: var(--purple-text) !important; }
+
+/* ─── Estados disabled neutros en oscuro ───
+   Las variantes disabled:bg-slate-200 / disabled:text-slate-400 quedaban como
+   un bloque gris claro sobre el fondo oscuro. */
+.dark .disabled\:bg-slate-100:disabled,
+.dark .disabled\:bg-gray-100:disabled  { background-color: var(--bg-muted) !important; }
+.dark .disabled\:bg-slate-200:disabled,
+.dark .disabled\:bg-gray-200:disabled  { background-color: var(--bg-inset) !important; }
+.dark .disabled\:text-slate-300:disabled,
+.dark .disabled\:text-slate-400:disabled,
+.dark .disabled\:text-slate-500:disabled,
+.dark .disabled\:text-gray-400:disabled { color: var(--text-faint) !important; }
+
+/* ─── Gradientes neutros en oscuro ───
+   Las cards con gradiente claro (from-slate-50 to-white) quedaban blancas.
+   Los gradientes de color (hero con texto blanco) se dejan. */
+.dark .from-white          { --tw-gradient-from: var(--bg-card) !important; }
+.dark .from-slate-50,
+.dark .from-gray-50        { --tw-gradient-from: var(--bg-subtle) !important; }
+.dark .via-white           { --tw-gradient-via: var(--bg-card) !important; }
+.dark .to-white            { --tw-gradient-to: var(--bg-card) !important; }
+.dark .to-slate-50,
+.dark .to-gray-50,
+.dark .to-slate-50\/80,
+.dark .to-slate-50\/60     { --tw-gradient-to: var(--bg-subtle) !important; }
+
+/* ─── Hover de fondo en oscuro ───
+   El hover claro (hover:bg-slate-50, etc.) volvía las filas casi blancas.
+   Los hover de botón sólidos de color (bg-emerald-700, etc.) se dejan. */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-50\/50:hover,
+.dark .hover\:bg-slate-50\/60:hover,
+.dark .hover\:bg-slate-50\/80:hover { background-color: var(--bg-hover) !important; }
+.dark .hover\:bg-rose-50:hover,
+.dark .hover\:bg-red-50:hover,
+.dark .hover\:bg-rose-100:hover     { background-color: var(--danger-bg) !important; }
+.dark .hover\:bg-emerald-50:hover   { background-color: var(--ok-bg) !important; }
+.dark .hover\:bg-amber-100:hover    { background-color: var(--warn-bg) !important; }
+.dark .hover\:bg-blue-50:hover,
+.dark .hover\:bg-blue-100:hover     { background-color: var(--brand-tint) !important; }
+.dark .hover\:bg-violet-50:hover    { background-color: var(--purple-bg) !important; }
+.dark .hover\:bg-sky-50\/60:hover   { background-color: var(--info-bg) !important; }
+
+/* ─── Remapeo de clases Tailwind arbitrarias (valor [#hex]) en oscuro ───
+   Solo las que romperían contraste. Los fondos navy (bg-[#1e3a5f] etc.)
+   se dejan: ya son oscuros y llevan texto claro encima. */
+.dark .text-\[\#1e3a5f\],
+.dark .text-\[\#15294a\],
+.dark .text-\[\#0f2744\],
+.dark .text-\[\#162d4a\],
+.dark .text-\[\#1e293b\],
+.dark .text-\[\#0f172a\]     { color: var(--text-heading) !important; }
+.dark .text-\[\#2563eb\],
+.dark .text-\[\#1d4ed8\],
+.dark .text-\[\#1e40af\]     { color: var(--brand) !important; }
+.dark .bg-\[\#e0eaff\],
+.dark .bg-\[\#dbeafe\]       { background-color: var(--brand-tint) !important; }
+.dark .bg-\[\#eff6ff\],
+.dark .bg-\[\#f8fafc\],
+.dark .bg-\[\#f9fafb\],
+.dark .bg-\[\#f1f5f9\]       { background-color: var(--bg-page) !important; }
+.dark .bg-\[\#fff\],
+.dark .bg-\[\#ffffff\]       { background-color: var(--bg-card) !important; }
+.dark .border-\[\#e5e7eb\],
+.dark .border-\[\#e2e8f0\],
+.dark .border-\[\#d1d5db\]   { border-color: var(--border) !important; }
+
+/* ─── Recharts en modo oscuro ───
+   CSS gana sobre los atributos de presentación SVG, así que esto ajusta
+   grillas, ejes, ticks, tooltips y leyendas de todos los gráficos a la vez
+   sin tocar las paletas de datos (que siguen vívidas). */
+.dark .recharts-cartesian-grid line,
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line { stroke: var(--border) !important; }
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis-tick-line { stroke: var(--border-strong) !important; }
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-cartesian-axis-tick text { fill: var(--text-muted) !important; }
+.dark .recharts-polar-grid-concentric circle,
+.dark .recharts-polar-grid-concentric path,
+.dark .recharts-polar-angle-axis-tick-value { stroke: var(--border) !important; }
+.dark .recharts-polar-angle-axis-tick-value { fill: var(--text-muted) !important; stroke: none !important; }
+.dark .recharts-reference-line line { stroke: var(--border-strong) !important; }
+.dark .recharts-legend-item-text { color: var(--text-secondary) !important; }
+.dark .recharts-default-tooltip {
+  background: var(--bg-elevated) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+.dark .recharts-tooltip-item,
+.dark .recharts-tooltip-label { color: var(--text-primary) !important; }
+
+/* ─── Clase helper para inputs dentro de BottomSheet (driver) ─── */
+.driver-input {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  width: 100%;
+}
+.driver-input::placeholder { color: var(--text-muted); }
+
+/* bg-slate-50/60 — variante con opacidad no cubierta por el remap general */
+.dark .bg-slate-50\/60 { background-color: var(--bg-subtle) !important; }
+
+/* ─── Scrollbar en modo oscuro ─── */
+.dark ::-webkit-scrollbar { width: 12px; height: 12px; }
+.dark ::-webkit-scrollbar-track { background: var(--bg-page); }
+.dark ::-webkit-scrollbar-thumb {
+  background: #2c3a55;
+  border-radius: 8px;
+  border: 3px solid var(--bg-page);
+}
+.dark ::-webkit-scrollbar-thumb:hover { background: #3a4a6a; }
+.dark { scrollbar-color: #2c3a55 var(--bg-page); }

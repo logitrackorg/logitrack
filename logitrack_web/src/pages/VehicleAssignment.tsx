@@ -138,21 +138,21 @@ export function VehicleAssignment() {
     <div className="p-6 max-w-[1000px] mx-auto">
       {/* Available vehicles list */}
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "#111827" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "var(--text-primary)" }}>
           Vehículos disponibles
         </h2>
 
         {loading && availableVehicles.length === 0 ? (
-          <p style={{ color: "#6b7280" }}>Cargando vehículos...</p>
+          <p style={{ color: "var(--text-secondary)" }}>Cargando vehículos...</p>
         ) : availableVehicles.length === 0 ? (
           <div
             style={{
-              background: "#f9fafb",
-              border: "1px solid #e5e7eb",
+              background: "var(--bg-subtle)",
+              border: "1px solid var(--border)",
               borderRadius: 8,
               padding: 24,
               textAlign: "center",
-              color: "#6b7280",
+              color: "var(--text-secondary)",
             }}
           >
             No hay vehículos disponibles para asignación
@@ -164,8 +164,8 @@ export function VehicleAssignment() {
                 key={v.id}
                 onClick={() => handleSelectVehicle(v.license_plate)}
                 style={{
-                  background: selectedPlate === v.license_plate ? "#eff6ff" : "#fff",
-                  border: `2px solid ${selectedPlate === v.license_plate ? "#2563eb" : "#e5e7eb"}`,
+                  background: selectedPlate === v.license_plate ? "var(--brand-tint)" : "var(--bg-card)",
+                  border: `2px solid ${selectedPlate === v.license_plate ? "var(--brand)" : "var(--border)"}`,
                   borderRadius: 8,
                   padding: 16,
                   display: "flex",
@@ -176,12 +176,12 @@ export function VehicleAssignment() {
                 }}
                 onMouseEnter={(e) => {
                   if (selectedPlate !== v.license_plate) {
-                    e.currentTarget.style.borderColor = "#93c5fd";
+                    e.currentTarget.style.borderColor = "var(--info)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (selectedPlate !== v.license_plate) {
-                    e.currentTarget.style.borderColor = "#e5e7eb";
+                    e.currentTarget.style.borderColor = "var(--border)";
                   }
                 }}
               >
@@ -197,14 +197,14 @@ export function VehicleAssignment() {
                     flexShrink: 0,
                   }}
                 >
-                  <svg style={{ width: 24, height: 24, color: "#10b981" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg style={{ width: 24, height: 24, color: "var(--ok)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
                   </svg>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: "#111827", margin: 0 }}>{v.license_plate}</p>
-                  <p style={{ fontSize: 13, color: "#6b7280", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{v.license_plate}</p>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "2px 0 0" }}>
                     {vehicleTypeLabels[v.type]} · {v.capacity_kg} kg
                   </p>
                 </div>
@@ -215,13 +215,13 @@ export function VehicleAssignment() {
                     background: "#10b98120",
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#10b981",
+                    color: "var(--ok)",
                   }}
                 >
                   Disponible
                 </div>
                 {selectedPlate === v.license_plate && (
-                  <svg style={{ width: 24, height: 24, color: "#2563eb" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg style={{ width: 24, height: 24, color: "var(--brand)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 )}
@@ -235,8 +235,8 @@ export function VehicleAssignment() {
       {vehicle && (
         <div
           style={{
-            background: "#fff",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
             overflow: "hidden",
             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
@@ -244,15 +244,15 @@ export function VehicleAssignment() {
         >
           <div
             style={{
-              background: vehicle.status === "disponible" ? "#dcfce7" : "#fef3c7",
+              background: vehicle.status === "disponible" ? "var(--ok-bg)" : "var(--warn-bg)",
               padding: 20,
-              borderBottom: "1px solid #e5e7eb",
+              borderBottom: "1px solid var(--border)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Vehículo seleccionado</p>
-                <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, textTransform: "uppercase" }}>Vehículo seleccionado</p>
+                <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {vehicle.license_plate}
                 </h2>
               </div>
@@ -271,10 +271,10 @@ export function VehicleAssignment() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    background: vehicle.status === "disponible" ? "#10b981" : "#f59e0b",
+                    background: vehicle.status === "disponible" ? "var(--ok)" : "var(--warn)",
                   }}
                 />
-                <span style={{ fontSize: 14, fontWeight: 600, color: vehicle.status === "disponible" ? "#10b981" : "#b45309" }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: vehicle.status === "disponible" ? "var(--ok)" : "var(--warn-text)" }}>
                   {vehicle.status_label}
                 </span>
               </div>
@@ -284,21 +284,21 @@ export function VehicleAssignment() {
           <div style={{ padding: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicle.capacity_kg} kg</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicle.capacity_kg} kg</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>ID interno</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>#{vehicle.id}</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>ID interno</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>#{vehicle.id}</p>
               </div>
               {vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Envíos asignados</p>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Envíos asignados</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
                 </div>
               )}
             </div>
@@ -307,13 +307,13 @@ export function VehicleAssignment() {
             {vehicle.status === "disponible" && !(vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0) && (
               <div
                 style={{
-                  background: "#f9fafb",
-                  border: "1px solid #e5e7eb",
+                  background: "var(--bg-subtle)",
+                  border: "1px solid var(--border)",
                   borderRadius: 8,
                   padding: 20,
                 }}
               >
-                <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 16px" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 16px" }}>
                   Asignar a envío
                 </h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
@@ -330,12 +330,12 @@ export function VehicleAssignment() {
                         width: "100%",
                         padding: "10px 14px",
                         borderRadius: 6,
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-strong)",
                         fontSize: 14,
                         textTransform: "uppercase",
                       }}
                     />
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 0" }}>
                       Formato: LT-XXXXXXXX (8 caracteres alfanuméricos)
                     </p>
                   </div>
@@ -343,7 +343,7 @@ export function VehicleAssignment() {
                     onClick={handleAssign}
                     disabled={assigning}
                     style={{
-                      background: "#16a34a",
+                      background: "var(--ok)",
                       color: "#fff",
                       border: "none",
                       borderRadius: 6,
@@ -365,15 +365,15 @@ export function VehicleAssignment() {
             {alreadyAssigned && (
               <div
                 style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
+                  background: "var(--warn-bg)",
+                  border: "1px solid var(--warn-border)",
                   borderRadius: 8,
                   padding: 20,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                   <svg
-                    style={{ width: 24, height: 24, color: "#b45309", flexShrink: 0 }}
+                    style={{ width: 24, height: 24, color: "var(--warn-text)", flexShrink: 0 }}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -385,16 +385,16 @@ export function VehicleAssignment() {
                       d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                     />
                   </svg>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: "#92400e", margin: 0 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--warn-text)", margin: 0 }}>
                     Vehículo ya asignado
                   </h3>
                 </div>
-                <p style={{ fontSize: 14, color: "#78350f", margin: 0 }}>
+                <p style={{ fontSize: 14, color: "var(--warn-text)", margin: 0 }}>
                   Este vehículo ya está asignado al envío{" "}
-                  <strong style={{ color: "#1e3a5f" }}>{alreadyAssigned.shipment}</strong>
+                  <strong style={{ color: "var(--text-heading)" }}>{alreadyAssigned.shipment}</strong>
                   {" "}y su estado actual es <strong>"{alreadyAssigned.status}"</strong>.
                 </p>
-                <p style={{ fontSize: 13, color: "#92400e", margin: "8px 0 0" }}>
+                <p style={{ fontSize: 13, color: "var(--warn-text)", margin: "8px 0 0" }}>
                   Para asignar este vehículo a otro envío, el envío actual debe ser completado o reasignado primero.
                 </p>
               </div>
@@ -407,9 +407,9 @@ export function VehicleAssignment() {
       {error && (
         <div
           style={{
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#dc2626",
+            background: "var(--danger-bg)",
+            border: "1px solid var(--danger-border)",
+            color: "var(--danger-text)",
             padding: "12px 16px",
             borderRadius: 6,
             marginBottom: 20,
@@ -424,9 +424,9 @@ export function VehicleAssignment() {
       {success && (
         <div
           style={{
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            color: "#16a34a",
+            background: "var(--ok-bg)",
+            border: "1px solid var(--ok-border)",
+            color: "var(--ok-text)",
             padding: "12px 16px",
             borderRadius: 6,
             marginBottom: 20,
@@ -441,8 +441,8 @@ export function VehicleAssignment() {
       {vehicle && (
         <div
           style={{
-            background: "#fff",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
             overflow: "hidden",
             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
@@ -451,15 +451,15 @@ export function VehicleAssignment() {
         >
           <div
             style={{
-              background: vehicle.status === "disponible" ? "#dcfce7" : "#fef3c7",
+              background: vehicle.status === "disponible" ? "var(--ok-bg)" : "var(--warn-bg)",
               padding: 20,
-              borderBottom: "1px solid #e5e7eb",
+              borderBottom: "1px solid var(--border)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Patente</p>
-                <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, textTransform: "uppercase" }}>Patente</p>
+                <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {vehicle.license_plate}
                 </h2>
               </div>
@@ -478,10 +478,10 @@ export function VehicleAssignment() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    background: vehicle.status === "disponible" ? "#10b981" : "#f59e0b",
+                    background: vehicle.status === "disponible" ? "var(--ok)" : "var(--warn)",
                   }}
                 />
-                <span style={{ fontSize: 14, fontWeight: 600, color: vehicle.status === "disponible" ? "#10b981" : "#b45309" }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: vehicle.status === "disponible" ? "var(--ok)" : "var(--warn-text)" }}>
                   {vehicle.status_label}
                 </span>
               </div>
@@ -491,21 +491,21 @@ export function VehicleAssignment() {
           <div style={{ padding: 20 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 16, marginBottom: 24 }}>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Tipo</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicle.capacity_kg} kg</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Capacidad</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicle.capacity_kg} kg</p>
               </div>
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>ID interno</p>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>#{vehicle.id}</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>ID interno</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>#{vehicle.id}</p>
               </div>
               {vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase" }}>Envíos asignados</p>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase" }}>Envíos asignados</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-heading)", margin: 0 }}>{vehicle.assigned_shipments.join(", ")}</p>
                 </div>
               )}
             </div>
@@ -514,13 +514,13 @@ export function VehicleAssignment() {
             {vehicle.status === "disponible" && !(vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0) && (
               <div
                 style={{
-                  background: "#f9fafb",
-                  border: "1px solid #e5e7eb",
+                  background: "var(--bg-subtle)",
+                  border: "1px solid var(--border)",
                   borderRadius: 8,
                   padding: 20,
                 }}
               >
-                <h3 style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: "0 0 16px" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 16px" }}>
                   Asignar a envío
                 </h3>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
@@ -537,7 +537,7 @@ export function VehicleAssignment() {
                         width: "100%",
                         padding: "10px 14px",
                         borderRadius: 6,
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-strong)",
                         fontSize: 14,
                         textTransform: "uppercase",
                       }}
@@ -547,7 +547,7 @@ export function VehicleAssignment() {
                     onClick={handleAssign}
                     disabled={assigning}
                     style={{
-                      background: "#16a34a",
+                      background: "var(--ok)",
                       color: "#fff",
                       border: "none",
                       borderRadius: 6,
@@ -569,15 +569,15 @@ export function VehicleAssignment() {
             {alreadyAssigned && (
               <div
                 style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
+                  background: "var(--warn-bg)",
+                  border: "1px solid var(--warn-border)",
                   borderRadius: 8,
                   padding: 20,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
                   <svg
-                    style={{ width: 24, height: 24, color: "#b45309", flexShrink: 0 }}
+                    style={{ width: 24, height: 24, color: "var(--warn-text)", flexShrink: 0 }}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -589,16 +589,16 @@ export function VehicleAssignment() {
                       d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                     />
                   </svg>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: "#92400e", margin: 0 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--warn-text)", margin: 0 }}>
                     Vehículo ya asignado
                   </h3>
                 </div>
-                <p style={{ fontSize: 14, color: "#78350f", margin: 0 }}>
+                <p style={{ fontSize: 14, color: "var(--warn-text)", margin: 0 }}>
                   Este vehículo ya está asignado al envío{" "}
-                  <strong style={{ color: "#1e3a5f" }}>{alreadyAssigned.shipment}</strong>
+                  <strong style={{ color: "var(--text-heading)" }}>{alreadyAssigned.shipment}</strong>
                   {" "}y su estado actual es <strong>"{alreadyAssigned.status}"</strong>.
                 </p>
-                <p style={{ fontSize: 13, color: "#92400e", margin: "8px 0 0" }}>
+                <p style={{ fontSize: 13, color: "var(--warn-text)", margin: "8px 0 0" }}>
                   Para asignar este vehículo a otro envío, el envío actual debe ser completado o reasignado primero.
                 </p>
               </div>
@@ -614,7 +614,7 @@ export function VehicleAssignment() {
           style={{
             background: "none",
             border: "none",
-            color: "#6b7280",
+            color: "var(--text-secondary)",
             cursor: "pointer",
             fontSize: 14,
             textDecoration: "underline",

@@ -1,4 +1,6 @@
 import type { ShipmentStatus } from "../api/shipments";
+import { useTheme } from "../context/ThemeContext";
+import { softBadgeStyle } from "../utils/badgeTone";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STATUS_BADGE_CONFIG: Record<ShipmentStatus, { label: string; bg: string }> = {
@@ -24,8 +26,14 @@ export const STATUS_BADGE_CONFIG: Record<ShipmentStatus, { label: string; bg: st
 };
 
 export function StatusBadge({ status, label }: { status: ShipmentStatus; label?: string }) {
+  const { theme } = useTheme();
   const base = STATUS_BADGE_CONFIG[status] ?? { label: status, bg: "#9ca3af" };
   const cfg = label ? { ...base, label } : base;
+
+  // En oscuro usamos el estilo "tinte suave" de las prioridades; en claro,
+  // el sólido original. Lógica compartida en softBadgeStyle.
+  const tone = softBadgeStyle(cfg.bg, theme === "dark");
+
   return (
     <span style={{
       display: "inline-block",
@@ -34,8 +42,7 @@ export function StatusBadge({ status, label }: { status: ShipmentStatus; label?:
       fontSize: 12,
       fontWeight: 600,
       whiteSpace: "nowrap",
-      background: cfg.bg,
-      color: "#fff",
+      ...tone,
     }}>
       {cfg.label}
     </span>

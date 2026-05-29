@@ -115,8 +115,8 @@ export function UserProfile() {
                 padding: "12px 16px",
                 border: "none",
                 borderRadius: 8,
-                background: activeTab === "profile" ? "#1e3a5f" : "#f8fafc",
-                color: activeTab === "profile" ? "#fff" : "#0f172a",
+                background: activeTab === "profile" ? "#1e3a5f" : "var(--bg-page)",
+                color: activeTab === "profile" ? "#fff" : "var(--text-primary)",
                 cursor: "pointer",
                 fontWeight: activeTab === "profile" ? 700 : 500,
                 marginBottom: 12,
@@ -133,8 +133,8 @@ export function UserProfile() {
                 padding: "12px 16px",
                 border: "none",
                 borderRadius: 8,
-                background: activeTab === "security" ? "#1e3a5f" : "#f8fafc",
-                color: activeTab === "security" ? "#fff" : "#0f172a",
+                background: activeTab === "security" ? "#1e3a5f" : "var(--bg-page)",
+                color: activeTab === "security" ? "#fff" : "var(--text-primary)",
                 cursor: "pointer",
                 fontWeight: activeTab === "security" ? 700 : 500,
                 marginBottom: 12,
@@ -298,7 +298,7 @@ export function UserProfile() {
               {loadingProfile ? (
                 <p>Cargando perfil...</p>
               ) : profileError ? (
-                <p style={{ color: "#b91c1c" }}>{profileError}</p>
+                <p style={{ color: "var(--danger-text)" }}>{profileError}</p>
               ) : (
                 <div style={{ display: "grid", gap: 16, maxWidth: 520 }}>
                   <div>
@@ -313,10 +313,10 @@ export function UserProfile() {
                       style={{
                         width: "100%",
                         padding: "10px 12px",
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-strong)",
                         borderRadius: 6,
-                        background: "#f8fafc",
-                        color: "#334155",
+                        background: "var(--bg-page)",
+                        color: "var(--text-strong)",
                       }}
                     />
                   </div>
@@ -333,10 +333,10 @@ export function UserProfile() {
                       style={{
                         width: "100%",
                         padding: "10px 12px",
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-strong)",
                         borderRadius: 6,
-                        background: "#f8fafc",
-                        color: "#334155",
+                        background: "var(--bg-page)",
+                        color: "var(--text-strong)",
                       }}
                     />
                   </div>
@@ -353,10 +353,10 @@ export function UserProfile() {
                       style={{
                         width: "100%",
                         padding: "10px 12px",
-                        border: "1px solid #d1d5db",
+                        border: "1px solid var(--border-strong)",
                         borderRadius: 6,
-                        background: "#f8fafc",
-                        color: "#334155",
+                        background: "var(--bg-page)",
+                        color: "var(--text-strong)",
                       }}
                     />
                   </div>
@@ -401,7 +401,7 @@ export function UserProfile() {
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      border: "1px solid #d1d5db",
+                      border: "1px solid var(--border-strong)",
                       borderRadius: 6,
                       fontSize: 14,
                     }}
@@ -421,7 +421,7 @@ export function UserProfile() {
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      border: "1px solid #d1d5db",
+                      border: "1px solid var(--border-strong)",
                       borderRadius: 6,
                       fontSize: 14,
                     }}
@@ -441,7 +441,7 @@ export function UserProfile() {
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      border: "1px solid #d1d5db",
+                      border: "1px solid var(--border-strong)",
                       borderRadius: 6,
                       fontSize: 14,
                     }}
