@@ -15,36 +15,36 @@ const KPIS: KPI[] = [
   {
     key: "in_transit",
     label: "En tránsito",
-    color: "#2563eb",
-    bg: "#eff6ff",
-    border: "#bfdbfe",
+    color: "var(--brand)",
+    bg: "var(--brand-tint)",
+    border: "var(--brand-tint-border)",
     filterValue: "in_transit",
     count: (list) => list.filter((s) => s.status === "in_transit").length,
   },
   {
     key: "out_for_delivery",
     label: "Última milla",
-    color: "#d97706",
-    bg: "#fffbeb",
-    border: "#fde68a",
+    color: "var(--warn)",
+    bg: "var(--warn-bg)",
+    border: "var(--warn-border)",
     filterValue: "out_for_delivery",
     count: (list) => list.filter((s) => s.status === "out_for_delivery").length,
   },
   {
     key: "at_hub",
     label: "En sucursal",
-    color: "#7c3aed",
-    bg: "#f5f3ff",
-    border: "#ddd6fe",
+    color: "var(--purple-text)",
+    bg: "var(--purple-bg)",
+    border: "var(--purple-bg)",
     filterValue: "at_hub",
     count: (list) => list.filter((s) => s.status === "at_hub" || s.status === "at_origin_hub").length,
   },
   {
     key: "sla_risk",
     label: "Riesgo SLA",
-    color: "#b45309",
-    bg: "#fff7ed",
-    border: "#fed7aa",
+    color: "var(--warn-text)",
+    bg: "var(--warn-bg)",
+    border: "var(--warn-border)",
     filterValue: "sla_risk",
     count: (list) => {
       const cutoff = Date.now() + 24 * 60 * 60 * 1000;
@@ -79,15 +79,15 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
             onClick={() => onFilter(isActive ? "active" : kpi.filterValue as ShipmentStatus | "active" | "sla_risk" | "")}
             className="text-left rounded-xl p-3.5 border transition-all cursor-pointer"
             style={{
-              background: isActive ? kpi.bg : "#fff",
-              borderColor: isActive ? kpi.border : "#e2e8f0",
+              background: isActive ? kpi.bg : "var(--bg-card)",
+              borderColor: isActive ? kpi.border : "var(--border)",
               boxShadow: isActive ? `0 0 0 2px ${kpi.border}` : "0 1px 3px rgba(0,0,0,0.06)",
               transform: isActive ? "translateY(-1px)" : undefined,
             }}
           >
             <div
               className="text-2xl font-bold tabular-nums leading-none mb-1"
-              style={{ color: count > 0 ? kpi.color : "#cbd5e1" }}
+              style={{ color: count > 0 ? kpi.color : "var(--text-faint)" }}
             >
               {count}
             </div>

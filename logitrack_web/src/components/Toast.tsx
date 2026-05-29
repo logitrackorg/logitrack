@@ -37,7 +37,7 @@ export function ToastContainer() {
           borderRadius: 8,
           minWidth: 260,
           maxWidth: 360,
-          background: t.type === "success" ? "#166534" : "#991b1b",
+          background: t.type === "success" ? "var(--ok)" : "var(--danger-c)",
           color: "#fff",
           fontSize: 14,
           fontWeight: 500,

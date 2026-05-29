@@ -58,15 +58,15 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
 function statusBadgeStyle(status: ClaimStatus): React.CSSProperties {
   switch (status) {
     case "open":
-      return { background: "#0ea5e9", color: "#fff" };
+      return { background: "var(--info)", color: "#fff" };
     case "in_review":
-      return { background: "#2563eb", color: "#fff" };
+      return { background: "var(--brand)", color: "#fff" };
     case "pending_customer":
-      return { background: "#f59e0b", color: "#1e293b" };
+      return { background: "var(--warn)", color: "#1e293b" };
     case "derived":
       return { background: "#64748b", color: "#fff" };
     default:
-      return { background: "#16a34a", color: "#fff" };
+      return { background: "var(--ok)", color: "#fff" };
   }
 }
 
@@ -453,19 +453,19 @@ export function Claims() {
                     cursor: "pointer",
                     listStyle: "none",
                     padding: "18px 20px",
-                    borderBottom: "1px solid #e2e8f0",
-                    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                    borderBottom: "1px solid var(--border)",
+                    background: "linear-gradient(180deg, var(--bg-card) 0%, var(--bg-page) 100%)",
                   }}
                 >
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "#1e3a5f", background: "rgba(30,58,95,0.08)", padding: "3px 8px", borderRadius: 999 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-heading)", background: "rgba(30,58,95,0.08)", padding: "3px 8px", borderRadius: 999 }}>
                           {claim.id}
                         </span>
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>Envío {claim.tracking_id}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Envío {claim.tracking_id}</span>
                       </div>
-                      <div style={{ fontSize: 13, color: "#475569" }}>
+                      <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                         {CLAIM_TYPE_LABELS[claim.claim_type]}
                       </div>
                     </div>
@@ -485,7 +485,7 @@ export function Claims() {
                 </summary>
 
                 <div style={{ padding: "18px 20px 20px", display: "grid", gap: 16 }}>
-                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "#334155", lineHeight: 1.45 }}>
+                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "var(--text-strong)", lineHeight: 1.45 }}>
                     <div><strong>Creado por:</strong> {claim.created_by}</div>
                     <div><strong>Descripción:</strong> {claim.description}</div>
                     <div><strong>Creado:</strong> {fmtDateTime(claim.created_at)}</div>
@@ -496,12 +496,12 @@ export function Claims() {
                   </div>
 
                   {claim.evidence_file_name && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", border: "1px solid #e2e8f0", borderRadius: 16, padding: "14px 16px", background: "#f8fafc" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", border: "1px solid var(--border)", borderRadius: 16, padding: "14px 16px", background: "var(--bg-page)" }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5 }}>Evidencia adjunta</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1e293b", wordBreak: "break-word" }}>{claim.evidence_file_name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Evidencia adjunta</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", wordBreak: "break-word" }}>{claim.evidence_file_name}</div>
                         {claim.evidence_upload_date && (
-                          <div style={{ fontSize: 12, color: "#64748b" }}>Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
                         )}
                       </div>
                       <button
@@ -529,19 +529,19 @@ export function Claims() {
                   )}
 
                   {!isManager && (
-                    <div style={{ display: "grid", gap: 12, borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+                    <div style={{ display: "grid", gap: 12, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end" }}>
-                        <label style={{ fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Derivar a</label>
+                        <label style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Derivar a</label>
                         <select
                           value={categoryDraft[claim.id] ?? ""}
                           onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
                           style={{
                             minWidth: 240,
-                            border: "1px solid #cbd5e1",
+                            border: "1px solid var(--border)",
                             borderRadius: 12,
                             padding: "10px 12px",
                             fontSize: 13,
-                            background: "#fff",
+                            background: "var(--bg-card)",
                             boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
                           }}
                         >
@@ -573,7 +573,7 @@ export function Claims() {
                       </div>
 
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Resolver</span>
+                        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Resolver</span>
                         {RESOLUTION_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
@@ -581,9 +581,9 @@ export function Claims() {
                             onClick={() => handleResolve(claim.id, opt.value)}
                             disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
                             style={{
-                              background: "#fff7ed",
-                              color: "#1e293b",
-                              border: "1px solid #fed7aa",
+                              background: "var(--warn-bg)",
+                              color: "var(--text-primary)",
+                              border: "1px solid var(--warn-border)",
                               borderRadius: 999,
                               padding: "9px 14px",
                               fontSize: 12,
@@ -666,37 +666,37 @@ export function Claims() {
                     </div>
                   )}
 
-                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 16 }}>
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
                     <details>
-                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "var(--text-secondary)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>
                         Historial del reclamo
                       </summary>
                       <div style={{ marginTop: 8 }}>
                         {eventsLoadingId === claim.id ? (
-                          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Cargando historial…</p>
+                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Cargando historial…</p>
                         ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
-                          <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>Sin eventos registrados.</p>
+                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Sin eventos registrados.</p>
                         ) : (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
                               <div
                                 key={ev.id}
                                 style={{
-                                  border: "1px solid #e2e8f0",
+                                  border: "1px solid var(--border)",
                                   borderRadius: 8,
                                   padding: "8px 10px",
                                   fontSize: 13,
-                                  background: "#f8fafc",
+                                  background: "var(--bg-page)",
                                 }}
                               >
                                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                                  <span style={{ fontWeight: 600, color: "#1e3a5f" }}>
+                                  <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>
                                     {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
                                   </span>
-                                  <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
+                                  <span style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
                                 </div>
-                                {ev.notes && <div style={{ color: "#475569" }}>{ev.notes}</div>}
-                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
+                                {ev.notes && <div style={{ color: "var(--text-secondary)" }}>{ev.notes}</div>}
+                                <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 4 }}>
                                   por <strong>{ev.changed_by}</strong>
                                   {ev.from_status && ev.to_status && (
                                     <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>

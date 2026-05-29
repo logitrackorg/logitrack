@@ -370,7 +370,7 @@ export function FatigueConfig() {
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
-                      <tr style={{ background: "#f9fafb" }}>
+                      <tr style={{ background: "var(--bg-subtle)" }}>
                         <th style={thStyle}>Fecha / hora</th>
                         <th style={thStyle}>Usuario</th>
                         <th style={thStyle}>Acción</th>
@@ -584,7 +584,7 @@ const thStyle: React.CSSProperties = {
   textAlign: "left",
   fontWeight: 700,
   fontSize: 11,
-  color: "#6b7280",
+  color: "var(--text-secondary)",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
   whiteSpace: "nowrap",
@@ -592,14 +592,14 @@ const thStyle: React.CSSProperties = {
 
 const tdStyle: React.CSSProperties = {
   padding: "8px 12px",
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: "1px solid var(--border)",
   verticalAlign: "top",
 };
 
 const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
-  UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "#dbeafe", color: "#1e40af" },
-  SUBMIT_CHECKIN:        { label: "Check-in",        bg: "#dcfce7", color: "#166534" },
-  SKIP_CHECKIN:          { label: "Salteado",         bg: "#ffedd5", color: "#9a3412" },
+  UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "var(--brand-tint)", color: "var(--brand)" },
+  SUBMIT_CHECKIN:        { label: "Check-in",        bg: "var(--ok-bg)", color: "var(--ok-text)" },
+  SKIP_CHECKIN:          { label: "Salteado",         bg: "var(--warn-bg)", color: "var(--warn-text)" },
 };
 
 function formatAuditDate(iso: string): string {
@@ -610,7 +610,7 @@ function formatAuditDate(iso: string): string {
 }
 
 function AuditRow({ log }: { log: AuditLog }) {
-  const badge = ACTION_BADGE[log.action] ?? { label: log.action, bg: "#f3f4f6", color: "#374151" };
+  const badge = ACTION_BADGE[log.action] ?? { label: log.action, bg: "var(--bg-muted)", color: "var(--text-strong)" };
   const d = log.details;
 
   let detailText = "—";
@@ -628,17 +628,17 @@ function AuditRow({ log }: { log: AuditLog }) {
   }
 
   return (
-    <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "#374151" }}>
+    <tr style={{ borderBottom: "1px solid var(--border)" }}>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "var(--text-strong)" }}>
         {formatAuditDate(log.created_at)}
       </td>
-      <td style={{ ...tdStyle, fontWeight: 600, color: "#111827" }}>{log.created_by}</td>
+      <td style={{ ...tdStyle, fontWeight: 600, color: "var(--text-primary)" }}>{log.created_by}</td>
       <td style={tdStyle}>
         <span style={{ background: badge.bg, color: badge.color, borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
           {badge.label}
         </span>
       </td>
-      <td style={{ ...tdStyle, color: "#6b7280", fontSize: 12 }}>{detailText}</td>
+      <td style={{ ...tdStyle, color: "var(--text-secondary)", fontSize: 12 }}>{detailText}</td>
     </tr>
   );
 }

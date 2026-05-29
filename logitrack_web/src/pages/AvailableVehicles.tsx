@@ -53,14 +53,14 @@ export function AvailableVehicles() {
       {/* Filtros */}
       <div
         style={{
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
+          background: "var(--bg-subtle)",
+          border: "1px solid var(--border)",
           borderRadius: 8,
           padding: 20,
           marginBottom: 24,
         }}
       >
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 16px" }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 16px" }}>
           Filtrar Vehículos
         </h3>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -75,9 +75,9 @@ export function AvailableVehicles() {
                 width: "100%",
                 padding: "8px 12px",
                 borderRadius: 6,
-                border: "1px solid #d1d5db",
+                border: "1px solid var(--border-strong)",
                 fontSize: 14,
-                background: "#fff",
+                background: "var(--bg-card)",
               }}
             >
               <option value="">Todos los tipos</option>
@@ -102,7 +102,7 @@ export function AvailableVehicles() {
                 width: "100%",
                 padding: "8px 12px",
                 borderRadius: 6,
-                border: "1px solid #d1d5db",
+                border: "1px solid var(--border-strong)",
                 fontSize: 14,
               }}
             />
@@ -111,8 +111,8 @@ export function AvailableVehicles() {
           <button
             onClick={handleClearFilters}
             style={{
-              background: "#e5e7eb",
-              color: "#374151",
+              background: "var(--bg-muted)",
+              color: "var(--text-strong)",
               border: "none",
               borderRadius: 6,
               padding: "8px 16px",
@@ -129,14 +129,14 @@ export function AvailableVehicles() {
 
       {/* Resultados */}
       {loading ? (
-        <p style={{ textAlign: "center", color: "#6b7280" }}>Cargando...</p>
+        <p style={{ textAlign: "center", color: "var(--text-secondary)" }}>Cargando...</p>
       ) : vehicles.length === 0 ? (
         <div
           style={{
             textAlign: "center",
             padding: "60px 20px",
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
           }}
         >
@@ -159,16 +159,16 @@ export function AvailableVehicles() {
               d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z"
             />
           </svg>
-          <p style={{ fontSize: 16, fontWeight: 600, color: "#374151", margin: 0 }}>
+          <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>
             No hay vehículos disponibles
           </p>
-          <p style={{ fontSize: 14, color: "#6b7280", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: "4px 0 0" }}>
             No existen unidades en estado "Disponible" que coincidan con los filtros seleccionados.
           </p>
         </div>
       ) : (
         <>
-          <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
             {vehicles.length} vehículo{vehicles.length !== 1 ? "s" : ""} disponible{vehicles.length !== 1 ? "s" : ""}
           </p>
           <div style={{ display: "grid", gap: 16 }}>
@@ -176,8 +176,8 @@ export function AvailableVehicles() {
               <div
                 key={v.id}
                 style={{
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
                   borderRadius: 8,
                   padding: 20,
                   display: "flex",
@@ -226,37 +226,37 @@ export function AvailableVehicles() {
                 {/* Información del vehículo */}
                 <div style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center" }}>
                   <div>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       Patente
                     </p>
-                    <p style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>
+                    <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
                       {v.license_plate}
                     </p>
                   </div>
 
                   <div>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       Tipo
                     </p>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>
                       {vehicleTypeLabels[v.type]}
                     </p>
                   </div>
 
                   <div>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       Capacidad
                     </p>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>
                       {v.capacity_kg} kg
                     </p>
                   </div>
 
                   <div>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       ID
                     </p>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>
                       #{v.id}
                     </p>
                   </div>

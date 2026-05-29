@@ -6,6 +6,7 @@ import { autoReportsApi, type AutoReportSchedule, type GeneratedReport, type Rep
 import { branchApi, type Branch } from "../api/branches";
 import { PageHeader } from "../components/ui/page-header";
 import { Card } from "../components/ui/card";
+import { SelectMenu } from "../components/ui/SelectMenu";
 import { toast } from "../utils/toast";
 import { fmtDateTime } from "../utils/date";
 
@@ -545,18 +546,14 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Sucursal</label>
-              <select
+              <SelectMenu
                 value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50"
-              >
-                <option value="">Todas las sucursales</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setBranchId}
+                placeholder="Todas las sucursales"
+                ariaLabel="Sucursal"
+                className="w-full"
+                options={branches.map((b) => ({ value: b.id, label: b.name }))}
+              />
             </div>
 
             <div>

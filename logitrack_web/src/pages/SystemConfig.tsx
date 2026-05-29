@@ -416,9 +416,10 @@ export function SystemConfig() {
                   }`}
                 />
                 <div
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${
                     draft.force_email_notifications ? "translate-x-5" : "translate-x-0"
                   }`}
+                  style={{ background: "#fff" }}
                 />
               </div>
               <span className="text-sm font-semibold text-slate-700">

@@ -62,7 +62,7 @@ function ScoreBar({
   redMin: number;
 }) {
   const color =
-    score <= greenMax ? "#10b981" : score >= redMin ? "#ef4444" : "#f59e0b";
+    score <= greenMax ? "var(--ok)" : score >= redMin ? "var(--danger-c)" : "var(--warn)";
   return (
     <div className="flex items-center gap-2 min-w-0">
       <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">

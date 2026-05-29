@@ -183,7 +183,7 @@ export function VehicleStatus() {
                 width: "100%",
                 padding: "10px 14px",
                 borderRadius: 6,
-                border: "1px solid #d1d5db",
+                border: "1px solid var(--border-strong)",
                 fontSize: 16,
                 textTransform: "uppercase",
                 fontWeight: 500,
@@ -211,8 +211,8 @@ export function VehicleStatus() {
             type="button"
             onClick={handleClear}
             style={{
-              background: "#e5e7eb",
-              color: "#374151",
+              background: "var(--bg-muted)",
+              color: "var(--text-strong)",
               border: "none",
               borderRadius: 6,
               padding: "10px 20px",
@@ -230,9 +230,9 @@ export function VehicleStatus() {
       {error && (
         <div
           style={{
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#dc2626",
+            background: "var(--danger-bg)",
+            border: "1px solid var(--danger-border)",
+            color: "var(--danger-text)",
             padding: "12px 16px",
             borderRadius: 6,
             marginBottom: 20,
@@ -247,9 +247,9 @@ export function VehicleStatus() {
       {notFound && (
         <div
           style={{
-            background: "#fffbeb",
-            border: "1px solid #fde68a",
-            color: "#92400e",
+            background: "var(--warn-bg)",
+            border: "1px solid var(--warn-border)",
+            color: "var(--warn-text)",
             padding: "16px 20px",
             borderRadius: 8,
             marginBottom: 20,
@@ -280,9 +280,9 @@ export function VehicleStatus() {
       {success && (
         <div
           style={{
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            color: "#16a34a",
+            background: "var(--ok-bg)",
+            border: "1px solid var(--ok-border)",
+            color: "var(--ok-text)",
             padding: "12px 16px",
             borderRadius: 6,
             marginBottom: 20,
@@ -297,8 +297,8 @@ export function VehicleStatus() {
       {vehicle && (
         <div
           style={{
-            background: "#fff",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
             overflow: "hidden",
             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
@@ -314,10 +314,10 @@ export function VehicleStatus() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
               <div>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   Patente
                 </p>
-                <h2 style={{ fontSize: 28, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
+                <h2 style={{ fontSize: 28, fontWeight: 700, margin: "4px 0 0", color: "var(--text-primary)" }}>
                   {vehicle.license_plate}
                 </h2>
               </div>
@@ -372,7 +372,7 @@ export function VehicleStatus() {
 
           {/* Vehicle information */}
           <div style={{ padding: 24 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#6b7280", margin: "0 0 16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Información del vehículo
             </h3>
             <div
@@ -467,21 +467,21 @@ export function VehicleStatus() {
                 style={{
                   marginTop: 24,
                   padding: 16,
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
+                  background: "var(--brand-tint)",
+                  border: "1px solid var(--brand-tint-border)",
                   borderRadius: 8,
                 }}
               >
-                <h3 style={{ fontSize: 14, fontWeight: 600, color: "#1e40af", margin: "0 0 8px", display: "flex", alignItems: "center", gap: 8 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--brand)", margin: "0 0 8px", display: "flex", alignItems: "center", gap: 8 }}>
                   <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Envíos asignados
                 </h3>
-                <p style={{ fontSize: 16, fontWeight: 600, color: "#1e3a5f", margin: 0 }}>
+                <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-heading)", margin: 0 }}>
                   {vehicle.assigned_shipments.join(", ")}
                 </p>
-                <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 0" }}>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>
                   Este vehículo tiene envíos cargados activos.
                 </p>
               </div>
@@ -493,12 +493,12 @@ export function VehicleStatus() {
                 style={{
                   marginTop: 24,
                   padding: 16,
-                  background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
+                  background: "var(--ok-bg)",
+                  border: "1px solid var(--ok-border)",
                   borderRadius: 8,
                 }}
               >
-                <p style={{ fontSize: 14, color: "#16a34a", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <p style={{ fontSize: 14, color: "var(--ok-text)", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
                   <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -529,7 +529,7 @@ export function VehicleStatus() {
         >
           <div
             style={{
-              background: "#fff",
+              background: "var(--bg-card)",
               borderRadius: 12,
               padding: 24,
               maxWidth: 450,
@@ -538,16 +538,16 @@ export function VehicleStatus() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 20px", color: "#111827" }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 20px", color: "var(--text-primary)" }}>
               Cambiar estado del vehículo
             </h2>
 
             {transitionError && (
               <div
                 style={{
-                  background: showForceConfirm ? "#fffbeb" : "#fef2f2",
-                  border: `1px solid ${showForceConfirm ? "#fde68a" : "#fecaca"}`,
-                  color: showForceConfirm ? "#92400e" : "#dc2626",
+                  background: showForceConfirm ? "var(--warn-bg)" : "var(--danger-bg)",
+                  border: `1px solid ${showForceConfirm ? "var(--warn-border)" : "var(--danger-border)"}`,
+                  color: showForceConfirm ? "var(--warn-text)" : "var(--danger-text)",
                   padding: "12px 16px",
                   borderRadius: 6,
                   marginBottom: 16,
@@ -574,9 +574,9 @@ export function VehicleStatus() {
                   width: "100%",
                   padding: "8px 12px",
                   borderRadius: 6,
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--border-strong)",
                   fontSize: 14,
-                  background: "#fff",
+                  background: "var(--bg-card)",
                 }}
               >
                 {statusOptions.map((opt) => (
@@ -598,7 +598,7 @@ export function VehicleStatus() {
                   width: "100%",
                   padding: "8px 12px",
                   borderRadius: 6,
-                  border: "1px solid #d1d5db",
+                  border: "1px solid var(--border-strong)",
                   fontSize: 14,
                   resize: "vertical",
                 }}
@@ -611,8 +611,8 @@ export function VehicleStatus() {
                 onClick={() => setShowStatusModal(false)}
                 disabled={changingStatus}
                 style={{
-                  background: "#e5e7eb",
-                  color: "#374151",
+                  background: "var(--bg-muted)",
+                  color: "var(--text-strong)",
                   border: "none",
                   borderRadius: 6,
                   padding: "8px 16px",
@@ -651,7 +651,7 @@ export function VehicleStatus() {
           style={{
             textAlign: "center",
             padding: "60px 20px",
-            color: "#6b7280",
+            color: "var(--text-secondary)",
           }}
         >
           <svg
@@ -687,20 +687,20 @@ function InfoCard({ label, value, icon }: { label: string; value: string; icon: 
     <div
       style={{
         padding: 16,
-        background: "#f9fafb",
-        border: "1px solid #e5e7eb",
+        background: "var(--bg-subtle)",
+        border: "1px solid var(--border)",
         borderRadius: 8,
         display: "flex",
         alignItems: "flex-start",
         gap: 12,
       }}
     >
-      <div style={{ color: "#6b7280", flexShrink: 0 }}>{icon}</div>
+      <div style={{ color: "var(--text-secondary)", flexShrink: 0 }}>{icon}</div>
       <div>
-        <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
           {label}
         </p>
-        <p style={{ fontSize: 16, fontWeight: 600, color: "#111827", margin: 0 }}>{value}</p>
+        <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{value}</p>
       </div>
     </div>
   );

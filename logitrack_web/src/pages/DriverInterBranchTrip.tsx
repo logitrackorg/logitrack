@@ -824,16 +824,16 @@ function StepperBar({
           const isPending = !isOriginPt && stopIdx > currentStopIdx;
           const isLast = idx === allPoints.length - 1;
 
-          let dotBg = "#64748b";
+          let dotBg = "var(--text-secondary)";
           let dotContent = <span className="text-[9px] font-bold text-white">{idx}</span>;
           if (isOriginPt) {
             dotBg = "#1e3a5f";
             dotContent = <Truck className="w-3 h-3 text-white" />;
           } else if (isCompleted) {
-            dotBg = "#059669";
+            dotBg = "var(--ok)";
             dotContent = <span className="text-[9px] font-bold text-white">✓</span>;
           } else if (isCurrent) {
-            dotBg = "#0284c7";
+            dotBg = "var(--info)";
             dotContent = <MapPin className="w-3 h-3 text-white" />;
           }
 
@@ -853,7 +853,7 @@ function StepperBar({
               {!isLast && (
                 <div
                   className="flex-1 h-0.5 mt-[13px] mx-1"
-                  style={{ background: isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "#059669" : "#e2e8f0" }}
+                  style={{ background: isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "var(--ok)" : "var(--border)" }}
                 />
               )}
             </div>

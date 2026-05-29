@@ -265,7 +265,7 @@ export function PVTCheckIn({ onDone }: Props) {
                   className="h-full rounded-full transition-[width] duration-1000"
                   style={{
                     width: `${(timeLeft / GAME_DURATION_S) * 100}%`,
-                    background: timeLeft > 10 ? "#eab308" : "#ef4444",
+                    background: timeLeft > 10 ? "var(--warn)" : "var(--danger-c)",
                   }}
                 />
               </div>
@@ -310,7 +310,7 @@ export function PVTCheckIn({ onDone }: Props) {
                     height: CIRCLE_SIZE,
                     left: circlePos.x - CIRCLE_RADIUS,
                     top: circlePos.y - CIRCLE_RADIUS,
-                    background: "#34d399",               // emerald-400
+                    background: "var(--ok)",             // emerald-400
                     boxShadow: "0 0 24px rgba(52,211,153,0.55)",
                     touchAction: "none",
                   }}

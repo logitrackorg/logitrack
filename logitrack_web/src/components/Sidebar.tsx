@@ -57,9 +57,9 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
-      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager", "admin"] },
-      { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor", "manager"] },
-      { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor", "manager"] },
+      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
+      { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor"] },
+      { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
     ],
@@ -197,11 +197,11 @@ export function Sidebar() {
           position: "fixed",
           top: 0, left: 0, bottom: 0,
           width,
-          background: "#0f2744",
+          background: "var(--sidebar-bg)",
           color: "#cbd5e1",
           display: "flex",
           flexDirection: "column",
-          borderRight: "1px solid #1e3a5f",
+          borderRight: "1px solid var(--sidebar-border)",
           transition: "width 0.18s ease, transform 0.22s ease",
           zIndex: 100,
           transform: isMobile && !mobileOpen ? "translateX(-100%)" : "translateX(0)",
@@ -214,7 +214,7 @@ export function Sidebar() {
           display: "flex", alignItems: "center",
           padding: expanded ? "0 16px" : "0",
           justifyContent: expanded ? "space-between" : "center",
-          borderBottom: "1px solid #1e3a5f",
+          borderBottom: "1px solid var(--sidebar-border)",
           flexShrink: 0,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
@@ -272,7 +272,7 @@ export function Sidebar() {
                   {section.title}
                 </div>
               ) : idx > 0 ? (
-                <div style={{ height: 1, background: "#1e3a5f", margin: "6px 14px" }} />
+                <div style={{ height: 1, background: "var(--sidebar-border)", margin: "6px 14px" }} />
               ) : null}
               {section.items.map((item) => (
                 <SidebarLink
@@ -288,7 +288,7 @@ export function Sidebar() {
 
         {/* Footer: pin toggle + user + logout */}
         <div style={{
-          borderTop: "1px solid #1e3a5f",
+          borderTop: "1px solid var(--sidebar-border)",
           padding: expanded ? "10px 12px" : "10px 0",
           flexShrink: 0,
           display: "flex",

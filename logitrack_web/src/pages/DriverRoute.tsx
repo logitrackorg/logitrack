@@ -560,12 +560,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[#1e3a5f]" : "text-slate-500 hover:text-slate-700"
+      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[#2563eb]" : "text-slate-500 hover:text-slate-700"
         }`}
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[#1e3a5f]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[#2563eb]" />
       )}
     </button>
   );
@@ -641,7 +641,7 @@ function ShipmentCard({
     <Card
       className={
         isCompleted
-          ? "p-0 bg-slate-50/60 border-slate-200"
+          ? "p-0 bg-slate-50/60 dark:bg-slate-800/30 border-slate-200"
           : "p-0 hover:shadow-md transition-shadow"
       }
     >
@@ -745,7 +745,7 @@ function ShipmentCard({
                 </button>
                 <button
                   onClick={handleFailedClick}
-                  className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+                  className="h-12 rounded-xl border-2 border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
                 >
                   <XCircle className="w-4 h-4" />
                   No entregado
@@ -823,7 +823,7 @@ function DeliverSheet({
         inputMode="numeric"
         autoComplete="off"
         placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
+        className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
       />
       <p className="mt-1.5 text-[11px] text-slate-500">
         Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
@@ -832,7 +832,7 @@ function DeliverSheet({
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -893,7 +893,7 @@ function FailedSheet({
               onClick={() => onReasonChange(r.id)}
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${active
                 ? "border-rose-500 bg-rose-50 text-rose-800"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50"
                 }`}
             >
               {r.label}
@@ -910,13 +910,13 @@ function FailedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
+        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y driver-input"
       />
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -979,7 +979,7 @@ function RejectedSheet({
               className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors flex flex-col items-center justify-center gap-0.5 px-2 ${
                 active
                   ? "border-amber-500 bg-amber-50 text-amber-900"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50"
               }`}
             >
               <span className="text-lg leading-none">{r.emoji}</span>
@@ -997,13 +997,13 @@ function RejectedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={2}
-        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none"
+        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none driver-input"
       />
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>

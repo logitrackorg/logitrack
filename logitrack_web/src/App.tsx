@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./components/Sidebar";
@@ -64,6 +66,7 @@ function DriverNav() {
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
+        <ThemeToggle compact />
         {isMobile ? (
           <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
         ) : (
@@ -247,13 +250,13 @@ function AppRoutes() {
         } />
 
         <Route path="/repartos" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["operator", "supervisor"]}>
             <Repartos />
           </ProtectedRoute>
         } />
 
         <Route path="/inter-sucursal" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["operator", "supervisor"]}>
             <InterSucursal />
           </ProtectedRoute>
         } />
@@ -337,7 +340,7 @@ function AppRoutes() {
         } />
 
         <Route path="/auto-reports" element={
-          <ProtectedRoute roles={["manager", "admin"]}>
+          <ProtectedRoute roles={["manager"]}>
             <AutoReports />
           </ProtectedRoute>
         } />
@@ -351,14 +354,16 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/track" element={<PublicTracking />} />
-          <Route path="*" element={<AppRoutes />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/track" element={<PublicTracking />} />
+            <Route path="*" element={<AppRoutes />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

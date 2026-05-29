@@ -357,14 +357,18 @@ export function RoutingConfig() {
                     }
                   />
                   <div
-                    className={`w-10 h-6 rounded-full transition-colors ${
-                      draft?.enforce_time_windows ? "bg-[#1e3a5f]" : "bg-slate-200"
-                    }`}
+                    className="w-10 h-6 rounded-full transition-colors"
+                    style={{
+                      background: draft?.enforce_time_windows
+                        ? "var(--brand)"
+                        : "var(--border-strong)",
+                    }}
                   />
                   <div
-                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform ${
                       draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
                     }`}
+                    style={{ background: "#fff" }}
                   />
                 </div>
                 <span className="text-sm text-slate-700">
@@ -537,10 +541,10 @@ export function RoutingConfig() {
                 ).map((opt) => (
                   <label
                     key={opt.value}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all ${
                       draft.last_mile_packing_strategy === opt.value
-                        ? "border-[#1e3a5f] bg-[#1e3a5f]/5"
-                        : "border-slate-200 hover:bg-slate-50"
+                        ? "border-[#2563eb] bg-blue-50 ring-1 ring-[#2563eb]/20"
+                        : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <input
@@ -551,9 +555,17 @@ export function RoutingConfig() {
                       onChange={() =>
                         setDraft((d) => (d ? { ...d, last_mile_packing_strategy: opt.value } : d))
                       }
-                      className="accent-[#1e3a5f]"
+                      className="accent-[#2563eb]"
                     />
-                    <span className="text-sm font-semibold text-slate-700">{opt.label}</span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        draft.last_mile_packing_strategy === opt.value
+                          ? "text-[#2563eb]"
+                          : "text-slate-700"
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
                   </label>
                 ))}
               </div>

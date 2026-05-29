@@ -114,7 +114,7 @@ const ShipmentQRModal: React.FC<Props> = ({
           </button>
         </div>
         {subtitle && (
-          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px", textAlign: "center" }}>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px", textAlign: "center" }}>
             {subtitle}
           </p>
         )}

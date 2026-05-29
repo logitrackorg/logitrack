@@ -547,7 +547,7 @@ export function ShipmentDetail() {
 
   if (error) return (
     <div style={{ padding: 24 }}>
-      <p style={{ color: "#ef4444" }}>{error}</p>
+      <p style={{ color: "var(--danger-c)" }}>{error}</p>
       <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
     </div>
   );
@@ -682,10 +682,10 @@ export function ShipmentDetail() {
         const atLimit = attempts >= maxDeliveryAttempts;
         return (
           <div style={{
-            background: atLimit ? "#fef2f2" : "#fffbeb",
-            border: `1px solid ${atLimit ? "#fecaca" : "#fcd34d"}`,
+            background: atLimit ? "var(--danger-bg)" : "var(--warn-bg)",
+            border: `1px solid ${atLimit ? "var(--danger-border)" : "var(--warn-border)"}`,
             borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-            fontSize: 13, color: atLimit ? "#b91c1c" : "#92400e",
+            fontSize: 13, color: atLimit ? "var(--danger-text)" : "var(--warn-text)",
             display: "flex", alignItems: "center", gap: 10,
           }}>
             <span>{atLimit ? "🚫" : "⚠️"}</span>
@@ -699,9 +699,9 @@ export function ShipmentDetail() {
       })()}
 
       {shipment.status === "draft" && branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
+        <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: "var(--warn-text)" }}>
           <strong>⚠️ La sucursal receptora está al límite de capacidad</strong>
-          <div style={{ marginTop: 4, color: "#78350f" }}>
+          <div style={{ marginTop: 4, color: "var(--warn-text)" }}>
             {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés confirmar el envío, pero la sucursal estará por encima de su capacidad.
           </div>
         </div>
@@ -823,14 +823,14 @@ export function ShipmentDetail() {
     disabled={!shipment.tracking_id || generatingQR}
     title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
     style={{
-      background: "#fff",
-      border: "1px solid #d1d5db",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border-strong)",
       borderRadius: 6,
       padding: "6px 12px",
       cursor: (!shipment.tracking_id || generatingQR) ? "not-allowed" : "pointer",
       fontSize: 13,
       fontWeight: 600,
-      color: "#374151",
+      color: "var(--text-strong)",
       opacity: (!shipment.tracking_id || generatingQR) ? 0.5 : 1,
     }}
   >
@@ -845,14 +845,14 @@ export function ShipmentDetail() {
     disabled={printingDoc}
     title="Imprimir comprobante de alta del envío"
     style={{
-      background: "#fff",
-      border: "1px solid #d1d5db",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border-strong)",
       borderRadius: 6,
       padding: "6px 12px",
       cursor: printingDoc ? "not-allowed" : "pointer",
       fontSize: 13,
       fontWeight: 600,
-      color: "#374151",
+      color: "var(--text-strong)",
       opacity: printingDoc ? 0.5 : 1,
     }}
   >
@@ -862,37 +862,37 @@ export function ShipmentDetail() {
 
       {/* Zona actions — mover entre zonas internas de sucursal */}
       {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--ok-bg)", border: "1px solid var(--ok-border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ok-text)" }}>
               Zona actual: <ZoneBadge zone={shipment.current_zone} />
             </span>
             {shipment.current_zone === "entrada" && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--ok)", background: "var(--bg-card)", color: "var(--ok-text)" }}>
                   Mover a Salida
                 </button>
-                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--warn)", background: "var(--bg-card)", color: "var(--warn-text)" }}>
                   Mover a Revisión
                 </button>
               </>
             )}
             {shipment.current_zone === "salida" && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--warn)", background: "var(--bg-card)", color: "var(--warn-text)" }}>
                   Mover a Revisión
                 </button>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #3b82f6", background: "#fff", color: "#1e40af" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--brand)", background: "var(--bg-card)", color: "var(--brand)" }}>
                   Reingresar a Entrada
                 </button>
               </>
             )}
             {shipment.current_zone === "revision" && hasRole("supervisor") && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--ok)", background: "var(--bg-card)", color: "var(--ok-text)" }}>
                   Aprobar (→ Salida)
                 </button>
-                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #ef4444", background: "#fff", color: "#991b1b" }}>
+                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--danger-c)", background: "var(--bg-card)", color: "var(--danger-text)" }}>
                   Clasificar (Perdido/Destruido)
                 </button>
               </>
@@ -903,8 +903,8 @@ export function ShipmentDetail() {
 
       {/* Status update — supervisor y operador (no admin) */}
       {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-          <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
+        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--brand-tint)", border: "1px solid var(--brand-tint-border)" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--brand-strong)" }}>
             {shipment.status === "loaded"
               ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
               : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
@@ -930,9 +930,9 @@ export function ShipmentDetail() {
                 }}
                   style={{
                     padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                    border: newStatus === s ? "2px solid #1e3a5f" : "2px solid #e5e7eb",
-                    background: newStatus === s ? "#e0eaff" : "#fff",
-                    color: newStatus === s ? "#1e3a5f" : "#374151",
+                    border: newStatus === s ? "2px solid var(--text-heading)" : "2px solid var(--border)",
+                    background: newStatus === s ? "var(--brand-tint)" : "var(--bg-card)",
+                    color: newStatus === s ? "var(--text-heading)" : "var(--text-strong)",
                   }}>
                   {STATUS_LABELS[s]}
                 </button>
@@ -981,7 +981,7 @@ export function ShipmentDetail() {
             {newStatus === "at_hub" && shipment.status === "delivery_failed" && (() => {
               const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_hub")?.location;
               return returnLocation ? (
-                <p style={{ margin: 0, fontSize: 13, color: "#4b5563" }}>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)" }}>
                   Devolviendo a: <strong>{branchLabel(returnLocation, branches)}</strong>
                 </p>
               ) : null;
@@ -991,18 +991,18 @@ export function ShipmentDetail() {
               required={newStatus === "delivery_failed"}
               style={inputStyle} />
             {newStatus === "delivery_failed" && !notes.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El motivo es obligatorio para registrar un intento fallido.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El motivo es obligatorio para registrar un intento fallido.</p>
             )}
             {newStatus === "delivered" && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
             )}
             {newStatus === "returned" && !shipment.parent_shipment_id && !senderDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
             )}
             {newStatus === "returned" && !!shipment.parent_shipment_id && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
             )}
-            {updateError && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{updateError}</p>}
+            {updateError && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{updateError}</p>}
             {(() => {
               const returnedDniMissing = newStatus === "returned" && (shipment.parent_shipment_id ? !recipientDni.trim() : !senderDni.trim());
               const disabled = !newStatus || updating || (newStatus === "delivery_failed" && !notes.trim()) || (newStatus === "out_for_delivery" && !selectedDriverId) || (newStatus === "delivered" && !recipientDni.trim()) || returnedDniMissing;
@@ -1010,8 +1010,8 @@ export function ShipmentDetail() {
             <button type="submit"
               disabled={disabled}
               style={{
-                background: !disabled ? "#1e3a5f" : "#e5e7eb",
-                color: !disabled ? "#fff" : "#9ca3af",
+                background: !disabled ? "#1e3a5f" : "var(--bg-muted)",
+                color: !disabled ? "#fff" : "var(--text-muted)",
                 border: "none", borderRadius: 6, padding: "8px 16px",
                 cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
                 fontWeight: 600, alignSelf: "start",
@@ -1025,8 +1025,8 @@ export function ShipmentDetail() {
       )}
 
       {shipment.status === "delivered" && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#d1fae5", border: "1px solid #6ee7b7" }}>
-          <p style={{ margin: 0, color: "#065f46", fontWeight: 600 }}>Este envío fue entregado.</p>
+        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--ok-bg)", border: "1px solid var(--ok-border)" }}>
+          <p style={{ margin: 0, color: "var(--ok-text)", fontWeight: 600 }}>Este envío fue entregado.</p>
         </div>
       )}
 
@@ -1034,18 +1034,18 @@ export function ShipmentDetail() {
       {shipment.status !== "draft" && (
       <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>)}
       {shipment.status !== "draft" && (events.length === 0 ? (
-        <p style={{ color: "#6b7280", fontSize: 14 }}>Sin eventos registrados.</p>
+        <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Sin eventos registrados.</p>
       ) : (
         <div style={{ position: "relative", paddingLeft: 24 }}>
-          <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "#e5e7eb" }} />
+          <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "var(--border)" }} />
           {[...events].reverse().map((ev) => (
             <div key={ev.id} style={{ position: "relative", marginBottom: 12 }}>
               <div style={{
                 position: "absolute", left: -24, top: 4,
                 width: 14, height: 14, borderRadius: "50%",
-                background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
+                background: "#1e3a5f", border: "2px solid var(--bg-card)", boxShadow: "0 0 0 2px var(--border)",
               }} />
-              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
                 {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
@@ -1056,12 +1056,12 @@ export function ShipmentDetail() {
                           ? `En Sucursal Origen (${ev.current_location.branch_code})`
                           : "En tránsito"} — {ev.current_location.status}
                       </span>
-                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                      <span style={{ color: "var(--text-muted)" }}>{fmt(ev.timestamp)}</span>
                     </div>
-                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                    <div style={{ color: "var(--text-secondary)", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
                       <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
                     </div>
-                    <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
+                    <p style={{ margin: "4px 0 0", color: "var(--danger-text)", fontWeight: 500 }}>
                       Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
                         day: "2-digit",
                         month: "2-digit",
@@ -1073,25 +1073,25 @@ export function ShipmentDetail() {
                   <>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
                       <span style={{ fontWeight: 600 }}>{formatShipmentEventLabel(ev)}</span>
-                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
+                      <span style={{ color: "var(--text-muted)" }}>{fmt(ev.timestamp)}</span>
                     </div>
-                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                    <div style={{ color: "var(--text-secondary)", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
                       <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
                       {ev.location && (() => {
                         const b = branches.find(x => x.id === ev.location);
                         return (
-                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
+                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "var(--text-muted)" }}>{b.province}</span></>}</span>
                         );
                       })()}
                     </div>
-                    {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
+                    {ev.notes && <p style={{ margin: "4px 0 0", color: "var(--text-secondary)" }}>{ev.notes}</p>}
                     {ev.event_type === "claim_created" && ev.notes && (() => {
                       const m = ev.notes.match(/REC-\d+/);
                       if (m) {
                         const claimId = m[0];
                         return (
                           <p style={{ margin: "6px 0 0" }}>
-                            <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                            <Link to={`/claims/${claimId}`} style={{ color: "var(--text-heading)", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
                           </p>
                         );
                       }
@@ -1118,7 +1118,7 @@ export function ShipmentDetail() {
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
           {loadingVehicle ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Cargando...</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Cargando...</p>
           ) : assignedVehicle ? (
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -1128,7 +1128,7 @@ export function ShipmentDetail() {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0,
                 }}>
-                  <svg style={{ width: 24, height: 24, color: "#10b981" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg style={{ width: 24, height: 24, color: "var(--ok)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
                   </svg>
@@ -1136,32 +1136,32 @@ export function ShipmentDetail() {
                 <div style={{ flex: 1 }}>
                   <p
                     onClick={() => setShowVehicleDetail(true)}
-                    style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
+                    style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
                   >
                     {assignedVehicle.license_plate}
                   </p>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
                     {assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
                   </p>
                 </div>
                 <div style={{
                   padding: "4px 10px", borderRadius: 9999,
                   background: "#10b98120",
-                  fontSize: 11, fontWeight: 600, color: "#10b981",
+                  fontSize: 11, fontWeight: 600, color: "var(--ok)",
                 }}>
                   {assignedVehicle.status_label}
                 </div>
               </div>
-              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10 }}>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
                   <div>
-                    <span style={{ color: "#6b7280" }}>ID: </span>
-                    <span style={{ fontWeight: 600, color: "#374151" }}>#{assignedVehicle.id}</span>
+                    <span style={{ color: "var(--text-secondary)" }}>ID: </span>
+                    <span style={{ fontWeight: 600, color: "var(--text-strong)" }}>#{assignedVehicle.id}</span>
                   </div>
                   {assignedVehicle.updated_by && (
                     <div>
-                      <span style={{ color: "#6b7280" }}>Por: </span>
-                      <span style={{ fontWeight: 600, color: "#374151" }}>{assignedVehicle.updated_by}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>Por: </span>
+                      <span style={{ fontWeight: 600, color: "var(--text-strong)" }}>{assignedVehicle.updated_by}</span>
                     </div>
                   )}
                 </div>
@@ -1169,11 +1169,11 @@ export function ShipmentDetail() {
             </div>
           ) : (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <svg style={{ width: 32, height: 32, color: "#9ca3af", margin: "0 auto 8px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg style={{ width: 32, height: 32, color: "var(--text-muted)", margin: "0 auto 8px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
               </svg>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Sin vehículo asignado</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Sin vehículo asignado</p>
             </div>
           )}
         </div>
@@ -1182,19 +1182,19 @@ export function ShipmentDetail() {
         <div style={{ ...cardStyle, marginBottom: 16 }}>
           <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Incidencias</h2>
           {incidents.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin incidencias registradas.</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Sin incidencias registradas.</p>
           ) : (
             <div style={{ display: "grid", gap: 8, maxHeight: 400, overflowY: "auto" }}>
               {incidents.map((inc) => (
-                <div key={inc.id} style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                <div key={inc.id} style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
+                    <span style={{ fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
                       {INCIDENT_TYPE_LABELS[inc.incident_type] ?? inc.incident_type}
                     </span>
-                    <span style={{ color: "#9ca3af", fontSize: 11, whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDateTime(inc.created_at)}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11, whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDateTime(inc.created_at)}</span>
                   </div>
-                  <p style={{ margin: "4px 0 0", color: "#374151", whiteSpace: "pre-wrap" as const }}>{inc.description}</p>
-                  <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>Reportado por: {inc.reported_by}</p>
+                  <p style={{ margin: "4px 0 0", color: "var(--text-strong)", whiteSpace: "pre-wrap" as const }}>{inc.description}</p>
+                  <p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: 11 }}>Reportado por: {inc.reported_by}</p>
                 </div>
               ))}
             </div>
@@ -1234,16 +1234,16 @@ export function ShipmentDetail() {
             </div>
           )}
           {comments.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin comentarios todavía.</p>
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Sin comentarios todavía.</p>
           ) : (
             <div style={{ display: "grid", gap: 8, maxHeight: 500, overflowY: "auto" }}>
               {comments.map((c) => (
-                <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                <div key={c.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontWeight: 600 }}>{c.author}</span>
-                    <span style={{ color: "#9ca3af", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
                   </div>
-                  <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
+                  <p style={{ margin: 0, color: "var(--text-strong)", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
                 </div>
               ))}
             </div>
@@ -1271,24 +1271,24 @@ export function ShipmentDetail() {
           onClick={() => setShowIncidentModal(false)}
         >
           <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Registrar incidencia</h2>
-              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>Registrar incidencia</h2>
+              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
             {incidentError && (
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
                 {incidentError}
               </div>
             )}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Tipo de incidencia</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Tipo de incidencia</label>
               <select
                 value={incidentType}
                 onChange={(e) => setIncidentType(e.target.value as IncidentType)}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "#fff" }}
+                style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: 6, fontSize: 13, background: "var(--bg-card)" }}
               >
                 {(Object.entries(INCIDENT_TYPE_LABELS) as [IncidentType, string][]).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
@@ -1296,24 +1296,24 @@ export function ShipmentDetail() {
               </select>
             </div>
             {TERMINAL_INCIDENT_STATUS[incidentType] && (
-              <div style={{ background: "#fef3c7", border: "1px solid #fbbf24", color: "#92400e", padding: "10px 12px", borderRadius: 6, marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+              <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn)", color: "var(--warn-text)", padding: "10px 12px", borderRadius: 6, marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
                 <strong>Atención:</strong> Al confirmar esta incidencia, el envío quedará en estado <strong>{incidentType === "extraviado" ? "Extraviado" : "Daño total"}</strong> y no podrá continuar su flujo. Esta acción es irreversible.
               </div>
             )}
             <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Descripción</label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Descripción</label>
               <textarea
                 value={incidentDescription}
                 onChange={(e) => setIncidentDescription(e.target.value)}
                 placeholder="Describí el problema detectado..."
                 rows={4}
-                style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontFamily: "inherit", resize: "vertical" as const }}
+                style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", resize: "vertical" as const }}
               />
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
                 onClick={() => setShowIncidentModal(false)}
-                style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
                 Cancelar
               </button>
               <button
@@ -1338,7 +1338,7 @@ export function ShipmentDetail() {
                     setReportingIncident(false);
                   }
                 }}
-                style={{ background: TERMINAL_INCIDENT_STATUS[incidentType] ? "#dc2626" : "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
+                style={{ background: TERMINAL_INCIDENT_STATUS[incidentType] ? "var(--danger-c)" : "var(--warn)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
                 {reportingIncident ? "Registrando..." : TERMINAL_INCIDENT_STATUS[incidentType] ? "Confirmar y cerrar envío" : "Confirmar registro"}
               </button>
             </div>
@@ -1353,25 +1353,25 @@ export function ShipmentDetail() {
           onClick={() => setShowVehiclePicker(false)}
         >
           <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargar en vehículo</h2>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>Asignar vehículo — Cargar en vehículo</h2>
+              <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-secondary)" }}>
               Seleccioná un vehículo disponible en esta sucursal. Peso del envío: <strong>{effectiveWeightKg(shipment)} kg</strong>.
             </p>
             {vehiclePickerError && (
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
                 {vehiclePickerError}
               </div>
             )}
             {loadingVehicles ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>Cargando vehículos disponibles...</p>
+              <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Cargando vehículos disponibles...</p>
             ) : availableVehicles.length === 0 ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
+              <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 {availableVehicles.map((v) => {
@@ -1385,28 +1385,28 @@ export function ShipmentDetail() {
                       key={v.license_plate}
                       onClick={() => setSelectedVehiclePlate(v.license_plate)}
                       style={{
-                        border: isSelected ? "2px solid #1e3a5f" : "1px solid #e5e7eb",
+                        border: isSelected ? "2px solid #1e3a5f" : "1px solid var(--border)",
                         borderRadius: 8, padding: "12px 14px", cursor: "pointer",
-                        background: isSelected ? "#e0eaff" : "#fff",
+                        background: isSelected ? "var(--brand-tint)" : "var(--bg-card)",
                         display: "flex", alignItems: "center", gap: 12,
                       }}
                     >
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
-                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "var(--text-primary)" }}>{v.license_plate}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
                           {v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
                           {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
                           {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>
                       </div>
-                      {isSelected && <span style={{ color: "#1e3a5f", fontWeight: 700 }}>✓</span>}
+                      {isSelected && <span style={{ color: "var(--text-heading)", fontWeight: 700 }}>✓</span>}
                     </div>
                   );
                 })}
               </div>
             )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
+              <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: "pointer", fontWeight: 500 }}>
                 Cancelar
               </button>
               <button
@@ -1414,8 +1414,8 @@ export function ShipmentDetail() {
                 disabled={!selectedVehiclePlate || assigningVehicle}
                 style={{
                   padding: "8px 16px", borderRadius: 6, border: "none", fontWeight: 600, cursor: !selectedVehiclePlate || assigningVehicle ? "default" : "pointer",
-                  background: !selectedVehiclePlate || assigningVehicle ? "#e5e7eb" : "#1e3a5f",
-                  color: !selectedVehiclePlate || assigningVehicle ? "#9ca3af" : "#fff",
+                  background: !selectedVehiclePlate || assigningVehicle ? "var(--bg-muted)" : "#1e3a5f",
+                  color: !selectedVehiclePlate || assigningVehicle ? "var(--text-muted)" : "#fff",
                 }}
               >
                 {assigningVehicle ? "Asignando..." : "Asignar vehículo"}
@@ -1435,12 +1435,12 @@ export function ShipmentDetail() {
 
       {showCancelModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 440, width: "calc(100vw - 32px)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c" }}>Cancelar envío</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "28px 32px", maxWidth: 440, width: "calc(100vw - 32px)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "var(--danger-text)" }}>Cancelar envío</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--text-secondary)" }}>
               Esta acción es irreversible. El envío pasará a <strong>Cancelado</strong> y no podrá continuar en tránsito.
             </p>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)", display: "block", marginBottom: 6 }}>
               Motivo de cancelación *
             </label>
             <textarea
@@ -1448,16 +1448,16 @@ export function ShipmentDetail() {
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="Describí el motivo de la cancelación..."
               rows={4}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", resize: "vertical" }}
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, boxSizing: "border-box", resize: "vertical" }}
             />
-            {cancelError && <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0 0" }}>{cancelError}</p>}
+            {cancelError && <p style={{ color: "var(--danger-c)", fontSize: 13, margin: "8px 0 0" }}>{cancelError}</p>}
             <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
               <button type="button" onClick={() => setShowCancelModal(false)} disabled={cancelling}
-                style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#374151" }}>
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
                 Volver
               </button>
               <button type="button" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}
-                style={{ background: cancelReason.trim() ? "#b91c1c" : "#fca5a5", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: cancelReason.trim() ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 700 }}>
+                style={{ background: cancelReason.trim() ? "var(--danger-c)" : "var(--danger-border)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: cancelReason.trim() ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 700 }}>
                 {cancelling ? "Cancelando..." : "Confirmar cancelación"}
               </button>
             </div>
@@ -1479,9 +1479,9 @@ export function ShipmentDetail() {
           position: "fixed",
           bottom: 24,
           right: 24,
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#dc2626",
+          background: "var(--danger-bg)",
+          border: "1px solid var(--danger-border)",
+          color: "var(--danger-text)",
           padding: "12px 16px",
           borderRadius: 8,
           fontSize: 13,
@@ -1496,9 +1496,9 @@ export function ShipmentDetail() {
           position: "fixed",
           bottom: qrError ? 80 : 24,
           right: 24,
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#dc2626",
+          background: "var(--danger-bg)",
+          border: "1px solid var(--danger-border)",
+          color: "var(--danger-text)",
           padding: "12px 16px",
           borderRadius: 8,
           fontSize: 13,
@@ -1540,28 +1540,28 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
   return (
     <div style={{
       position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-      border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8,
+      border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8,
       padding: "10px 12px", display: "flex", justifyContent: "space-between",
       alignItems: "center", gap: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     }}>
-      <div style={{ fontSize: 13, color: "#1e40af", lineHeight: 1.5, minWidth: 0 }}>
+      <div style={{ fontSize: 13, color: "var(--brand)", lineHeight: 1.5, minWidth: 0 }}>
         <span style={{ fontWeight: 700 }}>{customer.name}</span>
-        <span style={{ color: "#6b7280", margin: "0 6px" }}>·</span>
+        <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>·</span>
         <span>{customer.phone}</span>
         {customer.address.city && (
           <>
-            <span style={{ color: "#6b7280", margin: "0 6px" }}>·</span>
+            <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>·</span>
             <span>{customer.address.city}, {customer.address.province}</span>
           </>
         )}
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <button type="button" onClick={onApply}
-          style={{ background: "#1e40af", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+          style={{ background: "var(--brand)", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
           Usar datos
         </button>
         <button type="button" onClick={onDismiss}
-          style={{ background: "none", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>
+          style={{ background: "none", color: "var(--text-secondary)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>
           ✕
         </button>
       </div>
@@ -1788,9 +1788,9 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
 
   return (
     <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#6b7280" }}>
+      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "var(--text-secondary)" }}>
         <span>Creado: {createdAt}</span>
-        <span>ID del borrador: <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "#374151" }}>{draftId}</code></span>
+        <span>ID del borrador: <code style={{ background: "var(--bg-muted)", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "var(--text-strong)" }}>{draftId}</code></span>
       </div>
 
       {/* Remitente */}
@@ -1798,8 +1798,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
         <legend style={legStyle}>Remitente</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
           <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
-            {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
+            <input style={{ ...inp, borderColor: senderNameError ? "var(--danger-c)" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
+            {senderNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{senderNameError}</span>}
           </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
@@ -1829,8 +1829,8 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
         <legend style={legStyle}>Destinatario</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
           <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
-            {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
+            <input style={{ ...inp, borderColor: recipientNameError ? "var(--danger-c)" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
+            {recipientNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{recipientNameError}</span>}
           </DField>
           <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
           <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
@@ -1859,14 +1859,14 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
             marginTop: 10,
             padding: "10px 14px",
             borderRadius: 8,
-            border: "1px solid #e0f2fe",
-            background: "#f0f9ff",
+            border: "1px solid var(--info-border)",
+            background: "var(--bg-hover)",
             display: "flex",
             gap: 10,
             alignItems: "flex-start",
           }}>
             <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
-            <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12, color: "var(--info)", margin: 0, lineHeight: 1.5 }}>
               Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
               <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
               Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
@@ -1881,25 +1881,25 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
         <div style={{ display: "grid", gap: 12 }}>
           {/* Sucursal de origen */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal de origen *</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Sucursal de origen *</div>
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
-                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
-                  {selected && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>}
-                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Asignada a tu sucursal — no se puede cambiar.</div>
+                <div style={{ border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
+                  {selected && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>}
+                  <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 6 }}>Asignada a tu sucursal — no se puede cambiar.</div>
                 </div>
               );
             })() : (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return selected ? (
-                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
-                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>
+                <div style={{ border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{selected.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>Sin sucursal asignada</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Sin sucursal asignada</div>
               );
             })()}
           </div>
@@ -1909,11 +1909,11 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
             if (!finalBranch) return null;
             return (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal final</div>
-                <div style={{ border: "1px solid #a7f3d0", background: "#ecfdf5", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{finalBranch.name}</div>
-                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{finalBranch.address.street}, {finalBranch.address.city}</div>
-                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Sucursal más cercana al domicilio del destinatario.</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Sucursal final</div>
+                <div style={{ border: "1px solid var(--ok-border)", background: "var(--ok-bg)", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{finalBranch.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{finalBranch.address.street}, {finalBranch.address.city}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 6 }}>Sucursal más cercana al domicilio del destinatario.</div>
                 </div>
               </div>
             );
@@ -1926,7 +1926,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
         <legend style={legStyle}>Paquete</legend>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
           <DField label="Peso (kg) *" error={envelopeOverweight ? "Un sobre no puede superar 5 kg; usá una caja" : undefined}>
-            <input style={{ ...inp, borderColor: envelopeOverweight ? "#ef4444" : undefined }}
+            <input style={{ ...inp, borderColor: envelopeOverweight ? "var(--danger-c)" : undefined }}
               type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
               onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
           </DField>
@@ -2001,45 +2001,45 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
       )}
 
       {/* Acciones */}
-      <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
+      <div style={{ border: "1px solid var(--warn-border)", background: "var(--warn-bg)", borderRadius: 10, padding: "14px 18px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
+          <h2 style={{ fontSize: "1rem", margin: 0, color: "var(--warn-text)" }}>Borrador — pendiente de confirmación</h2>
           {/* Auto-save status */}
           {autoSaveStatus === "saving" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#78350f" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--warn-text)" }}>
               <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
             </span>
           )}
           {autoSaveStatus === "saved" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#15803d" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ok-text)" }}>
               <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
             </span>
           )}
           {autoSaveStatus === "error" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#dc2626" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--danger-text)" }}>
               <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
             </span>
           )}
         </div>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--warn-text)" }}>
           Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
         </p>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--warn-text)" }}>
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
-        {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
+        {confirmError && <p style={{ color: "var(--danger-c)", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
         {discardConfirm ? (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#991b1b" }}>
+          <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
+            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--danger-text)" }}>
               ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={onDiscard} disabled={confirming}
-                style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
+                style={{ background: "var(--danger-c)", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
                 Sí, descartar
               </button>
               <button onClick={() => setDiscardConfirm(false)}
-                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                style={{ background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
                 Cancelar
               </button>
             </div>
@@ -2052,7 +2052,7 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
             {confirming ? "Procesando..." : "Continuar al pago"}
           </button>
           <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
-            style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
+            style={{ background: "var(--danger-bg)", color: "var(--danger-text)", border: "1px solid var(--danger-border)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
             Descartar borrador
           </button>
         </div>
@@ -2066,8 +2066,8 @@ function DField({ label, children, style, error }: { label: string; children: Re
     <div style={{ display: "grid", gap: 4, position: "relative", ...style }}>
       {label && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
-          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "#ef4444", lineHeight: 1.2 }}>{error}</span>}
+          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>{label}</label>
+          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "var(--danger-c)", lineHeight: 1.2 }}>{error}</span>}
         </div>
       )}
       {children}
@@ -2075,9 +2075,9 @@ function DField({ label, children, style, error }: { label: string; children: Re
   );
 }
 
-const fsStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 18px" };
-const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "#1e3a5f", padding: "0 6px" };
-const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, width: "100%", boxSizing: "border-box" };
+const fsStyle: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" };
+const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "var(--text-heading)", padding: "0 6px" };
+const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 13, width: "100%", boxSizing: "border-box" };
 
 function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, destination, branches }: {
   events: ShipmentEvent[];
@@ -2123,16 +2123,16 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
     pending_payment: "#d97706",
   };
 
-  const solidLine = (color = "#e5e7eb") => (
+  const solidLine = (color = "var(--border)") => (
     <div style={{ width: 40, height: 2, background: color, flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
   );
   const dashedLine = () => (
-    <div style={{ width: 40, height: 2, background: "repeating-linear-gradient(to right, #d1d5db 0, #d1d5db 5px, transparent 5px, transparent 9px)", flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
+    <div style={{ width: 40, height: 2, background: "repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 5px, transparent 5px, transparent 9px)", flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
   );
 
   return (
     <div style={{ ...cardStyle, marginBottom: 16 }}>
-      <h3 style={{ margin: "0 0 16px", fontSize: 13, color: "#1e3a5f", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+      <h3 style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-heading)", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
         Route · {origin} → {destination}
       </h3>
       <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
@@ -2141,23 +2141,23 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
             <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: "50%",
-                background: stop.current ? statusColors[stop.status] : "#e5e7eb",
-                border: stop.current ? `3px solid ${statusColors[stop.status]}` : "3px solid #e5e7eb",
+                background: stop.current ? statusColors[stop.status] : "var(--border)",
+                border: stop.current ? `3px solid ${statusColors[stop.status]}` : "3px solid var(--border)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 boxShadow: stop.current ? `0 0 0 3px ${statusColors[stop.status]}33` : "none",
               }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: stop.current ? "#fff" : "#9ca3af" }}>{i + 1}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: stop.current ? "#fff" : "var(--text-muted)" }}>{i + 1}</span>
               </div>
               <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
                 {(() => {
                   const b = branches.find(x => x.id === stop.location);
                   return (
-                    <div style={{ fontSize: 11, fontWeight: stop.current ? 700 : 500, color: stop.current ? "#1e3a5f" : "#6b7280", whiteSpace: "nowrap" as const }}>{b?.name ?? stop.location}</div>
+                    <div style={{ fontSize: 11, fontWeight: stop.current ? 700 : 500, color: stop.current ? "var(--text-heading)" : "var(--text-secondary)", whiteSpace: "nowrap" as const }}>{b?.name ?? stop.location}</div>
                   );
                 })()}
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(stop.timestamp)}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{fmtDate(stop.timestamp)}</div>
                 {stop.location === finalBranchId && (
-                  <div style={{ fontSize: 10, color: "#8b5cf6", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
+                  <div style={{ fontSize: 10, color: "var(--purple)", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
                 )}
               </div>
             </div>
@@ -2170,10 +2170,10 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
           <>
             {dashedLine()}
             <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #f97316", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 14, color: "#f97316" }}>🚚</span>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg-subtle)", border: "3px dashed var(--warn)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 14, color: "var(--warn)" }}>🚚</span>
               </div>
-              <div style={{ fontSize: 11, color: "#f97316", fontWeight: 600, whiteSpace: "nowrap" as const }}>Destinatario</div>
+              <div style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600, whiteSpace: "nowrap" as const }}>Destinatario</div>
             </div>
           </>
         )}
@@ -2183,14 +2183,14 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
           <>
             {dashedLine()}
             <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#d1d5db" }}>{stops.length + 1}</span>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg-subtle)", border: "3px dashed var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--border-strong)" }}>{stops.length + 1}</span>
               </div>
               <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
                 {(() => {
                   const b = branches.find(x => x.id === nextBranch);
                   return (
-                    <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
                   );
                 })()}
               </div>
@@ -2205,16 +2205,16 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
             <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: "50%",
-                background: "#f9fafb", border: "3px dashed #8b5cf6",
+                background: "var(--bg-subtle)", border: "3px dashed var(--purple)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--purple)" }}>
                   {stops.length + (isInTransit && nextBranch ? 2 : 1)}
                 </span>
               </div>
               <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>Sucursal final</div>
+                <div style={{ fontSize: 11, color: "var(--purple)", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Sucursal final</div>
               </div>
             </div>
           </>
@@ -2222,20 +2222,20 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
 
         {/* Final destination — always shown */}
         <>
-          {isDelivered ? solidLine("#10b981") : dashedLine()}
+          {isDelivered ? solidLine("var(--ok)") : dashedLine()}
           <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
             <div style={{
               width: 32, height: 32, borderRadius: "50%",
-              background: isDelivered ? "#10b981" : "#f9fafb",
-              border: isDelivered ? "3px solid #10b981" : "3px dashed #d1d5db",
+              background: isDelivered ? "var(--ok)" : "var(--bg-subtle)",
+              border: isDelivered ? "3px solid var(--ok)" : "3px dashed var(--border-strong)",
               display: "flex", alignItems: "center", justifyContent: "center",
               boxShadow: isDelivered ? "0 0 0 3px #10b98133" : "none",
             }}>
-              <span style={{ fontSize: 14, color: isDelivered ? "#fff" : "#d1d5db" }}>
+              <span style={{ fontSize: 14, color: isDelivered ? "#fff" : "var(--border-strong)" }}>
                 {isDelivered ? "✓" : "🏁"}
               </span>
             </div>
-            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "#065f46" : "#9ca3af", whiteSpace: "nowrap" as const }}>Destinatario</div>
+            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "var(--ok-text)" : "var(--text-muted)", whiteSpace: "nowrap" as const }}>Destinatario</div>
           </div>
         </>
       </div>
@@ -2246,7 +2246,7 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={cardStyle}>
-      <h3 style={{ margin: "0 0 12px", fontSize: 13, color: "#1e3a5f", textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</h3>
+      <h3 style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-heading)", textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</h3>
       <div style={{ display: "grid", gap: 6 }}>{children}</div>
     </div>
   );
@@ -2255,7 +2255,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
-      <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: "var(--text-muted)", minWidth: 90, flexShrink: 0 }}>{label}</span>
       <span style={{ fontWeight: 500 }}>{value}</span>
     </div>
   );
@@ -2400,26 +2400,26 @@ function PriceRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const cardStyle: React.CSSProperties = { background: "#f9fafb", borderRadius: 10, padding: 16 };
-const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 };
-const backBtn: React.CSSProperties = { background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
+const cardStyle: React.CSSProperties = { background: "var(--bg-subtle)", borderRadius: 10, padding: 16 };
+const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14 };
+const backBtn: React.CSSProperties = { background: "none", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
 
 // InfoRowEx: same as InfoRow but supports showing original value when corrected
 function InfoRowEx({ label, value, corrected, original }: { label: string; value: string; corrected: boolean; original: string }) {
   return (
     <div style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "flex-start" }}>
-      <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: "var(--text-muted)", minWidth: 90, flexShrink: 0 }}>{label}</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontWeight: 500 }}>{value}</span>
           {corrected && (
-            <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" as const }}>
+            <span style={{ fontSize: 10, fontWeight: 700, background: "var(--warn-bg)", color: "var(--warn-text)", border: "1px solid var(--warn-border)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" as const }}>
               Modificado
             </span>
           )}
         </div>
         {corrected && original && (
-          <span style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through" }}>{original}</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "line-through" }}>{original}</span>
         )}
       </div>
     </div>
@@ -2438,12 +2438,12 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
   const set = (key: string, value: string) => onChange({ ...form, [key]: value });
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Corregir datos del envío</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>✕</button>
+          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-heading)" }}>Corregir datos del envío</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
         </div>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-secondary)" }}>
           Los datos originales no se modifican. Los cambios quedan registrados en el historial de comentarios.
         </p>
 
@@ -2458,9 +2458,9 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Calle (origen)">
               <input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </DField>
-            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_city}</div></DField>
-            <DField label="Provincia (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_province}</div></DField>
-            <DField label="Código postal (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_postal_code}</div></DField>
+            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_city}</div></DField>
+            <DField label="Provincia (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_province}</div></DField>
+            <DField label="Código postal (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -2475,9 +2475,9 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
             <DField label="Calle (destino)">
               <input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
             </DField>
-            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_city}</div></DField>
-            <DField label="Provincia (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_province}</div></DField>
-            <DField label="Código postal (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_postal_code}</div></DField>
+            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_city}</div></DField>
+            <DField label="Provincia (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_province}</div></DField>
+            <DField label="Código postal (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_postal_code}</div></DField>
           </div>
         </fieldset>
 
@@ -2494,14 +2494,14 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
               <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
+          <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 8, marginBottom: 0 }}>
             Peso, tipo de paquete, tipo de envío y marca de frágil quedan fijos al crear el envío. La ventana horaria solo puede cambiarse a una opción de igual o menor recargo (no se permite pasar de Flexible a Mañana/Tarde).
           </p>
         </fieldset>
 
-        {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
+        {error && <p style={{ color: "var(--danger-c)", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button onClick={onClose} disabled={saving} style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+          <button onClick={onClose} disabled={saving} style={{ background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             Cancelar
           </button>
           <button onClick={onSave} disabled={saving} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: saving ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>
@@ -2543,15 +2543,15 @@ function PendingPaymentPanel({
 
   return (
     <div style={{
-      background: "#fffbeb", border: "1px solid #fcd34d",
+      background: "var(--warn-bg)", border: "1px solid var(--warn-border)",
       borderRadius: 12, padding: 20, marginBottom: 16,
     }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "var(--warn-text)" }}>
           💳 Pago pendiente
         </div>
         {payment && (
-          <div style={{ fontSize: 13, color: "#78350f" }}>
+          <div style={{ fontSize: 13, color: "var(--warn-text)" }}>
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
@@ -2569,16 +2569,16 @@ function PendingPaymentPanel({
           onError={setError}
         />
       ) : (
-        <p style={{ fontSize: 13, color: "#78350f" }}>Cargando información de pago…</p>
+        <p style={{ fontSize: 13, color: "var(--warn-text)" }}>Cargando información de pago…</p>
       )}
-      {error && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a", display: "flex", justifyContent: "flex-end" }}>
+      {error && <p style={{ color: "var(--danger-text)", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--warn-border)", display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={handleBackToDraft}
           disabled={reverting}
           style={{
-            border: "1px solid #fcd34d", borderRadius: 8,
-            background: "#fff", color: "#92400e",
+            border: "1px solid var(--warn-border)", borderRadius: 8,
+            background: "var(--bg-card)", color: "var(--warn-text)",
             fontSize: 13, fontWeight: 600, cursor: "pointer",
             padding: "8px 16px",
             opacity: reverting ? 0.6 : 1,

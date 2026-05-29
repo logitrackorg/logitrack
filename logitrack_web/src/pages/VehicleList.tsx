@@ -9,6 +9,7 @@ import { usersApi, type UserProfile } from "../api/users";
 import { useAuth } from "../context/AuthContext";
 import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
+import { SelectMenu } from "../components/ui/SelectMenu";
 
 const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
@@ -313,21 +314,21 @@ const handleAddShipment = async () => {
           onClick={handleCancel}
         >
           <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 460, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 460, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Registrar nuevo vehículo</h2>
-              <button onClick={handleCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <button onClick={handleCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
 
             {error && (
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
+              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
                 {error}
               </div>
             )}
             {success && (
-              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
+              <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
                 {success}
               </div>
             )}
@@ -340,7 +341,7 @@ const handleAddShipment = async () => {
                   value={formData.license_plate}
                   onChange={(e) => setFormData({ ...formData, license_plate: e.target.value.toUpperCase() })}
                   placeholder="Ej.: AB123CD"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, textTransform: "uppercase", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, textTransform: "uppercase", boxSizing: "border-box" }}
                 />
               </div>
               <div style={{ marginBottom: 16 }}>
@@ -348,7 +349,7 @@ const handleAddShipment = async () => {
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as VehicleType })}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
                 >
                   {Object.entries(vehicleTypeLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
@@ -360,7 +361,7 @@ const handleAddShipment = async () => {
                 <select
                   value={formData.mode}
                   onChange={(e) => setFormData({ ...formData, mode: e.target.value as import("../api/vehicles").VehicleMode })}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
                 >
                   <option value="ultima_milla">Última milla (entrega local)</option>
                   <option value="inter_sucursal">Inter-sucursal (transferencia)</option>
@@ -375,7 +376,7 @@ const handleAddShipment = async () => {
                   placeholder="Ej.: 500"
                   min="1"
                   step="0.1"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, boxSizing: "border-box" }}
                 />
               </div>
               <div style={{ marginBottom: 20 }}>
@@ -384,7 +385,7 @@ const handleAddShipment = async () => {
                   value={formData.branch_id}
                   onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
                   required
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
                 >
                   <option value="">Seleccioná una sucursal...</option>
                   {branches.map(b => (
@@ -393,7 +394,7 @@ const handleAddShipment = async () => {
                 </select>
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" onClick={handleCancel} style={{ background: "#e5e7eb", color: "#374151", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 500 }}>
+                <button type="button" onClick={handleCancel} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 500 }}>
                   Cancelar
                 </button>
                 <button type="submit" style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
@@ -431,16 +432,16 @@ const handleAddShipment = async () => {
               {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
             </span>
           ) : (
-            <select
+            <SelectMenu
               value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Todas las sucursales</option>
-              {[...branches].sort((a, b) => a.name.localeCompare(b.name)).map(b => (
-                <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
-              ))}
-            </select>
+              onChange={setBranchFilter}
+              placeholder="Todas las sucursales"
+              ariaLabel="Filtrar por sucursal"
+              className="w-[220px]"
+              options={[...branches]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((b) => ({ value: b.id, label: `${b.name} — ${b.address.city}` }))}
+            />
           )}
 
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</span>
@@ -471,9 +472,9 @@ const handleAddShipment = async () => {
       {/* Mensajes */}
       {error && (
         <div style={{
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#dc2626",
+          background: "var(--danger-bg)",
+          border: "1px solid var(--danger-border)",
+          color: "var(--danger-text)",
           padding: "12px 16px",
           borderRadius: 6,
           marginBottom: 20,
@@ -485,9 +486,9 @@ const handleAddShipment = async () => {
 
       {success && (
         <div style={{
-          background: "#f0fdf4",
-          border: "1px solid #bbf7d0",
-          color: "#16a34a",
+          background: "var(--ok-bg)",
+          border: "1px solid var(--ok-border)",
+          color: "var(--ok-text)",
           padding: "12px 16px",
           borderRadius: 6,
           marginBottom: 20,
@@ -685,29 +686,29 @@ const handleAddShipment = async () => {
       {loadModalVehicle && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={closeLoadModal}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 480, maxWidth: "95vw", maxHeight: "85vh", overflowY: "auto" }}
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 28, width: 480, maxWidth: "95vw", maxHeight: "85vh", overflowY: "auto" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Cargar envíos</h2>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
+                <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-heading)" }}>Cargar envíos</h2>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-secondary)" }}>
                   <code style={{ fontWeight: 700 }}>{loadModalVehicle.license_plate}</code>
                   {" · "}{vehicleTypeLabels[loadModalVehicle.type]}
                   {" · "}{loadModalVehicle.capacity_kg} kg de capacidad
                 </p>
               </div>
-              <button onClick={closeLoadModal} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <button onClick={closeLoadModal} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
 
             {/* Already loaded */}
             {loadAdded.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 8px" }}>
                   Envíos cargados ({loadAdded.length}):
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {loadAdded.map(tid => (
-                    <span key={tid} style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "3px 10px", fontSize: 13, fontWeight: 600, color: "#166534" }}>
+                    <span key={tid} style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", borderRadius: 6, padding: "3px 10px", fontSize: 13, fontWeight: 600, color: "var(--ok-text)" }}>
                       {tid}
                     </span>
                   ))}
@@ -716,9 +717,9 @@ const handleAddShipment = async () => {
             )}
 
             {/* Input */}
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>Agregar envío:</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 8px" }}>Agregar envío:</p>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>LT-</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>LT-</span>
               <input
                 autoFocus
                 value={loadInput}
@@ -726,7 +727,7 @@ const handleAddShipment = async () => {
                 onKeyDown={e => { if (e.key === "Enter") handleAddShipment(); }}
                 placeholder="A1B2C3D4"
                 maxLength={20}
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}
               />
               <button
                 onClick={handleAddShipment}
@@ -737,12 +738,12 @@ const handleAddShipment = async () => {
               </button>
             </div>
             {loadError && (
-              <p style={{ margin: "8px 0 0", fontSize: 13, color: "#dc2626" }}>{loadError}</p>
+              <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--danger-text)" }}>{loadError}</p>
             )}
 
             <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={closeLoadModal}
-                style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
                 Listo
               </button>
             </div>
@@ -762,17 +763,17 @@ const handleAddShipment = async () => {
             onClick={() => !endingTrip && setShowEndTripModal(false)}
           >
             <div
-              style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+              style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Finalizar viaje</h2>
-                <button onClick={() => !endingTrip && setShowEndTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: endingTrip ? "not-allowed" : "pointer", color: "#6b7280" }}>✕</button>
+                <button onClick={() => !endingTrip && setShowEndTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: endingTrip ? "not-allowed" : "pointer", color: "var(--text-secondary)" }}>✕</button>
               </div>
-              <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px" }}>
+              <p style={{ fontSize: 14, color: "var(--text-strong)", margin: "0 0 12px" }}>
                 ¿Confirmás finalizar el viaje del vehículo <strong>{selectedForAssign}</strong>?
               </p>
-              <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#374151" }}>
+              <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
                 <p style={{ margin: "0 0 6px" }}>
                   • Los {numShipments} envío{numShipments !== 1 ? "s" : ""} pasarán al estado <strong>En sucursal</strong>{destBranch ? <> en <strong>{destBranch.name}</strong></> : ""}.
                 </p>
@@ -784,7 +785,7 @@ const handleAddShipment = async () => {
                 <button
                   onClick={() => setShowEndTripModal(false)}
                   disabled={endingTrip}
-                  style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: endingTrip ? "not-allowed" : "pointer", fontWeight: 500, opacity: endingTrip ? 0.6 : 1 }}
+                  style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: endingTrip ? "not-allowed" : "pointer", fontWeight: 500, opacity: endingTrip ? 0.6 : 1 }}
                 >
                   Cancelar
                 </button>
@@ -793,7 +794,7 @@ const handleAddShipment = async () => {
                   disabled={endingTrip}
                   style={{
                     padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                    background: endingTrip ? "#9ca3af" : "#dc2626",
+                    background: endingTrip ? "var(--text-muted)" : "var(--danger-c)",
                     color: "#fff", cursor: endingTrip ? "not-allowed" : "pointer",
                     opacity: endingTrip ? 0.7 : 1,
                   }}
@@ -960,7 +961,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
     >
       <div
         style={{
-          background: "#fff",
+          background: "var(--bg-card)",
           borderRadius: 12,
           padding: 24,
           maxWidth: 560,
@@ -973,8 +974,8 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: 0, textTransform: "uppercase" }}>Detalle del vehículo</p>
-            <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "#111827" }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, textTransform: "uppercase" }}>Detalle del vehículo</p>
+            <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "var(--text-primary)" }}>
               {vehicle.license_plate}
             </h2>
           </div>
@@ -985,7 +986,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               border: "none",
               fontSize: 24,
               cursor: "pointer",
-              color: "#6b7280",
+              color: "var(--text-secondary)",
               padding: "4px 8px",
             }}
           >
@@ -1026,7 +1027,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                 {vehicleStatusLabels[vehicle.status]}
               </span>
             </div>
-            <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 0" }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>
               ID: #{vehicle.id}
             </p>
           </div>
@@ -1034,35 +1035,35 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
         <div
           style={{
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 20,
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Información del vehículo</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Información del vehículo</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
-              <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px" }}>Tipo</p>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Tipo</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
             </div>
             <div>
-              <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px" }}>Capacidad</p>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "#111827", margin: 0 }}>{vehicle.capacity_kg} kg</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Capacidad</p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicle.capacity_kg} kg</p>
             </div>
             {vehicle.updated_at && (
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px" }}>Última actualización</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "#374151", margin: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Última actualización</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", margin: 0 }}>
                   {new Date(vehicle.updated_at).toLocaleString()}
                 </p>
               </div>
             )}
             {vehicle.updated_by && (
               <div>
-                <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 2px" }}>Actualizado por</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "#374151", margin: 0 }}>{vehicle.updated_by}</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Actualizado por</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", margin: 0 }}>{vehicle.updated_by}</p>
               </div>
             )}
           </div>
@@ -1075,7 +1076,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               onClick={onEndTrip}
               style={{
                 width: "100%",
-                background: "#dc2626",
+                background: "var(--danger-c)",
                 color: "#fff",
                 border: "none",
                 borderRadius: 8,
@@ -1092,11 +1093,11 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
         {/* Cambio de estado — solo admin */}
         {!readOnly && hideShipments && (
-          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Cambiar estado</h3>
+          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Cambiar estado</h3>
 
             {["en_carga", "en_transito"].includes(currentStatus) && (
-              <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "#92400e" }}>
+              <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "var(--warn-text)" }}>
                 El estado <strong>{vehicleStatusLabels[currentStatus]}</strong> es gestionado automáticamente por las operaciones de viaje y no puede cambiarse de forma manual.
               </div>
             )}
@@ -1104,24 +1105,24 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             {!["en_carga", "en_transito"].includes(currentStatus) && (
               <>
                 {currentShipments.length > 0 && (
-                  <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "#92400e" }}>
+                  <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "var(--warn-text)" }}>
                     Este vehículo tiene {currentShipments.length} envío{currentShipments.length !== 1 ? "s" : ""} asignado{currentShipments.length !== 1 ? "s" : ""}. El cambio de estado se aplicará de forma forzada.
                   </div>
                 )}
                 {statusError && (
-                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                  <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
                     {statusError}
                   </div>
                 )}
                 {statusSuccess && (
-                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                  <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
                     {statusSuccess}
                   </div>
                 )}
                 <select
                   value={selectedStatus}
                   onChange={(e) => { setSelectedStatus(e.target.value as VehicleStatus | ""); setStatusError(""); setStatusSuccess(""); }}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", marginBottom: 8 }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", marginBottom: 8 }}
                 >
                   <option value="">Seleccioná el nuevo estado…</option>
                   {MANUAL_STATUSES.filter(s => s.value !== currentStatus).map(s => (
@@ -1133,13 +1134,13 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                   value={statusNotes}
                   onChange={(e) => setStatusNotes(e.target.value)}
                   placeholder="Notas (opcional)"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, marginBottom: 8, boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, marginBottom: 8, boxSizing: "border-box" }}
                 />
                 <button
                   onClick={handleStatusChange}
                   disabled={!selectedStatus || statusBusy}
                   style={{
-                    background: !selectedStatus || statusBusy ? "#9ca3af" : "#1e3a5f",
+                    background: !selectedStatus || statusBusy ? "var(--text-muted)" : "#1e3a5f",
                     color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px",
                     cursor: !selectedStatus || statusBusy ? "not-allowed" : "pointer",
                     fontWeight: 600, width: "100%", opacity: statusBusy ? 0.7 : 1,
@@ -1155,49 +1156,49 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
           {/* Branch asignado */}
         <div
           style={{
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: 16,
             marginBottom: 16,
           }}
         >
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Sucursal actual</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Sucursal actual</h3>
           {currentBranch ? (
             <div style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: 8,
               padding: 12,
               marginBottom: hasShipments ? 0 : 12,
             }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0 }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
                 {currentBranch.name}
               </p>
-              <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
                 {currentBranch.address.city}, {currentBranch.province}
               </p>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "#6b7280", margin: hasShipments ? 0 : "0 0 12px" }}>Sin sucursal asignada</p>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: hasShipments ? 0 : "0 0 12px" }}>Sin sucursal asignada</p>
           )}
 
           {!hasShipments && canAssignBranch && (
             <>
               {branchError && (
-                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
                   {branchError}
                 </div>
               )}
               {branchSuccess && (
-                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+                <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
                   {branchSuccess}
                 </div>
               )}
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff", marginBottom: 8 }}
+                style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", marginBottom: 8 }}
               >
                 <option value="">Cambiar sucursal...</option>
                 {branches.map(b => (
@@ -1208,7 +1209,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                 onClick={handleAssignBranch}
                 disabled={assigningBranch || !selectedBranch}
                 style={{
-                  background: assigningBranch || !selectedBranch ? "#9ca3af" : "#1e3a5f",
+                  background: assigningBranch || !selectedBranch ? "var(--text-muted)" : "#1e3a5f",
                   color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px",
                   cursor: assigningBranch || !selectedBranch ? "not-allowed" : "pointer",
                   fontWeight: 600, width: "100%", opacity: assigningBranch ? 0.7 : 1,
@@ -1223,22 +1224,22 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         {/* Envíos asignados */}
         {!hideShipments && <div
           style={{
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             padding: 16,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: 0 }}>Envíos asignados</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>Envíos asignados</h3>
             {!readOnly && currentStatus === "en_carga" && currentShipments.length > 1 && (
               <button
                 onClick={() => setShowUnassignAllConfirm(true)}
                 disabled={unassignAllBusy || unassigning !== null}
                 style={{
-                  background: unassignAllBusy || unassigning !== null ? "#fca5a5" : "#fef2f2",
-                  color: "#dc2626",
-                  border: "1px solid #fecaca",
+                  background: unassignAllBusy || unassigning !== null ? "var(--danger-border)" : "var(--danger-bg)",
+                  color: "var(--danger-text)",
+                  border: "1px solid var(--danger-border)",
                   borderRadius: 6,
                   padding: "6px 12px",
                   cursor: unassignAllBusy || unassigning !== null ? "not-allowed" : "pointer",
@@ -1252,7 +1253,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             )}
           </div>
           {unassignError && (
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
+            <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
               {unassignError}
             </div>
           )}
@@ -1262,8 +1263,8 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                 <div
                   key={trackingId}
                   style={{
-                    background: "#fff",
-                    border: "1px solid #e5e7eb",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
                     borderRadius: 8,
                     padding: 12,
                     display: "flex",
@@ -1272,10 +1273,10 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                   }}
                 >
                   <div>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0 }}>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
                       {trackingId}
                     </p>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
                       ID de seguimiento
                     </p>
                   </div>
@@ -1301,9 +1302,9 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                         disabled={unassigning === trackingId || unassignAllBusy}
                         title="Desasignar envío"
                         style={{
-                          background: unassigning === trackingId ? "#f3f4f6" : "#fef2f2",
-                          color: "#dc2626",
-                          border: "1px solid #fecaca",
+                          background: unassigning === trackingId ? "var(--bg-muted)" : "var(--danger-bg)",
+                          color: "var(--danger-text)",
+                          border: "1px solid var(--danger-border)",
                           borderRadius: 6,
                           width: 32,
                           height: 32,
@@ -1329,7 +1330,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               style={{
                 textAlign: "center",
                 padding: "20px 0",
-                color: "#6b7280",
+                color: "var(--text-secondary)",
               }}
             >
               <svg style={{ width: 32, height: 32, margin: "0 auto 8px", opacity: 0.5 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1343,9 +1344,9 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
         {/* QR del vehículo */}
         {qrBase64 && (
-          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, marginTop: 16, textAlign: "center" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 12px" }}>Código QR del vehículo</h3>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 12px" }}>
+          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginTop: 16, textAlign: "center" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Código QR del vehículo</h3>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 12px" }}>
               El chofer escanea este QR para reclamar el viaje del día.
             </p>
             <img
@@ -1353,7 +1354,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               alt={`QR ${vehicle.license_plate}`}
               style={{ width: 160, height: 160, display: "block", margin: "0 auto", imageRendering: "pixelated" }}
             />
-            <p style={{ fontSize: 11, color: "#9ca3af", margin: "10px 0 0", fontFamily: "monospace" }}>{vehicle.license_plate}</p>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "10px 0 0", fontFamily: "monospace" }}>{vehicle.license_plate}</p>
           </div>
         )}
       </div>
@@ -1364,22 +1365,22 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
       >
         <div
-          style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
           onClick={(e) => e.stopPropagation()}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Desasignar todos los envíos</h2>
             <button
               onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
-              style={{ background: "none", border: "none", fontSize: 22, cursor: unassignAllBusy ? "not-allowed" : "pointer", color: "#6b7280" }}
+              style={{ background: "none", border: "none", fontSize: 22, cursor: unassignAllBusy ? "not-allowed" : "pointer", color: "var(--text-secondary)" }}
             >
               ✕
             </button>
           </div>
-          <p style={{ fontSize: 14, color: "#374151", margin: "0 0 12px" }}>
+          <p style={{ fontSize: 14, color: "var(--text-strong)", margin: "0 0 12px" }}>
             ¿Confirmás desasignar los <strong>{currentShipments.length} envíos</strong> cargados en el vehículo <strong>{vehicle.license_plate}</strong>?
           </p>
-          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#374151" }}>
+          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
             <p style={{ margin: "0 0 6px" }}>
               • Los envíos volverán al estado <strong>En sucursal</strong>.
             </p>
@@ -1391,7 +1392,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             <button
               onClick={() => setShowUnassignAllConfirm(false)}
               disabled={unassignAllBusy}
-              style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: unassignAllBusy ? "not-allowed" : "pointer", fontWeight: 500, opacity: unassignAllBusy ? 0.6 : 1 }}
+              style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: unassignAllBusy ? "not-allowed" : "pointer", fontWeight: 500, opacity: unassignAllBusy ? 0.6 : 1 }}
             >
               Cancelar
             </button>
@@ -1400,7 +1401,7 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               disabled={unassignAllBusy}
               style={{
                 padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                background: unassignAllBusy ? "#9ca3af" : "#dc2626",
+                background: unassignAllBusy ? "var(--text-muted)" : "var(--danger-c)",
                 color: "#fff", cursor: unassignAllBusy ? "not-allowed" : "pointer",
                 opacity: unassignAllBusy ? 0.7 : 1,
               }}

@@ -94,8 +94,8 @@ export function ZoneManagement() {
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:160px">
           <p style="font-weight:700;font-size:14px;margin:0 0 4px">⚠️ ${z.name}</p>
-          ${z.description ? `<p style="font-size:12px;color:#64748b;margin:0">${z.description}</p>` : ""}
-          ${!z.active ? '<span style="font-size:11px;color:#94a3b8;margin-top:4px;display:inline-block">Pausada</span>' : ""}
+          ${z.description ? `<p style="font-size:12px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
+          ${!z.active ? '<span style="font-size:11px;color:var(--text-muted);margin-top:4px;display:inline-block">Pausada</span>' : ""}
         </div>
       `);
       poly.on("click", (e: L.LeafletMouseEvent) => {

@@ -19,10 +19,10 @@ const KSS_LEVELS = [
 ] as const;
 
 function kssAccentColor(v: number): string {
-  if (v <= 3) return "#10b981"; // emerald — alerta
-  if (v <= 5) return "#f59e0b"; // amber   — leve somnolencia
-  if (v <= 7) return "#f97316"; // orange  — somnolencia
-  return "#ef4444";             // rose    — alto riesgo
+  if (v <= 3) return "var(--ok)";     // emerald — alerta
+  if (v <= 5) return "var(--warn)";   // amber   — leve somnolencia
+  if (v <= 7) return "var(--warn)";   // orange  — somnolencia
+  return "var(--danger-c)";           // rose    — alto riesgo
 }
 
 function kssBandLabel(v: number): { text: string; cls: string } {
