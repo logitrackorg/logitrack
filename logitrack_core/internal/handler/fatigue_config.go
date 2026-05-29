@@ -56,10 +56,12 @@ func (h *FatigueConfigHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, updated)
 }
 
-// ListAuditLogs returns all audit records newest-first.
+// ListAuditLogs returns configuration-change audit records newest-first.
+// Driver check-in events share the same backing file but are excluded here —
+// only "UPDATE_FATIGUE_CONFIG" actions represent actual config changes.
 // Read-only endpoint — no DELETE or PUT counterpart exists (AC2).
 func (h *FatigueConfigHandler) ListAuditLogs(c *gin.Context) {
-	logs := h.auditRepo.ListAll()
+	logs := h.auditRepo.ListByActions("UPDATE_FATIGUE_CONFIG")
 	c.JSON(http.StatusOK, gin.H{
 		"logs":  logs,
 		"total": len(logs),

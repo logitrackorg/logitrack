@@ -53,6 +53,33 @@ func (r *AuditLogRepository) ListAll() []model.AuditLog {
 	return records
 }
 
+// ListByActions returns only records whose Action field matches one of the
+// given values, sorted newest-first. Used to separate config-change history
+// from driver check-in events that share the same backing file.
+func (r *AuditLogRepository) ListByActions(actions ...string) []model.AuditLog {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	records, err := r.load()
+	if err != nil {
+		return []model.AuditLog{}
+	}
+	allowed := make(map[string]struct{}, len(actions))
+	for _, a := range actions {
+		allowed[a] = struct{}{}
+	}
+	filtered := make([]model.AuditLog, 0, len(records))
+	for _, rec := range records {
+		if _, ok := allowed[rec.Action]; ok {
+			filtered = append(filtered, rec)
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
+	})
+	return filtered
+}
+
 func (r *AuditLogRepository) load() ([]model.AuditLog, error) {
 	data, err := os.ReadFile(r.path)
 	if os.IsNotExist(err) {
