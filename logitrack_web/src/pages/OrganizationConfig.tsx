@@ -11,7 +11,7 @@ const labelClass = "text-sm font-semibold text-slate-700";
 
 export function OrganizationConfig() {
   const [config, setConfig] = useState<OrganizationConfigType | null>(null);
-  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "" });
+  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "", track_url: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function OrganizationConfig() {
         address: cfg.address ?? "",
         phone: cfg.phone ?? "",
         email: cfg.email ?? "",
+        track_url: cfg.track_url ?? "",
       });
     }).catch(() => {
       setError("No se pudo cargar la configuración de la organización.");
@@ -36,6 +37,10 @@ export function OrganizationConfig() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    if (form.track_url && !form.track_url.startsWith("https://")) {
+      setError("La URL del portal de tracking debe comenzar con https://");
+      return;
+    }
     setSaving(true);
     try {
       const updated = await organizationApi.update(form);
@@ -120,6 +125,20 @@ export function OrganizationConfig() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="Ej: contacto@empresa.com.ar"
               />
+            </div>
+
+            <div className="grid gap-1.5">
+              <label className={labelClass}>URL del portal de tracking</label>
+              <input
+                className={inputClass}
+                type="url"
+                value={form.track_url}
+                onChange={(e) => setForm({ ...form, track_url: e.target.value })}
+                placeholder="https://tudominio.com"
+              />
+              <p className="text-xs text-slate-400">
+                Si está vacío, se usa el valor de la variable de entorno <code className="font-mono">TRACK_BASE_URL</code>.
+              </p>
             </div>
 
             {error && (
