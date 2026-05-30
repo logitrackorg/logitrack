@@ -21,6 +21,11 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
+// OrgConfigProvider is the minimal interface needed to read the organization's track URL.
+type OrgConfigProvider interface {
+	Get() (*model.OrganizationConfig, error)
+}
+
 // RoutingConfigGetter is the minimal interface needed to read time-window hours.
 type RoutingConfigGetter interface {
 	Get() model.RoutingConfig
@@ -62,7 +67,8 @@ type Service struct {
 	twilioSID              string
 	twilioToken            string
 	twilioFrom             string // e.g. "whatsapp:+14155238886"
-	trackBaseURL           string
+	trackBaseURLEnv        string
+	orgSvc                 OrgConfigProvider
 	emailSvc               LastMileEmailSender
 	pickupEmailSvc         PickupEmailFallback
 	deliveryEmailSvc       DeliveryConfirmedEmailFallback
@@ -76,15 +82,28 @@ type Service struct {
 // twilioSID/twilioToken/twilioFrom may be empty (WhatsApp disabled, falls back to email).
 // emailSvc may be nil (email fallback also disabled).
 // routingCfg must be non-nil.
-func New(twilioSID, twilioToken, twilioFrom, trackBaseURL string, emailSvc LastMileEmailSender, routingCfg RoutingConfigGetter) *Service {
+// orgSvc is used to read TrackURL at send time; falls back to trackBaseURL when orgSvc is nil or TrackURL is empty.
+func New(twilioSID, twilioToken, twilioFrom, trackBaseURL string, emailSvc LastMileEmailSender, routingCfg RoutingConfigGetter, orgSvc OrgConfigProvider) *Service {
 	return &Service{
-		twilioSID:    twilioSID,
-		twilioToken:  twilioToken,
-		twilioFrom:   twilioFrom,
-		trackBaseURL: trackBaseURL,
-		emailSvc:     emailSvc,
-		routingCfg:   routingCfg,
+		twilioSID:       twilioSID,
+		twilioToken:     twilioToken,
+		twilioFrom:      twilioFrom,
+		trackBaseURLEnv: trackBaseURL,
+		orgSvc:          orgSvc,
+		emailSvc:        emailSvc,
+		routingCfg:      routingCfg,
 	}
+}
+
+// trackBaseURL returns the effective tracking portal base URL.
+// Prefers OrganizationConfig.TrackURL when set; falls back to the env-supplied value.
+func (s *Service) trackBaseURL() string {
+	if s.orgSvc != nil {
+		if cfg, err := s.orgSvc.Get(); err == nil && cfg != nil && cfg.TrackURL != "" {
+			return cfg.TrackURL
+		}
+	}
+	return s.trackBaseURLEnv
 }
 
 // SetPickupEmailFallback wires the email service used when WhatsApp is unavailable
@@ -123,8 +142,8 @@ func (s *Service) SendOutForDeliveryNotification(shipment model.Shipment) {
 	cfg := s.routingCfg.Get()
 	twText := timeWindowText(shipment.TimeWindow, cfg)
 	trackURL := ""
-	if s.trackBaseURL != "" {
-		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	if base := s.trackBaseURL(); base != "" {
+		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
 	recipient := shipment.Recipient
@@ -163,8 +182,8 @@ func (s *Service) SendOutForDeliveryNotification(shipment model.Shipment) {
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch model.Branch, deadlineDate *time.Time) {
 	trackURL := ""
-	if s.trackBaseURL != "" {
-		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	if base := s.trackBaseURL(); base != "" {
+		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
 	recipient := shipment.Recipient
@@ -200,7 +219,7 @@ func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
 	sentViaWhatsApp := false
 
 	if !s.forceEmail() && sender.Phone != "" && s.whatsappConfigured() {
-		msg := buildDeliveryConfirmedWhatsAppMessage(shipment, s.trackBaseURL)
+		msg := buildDeliveryConfirmedWhatsAppMessage(shipment, s.trackBaseURL())
 		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
 			log.Printf("[messaging] WhatsApp entrega confirmada falló para %s (%s): %v — usando email como fallback",
 				shipment.TrackingID, sender.Phone, err)
@@ -358,7 +377,7 @@ func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string
 	sentViaWhatsApp := false
 
 	if !s.forceEmail() && sender.Phone != "" && s.whatsappConfigured() {
-		msg := buildRejectedWhatsAppMessage(shipment, notes, s.trackBaseURL)
+		msg := buildRejectedWhatsAppMessage(shipment, notes, s.trackBaseURL())
 		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
 			log.Printf("[messaging] WhatsApp rechazo falló para %s (%s): %v — usando email como fallback",
 				shipment.TrackingID, sender.Phone, err)
@@ -427,8 +446,8 @@ func timeWindowText(tw model.TimeWindow, cfg model.RoutingConfig) string {
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemptsUsed, maxAttempts int, branch model.Branch) {
 	trackURL := ""
-	if s.trackBaseURL != "" {
-		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	if base := s.trackBaseURL(); base != "" {
+		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
 	// CA-02: WhatsApp si el destinatario tiene teléfono (independiente del email), salvo force_email.
@@ -503,8 +522,8 @@ func (s *Service) SendShipmentConfirmationNotification(shipment model.Shipment) 
 		return
 	}
 	trackURL := ""
-	if s.trackBaseURL != "" {
-		trackURL = s.trackBaseURL + "/track?id=" + shipment.TrackingID
+	if base := s.trackBaseURL(); base != "" {
+		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
 	// CA-03: notificar al destinatario.

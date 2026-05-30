@@ -219,6 +219,7 @@ func main() {
 		os.Getenv("TRACK_BASE_URL"),
 		emailSvc,
 		routingCfgSvc,
+		orgSvc,
 	)
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada

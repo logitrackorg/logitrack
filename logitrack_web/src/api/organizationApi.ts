@@ -17,6 +17,7 @@ export interface OrganizationConfig {
   address: string;
   phone: string;
   email: string;
+  track_url: string;
   updated_at?: string;
   updated_by?: string;
 }

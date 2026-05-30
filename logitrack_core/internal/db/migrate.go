@@ -258,11 +258,13 @@ func RunMigrations(db *sql.DB) error {
 			phone      TEXT NOT NULL DEFAULT '',
 			email      TEXT NOT NULL DEFAULT '',
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_by TEXT NOT NULL DEFAULT ''
+			updated_by TEXT NOT NULL DEFAULT '',
+			track_url  TEXT NOT NULL DEFAULT ''
 		);
-		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by)
-		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system')
+		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
+		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
 		ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS track_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,

@@ -95,11 +95,12 @@ func (s *Service) SendShipmentConfirmation(shipment model.Shipment) {
 		return
 	}
 	org := s.orgConfig()
+	trackBase := s.effectiveTrackBaseURL(org)
 
 	// --- Email al destinatario (CA-03) ---
 	if shipment.Recipient.Email != "" {
 		subj := fmt.Sprintf("Tu envío %s está en camino — %s", shipment.TrackingID, org.Name)
-		body := renderRecipientConfirmation(shipment, org, s.cfg.TrackBaseURL)
+		body := renderRecipientConfirmation(shipment, org, trackBase)
 		s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario", org.Email)
 	} else {
 		log.Printf("[email] confirmación de envío: destinatario de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
@@ -108,7 +109,7 @@ func (s *Service) SendShipmentConfirmation(shipment model.Shipment) {
 	// --- Email al remitente (CA-04) ---
 	if shipment.Sender.Email != "" {
 		subj := fmt.Sprintf("Tu envío %s fue registrado en %s", shipment.TrackingID, org.Name)
-		body := renderSenderConfirmation(shipment, org, s.cfg.TrackBaseURL)
+		body := renderSenderConfirmation(shipment, org, trackBase)
 		s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente", org.Email)
 	} else {
 		log.Printf("[email] confirmación de envío: remitente de %s sin email registrado — omitido (CA-04)", shipment.TrackingID)
@@ -144,7 +145,7 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 	}
 	org := s.orgConfig()
 	branchAddr := BranchAddressString(branch)
-	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
 	subj := fmt.Sprintf("Tu envío %s está listo para retirar en sucursal", shipment.TrackingID)
 	body := renderReadyForPickupNotification(shipment, branch.Name, branchAddr, branch.Hours, deadlineDate, trackURL, org)
 	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (retiro en sucursal)", org.Email)
@@ -164,7 +165,7 @@ func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
 		return
 	}
 	org := s.orgConfig()
-	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
 	deliveredAt := time.Now().UTC()
 	if shipment.DeliveredAt != nil {
 		deliveredAt = *shipment.DeliveredAt
@@ -188,7 +189,7 @@ func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemp
 		return
 	}
 	org := s.orgConfig()
-	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
 	branchAddr := BranchAddressString(branch)
 	attemptsLeft := maxAttempts - attemptsUsed
 	if attemptsLeft < 0 {
@@ -214,7 +215,7 @@ func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string
 		return
 	}
 	org := s.orgConfig()
-	trackURL := buildTrackURL(s.cfg.TrackBaseURL, shipment.TrackingID)
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
 	rejectedAt := time.Now().UTC()
 	subj := fmt.Sprintf("Tu envío %s fue rechazado por el destinatario — %s", shipment.TrackingID, org.Name)
 	body := renderRejectedNotification(shipment, notes, rejectedAt, trackURL, org)
@@ -316,6 +317,15 @@ func (s *Service) orgConfig() model.OrganizationConfig {
 		return model.OrganizationConfig{}
 	}
 	return *cfg
+}
+
+// effectiveTrackBaseURL returns the tracking portal base URL for use in email links.
+// Prefers OrganizationConfig.TrackURL when set; falls back to the env-supplied value.
+func (s *Service) effectiveTrackBaseURL(org model.OrganizationConfig) string {
+	if org.TrackURL != "" {
+		return org.TrackURL
+	}
+	return s.cfg.TrackBaseURL
 }
 
 // extractAddr returns the bare email address from a display-name formatted string.
