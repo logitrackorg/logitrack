@@ -251,7 +251,7 @@ export function DriverInterBranchTrip() {
       .getTestEligibility({ stopped_minutes: Math.floor(stoppedTimeMs / 60_000) })
       .then((elig) => { if (elig.require_test) openCheckinGate(); })
       .catch(() => { /* error de red — no bloquear al chofer */ });
-  }, [stoppedTimeMs, trip, midTripCheckin]);
+  }, [stoppedTimeMs, trip, midTripCheckin, openCheckinGate]);
 
   // Check-in obligatorio al salir de cada parada intermedia.
   // Trigger: cuando current_stop_index avanza en tiempo real (el operador
@@ -319,7 +319,7 @@ export function DriverInterBranchTrip() {
         break; // procesar un checkpoint por tick
       }
     }
-  }, [position, trip, midTripCheckin, checkpoints]);
+  }, [position, trip, midTripCheckin, checkpoints, openCheckinGate]);
 
   // Mapa Leaflet
   useEffect(() => {

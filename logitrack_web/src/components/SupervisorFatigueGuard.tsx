@@ -35,10 +35,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
   const poll = useCallback(async () => {
     if (!isSupervisorOrManager) return;
     try {
-      const res = await supervisorFatigueApi.getActiveAlerts(
-        // managers sin sucursal ven todas las ramas
-        user?.role === "supervisor" ? undefined : undefined
-      );
+      const res = await supervisorFatigueApi.getActiveAlerts();
       if (res.alerts.length === 0) return;
       // Solo agregar a la cola alertas que no están ya en ella
       setQueue((prev) => {
@@ -49,7 +46,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
     } catch {
       // Error de red — no interrumpir el flujo
     }
-  }, [isSupervisorOrManager, user?.role]);
+  }, [isSupervisorOrManager]);
 
   useEffect(() => {
     if (!isSupervisorOrManager) return;

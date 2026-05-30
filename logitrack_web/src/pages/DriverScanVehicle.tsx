@@ -39,7 +39,7 @@ export default function DriverScanVehicle() {
         navigate("/driver/trip", { replace: true });
       }
     }).catch(() => { /* sin trip — quedarse acá */ });
-  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [navigate]);
 
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);
