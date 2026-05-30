@@ -2,51 +2,71 @@ package model
 
 import "testing"
 
-func TestCanRequestPickup_NotAtFinalBranch(t *testing.T) {
+func TestCanRequestPickup(t *testing.T) {
 	cases := []struct {
-		name            string
-		status          Status
-		currentLocation string
-		finalBranchID   string
-		wantOK          bool
+		name           string
+		deliveryMethod DeliveryMethod
+		status         Status
+		finalBranchID  string
+		wantOK         bool
 	}{
 		{
-			name:            "at_origin_hub con location distinta al destino",
-			status:          StatusAtOriginHub,
-			currentLocation: "caba",
-			finalBranchID:   "cordoba",
-			wantOK:          false,
+			name:           "last_mile en at_origin_hub puede solicitar pickup",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusAtOriginHub,
+			finalBranchID:  "cordoba",
+			wantOK:         true,
 		},
 		{
-			name:            "in_transit sin estar en destino",
-			status:          StatusInTransit,
-			currentLocation: "caba",
-			finalBranchID:   "mendoza",
-			wantOK:          false,
+			name:           "last_mile en in_transit puede solicitar pickup",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusInTransit,
+			finalBranchID:  "mendoza",
+			wantOK:         true,
 		},
 		{
-			name:            "at_hub en sucursal destino",
-			status:          StatusAtHub,
-			currentLocation: "cordoba",
-			finalBranchID:   "cordoba",
-			wantOK:          true,
+			name:           "last_mile en at_hub puede solicitar pickup",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusAtHub,
+			finalBranchID:  "cordoba",
+			wantOK:         true,
 		},
 		{
-			name:            "location vacía (envío recién creado) no bloquea",
-			status:          StatusAtOriginHub,
-			currentLocation: "",
-			finalBranchID:   "cordoba",
-			wantOK:          true,
+			name:           "ya es branch_pickup — no permitir de nuevo",
+			deliveryMethod: DeliveryMethodBranchPickup,
+			status:         StatusAtHub,
+			finalBranchID:  "cordoba",
+			wantOK:         false,
+		},
+		{
+			name:           "out_for_delivery — no permitir",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusOutForDelivery,
+			finalBranchID:  "cordoba",
+			wantOK:         false,
+		},
+		{
+			name:           "estado terminal — no permitir",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusDelivered,
+			finalBranchID:  "cordoba",
+			wantOK:         false,
+		},
+		{
+			name:           "sin FinalBranchID — no permitir",
+			deliveryMethod: DeliveryMethodLastMile,
+			status:         StatusAtOriginHub,
+			finalBranchID:  "",
+			wantOK:         false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &Shipment{
-				DeliveryMethod:  DeliveryMethodLastMile,
-				Status:          tc.status,
-				CurrentLocation: tc.currentLocation,
-				FinalBranchID:   tc.finalBranchID,
+				DeliveryMethod: tc.deliveryMethod,
+				Status:         tc.status,
+				FinalBranchID:  tc.finalBranchID,
 			}
 			ok, msg := s.CanRequestPickup()
 			if ok != tc.wantOK {

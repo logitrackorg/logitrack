@@ -443,10 +443,6 @@ func (s *Shipment) CanRequestPickup() (bool, string) {
 		return false, "No se pudo determinar la sucursal de destino"
 	}
 
-	if s.CurrentLocation != "" && s.CurrentLocation != s.FinalBranchID {
-		return false, "Tu paquete aún no llegó a la sucursal de destino. Podrás solicitar retiro cuando esté disponible allí."
-	}
-
 	return true, ""
 }
 

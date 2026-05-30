@@ -114,11 +114,22 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		}
 		if payload.Location != "" {
 			if payload.ToStatus == model.StatusAtHub || payload.ToStatus == model.StatusAtOriginHub {
+				// Auto-promover a ready_for_pickup cuando un envío con branch_pickup llega
+				// a la sucursal final (at_hub con location == final_branch_id).
 				_, err := p.db.Exec(`
 					UPDATE shipments
-					SET status = $1, current_location = $2, receiving_branch_id = $2, updated_at = $3
+					SET status = CASE
+					        WHEN $1 = $5 AND delivery_method = $6 AND $2 = final_branch_id THEN $7
+					        ELSE $1
+					    END,
+					    current_location = $2,
+					    receiving_branch_id = $2,
+					    updated_at = $3
 					WHERE tracking_id = $4`,
 					string(payload.ToStatus), payload.Location, event.Timestamp, event.TrackingID,
+					string(model.StatusAtHub),
+					string(model.DeliveryMethodBranchPickup),
+					string(model.StatusReadyForPickup),
 				)
 				return err
 			}
@@ -253,9 +264,23 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		return err
 
 	case model.EventPickupRequested:
+		// Cambia el método de entrega. Solo promueve a ready_for_pickup si el envío
+		// ya está en la sucursal final (at_hub con current_location == final_branch_id).
+		// En caso contrario el status queda como está y se auto-promueve al llegar.
 		_, err := p.db.Exec(`
-			UPDATE shipments SET status = $1, delivery_method = $2, updated_at = $3 WHERE tracking_id = $4`,
-			string(model.StatusReadyForPickup), string(model.DeliveryMethodBranchPickup), event.Timestamp, event.TrackingID,
+			UPDATE shipments
+			SET delivery_method = $1,
+			    status = CASE
+			        WHEN status = $2 AND current_location = final_branch_id THEN $3
+			        ELSE status
+			    END,
+			    updated_at = $4
+			WHERE tracking_id = $5`,
+			string(model.DeliveryMethodBranchPickup),
+			string(model.StatusAtHub),
+			string(model.StatusReadyForPickup),
+			event.Timestamp,
+			event.TrackingID,
 		)
 		return err
 

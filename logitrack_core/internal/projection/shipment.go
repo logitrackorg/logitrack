@@ -77,6 +77,12 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if (payload.ToStatus == model.StatusAtHub || payload.ToStatus == model.StatusAtOriginHub) && payload.Location != "" {
 			shipment.ReceivingBranchID = payload.Location
 		}
+		// Auto-promover a ready_for_pickup cuando un envío con branch_pickup llega a su sucursal final.
+		if payload.ToStatus == model.StatusAtHub &&
+			shipment.DeliveryMethod == model.DeliveryMethodBranchPickup &&
+			payload.Location != "" && payload.Location == shipment.FinalBranchID {
+			shipment.Status = model.StatusReadyForPickup
+		}
 		if payload.ToStatus == model.StatusDelivered {
 			t := event.Timestamp
 			shipment.DeliveredAt = &t
@@ -140,11 +146,13 @@ func (p *ShipmentProjection) Apply(event model.DomainEvent) {
 		if !ok {
 			return
 		}
-		// Cambiar método de entrega a retiro en sucursal
 		shipment.DeliveryMethod = model.DeliveryMethodBranchPickup
-		// Cambiar estado a ready_for_pickup
-		shipment.Status = model.StatusReadyForPickup
-		// Actualizar timestamp y metadata
+		// Solo transicionar a ready_for_pickup si el envío ya está en la sucursal final.
+		// Si no, el status queda como está; llegará a ready_for_pickup automáticamente
+		// cuando el evento at_hub lo ubique en FinalBranchID.
+		if shipment.CurrentLocation == shipment.FinalBranchID && shipment.Status == model.StatusAtHub {
+			shipment.Status = model.StatusReadyForPickup
+		}
 		shipment.UpdatedAt = event.Timestamp
 		if shipment.ChatbotMetadata == nil {
 			shipment.ChatbotMetadata = &model.ChatbotMetadata{
