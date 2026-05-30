@@ -37,9 +37,14 @@ export function OrganizationConfig() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    if (form.track_url && !form.track_url.startsWith("https://")) {
-      setError("La URL del portal de tracking debe comenzar con https://");
-      return;
+    if (form.track_url) {
+      try {
+        const parsed = new URL(form.track_url);
+        if (parsed.protocol !== "https:") throw new Error();
+      } catch {
+        setError("La URL del portal de tracking debe ser una URL válida y comenzar con https://");
+        return;
+      }
     }
     setSaving(true);
     try {
