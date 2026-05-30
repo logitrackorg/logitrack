@@ -49,6 +49,9 @@ export default function DriverScanVehicle() {
   // Realiza el claim del token (QR o patente) y navega a la pantalla
   // correspondiente. Se llama después de que el gate de fatiga se resuelve
   // (ya sea porque no era necesario o porque el chofer lo completó).
+  // Llama a markRouteStarted() tras cada claim exitoso de ruta de última milla
+  // para que CompletedRoutesToday quede incrementado ANTES de que el chofer
+  // vuelva a esta pantalla para una eventual segunda ruta.
   const claimAndNavigate = async (token: string) => {
     setLoading(true);
     setError("");
@@ -56,6 +59,9 @@ export default function DriverScanVehicle() {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
       if (trip.kind === "last_mile") {
+        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget;
+        // la navegación tiene 900 ms de delay, más que suficiente para que complete.
+        driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
         setSuccess(`Vehículo ${trip.license_plate} asignado. Redirigiendo…`);
@@ -68,6 +74,7 @@ export default function DriverScanVehicle() {
         try {
           await driverApi.startRoute();
           stopScanner();
+          driverApi.markRouteStarted().catch(() => {});
           goToRoute("Ruta iniciada.");
           return;
         } catch (routeErr: unknown) {
@@ -80,6 +87,7 @@ export default function DriverScanVehicle() {
           }
           if (routeMsg.includes("ya está iniciada")) {
             stopScanner();
+            driverApi.markRouteStarted().catch(() => {});
             goToRoute("Ruta en curso.");
             return;
           }

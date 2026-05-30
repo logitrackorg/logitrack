@@ -206,11 +206,13 @@ export const driverApi = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data);
   },
-  /** Marca la ruta del día como completada en el backend.
-   *  Persiste CompletedRoutesToday en el JSON para que el gate de fatiga
-   *  sepa que se necesita un nuevo check-in antes de la siguiente ruta. */
-  completeRoute: () =>
-    api.post<{ ok: boolean }>("/driver/route/complete").then((r) => r.data),
+  /** Incrementa CompletedRoutesToday en el check-in del chofer.
+   *  Llamar justo después de que un claim de vehículo es exitoso (QR o patente),
+   *  antes de navegar a la ruta. Es la única señal confiable: si se espera
+   *  a detectar la finalización, AddShipmentToDriverRoute ya puede haber
+   *  reseteado el estado de la ruta y la detección falla. */
+  markRouteStarted: () =>
+    api.post<{ ok: boolean; routes_started_today?: number }>("/driver/route/mark-started").then((r) => r.data),
   requestHistory: () =>
     api.post<{ ok: boolean; request: NonNullable<PersonalHistoryResult["request"]> }>("/driver/history-request")
       .then((r) => r.data),

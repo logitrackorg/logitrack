@@ -23,14 +23,15 @@ import (
 const controlPhraseTemplate = "Hoy es un buen día para trabajar con seguridad, %s."
 
 type DriverHandler struct {
-	routeSvc    *service.RouteService
-	branchRepo  repository.BranchRepository
-	checkinRepo *repository.CheckinRepository
-	sleepRepo   *repository.SleepRepository
-	historyRepo *repository.HistoryAccessRequestRepository
-	fatigueSvc  *service.FatigueConfigService
-	auditRepo   *repository.AuditLogRepository
-	notifSvc    *service.NotificationService
+	routeSvc        *service.RouteService
+	branchRepo      repository.BranchRepository
+	checkinRepo     *repository.CheckinRepository
+	sleepRepo       *repository.SleepRepository
+	routeStartRepo  *repository.RouteStartRepository
+	historyRepo     *repository.HistoryAccessRequestRepository
+	fatigueSvc      *service.FatigueConfigService
+	auditRepo       *repository.AuditLogRepository
+	notifSvc        *service.NotificationService
 }
 
 func NewDriverHandler(
@@ -41,14 +42,15 @@ func NewDriverHandler(
 	notifSvc *service.NotificationService,
 ) *DriverHandler {
 	return &DriverHandler{
-		routeSvc:    routeSvc,
-		branchRepo:  branchRepo,
-		checkinRepo: repository.NewCheckinRepository(),
-		sleepRepo:   repository.NewSleepRepository(),
-		historyRepo: repository.NewHistoryAccessRequestRepository(),
-		fatigueSvc:  fatigueSvc,
-		auditRepo:   auditRepo,
-		notifSvc:    notifSvc,
+		routeSvc:       routeSvc,
+		branchRepo:     branchRepo,
+		checkinRepo:    repository.NewCheckinRepository(),
+		sleepRepo:      repository.NewSleepRepository(),
+		routeStartRepo: repository.NewRouteStartRepository(),
+		historyRepo:    repository.NewHistoryAccessRequestRepository(),
+		fatigueSvc:     fatigueSvc,
+		auditRepo:      auditRepo,
+		notifSvc:       notifSvc,
 	}
 }
 
@@ -84,7 +86,6 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 		_ = h.checkinRepo.Upsert(rec)
 	}
 }
-
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
@@ -174,65 +175,24 @@ func logicalDateAR(resetHour int) string {
 // skipGracePeriod is how long a "saltar" choice suppresses the fatigue gate.
 const skipGracePeriod = 3 * time.Hour
 
-// autoFinalizeAndCount detects whether all of today's route deliveries are done
-// and, if so, transitions the route to finalizada and increments
-// CompletedRoutesToday on the driver's check-in.
-//
-// This is the core fix for the "second route same day" bug: the route record
-// was never explicitly set to finalizada, so the old route-status check always
-// saw "en_curso" and never fired the gate. By persisting the completion count
-// in the check-in JSON we have a reliable signal that survives route resets.
-//
-// Idempotent: LastCompletedRouteStartedAt prevents double-counting on
-// repeated calls (e.g. multiple getTodayCheckin polls after completion).
-func (h *DriverHandler) autoFinalizeAndCount(driverID, today string) {
-	rec, ok := h.checkinRepo.Get(driverID, today)
-	if !ok {
-		return
-	}
-	route, shipments, err := h.routeSvc.GetTodayRoute(driverID)
-	if err != nil || route.StartedAt == nil || route.Status != model.RouteStatusActive {
-		return
-	}
-	if len(route.ShipmentIDs) == 0 {
-		return
-	}
-	// Avoid double-counting: skip if we already recorded this route run.
-	if rec.LastCompletedRouteStartedAt != nil &&
-		!rec.LastCompletedRouteStartedAt.Before(*route.StartedAt) {
-		return
-	}
-	// All visible shipments must have left out_for_delivery.
-	// delivery_failed / delivered / rechazado = terminal for this run.
-	for _, s := range shipments {
-		if s.Status == model.StatusOutForDelivery {
-			return // still pending deliveries
-		}
-	}
-	// Route is effectively complete — persist the counter and finalize.
-	rec.CompletedRoutesToday++
-	startedAt := *route.StartedAt
-	rec.LastCompletedRouteStartedAt = &startedAt
-	_ = h.checkinRepo.Upsert(rec)
-	_ = h.routeSvc.FinishRoute(driverID)
-}
-
 // GetTodayCheckin returns the authenticated driver's check-in for today.
 // Returns 404 (gate re-appears) when:
 //   - no check-in has been recorded yet, OR
 //   - an admin reset was triggered after the existing check-in, OR
 //   - the driver had skipped and the 3-hour grace period has elapsed.
 //
-// Always calls autoFinalizeAndCount first so that CompletedRoutesToday is
-// up-to-date before requires_fatigue_test is computed.
+// requires_fatigue_test: true when routeStartRepo reports the driver has already
+// claimed ≥ 1 vehicle since their last check-in. This counter lives in its own
+// JSON file, independent of the check-in record, so it works even when no
+// proper KSS check-in exists (e.g. early in the day, or skeleton records
+// created by touch-event accumulation).
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	cfg := h.fatigueSvc.Get()
 	logicalDate := logicalDateAR(cfg.DailyResetHour)
 	today := todayAR()
 
-	// Detect route completion and persist counter before reading the check-in.
-	h.autoFinalizeAndCount(user.ID, today)
+	requiresFatigueTest := h.routeStartRepo.Get(user.ID, today) > 0
 
 	rec, ok := h.checkinRepo.Get(user.ID, today)
 	if !ok {
@@ -240,7 +200,7 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":                 "sin check-in para hoy",
 			"requires_sleep_data":   !hasSleep,
-			"requires_fatigue_test": false, // no check-in → first route of day
+			"requires_fatigue_test": requiresFatigueTest,
 		})
 		return
 	}
@@ -250,18 +210,17 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":                 "check-in requiere renovación",
 			"requires_sleep_data":   !hasSleep,
-			"requires_fatigue_test": false,
+			"requires_fatigue_test": requiresFatigueTest,
 		})
 		return
 	}
-	// Skipped grace period: after 3 h the gate re-appears so the driver is
-	// prompted again — without deleting the skip record from history.
+	// Skipped grace period: after 3 h the gate re-appears.
 	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
 		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":                 "período de gracia de salto expirado",
 			"requires_sleep_data":   !hasSleep,
-			"requires_fatigue_test": false,
+			"requires_fatigue_test": requiresFatigueTest,
 		})
 		return
 	}
@@ -271,18 +230,27 @@ func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 		"ok":                    true,
 		"checkin":               rec,
 		"requires_sleep_data":   !hasSleep,
-		"requires_fatigue_test": rec.CompletedRoutesToday > 0,
+		"requires_fatigue_test": requiresFatigueTest,
 	})
 }
 
-// CompleteRoute is the explicit belt-and-suspenders counterpart to
-// autoFinalizeAndCount. The frontend calls it when it detects routeEffectivelyDone
-// so that CompletedRoutesToday is persisted immediately rather than waiting for
-// the next GetTodayCheckin poll from DriverScanVehicle.
-func (h *DriverHandler) CompleteRoute(c *gin.Context) {
+// MarkRouteStarted increments the route-start counter for today.
+// Called by the frontend right after a successful vehicle claim (QR or plate),
+// before navigating to the route page.
+//
+// The counter lives in routeStartRepo (data/route_starts.json), completely
+// independent of the check-in record. This guarantees it works even when:
+//   - the driver hasn't done a morning KSS check-in yet
+//   - the check-in record is a skeleton created by touch-event accumulation
+//   - AddShipmentToDriverRoute already reset the route record
+func (h *DriverHandler) MarkRouteStarted(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
-	h.autoFinalizeAndCount(user.ID, todayAR())
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	count, err := h.routeStartRepo.Increment(user.ID, todayAR())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el inicio de ruta"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "routes_started_today": count})
 }
 
 // SkipCheckin records that the driver deliberately bypassed the fatigue gate.
@@ -327,6 +295,10 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 			Details:   json.RawMessage(detailsJSON),
 		})
 	}
+
+	// Reset the route-start counter so the gate doesn't re-fire on the
+	// immediate next scan after a skip.
+	_ = h.routeStartRepo.Reset(user.ID, today)
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
 }
@@ -433,6 +405,10 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 			Details:   json.RawMessage(detailsJSON),
 		})
 	}
+
+	// Reset the route-start counter: the driver just passed the gate so the
+	// next scan should not show the gate again until another route is claimed.
+	_ = h.routeStartRepo.Reset(user.ID, today)
 
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec, "requires_sleep_data": false})
 }
@@ -629,10 +605,10 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ok":           true,
+		"ok":            true,
 		"voice_metrics": current,
-		"drift_score":  driftScore,
-		"baseline":     rec.BaselineVoice,
+		"drift_score":   driftScore,
+		"baseline":      rec.BaselineVoice,
 	})
 }
 
@@ -731,8 +707,8 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	isTripStart    := c.Query("is_trip_start") == "true"
-	isCheckpoint   := c.Query("checkpoint") == "true"
+	isTripStart := c.Query("is_trip_start") == "true"
+	isCheckpoint := c.Query("checkpoint") == "true"
 	stoppedMinutes := 0
 	if raw := c.Query("stopped_minutes"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil {
@@ -780,13 +756,13 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 			}
 		}
 
-		// Gate A: menos de 5 misfires → no hay problema táctil.
-		if latestMisfires < 5 {
+		// Gate A: menos de 20 misfires → no hay problema táctil.
+		if latestMisfires < 15 {
 			c.JSON(http.StatusOK, gin.H{"require_test": false})
 			return
 		}
 
-		// Gate B: 5+ misfires — exige re-test si no hay check-in formal ese día
+		// Gate B: 15+ misfires — exige re-test si no hay check-in formal ese día
 		// o si el último fue hace más de 1 hora.
 		hadFormalCheckin := hasRec && (rec.KSSLevel > 0 || rec.Skipped)
 		if !hadFormalCheckin {
