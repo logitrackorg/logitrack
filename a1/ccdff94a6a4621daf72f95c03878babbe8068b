@@ -1,0 +1,22 @@
+logitrack_web/src/pages/Login.tsx
+  s_a73eafc379abe0::t_958bbd26e1f411 253,260-263
+logitrack_web/src/pages/NewShipment.tsx
+  s_a73eafc379abe0::t_9bffdc146351ae 1059,1062,1073,1084,1087
+  s_a73eafc379abe0::t_cad04867ac137f 1058,1060-1061,1064,1068,1085
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a1ccdff94a6a4621daf72f95c03878babbe8068b",
+  "prompts": {},
+  "sessions": {
+    "s_a73eafc379abe0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d0803829-ba89-4526-ba02-6003020cad23",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
