@@ -250,23 +250,17 @@ export function Login() {
 
             {showTestUsers && (
               <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                {TEST_USERS.map(({ u, p, r, branch }) => (
+                {TEST_USERS.map(({ u, p, r }) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => { setUsername(u); setPassword(p); }}
                     className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
                   >
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-gray-800 group-hover:text-[#2563eb] transition-colors">{u}</span>
-                      <span className="text-xs text-gray-400 ml-2">{p}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-3">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
-                        {r}
-                      </span>
-                      {branch && <span className="text-[10px] text-slate-400">{branch}</span>}
-                    </div>
+                    <span className="text-xs font-semibold text-gray-800 group-hover:text-[#2563eb] transition-colors">{u}</span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
+                      {r}
+                    </span>
                   </button>
                 ))}
               </div>

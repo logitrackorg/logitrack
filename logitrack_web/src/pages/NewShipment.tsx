@@ -1055,19 +1055,22 @@ function BreakdownRow({ label, value }: { label: string; value: string }) {
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
-    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-center justify-between gap-3 shadow-lg">
-      <div className="text-sm text-blue-900 leading-relaxed min-w-0 flex-1">
+    <div
+      className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg px-3 py-2.5 flex flex-col gap-2 shadow-lg"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--brand-tint-border)" }}
+    >
+      <div className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
         <span className="font-bold">{customer.name}</span>
-        <span className="mx-1.5 text-slate-400">·</span>
+        <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
         <span>{customer.phone}</span>
         {customer.address.city && (
           <>
-            <span className="mx-1.5 text-slate-400">·</span>
+            <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
             <span>{customer.address.city}, {customer.address.province}</span>
           </>
         )}
       </div>
-      <div className="flex gap-1.5 shrink-0">
+      <div className="flex gap-1.5">
         <button
           type="button"
           onClick={onApply}
@@ -1078,10 +1081,10 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Descartar"
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 cursor-pointer"
+          className="h-7 px-3 rounded-md text-xs font-semibold cursor-pointer"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         >
-          <X className="w-3.5 h-3.5" />
+          Ignorar
         </button>
       </div>
     </div>
