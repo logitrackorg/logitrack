@@ -60,7 +60,8 @@ export interface DriverRouteResponse {
 
 export interface CheckInPayload {
   driver_id: string;
-  horas_sueno: number;
+  /** Omit when the driver already reported sleep for today's logical day. */
+  horas_sueno?: number;
   kss_level: number;
 }
 
@@ -118,11 +119,57 @@ export interface PVTResult {
   recorded_at: string;
 }
 
+export type PersonalHistoryStatus = "pending" | "approved" | "rejected" | "sin_solicitud";
+
+export interface PersonalHistoryResult {
+  ok: boolean;
+  request_status?: PersonalHistoryStatus;
+  history?: import("./supervisorFatigue").CheckinRecord[];
+  total?: number;
+  request?: {
+    driver_id: string;
+    status: PersonalHistoryStatus;
+    request_date: string;
+    reviewed_by?: string;
+    reviewed_at?: string;
+    review_note?: string;
+  };
+}
+
 export const driverApi = {
   getRoute: () => api.get<DriverRouteResponse>("/driver/route").then((r) => r.data),
   startRoute: () => api.post<{ route: DriverRoute }>("/driver/route/start").then((r) => r.data),
   getTodayCheckin: () =>
-    api.get<{ ok: boolean }>("/driver/checkin/today").then((r) => r.data),
+    api.get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today").then((r) => r.data),
+  /** Resolves whether the driver must pass the fatigue gate before their next route.
+   *  Handles both 200 (requires_fatigue_test) and 404 (first route vs. second route).
+   *  Never throws — always returns a safe result.
+   *
+   *  requires_fatigue_test is false when:
+   *    - no route has started yet today (first route of the day), OR
+   *    - the driver is currently on an active route.
+   *  requires_fatigue_test is true when:
+   *    - a prior route was started and is now finished (second route+). */
+  getCheckinGateStatus: async (): Promise<{ needs_test: boolean; requires_sleep_data: boolean }> => {
+    try {
+      const data = await api
+        .get<{ ok: boolean; requires_sleep_data: boolean; requires_fatigue_test?: boolean }>("/driver/checkin/today")
+        .then((r) => r.data);
+      return {
+        needs_test: !!data.requires_fatigue_test,
+        requires_sleep_data: !!data.requires_sleep_data,
+      };
+    } catch (err: unknown) {
+      // 404 body now includes requires_fatigue_test and requires_sleep_data.
+      // Use them directly — do NOT default needs_test to true, because a 404
+      // on the first route of the day should NOT trigger the gate.
+      const body = (err as { response?: { data?: { requires_fatigue_test?: boolean; requires_sleep_data?: boolean } } })?.response?.data;
+      return {
+        needs_test: !!body?.requires_fatigue_test,
+        requires_sleep_data: body?.requires_sleep_data ?? true,
+      };
+    }
+  },
   submitCheckin: (payload: CheckInPayload) =>
     api.post("/driver/checkin", payload).then((r) => r.data),
   /** Registra que el chofer eligió saltear el check-in de fatiga.
@@ -159,4 +206,21 @@ export const driverApi = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data);
   },
+  /** Incrementa CompletedRoutesToday en el check-in del chofer.
+   *  Llamar justo después de que un claim de vehículo es exitoso (QR o patente),
+   *  antes de navegar a la ruta. Es la única señal confiable: si se espera
+   *  a detectar la finalización, AddShipmentToDriverRoute ya puede haber
+   *  reseteado el estado de la ruta y la detección falla. */
+  markRouteStarted: () =>
+    api.post<{ ok: boolean; routes_started_today?: number }>("/driver/route/mark-started").then((r) => r.data),
+  requestHistory: () =>
+    api.post<{ ok: boolean; request: NonNullable<PersonalHistoryResult["request"]> }>("/driver/history-request")
+      .then((r) => r.data),
+  getPersonalHistory: (): Promise<PersonalHistoryResult> =>
+    api.get("/driver/history")
+      .then((r) => ({ ok: true as const, ...r.data }))
+      .catch((err) => ({
+        ok: false as const,
+        request_status: (err?.response?.data?.request_status ?? "sin_solicitud") as PersonalHistoryStatus,
+      })),
 };

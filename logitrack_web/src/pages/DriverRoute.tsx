@@ -53,6 +53,8 @@ export function DriverRoute() {
   // Misfires capturados en el momento en que se activa el overlay, para mostrarlo
   // en el toast de "Saltar test" dentro de KssCheckIn.
   const [checkinMisfires, setCheckinMisfires] = useState(0);
+  // true si el driver aún no reportó sueño para el día logístico actual.
+  const [requiresSleepData, setRequiresSleepData] = useState(true);
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -123,6 +125,13 @@ export function DriverRoute() {
     const capturedMisfires = misfireRef.current;
     misfireRef.current = 0; // resetear contador local siempre
     if (requireTest) {
+      // Consultar si ya se registraron horas de sueño hoy para no pedirlas de nuevo.
+      try {
+        const checkin = await driverApi.getTodayCheckin().catch(() => ({ ok: false, requires_sleep_data: true }));
+        setRequiresSleepData(checkin.requires_sleep_data ?? true);
+      } catch {
+        setRequiresSleepData(true);
+      }
       // No resetear el backend todavía: SubmitCheckin leerá los misfires
       // almacenados y los incluirá en el registro. El reset se hace en onDone.
       setCheckinMisfires(capturedMisfires);
@@ -203,6 +212,8 @@ export function DriverRoute() {
   };
 
   // Hooks que necesitan estar antes de cualquier return condicional
+
+
   const routePoints = useMemo(() => {
     const origin = data?.origin;
     const wps = data?.waypoints ?? [];
@@ -240,8 +251,10 @@ export function DriverRoute() {
       <KssCheckIn
         driverId={user.id}
         misfireCount={checkinMisfires}
+        requiresSleepData={requiresSleepData}
         onDone={() => {
           setMidRouteCheckin(false);
+          setRequiresSleepData(false); // sueño ya registrado, no pedir de nuevo hoy
           driverApi.resetMisfires().catch(() => {}); // resetear tras el check-in, no antes
           play();
           load();
@@ -270,6 +283,7 @@ export function DriverRoute() {
   const routeEffectivelyDone =
     (routeStatus === "finalizada" && pending === 0) ||
     (routeStatus === "en_curso" && pending === 0 && total > 0);
+
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} />;
   }

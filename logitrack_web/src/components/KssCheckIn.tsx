@@ -37,9 +37,15 @@ interface Props {
   onDone: () => void;
   /** Cantidad de misfires que dispararon este check-in. Se muestra en el toast de skip. */
   misfireCount?: number;
+  /**
+   * true  → el driver aún no reportó horas de sueño hoy, mostrar el campo.
+   * false → ya existe un registro de sueño para este día logístico, omitir el campo.
+   * Default: true (comportamiento seguro ante datos desconocidos).
+   */
+  requiresSleepData?: boolean;
 }
 
-export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
+export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepData = true }: Props) {
   const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(4);
@@ -99,14 +105,25 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
 
   const horasNum = parseInt(horasSueno, 10);
   const horasValid = !Number.isNaN(horasNum) && horasNum >= 0 && horasNum <= 10;
-  const canSubmit = horasValid && !submitting;
+  const canSubmit = (!requiresSleepData || horasValid) && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError("");
     try {
-      await driverApi.submitCheckin({ driver_id: driverId, horas_sueno: horasNum, kss_level: kss });
+      const payload = {
+        driver_id: driverId,
+        kss_level: kss,
+        ...(requiresSleepData ? { horas_sueno: horasNum } : {}),
+      };
+      const result = await driverApi.submitCheckin(payload);
+      // Backend can still ask for sleep data if the record wasn't found
+      // (e.g. race condition or first submission without sleep). Show field and retry.
+      if (result && (result as { requires_sleep_data?: boolean }).requires_sleep_data) {
+        setError("Ingresá tus horas de sueño para continuar.");
+        return;
+      }
       setStep("voice");
     } catch {
       setError("No se pudo registrar el check-in. Intentá de nuevo.");
@@ -190,24 +207,33 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
             </div>
           </div>
 
-          {/* Horas de sueño */}
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-              Horas de sueño (noche anterior)
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={10}
-              value={horasSueno}
-              onChange={(e) => setHorasSueno(e.target.value)}
-              placeholder="0 – 10"
-              className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {horasSueno !== "" && !horasValid && (
-              <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
-            )}
-          </div>
+          {/* Horas de sueño — solo si no hay registro para el día logístico */}
+          {requiresSleepData ? (
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                Horas de sueño (noche anterior)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={10}
+                value={horasSueno}
+                onChange={(e) => setHorasSueno(e.target.value)}
+                placeholder="0 – 10"
+                className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {horasSueno !== "" && !horasValid && (
+                <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
+              )}
+            </div>
+          ) : (
+            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700">
+              <Moon className="w-4 h-4 text-blue-400 shrink-0" />
+              <p className="text-xs text-slate-400 leading-snug">
+                Horas de sueño ya registradas para este día logístico.
+              </p>
+            </div>
+          )}
 
           {/* ── KSS Slider ─────────────────────────────────────────────────── */}
           <div className="mb-8">
