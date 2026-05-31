@@ -83,7 +83,6 @@ export function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
   const [confirmTouched, setConfirmTouched] = useState(false);
-  const [newPasswordTouched, setNewPasswordTouched] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,7 +152,6 @@ export function Login() {
         setResetError("");
         setResetSuccess(false);
         setConfirmTouched(false);
-        setNewPasswordTouched(false);
       }, 2000);
     } catch (e: unknown) {
       const msg = (e as Error).message ?? "";
@@ -492,7 +490,6 @@ export function Login() {
                       type="password"
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
-                      onBlur={() => setNewPasswordTouched(true)}
                       autoComplete="new-password"
                       placeholder="••••••••"
                       className={INPUT_CLASS}
