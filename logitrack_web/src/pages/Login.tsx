@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { AlertCircle, ChevronDown, Truck, Package, MapPin } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Truck, Package, MapPin } from "lucide-react";
 import { publicTrackingApi, type PublicStats } from "@/api/publicTracking";
+import { passwordResetApi } from "@/api/passwordReset";
 
 const STAT_LABELS: { key: keyof PublicStats; label: string }[] = [
   { key: "total_shipments", label: "Envíos gestionados" },
@@ -44,6 +45,24 @@ const FEATURES = [
   { icon: MapPin,  text: "Control por sucursal y región" },
 ];
 
+type ResetStep = "idle" | "username" | "channel" | "otp";
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+const INPUT_CLASS =
+  "w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all";
+
+const SPINNER = (
+  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+  </svg>
+);
+
 export function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -54,6 +73,18 @@ export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const [resetStep, setResetStep] = useState<ResetStep>("idle");
+  const [resetUsername, setResetUsername] = useState("");
+  const [resetChannel, setResetChannel] = useState<"email" | "whatsapp">("email");
+  const [resetOtp, setResetOtp] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
+  const [confirmTouched, setConfirmTouched] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     publicTrackingApi.getStats()
@@ -61,6 +92,18 @@ export function Login() {
       .catch(() => { /* el panel muestra "—" si falla */ });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (resetStep !== "otp") return;
+    setOtpSecondsLeft(300);
+    const interval = setInterval(() => {
+      setOtpSecondsLeft((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resetStep]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +119,68 @@ export function Login() {
       setLoading(false);
     }
   };
+
+  const handleSendCode = async () => {
+    setResetLoading(true);
+    setResetError("");
+    let advance = true;
+    try {
+      await passwordResetApi.request(resetUsername, resetChannel);
+    } catch (e: unknown) {
+      if ((e as Error).message === "rate_limited") {
+        setResetError("Demasiados intentos. Esperá unos minutos antes de volver a intentarlo.");
+        advance = false;
+      }
+      // otros errores: avanzar igual (mensaje genérico)
+    } finally {
+      setResetLoading(false);
+    }
+    if (advance) setResetStep("otp");
+  };
+
+  const handleConfirmReset = async () => {
+    setResetLoading(true);
+    setResetError("");
+    try {
+      await passwordResetApi.confirm(resetUsername, resetOtp, resetNewPassword);
+      setResetSuccess(true);
+      setTimeout(() => {
+        setResetStep("idle");
+        setResetUsername("");
+        setResetChannel("email");
+        setResetOtp("");
+        setResetNewPassword("");
+        setResetConfirmPassword("");
+        setResetError("");
+        setResetSuccess(false);
+        setConfirmTouched(false);
+      }, 2000);
+    } catch (e: unknown) {
+      const msg = (e as Error).message;
+      setResetError(
+        msg === "invalid_otp"
+          ? "Código incorrecto o expirado."
+          : "Ocurrió un error. Intentá de nuevo."
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const passwordsMatch = resetNewPassword === resetConfirmPassword;
+  const confirmValidationMsg: string | null = confirmTouched
+    ? resetNewPassword.length > 0 && resetNewPassword.length < 8
+      ? "Mínimo 8 caracteres"
+      : resetConfirmPassword.length > 0 && !passwordsMatch
+      ? "Las contraseñas no coinciden"
+      : null
+    : null;
+
+  const canConfirm =
+    resetOtp.length === 6 &&
+    resetNewPassword.length >= 8 &&
+    passwordsMatch &&
+    !resetLoading;
 
   return (
     <div className="min-h-screen grid lg:grid-cols-[1fr_480px] bg-[#eff6ff]">
@@ -148,7 +253,7 @@ export function Login() {
         </p>
       </div>
 
-      {/* ── Panel derecho — formulario ── */}
+      {/* ── Panel derecho ── */}
       <div className="flex items-center justify-center p-6 bg-white border-l border-slate-200">
         <div className="w-full max-w-[360px] space-y-7">
 
@@ -160,112 +265,344 @@ export function Login() {
             <span className="font-bold text-[#1e3a5f] text-base">LogiTrack</span>
           </div>
 
-          {/* Encabezado */}
-          <div className="space-y-1.5">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido</h2>
-            <p className="text-sm text-gray-500">Ingresá tus credenciales para continuar</p>
-          </div>
-
-          {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-
-            <div className="space-y-1.5">
-              <label htmlFor="username" className="text-sm font-semibold text-gray-700">
-                Usuario
-              </label>
-              <input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoFocus
-                autoComplete="username"
-                placeholder="ej. op_caba"
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-sm font-semibold text-gray-700">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                placeholder="••••••••"
-                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all"
-              />
-            </div>
-
-            {error === "credentials" && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <p className="text-sm text-red-700">Usuario o contraseña incorrectos.</p>
+          {/* ─── Login ─── */}
+          {resetStep === "idle" && (
+            <>
+              <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido</h2>
+                <p className="text-sm text-gray-500">Ingresá tus credenciales para continuar</p>
               </div>
-            )}
 
-            {error === "inactive" && (
-              <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-red-700">Cuenta inactiva</p>
-                  <p className="text-xs text-red-600 mt-0.5">Contactá con un administrador para reactivarla.</p>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="username" className="text-sm font-semibold text-gray-700">
+                    Usuario
+                  </label>
+                  <input
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    autoFocus
+                    autoComplete="username"
+                    placeholder="ej. op_caba"
+                    className={INPUT_CLASS}
+                  />
                 </div>
-              </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Ingresando...
-                </span>
-              ) : "Ingresar"}
-            </button>
-          </form>
+                <div className="space-y-1.5">
+                  <label htmlFor="password" className="text-sm font-semibold text-gray-700">
+                    Contraseña
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className={INPUT_CLASS}
+                  />
+                </div>
 
-          {/* Cuentas de prueba */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowTestUsers(!showTestUsers)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Cuentas de prueba
-              </span>
-              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
-            </button>
+                {error === "credentials" && (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700">Usuario o contraseña incorrectos.</p>
+                  </div>
+                )}
 
-            {showTestUsers && (
-              <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                {TEST_USERS.map(({ u, p, r }) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => { setUsername(u); setPassword(p); }}
-                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
-                  >
-                    <span className="text-xs font-semibold text-gray-800 group-hover:text-[#2563eb] transition-colors">{u}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
-                      {r}
+                {error === "inactive" && (
+                  <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">Cuenta inactiva</p>
+                      <p className="text-xs text-red-600 mt-0.5">Contactá con un administrador para reactivarla.</p>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      {SPINNER}
+                      Ingresando...
                     </span>
+                  ) : "Ingresar"}
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => { setResetStep("username"); setResetError(""); }}
+                className="w-full text-sm text-[#2563eb] hover:underline text-center mt-1 cursor-pointer"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+
+              {/* Cuentas de prueba */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowTestUsers(!showTestUsers)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Cuentas de prueba
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
+                </button>
+
+                {showTestUsers && (
+                  <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                    {TEST_USERS.map(({ u, p, r }) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => { setUsername(u); setPassword(p); }}
+                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
+                      >
+                        <span className="text-xs font-semibold text-gray-800 group-hover:text-[#2563eb] transition-colors">{u}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
+                          {r}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ─── Paso 1: Usuario ─── */}
+          {resetStep === "username" && (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Recuperar contraseña</h2>
+                <p className="text-sm text-gray-500">Ingresá tu nombre de usuario</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="reset-username" className="text-sm font-semibold text-gray-700">
+                    Usuario
+                  </label>
+                  <input
+                    id="reset-username"
+                    value={resetUsername}
+                    onChange={(e) => setResetUsername(e.target.value)}
+                    autoFocus
+                    autoComplete="username"
+                    placeholder="ej. op_caba"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!resetUsername.trim()}
+                  onClick={() => setResetStep("channel")}
+                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                >
+                  Continuar
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setResetStep("idle")}
+                className="w-full text-sm text-slate-500 hover:text-slate-700 text-center cursor-pointer"
+              >
+                ← Volver al login
+              </button>
+            </div>
+          )}
+
+          {/* ─── Paso 2: Canal ─── */}
+          {resetStep === "channel" && (
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">¿Cómo querés recibir el código?</h2>
+              </div>
+
+              <div className="space-y-3">
+                {([
+                  { value: "email" as const, emoji: "📧", label: "Email", desc: "Te enviamos un código a tu casilla de correo" },
+                  { value: "whatsapp" as const, emoji: "💬", label: "WhatsApp", desc: "Te enviamos un código por WhatsApp" },
+                ]).map(({ value, emoji, label, desc }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setResetChannel(value)}
+                    className={`w-full flex items-start gap-3 px-4 py-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                      resetChannel === value
+                        ? "border-[#2563eb] bg-blue-50"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="text-xl leading-none mt-0.5">{emoji}</span>
+                    <div>
+                      <div className={`text-sm font-semibold ${resetChannel === value ? "text-[#2563eb]" : "text-gray-800"}`}>
+                        {label}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+                    </div>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+
+              {resetError && (
+                <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <p className="text-sm text-red-700">{resetError}</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  disabled={resetLoading}
+                  onClick={handleSendCode}
+                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                >
+                  {resetLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      {SPINNER}
+                      Enviando...
+                    </span>
+                  ) : "Enviar código"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setResetError(""); setResetStep("username"); }}
+                  className="w-full text-sm text-slate-500 hover:text-slate-700 text-center cursor-pointer"
+                >
+                  ← Volver
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Paso 3: OTP ─── */}
+          {resetStep === "otp" && (
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingresá el código</h2>
+                <p className="text-sm text-gray-500">
+                  Revisá tu {resetChannel === "email" ? "casilla de correo" : "WhatsApp"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <p className="text-sm text-blue-700">
+                  Si el usuario existe y tiene contacto registrado, recibirás un código.
+                </p>
+              </div>
+
+              {resetSuccess ? (
+                <div className="flex items-center gap-2.5 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                  <p className="text-sm text-green-700">¡Contraseña actualizada! Ya podés iniciar sesión.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="otp-code" className="text-sm font-semibold text-gray-700">
+                      Código de verificación
+                    </label>
+                    <input
+                      id="otp-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={resetOtp}
+                      onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="000000"
+                      autoFocus
+                      className="w-full h-14 px-4 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center text-2xl tracking-widest text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all"
+                    />
+                  </div>
+
+                  <p className={`text-xs text-center ${otpSecondsLeft === 0 ? "text-red-600 font-medium" : "text-slate-400"}`}>
+                    {otpSecondsLeft > 0
+                      ? `El código expira en ${formatCountdown(otpSecondsLeft)}`
+                      : "El código expiró."}
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="new-password" className="text-sm font-semibold text-gray-700">
+                      Nueva contraseña
+                    </label>
+                    <input
+                      id="new-password"
+                      type="password"
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="confirm-password" className="text-sm font-semibold text-gray-700">
+                      Confirmar contraseña
+                    </label>
+                    <input
+                      id="confirm-password"
+                      type="password"
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      onBlur={() => setConfirmTouched(true)}
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      className={`${INPUT_CLASS} ${confirmValidationMsg ? "border-red-300 focus:border-red-400 focus:ring-red-200/30" : ""}`}
+                    />
+                    {confirmValidationMsg && (
+                      <p className="text-xs text-red-600">{confirmValidationMsg}</p>
+                    )}
+                  </div>
+
+                  {resetError && (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <p className="text-sm text-red-700">{resetError}</p>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={!canConfirm}
+                    onClick={handleConfirmReset}
+                    className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                  >
+                    {resetLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        {SPINNER}
+                        Confirmando...
+                      </span>
+                    ) : "Confirmar"}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={otpSecondsLeft > 0}
+                    onClick={() => { setResetError(""); setResetStep("channel"); }}
+                    className="w-full text-sm text-center disabled:text-slate-300 disabled:cursor-not-allowed text-[#2563eb] hover:underline cursor-pointer"
+                  >
+                    Reenviar código
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>
