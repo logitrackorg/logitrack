@@ -446,7 +446,7 @@ export function Login() {
 
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
                 <p className="text-sm text-blue-700">
-                  Si el usuario existe y tiene contacto registrado, recibirás un código.
+                  Te enviamos un código a tu casilla de correo. Revisá también la carpeta de spam.
                 </p>
               </div>
 
@@ -527,7 +527,10 @@ export function Login() {
                       className={`${INPUT_CLASS} ${confirmValidationMsg ? "border-red-300 focus:border-red-400 focus:ring-red-200/30" : ""}`}
                     />
                     {confirmValidationMsg && (
-                      <p className="text-xs text-red-600">{confirmValidationMsg}</p>
+                      <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 mt-1.5">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                        <p className="text-sm text-red-700">{confirmValidationMsg}</p>
+                      </div>
                     )}
                   </div>
 
