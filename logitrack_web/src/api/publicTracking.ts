@@ -37,6 +37,7 @@ export interface PublicShipment {
   is_fragile?: boolean;
   is_returning?: boolean;
   delivery_attempts?: number;
+  max_delivery_attempts?: number;
   has_incident?: boolean;
   incident_type?: IncidentType;
 }

@@ -37,8 +37,9 @@ type PublicShipmentView struct {
 	IsFragile      bool           `json:"is_fragile,omitempty"`
 	IsReturning    bool           `json:"is_returning,omitempty"`
 
-	DeliveryAttempts int          `json:"delivery_attempts,omitempty"`
-	HasIncident      bool         `json:"has_incident,omitempty"`
+	DeliveryAttempts    int          `json:"delivery_attempts,omitempty"`
+	MaxDeliveryAttempts int          `json:"max_delivery_attempts,omitempty"`
+	HasIncident         bool         `json:"has_incident,omitempty"`
 	IncidentType     IncidentType `json:"incident_type,omitempty"`
 }
 

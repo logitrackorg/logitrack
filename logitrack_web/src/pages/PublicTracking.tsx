@@ -595,6 +595,15 @@ export function PublicTracking() {
                 <div>
                   <p className="pt-banner-title">
                     {shipment.delivery_attempts === 1 ? "1 intento de entrega" : `${shipment.delivery_attempts} intentos de entrega`}
+                    {shipment.max_delivery_attempts != null && shipment.delivery_attempts != null && (
+                      <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.8 }}>
+                        — {(() => {
+                            const left = Math.max(0, shipment.max_delivery_attempts - shipment.delivery_attempts);
+                            if (left === 0) return "disponible para retiro en sucursal";
+                            return `${left} ${left === 1 ? "intento restante" : "intentos restantes"}`;
+                          })()}
+                      </span>
+                    )}
                   </p>
                   <p className="pt-banner-body">
                     {shipment.status === "redelivery_scheduled"
