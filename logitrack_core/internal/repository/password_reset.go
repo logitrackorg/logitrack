@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logitrack/core/internal/clock"
 )
 
 type PasswordResetToken struct {
@@ -34,8 +35,8 @@ func NewPostgresPasswordResetRepository(db *sql.DB) PasswordResetRepository {
 func (r *postgresPasswordResetRepository) Create(userID, tokenHash string, expiresAt time.Time) error {
 	_, err := r.db.Exec(
 		`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at)
-		 VALUES ($1, $2, $3, $4, NOW())`,
-		uuid.NewString(), userID, tokenHash, expiresAt,
+		 VALUES ($1, $2, $3, $4, $5)`,
+		uuid.NewString(), userID, tokenHash, expiresAt, clock.Now().UTC(),
 	)
 	return err
 }
@@ -46,10 +47,10 @@ func (r *postgresPasswordResetRepository) FindValidByUser(userID string) (*Passw
 		 FROM password_reset_tokens
 		 WHERE user_id = $1
 		   AND used_at IS NULL
-		   AND expires_at > NOW()
+		   AND expires_at > $2
 		 ORDER BY created_at DESC
 		 LIMIT 1`,
-		userID,
+		userID, clock.Now().UTC(),
 	)
 	var t PasswordResetToken
 	var usedAt sql.NullTime
@@ -67,8 +68,8 @@ func (r *postgresPasswordResetRepository) FindValidByUser(userID string) (*Passw
 
 func (r *postgresPasswordResetRepository) MarkUsed(id string) error {
 	_, err := r.db.Exec(
-		`UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
-		id,
+		`UPDATE password_reset_tokens SET used_at = $1 WHERE id = $2`,
+		clock.Now().UTC(), id,
 	)
 	return err
 }
