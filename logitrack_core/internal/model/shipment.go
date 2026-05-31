@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"  
+	"time"
+)
 
 type Status string
 
@@ -362,7 +365,10 @@ func (s *Shipment) CanReschedule() (bool, string) {
 	}
 
 	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
-		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			s.ChatbotMetadata.MaxReschedules,
+		)
 	}
 
 	return true, ""
@@ -471,12 +477,13 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	return dates
 }
 
-// InitializeChatbotMetadata sets up chatbot metadata if not present
-func (s *Shipment) InitializeChatbotMetadata() {
+// InitializeChatbotMetadata sets up chatbot metadata if not present.
+// maxReschedules should come from SystemConfig.MaxReschedules.
+func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
 	if s.ChatbotMetadata == nil {
 		s.ChatbotMetadata = &ChatbotMetadata{
 			RescheduleCount: 0,
-			MaxReschedules:  2,
+			MaxReschedules:  maxReschedules, 
 		}
 
 		if s.EstimatedDeliveryAt != nil {

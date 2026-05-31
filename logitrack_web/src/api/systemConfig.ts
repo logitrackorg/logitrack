@@ -19,6 +19,7 @@ export interface SystemConfig {
   pickup_deadline_days: number;
   /** When true, WhatsApp is skipped and all customer notifications go via email only. */
   force_email_notifications: boolean;
+  max_reschedules: number; 
 }
 
 export const systemConfigApi = {

@@ -531,7 +531,7 @@ func (r *eventSourcedShipmentRepository) AuthenticateRecipient(cmd AuthenticateR
 
 	// Inicializar metadata del chatbot si no existe
 	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata()
+		shipment.InitializeChatbotMetadata(2)
 	}
 
 	return shipment, nil
@@ -588,7 +588,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	
 	// Inicializar metadata si no existe
 	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata()
+		shipment.InitializeChatbotMetadata(2)
 	}
 
 	// Validar que se puede reprogramar

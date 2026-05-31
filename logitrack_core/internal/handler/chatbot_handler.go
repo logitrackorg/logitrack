@@ -40,14 +40,22 @@ type ChatbotHandler struct {
 	branchRepo   repository.BranchRepository
 	notifSvc     *service.NotificationService
 	shipmentSvc  *service.ShipmentService
+	sysConfigSvc *service.SystemConfigService
 }
 
-func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository, notifSvc *service.NotificationService, shipmentSvc *service.ShipmentService) *ChatbotHandler {
+func NewChatbotHandler(
+	shipmentRepo repository.ShipmentRepository, 
+	branchRepo repository.BranchRepository, 
+	notifSvc *service.NotificationService, 
+	shipmentSvc *service.ShipmentService,
+	sysConfigSvc *service.SystemConfigService, 
+) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
 		branchRepo:   branchRepo,
 		notifSvc:     notifSvc,
 		shipmentSvc:  shipmentSvc,
+		sysConfigSvc: sysConfigSvc, 
 	}
 }
 
@@ -256,11 +264,17 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		return
 	}
 
-	// Verificar si puede reprogramar
-	canReschedule, message := shipment.CanReschedule()
+	// ✨ NUEVO: Obtener configuración dinámica del sistema (CA03)
+	maxReschedules := 2 // Valor por defecto fallback
+	if h.sysConfigSvc != nil {
+		maxReschedules = h.sysConfigSvc.Get().MaxReschedules
+	}
 
-	// Inicializar metadata si no existe
-	shipment.InitializeChatbotMetadata()
+	// Inicializar metadata con configuración del sistema (CA03)
+	shipment.InitializeChatbotMetadata(maxReschedules) // ✅ CON PARÁMETRO
+
+	// Verificar si puede reprogramar (CA04/CA05)
+	canReschedule, message := shipment.CanReschedule()
 
 	response := RescheduleOptionsResponse{
 		Success:         true,

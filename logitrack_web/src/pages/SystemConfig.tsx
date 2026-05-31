@@ -139,11 +139,12 @@ export function SystemConfig() {
 
   const isDirty =
     draft !== null && config !== null && (
-      draft.max_delivery_attempts     !== config.max_delivery_attempts     ||
-      draft.draft_retention_days      !== config.draft_retention_days      ||
-      draft.draft_purge_days          !== config.draft_purge_days          ||
-      draft.pickup_deadline_days      !== config.pickup_deadline_days      ||
-      draft.force_email_notifications !== config.force_email_notifications
+      draft.max_delivery_attempts !== config.max_delivery_attempts ||
+      draft.draft_retention_days !== config.draft_retention_days ||
+      draft.draft_purge_days !== config.draft_purge_days ||
+      draft.pickup_deadline_days !== config.pickup_deadline_days ||
+      draft.force_email_notifications !== config.force_email_notifications ||
+      draft.max_reschedules !== config.max_reschedules 
     );
 
   return (
@@ -154,319 +155,392 @@ export function SystemConfig() {
         </Card>
       ) : draft && (
         <>
-        <Card>
-          <CardHeader>
-            <CardTitle>Intentos de entrega</CardTitle>
-            <CardDescription>
-              Cantidad máxima de intentos fallidos antes de que el envío pase automáticamente a <strong>Listo para retiro en mostrador</strong>. Rango permitido: 1–10.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4 mb-5">
-              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
-                Máximo de intentos fallidos
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, max_delivery_attempts: Math.max(1, d.max_delivery_attempts - 1) } : d
-                    )
-                  }
-                  disabled={draft.max_delivery_attempts <= 1}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Minus className="w-4 h-4 text-slate-700" />
-                </button>
-                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
-                  {draft.max_delivery_attempts}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, max_delivery_attempts: Math.min(10, d.max_delivery_attempts + 1) } : d
-                    )
-                  }
-                  disabled={draft.max_delivery_attempts >= 10}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-slate-700" />
-                </button>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={draft.max_delivery_attempts}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d ? { ...d, max_delivery_attempts: Number(e.target.value) } : d
-                    )
-                  }
-                  className="w-32 accent-[#1e3a5f]"
-                />
+          <Card>
+            <CardHeader>
+              <CardTitle>Intentos de entrega</CardTitle>
+              <CardDescription>
+                Cantidad máxima de intentos fallidos antes de que el envío pase automáticamente a <strong>Listo para retiro en mostrador</strong>. Rango permitido: 1–10.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-5">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Máximo de intentos fallidos
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_delivery_attempts: Math.max(1, d.max_delivery_attempts - 1) } : d
+                      )
+                    }
+                    disabled={draft.max_delivery_attempts <= 1}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.max_delivery_attempts}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_delivery_attempts: Math.min(10, d.max_delivery_attempts + 1) } : d
+                      )
+                    }
+                    disabled={draft.max_delivery_attempts >= 10}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={draft.max_delivery_attempts}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, max_delivery_attempts: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
               </div>
-            </div>
 
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Draft lifecycle */}
-        <Card className="mt-4">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-slate-500" />
-              <CardTitle>Ciclo de vida de borradores (Ley 25.326)</CardTitle>
-            </div>
-            <CardDescription>
-              Define por cuántos días los borradores permanecen activos y cuándo se purgan los datos personales conforme a la normativa de protección de datos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* Draft retention days */}
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
-                Vigencia del borrador (días)
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_retention_days: Math.max(1, d.draft_retention_days - 1) } : d
-                    )
-                  }
-                  disabled={draft.draft_retention_days <= 1}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Minus className="w-4 h-4 text-slate-700" />
-                </button>
-                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
-                  {draft.draft_retention_days}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_retention_days: Math.min(365, d.draft_retention_days + 1) } : d
-                    )
-                  }
-                  disabled={draft.draft_retention_days >= 365}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-slate-700" />
-                </button>
-                <input
-                  type="range"
-                  min={1}
-                  max={30}
-                  value={draft.draft_retention_days}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_retention_days: Number(e.target.value) } : d
-                    )
-                  }
-                  className="w-32 accent-[#1e3a5f]"
-                />
+          {/* Draft lifecycle */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-slate-500" />
+                <CardTitle>Ciclo de vida de borradores (Ley 25.326)</CardTitle>
               </div>
-              <p className="text-xs text-slate-400">
-                Transcurrido este período el borrador pasa a "Expirado" y deja de ser visible para operadores.
-              </p>
-            </div>
-
-            {/* Draft purge days */}
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
-                Retención tras expiración (días)
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_purge_days: Math.max(1, d.draft_purge_days - 1) } : d
-                    )
-                  }
-                  disabled={draft.draft_purge_days <= 1}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Minus className="w-4 h-4 text-slate-700" />
-                </button>
-                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
-                  {draft.draft_purge_days}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_purge_days: Math.min(1825, d.draft_purge_days + 1) } : d
-                    )
-                  }
-                  disabled={draft.draft_purge_days >= 1825}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-slate-700" />
-                </button>
-                <input
-                  type="range"
-                  min={1}
-                  max={180}
-                  value={draft.draft_purge_days}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d ? { ...d, draft_purge_days: Number(e.target.value) } : d
-                    )
-                  }
-                  className="w-32 accent-[#1e3a5f]"
-                />
+              <CardDescription>
+                Define por cuántos días los borradores permanecen activos y cuándo se purgan los datos personales conforme a la normativa de protección de datos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Draft retention days */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Vigencia del borrador (días)
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_retention_days: Math.max(1, d.draft_retention_days - 1) } : d
+                      )
+                    }
+                    disabled={draft.draft_retention_days <= 1}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.draft_retention_days}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_retention_days: Math.min(365, d.draft_retention_days + 1) } : d
+                      )
+                    }
+                    disabled={draft.draft_retention_days >= 365}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={1}
+                    max={30}
+                    value={draft.draft_retention_days}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_retention_days: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+                <p className="text-xs text-slate-400">
+                  Transcurrido este período el borrador pasa a "Expirado" y deja de ser visible para operadores.
+                </p>
               </div>
-              <p className="text-xs text-slate-400">
-                Días después de expirar hasta que se eliminan nombre, DNI, email, teléfono y dirección de forma irreversible.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Pickup deadline */}
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>Retiro en sucursal</CardTitle>
-            <CardDescription>
-              Plazo máximo de días para retirar un envío disponible en sucursal. El destinatario lo verá en el email de notificación. <strong>0 = sin límite</strong> (no se muestra fecha en el email). Rango: 0–365 días.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
-                Días para retirar
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, pickup_deadline_days: Math.max(0, d.pickup_deadline_days - 1) } : d
-                    )
-                  }
-                  disabled={draft.pickup_deadline_days <= 0}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Minus className="w-4 h-4 text-slate-700" />
-                </button>
-                <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
-                  {draft.pickup_deadline_days === 0 ? "∞" : draft.pickup_deadline_days}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraft((d) =>
-                      d ? { ...d, pickup_deadline_days: Math.min(365, d.pickup_deadline_days + 1) } : d
-                    )
-                  }
-                  disabled={draft.pickup_deadline_days >= 365}
-                  className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-slate-700" />
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={30}
-                  value={draft.pickup_deadline_days}
-                  onChange={(e) =>
-                    setDraft((d) =>
-                      d ? { ...d, pickup_deadline_days: Number(e.target.value) } : d
-                    )
-                  }
-                  className="w-32 accent-[#1e3a5f]"
-                />
+              {/* Draft purge days */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Retención tras expiración (días)
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_purge_days: Math.max(1, d.draft_purge_days - 1) } : d
+                      )
+                    }
+                    disabled={draft.draft_purge_days <= 1}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.draft_purge_days}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_purge_days: Math.min(1825, d.draft_purge_days + 1) } : d
+                      )
+                    }
+                    disabled={draft.draft_purge_days >= 1825}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={1}
+                    max={180}
+                    value={draft.draft_purge_days}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, draft_purge_days: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+                <p className="text-xs text-slate-400">
+                  Días después de expirar hasta que se eliminan nombre, DNI, email, teléfono y dirección de forma irreversible.
+                </p>
               </div>
-              {draft.pickup_deadline_days === 0 && (
-                <p className="text-xs text-slate-400">Sin límite — no se muestra fecha en el email.</p>
+            </CardContent>
+          </Card>
+
+          {/* Pickup deadline */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Retiro en sucursal</CardTitle>
+              <CardDescription>
+                Plazo máximo de días para retirar un envío disponible en sucursal. El destinatario lo verá en el email de notificación. <strong>0 = sin límite</strong> (no se muestra fecha en el email). Rango: 0–365 días.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Días para retirar
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, pickup_deadline_days: Math.max(0, d.pickup_deadline_days - 1) } : d
+                      )
+                    }
+                    disabled={draft.pickup_deadline_days <= 0}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.pickup_deadline_days === 0 ? "∞" : draft.pickup_deadline_days}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, pickup_deadline_days: Math.min(365, d.pickup_deadline_days + 1) } : d
+                      )
+                    }
+                    disabled={draft.pickup_deadline_days >= 365}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={30}
+                    value={draft.pickup_deadline_days}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, pickup_deadline_days: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+                {draft.pickup_deadline_days === 0 && (
+                  <p className="text-xs text-slate-400">Sin límite — no se muestra fecha en el email.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          {/* Notificaciones */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-slate-500" />
+                <CardTitle>Canal de notificaciones al cliente</CardTitle>
+              </div>
+              <CardDescription>
+                Cuando está activo, <strong>WhatsApp (Twilio) se saltea completamente</strong> y todas las notificaciones al cliente se envían solo por email. Útil para probar plantillas de email o cuando Twilio presenta problemas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draft.force_email_notifications}
+                    onChange={(e) =>
+                      setDraft((d) => d ? { ...d, force_email_notifications: e.target.checked } : d)
+                    }
+                  />
+                  <div
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.force_email_notifications ? "bg-amber-500" : "bg-slate-200"
+                      }`}
+                  />
+                  <div
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.force_email_notifications ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    style={{ background: "#fff" }}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">
+                  Forzar notificaciones por email (omitir WhatsApp)
+                </span>
+              </label>
+              {draft.force_email_notifications && (
+                <div className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  WhatsApp deshabilitado — todas las notificaciones se enviarán únicamente por email.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ✨ NUEVA SECCIÓN: Reprogramaciones vía chatbot */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-slate-500" />
+                <CardTitle>Reprogramaciones vía chatbot</CardTitle>
+              </div>
+              <CardDescription>
+                Cantidad máxima de veces que un cliente puede reprogramar la entrega desde el chatbot antes de requerir intervención manual. Rango permitido: 0–10.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Máximo de reprogramaciones
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedules: Math.max(0, d.max_reschedules - 1) } : d
+                      )
+                    }
+                    disabled={draft.max_reschedules <= 0}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.max_reschedules}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedules: Math.min(10, d.max_reschedules + 1) } : d
+                      )
+                    }
+                    disabled={draft.max_reschedules >= 10}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={10}
+                    value={draft.max_reschedules}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedules: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+              </div>
+
+              {/* Helper text */}
+              <div className="mt-3 text-xs text-slate-500">
+                {draft.max_reschedules === 0 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    Los clientes no podrán reprogramar entregas vía chatbot.
+                  </div>
+                ) : (
+                  <p>
+                    Los clientes podrán reprogramar hasta <strong>{draft.max_reschedules}</strong> {draft.max_reschedules === 1 ? 'vez' : 'veces'} desde el chatbot. Los cambios se aplican inmediatamente para nuevas solicitudes.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          {/* Save / discard — always below all config cards */}
+          <div className="space-y-2">
+            {error && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Configuración guardada correctamente.
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleSave}
+                disabled={saving || !isDirty}
+                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+              >
+                {saving ? "Guardando…" : "Guardar cambios"}
+              </button>
+              {isDirty && (
+                <button
+                  onClick={() => setDraft(config)}
+                  disabled={saving}
+                  className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+                >
+                  Descartar
+                </button>
               )}
             </div>
-          </CardContent>
-        </Card>
-        {/* Notificaciones */}
-        <Card className="mt-4">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-slate-500" />
-              <CardTitle>Canal de notificaciones al cliente</CardTitle>
-            </div>
-            <CardDescription>
-              Cuando está activo, <strong>WhatsApp (Twilio) se saltea completamente</strong> y todas las notificaciones al cliente se envían solo por email. Útil para probar plantillas de email o cuando Twilio presenta problemas.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={draft.force_email_notifications}
-                  onChange={(e) =>
-                    setDraft((d) => d ? { ...d, force_email_notifications: e.target.checked } : d)
-                  }
-                />
-                <div
-                  className={`w-11 h-6 rounded-full transition-colors ${
-                    draft.force_email_notifications ? "bg-amber-500" : "bg-slate-200"
-                  }`}
-                />
-                <div
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${
-                    draft.force_email_notifications ? "translate-x-5" : "translate-x-0"
-                  }`}
-                  style={{ background: "#fff" }}
-                />
-              </div>
-              <span className="text-sm font-semibold text-slate-700">
-                Forzar notificaciones por email (omitir WhatsApp)
-              </span>
-            </label>
-            {draft.force_email_notifications && (
-              <div className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                WhatsApp deshabilitado — todas las notificaciones se enviarán únicamente por email.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        {/* Save / discard — always below all config cards */}
-        <div className="space-y-2">
-          {error && (
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              Configuración guardada correctamente.
-            </div>
-          )}
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              disabled={saving || !isDirty}
-              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-            >
-              {saving ? "Guardando…" : "Guardar cambios"}
-            </button>
-            {isDirty && (
-              <button
-                onClick={() => setDraft(config)}
-                disabled={saving}
-                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-              >
-                Descartar
-              </button>
-            )}
           </div>
-        </div>
         </>
       )}
 
@@ -495,9 +569,8 @@ export function SystemConfig() {
               Hora del sistema
             </div>
             <div
-              className={`text-3xl font-extrabold tabular-nums ${
-                clockState?.is_active ? "text-rose-700" : "text-[#1e3a5f]"
-              }`}
+              className={`text-3xl font-extrabold tabular-nums ${clockState?.is_active ? "text-rose-700" : "text-[#1e3a5f]"
+                }`}
             >
               {displayedSystemNow ? fmtDateTimeSeconds(displayedSystemNow) : "—"}
             </div>
