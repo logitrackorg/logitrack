@@ -644,7 +644,7 @@ export function DriverInterBranchTrip() {
 
         {/* ── MAPA ── */}
         {!!origin?.latitude && (
-          <Card className="overflow-hidden p-0">
+          <Card className="overflow-hidden p-0 isolate">
             <div ref={mapRef} className="h-44 w-full" />
           </Card>
         )}
