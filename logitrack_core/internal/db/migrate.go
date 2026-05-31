@@ -527,6 +527,19 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- Recuperación de contraseña vía OTP (LOGITRACK-397)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL,
+			token_hash TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			used_at    TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
 	`)
 	return err
 }
