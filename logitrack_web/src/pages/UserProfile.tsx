@@ -431,16 +431,22 @@ export function UserProfile() {
                       fontSize: 14,
                     }}
                   />
-                  {newPasswordTouched && form.new_password.length > 0 && (
-                    <div style={{ marginTop: 6, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
-                      <span style={{ color: form.new_password.length >= 8 ? "#16a34a" : "#ef4444" }}>
-                        {form.new_password.length >= 8 ? "✓" : "✗"} Al menos 8 caracteres
-                      </span>
-                      <span style={{ color: /\d/.test(form.new_password) ? "#16a34a" : "#ef4444" }}>
-                        {/\d/.test(form.new_password) ? "✓" : "✗"} Al menos un número
-                      </span>
-                    </div>
-                  )}
+                  {form.new_password.length > 0 && (() => {
+                    const ok8 = form.new_password.length >= 8;
+                    const okNum = /\d/.test(form.new_password);
+                    const item = (met: boolean, text: string) => (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "var(--ok-text)" : "var(--danger-text)" }}>
+                        <span style={{ fontWeight: 700 }}>{met ? "✓" : "✗"}</span>
+                        {text}
+                      </div>
+                    );
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "var(--bg-subtle)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                        {item(ok8, "Al menos 8 caracteres")}
+                        {item(okNum, "Al menos un número")}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ marginBottom: 24 }}>

@@ -45,7 +45,7 @@ const FEATURES = [
   { icon: MapPin,  text: "Control por sucursal y región" },
 ];
 
-type ResetStep = "idle" | "username" | "channel" | "otp";
+type ResetStep = "idle" | "username" | "otp";
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -75,7 +75,6 @@ export function Login() {
 
   const [resetStep, setResetStep] = useState<ResetStep>("idle");
   const [resetUsername, setResetUsername] = useState("");
-  const [resetChannel, setResetChannel] = useState<"email" | "whatsapp">("email");
   const [resetOtp, setResetOtp] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetConfirmPassword, setResetConfirmPassword] = useState("");
@@ -126,7 +125,7 @@ export function Login() {
     setResetError("");
     let advance = true;
     try {
-      await passwordResetApi.request(resetUsername, resetChannel);
+      await passwordResetApi.request(resetUsername, "email");
     } catch (e: unknown) {
       if ((e as Error).message === "rate_limited") {
         setResetError("Demasiados intentos. Esperá unos minutos antes de volver a intentarlo.");
@@ -148,7 +147,6 @@ export function Login() {
       setTimeout(() => {
         setResetStep("idle");
         setResetUsername("");
-        setResetChannel("email");
         setResetOtp("");
         setResetNewPassword("");
         setResetConfirmPassword("");
@@ -409,13 +407,25 @@ export function Login() {
                   />
                 </div>
 
+                {resetError && (
+                  <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <p className="text-sm text-red-700">{resetError}</p>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  disabled={!resetUsername.trim()}
-                  onClick={() => setResetStep("channel")}
+                  disabled={!resetUsername.trim() || resetLoading}
+                  onClick={handleSendCode}
                   className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
                 >
-                  Continuar
+                  {resetLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      {SPINNER}
+                      Enviando...
+                    </span>
+                  ) : "Enviar código"}
                 </button>
               </div>
 
@@ -429,79 +439,13 @@ export function Login() {
             </div>
           )}
 
-          {/* ─── Paso 2: Canal ─── */}
-          {resetStep === "channel" && (
-            <div className="space-y-6">
-              <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">¿Cómo querés recibir el código?</h2>
-              </div>
-
-              <div className="space-y-3">
-                {([
-                  { value: "email" as const, emoji: "📧", label: "Email", desc: "Te enviamos un código a tu casilla de correo" },
-                  { value: "whatsapp" as const, emoji: "💬", label: "WhatsApp", desc: "Te enviamos un código por WhatsApp" },
-                ]).map(({ value, emoji, label, desc }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setResetChannel(value)}
-                    className={`w-full flex items-start gap-3 px-4 py-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
-                      resetChannel === value
-                        ? "border-[#2563eb] bg-blue-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="text-xl leading-none mt-0.5">{emoji}</span>
-                    <div>
-                      <div className={`text-sm font-semibold ${resetChannel === value ? "text-[#2563eb]" : "text-gray-800"}`}>
-                        {label}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {resetError && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                  <p className="text-sm text-red-700">{resetError}</p>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  disabled={resetLoading}
-                  onClick={handleSendCode}
-                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
-                >
-                  {resetLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      {SPINNER}
-                      Enviando...
-                    </span>
-                  ) : "Enviar código"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setResetError(""); setResetStep("username"); }}
-                  className="w-full text-sm text-slate-500 hover:text-slate-700 text-center cursor-pointer"
-                >
-                  ← Volver
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* ─── Paso 3: OTP ─── */}
           {resetStep === "otp" && (
             <div className="space-y-5">
               <div className="space-y-1.5">
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingresá el código</h2>
                 <p className="text-sm text-gray-500">
-                  Revisá tu {resetChannel === "email" ? "casilla de correo" : "WhatsApp"}
+                  Revisá tu casilla de correo
                 </p>
               </div>
 
@@ -604,7 +548,7 @@ export function Login() {
                   <button
                     type="button"
                     disabled={otpSecondsLeft > 0}
-                    onClick={() => { setResetError(""); setResetStep("channel"); }}
+                    onClick={() => { setResetError(""); setResetStep("username"); }}
                     className="w-full text-sm text-center disabled:text-slate-300 disabled:cursor-not-allowed text-[#2563eb] hover:underline cursor-pointer"
                   >
                     Reenviar código
