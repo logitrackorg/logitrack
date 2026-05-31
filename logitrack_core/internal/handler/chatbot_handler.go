@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -264,12 +265,14 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		return
 	}
 
-	// ✨ NUEVO: Obtener configuración dinámica del sistema (CA03)
-	maxReschedules := 2 // Valor por defecto fallback
+	
+	maxReschedules := 2
+	maxRescheduleDays := 3
 	if h.sysConfigSvc != nil {
-		maxReschedules = h.sysConfigSvc.Get().MaxReschedules
-	}
-
+		cfg := h.sysConfigSvc.Get()  
+		maxReschedules = cfg.MaxReschedules
+		maxRescheduleDays = cfg.MaxRescheduleDays
+}
 	// Inicializar metadata con configuración del sistema (CA03)
 	shipment.InitializeChatbotMetadata(maxReschedules) // ✅ CON PARÁMETRO
 
@@ -285,8 +288,7 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 	}
 
 	if canReschedule {
-		// Obtener fechas disponibles
-		dates := shipment.GetAvailableRescheduleDates()
+		dates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
 		dateStrings := make([]string, len(dates))
 		for i, d := range dates {
 			dateStrings[i] = d.Format("2006-01-02")
@@ -330,14 +332,45 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 		return
 	}
 
-	// Parsear fecha
 	newDate, err := time.Parse("2006-01-02", req.NewDeliveryDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de fecha inválido. Usa YYYY-MM-DD"})
 		return
 	}
 
-	shipment, err := h.shipmentRepo.RescheduleDelivery(repository.RescheduleDeliveryCmd{
+	shipment, err := h.shipmentRepo.AuthenticateRecipient(repository.AuthenticateRecipientCmd{
+		TrackingID:   req.TrackingID,
+		RecipientDNI: req.RecipientDNI,
+	})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Envío no encontrado"})
+		return
+	}
+
+	maxRescheduleDays := 3 
+	if h.sysConfigSvc != nil {
+		maxRescheduleDays = h.sysConfigSvc.Get().MaxRescheduleDays
+	}
+
+	baseDate := shipment.EstimatedDeliveryAt
+	if shipment.ChatbotMetadata != nil && shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+		baseDate = shipment.ChatbotMetadata.OriginalDeliveryDate
+	}
+
+	if baseDate != nil {
+		maxAllowedDate := baseDate.AddDate(0, 0, maxRescheduleDays)
+		if newDate.After(maxAllowedDate) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf(
+					"La fecha seleccionada excede el rango permitido de %d días desde la fecha original",
+					maxRescheduleDays,
+				),
+			})
+			return
+		}
+	}
+
+	shipment, err = h.shipmentRepo.RescheduleDelivery(repository.RescheduleDeliveryCmd{
 		TrackingID:      req.TrackingID,
 		RecipientDNI:    req.RecipientDNI,
 		NewDeliveryDate: newDate,

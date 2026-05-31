@@ -531,6 +531,13 @@ func RunMigrations(db *sql.DB) error {
 		--Parametrización de reprogramaciones vía chatbot
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
 		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;
+
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedule_days INTEGER NOT NULL DEFAULT 3;
+		UPDATE system_config SET max_reschedule_days = 3 WHERE id = 1 AND (max_reschedule_days IS NULL OR max_reschedule_days = 0);
+
+		-- Parametrización de ventana de días para reprogramación vía chatbot
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedule_days INTEGER NOT NULL DEFAULT 3;
+		UPDATE system_config SET max_reschedule_days = 3 WHERE id = 1 AND max_reschedule_days = 0;
 	`)
 	return err
 }

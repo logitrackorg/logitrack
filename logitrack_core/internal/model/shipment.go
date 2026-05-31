@@ -453,7 +453,7 @@ func (s *Shipment) CanRequestPickup() (bool, string) {
 }
 
 // GetAvailableRescheduleDates calculates available dates for rescheduling (US3 CA-01 & CA-03)
-func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
+func (s *Shipment) GetAvailableRescheduleDates(maxDays int) []time.Time {
 	if s.EstimatedDeliveryAt == nil {
 		return []time.Time{}
 	}
@@ -464,10 +464,10 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)
-	maxDate := baseDate.AddDate(0, 0, 3)
+	maxDate := baseDate.AddDate(0, 0, maxDays)
 
 	var dates []time.Time
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= maxDays; i++ {
 		newDate := baseDate.AddDate(0, 0, i)
 		if newDate.After(today) && !newDate.After(maxDate) {
 			dates = append(dates, newDate)

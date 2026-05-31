@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"log" 
 
 	"github.com/logitrack/core/internal/model"
 )
@@ -26,7 +27,7 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 		       pickup_deadline_days, force_email_notifications, max_reschedules
 		FROM system_config WHERE id = 1`).
 		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays, 
-			&cfg.PickupDeadlineDays, &cfg.ForceEmailNotifications, &cfg.MaxReschedules)
+			&cfg.PickupDeadlineDays, &cfg.ForceEmailNotifications, &cfg.MaxReschedules, &cfg.MaxRescheduleDays)
 	if err != nil {
 		return model.DefaultSystemConfig()
 	}
@@ -34,6 +35,7 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 }
 
 func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
+	log.Printf("[DEBUG] Updating config: %+v", cfg)
 	_, err := r.db.Exec(
 		`UPDATE system_config
 		 SET max_delivery_attempts       = $1,
@@ -41,14 +43,19 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		     draft_purge_days            = $3,
 		     pickup_deadline_days        = $4,
 		     force_email_notifications   = $5,
-		     max_reschedules             = $6
+		     max_reschedules             = $6,
+			 max_reschedule_days         = $7
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
 		cfg.DraftPurgeDays,
 		cfg.PickupDeadlineDays,
 		cfg.ForceEmailNotifications,
-		cfg.MaxReschedules, // ✨ NUEVO
+		cfg.MaxReschedules, 
+		cfg.MaxRescheduleDays, 
 	)
+	if err != nil {
+		log.Printf("[ERROR] Update failed: %v", err) 
+	}
 	return err
 }

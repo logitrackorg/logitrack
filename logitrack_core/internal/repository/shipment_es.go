@@ -598,7 +598,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	}
 
 	// Validar que la fecha está dentro del rango permitido
-	availableDates := shipment.GetAvailableRescheduleDates()
+	availableDates := shipment.GetAvailableRescheduleDates(3)
 	validDate := false
 	for _, date := range availableDates {
 		if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {

@@ -34,9 +34,14 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 		return model.SystemConfig{}, fmt.Errorf("pickup_deadline_days debe estar entre 0 y 365 (0 = sin límite)")
 	}
 	
-	// NUEVA VALIDACIÓN (CA02)
+
 	if cfg.MaxReschedules < 0 || cfg.MaxReschedules > 10 {
 		return model.SystemConfig{}, fmt.Errorf("max_reschedules debe estar entre 0 y 10")
+	}
+
+	
+	if cfg.MaxRescheduleDays < 1 || cfg.MaxRescheduleDays > 7 {
+		return model.SystemConfig{}, fmt.Errorf("max_reschedule_days debe estar entre 1 y 7")
 	}
 	
 	// CA01: Guardar configuración

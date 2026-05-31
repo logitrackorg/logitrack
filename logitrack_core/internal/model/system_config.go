@@ -24,6 +24,7 @@ type SystemConfig struct {
 	// reschedule delivery via chatbot before requiring manual intervention. 
 	// Default: 2. Range: 0-10 (CA02 validation).
 	MaxReschedules int `json:"max_reschedules"`
+	MaxRescheduleDays  int `json:"max_reschedule_days"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -34,5 +35,6 @@ func DefaultSystemConfig() SystemConfig {
 		PickupDeadlineDays:      0,
 		ForceEmailNotifications: false,
 		MaxReschedules:          2, 
+		MaxRescheduleDays:       3,
 	}
 }

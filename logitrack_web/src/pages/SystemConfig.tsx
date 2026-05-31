@@ -144,7 +144,8 @@ export function SystemConfig() {
       draft.draft_purge_days !== config.draft_purge_days ||
       draft.pickup_deadline_days !== config.pickup_deadline_days ||
       draft.force_email_notifications !== config.force_email_notifications ||
-      draft.max_reschedules !== config.max_reschedules 
+      draft.max_reschedules !== config.max_reschedules ||
+      draft.max_reschedule_days !== config.max_reschedule_days
     );
 
   return (
@@ -434,7 +435,7 @@ export function SystemConfig() {
             </CardContent>
           </Card>
 
-          {/* ✨ NUEVA SECCIÓN: Reprogramaciones vía chatbot */}
+          {/* Reprogramaciones vía chatbot */}
           <Card className="mt-4">
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -505,6 +506,72 @@ export function SystemConfig() {
                     Los clientes podrán reprogramar hasta <strong>{draft.max_reschedules}</strong> {draft.max_reschedules === 1 ? 'vez' : 'veces'} desde el chatbot. Los cambios se aplican inmediatamente para nuevas solicitudes.
                   </p>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+          {/*Ventana de reprogramación */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-500" />
+                <CardTitle>Ventana de reprogramación</CardTitle>
+              </div>
+              <CardDescription>
+                Cantidad máxima de días hacia adelante (desde la fecha original) que un cliente puede reprogramar la entrega desde el chatbot. Rango permitido: 1–7 días.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Días permitidos para reprogramar
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedule_days: Math.max(1, d.max_reschedule_days - 1) } : d
+                      )
+                    }
+                    disabled={draft.max_reschedule_days <= 1}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.max_reschedule_days}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedule_days: Math.min(7, d.max_reschedule_days + 1) } : d
+                      )
+                    }
+                    disabled={draft.max_reschedule_days >= 7}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={1}
+                    max={7}
+                    value={draft.max_reschedule_days}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, max_reschedule_days: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-slate-500">
+                <p>
+                  Los clientes podrán reprogramar dentro de los próximos <strong>{draft.max_reschedule_days}</strong> {draft.max_reschedule_days === 1 ? 'día' : 'días'} desde la fecha original. Cambios aplicados inmediatamente para nuevas solicitudes.
+                </p>
               </div>
             </CardContent>
           </Card>

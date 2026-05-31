@@ -19,7 +19,10 @@ export interface SystemConfig {
   pickup_deadline_days: number;
   /** When true, WhatsApp is skipped and all customer notifications go via email only. */
   force_email_notifications: boolean;
-  max_reschedules: number; 
+  /** Maximum number of times a customer can reschedule delivery via chatbot. Range: 0-10 (default 2). */
+  max_reschedules: number;
+  max_reschedule_days: number;
+
 }
 
 export const systemConfigApi = {
