@@ -375,6 +375,32 @@ const deliveryFailedBodySrc = `
 </div>
 {{end}}`
 
+const passwordResetOTPBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🔐 Tu código de verificación
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+  Hola, <strong>{{.Username}}</strong>. Recibimos una solicitud para restablecer la contraseña de tu cuenta en LogiTrack.
+</p>
+
+<div style="text-align:center;margin:28px 0;">
+  <div style="display:inline-block;background:#f0f9ff;border:2px solid #0ea5e9;border-radius:12px;padding:20px 40px;">
+    <p style="margin:0;color:#64748b;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Código OTP</p>
+    <p style="margin:0;color:#0c4a6e;font-size:36px;font-weight:700;letter-spacing:8px;font-family:monospace;">{{.OTP}}</p>
+  </div>
+</div>
+
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 20px;margin-bottom:24px;text-align:center;">
+  <p style="margin:0;color:#92400e;font-size:13px;">
+    ⚠️ Este código expira en <strong>5 minutos</strong>. No lo compartas con nadie.
+  </p>
+</div>
+
+<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+  Si no solicitaste este código, podés ignorar este email. Tu contraseña no cambiará.
+</p>`
+
 var (
 	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
 	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
@@ -384,6 +410,7 @@ var (
 	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
 	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 	deliveryFailedTmpl      = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	passwordResetOTPTmpl    = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -610,6 +637,25 @@ func renderRejectedNotification(s model.Shipment, rejectionReason string, reject
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("Tu envío %s fue rechazado por el destinatario", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderPasswordResetOTP(username, otp string, org model.OrganizationConfig) string {
+	type otpData struct {
+		Username string
+		OTP      string
+	}
+	var bodyBuf bytes.Buffer
+	if err := passwordResetOTPTmpl.Execute(&bodyBuf, otpData{Username: username, OTP: otp}); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    "Tu código de verificación — LogiTrack",
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,
