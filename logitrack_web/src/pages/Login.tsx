@@ -170,10 +170,6 @@ export function Login() {
   };
 
   const passwordsMatch = resetNewPassword === resetConfirmPassword;
-  const newPasswordValidationMsg: string | null =
-    newPasswordTouched && resetNewPassword.length > 0 && resetNewPassword.length < 8
-      ? "La contraseña debe tener al menos 8 caracteres."
-      : null;
   const confirmValidationMsg: string | null = confirmTouched
     ? resetConfirmPassword.length > 0 && !passwordsMatch
       ? "Las contraseñas no coinciden."
@@ -183,6 +179,7 @@ export function Login() {
   const canConfirm =
     resetOtp.length === 6 &&
     resetNewPassword.length >= 8 &&
+    /\d/.test(resetNewPassword) &&
     passwordsMatch &&
     !resetLoading;
 
@@ -498,11 +495,24 @@ export function Login() {
                       onBlur={() => setNewPasswordTouched(true)}
                       autoComplete="new-password"
                       placeholder="••••••••"
-                      className={`${INPUT_CLASS} ${newPasswordValidationMsg ? "border-red-300 focus:border-red-400 focus:ring-red-200/30" : ""}`}
+                      className={INPUT_CLASS}
                     />
-                    {newPasswordValidationMsg && (
-                      <p className="text-xs text-red-600">{newPasswordValidationMsg}</p>
-                    )}
+                    {resetNewPassword.length > 0 && (() => {
+                      const ok8 = resetNewPassword.length >= 8;
+                      const okNum = /\d/.test(resetNewPassword);
+                      const item = (met: boolean, text: string) => (
+                        <div className={`flex items-center gap-1.5 text-xs font-medium ${met ? "text-green-700" : "text-red-600"}`}>
+                          <span className="font-bold">{met ? "✓" : "✗"}</span>
+                          {text}
+                        </div>
+                      );
+                      return (
+                        <div className="flex flex-col gap-1 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                          {item(ok8, "Al menos 8 caracteres")}
+                          {item(okNum, "Al menos un número")}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1.5">
