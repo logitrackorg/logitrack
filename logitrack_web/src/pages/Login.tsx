@@ -84,6 +84,7 @@ export function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
   const [confirmTouched, setConfirmTouched] = useState(false);
+  const [newPasswordTouched, setNewPasswordTouched] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,25 +155,30 @@ export function Login() {
         setResetError("");
         setResetSuccess(false);
         setConfirmTouched(false);
+        setNewPasswordTouched(false);
       }, 2000);
     } catch (e: unknown) {
-      const msg = (e as Error).message;
-      setResetError(
-        msg === "invalid_otp"
-          ? "Código incorrecto o expirado."
-          : "Ocurrió un error. Intentá de nuevo."
-      );
+      const msg = (e as Error).message ?? "";
+      if (msg.includes("inválido") || msg.includes("expirado") || msg.includes("utilizado")) {
+        setResetError("El código es incorrecto, ya fue utilizado o expiró. Solicitá uno nuevo.");
+      } else if (msg.includes("8 caracteres") || msg.includes("weak")) {
+        setResetError("La contraseña debe tener al menos 8 caracteres.");
+      } else {
+        setResetError("Ocurrió un error. Intentá de nuevo.");
+      }
     } finally {
       setResetLoading(false);
     }
   };
 
   const passwordsMatch = resetNewPassword === resetConfirmPassword;
+  const newPasswordValidationMsg: string | null =
+    newPasswordTouched && resetNewPassword.length > 0 && resetNewPassword.length < 8
+      ? "La contraseña debe tener al menos 8 caracteres."
+      : null;
   const confirmValidationMsg: string | null = confirmTouched
-    ? resetNewPassword.length > 0 && resetNewPassword.length < 8
-      ? "Mínimo 8 caracteres"
-      : resetConfirmPassword.length > 0 && !passwordsMatch
-      ? "Las contraseñas no coinciden"
+    ? resetConfirmPassword.length > 0 && !passwordsMatch
+      ? "Las contraseñas no coinciden."
       : null
     : null;
 
@@ -545,10 +551,14 @@ export function Login() {
                       type="password"
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
+                      onBlur={() => setNewPasswordTouched(true)}
                       autoComplete="new-password"
                       placeholder="••••••••"
-                      className={INPUT_CLASS}
+                      className={`${INPUT_CLASS} ${newPasswordValidationMsg ? "border-red-300 focus:border-red-400 focus:ring-red-200/30" : ""}`}
                     />
+                    {newPasswordValidationMsg && (
+                      <p className="text-xs text-red-600">{newPasswordValidationMsg}</p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
