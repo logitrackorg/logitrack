@@ -15,6 +15,8 @@ export function UserProfile() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [newPasswordTouched, setNewPasswordTouched] = useState(false);
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
   const [form, setForm] = useState<ChangePasswordRequest>({
     current_password: "",
     new_password: "",
@@ -69,12 +71,12 @@ export function UserProfile() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.new_password !== form.confirm_password) {
-      toast.error("Las contraseñas nuevas no coinciden");
+    if (form.new_password.length < 8 || !/\d/.test(form.new_password)) {
+      setNewPasswordTouched(true);
       return;
     }
-    if (form.new_password.length < 6) {
-      toast.error("La nueva contraseña debe tener al menos 6 caracteres");
+    if (form.new_password !== form.confirm_password) {
+      setConfirmPasswordTouched(true);
       return;
     }
     setPasswordLoading(true);
@@ -82,6 +84,8 @@ export function UserProfile() {
       await usersApi.changePassword(form);
       toast.success("Contraseña cambiada exitosamente");
       setForm({ current_password: "", new_password: "", confirm_password: "" });
+      setNewPasswordTouched(false);
+      setConfirmPasswordTouched(false);
     } catch (error: unknown) {
       toast.error((error as { response?: { data?: { error?: string } } })?.response?.data?.error || "Error al cambiar la contraseña");
     } finally {
@@ -416,16 +420,27 @@ export function UserProfile() {
                     type="password"
                     value={form.new_password}
                     onChange={(e) => handleChange("new_password", e.target.value)}
+                    onBlur={() => setNewPasswordTouched(true)}
                     required
-                    minLength={6}
+                    minLength={8}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      border: "1px solid var(--border-strong)",
+                      border: `1px solid ${newPasswordTouched && (form.new_password.length < 8 || !/\d/.test(form.new_password)) ? "#ef4444" : "var(--border-strong)"}`,
                       borderRadius: 6,
                       fontSize: 14,
                     }}
                   />
+                  {newPasswordTouched && form.new_password.length > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                      <span style={{ color: form.new_password.length >= 8 ? "#16a34a" : "#ef4444" }}>
+                        {form.new_password.length >= 8 ? "✓" : "✗"} Al menos 8 caracteres
+                      </span>
+                      <span style={{ color: /\d/.test(form.new_password) ? "#16a34a" : "#ef4444" }}>
+                        {/\d/.test(form.new_password) ? "✓" : "✗"} Al menos un número
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginBottom: 24 }}>
@@ -436,16 +451,20 @@ export function UserProfile() {
                     type="password"
                     value={form.confirm_password}
                     onChange={(e) => handleChange("confirm_password", e.target.value)}
+                    onBlur={() => setConfirmPasswordTouched(true)}
                     required
-                    minLength={6}
+                    minLength={8}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      border: "1px solid var(--border-strong)",
+                      border: `1px solid ${confirmPasswordTouched && form.confirm_password.length > 0 && form.new_password !== form.confirm_password ? "#ef4444" : "var(--border-strong)"}`,
                       borderRadius: 6,
                       fontSize: 14,
                     }}
                   />
+                  {confirmPasswordTouched && form.confirm_password.length > 0 && form.new_password !== form.confirm_password && (
+                    <p style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>Las contraseñas no coinciden.</p>
+                  )}
                 </div>
 
                 <button
