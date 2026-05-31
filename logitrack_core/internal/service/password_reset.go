@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/logitrack/core/internal/clock"
@@ -22,7 +23,7 @@ import (
 
 var (
 	ErrRateLimited  = errors.New("demasiadas solicitudes — intentá de nuevo en 15 minutos")
-	ErrWeakPassword = errors.New("la contraseña debe tener al menos 8 caracteres")
+	ErrWeakPassword = errors.New("la contraseña debe tener al menos 8 caracteres y un número")
 )
 
 const (
@@ -134,6 +135,16 @@ func (s *PasswordResetService) ConfirmReset(username, otp, newPassword string) e
 	}
 
 	if len(newPassword) < 8 {
+		return ErrWeakPassword
+	}
+	hasDigit := false
+	for _, r := range newPassword {
+		if unicode.IsDigit(r) {
+			hasDigit = true
+			break
+		}
+	}
+	if !hasDigit {
 		return ErrWeakPassword
 	}
 
