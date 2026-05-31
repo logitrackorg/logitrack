@@ -610,6 +610,8 @@ export function PublicTracking() {
                       ? "Vamos a hacer un nuevo intento de entrega."
                       : shipment.status === "ready_for_pickup"
                       ? "Tu envío te espera para retiro en sucursal."
+                      : shipment.max_delivery_attempts != null && shipment.delivery_attempts != null && shipment.delivery_attempts >= shipment.max_delivery_attempts
+                      ? null
                       : "Coordinaremos los próximos pasos según el estado actual."}
                   </p>
                 </div>
