@@ -26,6 +26,9 @@ export function SupervisorFatigueGuard({ children }: Props) {
   const [recalling, setRecalling] = useState(false);
   const [recalled, setRecalled] = useState(false);
   const [dismissing, setDismissing] = useState(false);
+  const [unblocking, setUnblocking] = useState(false);
+  const [unblocked, setUnblocked] = useState(false);
+  const [confirmUnblock, setConfirmUnblock] = useState(false);
 
   const current = queue[0] ?? null;
 
@@ -60,6 +63,9 @@ export function SupervisorFatigueGuard({ children }: Props) {
     setRecalled(false);
     setRecalling(false);
     setDismissing(false);
+    setUnblocked(false);
+    setUnblocking(false);
+    setConfirmUnblock(false);
   }, [current?.driver_id]);
 
   const handleRecall = async () => {
@@ -84,6 +90,19 @@ export function SupervisorFatigueGuard({ children }: Props) {
       // Descartar de la cola igual — el próximo ciclo lo re-mostraría si sigue activo
     }
     removeFirst();
+  };
+
+  const handleUnblock = async () => {
+    if (!current) return;
+    setUnblocking(true);
+    try {
+      await supervisorFatigueApi.unblockDriver(current.driver_id);
+      setUnblocked(true);
+      setTimeout(() => removeFirst(), 1800);
+    } catch {
+      setUnblocking(false);
+      setConfirmUnblock(false);
+    }
   };
 
   return (
@@ -194,7 +213,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
               test de fatiga. Realizá las acciones correspondientes de inmediato.
             </p>
 
-            {/* Confirmación de recall */}
+            {/* Confirmación de acción completada */}
             {recalled ? (
               <div
                 style={{
@@ -210,12 +229,27 @@ export function SupervisorFatigueGuard({ children }: Props) {
               >
                 ✓ Acción registrada. Contactá al chofer para que regrese a la sucursal.
               </div>
+            ) : unblocked ? (
+              <div
+                style={{
+                  background: "#fff7ed",
+                  border: "1px solid #fed7aa",
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  color: "#9a3412",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textAlign: "center",
+                }}
+              >
+                🔓 Ruta desbloqueada. El chofer puede continuar.
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {/* Botón principal: cortar ruta */}
                 <button
                   onClick={() => void handleRecall()}
-                  disabled={recalling || dismissing}
+                  disabled={recalling || dismissing || unblocking}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -228,18 +262,77 @@ export function SupervisorFatigueGuard({ children }: Props) {
                     padding: "13px 20px",
                     fontSize: 14,
                     fontWeight: 700,
-                    cursor: recalling || dismissing ? "not-allowed" : "pointer",
-                    opacity: recalling || dismissing ? 0.7 : 1,
+                    cursor: recalling || dismissing || unblocking ? "not-allowed" : "pointer",
+                    opacity: recalling || dismissing || unblocking ? 0.7 : 1,
                   }}
                 >
                   <PhoneCall style={{ width: 16, height: 16 }} />
                   {recalling ? "Guardando…" : "Cortar ruta y llamar de vuelta"}
                 </button>
 
+                {/* Botón desbloquear ruta */}
+                {!confirmUnblock ? (
+                  <button
+                    onClick={() => setConfirmUnblock(true)}
+                    disabled={recalling || dismissing || unblocking}
+                    style={{
+                      background: "#f97316",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 10,
+                      padding: "13px 20px",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: recalling || dismissing || unblocking ? "not-allowed" : "pointer",
+                      opacity: recalling || dismissing || unblocking ? 0.7 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    🔓 Desbloquear ruta
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => void handleUnblock()}
+                      style={{
+                        flex: 1,
+                        background: "#f97316",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 10,
+                        padding: "12px",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {unblocking ? "Desbloqueando…" : "Sí, desbloquear"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmUnblock(false)}
+                      style={{
+                        flex: 1,
+                        background: "transparent",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: 10,
+                        padding: "12px",
+                        fontSize: 13,
+                        color: "#64748b",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+
                 {/* Botón secundario: no hacer nada */}
                 <button
                   onClick={() => void handleDismiss()}
-                  disabled={recalling || dismissing}
+                  disabled={recalling || dismissing || unblocking}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -252,8 +345,8 @@ export function SupervisorFatigueGuard({ children }: Props) {
                     padding: "12px 20px",
                     fontSize: 14,
                     fontWeight: 600,
-                    cursor: recalling || dismissing ? "not-allowed" : "pointer",
-                    opacity: recalling || dismissing ? 0.7 : 1,
+                    cursor: recalling || dismissing || unblocking ? "not-allowed" : "pointer",
+                    opacity: recalling || dismissing || unblocking ? 0.7 : 1,
                   }}
                 >
                   <X style={{ width: 15, height: 15 }} />

@@ -17,21 +17,24 @@ import (
 const dashboardHistoryLimit = 30
 
 type SupervisorFatigueHandler struct {
-	authRepo    repository.AuthRepository
-	checkinRepo *repository.CheckinRepository
-	historyRepo *repository.HistoryAccessRequestRepository
-	fatigueSvc  *service.FatigueConfigService
+	authRepo         repository.AuthRepository
+	checkinRepo      *repository.CheckinRepository
+	historyRepo      *repository.HistoryAccessRequestRepository
+	fatigueSvc       *service.FatigueConfigService
+	fatigueBlockRepo repository.FatigueBlockRepository
 }
 
 func NewSupervisorFatigueHandler(
 	authRepo repository.AuthRepository,
 	fatigueSvc *service.FatigueConfigService,
+	fatigueBlockRepo repository.FatigueBlockRepository,
 ) *SupervisorFatigueHandler {
 	return &SupervisorFatigueHandler{
-		authRepo:    authRepo,
-		checkinRepo: repository.NewCheckinRepository(),
-		historyRepo: repository.NewHistoryAccessRequestRepository(),
-		fatigueSvc:  fatigueSvc,
+		authRepo:         authRepo,
+		checkinRepo:      repository.NewCheckinRepository(),
+		historyRepo:      repository.NewHistoryAccessRequestRepository(),
+		fatigueSvc:       fatigueSvc,
+		fatigueBlockRepo: fatigueBlockRepo,
 	}
 }
 
@@ -469,6 +472,48 @@ func (h *SupervisorFatigueHandler) RecallDriver(c *gin.Context) {
 // auditRepoForRecall es un no-op si el handler no tiene auditRepo inyectado.
 // Se mantiene como receptor para futuras extensiones sin cambiar la firma pública.
 func (h *SupervisorFatigueHandler) auditRepoForRecall(_, _ string) error { return nil }
+
+// UnblockDriver levanta el bloqueo de pantalla activo de un chofer.
+// Llamado por el supervisor desde el modal de alerta o desde el panel de fatiga.
+// POST /supervisor/fatigue/:driver_id/unblock
+func (h *SupervisorFatigueHandler) UnblockDriver(c *gin.Context) {
+	supervisor := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "servicio no disponible"})
+		return
+	}
+	if err := h.fatigueBlockRepo.Unblock(driverID, supervisor.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo desbloquear al chofer"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// GetBlockedDrivers devuelve los IDs de choferes con bloqueo de pantalla activo
+// en la sucursal del supervisor. Los managers pueden filtrar con ?branch_id=.
+// GET /supervisor/fatigue/blocked-drivers
+func (h *SupervisorFatigueHandler) GetBlockedDrivers(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branchID := user.BranchID
+	if branchID == "" {
+		branchID = c.Query("branch_id")
+	}
+
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked_driver_ids": []string{}})
+		return
+	}
+
+	drivers := h.authRepo.ListByRole(model.RoleDriver, branchID)
+	blockedIDs := make([]string, 0)
+	for _, d := range drivers {
+		if block, err := h.fatigueBlockRepo.GetActive(d.ID); err == nil && block != nil {
+			blockedIDs = append(blockedIDs, d.ID)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"blocked_driver_ids": blockedIDs})
+}
 
 // ListHistoryRequests returns all history access requests (optionally filtered
 // by ?status=pending|approved|rejected). Used by supervisors in the Fatigue panel.

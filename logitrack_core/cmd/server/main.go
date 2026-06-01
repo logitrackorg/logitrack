@@ -166,7 +166,8 @@ func main() {
 	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
 	auditLogRepo := repository.NewAuditLogRepository()
 	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc, auditLogRepo)
-	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
+	fatigueBlockRepo := repository.NewPostgresFatigueBlockRepository(database)
+	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc, fatigueBlockRepo)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
@@ -252,7 +253,6 @@ func main() {
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	vehicleHandler.SetBranchZoneService(branchZoneSvc)
-	fatigueBlockRepo := repository.NewPostgresFatigueBlockRepository(database)
 	notifSvc.SetFatigueBlockRepo(fatigueBlockRepo)
 	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc, fatigueBlockRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
@@ -499,6 +499,8 @@ func main() {
 	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
 	protected.POST("/supervisor/fatigue-alerts/:driver_id/dismiss", canViewStats, supervisorFatigueHandler.DismissAlert)
 	protected.POST("/supervisor/fatigue-alerts/:driver_id/recall", canViewStats, supervisorFatigueHandler.RecallDriver)
+	protected.GET("/supervisor/fatigue/blocked-drivers", canViewStats, supervisorFatigueHandler.GetBlockedDrivers)
+	protected.POST("/supervisor/fatigue/:driver_id/unblock", canViewStats, supervisorFatigueHandler.UnblockDriver)
 	protected.GET("/supervisor/history-requests", canViewStats, supervisorFatigueHandler.ListHistoryRequests)
 	protected.PATCH("/supervisor/history-requests/:driver_id", canViewStats, supervisorFatigueHandler.ReviewHistoryRequest)
 
