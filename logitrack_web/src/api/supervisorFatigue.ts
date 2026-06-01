@@ -156,4 +156,12 @@ export const supervisorFatigueApi = {
     api
       .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, note })
       .then((r) => r.data),
+  getBlockedDrivers: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api
+      .get<{ blocked_driver_ids: string[] }>("/supervisor/fatigue/blocked-drivers", { params })
+      .then((r) => r.data);
+  },
+  unblockDriver: (driverID: string) =>
+    api.post<{ ok: boolean }>(`/supervisor/fatigue/${driverID}/unblock`).then((r) => r.data),
 };

@@ -305,6 +305,9 @@ export function SupervisorFatigue() {
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   const [historyRequests, setHistoryRequests] = useState<HistoryAccessRequest[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [blockedDriverIds, setBlockedDriverIds] = useState<string[]>([]);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [confirmUnblockId, setConfirmUnblockId] = useState<string | null>(null);
 
   // Sync the ref with selectedBranch so the polling interval always reads the
   // latest value without stale-closure issues. Writing to a ref must happen in
@@ -349,6 +352,19 @@ export function SupervisorFatigue() {
     if (!isSupervisor) load();
   }, [selectedBranch, isSupervisor, load]);
 
+  // Polling de choferes bloqueados por alerta de fatiga (LOGITRACK-501)
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await supervisorFatigueApi.getBlockedDrivers(selectedBranch || undefined);
+        setBlockedDriverIds(res.blocked_driver_ids);
+      } catch { /* silencioso */ }
+    };
+    void poll();
+    const id = setInterval(poll, 10_000);
+    return () => clearInterval(id);
+  }, [selectedBranch]);
+
   const loadHistoryRequests = useCallback(async () => {
     try {
       const res = await supervisorFatigueApi.listHistoryRequests("pending");
@@ -369,6 +385,19 @@ export function SupervisorFatigue() {
       // ignore
     } finally {
       setReviewingId(null);
+    }
+  };
+
+  const handleUnblockFromPanel = async (driverID: string) => {
+    setUnblockingId(driverID);
+    try {
+      await supervisorFatigueApi.unblockDriver(driverID);
+      setBlockedDriverIds((prev) => prev.filter((id) => id !== driverID));
+    } catch {
+      // ignore — el próximo polling lo reflejará
+    } finally {
+      setUnblockingId(null);
+      setConfirmUnblockId(null);
     }
   };
 
@@ -451,6 +480,68 @@ export function SupervisorFatigue() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Choferes con ruta bloqueada por alerta de fatiga (LOGITRACK-501) */}
+      {blockedDriverIds.length > 0 && (
+        <Card className="border-orange-300 bg-orange-50">
+          <CardHeader className="border-b border-orange-200 pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-800">
+              🔒 Choferes con ruta bloqueada ({blockedDriverIds.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <tbody>
+                {blockedDriverIds.map((driverID) => {
+                  const driverInfo = data?.drivers.find((d) => d.driver_id === driverID);
+                  const name = driverInfo?.full_name ?? driverInfo?.username ?? driverID;
+                  const username = driverInfo?.username ?? "";
+                  const isConfirming = confirmUnblockId === driverID;
+                  const isUnblocking = unblockingId === driverID;
+                  return (
+                    <tr key={driverID} className="border-t border-orange-200">
+                      <td className="py-3 px-4">
+                        <p className="text-sm font-semibold text-slate-900">{name}</p>
+                        {username && <p className="text-[11px] text-slate-400 font-mono">{username}</p>}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {!isConfirming ? (
+                          <button
+                            onClick={() => setConfirmUnblockId(driverID)}
+                            disabled={isUnblocking}
+                            className="h-8 px-4 rounded-lg text-white text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors"
+                            style={{ background: "#f97316" }}
+                          >
+                            🔓 Desbloquear ruta
+                          </button>
+                        ) : (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => void handleUnblockFromPanel(driverID)}
+                              disabled={isUnblocking}
+                              className="h-8 px-3 rounded-lg text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                              style={{ background: "#f97316" }}
+                            >
+                              {isUnblocking ? "Desbloqueando…" : "Sí, desbloquear"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmUnblockId(null)}
+                              disabled={isUnblocking}
+                              className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       )}
 
       {/* Tabla principal */}

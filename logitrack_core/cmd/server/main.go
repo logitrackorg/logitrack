@@ -166,7 +166,8 @@ func main() {
 	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
 	auditLogRepo := repository.NewAuditLogRepository()
 	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc, auditLogRepo)
-	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
+	fatigueBlockRepo := repository.NewPostgresFatigueBlockRepository(database)
+	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc, fatigueBlockRepo)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
@@ -252,7 +253,8 @@ func main() {
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	vehicleHandler.SetBranchZoneService(branchZoneSvc)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
+	notifSvc.SetFatigueBlockRepo(fatigueBlockRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc, fatigueBlockRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -285,6 +287,7 @@ func main() {
 	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
 	interBranchTripSvc.SetRouteService(routeSvc)
 	interBranchTripSvc.SetNotificationService(notifSvc)
+	notifSvc.SetInterBranchTripService(interBranchTripSvc)
 	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
 	vehicleHandler.SetTripService(interBranchTripSvc)
 
@@ -526,6 +529,8 @@ func main() {
 	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
 	protected.POST("/supervisor/fatigue-alerts/:driver_id/dismiss", canViewStats, supervisorFatigueHandler.DismissAlert)
 	protected.POST("/supervisor/fatigue-alerts/:driver_id/recall", canViewStats, supervisorFatigueHandler.RecallDriver)
+	protected.GET("/supervisor/fatigue/blocked-drivers", canViewStats, supervisorFatigueHandler.GetBlockedDrivers)
+	protected.POST("/supervisor/fatigue/:driver_id/unblock", canViewStats, supervisorFatigueHandler.UnblockDriver)
 	protected.GET("/supervisor/history-requests", canViewStats, supervisorFatigueHandler.ListHistoryRequests)
 	protected.PATCH("/supervisor/history-requests/:driver_id", canViewStats, supervisorFatigueHandler.ReviewHistoryRequest)
 
@@ -557,6 +562,7 @@ func main() {
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
+	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)      // LOGITRACK-499
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)

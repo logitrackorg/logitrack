@@ -223,4 +223,6 @@ export const driverApi = {
         ok: false as const,
         request_status: (err?.response?.data?.request_status ?? "sin_solicitud") as PersonalHistoryStatus,
       })),
+  getFatigueBlockStatus: (): Promise<{ blocked: boolean }> =>
+    api.get("/driver/fatigue/block-status").then((r) => r.data),
 };

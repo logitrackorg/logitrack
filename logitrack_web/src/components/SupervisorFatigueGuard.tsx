@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, PhoneCall, X } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { supervisorFatigueApi, type ActiveFatigueAlert } from "../api/supervisorFatigue";
 import { useAuth } from "../context/AuthContext";
 
@@ -23,9 +23,8 @@ export function SupervisorFatigueGuard({ children }: Props) {
     user?.role === "supervisor" || user?.role === "manager";
 
   const [queue, setQueue] = useState<ActiveFatigueAlert[]>([]);
-  const [recalling, setRecalling] = useState(false);
-  const [recalled, setRecalled] = useState(false);
-  const [dismissing, setDismissing] = useState(false);
+  const [unblocking, setUnblocking] = useState(false);
+  const [unblocked, setUnblocked] = useState(false);
 
   const current = queue[0] ?? null;
 
@@ -55,35 +54,30 @@ export function SupervisorFatigueGuard({ children }: Props) {
     return () => clearInterval(id);
   }, [isSupervisorOrManager, poll]);
 
-  // Resetear estado de acciones cuando cambia la alerta mostrada
+  // Resetear estado cuando cambia la alerta mostrada
   useEffect(() => {
-    setRecalled(false);
-    setRecalling(false);
-    setDismissing(false);
+    setUnblocked(false);
+    setUnblocking(false);
   }, [current?.driver_id]);
 
-  const handleRecall = async () => {
+  const handleContinue = async () => {
     if (!current) return;
-    setRecalling(true);
-    try {
-      await supervisorFatigueApi.recallDriver(current.driver_id);
-      setRecalled(true);
-      // Dar un segundo para que el supervisor lea el mensaje de confirmación
-      setTimeout(() => removeFirst(), 1800);
-    } catch {
-      setRecalling(false);
-    }
-  };
-
-  const handleDismiss = async () => {
-    if (!current) return;
-    setDismissing(true);
     try {
       await supervisorFatigueApi.dismissAlert(current.driver_id);
-    } catch {
-      // Descartar de la cola igual — el próximo ciclo lo re-mostraría si sigue activo
-    }
+    } catch { /* descartar igual */ }
     removeFirst();
+  };
+
+  const handleUnblock = async () => {
+    if (!current) return;
+    setUnblocking(true);
+    try {
+      await supervisorFatigueApi.unblockDriver(current.driver_id);
+      setUnblocked(true);
+      setTimeout(() => removeFirst(), 1800);
+    } catch {
+      setUnblocking(false);
+    }
   };
 
   return (
@@ -194,70 +188,42 @@ export function SupervisorFatigueGuard({ children }: Props) {
               test de fatiga. Realizá las acciones correspondientes de inmediato.
             </p>
 
-            {/* Confirmación de recall */}
-            {recalled ? (
-              <div
-                style={{
-                  background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
-                  borderRadius: 8,
-                  padding: "12px 16px",
-                  color: "#166534",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textAlign: "center",
-                }}
-              >
-                ✓ Acción registrada. Contactá al chofer para que regrese a la sucursal.
+            {/* Confirmación de desbloqueo */}
+            {unblocked ? (
+              <div style={{
+                background: "#fff7ed", border: "1px solid #fed7aa",
+                borderRadius: 8, padding: "12px 16px",
+                color: "#9a3412", fontSize: 13, fontWeight: 600, textAlign: "center",
+              }}>
+                🔓 Ruta desbloqueada. El chofer puede continuar.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Botón principal: cortar ruta */}
                 <button
-                  onClick={() => void handleRecall()}
-                  disabled={recalling || dismissing}
+                  onClick={() => void handleUnblock()}
+                  disabled={unblocking}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    background: "#dc2626",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 10,
-                    padding: "13px 20px",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: recalling || dismissing ? "not-allowed" : "pointer",
-                    opacity: recalling || dismissing ? 0.7 : 1,
+                    background: "#f97316", color: "#fff", border: "none",
+                    borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 700,
+                    cursor: unblocking ? "not-allowed" : "pointer",
+                    opacity: unblocking ? 0.7 : 1,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   }}
                 >
-                  <PhoneCall style={{ width: 16, height: 16 }} />
-                  {recalling ? "Guardando…" : "Cortar ruta y llamar de vuelta"}
+                  🔓 {unblocking ? "Desbloqueando…" : "Desbloquear ruta"}
                 </button>
-
-                {/* Botón secundario: no hacer nada */}
                 <button
-                  onClick={() => void handleDismiss()}
-                  disabled={recalling || dismissing}
+                  onClick={() => void handleContinue()}
+                  disabled={unblocking}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                    background: "transparent",
-                    color: "#64748b",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 10,
-                    padding: "12px 20px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: recalling || dismissing ? "not-allowed" : "pointer",
-                    opacity: recalling || dismissing ? 0.7 : 1,
+                    background: "transparent", color: "#64748b",
+                    border: "1px solid #cbd5e1", borderRadius: 10,
+                    padding: "12px 20px", fontSize: 14, fontWeight: 600,
+                    cursor: unblocking ? "not-allowed" : "pointer",
+                    opacity: unblocking ? 0.7 : 1,
                   }}
                 >
-                  <X style={{ width: 15, height: 15 }} />
-                  {dismissing ? "Guardando…" : "No hacer nada"}
+                  Continuar
                 </button>
               </div>
             )}

@@ -82,6 +82,8 @@ export function DriverInterBranchTrip() {
   const [starting, setStarting] = useState(false);
   const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
 
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
   // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
   const [midTripCheckin, setMidTripCheckin] = useState(false);
   // true si el driver aún no reportó sueño para el día logístico actual.
@@ -107,8 +109,13 @@ export function DriverInterBranchTrip() {
   const [completedExpanded, setCompletedExpanded] = useState(false);
 
   // Mapa
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRefInternal = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<unknown>(null);
+  const [mapDivMounted, setMapDivMounted] = useState(false);
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    mapRefInternal.current = node;
+    setMapDivMounted(node !== null);
+  }, []);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -323,7 +330,7 @@ export function DriverInterBranchTrip() {
 
   // Mapa Leaflet
   useEffect(() => {
-    if (!trip || !mapRef.current || !branches.length) return;
+    if (!trip || !mapRefInternal.current || !branches.length) return;
     const origin = branches.find((b) => b.id === trip.origin_branch_id);
     if (!origin?.latitude) return;
 
@@ -357,7 +364,7 @@ export function DriverInterBranchTrip() {
         (mapInstanceRef.current as { remove(): void }).remove();
         mapInstanceRef.current = null;
       }
-      const map = L.map(mapRef.current!, { zoomControl: false, scrollWheelZoom: false });
+      const map = L.map(mapRefInternal.current!, { zoomControl: false, scrollWheelZoom: false });
       mapInstanceRef.current = map;
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(map);
 
@@ -443,7 +450,23 @@ export function DriverInterBranchTrip() {
     return () => {
       if (mapInstanceRef.current) { (mapInstanceRef.current as { remove(): void }).remove(); mapInstanceRef.current = null; }
     };
-  }, [trip, branches]);
+  }, [trip, branches, mapDivMounted]);
+
+  // Polling de bloqueo por fatiga — cada 5 s mientras el viaje está en_transito (LOGITRACK-499).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito") return;
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        setFatigueBlocked(data.blocked ?? false);
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [trip]);
 
   const openQR = async () => {
     if (!trip) return;
@@ -491,6 +514,10 @@ export function DriverInterBranchTrip() {
       localStorage.setItem(`trip_checkin_${t.id}`, String(curIdx));
     }
   }, []);
+
+  // Bloqueo por alerta de fatiga: overlay fixed encima del contenido para no
+  // desmontar el mapa ni otros elementos del DOM (LOGITRACK-499).
+  // Se renderiza al final del JSX como portal superpuesto.
 
   // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
   // el viaje o cuando lleva más de 6 minutos detenido en ruta.
@@ -788,6 +815,26 @@ export function DriverInterBranchTrip() {
           confirmedBranchName={confirmedBranchName}
           onClose={() => { setQrOpen(false); if (pollingRef.current) clearInterval(pollingRef.current); }}
         />
+      )}
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
+      {fatigueBlocked && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#1a1a2e",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: 32, textAlign: "center", gap: 24,
+        }}>
+          <span style={{ fontSize: 64 }}>⚠️</span>
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            Alerta de fatiga detectada
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
       )}
     </div>
   );
