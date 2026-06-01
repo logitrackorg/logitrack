@@ -531,6 +531,18 @@ func RunMigrations(db *sql.DB) error {
 		--Parametrización de reprogramaciones vía chatbot
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
 		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;
+		-- Recuperación de contraseña vía OTP (LOGITRACK-397)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL,
+			token_hash TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			used_at    TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
 	`)
 	return err
 }

@@ -451,7 +451,7 @@ export function AdminUsers() {
                 <input type="password" value={createForm.password} onChange={e => setCreateForm(s => ({ ...s, password: e.target.value }))} placeholder="••••••••" style={inputStyle} />
               </label>
               {createForm.password.length > 0 && (() => {
-                const ok6 = createForm.password.length >= 6;
+                const ok6 = createForm.password.length >= 8;
                 const okNum = /\d/.test(createForm.password);
                 const item = (met: boolean, text: string) => (
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "var(--ok-text)" : "var(--danger-text)" }}>
@@ -461,7 +461,7 @@ export function AdminUsers() {
                 );
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "var(--bg-subtle)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                    {item(ok6, "Al menos 6 caracteres")}
+                    {item(ok6, "Al menos 8 caracteres")}
                     {item(okNum, "Al menos un número")}
                   </div>
                 );
