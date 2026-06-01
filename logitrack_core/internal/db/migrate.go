@@ -540,6 +540,17 @@ func RunMigrations(db *sql.DB) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
+
+		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
+		CREATE TABLE IF NOT EXISTS fatigue_blocks (
+			id           TEXT PRIMARY KEY,
+			driver_id    TEXT NOT NULL,
+			trip_id      TEXT,
+			blocked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			unblocked_at TIMESTAMPTZ,
+			unblocked_by TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_fatigue_blocks_driver ON fatigue_blocks(driver_id) WHERE unblocked_at IS NULL;
 	`)
 	return err
 }

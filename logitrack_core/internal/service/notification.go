@@ -18,8 +18,10 @@ type Pusher interface {
 
 // NotificationService handles creation and retrieval of in-app notifications.
 type NotificationService struct {
-	repo repository.NotificationRepository
-	hub  Pusher
+	repo               repository.NotificationRepository
+	hub                Pusher
+	fatigueBlockRepo   repository.FatigueBlockRepository
+	interBranchTripSvc *InterBranchTripService
 }
 
 // NewNotificationService creates a new NotificationService.
@@ -30,6 +32,16 @@ func NewNotificationService(repo repository.NotificationRepository) *Notificatio
 // SetHub wires in the SSE hub so that new notifications are pushed in real time.
 func (s *NotificationService) SetHub(hub Pusher) {
 	s.hub = hub
+}
+
+// SetFatigueBlockRepo wires in the fatigue block repository (LOGITRACK-499).
+func (s *NotificationService) SetFatigueBlockRepo(repo repository.FatigueBlockRepository) {
+	s.fatigueBlockRepo = repo
+}
+
+// SetInterBranchTripService wires in the inter-branch trip service for fatigue block lookups (LOGITRACK-499).
+func (s *NotificationService) SetInterBranchTripService(svc *InterBranchTripService) {
+	s.interBranchTripSvc = svc
 }
 
 // statusLabel returns a human-readable label for the given shipment status.
@@ -549,8 +561,9 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 // NotifyFatigueAlert sends an urgent notification to all supervisors of the given
 // branch when a driver's composite fatigue score reaches the RED (high risk) level.
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.
+// driverID is the driver's user UUID; driverUsername is used for dedup and display.
 // Intended to be called as a goroutine (fire-and-forget).
-func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, driverFullName string, score int) {
+func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsername, driverFullName string, score int) {
 	since := clock.Now().Add(-1 * time.Hour)
 	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
 	if err != nil {
@@ -587,6 +600,19 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, drive
 			log.Printf("[NotificationService] NotifyFatigueAlert Create error for supervisor %s: %v", sup.ID, err)
 		} else if s.hub != nil {
 			s.hub.Push(n.UserID)
+		}
+	}
+
+	// Crear bloqueo de pantalla para el chofer (LOGITRACK-499)
+	if s.fatigueBlockRepo != nil {
+		var tripID *string
+		if s.interBranchTripSvc != nil {
+			if trip, err := s.interBranchTripSvc.GetActiveByDriver(driverID); err == nil {
+				tripID = &trip.ID
+			}
+		}
+		if err := s.fatigueBlockRepo.Create(driverID, tripID); err != nil {
+			log.Printf("[NotificationService] NotifyFatigueAlert: error creando fatigue_block: %v", err)
 		}
 	}
 }

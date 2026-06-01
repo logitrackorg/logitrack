@@ -82,6 +82,8 @@ export function DriverInterBranchTrip() {
   const [starting, setStarting] = useState(false);
   const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
 
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
   // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
   const [midTripCheckin, setMidTripCheckin] = useState(false);
   // true si el driver aún no reportó sueño para el día logístico actual.
@@ -445,6 +447,22 @@ export function DriverInterBranchTrip() {
     };
   }, [trip, branches]);
 
+  // Polling de bloqueo por fatiga — cada 5 s mientras el viaje está en_transito (LOGITRACK-499).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito") return;
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        setFatigueBlocked(data.blocked ?? false);
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [trip]);
+
   const openQR = async () => {
     if (!trip) return;
     setQrOpen(true);
@@ -491,6 +509,28 @@ export function DriverInterBranchTrip() {
       localStorage.setItem(`trip_checkin_${t.id}`, String(curIdx));
     }
   }, []);
+
+  // Bloqueo por alerta de fatiga: full-screen, sin botón de cierre (LOGITRACK-499).
+  if (fatigueBlocked) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "#1a1a2e",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: 32, textAlign: "center", gap: 24,
+      }}>
+        <span style={{ fontSize: 64 }}>⚠️</span>
+        <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+          Alerta de fatiga detectada
+        </h2>
+        <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+          Tu supervisor fue notificado.<br/>
+          Esperá su indicación antes de continuar.
+        </p>
+      </div>
+    );
+  }
 
   // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
   // el viaje o cuando lleva más de 6 minutos detenido en ruta.

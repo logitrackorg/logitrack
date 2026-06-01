@@ -23,15 +23,16 @@ import (
 const controlPhraseTemplate = "Hoy es un buen día para trabajar con seguridad, %s."
 
 type DriverHandler struct {
-	routeSvc        *service.RouteService
-	branchRepo      repository.BranchRepository
-	checkinRepo     *repository.CheckinRepository
-	sleepRepo       *repository.SleepRepository
-	routeStartRepo  *repository.RouteStartRepository
-	historyRepo     *repository.HistoryAccessRequestRepository
-	fatigueSvc      *service.FatigueConfigService
-	auditRepo       *repository.AuditLogRepository
-	notifSvc        *service.NotificationService
+	routeSvc         *service.RouteService
+	branchRepo       repository.BranchRepository
+	checkinRepo      *repository.CheckinRepository
+	sleepRepo        *repository.SleepRepository
+	routeStartRepo   *repository.RouteStartRepository
+	historyRepo      *repository.HistoryAccessRequestRepository
+	fatigueSvc       *service.FatigueConfigService
+	auditRepo        *repository.AuditLogRepository
+	notifSvc         *service.NotificationService
+	fatigueBlockRepo repository.FatigueBlockRepository
 }
 
 func NewDriverHandler(
@@ -40,17 +41,19 @@ func NewDriverHandler(
 	fatigueSvc *service.FatigueConfigService,
 	auditRepo *repository.AuditLogRepository,
 	notifSvc *service.NotificationService,
+	fatigueBlockRepo repository.FatigueBlockRepository,
 ) *DriverHandler {
 	return &DriverHandler{
-		routeSvc:       routeSvc,
-		branchRepo:     branchRepo,
-		checkinRepo:    repository.NewCheckinRepository(),
-		sleepRepo:      repository.NewSleepRepository(),
-		routeStartRepo: repository.NewRouteStartRepository(),
-		historyRepo:    repository.NewHistoryAccessRequestRepository(),
-		fatigueSvc:     fatigueSvc,
-		auditRepo:      auditRepo,
-		notifSvc:       notifSvc,
+		routeSvc:         routeSvc,
+		branchRepo:       branchRepo,
+		checkinRepo:      repository.NewCheckinRepository(),
+		sleepRepo:        repository.NewSleepRepository(),
+		routeStartRepo:   repository.NewRouteStartRepository(),
+		historyRepo:      repository.NewHistoryAccessRequestRepository(),
+		fatigueSvc:       fatigueSvc,
+		auditRepo:        auditRepo,
+		notifSvc:         notifSvc,
+		fatigueBlockRepo: fatigueBlockRepo,
 	}
 }
 
@@ -72,7 +75,7 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 		fullName = user.Username
 	}
 	if h.notifSvc != nil {
-		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
+		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score)
 	}
 
 	// Stamp the driver's own check-in so the polling endpoint can surface
@@ -901,4 +904,21 @@ func updateBaseline(baseline *model.VoiceMetrics, current model.VoiceMetrics) *m
 		PauseRatio: baseline.PauseRatio*(1-alpha) + current.PauseRatio*alpha,
 	}
 	return &updated
+}
+
+// GetFatigueBlockStatus returns whether the authenticated driver has an active
+// fatigue block. The frontend polls this endpoint every 5 s and shows a
+// full-screen overlay when blocked (LOGITRACK-499).
+func (h *DriverHandler) GetFatigueBlockStatus(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": false})
+		return
+	}
+	block, err := h.fatigueBlockRepo.GetActive(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al verificar estado de bloqueo"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"blocked": block != nil})
 }
