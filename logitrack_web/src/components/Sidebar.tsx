@@ -19,6 +19,7 @@ import {
   FileBarChart,
   FileText,
   ClipboardList,
+  TrendingUp,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -62,6 +63,7 @@ const SECTIONS: NavSection[] = [
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
+      { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
     ],
   },
   {

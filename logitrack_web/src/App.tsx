@@ -16,6 +16,7 @@ import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
 import { Claims } from "./pages/Claims";
+import { SlaAuditLogs } from "./pages/SlaAuditLogs";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
@@ -191,6 +192,12 @@ function AppRoutes() {
         <Route path="/" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
             <ShipmentList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/sla-audit" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <SlaAuditLogs />
           </ProtectedRoute>
         } />
 

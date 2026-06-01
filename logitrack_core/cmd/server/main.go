@@ -297,6 +297,21 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
+	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
+	priorityLogRepo := repository.NewPriorityLogRepository()
+	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo)
+	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo)
+	// Attach to the clock callback so every admin clock tick triggers a check.
+	// The service runs in its own goroutine and is mutex-guarded against overlap.
+	_ = slaAnomalySvc // referenced via closure below
+	origSLARiskChecker := slaRiskChecker
+	slaRiskChecker = func() {
+		if origSLARiskChecker != nil {
+			origSLARiskChecker()
+		}
+		slaAnomalySvc.RunCheck()
+	}
+
 	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
 	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
 	dispatchVolumeChecker := service.NewDispatchVolumeChecker(
@@ -491,6 +506,7 @@ func main() {
 	protected.GET("/stats/volume-by-delivery-method", canViewStats, statsExtendedHandler.VolumeByDeliveryMethod)
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
+	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
 	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
