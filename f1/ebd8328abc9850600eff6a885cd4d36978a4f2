@@ -1,0 +1,273 @@
+logitrack_core/internal/seed/seed.go
+  s_3b8cb612e4a9a4::t_24e171ed84cba8 133-136,140
+  s_3b8cb612e4a9a4::t_99b929aa80637b 807-980
+  s_3b8cb612e4a9a4::t_1ef478bb6761fb 253-263
+logitrack_core/internal/repository/inter_branch_trip.go
+  s_3b8cb612e4a9a4::t_afcecfc5908100 38-40
+logitrack_web/src/components/calendar/VehicleTimelineView.tsx
+  s_3b8cb612e4a9a4::t_7c96e9c38aa207 90,94-95,98-105
+  s_3b8cb612e4a9a4::t_54a7ec57d05ac4 110-124,130,132-133,137,139,143-144,151
+  s_3b8cb612e4a9a4::t_dbdcdfeaba10e9 9
+  s_3b8cb612e4a9a4::t_9112fbda07cb1e 91,109,125-129,131,134-136
+  s_3b8cb612e4a9a4::t_ae03a6ef609919 78-79,82-83
+  s_3b8cb612e4a9a4::t_da2daa000d54c3 51
+  s_3b8cb612e4a9a4::t_a96ac1c0e94001 316
+  s_3b8cb612e4a9a4::t_40e08bf0944313 1-8,10-13,15-50,52-60,62-77,80-81,84-89,92-93,96-97,106-108,138,140-142,145-150,174-251,253-256,258,260,280,282-288,290,293-300,317-318,320-321,323,325-337,339-347,389-397,399-403,405-413,415-430,471-479,482-512
+  s_3b8cb612e4a9a4::t_8ae36b64fd847a 480-481
+  s_3b8cb612e4a9a4::t_bd70667467d795 301-315,319,322,324
+  s_3b8cb612e4a9a4::t_9fdc1ecc72f4be 431-470
+  s_3b8cb612e4a9a4::t_79b897280395ec 14
+  s_3b8cb612e4a9a4::t_5f6d4c319a04ba 152
+  s_3b8cb612e4a9a4::t_806c9d26b669c1 252,257,259,261-279,281,289,291-292
+  s_3b8cb612e4a9a4::t_011eafa3b15524 338,348-388,398,404,414
+  s_3b8cb612e4a9a4::t_427a6fbbee924b 61
+  s_3b8cb612e4a9a4::t_bf2d02310f2c1e 153-173
+logitrack_core/internal/service/routing_projection.go
+  s_3b8cb612e4a9a4::t_7bab1d109853e7 1-16,18-533,551-636
+  s_3b8cb612e4a9a4::t_bf49ab9d81334a 534-535,537,539-540,542-550
+  s_3b8cb612e4a9a4::t_9c2fb4386fe51b 536,538,541
+  s_3b8cb612e4a9a4::t_08765c178f2f60 17
+logitrack_core/internal/model/inter_branch_trip.go
+  s_3b8cb612e4a9a4::t_db693fdd64f13b 47-52
+  s_3b8cb612e4a9a4::t_86835d15ed4f66 72-73
+logitrack_core/internal/service/routing_interbranch_schedule_test.go
+  s_3b8cb612e4a9a4::t_5a368c40718624 84
+  s_3b8cb612e4a9a4::t_83ecdb6d780526 1-15,17-19,24-32,34-56,59-60,63-83,85-99
+  s_3b8cb612e4a9a4::t_b750e8f63aeaed 16,20-23,33,57-58,61-62
+logitrack_core/internal/repository/routing_plan.go
+  s_3b8cb612e4a9a4::t_938cc5e4390c2c 19-23
+  s_3b8cb612e4a9a4::t_c6fdefb18ba5ae 52
+  s_3b8cb612e4a9a4::t_88f73a64d8d5f5 53,60
+  s_3b8cb612e4a9a4::t_162778069b714b 116-118,121-126,129,134-181,183-230
+  s_3b8cb612e4a9a4::t_1bbf0e755845a2 182
+logitrack_core/internal/repository/postgres_inter_branch_trip.go
+  s_3b8cb612e4a9a4::t_efa35e59cd4a2f 49-50
+  s_3b8cb612e4a9a4::t_eb53908e7035f9 35-36,42
+  s_3b8cb612e4a9a4::t_d7df114552b164 184-193
+  s_3b8cb612e4a9a4::t_a4aecbc52f1a45 215,226,253-259
+logitrack_web/src/App.tsx
+  s_3b8cb612e4a9a4::t_e3289a7db253c0 45
+  s_3b8cb612e4a9a4::t_311953c16f4719 205-210
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_3b8cb612e4a9a4::t_e063d10b24ee37 645-668
+  s_3b8cb612e4a9a4::t_95141c0d71b612 311-313
+  s_3b8cb612e4a9a4::t_1d134f0bbdb440 308
+  s_3b8cb612e4a9a4::t_73a2b186c13b5c 621-644
+  s_3b8cb612e4a9a4::t_5be5db65a4f3ef 309
+  s_3b8cb612e4a9a4::t_73f94c9c860924 310
+  s_3b8cb612e4a9a4::t_9162ebbe21e6dd 669-698
+  s_3b8cb612e4a9a4::t_40c27e2756e038 385-426
+logitrack_core/internal/handler/inter_branch_trip.go
+  s_3b8cb612e4a9a4::t_4cc0a208f41436 280-326
+logitrack_core/cmd/server/main.go
+  s_3b8cb612e4a9a4::t_daa5ea61cdae1b 519
+  s_3b8cb612e4a9a4::t_67acc223900b85 595
+CLAUDE.md
+  s_3b8cb612e4a9a4::t_70b8d582c5514b 511
+  s_3b8cb612e4a9a4::t_26a7e6b6880697 299,305,311
+  s_3b8cb612e4a9a4::t_38eee70449bd8b 300,303-304,309-310,312-313
+logitrack_core/internal/repository/routing_config.go
+  s_3b8cb612e4a9a4::t_ea95f17906da94 46
+  s_3b8cb612e4a9a4::t_ef2313531c52d6 74,87
+  s_3b8cb612e4a9a4::t_4a1583cc826e15 75-77,88
+  s_3b8cb612e4a9a4::t_9a83bb6cb30752 32
+  s_3b8cb612e4a9a4::t_a2d253b0f732ac 71
+  s_3b8cb612e4a9a4::t_e9cc6dc813246e 34-35,47
+  s_3b8cb612e4a9a4::t_143a71bb7eb53c 33
+  s_3b8cb612e4a9a4::t_16a412a1c04fc4 45
+  s_3b8cb612e4a9a4::t_e9ed920d73cc85 72,86
+  s_3b8cb612e4a9a4::t_3e7c2a3852ffeb 73
+logitrack_web/src/pages/Routing.tsx
+  s_3b8cb612e4a9a4::t_d483e68e3c09d9 860
+  s_3b8cb612e4a9a4::t_57c2d65e3a864b 734,744
+  s_3b8cb612e4a9a4::t_833e57ac07d5e0 763
+  s_3b8cb612e4a9a4::t_2cc125b43e7038 1047
+  s_3b8cb612e4a9a4::t_657d14a63ce913 199-200
+  s_3b8cb612e4a9a4::t_8d86eafc7e7fbc 757-760,764-765,769-801
+  s_3b8cb612e4a9a4::t_e0830fc7c6fdd8 1982
+  s_3b8cb612e4a9a4::t_18fd534b411ac1 761-762,766-768
+  s_3b8cb612e4a9a4::t_65649769c2148f 1151-1152,1154-1159,1161-1166,1171-1188
+  s_3b8cb612e4a9a4::t_61cb6524842426 256-257
+  s_3b8cb612e4a9a4::t_198f851f9feb81 1898
+  s_3b8cb612e4a9a4::t_8be774818dcd71 294-321
+  s_3b8cb612e4a9a4::t_4fdd0927dfceb6 2022-2026
+  s_3b8cb612e4a9a4::t_39f18ca21f181e 1160,1167-1170
+  s_3b8cb612e4a9a4::t_edef7a6bbfb65f 1878
+logitrack_web/src/api/interBranchTrips.ts
+  s_3b8cb612e4a9a4::t_28c5c91efb5dd2 38
+  s_3b8cb612e4a9a4::t_54b3db07133b62 59-60
+  s_3b8cb612e4a9a4::t_b3140e519dc5a6 99-105
+logitrack_web/src/components/calendar/tripEvents.ts
+  s_3b8cb612e4a9a4::t_eb4a9c9974d3f9 1-2,4-48,138-155
+  s_3b8cb612e4a9a4::t_eeb328557b140b 64-65,67-73,79
+  s_3b8cb612e4a9a4::t_0de6193f605d68 49-63,66,74-78,80-137
+  s_3b8cb612e4a9a4::t_1a6220cfe5d07c 3
+logitrack_web/src/components/calendar/WeekCalendarView.tsx
+  s_3b8cb612e4a9a4::t_69d617d828556a 11
+  s_3b8cb612e4a9a4::t_b567ad6dfdbea4 149,168
+  s_3b8cb612e4a9a4::t_fe79aed04126d5 1-10,12-16,46-52,54-61,63-148,169-193,195-196,198-208
+  s_3b8cb612e4a9a4::t_068190c6b3e91e 150-167
+  s_3b8cb612e4a9a4::t_89531733471b31 194
+  s_3b8cb612e4a9a4::t_ae634fca008bc6 17-45
+  s_3b8cb612e4a9a4::t_8bb76ad8bed65b 53,62
+  s_3b8cb612e4a9a4::t_dde459cc676779 197
+logitrack_core/internal/service/routing.go
+  s_3b8cb612e4a9a4::t_abcec97e35bc0f 904-1006
+  s_3b8cb612e4a9a4::t_dee8ba3a6dd2c1 3670,3672-3676,3678-3689
+  s_3b8cb612e4a9a4::t_6c35468daa10c7 1489,1491-1495,1497-1508
+  s_3b8cb612e4a9a4::t_98f6b00f041008 307
+  s_3b8cb612e4a9a4::t_ad99bc9debc4c7 1149
+  s_3b8cb612e4a9a4::t_fe899c478c53ff 191-199,201,204,206,209
+  s_3b8cb612e4a9a4::t_35094d3f116caa 2641-2652
+  s_3b8cb612e4a9a4::t_659a0536a073ee 309-317
+  s_3b8cb612e4a9a4::t_80466d2071bcdc 3810-3817,3819-3828
+  s_3b8cb612e4a9a4::t_32bb9312bccaf7 2866
+  s_3b8cb612e4a9a4::t_6c3a2aa10b08bd 2940
+  s_3b8cb612e4a9a4::t_0c5605b3c9890e 4798-5051
+  s_3b8cb612e4a9a4::t_61b88e61585aa3 318-321
+  s_3b8cb612e4a9a4::t_e27310645accf1 4764,4766-4775,4777-4779
+  s_3b8cb612e4a9a4::t_4b0ccb37411066 3455
+  s_0c1474516137b1::t_f32fdfc070de8b 308
+  s_3b8cb612e4a9a4::t_579f2a28e1ffe9 1148
+  s_3b8cb612e4a9a4::t_34d760c86cff07 1486-1488,1490
+  s_3b8cb612e4a9a4::t_7854de704cfbb5 110,113-119,121,133-137
+  s_3b8cb612e4a9a4::t_a97e4377e04955 200,202-203,205,207-208,210-219
+  s_3b8cb612e4a9a4::t_274128afe9bc86 570-573,588-590
+  s_3b8cb612e4a9a4::t_776e6727762851 285
+  s_3b8cb612e4a9a4::t_5964badbd2c2d9 559-563,574-581,586-587,604,612-615,617-622,625-632,635-637,644-662
+  s_3b8cb612e4a9a4::t_b03db10f6e5610 2908-2910,2913-2914,2916,2919
+  s_3b8cb612e4a9a4::t_ad1390f4d0ee38 2929,2931-2934,2936
+  s_3b8cb612e4a9a4::t_2c277747eb725a 2949-3007
+  s_3b8cb612e4a9a4::t_25a928f62bddc4 237-240,243,248
+  s_3b8cb612e4a9a4::t_0579b69435b99b 322
+  s_3b8cb612e4a9a4::t_d137828dbf9f0c 3436-3438
+  s_3b8cb612e4a9a4::t_093045f496cbc7 564-569,582-585,591-603,605-611,616,623-624,633-634,638-643
+  s_3b8cb612e4a9a4::t_dbc44cd7333ab2 1254-1262,1264-1274
+  s_3b8cb612e4a9a4::t_29e492851aa69c 3667-3669,3671
+  s_3b8cb612e4a9a4::t_59908683ca2b52 4498-4611,4640,4644-4763,4765,4776,4780-4797
+  s_3b8cb612e4a9a4::t_213b5cbcf66da1 663-680
+  s_3b8cb612e4a9a4::t_4ea2242ec4706f 4612-4639,4641-4643
+  s_3b8cb612e4a9a4::t_7c7b5b472bf6df 3175
+  s_3b8cb612e4a9a4::t_13026f6b264d24 2911-2912,2915,2917-2918,2920-2921,2923-2926,2928,2930
+  s_3b8cb612e4a9a4::t_366d4a1b57e09c 3456
+logitrack_web/src/components/Sidebar.tsx
+  s_3b8cb612e4a9a4::t_c67c6f0908a389 27
+  s_3b8cb612e4a9a4::t_7ffcfe6cabad2b 65
+logitrack_web/CLAUDE.md
+  s_3b8cb612e4a9a4::t_6812336adf746e 62
+logitrack_core/internal/model/routing_config.go
+  s_3b8cb612e4a9a4::t_9650061a4fe5d9 95
+  s_3b8cb612e4a9a4::t_f3ebbf4d598764 49-54
+  s_3b8cb612e4a9a4::t_0071a66a5aac87 65-74
+  s_3b8cb612e4a9a4::t_4d373da383234e 93
+  s_3b8cb612e4a9a4::t_03cbee7b045b9e 94
+  s_3b8cb612e4a9a4::t_1da1b55d773d83 55-60
+  s_3b8cb612e4a9a4::t_8d799395c6c1ae 61-64
+  s_3b8cb612e4a9a4::t_f2536b7af1013f 45-48
+  s_3b8cb612e4a9a4::t_b44fd7ddf9d82d 92
+  s_3b8cb612e4a9a4::t_c3dacc0c88fcd7 96-97
+logitrack_core/internal/handler/routing.go
+  s_3b8cb612e4a9a4::t_f5e94501c22b29 161-172
+logitrack_core/internal/service/inter_branch_trip.go
+  s_3b8cb612e4a9a4::t_b2c830a5d64d09 66-81
+  s_3b8cb612e4a9a4::t_11a9a3b83a674f 6
+  s_3b8cb612e4a9a4::t_1930aa752437fa 51-52,56-57
+  s_3b8cb612e4a9a4::t_2462a67eb3a3e8 700-734
+logitrack_web/src/components/ReviewInterBranchModal.tsx
+  s_3b8cb612e4a9a4::t_950bdb65d998db 80-81,87-91,94,99
+  s_3b8cb612e4a9a4::t_46363f468975d3 111-141
+  s_3b8cb612e4a9a4::t_ff9d2a1ea95529 368,370-384,389,391,395,400-401,403-406,408,411,416
+  s_3b8cb612e4a9a4::t_edf5c243d558aa 4,11
+  s_3b8cb612e4a9a4::t_588d3c2adfc0f0 344-355
+  s_3b8cb612e4a9a4::t_929cadda37f068 369
+  s_3b8cb612e4a9a4::t_a1821e99c9a68a 193,198,205-206
+  s_3b8cb612e4a9a4::t_a20da2037d422e 159,162-167
+  s_3b8cb612e4a9a4::t_767a4db6906457 544
+  s_3b8cb612e4a9a4::t_1012589a2efc21 308-309
+  s_3b8cb612e4a9a4::t_8ba8c65b0b3ef8 197
+  s_3b8cb612e4a9a4::t_583a5f3f7bed3a 194-196,199-204
+  s_3b8cb612e4a9a4::t_9931be61872c44 311-321
+  s_3b8cb612e4a9a4::t_1274ddee2b6407 1
+  s_3b8cb612e4a9a4::t_4fa8512547c9bb 385-388,390,392-394,396-399,402,407,409-410,412-415,417-420,428-430
+  s_3b8cb612e4a9a4::t_103b8b810f7258 421-427
+logitrack_web/src/index.css
+  s_3b8cb612e4a9a4::t_66bf948a63102d 505,513-553,555-556,571-574
+  s_3b8cb612e4a9a4::t_842072674f7615 554,557-570
+  s_3b8cb612e4a9a4::t_dd6b2497b64b3b 503-504,506-512,575-580
+logitrack_core/internal/model/routing_plan.go
+  s_3b8cb612e4a9a4::t_d1264f27f51388 20-22,36-40
+logitrack_core/internal/model/routing.go
+  s_3b8cb612e4a9a4::t_2703a90f994945 179-184,196-197
+logitrack_core/internal/service/routing_config.go
+  s_3b8cb612e4a9a4::t_2596b0482edaad 63-65
+  s_3b8cb612e4a9a4::t_1e083af1171ce1 120-122
+  s_3b8cb612e4a9a4::t_6e77fb347fb0b6 60-62
+  s_3b8cb612e4a9a4::t_acb8143fd9f013 66-69
+  s_3b8cb612e4a9a4::t_72ffc2f50ceeb9 111-113
+  s_3b8cb612e4a9a4::t_0b6017390e5119 114-116
+  s_3b8cb612e4a9a4::t_84eba8dd0714c5 117-119
+logitrack_web/src/api/routing.ts
+  s_3b8cb612e4a9a4::t_945ba6b6b2de34 49
+  s_3b8cb612e4a9a4::t_f59727b10ced2a 257-260
+  s_3b8cb612e4a9a4::t_0460d180f5e203 50
+  s_3b8cb612e4a9a4::t_4902560023eb4a 52
+  s_3b8cb612e4a9a4::t_27215fed00f9db 53-54
+  s_3b8cb612e4a9a4::t_92613fafd31293 51
+  s_3b8cb612e4a9a4::t_6d043e6c09966d 109
+  s_3b8cb612e4a9a4::t_b7f7478d616b44 324
+  s_3b8cb612e4a9a4::t_74148d30db7d6a 134-137
+  s_3b8cb612e4a9a4::t_24d061e2e00fec 138-139
+  s_3b8cb612e4a9a4::t_41332c71287ead 268-271
+  s_3b8cb612e4a9a4::t_8cb33d2c49880f 323
+logitrack_web/src/pages/TripsCalendar.tsx
+  s_3b8cb612e4a9a4::t_ef706d3a63625f 3-4,11,16-22,25,27-28,31-33,36,39,43-44,46-51,55-59,62,66,72-73,76,81,88-112,122-127,133-142,144-153,155-156,158,172,224-234,237-243,245-248,250-251,253-262
+  s_3b8cb612e4a9a4::t_34ec0b4029861b 53,61
+  s_3b8cb612e4a9a4::t_864749e522ceb7 63-65,67-71,74-75,77-78
+  s_3b8cb612e4a9a4::t_9f9bd20a171f49 45
+  s_3b8cb612e4a9a4::t_95566fba709784 42
+  s_3b8cb612e4a9a4::t_462424cc6bf570 14
+  s_3b8cb612e4a9a4::t_6079b0849cab3a 143,154
+  s_3b8cb612e4a9a4::t_1323b8f3c0729c 159-165
+  s_3b8cb612e4a9a4::t_db17a3fe00cf93 1
+  s_3b8cb612e4a9a4::t_f6e79b5c771f88 166
+  s_3b8cb612e4a9a4::t_f1797a3f1847c0 173,175,181,192-202,204-223
+  s_3b8cb612e4a9a4::t_256d4bb7db41f3 2,5-8,10,12-13,15,29-30,34-35,37-38,40,52,54,79,83-84,86-87,113-115,117-121,128-129,278-280
+  s_3b8cb612e4a9a4::t_551651e6c9f039 9,23-24,26,41,60,80,82,85,116,130-132,157,167-171,174,176-180,182-191,203,235-236,244,249,252,263,267-277
+  s_3b8cb612e4a9a4::t_c43415af442009 264-266
+logitrack_web/src/utils/vehicleStatus.ts
+  s_3b8cb612e4a9a4::t_29a3f8c53ffc68 1-23
+logitrack_web/package.json
+  s_3b8cb612e4a9a4::t_796bc13d10db7a 20-23
+logitrack_core/internal/db/migrate.go
+  s_3b8cb612e4a9a4::t_e5d124f6c02d08 540-541,545-548
+  s_3b8cb612e4a9a4::t_a86887f5937efb 542-544
+  s_3b8cb612e4a9a4::t_b575a15b82c8c8 538-539
+  s_3b8cb612e4a9a4::t_1563a4f5523096 528-535
+  s_3b8cb612e4a9a4::t_80653132aadc2a 536-537
+logitrack_core/internal/service/inter_branch_trip_test.go
+  s_3b8cb612e4a9a4::t_83078b0c2f6ce3 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f1ebd8328abc9850600eff6a885cd4d36978a4f2",
+  "prompts": {},
+  "sessions": {
+    "s_0c1474516137b1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "974d4412-0470-4387-a814-d999049a182b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": null
+    },
+    "s_3b8cb612e4a9a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e91eb592-b092-40ab-adf8-dbde320d94c2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
