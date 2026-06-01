@@ -297,6 +297,33 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 
+	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
+	priorityLogRepo := repository.NewPriorityLogRepository()
+	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo, shipmentRepo, branchRepo)
+	slaSettingsRepo := repository.NewSLASettingsRepository()
+	// Migración de arranque: fuerza la lista EnabledStates a la lista canónica
+	// derivada de las constantes de estado del modelo, sobreescribiendo cualquier
+	// configuración obsoleta en disco (p. ej. una escrita antes de agregar at_hub).
+	if changed, err := slaSettingsRepo.SyncEnabledStates(); err != nil {
+		log.Printf("[SLA] no se pudo sincronizar EnabledStates: %v", err)
+	} else if changed {
+		log.Printf("[SLA] EnabledStates sincronizado a la lista canónica: %v", model.MonitoredStatusCodes())
+	} else {
+		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
+	}
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
+	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
+	// Attach to the clock callback so every admin clock tick triggers a check.
+	// The service runs in its own goroutine and is mutex-guarded against overlap.
+	_ = slaAnomalySvc // referenced via closure below
+	origSLARiskChecker := slaRiskChecker
+	slaRiskChecker = func() {
+		if origSLARiskChecker != nil {
+			origSLARiskChecker()
+		}
+		slaAnomalySvc.RunCheck()
+	}
+
 	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
 	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
 	dispatchVolumeChecker := service.NewDispatchVolumeChecker(
@@ -491,6 +518,9 @@ func main() {
 	protected.GET("/stats/volume-by-delivery-method", canViewStats, statsExtendedHandler.VolumeByDeliveryMethod)
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
+	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
+	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
 	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)

@@ -19,6 +19,8 @@ import {
   FileBarChart,
   FileText,
   ClipboardList,
+  TrendingUp,
+  Gauge,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -64,6 +66,7 @@ const SECTIONS: NavSection[] = [
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/calendar", label: "Calendario", icon: Calendar, roles: ["operator", "supervisor", "manager"] },
       { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
+      { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
     ],
   },
   {
@@ -87,6 +90,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "Configuración",
     items: [
+      { to: "/admin/sla-config", label: "Motor SLA", icon: Gauge, roles: ["admin"] },
       { to: "/routing-config", label: "Ruteo", icon: Sliders, roles: ["admin"] },
       { to: "/ml-config", label: "ML", icon: Brain, roles: ["admin"] },
       { to: "/fatigue-config", label: "Fatiga", icon: Activity, roles: ["admin"] },
