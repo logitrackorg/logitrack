@@ -5,12 +5,49 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
+
+// debugCacheTTL is the shortened average-cache lifetime used when SLA_DEBUG is
+// enabled, so manual time-travel tests don't require a server restart between
+// DB date manipulations.
+const debugCacheTTL = 10 * time.Second
+
+// sanitizeState normalises a status string for tolerant comparison: trims
+// hidden whitespace and lowercases it. Status codes are already lowercase, so
+// this is a no-op for clean data — but it protects against stray spaces or
+// case differences that could otherwise cause a silent allow-list miss.
+func sanitizeState(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// fallbackAvgHours is the synthetic average used when a state has no
+// historical data yet (cold start / new deployment). It prevents the
+// tolerance check from evaluating to zero, which would either skip the
+// shipment or trigger spuriously. At 1.5× tolerance, a shipment must
+// exceed 36 h in the state before being flagged — a safe first-time threshold.
+const fallbackAvgHours = 24.0
+
+// excludedStatuses is a Go-level security guard that mirrors the SQL NOT IN
+// clause. Belt-and-suspenders: if a row somehow slips past the SQL filter
+// (future schema change, query reuse, etc.) it is still discarded here.
+var excludedStatuses = map[string]bool{
+	"delivered":      true, // Entregado  — terminal
+	"returned":       true, // Devuelto   — terminal
+	"cancelled":      true, // Cancelado  — terminal
+	"lost":           true, // Extraviado — terminal
+	"destroyed":      true, // Destruido  — terminal
+	"draft":          true, // Borrador   — pre-operativo
+	"pending_payment":true, // Pago pendiente — pre-operativo
+	"expired":        true, // Expirado   — terminal
+}
 
 // priorityOrder defines escalation steps from lowest to highest.
 var priorityOrder = []string{"baja", "media", "alta"}
@@ -95,6 +132,11 @@ type SLAAnomalyService struct {
 	mu      sync.Mutex // guards against concurrent RunCheck invocations
 	running bool
 
+	// debugMode is read once at construction from the SLA_DEBUG env var. When
+	// true, the average cache TTL is forced to debugCacheTTL (10 s) so manual
+	// time-travel tests reflect fresh data without a restart.
+	debugMode bool
+
 	// Average cache — avoids recomputing the full aggregation every tick.
 	// The TTL is read from SLASettings.CacheIntervalMinutes at check time.
 	cacheMu    sync.RWMutex
@@ -107,10 +149,15 @@ func NewSLAAnomalyService(
 	logRepo *repository.PriorityLogRepository,
 	settingsRepo *repository.SLASettingsRepository,
 ) *SLAAnomalyService {
+	debug := strings.EqualFold(strings.TrimSpace(os.Getenv("SLA_DEBUG")), "true")
+	if debug {
+		log.Printf("[SLA][debug] SLA_DEBUG activo — TTL de caché reducido a %s", debugCacheTTL)
+	}
 	return &SLAAnomalyService{
 		db:           db,
 		logRepo:      logRepo,
 		settingsRepo: settingsRepo,
+		debugMode:    debug,
 	}
 }
 
@@ -144,6 +191,9 @@ func (s *SLAAnomalyService) runCheck() error {
 	cfg := s.settingsRepo.Get()
 
 	cacheTTL := time.Duration(cfg.CacheIntervalMinutes) * time.Minute
+	if s.debugMode {
+		cacheTTL = debugCacheTTL // bypass long cache during manual time-travel tests
+	}
 	avgs, err := s.averages(cacheTTL)
 	if err != nil {
 		return fmt.Errorf("computing averages: %w", err)
@@ -153,9 +203,11 @@ func (s *SLAAnomalyService) runCheck() error {
 	}
 
 	// Build allow-list set from EnabledStates for O(1) lookup.
+	// Keys are sanitised (trimmed + lowercased) so the comparison against the
+	// shipment status is tolerant to stray whitespace / case differences.
 	allowed := make(map[string]bool, len(cfg.EnabledStates))
 	for _, st := range cfg.EnabledStates {
-		allowed[st] = true
+		allowed[sanitizeState(st)] = true
 	}
 
 	type activeShipment struct {
@@ -193,19 +245,44 @@ func (s *SLAAnomalyService) runCheck() error {
 		return fmt.Errorf("iterating active shipments: %w", err)
 	}
 
-	now := time.Now()
+	// CRITICAL: measure dwell with clock.Now(), NOT time.Now(). Shipment
+	// updated_at timestamps are written using clock.Now(), which honours the
+	// admin "advance time" override. Using real time.Now() here made shipments
+	// that transitioned UNDER an active override (e.g. arrivals at destination
+	// hub during a +7d jump) have a future updated_at → negative dwell → never
+	// flagged. clock.Now() keeps both timestamps on the same timeline.
+	now := clock.Now()
 	for _, sh := range candidates {
-		// AC1 — only evaluate states the admin has enabled.
-		if !allowed[sh.status] {
+		// Sanitise once and use the normalised value for every comparison.
+		st := sanitizeState(sh.status)
+
+		// Security guard — belt-and-suspenders exclusion of terminal and
+		// pre-operative states even if they somehow passed the SQL filter.
+		if excludedStatuses[st] {
 			continue
 		}
 
-		avg, ok := avgs[sh.status]
+		// Allow-list check — only evaluate states the admin has enabled.
+		if !allowed[st] {
+			continue
+		}
+
+		avg, ok := avgs[st]
+		// Cold-start fallback: when no historical data exists for this state
+		// (new deployment or first-ever shipment through it), use a safe 24-hour
+		// synthetic average. At the default 1.5× tolerance the engine will flag
+		// the shipment after 36 h — conservative but avoids silent gaps.
 		if !ok || avg <= 0 {
-			continue // no historical data for this status
+			avg = fallbackAvgHours
 		}
 
 		dwellHours := now.Sub(sh.updatedAt).Hours()
+
+		// DEBUG TEMPORAL — quitar tras diagnosticar el motor SLA.
+		// Muestra qué estado reconoce Go y los valores que entran al umbral.
+		log.Printf("[SLA][debug] Evaluando envío %s en estado: %s - Promedio Histórico: %.2fh - Tiempo Transcurrido: %.2fh (umbral: %.2fh)",
+			sh.trackingID, st, avg, dwellHours, cfg.ToleranceMultiplier*avg)
+
 		if dwellHours <= cfg.ToleranceMultiplier*avg {
 			continue // within expected range
 		}

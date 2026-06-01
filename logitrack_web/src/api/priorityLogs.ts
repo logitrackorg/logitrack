@@ -16,6 +16,12 @@ export interface PriorityLog {
   priority_from: string;   // "baja" | "media" | "alta"
   priority_to: string;
   reason: string;
+  // Enriched fields (cruzados con el envío en el backend)
+  sender_name: string;
+  receiver_name: string;
+  origin_city: string;
+  current_branch: string;     // nombre de sucursal (display)
+  current_branch_id: string;  // id de sucursal (para filtrar)
 }
 
 export interface PriorityLogsResponse {

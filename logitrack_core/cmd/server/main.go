@@ -299,8 +299,18 @@ func main() {
 
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
-	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo)
+	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo, shipmentRepo, branchRepo)
 	slaSettingsRepo := repository.NewSLASettingsRepository()
+	// Migración de arranque: fuerza la lista EnabledStates a la lista canónica
+	// derivada de las constantes de estado del modelo, sobreescribiendo cualquier
+	// configuración obsoleta en disco (p. ej. una escrita antes de agregar at_hub).
+	if changed, err := slaSettingsRepo.SyncEnabledStates(); err != nil {
+		log.Printf("[SLA] no se pudo sincronizar EnabledStates: %v", err)
+	} else if changed {
+		log.Printf("[SLA] EnabledStates sincronizado a la lista canónica: %v", model.MonitoredStatusCodes())
+	} else {
+		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
+	}
 	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
 	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
 	// Attach to the clock callback so every admin clock tick triggers a check.

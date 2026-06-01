@@ -72,3 +72,43 @@ func (r *SLASettingsRepository) Update(cfg model.SLASettings) error {
 	}
 	return os.Rename(tmp, r.path)
 }
+
+// SyncEnabledStates force-overwrites the persisted EnabledStates array with the
+// canonical list derived from the model Status constants, preserving every
+// other field. Intended to be called once at server startup so that a stale
+// on-disk configuration (e.g. one written before a state code was added to the
+// monitored list) can never silently exclude active shipments.
+//
+// Returns true when the on-disk list actually changed (useful for logging),
+// false when it was already in sync.
+//
+// NOTE: this deliberately clobbers any admin customisation of EnabledStates.
+// The other tunables (tolerance, ceiling, cache interval) are left untouched.
+func (r *SLASettingsRepository) SyncEnabledStates() (bool, error) {
+	cur := r.Get() // returns stored config, or defaults if no file yet
+	canonical := model.MonitoredStatusCodes()
+
+	if equalStringSlices(cur.EnabledStates, canonical) {
+		return false, nil // already in sync — no write needed
+	}
+
+	cur.EnabledStates = canonical
+	if err := r.Update(cur); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// equalStringSlices reports whether two slices contain the same elements in the
+// same order.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
