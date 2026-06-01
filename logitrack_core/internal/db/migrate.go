@@ -528,6 +528,12 @@ func RunMigrations(db *sql.DB) error {
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
 
+		-- Parametrización de reprogramaciones vía chatbot
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
+		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedule_days INTEGER NOT NULL DEFAULT 3;
+		UPDATE system_config SET max_reschedule_days = 3 WHERE id = 1 AND (max_reschedule_days IS NULL OR max_reschedule_days = 0);
+
 		-- Calendario de viajes: tiempos planificados en inter_branch_trips
 		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS scheduled_departure_at TIMESTAMPTZ;
 		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS estimated_arrival_at   TIMESTAMPTZ;
@@ -548,7 +554,6 @@ func RunMigrations(db *sql.DB) error {
 		-- Plan multi-día: offset y flag de pronóstico en routing_plans
 		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS horizon_offset INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS is_forecast BOOLEAN NOT NULL DEFAULT false;
-
 		-- Recuperación de contraseña vía OTP (LOGITRACK-397)
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
 

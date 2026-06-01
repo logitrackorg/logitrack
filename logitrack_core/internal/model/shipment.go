@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"  
+	"time"
+)
 
 type Status string
 
@@ -348,7 +351,7 @@ type ChatbotMetadata struct {
 }
 
 // CanReschedule checks if shipment can be rescheduled via chatbot (US3)
-func (s *Shipment) CanReschedule() (bool, string) {
+/*func (s *Shipment) CanReschedule() (bool, string) {
 	if s.Status == StatusOutForDelivery {
 		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
 	}
@@ -362,7 +365,35 @@ func (s *Shipment) CanReschedule() (bool, string) {
 	}
 
 	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
-		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			s.ChatbotMetadata.MaxReschedules,
+		)
+	}
+
+	return true, ""
+}*/
+
+// ✅ CÓDIGO NUEVO:
+func (s *Shipment) CanReschedule(maxReschedules int) (bool, string) {
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser modificado"
+	}
+
+	if s.ChatbotMetadata == nil {
+		return true, ""
+	}
+
+	// ✅ Usar el parámetro maxReschedules, NO el metadata
+	if s.ChatbotMetadata.RescheduleCount >= maxReschedules {
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			maxReschedules,
+		)
 	}
 
 	return true, ""
@@ -447,7 +478,7 @@ func (s *Shipment) CanRequestPickup() (bool, string) {
 }
 
 // GetAvailableRescheduleDates calculates available dates for rescheduling (US3 CA-01 & CA-03)
-func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
+func (s *Shipment) GetAvailableRescheduleDates(maxDays int) []time.Time {
 	if s.EstimatedDeliveryAt == nil {
 		return []time.Time{}
 	}
@@ -458,10 +489,10 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)
-	maxDate := baseDate.AddDate(0, 0, 3)
+	maxDate := baseDate.AddDate(0, 0, maxDays)
 
 	var dates []time.Time
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= maxDays; i++ {
 		newDate := baseDate.AddDate(0, 0, i)
 		if newDate.After(today) && !newDate.After(maxDate) {
 			dates = append(dates, newDate)
@@ -471,12 +502,29 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	return dates
 }
 
-// InitializeChatbotMetadata sets up chatbot metadata if not present
+// InitializeChatbotMetadata sets up chatbot metadata if not present.
+// maxReschedules should come from SystemConfig.MaxReschedules.
+/*func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
+	if s.ChatbotMetadata == nil {
+		s.ChatbotMetadata = &ChatbotMetadata{
+			RescheduleCount: 0,
+			MaxReschedules:  maxReschedules, 
+		}
+
+		if s.EstimatedDeliveryAt != nil {
+			originalDate := *s.EstimatedDeliveryAt
+			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
+		}
+		}else {		
+			s.ChatbotMetadata.MaxReschedules = maxReschedules
+	}
+	}*/
+
+	// ✅ CÓDIGO NUEVO - COPIAR Y PEGAR:
 func (s *Shipment) InitializeChatbotMetadata() {
 	if s.ChatbotMetadata == nil {
 		s.ChatbotMetadata = &ChatbotMetadata{
 			RescheduleCount: 0,
-			MaxReschedules:  2,
 		}
 
 		if s.EstimatedDeliveryAt != nil {

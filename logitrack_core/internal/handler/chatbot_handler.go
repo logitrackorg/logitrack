@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -40,14 +42,22 @@ type ChatbotHandler struct {
 	branchRepo   repository.BranchRepository
 	notifSvc     *service.NotificationService
 	shipmentSvc  *service.ShipmentService
+	sysConfigSvc *service.SystemConfigService
 }
 
-func NewChatbotHandler(shipmentRepo repository.ShipmentRepository, branchRepo repository.BranchRepository, notifSvc *service.NotificationService, shipmentSvc *service.ShipmentService) *ChatbotHandler {
+func NewChatbotHandler(
+	shipmentRepo repository.ShipmentRepository, 
+	branchRepo repository.BranchRepository, 
+	notifSvc *service.NotificationService, 
+	shipmentSvc *service.ShipmentService,
+	sysConfigSvc *service.SystemConfigService, 
+) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
 		branchRepo:   branchRepo,
 		notifSvc:     notifSvc,
 		shipmentSvc:  shipmentSvc,
+		sysConfigSvc: sysConfigSvc, 
 	}
 }
 
@@ -238,6 +248,67 @@ type RescheduleOptionsResponse struct {
 // @Failure      400  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
 // @Router       /public/chatbot/reschedule/options [get]
+/*func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
+	var req RescheduleOptionsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
+		return
+	}
+
+	// Autenticar
+	shipment, err := h.shipmentRepo.AuthenticateRecipient(repository.AuthenticateRecipientCmd{
+		TrackingID:   req.TrackingID,
+		RecipientDNI: req.RecipientDNI,
+	})
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Envío no encontrado"})
+		return
+	}
+
+	log.Printf("🔍 [CHATBOT] sysConfigSvc is nil? %v", h.sysConfigSvc == nil)
+	maxReschedules := 2
+	maxRescheduleDays := 3
+	if h.sysConfigSvc != nil {
+		cfg := h.sysConfigSvc.Get()
+		log.Printf("🔍 Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d", 
+			cfg.MaxReschedules, cfg.MaxRescheduleDays)
+		maxReschedules = cfg.MaxReschedules
+		maxRescheduleDays = cfg.MaxRescheduleDays
+	}else {
+		log.Printf("⚠️ sysConfigSvc es nil, usando defaults")
+	}
+	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d", 
+		maxReschedules, maxRescheduleDays) 
+	// Inicializar metadata con configuración del sistema (CA03)
+	shipment.InitializeChatbotMetadata(maxReschedules) 
+
+	// Verificar si puede reprogramar (CA04/CA05)
+	canReschedule, message := shipment.CanReschedule()
+
+	response := RescheduleOptionsResponse{
+		Success:         true,
+		CanReschedule:   canReschedule,
+		RescheduleCount: shipment.ChatbotMetadata.RescheduleCount,
+		MaxReschedules:  shipment.ChatbotMetadata.MaxReschedules,
+		Message:         message,
+	}
+
+	if canReschedule {
+		dates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
+		dateStrings := make([]string, len(dates))
+		for i, d := range dates {
+			dateStrings[i] = d.Format("2006-01-02")
+		}
+		
+		response.AvailableDates = dateStrings
+	}
+	log.Printf("📤 [CHATBOT] Response a enviar: RescheduleCount=%d, MaxReschedules=%d, Dates=%d",
+		response.RescheduleCount, response.MaxReschedules, len(response.AvailableDates))
+
+	c.JSON(http.StatusOK, response)
+}*/
+
 func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 	var req RescheduleOptionsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -256,29 +327,47 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		return
 	}
 
-	// Verificar si puede reprogramar
-	canReschedule, message := shipment.CanReschedule()
+	// ✅ Leer configuración ACTUAL del sistema
+	log.Printf("🔍 [CHATBOT] sysConfigSvc is nil? %v", h.sysConfigSvc == nil)
+	maxReschedules := 2
+	maxRescheduleDays := 3
+	if h.sysConfigSvc != nil {
+		cfg := h.sysConfigSvc.Get()
+		log.Printf("✅ [CHATBOT] Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d", 
+			cfg.MaxReschedules, cfg.MaxRescheduleDays)
+		maxReschedules = cfg.MaxReschedules
+		maxRescheduleDays = cfg.MaxRescheduleDays
+	} else {
+		log.Printf("⚠️ sysConfigSvc es nil, usando defaults")
+	}
+	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d", 
+		maxReschedules, maxRescheduleDays)
 
-	// Inicializar metadata si no existe
+	// ✅ CAMBIO 1: Inicializar metadata SIN parámetro
 	shipment.InitializeChatbotMetadata()
+
+	// ✅ CAMBIO 2: Verificar si puede reprogramar CON parámetro
+	canReschedule, message := shipment.CanReschedule(maxReschedules)
 
 	response := RescheduleOptionsResponse{
 		Success:         true,
 		CanReschedule:   canReschedule,
 		RescheduleCount: shipment.ChatbotMetadata.RescheduleCount,
-		MaxReschedules:  shipment.ChatbotMetadata.MaxReschedules,
+		MaxReschedules:  maxReschedules, // ✅ CAMBIO 3: Usar variable, NO metadata
 		Message:         message,
 	}
 
 	if canReschedule {
-		// Obtener fechas disponibles
-		dates := shipment.GetAvailableRescheduleDates()
+		dates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
 		dateStrings := make([]string, len(dates))
 		for i, d := range dates {
 			dateStrings[i] = d.Format("2006-01-02")
 		}
+		
 		response.AvailableDates = dateStrings
 	}
+	log.Printf("📤 [CHATBOT] Response a enviar: RescheduleCount=%d, MaxReschedules=%d, Dates=%d",
+		response.RescheduleCount, response.MaxReschedules, len(response.AvailableDates))
 
 	c.JSON(http.StatusOK, response)
 }
@@ -316,19 +405,57 @@ func (h *ChatbotHandler) RescheduleDelivery(c *gin.Context) {
 		return
 	}
 
-	// Parsear fecha
 	newDate, err := time.Parse("2006-01-02", req.NewDeliveryDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de fecha inválido. Usa YYYY-MM-DD"})
 		return
 	}
 
-	shipment, err := h.shipmentRepo.RescheduleDelivery(repository.RescheduleDeliveryCmd{
-		TrackingID:      req.TrackingID,
-		RecipientDNI:    req.RecipientDNI,
-		NewDeliveryDate: newDate,
-		ChangedBy:       "chatbot-recipient:" + req.RecipientDNI,
-		Timestamp:       time.Now(),
+	shipment, err := h.shipmentRepo.AuthenticateRecipient(repository.AuthenticateRecipientCmd{
+		TrackingID:   req.TrackingID,
+		RecipientDNI: req.RecipientDNI,
+	})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Envío no encontrado"})
+		return
+	}
+
+	// ✅ Declarar AMBAS variables
+	maxRescheduleDays := 3
+	maxReschedules := 2  // ✅ AGREGAR ESTA LÍNEA
+	
+	if h.sysConfigSvc != nil {
+		cfg := h.sysConfigSvc.Get()
+		maxRescheduleDays = cfg.MaxRescheduleDays
+		maxReschedules = cfg.MaxReschedules  // ✅ AGREGAR ESTA LÍNEA
+	}
+
+	baseDate := shipment.EstimatedDeliveryAt
+	if shipment.ChatbotMetadata != nil && shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+		baseDate = shipment.ChatbotMetadata.OriginalDeliveryDate
+	}
+
+	if baseDate != nil {
+		maxAllowedDate := baseDate.AddDate(0, 0, maxRescheduleDays)
+		if newDate.After(maxAllowedDate) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf(
+					"La fecha seleccionada excede el rango permitido de %d días desde la fecha original",
+					maxRescheduleDays,
+				),
+			})
+			return
+		}
+	}
+
+	shipment, err = h.shipmentRepo.RescheduleDelivery(repository.RescheduleDeliveryCmd{
+		TrackingID:        req.TrackingID,
+		RecipientDNI:      req.RecipientDNI,
+		NewDeliveryDate:   newDate,
+		ChangedBy:         "chatbot-recipient:" + req.RecipientDNI,
+		Timestamp:         time.Now(),
+		MaxReschedules:    maxReschedules,    // ✅ Ahora existe
+		MaxRescheduleDays: maxRescheduleDays,
 	})
 
 	if err != nil {
@@ -467,7 +594,7 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 }
 
 // getAvailableActions determina qué acciones puede realizar el destinatario
-func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
+/*func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	actions := []string{}
 
 	if canPickup, _ := shipment.CanRequestPickup(); canPickup {
@@ -475,6 +602,32 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	}
 
 	if canReschedule, _ := shipment.CanReschedule(); canReschedule {
+		actions = append(actions, "reschedule")
+	}
+
+	if canReject, _ := shipment.CanReject(); canReject {
+		actions = append(actions, "cancel")
+	}
+
+	return actions
+}*/
+
+// ✅ CÓDIGO NUEVO:
+func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
+	actions := []string{}
+
+	if canPickup, _ := shipment.CanRequestPickup(); canPickup {
+		actions = append(actions, "request_pickup")
+	}
+
+	// ✅ Obtener maxReschedules de la configuración
+	maxReschedules := 2
+	if h.sysConfigSvc != nil {
+		maxReschedules = h.sysConfigSvc.Get().MaxReschedules
+	}
+
+	// ✅ Pasar maxReschedules como parámetro
+	if canReschedule, _ := shipment.CanReschedule(maxReschedules); canReschedule {
 		actions = append(actions, "reschedule")
 	}
 
