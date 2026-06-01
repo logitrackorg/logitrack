@@ -490,5 +490,8 @@ func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
 			originalDate := *s.EstimatedDeliveryAt
 			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
 		}
+		}else {
+		
+		s.ChatbotMetadata.MaxReschedules = maxReschedules
 	}
-}
+	}

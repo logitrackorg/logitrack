@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -265,16 +266,22 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		return
 	}
 
-	
+	log.Printf("🔍 [CHATBOT] sysConfigSvc is nil? %v", h.sysConfigSvc == nil)
 	maxReschedules := 2
 	maxRescheduleDays := 3
 	if h.sysConfigSvc != nil {
-		cfg := h.sysConfigSvc.Get()  
+		cfg := h.sysConfigSvc.Get()
+		log.Printf("🔍 Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d", 
+			cfg.MaxReschedules, cfg.MaxRescheduleDays)
 		maxReschedules = cfg.MaxReschedules
 		maxRescheduleDays = cfg.MaxRescheduleDays
-}
+	}else {
+		log.Printf("⚠️ sysConfigSvc es nil, usando defaults")
+	}
+	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d", 
+		maxReschedules, maxRescheduleDays) 
 	// Inicializar metadata con configuración del sistema (CA03)
-	shipment.InitializeChatbotMetadata(maxReschedules) // ✅ CON PARÁMETRO
+	shipment.InitializeChatbotMetadata(maxReschedules) 
 
 	// Verificar si puede reprogramar (CA04/CA05)
 	canReschedule, message := shipment.CanReschedule()
@@ -293,8 +300,11 @@ func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 		for i, d := range dates {
 			dateStrings[i] = d.Format("2006-01-02")
 		}
+		
 		response.AvailableDates = dateStrings
 	}
+	log.Printf("📤 [CHATBOT] Response a enviar: RescheduleCount=%d, MaxReschedules=%d, Dates=%d",
+		response.RescheduleCount, response.MaxReschedules, len(response.AvailableDates))
 
 	c.JSON(http.StatusOK, response)
 }
