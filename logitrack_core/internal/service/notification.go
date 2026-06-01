@@ -573,6 +573,20 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsern
 		return
 	}
 
+	// Crear bloqueo de pantalla para el chofer ANTES del early return (LOGITRACK-499).
+	// Aplica siempre, incluso si el chofer no tiene sucursal (ej: intersucursal).
+	if s.fatigueBlockRepo != nil {
+		var tripID *string
+		if s.interBranchTripSvc != nil {
+			if trip, err := s.interBranchTripSvc.GetActiveByDriver(driverID); err == nil {
+				tripID = &trip.ID
+			}
+		}
+		if err := s.fatigueBlockRepo.Create(driverID, tripID); err != nil {
+			log.Printf("[NotificationService] NotifyFatigueAlert: error creando fatigue_block: %v", err)
+		}
+	}
+
 	supervisors, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})
 	if err != nil {
 		log.Printf("[NotificationService] NotifyFatigueAlert GetUsersByBranchAndRoles error: %v", err)
@@ -600,19 +614,6 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsern
 			log.Printf("[NotificationService] NotifyFatigueAlert Create error for supervisor %s: %v", sup.ID, err)
 		} else if s.hub != nil {
 			s.hub.Push(n.UserID)
-		}
-	}
-
-	// Crear bloqueo de pantalla para el chofer (LOGITRACK-499)
-	if s.fatigueBlockRepo != nil {
-		var tripID *string
-		if s.interBranchTripSvc != nil {
-			if trip, err := s.interBranchTripSvc.GetActiveByDriver(driverID); err == nil {
-				tripID = &trip.ID
-			}
-		}
-		if err := s.fatigueBlockRepo.Create(driverID, tripID); err != nil {
-			log.Printf("[NotificationService] NotifyFatigueAlert: error creando fatigue_block: %v", err)
 		}
 	}
 }

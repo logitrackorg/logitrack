@@ -505,12 +505,20 @@ func (h *SupervisorFatigueHandler) GetBlockedDrivers(c *gin.Context) {
 		return
 	}
 
-	drivers := h.authRepo.ListByRole(model.RoleDriver, branchID)
+	allBlocks, err := h.fatigueBlockRepo.ListAllActive()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener bloqueos activos"})
+		return
+	}
 	blockedIDs := make([]string, 0)
-	for _, d := range drivers {
-		if block, err := h.fatigueBlockRepo.GetActive(d.ID); err == nil && block != nil {
-			blockedIDs = append(blockedIDs, d.ID)
+	for _, b := range allBlocks {
+		if branchID != "" {
+			driver, err := h.authRepo.GetUserByID(b.DriverID)
+			if err != nil || (driver.BranchID != "" && driver.BranchID != branchID) {
+				continue
+			}
 		}
+		blockedIDs = append(blockedIDs, b.DriverID)
 	}
 	c.JSON(http.StatusOK, gin.H{"blocked_driver_ids": blockedIDs})
 }
