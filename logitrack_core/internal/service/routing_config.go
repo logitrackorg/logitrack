@@ -57,6 +57,16 @@ func applyRoutingConfigDefaults(cfg *model.RoutingConfig) {
 	if cfg.LastMilePackingStrategy == "" {
 		cfg.LastMilePackingStrategy = d.LastMilePackingStrategy
 	}
+	if cfg.InterBranchAvgSpeedKmh == 0 {
+		cfg.InterBranchAvgSpeedKmh = d.InterBranchAvgSpeedKmh
+	}
+	if cfg.PlanningHorizonDays == 0 {
+		cfg.PlanningHorizonDays = d.PlanningHorizonDays
+	}
+	// inter_branch_dispatch_hour: 0 es medianoche (válido), así que solo aplicamos
+	// el default si el campo no aparece en la config de la DB (nunca fue seteado).
+	// Como 0 es un valor válido, no podemos distinguir "no seteado" de "medianoche";
+	// en la práctica default=8 y el admin lo cambia si quiere medianoche.
 }
 
 func validateRoutingConfig(cfg model.RoutingConfig) error {
@@ -97,6 +107,18 @@ func validateRoutingConfig(cfg model.RoutingConfig) error {
 	case model.PackingStrategyBalanced, model.PackingStrategyMaximizeCapacity:
 	default:
 		return fmt.Errorf("last_mile_packing_strategy debe ser 'balanced' o 'maximize_capacity'")
+	}
+	if cfg.InterBranchDispatchHour < 0 || cfg.InterBranchDispatchHour > 23 {
+		return fmt.Errorf("inter_branch_dispatch_hour debe estar entre 0 y 23")
+	}
+	if cfg.InterBranchAvgSpeedKmh < 20 || cfg.InterBranchAvgSpeedKmh > 120 {
+		return fmt.Errorf("inter_branch_avg_speed_kmh debe estar entre 20 y 120")
+	}
+	if cfg.InterBranchStopMinutes < 0 || cfg.InterBranchStopMinutes > 1440 {
+		return fmt.Errorf("inter_branch_stop_minutes debe estar entre 0 y 1440")
+	}
+	if cfg.PlanningHorizonDays < 1 || cfg.PlanningHorizonDays > 7 {
+		return fmt.Errorf("planning_horizon_days debe estar entre 1 y 7")
 	}
 	return nil
 }

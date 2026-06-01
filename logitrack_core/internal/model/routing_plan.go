@@ -17,6 +17,9 @@ const (
 // Cada sucursal activa tiene su BranchPlan con las asignaciones de última
 // milla e inter-sucursal. El apply es por sucursal — operator/supervisor
 // solo aplican los items de su propia sucursal.
+//
+// HorizonOffset=0 → plan aplicable (hoy). HorizonOffset>0 → pronóstico
+// read-only (no se puede aplicar). Los pronósticos se regeneran cada día.
 type GlobalRoutingPlan struct {
 	ID              string       `json:"id"`
 	PlanDate        string       `json:"plan_date"`             // YYYY-MM-DD
@@ -30,6 +33,11 @@ type GlobalRoutingPlan struct {
 	// AppliedBranches lista las sucursales que ya completaron su apply.
 	// Cuando todas las sucursales del plan están en esta lista, el plan pasa a "applied".
 	AppliedBranches []string `json:"applied_branches"`
+
+	// HorizonOffset es la cantidad de días desde hoy. 0=hoy (aplicable), 1/2=pronóstico.
+	HorizonOffset int  `json:"horizon_offset"`
+	// IsForecast=true cuando HorizonOffset>0. Los pronósticos no se pueden aplicar.
+	IsForecast    bool `json:"is_forecast"`
 }
 
 // NetworkInsights agrupa el análisis cross-branch del plan global.

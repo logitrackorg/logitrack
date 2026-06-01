@@ -35,6 +35,7 @@ export interface TripStop {
   unloaded_by?: string;
   completed_at?: string;
   completed_by_user_id?: string;
+  estimated_arrival_at?: string; // ISO timestamp planificado
 }
 
 export interface InterBranchTrip {
@@ -55,6 +56,8 @@ export interface InterBranchTrip {
   started_at?: string;
   completed_at?: string;
   finished_by_user_id?: string;
+  scheduled_departure_at?: string; // ISO timestamp planificado (de la planificación)
+  estimated_arrival_at?: string;   // ISO timestamp de llegada estimada
 }
 
 export interface TripQRResponse {
@@ -91,6 +94,13 @@ export const interBranchTripsApi = {
   listByBranch: (branchId?: string) => {
     const url = branchId ? `/inter-branch-trips?branch_id=${branchId}` : "/inter-branch-trips";
     return api.get<InterBranchTrip[]>(url).then((r) => r.data);
+  },
+
+  // Devuelve viajes del rango de fechas para el calendario. from/to en formato YYYY-MM-DD.
+  calendar: (from: string, to: string, branchId?: string) => {
+    const params = new URLSearchParams({ from, to });
+    if (branchId) params.set("branch_id", branchId);
+    return api.get<InterBranchTrip[]>(`/inter-branch-trips/calendar?${params}`).then((r) => r.data);
   },
 
   // Operator: get trip by ID (for reception page)

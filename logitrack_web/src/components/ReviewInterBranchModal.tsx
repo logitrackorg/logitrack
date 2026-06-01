@@ -1,13 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Clock } from "lucide-react";
 import type { InterBranchAssignment, AssignmentStop } from "../api/routing";
 import type { Branch } from "../api/branches";
 import { branchLabelById } from "../api/branches";
 import type { Shipment } from "../api/shipments";
 import { PriorityBadge } from "./PriorityBadge";
 import { DISPATCH_RULE_LABELS } from "../api/routing";
+import { fmtMinutesAsTime } from "../utils/date";
 
 // Leaflet default icon fix (idempotent)
 delete (L.Icon.Default.prototype as typeof L.Icon.Default.prototype & { _getIconUrl?: unknown })
@@ -76,19 +77,26 @@ function InterBranchRouteMap({
     }
 
     // Destinos
+    const originId = originBranch?.id ?? "";
+    let stopNum = 1;
     stops.forEach((branchId, i) => {
       const b = branches.find((x) => x.id === branchId);
       if (!b || b.latitude == null || b.longitude == null) return;
       const pt: [number, number] = [b.latitude, b.longitude];
       points.push(pt);
+      // Si la parada es el origen = retorno backhaul → ↩; sino número de parada.
+      const isReturn = branchId === originId && i === stops.length - 1;
+      const label = isReturn ? "↩" : String(stopNum++);
+      const bg = isReturn ? "#059669" : "#0f766e";
+      const popupText = isReturn ? `<b>Retorno: ${b.name}</b>` : `<b>Parada ${label}: ${b.name}</b>`;
       L.marker(pt, {
         icon: L.divIcon({
-          html: `<div style="width:28px;height:28px;background:#0f766e;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i + 1}</div>`,
+          html: `<div style="width:28px;height:28px;background:${bg};border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:${isReturn ? 14 : 11}px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${label}</div>`,
           className: "",
           iconSize: [28, 28],
           iconAnchor: [14, 28],
         }),
-      }).bindPopup(`<b>Parada ${i + 1}: ${b.name}</b>`).addTo(layer);
+      }).bindPopup(popupText).addTo(layer);
     });
 
     if (points.length < 2) {
@@ -100,26 +108,37 @@ function InterBranchRouteMap({
       map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
     } catch { /* bounds vacíos */ }
 
-    // Trazar ruta real por carretera vía OSRM; fallback a línea recta si falla
-    const osrmCoords = points.map(([lat, lng]) => `${lng},${lat}`).join(";");
-    fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!layerRef.current) return;
-        if (data.code === "Ok" && data.routes?.[0]) {
-          const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
-            (c: number[]) => [c[1], c[0]] as [number, number],
-          );
-          L.polyline(coords, { color: "#1e3a5f", weight: 3, opacity: 0.75, dashArray: "7,5" }).addTo(layerRef.current);
-        } else {
-          L.polyline(points, { color: "#1e3a5f", weight: 3, opacity: 0.65, dashArray: "7,5" }).addTo(layerRef.current);
-        }
-      })
-      .catch(() => {
-        if (layerRef.current) {
-          L.polyline(points, { color: "#1e3a5f", weight: 3, opacity: 0.65, dashArray: "7,5" }).addTo(layerRef.current);
-        }
-      });
+    // Trazar cada segmento individualmente para que en round-trips (A→B→A)
+    // la ida y la vuelta sean visibles aunque compartan el mismo recorrido.
+    // Segmento i = points[i] → points[i+1].
+    const segmentColors = ["#1e3a5f", "#0f766e", "#b45309", "#7c3aed"];
+    const fetchSegment = (i: number) => {
+      if (!layerRef.current || i >= points.length - 1) return;
+      const segPoints = [points[i], points[i + 1]];
+      const color = segmentColors[i % segmentColors.length];
+      const osrmCoords = segPoints.map(([lat, lng]) => `${lng},${lat}`).join(";");
+      fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!layerRef.current) return;
+          if (data.code === "Ok" && data.routes?.[0]) {
+            const coords: [number, number][] = data.routes[0].geometry.coordinates.map(
+              (c: number[]) => [c[1], c[0]] as [number, number],
+            );
+            L.polyline(coords, { color, weight: 3, opacity: 0.80, dashArray: i === 0 ? undefined : "7,5" }).addTo(layerRef.current);
+          } else {
+            L.polyline(segPoints, { color, weight: 3, opacity: 0.65, dashArray: i === 0 ? undefined : "7,5" }).addTo(layerRef.current);
+          }
+          fetchSegment(i + 1);
+        })
+        .catch(() => {
+          if (layerRef.current) {
+            L.polyline(segPoints, { color, weight: 3, opacity: 0.65, dashArray: i === 0 ? undefined : "7,5" }).addTo(layerRef.current);
+          }
+          fetchSegment(i + 1);
+        });
+    };
+    fetchSegment(0);
   }, [originBranch, stops, branches]);
 
   return (
@@ -137,8 +156,15 @@ export interface ReviewInterBranchModalProps {
   shipments: Map<string, Shipment>;
   applying?: boolean;
   onClose: () => void;
-  onConfirm: (additionalStops: AssignmentStop[]) => void;
+  onConfirm: (additionalStops: AssignmentStop[], departureMin: number) => void;
 }
+
+const minToHHMM = (m: number) =>
+  `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m) % 60).padStart(2, "0")}`;
+const hhmmToMin = (s: string) => {
+  const [h, mm] = s.split(":").map(Number);
+  return (h || 0) * 60 + (mm || 0);
+};
 
 export function ReviewInterBranchModal({
   assignment,
@@ -164,6 +190,20 @@ export function ReviewInterBranchModal({
   const [additionalStops, setAdditionalStops] = useState<AssignmentStop[]>(
     () => (a.additional_stops ?? []).map((s) => ({ ...s })),
   );
+
+  // Hora de salida editable. El default es el momento de aplicar + 30 min
+  // (anclado al apply, como última milla). Cambiarla desplaza todo el itinerario
+  // por el mismo delta: los tramos de viaje calculados por el plan no cambian,
+  // solo se reanclan a la nueva salida. baseDepartureMin es ese ancla del plan.
+  const baseDepartureMin = a.estimated_departure_min ?? 8 * 60;
+  const hasArrivals = (a.estimated_arrival_min ?? 0) > 0 || (a.primary_estimated_arrival_min ?? 0) > 0;
+  const defaultDepartureMin = useMemo(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes() + 30;
+  }, []);
+  const [departureMin, setDepartureMin] = useState<number>(defaultDepartureMin);
+  const delta = departureMin - baseDepartureMin;
+  const shift = (m?: number): number | undefined => (m && m > 0 ? m + delta : undefined);
   const [addingStop, setAddingStop] = useState(false);
   const [newStopBranchId, setNewStopBranchId] = useState("");
   const [newStopShipments, setNewStopShipments] = useState<Set<string>>(new Set());
@@ -265,10 +305,20 @@ export function ReviewInterBranchModal({
               Revisar despacho · {a.license_plate}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
+              {branchLabelById(originBranchId, branches)}
+              {" → "}
               {branchLabelById(a.destination_branch, branches)}
-              {additionalStops.map((st, i) => (
-                <span key={i}> › {branchLabelById(st.branch_id, branches)}</span>
-              ))}
+              {additionalStops.map((st, i) => {
+                // La última parada que coincide con el origen es el retorno backhaul.
+                const isReturn = a.backhaul && i === additionalStops.length - 1 && st.branch_id === originBranchId;
+                return (
+                  <span key={i}>
+                    {" › "}
+                    {branchLabelById(st.branch_id, branches)}
+                    {isReturn && <span className="text-emerald-600 ml-1">(retorno)</span>}
+                  </span>
+                );
+              })}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -291,6 +341,18 @@ export function ReviewInterBranchModal({
 
             {/* KPIs */}
             <div className="shrink-0 px-4 py-3 border-t border-slate-100 space-y-2">
+              {/* Badge de backhaul */}
+              {a.backhaul && (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <span className="text-emerald-700 font-bold text-sm">↩</span>
+                  <div>
+                    <span className="text-xs font-semibold text-emerald-800">Backhaul (retorno al origen)</span>
+                    <span className="text-xs text-emerald-600 ml-2">
+                      {a.backhaul.shipments.length} envíos · {a.backhaul.total_weight_kg.toFixed(1)} kg · {a.backhaul.fill_rate_pct.toFixed(0)}% cap.
+                    </span>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
                 <span className="font-medium">{originShipments.length} envíos de origen</span>
                 {pickupSet.size > 0 && (
@@ -303,6 +365,69 @@ export function ReviewInterBranchModal({
                   <span className="text-slate-400 text-xs">+ {pickupWeight.toFixed(1)} kg pickups</span>
                 )}
               </div>
+              {/* Horarios estimados (salida editable) */}
+              {(
+                <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="font-medium">Horarios estimados</span>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <span>Salir a</span>
+                      <input
+                        type="time"
+                        value={minToHHMM(departureMin)}
+                        onChange={(e) => setDepartureMin(hhmmToMin(e.target.value))}
+                        className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-slate-500 pl-5">
+                    <span className="text-slate-400">Salida</span>
+                    <span className="font-semibold text-slate-700 tabular-nums">
+                      {fmtMinutesAsTime(departureMin)} · {branchLabelById(originBranchId, branches)}
+                    </span>
+                    {shift(a.primary_estimated_arrival_min) !== undefined && (
+                      <>
+                        <span className="text-slate-400">Llega</span>
+                        <span className="font-semibold text-slate-700 tabular-nums">
+                          {fmtMinutesAsTime(shift(a.primary_estimated_arrival_min)!)} · {branchLabelById(a.destination_branch, branches)}
+                        </span>
+                      </>
+                    )}
+                    {additionalStops.map((st, i) => {
+                      const arr = shift(a.additional_stops?.[i]?.estimated_arrival_min);
+                      if (arr === undefined) return null;
+                      return (
+                        <span key={i} className="contents">
+                          <span className="text-slate-400">Llega</span>
+                          <span className="font-semibold text-slate-700 tabular-nums">
+                            {fmtMinutesAsTime(arr)} · {branchLabelById(st.branch_id, branches)}
+                          </span>
+                        </span>
+                      );
+                    })}
+                    {shift(a.estimated_arrival_min) !== undefined &&
+                      a.estimated_arrival_min !== a.primary_estimated_arrival_min && (
+                      <>
+                        <span className="text-slate-400 font-medium">Llegada final</span>
+                        <span className="font-bold text-slate-800 tabular-nums">
+                          {fmtMinutesAsTime(shift(a.estimated_arrival_min)!)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 pl-5">
+                    {departureMin === defaultDepartureMin
+                      ? "Default: 30 min después de ahora. Editá la salida si querés otro horario."
+                      : hasArrivals
+                      ? "Salida ajustada · llegadas recalculadas."
+                      : "Salida ajustada."}
+                  </p>
+                </div>
+              )}
+
               <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${a.rule === "sla_forced" ? "bg-rose-100 text-rose-700" : "bg-sky-100 text-sky-700"}`}>
                 {DISPATCH_RULE_LABELS[a.rule]}
               </span>
@@ -416,7 +541,7 @@ export function ReviewInterBranchModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(additionalStops)}
+            onClick={() => onConfirm(additionalStops, departureMin)}
             disabled={applying}
             className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
           >

@@ -44,6 +44,12 @@ type InterBranchTrip struct {
 	StartedAt        *time.Time `json:"started_at,omitempty"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
 	FinishedByUserID *string    `json:"finished_by_user_id,omitempty"`
+
+	// Tiempos planificados (calculados al momento de Apply).
+	// Para última milla: salida = SuggestedStartTime del Route; llegada = última parada + service time.
+	// Para inter-sucursal: salida = InterBranchDispatchHour; llegada = distancia/velocidad acumulada.
+	ScheduledDepartureAt *time.Time `json:"scheduled_departure_at,omitempty"`
+	EstimatedArrivalAt   *time.Time `json:"estimated_arrival_at,omitempty"`
 }
 
 // TripStop representa una parada del viaje. Los envíos en ShipmentIDs se
@@ -63,6 +69,8 @@ type TripStop struct {
 	// Carga confirmada y parada cerrada (paso 2, o automático si no hay pickups).
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
 	CompletedByUserID *string    `json:"completed_by_user_id,omitempty"`
+	// EstimatedArrivalAt es la hora estimada de llegada a esta parada (en el JSONB stops).
+	EstimatedArrivalAt *time.Time `json:"estimated_arrival_at,omitempty"`
 }
 
 func GenerateTripID() string {

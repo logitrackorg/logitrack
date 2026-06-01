@@ -500,6 +500,84 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   display: none;
 }
 
+/* ─── Calendario de viajes ────────────────────────────────── */
+.cal-event {
+  transition: box-shadow 0.12s ease, filter 0.12s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.cal-event:hover {
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
+  filter: brightness(1.03);
+  z-index: 4 !important;
+}
+
+/* ─── FullCalendar — integración con design system ──────────── */
+
+/* Tokens light */
+:root {
+  --fc-border-color:          #e5e7eb;
+  --fc-page-bg-color:         #ffffff;
+  --fc-neutral-bg-color:      #f9fafb;
+  --fc-today-bg-color:        rgba(16, 185, 129, 0.06);
+  --fc-now-indicator-color:   #ef4444;
+  --fc-event-border-color:    transparent;
+  --fc-event-text-color:      #ffffff;
+  --fc-button-bg-color:       #1e3a5f;
+  --fc-button-border-color:   #1e3a5f;
+  --fc-button-hover-bg-color: #15294a;
+  --fc-button-active-bg-color:#0f1e36;
+  --fc-highlight-color:       rgba(37, 99, 235, 0.1);
+}
+
+/* Tokens dark */
+.dark {
+  --fc-border-color:          #2a3650;
+  --fc-page-bg-color:         #161f31;
+  --fc-neutral-bg-color:      #1c2740;
+  --fc-today-bg-color:        rgba(16, 185, 129, 0.08);
+  --fc-now-indicator-color:   #ef4444;
+  --fc-button-bg-color:       #2563eb;
+  --fc-button-border-color:   #2563eb;
+  --fc-button-hover-bg-color: #1d4ed8;
+  --fc-button-active-bg-color:#1e40af;
+}
+
+/* Tipografía del calendario */
+.fc { font-family: inherit; }
+.fc .fc-toolbar-title { font-size: 15px; font-weight: 700; color: var(--text-heading); }
+.fc .fc-col-header-cell-cushion,
+.fc .fc-timegrid-slot-label-cushion { color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.fc .fc-daygrid-day-number { color: var(--text-primary); }
+.fc .fc-button { font-size: 13px; padding: 5px 12px; border-radius: 6px !important; font-weight: 600; }
+.fc .fc-button-primary { box-shadow: none !important; }
+
+/* Eventos planificados (borde punteado ámbar — sin aplicar, hoy) */
+.fc-planned .fc-event-main { opacity: 0.88; }
+.fc .fc-planned { border: 1.5px dashed #f59e0b !important; background: rgba(245,158,11,0.15) !important; }
+
+/* Eventos de pronóstico (D+1, D+2 — rayado sutil) */
+.fc .fc-forecast {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(255,255,255,0.25) 4px,
+    rgba(255,255,255,0.25) 8px
+  ) !important;
+  border-style: dashed !important;
+  opacity: 0.82;
+}
+.fc .fc-forecast .fc-event-title { font-style: italic; }
+
+/* Hover en eventos */
+.fc .fc-event { cursor: pointer; transition: filter 0.12s ease, box-shadow 0.12s ease; }
+.fc .fc-event:hover { filter: brightness(1.08); box-shadow: 0 4px 12px rgba(0,0,0,0.18); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
 /* ═══════════════════════════════════════════════════════════
    THEME TOKENS — paleta semántica light/dark
    Cada token tiene su valor claro (= diseño original) en :root

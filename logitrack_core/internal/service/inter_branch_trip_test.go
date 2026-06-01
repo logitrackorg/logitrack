@@ -161,6 +161,7 @@ func (r *fakeTripRepo) ListByOriginBranch(branchID string) []model.InterBranchTr
 func (r *fakeTripRepo) ListByStopBranch(branchID string) []model.InterBranchTrip   { return nil }
 func (r *fakeTripRepo) ListAllActive() []model.InterBranchTrip                     { return nil }
 func (r *fakeTripRepo) AddShipment(tripID, shipmentID string) error                { return nil }
+func (r *fakeTripRepo) ListByDateRange(from, to time.Time) []model.InterBranchTrip { return nil }
 
 // =============================================================================
 // Fake AuthRepository (minimal — only GetUserByID needed for AssignDriver)

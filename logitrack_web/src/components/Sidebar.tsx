@@ -24,6 +24,7 @@ import {
   Menu,
   LogOut,
   X,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -61,6 +62,7 @@ const SECTIONS: NavSection[] = [
       { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor"] },
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
+      { to: "/calendar", label: "Calendario", icon: Calendar, roles: ["operator", "supervisor", "manager"] },
       { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
     ],
   },

@@ -35,4 +35,7 @@ type InterBranchTripRepository interface {
 	ListAllActive() []model.InterBranchTrip
 	// AddShipment appends a shipment ID to an existing trip's shipment_ids.
 	AddShipment(tripID, shipmentID string) error
+	// ListByDateRange devuelve trips cuya scheduled_departure_at (o created_at como fallback)
+	// cae dentro del rango [from, to). Excluye cancelados. Usado por el calendario.
+	ListByDateRange(from, to time.Time) []model.InterBranchTrip
 }

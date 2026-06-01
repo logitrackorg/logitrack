@@ -29,7 +29,10 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 		       afternoon_window_start_hour, afternoon_window_end_hour,
 		       service_time_minutes, avg_speed_kmh,
 		       last_mile_packing_strategy,
-		       min_fill_last_mile_rate, min_fill_inter_branch_rate
+		       min_fill_last_mile_rate, min_fill_inter_branch_rate,
+		       inter_branch_dispatch_hour, inter_branch_avg_speed_kmh,
+		       inter_branch_stop_minutes, planning_horizon_days,
+		       backhaul_enabled, keep_one_vehicle_per_branch
 		FROM routing_config WHERE id = 1`).
 		Scan(
 			&cfg.SLAForceHorizonHours, &cfg.PriorityForceThreshold,
@@ -39,6 +42,9 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 			&cfg.ServiceTimeMinutes, &cfg.AvgSpeedKmh,
 			&strategy,
 			&cfg.MinFillLastMileRate, &cfg.MinFillInterBranchRate,
+			&cfg.InterBranchDispatchHour, &cfg.InterBranchAvgSpeedKmh,
+			&cfg.InterBranchStopMinutes, &cfg.PlanningHorizonDays,
+			&cfg.BackhaulEnabled, &cfg.KeepOneVehiclePerBranch,
 		)
 	if err != nil {
 		return model.DefaultRoutingConfig()
@@ -62,7 +68,13 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 			avg_speed_kmh                  = $10,
 			last_mile_packing_strategy     = $11,
 			min_fill_last_mile_rate        = $12,
-			min_fill_inter_branch_rate     = $13
+			min_fill_inter_branch_rate     = $13,
+			inter_branch_dispatch_hour     = $14,
+			inter_branch_avg_speed_kmh     = $15,
+			inter_branch_stop_minutes      = $16,
+			planning_horizon_days          = $17,
+			backhaul_enabled               = $18,
+			keep_one_vehicle_per_branch    = $19
 		WHERE id = 1`,
 		cfg.SLAForceHorizonHours, cfg.PriorityForceThreshold,
 		cfg.MinFillRate, cfg.EnforceTimeWindows,
@@ -71,6 +83,9 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 		cfg.ServiceTimeMinutes, cfg.AvgSpeedKmh,
 		string(cfg.LastMilePackingStrategy),
 		cfg.MinFillLastMileRate, cfg.MinFillInterBranchRate,
+		cfg.InterBranchDispatchHour, cfg.InterBranchAvgSpeedKmh,
+		cfg.InterBranchStopMinutes, cfg.PlanningHorizonDays,
+		cfg.BackhaulEnabled, cfg.KeepOneVehiclePerBranch,
 	)
 	return err
 }

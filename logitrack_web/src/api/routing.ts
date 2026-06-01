@@ -46,6 +46,12 @@ export interface RoutingConfig {
   service_time_minutes: number;
   avg_speed_kmh: number;
   last_mile_packing_strategy: LastMilePackingStrategy;
+  inter_branch_dispatch_hour: number;
+  inter_branch_avg_speed_kmh: number;
+  inter_branch_stop_minutes: number;
+  planning_horizon_days: number;
+  backhaul_enabled: boolean;
+  keep_one_vehicle_per_branch: boolean;
 }
 
 export type DispatchRule = "sla_forced" | "consolidation" | "manual";
@@ -100,6 +106,7 @@ export interface AssignmentStop {
   total_weight_kg: number;
   pickup_shipments?: string[];
   pickup_weight_kg?: number;
+  estimated_arrival_min?: number; // minutos desde medianoche (hora local)
 }
 
 export interface InterBranchAssignment {
@@ -124,6 +131,12 @@ export interface InterBranchAssignment {
   applied_by?: string;
   // Runtime-only: el vehículo ya está en viaje — card informativa.
   in_transit?: boolean;
+  // Schedule inter-sucursal: calculados por scheduleInterBranchAssignments.
+  estimated_departure_min?: number;       // minutos desde medianoche (hora local)
+  primary_estimated_arrival_min?: number;
+  estimated_arrival_min?: number;         // última parada
+  // Backhaul: carga de retorno al origen (si el dispatch es un round-trip).
+  backhaul?: { shipments: string[]; total_weight_kg: number; fill_rate_pct: number };
 }
 
 export interface UnassignedShipment {
@@ -241,12 +254,20 @@ export interface GlobalRoutingPlan {
   applied_by?: string;
   log: GlobalPlanLog;
   insights?: NetworkInsights;
+  /** HorizonOffset: 0=hoy (aplicable), 1/2=pronóstico read-only */
+  horizon_offset?: number;
+  /** IsForecast: true cuando horizon_offset > 0. No se puede aplicar. */
+  is_forecast?: boolean;
 }
 
 export const routingApi = {
   /** Obtiene el plan del día desde el servidor (generado por cron o regenerate). */
   getTodayPlan: () =>
     api.get<GlobalRoutingPlan>("/routing/plan/today").then((r) => r.data),
+
+  /** Obtiene el horizonte de planes: hoy + pronósticos. */
+  getHorizonPlans: () =>
+    api.get<GlobalRoutingPlan[]>("/routing/plan/horizon").then((r) => r.data),
 
   /** Regenera el plan del día para la sucursal del usuario (operator/supervisor). */
   regenerate: () =>
@@ -299,6 +320,8 @@ export const REASON_LABELS: Record<string, string> = {
   tramo_subutilizado: "El tramo final no alcanza el % mínimo de carga — esperando más envíos",
   sin_vehiculos_ultima_milla_disponibles: "No hay vehículos de última milla disponibles",
   ventana_horaria_inviable: "No se puede cumplir la ventana horaria del envío",
+  ventana_horaria_vencida: "Ventana horaria vencida para hoy — programado para mañana",
+  reteniendo_ultimo_vehiculo_sucursal: "Se retiene el último vehículo de la sucursal (balanceo de flota)",
   // Apply
   envio_no_encontrado: "Envío no encontrado",
   envio_no_pertenece_a_sucursal: "El envío ya no pertenece a esta sucursal",

@@ -539,6 +539,7 @@ func main() {
 	protected.POST("/inter-branch-trips/:id/assign-driver", shipmentWrite, interBranchTripHandler.AssignDriver)
 	protected.POST("/inter-branch-trips/:id/cancel", middleware.RequireRoles(model.RoleSupervisor), interBranchTripHandler.Cancel)
 	protected.GET("/inter-branch-trips", shipmentRead, interBranchTripHandler.ListByBranch)
+	protected.GET("/inter-branch-trips/calendar", shipmentRead, interBranchTripHandler.Calendar)
 	// QR-based vehicle claim (driver) and close (operator/supervisor)
 	protected.POST("/trips/claim-by-qr", driverOnly, interBranchTripHandler.ClaimByVehicleQR)
 	protected.POST("/trips/close-by-qr", shipmentWrite, interBranchTripHandler.CloseByVehicleQR)
@@ -614,6 +615,7 @@ func main() {
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
+	protected.GET("/routing/plan/horizon", shipmentRead, routingHandler.GetHorizonPlans)
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)

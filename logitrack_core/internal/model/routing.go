@@ -176,6 +176,12 @@ type InterBranchAssignment struct {
 	// destino primario que se recogen al pasar y siguen viaje a alguna additional stop).
 	PrimaryPickupShipments []string `json:"primary_pickup_shipments,omitempty"`
 	PrimaryPickupWeightKg  float64  `json:"primary_pickup_weight_kg,omitempty"`
+
+	// Schedule inter-sucursal: calculados por scheduleInterBranchAssignments.
+	// Minutos desde medianoche (hora local ART). Omitidos si no hay datos de distancia.
+	EstimatedDepartureMin      int `json:"estimated_departure_min,omitempty"`
+	PrimaryEstimatedArrivalMin int `json:"primary_estimated_arrival_min,omitempty"`
+	EstimatedArrivalMin        int `json:"estimated_arrival_min,omitempty"` // última parada
 }
 
 // AssignmentStop representa una parada adicional dentro de un dispatch multi-hop.
@@ -187,6 +193,8 @@ type AssignmentStop struct {
 	TotalWeightKg   float64  `json:"total_weight_kg"`  // peso de los dropoffs
 	PickupShipments []string `json:"pickup_shipments,omitempty"`
 	PickupWeightKg  float64  `json:"pickup_weight_kg,omitempty"`
+	// EstimatedArrivalMin es el arribo estimado a esta parada en minutos desde medianoche.
+	EstimatedArrivalMin int `json:"estimated_arrival_min,omitempty"`
 }
 
 // MaxTripStops es el tope de paradas por viaje multi-hop (incluyendo la primaria).
