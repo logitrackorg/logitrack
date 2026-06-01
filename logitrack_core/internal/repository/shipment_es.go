@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	//"log"
 	"fmt"
 	"time"
 
@@ -531,7 +532,7 @@ func (r *eventSourcedShipmentRepository) AuthenticateRecipient(cmd AuthenticateR
 
 	// Inicializar metadata del chatbot si no existe
 	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata(2)
+		shipment.InitializeChatbotMetadata()
 	}
 
 	return shipment, nil
@@ -587,11 +588,39 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	}
 	
 	// Inicializar metadata si no existe
-	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata(2)
-	}
+if shipment.ChatbotMetadata == nil {
+	shipment.InitializeChatbotMetadata()
+}
 
-	// Validar que se puede reprogramar
+// ✅ Usar configuración pasada desde el handler
+maxReschedules := cmd.MaxReschedules
+maxRescheduleDays := cmd.MaxRescheduleDays
+
+// Validar que se puede reprogramar
+canReschedule, reason := shipment.CanReschedule(maxReschedules)
+if !canReschedule {
+	return model.Shipment{}, errors.New(reason)
+}
+
+// Validar que la fecha está dentro del rango permitido
+availableDates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
+validDate := false
+for _, date := range availableDates {
+	if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {
+		validDate = true
+		break
+	}
+}
+if !validDate {
+	return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
+}
+
+// Calcular días desde la fecha original
+daysFromOriginal := 0
+if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+	daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
+}
+	/*// Validar que se puede reprogramar
 	canReschedule, reason := shipment.CanReschedule()
 	if !canReschedule {
 		return model.Shipment{}, errors.New(reason)
@@ -614,7 +643,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	daysFromOriginal := 0
 	if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
 		daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
-	}
+	}*/
 
 	// ✅ NUEVO: Obtener ubicación actual del envío
 	currentLocation := model.GetCurrentLocation(&shipment)

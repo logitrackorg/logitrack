@@ -351,7 +351,7 @@ type ChatbotMetadata struct {
 }
 
 // CanReschedule checks if shipment can be rescheduled via chatbot (US3)
-func (s *Shipment) CanReschedule() (bool, string) {
+/*func (s *Shipment) CanReschedule() (bool, string) {
 	if s.Status == StatusOutForDelivery {
 		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
 	}
@@ -368,6 +368,31 @@ func (s *Shipment) CanReschedule() (bool, string) {
 		return false, fmt.Sprintf(
 			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
 			s.ChatbotMetadata.MaxReschedules,
+		)
+	}
+
+	return true, ""
+}*/
+
+// ✅ CÓDIGO NUEVO:
+func (s *Shipment) CanReschedule(maxReschedules int) (bool, string) {
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser modificado"
+	}
+
+	if s.ChatbotMetadata == nil {
+		return true, ""
+	}
+
+	// ✅ Usar el parámetro maxReschedules, NO el metadata
+	if s.ChatbotMetadata.RescheduleCount >= maxReschedules {
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			maxReschedules,
 		)
 	}
 
@@ -479,7 +504,7 @@ func (s *Shipment) GetAvailableRescheduleDates(maxDays int) []time.Time {
 
 // InitializeChatbotMetadata sets up chatbot metadata if not present.
 // maxReschedules should come from SystemConfig.MaxReschedules.
-func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
+/*func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
 	if s.ChatbotMetadata == nil {
 		s.ChatbotMetadata = &ChatbotMetadata{
 			RescheduleCount: 0,
@@ -490,8 +515,21 @@ func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
 			originalDate := *s.EstimatedDeliveryAt
 			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
 		}
-		}else {
-		
-		s.ChatbotMetadata.MaxReschedules = maxReschedules
+		}else {		
+			s.ChatbotMetadata.MaxReschedules = maxReschedules
 	}
+	}*/
+
+	// ✅ CÓDIGO NUEVO - COPIAR Y PEGAR:
+func (s *Shipment) InitializeChatbotMetadata() {
+	if s.ChatbotMetadata == nil {
+		s.ChatbotMetadata = &ChatbotMetadata{
+			RescheduleCount: 0,
+		}
+
+		if s.EstimatedDeliveryAt != nil {
+			originalDate := *s.EstimatedDeliveryAt
+			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
+		}
 	}
+}
