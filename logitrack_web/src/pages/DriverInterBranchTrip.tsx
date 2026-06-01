@@ -510,27 +510,9 @@ export function DriverInterBranchTrip() {
     }
   }, []);
 
-  // Bloqueo por alerta de fatiga: full-screen, sin botón de cierre (LOGITRACK-499).
-  if (fatigueBlocked) {
-    return (
-      <div style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        background: "#1a1a2e",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        padding: 32, textAlign: "center", gap: 24,
-      }}>
-        <span style={{ fontSize: 64 }}>⚠️</span>
-        <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
-          Alerta de fatiga detectada
-        </h2>
-        <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
-          Tu supervisor fue notificado.<br/>
-          Esperá su indicación antes de continuar.
-        </p>
-      </div>
-    );
-  }
+  // Bloqueo por alerta de fatiga: overlay fixed encima del contenido para no
+  // desmontar el mapa ni otros elementos del DOM (LOGITRACK-499).
+  // Se renderiza al final del JSX como portal superpuesto.
 
   // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
   // el viaje o cuando lleva más de 6 minutos detenido en ruta.
@@ -1224,6 +1206,26 @@ function NoTripView() {
           Escanear vehículo
         </button>
       </Card>
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
+      {fatigueBlocked && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#1a1a2e",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: 32, textAlign: "center", gap: 24,
+        }}>
+          <span style={{ fontSize: 64 }}>⚠️</span>
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            Alerta de fatiga detectada
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
