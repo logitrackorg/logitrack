@@ -109,8 +109,13 @@ export function DriverInterBranchTrip() {
   const [completedExpanded, setCompletedExpanded] = useState(false);
 
   // Mapa
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRefInternal = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<unknown>(null);
+  const [mapDivMounted, setMapDivMounted] = useState(false);
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    mapRefInternal.current = node;
+    setMapDivMounted(node !== null);
+  }, []);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -325,7 +330,7 @@ export function DriverInterBranchTrip() {
 
   // Mapa Leaflet
   useEffect(() => {
-    if (!trip || !mapRef.current || !branches.length) return;
+    if (!trip || !mapRefInternal.current || !branches.length) return;
     const origin = branches.find((b) => b.id === trip.origin_branch_id);
     if (!origin?.latitude) return;
 
@@ -359,7 +364,7 @@ export function DriverInterBranchTrip() {
         (mapInstanceRef.current as { remove(): void }).remove();
         mapInstanceRef.current = null;
       }
-      const map = L.map(mapRef.current!, { zoomControl: false, scrollWheelZoom: false });
+      const map = L.map(mapRefInternal.current!, { zoomControl: false, scrollWheelZoom: false });
       mapInstanceRef.current = map;
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(map);
 
@@ -445,7 +450,7 @@ export function DriverInterBranchTrip() {
     return () => {
       if (mapInstanceRef.current) { (mapInstanceRef.current as { remove(): void }).remove(); mapInstanceRef.current = null; }
     };
-  }, [trip, branches]);
+  }, [trip, branches, mapDivMounted]);
 
   // Polling de bloqueo por fatiga — cada 5 s mientras el viaje está en_transito (LOGITRACK-499).
   useEffect(() => {
