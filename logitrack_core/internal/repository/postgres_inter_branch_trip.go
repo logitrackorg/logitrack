@@ -32,20 +32,22 @@ func (r *postgresInterBranchTripRepository) Create(trip model.InterBranchTrip) e
 		INSERT INTO inter_branch_trips
 			(id, kind, driver_id, vehicle_id, license_plate, origin_branch_id, destination_branch_id,
 			 shipment_ids, status, total_weight_kg, created_by, created_at,
-			 stops, current_stop_index)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+			 stops, current_stop_index, scheduled_departure_at, estimated_arrival_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
 		trip.ID, kind, trip.DriverID, trip.VehicleID, trip.LicensePlate,
 		trip.OriginBranchID, trip.DestinationBranchID,
 		ids, string(trip.Status), trip.TotalWeightKg,
 		trip.CreatedBy, trip.CreatedAt,
 		stopsJSON, trip.CurrentStopIndex,
+		trip.ScheduledDepartureAt, trip.EstimatedArrivalAt,
 	)
 	return err
 }
 
 const tripSelectCols = `id, kind, driver_id, vehicle_id, license_plate, origin_branch_id, destination_branch_id,
 	shipment_ids, status, total_weight_kg, created_by, created_at,
-	started_at, completed_at, finished_by_user_id, stops, current_stop_index`
+	started_at, completed_at, finished_by_user_id, stops, current_stop_index,
+	scheduled_departure_at, estimated_arrival_at`
 
 func (r *postgresInterBranchTripRepository) GetByID(id string) (model.InterBranchTrip, bool) {
 	row := r.db.QueryRow(`SELECT `+tripSelectCols+` FROM inter_branch_trips WHERE id = $1`, id)
@@ -179,6 +181,16 @@ func (r *postgresInterBranchTripRepository) ListAllActive() []model.InterBranchT
 	return r.listWhere(`status IN ('pendiente','en_transito') ORDER BY created_at DESC`)
 }
 
+func (r *postgresInterBranchTripRepository) ListByDateRange(from, to time.Time) []model.InterBranchTrip {
+	return r.listWhere(
+		`COALESCE(scheduled_departure_at, created_at) >= $1
+		 AND COALESCE(scheduled_departure_at, created_at) < $2
+		 AND status != 'cancelado'
+		 ORDER BY COALESCE(scheduled_departure_at, created_at) ASC`,
+		from, to,
+	)
+}
+
 func (r *postgresInterBranchTripRepository) listWhere(where string, args ...any) []model.InterBranchTrip {
 	rows, err := r.db.Query(`SELECT `+tripSelectCols+` FROM inter_branch_trips WHERE `+where, args...)
 	if err != nil {
@@ -200,7 +212,7 @@ func scanTrip(scan func(...any) error) (model.InterBranchTrip, error) {
 	var status, kind string
 	var driverID, finishedByUserID sql.NullString
 	var destinationBranchID sql.NullString
-	var startedAt, completedAt sql.NullTime
+	var startedAt, completedAt, scheduledDepartureAt, estimatedArrivalAt sql.NullTime
 	var idsJSON, stopsJSON []byte
 	var currentStopIndex sql.NullInt64
 
@@ -211,6 +223,7 @@ func scanTrip(scan func(...any) error) (model.InterBranchTrip, error) {
 		&t.CreatedBy, &t.CreatedAt,
 		&startedAt, &completedAt, &finishedByUserID,
 		&stopsJSON, &currentStopIndex,
+		&scheduledDepartureAt, &estimatedArrivalAt,
 	)
 	if err != nil {
 		return model.InterBranchTrip{}, err
@@ -236,6 +249,14 @@ func scanTrip(scan func(...any) error) (model.InterBranchTrip, error) {
 	if completedAt.Valid {
 		v := completedAt.Time
 		t.CompletedAt = &v
+	}
+	if scheduledDepartureAt.Valid {
+		v := scheduledDepartureAt.Time
+		t.ScheduledDepartureAt = &v
+	}
+	if estimatedArrivalAt.Valid {
+		v := estimatedArrivalAt.Time
+		t.EstimatedArrivalAt = &v
 	}
 	if len(idsJSON) > 0 {
 		_ = json.Unmarshal(idsJSON, &t.ShipmentIDs)

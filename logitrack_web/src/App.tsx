@@ -42,6 +42,7 @@ import { Repartos } from "./pages/Repartos";
 import OperatorTripReception from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
+import TripsCalendar from "./pages/TripsCalendar";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -198,6 +199,12 @@ function AppRoutes() {
         <Route path="/shipments/:trackingId" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
             <ShipmentDetail />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/calendar" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <TripsCalendar />
           </ProtectedRoute>
         } />
 

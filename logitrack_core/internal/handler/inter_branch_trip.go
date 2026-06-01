@@ -4,9 +4,11 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	qrcode "github.com/skip2/go-qrcode"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
@@ -273,6 +275,53 @@ func (h *InterBranchTripHandler) ConfirmLoad(c *gin.Context) {
 		msg = "Viaje completado. Todos los envíos entregados."
 	}
 	c.JSON(http.StatusOK, gin.H{"message": msg, "trip": trip})
+}
+
+// Calendar returns trips for the calendar view, filtered by date range and (for
+// operator/supervisor) by their branch. Accepts ?from=YYYY-MM-DD&to=YYYY-MM-DD.
+// If from/to are missing, defaults to the current month.
+func (h *InterBranchTripHandler) Calendar(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	tz := clock.LocalTZ
+	now := clock.Now().In(tz)
+
+	parseDay := func(s string, fallback time.Time) time.Time {
+		t, err := time.ParseInLocation("2006-01-02", s, tz)
+		if err != nil {
+			return fallback
+		}
+		return t
+	}
+	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz)
+	lastOfMonth := firstOfMonth.AddDate(0, 1, 0)
+
+	from := parseDay(c.Query("from"), firstOfMonth)
+	to := parseDay(c.Query("to"), lastOfMonth)
+	if !to.After(from) {
+		to = from.AddDate(0, 0, 1)
+	}
+
+	var branchID *string
+	switch user.Role {
+	case model.RoleManager:
+		// Manager puede filtrar por branch_id opcional
+		if b := c.Query("branch_id"); b != "" {
+			branchID = &b
+		}
+	default:
+		// operator/supervisor: su sucursal siempre
+		if user.BranchID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "debés tener una sucursal asignada"})
+			return
+		}
+		branchID = &user.BranchID
+	}
+
+	trips := h.svc.ListCalendar(branchID, from, to)
+	if trips == nil {
+		trips = []model.InterBranchTrip{}
+	}
+	c.JSON(http.StatusOK, trips)
 }
 
 // ListByBranch returns trips visible to the user.

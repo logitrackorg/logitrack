@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
@@ -47,11 +48,13 @@ type CreateInterBranchTripCmd struct {
 	VehicleID           string
 	LicensePlate        string
 	OriginBranchID      string
-	DestinationBranchID *string         // nil for last_mile trips; para inter-sucursal = última parada
-	ShipmentIDs         []string        // todos los envíos (todas las paradas)
+	DestinationBranchID *string          // nil for last_mile trips; para inter-sucursal = última parada
+	ShipmentIDs         []string         // todos los envíos (todas las paradas)
 	TotalWeightKg       float64
 	CreatedBy           string
 	Stops               []model.TripStop // 1..3 stops para inter-sucursal; vacío para last_mile
+	ScheduledDepartureAt *time.Time      // calculado al aplicar el plan
+	EstimatedArrivalAt   *time.Time      // calculado al aplicar el plan
 }
 
 func (s *InterBranchTripService) Create(cmd CreateInterBranchTripCmd) (model.InterBranchTrip, error) {
@@ -60,20 +63,22 @@ func (s *InterBranchTripService) Create(cmd CreateInterBranchTripCmd) (model.Int
 		kind = model.TripKindInterBranch
 	}
 	trip := model.InterBranchTrip{
-		ID:                  model.GenerateTripID(),
-		Kind:                kind,
-		DriverID:            cmd.DriverID,
-		VehicleID:           cmd.VehicleID,
-		LicensePlate:        cmd.LicensePlate,
-		OriginBranchID:      cmd.OriginBranchID,
-		DestinationBranchID: cmd.DestinationBranchID,
-		ShipmentIDs:         cmd.ShipmentIDs,
-		Status:              model.TripStatusPending,
-		TotalWeightKg:       cmd.TotalWeightKg,
-		Stops:               cmd.Stops,
-		CurrentStopIndex:    0,
-		CreatedBy:           cmd.CreatedBy,
-		CreatedAt:           clock.Now(),
+		ID:                   model.GenerateTripID(),
+		Kind:                 kind,
+		DriverID:             cmd.DriverID,
+		VehicleID:            cmd.VehicleID,
+		LicensePlate:         cmd.LicensePlate,
+		OriginBranchID:       cmd.OriginBranchID,
+		DestinationBranchID:  cmd.DestinationBranchID,
+		ShipmentIDs:          cmd.ShipmentIDs,
+		Status:               model.TripStatusPending,
+		TotalWeightKg:        cmd.TotalWeightKg,
+		Stops:                cmd.Stops,
+		CurrentStopIndex:     0,
+		CreatedBy:            cmd.CreatedBy,
+		CreatedAt:            clock.Now(),
+		ScheduledDepartureAt: cmd.ScheduledDepartureAt,
+		EstimatedArrivalAt:   cmd.EstimatedArrivalAt,
 	}
 	if err := s.repo.Create(trip); err != nil {
 		return model.InterBranchTrip{}, err
@@ -690,6 +695,41 @@ func (s *InterBranchTripService) ListByBranch(branchID string) []model.InterBran
 func (s *InterBranchTripService) ListAllActive() []model.InterBranchTrip {
 	all := s.repo.ListAllActive()
 	return all
+}
+
+// ListCalendar devuelve todos los trips cuya fecha de salida planificada (o creación)
+// cae dentro del rango [from, to). Si branchID != nil filtra por sucursal (origen/destino/parada).
+func (s *InterBranchTripService) ListCalendar(branchID *string, from, to time.Time) []model.InterBranchTrip {
+	all := s.repo.ListByDateRange(from, to)
+	if branchID == nil {
+		return all
+	}
+	branch := *branchID
+	seen := map[string]bool{}
+	result := make([]model.InterBranchTrip, 0, len(all))
+	for _, t := range all {
+		if seen[t.ID] {
+			continue
+		}
+		if t.OriginBranchID == branch {
+			seen[t.ID] = true
+			result = append(result, t)
+			continue
+		}
+		if t.DestinationBranchID != nil && *t.DestinationBranchID == branch {
+			seen[t.ID] = true
+			result = append(result, t)
+			continue
+		}
+		for _, st := range t.Stops {
+			if st.BranchID == branch {
+				seen[t.ID] = true
+				result = append(result, t)
+				break
+			}
+		}
+	}
+	return result
 }
 
 // GetTripByID devuelve un viaje por ID para que el operador pueda ver los detalles

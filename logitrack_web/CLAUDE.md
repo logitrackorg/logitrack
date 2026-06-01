@@ -59,6 +59,7 @@ src/
 | `/vehicles/available` | AvailableVehicles | supervisor, manager, admin |
 | `/branches` | BranchList | operator, supervisor, manager, admin |
 | `/routing` | Routing (plan diario inteligente) | operator, supervisor |
+| `/calendar` | TripsCalendar (calendario de viajes aplicados + planificados de hoy) | operator, supervisor, manager |
 | `/routing-config` | RoutingConfig | admin |
 | `/ml-config` | MLConfig | admin |
 | `/system-config` | SystemConfig | admin |

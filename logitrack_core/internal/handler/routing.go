@@ -158,6 +158,18 @@ func (h *RoutingHandler) Apply(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// GetHorizonPlans devuelve el horizonte de planes: hoy (con overrides runtime)
+// + N-1 pronósticos read-only (IsForecast=true), filtrados por sucursal según rol.
+func (h *RoutingHandler) GetHorizonPlans(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	plans, err := h.svc.GetHorizonPlans(user.Role, user.BranchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, plans)
+}
+
 // RecomputeLastMile recalcula el orden de paradas y horario sugerido para
 // una asignación de última milla según el modo solicitado (ventanas/segura/costo).
 // No aplica ni muta el plan persistido.

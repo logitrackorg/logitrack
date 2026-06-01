@@ -525,6 +525,27 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- Calendario de viajes: tiempos planificados en inter_branch_trips
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS scheduled_departure_at TIMESTAMPTZ;
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS estimated_arrival_at   TIMESTAMPTZ;
+		CREATE INDEX IF NOT EXISTS idx_ibt_scheduled_departure ON inter_branch_trips(scheduled_departure_at) WHERE scheduled_departure_at IS NOT NULL;
+
+		-- Hora de despacho inter-sucursal (configurable por admin)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_dispatch_hour INTEGER NOT NULL DEFAULT 8;
+		-- Velocidad de ruta inter-sucursal (fallback cuando la arista no tiene avg_transit_hours)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_avg_speed_kmh NUMERIC(6,2) NOT NULL DEFAULT 60.0;
+		-- Dwell (descarga + carga) en parada intermedia inter-sucursal — independiente de service_time_minutes
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_stop_minutes INTEGER NOT NULL DEFAULT 240;
+		-- Horizonte de planificación multi-día (hoy + N-1 pronósticos)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS planning_horizon_days INTEGER NOT NULL DEFAULT 3;
+		-- Backhauling y balanceo de flota
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS backhaul_enabled BOOLEAN NOT NULL DEFAULT true;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS keep_one_vehicle_per_branch BOOLEAN NOT NULL DEFAULT true;
+
+		-- Plan multi-día: offset y flag de pronóstico en routing_plans
+		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS horizon_offset INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS is_forecast BOOLEAN NOT NULL DEFAULT false;
 	`)
 	return err
 }
