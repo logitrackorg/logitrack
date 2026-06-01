@@ -5,9 +5,11 @@ import "time"
 type AccessEventType string
 
 const (
-	AccessEventLoginSuccess AccessEventType = "login_success"
-	AccessEventLoginFailure AccessEventType = "login_failure"
-	AccessEventLogout       AccessEventType = "logout"
+	AccessEventLoginSuccess            AccessEventType = "login_success"
+	AccessEventLoginFailure            AccessEventType = "login_failure"
+	AccessEventLogout                  AccessEventType = "logout"
+	AccessEventPasswordResetRequested  AccessEventType = "password_reset_requested"
+	AccessEventPasswordResetConfirmed  AccessEventType = "password_reset_confirmed"
 )
 
 type AccessLog struct {

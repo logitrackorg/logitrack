@@ -454,7 +454,9 @@ func (h *ShipmentHandler) GetPublicByTrackingID(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
 		return
 	}
-	c.JSON(http.StatusOK, shipment.ToPublicView())
+	view := shipment.ToPublicView()
+	view.MaxDeliveryAttempts = h.svc.MaxDeliveryAttempts()
+	c.JSON(http.StatusOK, view)
 }
 
 // GetPublicEvents returns the redacted event timeline for the public tracking page.

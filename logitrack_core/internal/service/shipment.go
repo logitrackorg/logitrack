@@ -350,6 +350,12 @@ func (s *ShipmentService) maxDeliveryAttempts() int {
 	return 3
 }
 
+// MaxDeliveryAttempts exposes the configured maximum delivery attempts for use
+// by handlers that need to include it in public-facing responses.
+func (s *ShipmentService) MaxDeliveryAttempts() int {
+	return s.maxDeliveryAttempts()
+}
+
 // FinalizeLastMileTripReturn auto-transitions a delivery_failed shipment when the
 // last-mile driver returns to the branch. Called by InterBranchTripService.finishTrip.
 // For rechazado: chains rechazado → at_hub so the routing algorithm can dispatch the return.

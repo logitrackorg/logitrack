@@ -219,6 +219,7 @@ func main() {
 		os.Getenv("TRACK_BASE_URL"),
 		emailSvc,
 		routingCfgSvc,
+		orgSvc,
 	)
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
@@ -362,8 +363,22 @@ func main() {
 
 	api := r.Group("/api/v1")
 
+	// Password reset via OTP (LOGITRACK-397) — sin autenticación
+	passwordResetRepo := repository.NewPostgresPasswordResetRepository(database)
+	passwordResetSvc := service.NewPasswordResetService(
+		authRepo,
+		passwordResetRepo,
+		emailSvc,
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		accessLogRepo,
+	)
+	passwordResetHandler := handler.NewPasswordResetHandler(passwordResetSvc)
+
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	passwordResetHandler.RegisterRoutes(api)
 	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
@@ -478,6 +493,11 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
+	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/dismiss", canViewStats, supervisorFatigueHandler.DismissAlert)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/recall", canViewStats, supervisorFatigueHandler.RecallDriver)
+	protected.GET("/supervisor/history-requests", canViewStats, supervisorFatigueHandler.ListHistoryRequests)
+	protected.PATCH("/supervisor/history-requests/:driver_id", canViewStats, supervisorFatigueHandler.ReviewHistoryRequest)
 
 	// Reportes automáticos — manager + admin. Operadores y choferes reciben 403 (CA-03).
 	managerAdmin := middleware.RequireRoles(model.RoleManager, model.RoleAdmin)
@@ -497,12 +517,15 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
+	protected.POST("/driver/route/mark-started", driverOnly, driverHandler.MarkRouteStarted)
 	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
 	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
 	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
+	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive

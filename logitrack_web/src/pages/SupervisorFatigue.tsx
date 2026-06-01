@@ -14,6 +14,7 @@ import {
   type CheckinRecord,
   type DriverFatigueStatus,
   type FatigueDashboardResponse,
+  type HistoryAccessRequest,
   type RiskLevel,
 } from "../api/supervisorFatigue";
 import { branchApi, type Branch } from "../api/branches";
@@ -302,6 +303,8 @@ export function SupervisorFatigue() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [historyRequests, setHistoryRequests] = useState<HistoryAccessRequest[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   // Sync the ref with selectedBranch so the polling interval always reads the
   // latest value without stale-closure issues. Writing to a ref must happen in
@@ -345,6 +348,29 @@ export function SupervisorFatigue() {
   useEffect(() => {
     if (!isSupervisor) load();
   }, [selectedBranch, isSupervisor, load]);
+
+  const loadHistoryRequests = useCallback(async () => {
+    try {
+      const res = await supervisorFatigueApi.listHistoryRequests("pending");
+      setHistoryRequests(res.requests);
+    } catch {
+      // non-critical — silent failure
+    }
+  }, []);
+
+  useEffect(() => { loadHistoryRequests(); }, [loadHistoryRequests]);
+
+  const handleReview = async (driverID: string, action: "approve" | "reject") => {
+    setReviewingId(driverID);
+    try {
+      await supervisorFatigueApi.reviewHistoryRequest(driverID, action);
+      await loadHistoryRequests();
+    } catch {
+      // ignore
+    } finally {
+      setReviewingId(null);
+    }
+  };
 
   // ── stats ─────────────────────────────────────────────────────────────────
 
@@ -475,6 +501,60 @@ export function SupervisorFatigue() {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Solicitudes de historial personal */}
+      {historyRequests.length > 0 && (
+        <Card>
+          <CardHeader className="border-b border-slate-100 pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              Solicitudes de historial personal ({historyRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
+                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
+                  <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyRequests.map((req) => (
+                  <tr key={req.driver_id} className="border-t border-slate-100">
+                    <td className="py-3 px-4">
+                      <p className="text-sm font-semibold text-slate-900">{req.full_name || req.driver_id}</p>
+                      <p className="text-[11px] text-slate-400 font-mono">{req.username}</p>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-500 tabular-nums">
+                      {new Date(req.request_date).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          disabled={reviewingId === req.driver_id}
+                          onClick={() => handleReview(req.driver_id, "approve")}
+                          className="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          disabled={reviewingId === req.driver_id}
+                          onClick={() => handleReview(req.driver_id, "reject")}
+                          className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}

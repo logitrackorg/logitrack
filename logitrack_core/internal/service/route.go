@@ -119,6 +119,20 @@ func (s *RouteService) RemoveShipmentFromTodayRoute(trackingID string) error {
 	return s.repo.RemoveShipmentFromDate(trackingID, today)
 }
 
+// FinishRoute transitions today's route from en_curso → finalizada.
+// Called when all deliveries are complete so that GetTodayCheckin can detect
+// the completed run and increment CompletedRoutesToday on the check-in.
+// Returns nil (no-op) if the route is not currently active.
+func (s *RouteService) FinishRoute(driverID string) error {
+	today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+	route, err := s.repo.GetByDriverAndDate(driverID, today)
+	if err != nil || route.Status != model.RouteStatusActive {
+		return nil
+	}
+	route.Status = model.RouteStatusFinished
+	return s.repo.Update(route)
+}
+
 // SetSuggestedStartTime persiste el horario óptimo de salida sugerido por el
 // motor de ruteo en la Route del chofer para esa fecha. Si la ruta no existe
 // (todavía no se aplicaron shipments) o ya arrancó, no hace nada.

@@ -189,6 +189,8 @@ func (f *fakeAuthRepoForTrip) ChangePassword(_ context.Context, _, _, _ string) 
 	return nil
 }
 func (f *fakeAuthRepoForTrip) ListByRole(_ model.Role, _ string) []model.User { return nil }
+func (f *fakeAuthRepoForTrip) FindUserByUsername(_ string) (model.User, bool)  { return model.User{}, false }
+func (f *fakeAuthRepoForTrip) UpdatePassword(_, _ string) error                { return nil }
 
 // =============================================================================
 // Helpers

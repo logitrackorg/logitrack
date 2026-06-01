@@ -258,11 +258,13 @@ func RunMigrations(db *sql.DB) error {
 			phone      TEXT NOT NULL DEFAULT '',
 			email      TEXT NOT NULL DEFAULT '',
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_by TEXT NOT NULL DEFAULT ''
+			updated_by TEXT NOT NULL DEFAULT '',
+			track_url  TEXT NOT NULL DEFAULT ''
 		);
-		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by)
-		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system')
+		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
+		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
 		ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS track_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,
@@ -546,6 +548,19 @@ func RunMigrations(db *sql.DB) error {
 		-- Plan multi-día: offset y flag de pronóstico en routing_plans
 		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS horizon_offset INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS is_forecast BOOLEAN NOT NULL DEFAULT false;
+
+		-- Recuperación de contraseña vía OTP (LOGITRACK-397)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL,
+			token_hash TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			used_at    TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
 	`)
 	return err
 }

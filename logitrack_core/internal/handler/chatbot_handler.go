@@ -197,9 +197,15 @@ func (h *ChatbotHandler) RequestPickup(c *gin.Context) {
 
 	go h.notifSvc.NotifyChatbotPickupRequested(shipment)
 
+	message := "Tu paquete está listo para retiro en sucursal"
+	if shipment.Status != model.StatusReadyForPickup {
+		message = "Registramos tu solicitud. Te avisaremos cuando el paquete esté disponible para retiro en sucursal."
+		branchInfo = nil
+	}
+
 	c.JSON(http.StatusOK, PickupResponse{
 		Success: true,
-		Message: "Tu paquete está listo para retiro en sucursal",
+		Message: message,
 		Branch:  branchInfo,
 	})
 }
