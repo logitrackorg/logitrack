@@ -811,6 +811,26 @@ export function DriverInterBranchTrip() {
           onClose={() => { setQrOpen(false); if (pollingRef.current) clearInterval(pollingRef.current); }}
         />
       )}
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
+      {fatigueBlocked && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#1a1a2e",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: 32, textAlign: "center", gap: 24,
+        }}>
+          <span style={{ fontSize: 64 }}>⚠️</span>
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            Alerta de fatiga detectada
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1206,26 +1226,6 @@ function NoTripView() {
           Escanear vehículo
         </button>
       </Card>
-
-      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
-      {fatigueBlocked && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9999,
-          background: "#1a1a2e",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          padding: 32, textAlign: "center", gap: 24,
-        }}>
-          <span style={{ fontSize: 64 }}>⚠️</span>
-          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
-            Alerta de fatiga detectada
-          </h2>
-          <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
-            Tu supervisor fue notificado.<br/>
-            Esperá su indicación antes de continuar.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
