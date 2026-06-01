@@ -300,7 +300,9 @@ func main() {
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
 	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo)
-	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo)
+	slaSettingsRepo := repository.NewSLASettingsRepository()
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
+	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
 	// Attach to the clock callback so every admin clock tick triggers a check.
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
 	_ = slaAnomalySvc // referenced via closure below
@@ -507,6 +509,8 @@ func main() {
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
+	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
 	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)

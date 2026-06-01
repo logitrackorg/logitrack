@@ -12,22 +12,32 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
-// anomalyThreshold is the multiplier applied to the dynamic average dwell time.
-// A shipment that has spent more than (threshold * avg) in its current state is
-// flagged as "Demorado" and its priority is escalated (AC1).
-const anomalyThreshold = 1.5
+// priorityOrder defines escalation steps from lowest to highest.
+var priorityOrder = []string{"baja", "media", "alta"}
 
-// averageCacheTTL controls how long the computed status averages are reused
-// before a fresh SQL query is issued. Long-running systems accumulate enough
-// historical events that recalculating every minute wastes DB cycles; 1 h is
-// a reasonable trade-off between freshness and overhead.
-const averageCacheTTL = time.Hour
+// nextPriorityBelowCeiling returns the next higher priority level, but only if
+// it does not exceed the configured ceiling. Returns ("", false) when the
+// current priority is already at or above the ceiling or has no successor.
+func nextPriorityBelowCeiling(current, ceiling string) (string, bool) {
+	cIdx := indexOfStr(priorityOrder, ceiling)
+	cUrr := indexOfStr(priorityOrder, current)
+	if cIdx < 0 || cUrr < 0 {
+		return "", false
+	}
+	next := cUrr + 1
+	if next >= len(priorityOrder) || next > cIdx {
+		return "", false // already at or above ceiling
+	}
+	return priorityOrder[next], true
+}
 
-// priorityNext maps each priority level to its escalated successor.
-// "alta" has no successor — already at the ceiling.
-var priorityNext = map[string]string{
-	"baja":  "media",
-	"media": "alta",
+func indexOfStr(slice []string, val string) int {
+	for i, v := range slice {
+		if v == val {
+			return i
+		}
+	}
+	return -1
 }
 
 // anomalyStatusNames translates raw DB status codes to Spanish display names
@@ -60,9 +70,6 @@ func anomalyStatusDisplayName(code string) string {
 // escalatedScore ensures the priority_score column is coherent with the new
 // priority label. It raises the score to the midpoint of the new tier's range
 // only if the current score falls below that midpoint (we never lower the score).
-//
-//	alta  → threshold 0.65, midpoint ≈ 0.82
-//	media → threshold 0.35, midpoint ≈ 0.50
 func escalatedScore(current float64, newPriority string) float64 {
 	var floor float64
 	switch newPriority {
@@ -77,39 +84,42 @@ func escalatedScore(current float64, newPriority string) float64 {
 }
 
 // SLAAnomalyService detects shipments that have been stalled in a state for
-// longer than 150 % of the historical average dwell time and escalates their
-// priority automatically (AC1 + AC2 + AC3).
-//
-// The heavy work (SQL queries, DB writes, file I/O) runs inside a goroutine so
-// the clock-handler goroutine is never blocked. A mutex prevents overlapping
-// runs if the clock fires faster than a single check completes.
+// longer than (ToleranceMultiplier × historical average) and escalates their
+// priority automatically. All tunable parameters are read from SLASettings at
+// each run so changes take effect without a server restart.
 type SLAAnomalyService struct {
-	db      *sql.DB
-	logRepo *repository.PriorityLogRepository
+	db           *sql.DB
+	logRepo      *repository.PriorityLogRepository
+	settingsRepo *repository.SLASettingsRepository
 
-	mu      sync.Mutex  // guards against concurrent RunCheck invocations
+	mu      sync.Mutex // guards against concurrent RunCheck invocations
 	running bool
 
 	// Average cache — avoids recomputing the full aggregation every tick.
+	// The TTL is read from SLASettings.CacheIntervalMinutes at check time.
 	cacheMu    sync.RWMutex
-	avgByState map[string]float64 // status → avg hours
+	avgByState map[string]float64
 	cacheBuilt time.Time
 }
 
-func NewSLAAnomalyService(db *sql.DB, logRepo *repository.PriorityLogRepository) *SLAAnomalyService {
+func NewSLAAnomalyService(
+	db *sql.DB,
+	logRepo *repository.PriorityLogRepository,
+	settingsRepo *repository.SLASettingsRepository,
+) *SLAAnomalyService {
 	return &SLAAnomalyService{
-		db:      db,
-		logRepo: logRepo,
+		db:           db,
+		logRepo:      logRepo,
+		settingsRepo: settingsRepo,
 	}
 }
 
-// RunCheck is the entry point called by the clock handler. It launches the
-// actual work in a goroutine and returns immediately (non-blocking).
+// RunCheck is the entry point called by the clock handler. Non-blocking.
 func (s *SLAAnomalyService) RunCheck() {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return // previous run still in progress — skip this tick
+		return
 	}
 	s.running = true
 	s.mu.Unlock()
@@ -129,8 +139,12 @@ func (s *SLAAnomalyService) RunCheck() {
 // ─── Internal implementation ──────────────────────────────────────────────────
 
 func (s *SLAAnomalyService) runCheck() error {
-	// AC1 — compute (or reuse cached) dynamic averages per status.
-	avgs, err := s.averages()
+	// Load current settings — done at the start of every run so changes made
+	// via the admin panel take effect on the very next clock tick.
+	cfg := s.settingsRepo.Get()
+
+	cacheTTL := time.Duration(cfg.CacheIntervalMinutes) * time.Minute
+	avgs, err := s.averages(cacheTTL)
 	if err != nil {
 		return fmt.Errorf("computing averages: %w", err)
 	}
@@ -138,7 +152,12 @@ func (s *SLAAnomalyService) runCheck() error {
 		return nil // not enough history yet
 	}
 
-	// AC1 — query active shipments and their current dwell time.
+	// Build allow-list set from EnabledStates for O(1) lookup.
+	allowed := make(map[string]bool, len(cfg.EnabledStates))
+	for _, st := range cfg.EnabledStates {
+		allowed[st] = true
+	}
+
 	type activeShipment struct {
 		trackingID    string
 		status        string
@@ -147,6 +166,8 @@ func (s *SLAAnomalyService) runCheck() error {
 		updatedAt     time.Time
 	}
 
+	// Query all non-terminal shipments; the EnabledStates filter is applied in
+	// Go to avoid dynamic SQL parameterisation complexity.
 	rows, err := s.db.Query(`
 		SELECT tracking_id, status, COALESCE(priority,''), COALESCE(priority_score,0), updated_at
 		FROM shipments
@@ -174,23 +195,28 @@ func (s *SLAAnomalyService) runCheck() error {
 
 	now := time.Now()
 	for _, sh := range candidates {
+		// AC1 — only evaluate states the admin has enabled.
+		if !allowed[sh.status] {
+			continue
+		}
+
 		avg, ok := avgs[sh.status]
 		if !ok || avg <= 0 {
 			continue // no historical data for this status
 		}
 
 		dwellHours := now.Sub(sh.updatedAt).Hours()
-		if dwellHours <= anomalyThreshold*avg {
+		if dwellHours <= cfg.ToleranceMultiplier*avg {
 			continue // within expected range
 		}
 
-		// AC1 — shipment is "Demorado".
-		nextPriority, canEscalate := priorityNext[sh.priority]
+		// AC1 — shipment is "Demorado"; attempt escalation.
+		nextPriority, canEscalate := nextPriorityBelowCeiling(sh.priority, cfg.PriorityCeiling)
 		if !canEscalate {
-			continue // already at "alta"; nothing to escalate
+			continue // at or above ceiling
 		}
 
-		// AC2 — persist priority escalation directly in the shipments table.
+		// AC2 — persist priority escalation.
 		newScore := escalatedScore(sh.priorityScore, nextPriority)
 		_, err := s.db.Exec(`
 			UPDATE shipments
@@ -203,7 +229,7 @@ func (s *SLAAnomalyService) runCheck() error {
 			continue
 		}
 
-		// AC3 — append audit entry to priority_logs.json.
+		// AC3 — append audit entry.
 		entry := model.PriorityLog{
 			TrackingID:   sh.trackingID,
 			Timestamp:    now,
@@ -218,20 +244,19 @@ func (s *SLAAnomalyService) runCheck() error {
 			log.Printf("[SLAAnomalyService] log append %s: %v", sh.trackingID, err)
 		}
 
-		log.Printf("[SLAAnomalyService] escalated %s: %s → %s (dwell %.1fh, avg %.1fh, status %s)",
-			sh.trackingID, sh.priority, nextPriority, dwellHours, avg, sh.status)
+		log.Printf("[SLAAnomalyService] escalated %s: %s → %s (dwell %.1fh, avg %.1fh, status %s, ceiling %s)",
+			sh.trackingID, sh.priority, nextPriority, dwellHours, avg, sh.status, cfg.PriorityCeiling)
 	}
 
 	return nil
 }
 
-// averages returns the cached dynamic dwell-time averages, refreshing them if
-// the cache is stale. The query mirrors the pattern used by AvgTimePerStatus in
-// the projection package, but without a date filter so all history is used.
-func (s *SLAAnomalyService) averages() (map[string]float64, error) {
-	// Fast path — cache hit.
+// averages returns the cached per-status dwell-time averages, refreshing when
+// the cache age exceeds cacheTTL. The TTL comes from SLASettings so changes
+// made by an admin are reflected on the next check cycle.
+func (s *SLAAnomalyService) averages(cacheTTL time.Duration) (map[string]float64, error) {
 	s.cacheMu.RLock()
-	if time.Since(s.cacheBuilt) < averageCacheTTL && len(s.avgByState) > 0 {
+	if time.Since(s.cacheBuilt) < cacheTTL && len(s.avgByState) > 0 {
 		out := make(map[string]float64, len(s.avgByState))
 		for k, v := range s.avgByState {
 			out[k] = v
@@ -241,22 +266,20 @@ func (s *SLAAnomalyService) averages() (map[string]float64, error) {
 	}
 	s.cacheMu.RUnlock()
 
-	// Slow path — recompute from the events table.
 	rows, err := s.db.Query(`
 		WITH ordered AS (
 			SELECT
-				e.tracking_id,
-				e.payload->>'FromStatus'                                           AS from_status,
+				e.payload->>'FromStatus'                                            AS from_status,
 				e.timestamp,
 				LEAD(e.timestamp) OVER (
 					PARTITION BY e.tracking_id ORDER BY e.timestamp ASC
-				)                                                                  AS next_ts
+				)                                                                   AS next_ts
 			FROM events e
 			WHERE e.event_type = 'status_changed'
 		)
 		SELECT
 			from_status,
-			COALESCE(AVG(EXTRACT(EPOCH FROM (next_ts - timestamp)) / 3600), 0)   AS avg_hours
+			COALESCE(AVG(EXTRACT(EPOCH FROM (next_ts - timestamp)) / 3600), 0)    AS avg_hours
 		FROM ordered
 		WHERE next_ts IS NOT NULL
 		  AND from_status != ''
