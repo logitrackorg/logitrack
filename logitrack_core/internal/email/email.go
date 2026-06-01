@@ -222,6 +222,21 @@ func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string
 	s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (rechazo)", org.Email)
 }
 
+// SendPasswordResetOTP sends a 6-digit OTP code to the user's email address for password reset.
+// Errors are logged and swallowed (fire-and-forget). Intended to be called as a goroutine.
+func (s *Service) SendPasswordResetOTP(to, username, otp string) {
+	if s == nil {
+		return
+	}
+	if to == "" {
+		log.Printf("[email] password reset OTP: dirección de email vacía para %s — omitido", username)
+		return
+	}
+	org := s.orgConfig()
+	body := renderPasswordResetOTP(username, otp, org)
+	s.sendOne(to, "Tu código de verificación — LogiTrack", body, "", "password reset", org.Email)
+}
+
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {

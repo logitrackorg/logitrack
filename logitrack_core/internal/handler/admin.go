@@ -58,8 +58,8 @@ type updateUserRequest struct {
 }
 
 func validatePassword(password string) error {
-	if len(password) < 6 {
-		return errMsg("La contraseña debe tener al menos 6 caracteres.")
+	if len(password) < 8 {
+		return errMsg("La contraseña debe tener al menos 8 caracteres.")
 	}
 	hasDigit := false
 	for _, r := range password {

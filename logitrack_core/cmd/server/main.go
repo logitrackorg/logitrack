@@ -363,8 +363,22 @@ func main() {
 
 	api := r.Group("/api/v1")
 
+	// Password reset via OTP (LOGITRACK-397) — sin autenticación
+	passwordResetRepo := repository.NewPostgresPasswordResetRepository(database)
+	passwordResetSvc := service.NewPasswordResetService(
+		authRepo,
+		passwordResetRepo,
+		emailSvc,
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		accessLogRepo,
+	)
+	passwordResetHandler := handler.NewPasswordResetHandler(passwordResetSvc)
+
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	passwordResetHandler.RegisterRoutes(api)
 	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
