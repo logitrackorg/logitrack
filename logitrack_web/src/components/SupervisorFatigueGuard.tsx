@@ -77,7 +77,6 @@ export function SupervisorFatigueGuard({ children }: Props) {
       setTimeout(() => removeFirst(), 1800);
     } catch {
       setUnblocking(false);
-      setConfirmUnblock(false);
     }
   };
 
