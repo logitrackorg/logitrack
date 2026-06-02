@@ -104,6 +104,12 @@ const recipientBodySrc = `
 </div>
 {{end}}
 
+<p style="margin:24px 0 0;color:#475569;font-size:13px;line-height:1.6;text-align:center;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento
+	<a href="{{.TrackURL}}" style="color:#1e3a5f;text-decoration:none;font-weight:600;">/track</a>
+	con los datos de tu envío.
+</p>
+
 <p style="margin:28px 0 0;color:#64748b;font-size:13px;text-align:center;">
   Si tenés preguntas sobre tu envío, respondé este email o usá el número de seguimiento.
 </p>`
@@ -143,7 +149,13 @@ const senderBodySrc = `
     Rastrear tu envío &rarr;
   </a>
 </div>
-{{end}}`
+{{end}}
+
+<p style="margin:24px 0 0;color:#475569;font-size:13px;line-height:1.6;text-align:center;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento
+	<a href="{{.TrackURL}}" style="color:#1e3a5f;text-decoration:none;font-weight:600;">/track</a>
+	con los datos de tu envío.
+</p>`
 
 // ─── Last mile template (CA-04) ──────────────────────────────────────────────
 
@@ -428,16 +440,16 @@ const passwordResetOTPBodySrc = `
 </p>`
 
 var (
-	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
-	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
-	senderTmpl              = template.Must(template.New("sender").Parse(senderBodySrc))
-	lastMileTmpl            = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
-	readyForPickupTmpl      = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
-	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
-	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
-	deliveryFailedTmpl      = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
-	passwordResetOTPTmpl    = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
-	passwordChangedTmpl     = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
+	baseTmpl              = template.Must(template.New("base").Parse(baseTmplSrc))
+	recipientTmpl         = template.Must(template.New("recipient").Parse(recipientBodySrc))
+	senderTmpl            = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl          = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
+	readyForPickupTmpl    = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	deliveryConfirmedTmpl = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
+	rejectedTmpl          = template.Must(template.New("rejected").Parse(rejectedBodySrc))
+	deliveryFailedTmpl    = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
+	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
