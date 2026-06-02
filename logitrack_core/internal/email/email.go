@@ -255,6 +255,24 @@ func (s *Service) SendClaimInfoRequestedNotification(claim model.Claim, shipment
 	s.sendOne(customer.Email, subj, body, claim.ID, role+" (solicitud de info reclamo)", org.Email)
 }
 
+// SendClaimResolvedNotification informa al reclamante el cierre del reclamo.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string) {
+	if s == nil {
+		return
+	}
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] reclamo resuelto %s: reclamante sin email registrado — omitido (CA-04)", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Tu reclamo %s fue resuelto — %s", claim.ID, org.Name)
+	body := renderClaimResolvedNotification(claim, shipment, resolutionNotes, trackURL, org)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (reclamo resuelto)", org.Email)
+}
+
 // SendRejectedNotification sends a rejection notification email to the shipment's sender.
 // CA-01: called when a shipment transitions to "rechazado".
 // CA-02: only the sender is notified.

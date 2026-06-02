@@ -35,6 +35,7 @@ type ClaimService struct {
 type ClaimEmailSender interface {
 	SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment)
 	SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string)
 }
 
 func NewClaimService(
@@ -429,6 +430,13 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	claim.ResolutionType = resolution
 	claim.Status = status
 	claim.UpdatedAt = updatedAt
+
+	if s.claimEmailSvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimEmailSvc.SendClaimResolvedNotification(claim, shipment, notes)
+		}
+	}
+
 	return claim, nil
 }
 

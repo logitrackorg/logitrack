@@ -32,8 +32,9 @@ func newClaimSetup() (*ClaimService, testSetup) {
 }
 
 type fakeClaimEmailSender struct {
-	createdCalls      chan claimEmailCall
+	createdCalls       chan claimEmailCall
 	infoRequestedCalls chan claimInfoRequestedCall
+	resolvedCalls      chan claimResolvedEmailCall
 }
 
 type claimEmailCall struct {
@@ -42,6 +43,12 @@ type claimEmailCall struct {
 }
 
 type claimInfoRequestedCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+	notes    string
+}
+
+type claimResolvedEmailCall struct {
 	claim    model.Claim
 	shipment model.Shipment
 	notes    string
@@ -56,6 +63,12 @@ func (f *fakeClaimEmailSender) SendClaimCreatedNotification(claim model.Claim, s
 func (f *fakeClaimEmailSender) SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, notes string) {
 	if f.infoRequestedCalls != nil {
 		f.infoRequestedCalls <- claimInfoRequestedCall{claim: claim, shipment: shipment, notes: notes}
+	}
+}
+
+func (f *fakeClaimEmailSender) SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, notes string) {
+	if f.resolvedCalls != nil {
+		f.resolvedCalls <- claimResolvedEmailCall{claim: claim, shipment: shipment, notes: notes}
 	}
 }
 
@@ -264,6 +277,8 @@ func TestCreatePublicClaim_WithImageEvidenceInfersExtension(t *testing.T) {
 func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimEmailSender{resolvedCalls: make(chan claimResolvedEmailCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -276,9 +291,25 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 		t.Fatalf("create claim: %v", err)
 	}
 
-	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "", "Reclamo revisado y rechazado por falta de evidencia")
+	resolutionNotes := "Reclamo revisado y rechazado por falta de evidencia"
+	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "", resolutionNotes)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
+	}
+
+	select {
+	case got := <-fakeEmail.resolvedCalls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.claim.Status != model.ClaimStatusResolvedImprocedente {
+			t.Fatalf("expected resolved_improcedente, got %s", got.claim.Status)
+		}
+		if got.notes != resolutionNotes {
+			t.Fatalf("expected notes %q, got %q", resolutionNotes, got.notes)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected resolved email to be sent")
 	}
 
 	events, err := claimSvc.GetEvents(claim.ID, "")

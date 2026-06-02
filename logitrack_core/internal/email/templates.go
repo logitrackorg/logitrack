@@ -526,6 +526,52 @@ const claimInfoRequestedBodySrc = `
 </div>
 {{end}}`
 
+const claimResolvedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	Tu reclamo fue resuelto
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.7;">
+	Te informamos que el reclamo <strong>{{.ClaimID}}</strong> asociado al envío
+	<strong>{{.TrackingID}}</strong> fue cerrado con el siguiente resultado.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Estado final</td>
+					<td><strong>{{.FinalStatusLabel}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Tipo de resolución</td>
+					<td><strong>{{.ResolutionTypeLabel}}</strong></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+	<p style="margin:0 0 6px;color:#065f46;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Detalle de la resolución</p>
+	<p style="margin:0;color:#047857;font-size:14px;line-height:1.6;">{{.ResolutionNotes}}</p>
+</div>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Si tenés dudas, podés consultar el estado de tu envío desde la página de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+					padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento &rarr;
+	</a>
+</div>
+{{end}}`
+
 const passwordResetOTPBodySrc = `
 <p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
   🔐 Tu código de verificación
@@ -564,6 +610,7 @@ var (
 	slaExpiredTmpl        = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
 	claimCreatedTmpl      = template.Must(template.New("claimcreated").Parse(claimCreatedBodySrc))
 	claimInfoRequestedTmpl = template.Must(template.New("claiminforequested").Parse(claimInfoRequestedBodySrc))
+	claimResolvedTmpl      = template.Must(template.New("claimresolved").Parse(claimResolvedBodySrc))
 	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
 	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
@@ -949,6 +996,37 @@ func renderClaimInfoRequestedNotification(claim model.Claim, shipment model.Ship
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("Necesitamos más información sobre tu reclamo %s", claim.ID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes, trackURL string, org model.OrganizationConfig) string {
+	type claimResolvedData struct {
+		ClaimID             string
+		TrackingID          string
+		FinalStatusLabel    string
+		ResolutionTypeLabel string
+		ResolutionNotes     string
+		TrackURL            string
+	}
+	data := claimResolvedData{
+		ClaimID:             claim.ID,
+		TrackingID:          shipment.TrackingID,
+		FinalStatusLabel:    claimStatusLabel(claim.Status),
+		ResolutionTypeLabel: claimResolutionTypeLabel(claim.ResolutionType),
+		ResolutionNotes:     strings.TrimSpace(resolutionNotes),
+		TrackURL:            trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := claimResolvedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu reclamo %s fue resuelto", claim.ID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,
