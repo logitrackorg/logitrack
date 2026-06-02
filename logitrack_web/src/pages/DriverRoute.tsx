@@ -24,6 +24,7 @@ import { ZoneAlert } from "../components/ui/ZoneAlert";
 import { BottomSheet } from "../components/ui/bottom-sheet";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { zoneApi, type Zone } from "../api/zones";
 import { isInDangerZone } from "../utils/pointInPolygon";
 import {
@@ -40,6 +41,11 @@ type Tab = "pendientes" | "completados";
 export function DriverRoute() {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // BUG-43: velocidad GPS real del chofer (sin fallback permisivo). El valor
+  // efectivo y la fuente se computan más abajo, una vez conocido el estado del
+  // simulador (ver simulationActive / effectiveSpeed).
+  const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
 
   const [data, setData] = useState<DriverRouteResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,6 +74,9 @@ export function DriverRoute() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
+  // Badge minimizado de zona peligrosa — true cuando el cartel grande fue descartado.
+  // Debe declararse ANTES de cualquier early return para cumplir las reglas de hooks.
+  const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
   // US4 global: contador de misfires para toda la vista de ruta.
   // Cualquier click que no sea detenido por e.stopPropagation() en un botón
@@ -153,6 +162,8 @@ export function DriverRoute() {
         status: "delivered",
         location: "",
         recipient_dni: recipientDni.trim(),
+        current_speed: effectiveSpeed,
+        speed_source: speedSource,
       });
       closeSheets();
       await checkReTestGate();
@@ -176,6 +187,8 @@ export function DriverRoute() {
         status: "delivery_failed",
         location: "",
         notes: note,
+        current_speed: effectiveSpeed,
+        speed_source: speedSource,
       });
       closeSheets();
       await checkReTestGate();
@@ -200,6 +213,8 @@ export function DriverRoute() {
         location: "",
         notes: note,
         rejected_by_recipient: true,
+        current_speed: effectiveSpeed,
+        speed_source: speedSource,
       });
       closeSheets();
       await checkReTestGate();
@@ -242,6 +257,26 @@ export function DriverRoute() {
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
+
+  // ── BUG-43: gate de entrega consciente del simulador ───────────────────────
+  // Si la simulación de Leaflet está activa, la velocidad efectiva es la velocidad
+  // VIRTUAL del vehículo (0 cuando está pausado/detenido en una parada; la
+  // velocidad de demo cuando se mueve). En modo real se usa el GPS del dispositivo
+  // SIN fallback permisivo: si no hay fix de ubicación, la entrega se bloquea.
+  const simulationActive = simulationMode === "simulate";
+  const simSpeedKmh = simulationActive ? (isPaused ? 0 : 360 * speedMultiplier) : 0;
+  const speedSource: "simulation" | "real_gps" = simulationActive ? "simulation" : "real_gps";
+  const effectiveSpeed = simulationActive ? simSpeedKmh : gpsSpeedKmh;
+
+  const movingTooFast = effectiveSpeed > 5;
+  // Ubicación faltante solo aplica en modo real (la simulación siempre "conoce" la posición).
+  const locationMissing = !simulationActive && !locationReady;
+  const deliveryBlocked = movingTooFast || locationMissing;
+  const blockMessage = movingTooFast
+    ? "Detenga el vehículo para entregar"
+    : locationMissing
+      ? "Ubicación requerida. Active el GPS y deténgase para entregar"
+      : "";
 
   // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
   // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
@@ -373,6 +408,15 @@ export function DriverRoute() {
               </button>
             )}
 
+            {/* Badge minimizado de zona peligrosa — visible solo cuando el cartel grande fue descartado */}
+            {isDangerDismissed && (
+              <span
+                title="Zona peligrosa activa"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
+              >
+                ⚠️ Zona
+              </span>
+            )}
             <RouteStatusPill status={routeStatus} />
           </div>
 
@@ -460,7 +504,7 @@ export function DriverRoute() {
               onRouteInfoChange={setRouteInfo}
               onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
             />
-            <ZoneAlert zones={activeDangerZones} />
+            <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
           </>
         ) : (
           <>
@@ -521,6 +565,10 @@ export function DriverRoute() {
         onDniChange={setRecipientDni}
         submitting={submitting}
         onConfirm={handleDeliver}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
       />
       <FailedSheet
         open={!!failedShipment}
@@ -532,6 +580,10 @@ export function DriverRoute() {
         onNotesChange={setFailedNotes}
         submitting={submitting}
         onConfirm={handleFailedAttempt}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
       />
       <RejectedSheet
         open={!!rejectedShipment}
@@ -543,6 +595,10 @@ export function DriverRoute() {
         onNotesChange={setRejectedNotes}
         submitting={submitting}
         onConfirm={handleRejected}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
       />
     </div>
   );
@@ -800,6 +856,10 @@ function DeliverSheet({
   onDniChange,
   submitting,
   onConfirm,
+  speedBlocked,
+  blockMessage,
+  needsLocation,
+  onRequestLocation,
 }: {
   open: boolean;
   onClose: () => void;
@@ -808,6 +868,10 @@ function DeliverSheet({
   onDniChange: (s: string) => void;
   submitting: boolean;
   onConfirm: () => void;
+  speedBlocked: boolean;
+  blockMessage: string;
+  needsLocation: boolean;
+  onRequestLocation: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -852,12 +916,25 @@ function DeliverSheet({
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!dni.trim() || submitting}
+          disabled={!dni.trim() || submitting || speedBlocked}
           className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}
         </button>
       </div>
+      {speedBlocked && (
+        <div className="mt-2.5 text-center">
+          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+          {needsLocation && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+            >
+              Activar ubicación
+            </button>
+          )}
+        </div>
+      )}
     </BottomSheet>
   );
 }
@@ -872,6 +949,10 @@ function FailedSheet({
   onNotesChange,
   submitting,
   onConfirm,
+  speedBlocked,
+  blockMessage,
+  needsLocation,
+  onRequestLocation,
 }: {
   open: boolean;
   onClose: () => void;
@@ -882,6 +963,10 @@ function FailedSheet({
   onNotesChange: (s: string) => void;
   submitting: boolean;
   onConfirm: () => void;
+  speedBlocked: boolean;
+  blockMessage: string;
+  needsLocation: boolean;
+  onRequestLocation: () => void;
 }) {
   if (!shipment) return null;
   const { name } = recipientView(shipment);
@@ -936,12 +1021,25 @@ function FailedSheet({
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting}
+          disabled={!canSubmit || submitting || speedBlocked}
           className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar"}
         </button>
       </div>
+      {speedBlocked && (
+        <div className="mt-2.5 text-center">
+          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+          {needsLocation && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+            >
+              Activar ubicación
+            </button>
+          )}
+        </div>
+      )}
     </BottomSheet>
   );
 }
@@ -957,6 +1055,10 @@ function RejectedSheet({
   onNotesChange,
   submitting,
   onConfirm,
+  speedBlocked,
+  blockMessage,
+  needsLocation,
+  onRequestLocation,
 }: {
   open: boolean;
   onClose: () => void;
@@ -967,6 +1069,10 @@ function RejectedSheet({
   onNotesChange: (s: string) => void;
   submitting: boolean;
   onConfirm: () => void;
+  speedBlocked: boolean;
+  blockMessage: string;
+  needsLocation: boolean;
+  onRequestLocation: () => void;
 }) {
   if (!shipment) return null;
   const { name } = recipientView(shipment);
@@ -1023,12 +1129,25 @@ function RejectedSheet({
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting}
+          disabled={!canSubmit || submitting || speedBlocked}
           className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar rechazo"}
         </button>
       </div>
+      {speedBlocked && (
+        <div className="mt-2.5 text-center">
+          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+          {needsLocation && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
+              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+            >
+              Activar ubicación
+            </button>
+          )}
+        </div>
+      )}
     </BottomSheet>
   );
 }

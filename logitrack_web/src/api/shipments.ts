@@ -245,6 +245,10 @@ export interface UpdateStatusPayload {
   recipient_dni?: string;
   sender_dni?: string;
   rejected_by_recipient?: boolean;
+  /** Velocidad del chofer (km/h) al confirmar entrega/fallo (BUG-43). */
+  current_speed?: number;
+  /** Origen de la velocidad reportada, para auditoría (BUG-43). */
+  speed_source?: "simulation" | "real_gps";
 }
 
 export const shipmentApi = {

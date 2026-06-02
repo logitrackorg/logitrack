@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -304,6 +305,34 @@ func (h *ShipmentHandler) UpdateStatus(c *gin.Context) {
 		if err := h.routeSvc.ValidateDriverCanUpdateShipment(user.ID, trackingID, req.Status); err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
+		}
+	}
+
+	// BUG-43: reject delivery / failed-delivery confirmations while the vehicle
+	// is moving. Only enforced when a speed reading was actually reported
+	// (CurrentSpeed != nil) so operator/system flows are unaffected.
+	if req.Status == model.StatusDelivered || req.Status == model.StatusDeliveryFailed {
+		if req.CurrentSpeed != nil {
+			if *req.CurrentSpeed > model.MaxDeliverySpeedKmh {
+				c.JSON(http.StatusUnprocessableEntity, gin.H{
+					"error": fmt.Sprintf(
+						"No se puede confirmar la entrega en movimiento (velocidad actual: %.1f km/h). Detené el vehículo para continuar.",
+						*req.CurrentSpeed,
+					),
+				})
+				return
+			}
+			// Audit trail: record the speed and its source in the event notes.
+			src := req.SpeedSource
+			if src == "" {
+				src = "real_gps"
+			}
+			marker := fmt.Sprintf("[velocidad %.1f km/h · %s]", *req.CurrentSpeed, src)
+			if req.Notes == "" {
+				req.Notes = marker
+			} else {
+				req.Notes += " " + marker
+			}
 		}
 	}
 
