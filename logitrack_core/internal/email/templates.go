@@ -413,6 +413,46 @@ const passwordChangedBodySrc = `
   Este es un mensaje automático de seguridad. No respondas a este email.
 </p>`
 
+const slaExpiredBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	⚠️ Detectamos una demora en tu envío.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+					<td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Entrega estimada</td>
+					<td><strong>{{.EstimatedDelivery}}</strong></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<p style="margin:0 0 16px;color:#475569;font-size:14px;line-height:1.7;">
+	El sistema LogiTrack reconoce la demora de tu envío. A partir de este momento, el caso recibirá prioridad operativa para acelerar su revisión y resolución.
+</p>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento /track con los datos de tu envío.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+						padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento y reclamar &rarr;
+	</a>
+</div>
+{{end}}`
+
 const passwordResetOTPBodySrc = `
 <p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
   🔐 Tu código de verificación
@@ -448,6 +488,7 @@ var (
 	deliveryConfirmedTmpl = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
 	rejectedTmpl          = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 	deliveryFailedTmpl    = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	slaExpiredTmpl        = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
 	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
 	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
@@ -754,6 +795,31 @@ func renderPasswordChanged(username string, org model.OrganizationConfig) string
 	}
 	return renderBase(baseData{
 		Subject:    "Tu contraseña fue modificada — LogiTrack",
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderSLAExpiredNotification(s model.Shipment, trackBaseURL string, org model.OrganizationConfig) string {
+	type slaExpiredData struct {
+		TrackingID        string
+		EstimatedDelivery string
+		TrackURL          string
+	}
+	data := slaExpiredData{
+		TrackingID:        s.TrackingID,
+		EstimatedDelivery: formatEstimatedDelivery(s.EstimatedDeliveryAt),
+		TrackURL:          buildTrackURL(trackBaseURL, s.TrackingID),
+	}
+	var bodyBuf bytes.Buffer
+	if err := slaExpiredTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s presenta demora", s.TrackingID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,

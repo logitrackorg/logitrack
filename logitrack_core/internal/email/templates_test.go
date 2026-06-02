@@ -39,6 +39,20 @@ func TestRenderSenderConfirmationIncludesClaimHint(t *testing.T) {
 	assertContains(t, body, ">/track<")
 }
 
+func TestRenderSLAExpiredNotificationIncludesClaimHint(t *testing.T) {
+	shipment := model.Shipment{
+		TrackingID:          "LT-1234ABCD",
+		Recipient:           model.Customer{Name: "Destinatario"},
+		EstimatedDeliveryAt: ptrTime(time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)),
+	}
+	org := model.OrganizationConfig{Name: "LogiTrack", Address: "Av. Siempre Viva 742", Phone: "11 5555-5555", Email: "hola@logitrack.test"}
+	body := renderSLAExpiredNotification(shipment, "https://logitrack.test", org)
+
+	assertContains(t, body, "El sistema LogiTrack reconoce la demora de tu envío")
+	assertContains(t, body, "Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento /track con los datos de tu envío.")
+	assertContains(t, body, "href=\"https://logitrack.test/track?id=LT-1234ABCD\"")
+}
+
 func ptrTime(t time.Time) *time.Time {
 	return &t
 }
