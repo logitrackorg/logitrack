@@ -225,15 +225,34 @@ func (s *Service) SendClaimCreatedNotification(claim model.Claim, shipment model
 	if s == nil {
 		return
 	}
-	if shipment.Recipient.Email == "" {
-		log.Printf("[email] reclamo creado: destinatario de %s sin email registrado — omitido", claim.ID)
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] reclamo creado: reclamante de %s sin email registrado — omitido (CA-04)", claim.ID)
 		return
 	}
 	org := s.orgConfig()
 	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
 	subj := fmt.Sprintf("Tu reclamo %s fue registrado — %s", claim.ID, org.Name)
 	body := renderClaimCreatedNotification(claim, shipment, trackURL, org)
-	s.sendOne(shipment.Recipient.Email, subj, body, claim.ID, "destinatario (reclamo creado)", org.Email)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (reclamo creado)", org.Email)
+}
+
+// SendClaimInfoRequestedNotification avisa al reclamante que debe enviar más información.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string) {
+	if s == nil {
+		return
+	}
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] solicitud de info reclamo %s: reclamante sin email registrado — omitido (CA-04)", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Necesitamos más información sobre tu reclamo %s — %s", claim.ID, org.Name)
+	body := renderClaimInfoRequestedNotification(claim, shipment, supervisorNotes, trackURL, org)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (solicitud de info reclamo)", org.Email)
 }
 
 // SendRejectedNotification sends a rejection notification email to the shipment's sender.

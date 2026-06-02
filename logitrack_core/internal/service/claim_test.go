@@ -31,18 +31,31 @@ func newClaimSetup() (*ClaimService, testSetup) {
 	return claimSvc, ts
 }
 
-type fakeClaimCreatedEmailSender struct {
-	calls chan claimCreatedEmailCall
+type fakeClaimEmailSender struct {
+	createdCalls      chan claimEmailCall
+	infoRequestedCalls chan claimInfoRequestedCall
 }
 
-type claimCreatedEmailCall struct {
+type claimEmailCall struct {
 	claim    model.Claim
 	shipment model.Shipment
 }
 
-func (f *fakeClaimCreatedEmailSender) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
-	if f.calls != nil {
-		f.calls <- claimCreatedEmailCall{claim: claim, shipment: shipment}
+type claimInfoRequestedCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+	notes    string
+}
+
+func (f *fakeClaimEmailSender) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
+	if f.createdCalls != nil {
+		f.createdCalls <- claimEmailCall{claim: claim, shipment: shipment}
+	}
+}
+
+func (f *fakeClaimEmailSender) SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, notes string) {
+	if f.infoRequestedCalls != nil {
+		f.infoRequestedCalls <- claimInfoRequestedCall{claim: claim, shipment: shipment, notes: notes}
 	}
 }
 
@@ -136,8 +149,8 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
-	fakeEmail := &fakeClaimCreatedEmailSender{calls: make(chan claimCreatedEmailCall, 1)}
-	claimSvc.SetClaimCreatedEmailService(fakeEmail)
+	fakeEmail := &fakeClaimEmailSender{createdCalls: make(chan claimEmailCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -151,7 +164,7 @@ func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
 	}
 
 	select {
-	case got := <-fakeEmail.calls:
+	case got := <-fakeEmail.createdCalls:
 		if got.claim.ID != claim.ID {
 			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
 		}
@@ -280,6 +293,48 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	}
 	if events[1].Notes != "Reclamo revisado y rechazado por falta de evidencia" {
 		t.Errorf("expected notes to be stored, got %q", events[1].Notes)
+	}
+}
+
+func TestRequestCustomerInfo_SendsInfoRequestedEmail(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimEmailSender{infoRequestedCalls: make(chan claimInfoRequestedCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDelay,
+		Description: "Demora en la entrega del paquete",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, nil)
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	if claim.ClaimantDNI != "12345678" {
+		t.Fatalf("expected claimant DNI persisted, got %q", claim.ClaimantDNI)
+	}
+
+	notes := "Necesitamos fotos del paquete y del embalaje para continuar"
+	updated, err := claimSvc.RequestCustomerInfo(claim.ID, "sup_caba", "", notes)
+	if err != nil {
+		t.Fatalf("request customer info: %v", err)
+	}
+	if updated.Status != model.ClaimStatusPendingCustomer {
+		t.Fatalf("expected pending_customer, got %s", updated.Status)
+	}
+
+	select {
+	case got := <-fakeEmail.infoRequestedCalls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.notes != notes {
+			t.Fatalf("expected notes %q, got %q", notes, got.notes)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected info-requested email to be sent")
 	}
 }
 
