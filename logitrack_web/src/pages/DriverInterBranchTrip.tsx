@@ -97,6 +97,8 @@ export function DriverInterBranchTrip() {
   const prevStopIndexRef = useRef<number | null>(null);
   // Ref estable al trip actual — usado en handleCheckinDone sin necesitar deps.
   const tripRef = useRef<typeof trip>(null);
+  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
+  const pendingAckRef = useRef<string | null>(null);
 
   // QR modal state
   const [qrOpen, setQrOpen] = useState(false);
@@ -459,9 +461,15 @@ export function DriverInterBranchTrip() {
     const poll = async () => {
       try {
         const data = await driverApi.getFatigueBlockStatus();
-        setFatigueBlocked(data.blocked ?? false);
-        if (!data.blocked && data.recently_unblocked && data.unblocked_by) {
-          setFatigueUnblockedBy(data.unblocked_by);
+        const nowBlocked = data.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && data.recently_unblocked && data.unblocked_by) {
+          const ackKey = data.unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(data.unblocked_by);
+          }
         }
       } catch {
         // Error de red → mantener estado actual (conservador)
@@ -859,7 +867,10 @@ export function DriverInterBranchTrip() {
             que continúes la ruta.
           </p>
           <button
-            onClick={() => setFatigueUnblockedBy(null)}
+            onClick={() => {
+              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
+              setFatigueUnblockedBy(null);
+            }}
             style={{
               marginTop: 8,
               padding: "12px 36px",

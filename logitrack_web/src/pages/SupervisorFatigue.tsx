@@ -184,12 +184,16 @@ function DriverRow({
   redMin,
   expanded,
   onToggle,
+  isBlocked = false,
+  isAuthorized = false,
 }: {
   driver: DriverFatigueStatus;
   greenMax: number;
   redMin: number;
   expanded: boolean;
   onToggle: () => void;
+  isBlocked?: boolean;
+  isAuthorized?: boolean;
 }) {
   const checkinTimeStr = driver.checkin_time
     ? fmtDateTime(driver.checkin_time)
@@ -212,13 +216,23 @@ function DriverRow({
           </div>
         </td>
 
-        {/* Nivel de Riesgo Total — badge + barra de score */}
+        {/* Nivel de Riesgo Total — badge + barra de score + estado de ruta */}
         <td className="py-3 px-4 min-w-[160px]">
           <RiskBadge level={driver.risk_level} />
           {driver.risk_score !== null && (
             <div className="mt-2">
               <ScoreBar score={driver.risk_score} greenMax={greenMax} redMin={redMin} />
             </div>
+          )}
+          {isBlocked && (
+            <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5 w-fit">
+              🔒 Pendiente de revisión
+            </span>
+          )}
+          {!isBlocked && isAuthorized && (
+            <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 w-fit">
+              ✅ Autorizado para continuar
+            </span>
           )}
         </td>
 
@@ -308,6 +322,7 @@ export function SupervisorFatigue() {
   const [blockedDriverIds, setBlockedDriverIds] = useState<string[]>([]);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [confirmUnblockId, setConfirmUnblockId] = useState<string | null>(null);
+  const [recentlyAuthorizedIds, setRecentlyAuthorizedIds] = useState<Set<string>>(new Set());
 
   // Sync the ref with selectedBranch so the polling interval always reads the
   // latest value without stale-closure issues. Writing to a ref must happen in
@@ -393,6 +408,7 @@ export function SupervisorFatigue() {
     try {
       await supervisorFatigueApi.unblockDriver(driverID);
       setBlockedDriverIds((prev) => prev.filter((id) => id !== driverID));
+      setRecentlyAuthorizedIds((prev) => new Set([...prev, driverID]));
     } catch {
       // ignore — el próximo polling lo reflejará
     } finally {
@@ -587,6 +603,8 @@ export function SupervisorFatigue() {
                           prev === d.driver_id ? null : d.driver_id
                         )
                       }
+                      isBlocked={blockedDriverIds.includes(d.driver_id)}
+                      isAuthorized={recentlyAuthorizedIds.has(d.driver_id)}
                     />
                   ))}
                 </tbody>
