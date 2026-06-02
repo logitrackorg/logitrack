@@ -84,6 +84,7 @@ export function DriverInterBranchTrip() {
 
   // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
   const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
   // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
   const [midTripCheckin, setMidTripCheckin] = useState(false);
   // true si el driver aún no reportó sueño para el día logístico actual.
@@ -459,6 +460,9 @@ export function DriverInterBranchTrip() {
       try {
         const data = await driverApi.getFatigueBlockStatus();
         setFatigueBlocked(data.blocked ?? false);
+        if (!data.blocked && data.recently_unblocked && data.unblocked_by) {
+          setFatigueUnblockedBy(data.unblocked_by);
+        }
       } catch {
         // Error de red → mantener estado actual (conservador)
       }
@@ -834,6 +838,42 @@ export function DriverInterBranchTrip() {
             Tu supervisor fue notificado.<br/>
             Esperá su indicación antes de continuar.
           </p>
+        </div>
+      )}
+
+      {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
+      {!fatigueBlocked && fatigueUnblockedBy && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "#0d1f12",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: 32, textAlign: "center", gap: 24,
+        }}>
+          <span style={{ fontSize: 64 }}>✅</span>
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+            Ruta autorizada
+          </h2>
+          <p style={{ color: "#86efac", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+            Tu supervisor <strong style={{ color: "#fff" }}>{fatigueUnblockedBy}</strong> autorizó<br/>
+            que continúes la ruta.
+          </p>
+          <button
+            onClick={() => setFatigueUnblockedBy(null)}
+            style={{
+              marginTop: 8,
+              padding: "12px 36px",
+              borderRadius: 10,
+              border: "none",
+              background: "#16a34a",
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Continuar
+          </button>
         </div>
       )}
     </div>

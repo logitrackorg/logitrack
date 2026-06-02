@@ -920,5 +920,19 @@ func (h *DriverHandler) GetFatigueBlockStatus(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al verificar estado de bloqueo"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"blocked": block != nil})
+	if block != nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": true})
+		return
+	}
+	recent, err := h.fatigueBlockRepo.GetRecentlyUnblocked(user.ID)
+	if err != nil || recent == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"blocked":            false,
+		"recently_unblocked": true,
+		"unblocked_by":       recent.UnblockedBy,
+		"unblocked_at":       recent.UnblockedAt,
+	})
 }
