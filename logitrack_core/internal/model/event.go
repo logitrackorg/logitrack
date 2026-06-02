@@ -27,6 +27,12 @@ type EventLocation struct {
 	Status     string `json:"status"`      // Ej: "Disponible para retiro"
 }
 
+// MaxDeliverySpeedKmh is the speed threshold (km/h) above which a driver is
+// considered to be moving and therefore must NOT be able to confirm a delivery
+// or a failed-delivery attempt (BUG-43). The 5 km/h margin tolerates GPS jitter
+// while the vehicle is effectively stopped.
+const MaxDeliverySpeedKmh = 5.0
+
 type UpdateStatusRequest struct {
 	Status              Status `json:"status"                binding:"required"`
 	ChangedBy           string `json:"changed_by"`
@@ -36,7 +42,15 @@ type UpdateStatusRequest struct {
 	RecipientDNI        string `json:"recipient_dni"`        // required when status = "delivered"
 	SenderDNI           string `json:"sender_dni"`           // required when status = "returned"
 	RejectedByRecipient bool   `json:"rejected_by_recipient"` // delivery_failed: recipient explicitly refused
-	SystemTransition    bool   `json:"-"`                    // skips driver_id requirement for system-initiated transitions
+	// CurrentSpeed is the driver's speed in km/h at the moment of the action.
+	// nil = not reported (operator/system flows); the speed guard only applies
+	// when the value is present AND the transition is delivered / delivery_failed.
+	CurrentSpeed *float64 `json:"current_speed,omitempty"`
+	// SpeedSource records whether CurrentSpeed came from the Leaflet route
+	// simulation ("simulation") or the device GPS ("real_gps"). Persisted to the
+	// event notes for the delivery audit trail (BUG-43).
+	SpeedSource      string `json:"speed_source,omitempty"`
+	SystemTransition bool   `json:"-"` // skips driver_id requirement for system-initiated transitions
 }
 
 // ✅ NUEVO: Request para reprogramación

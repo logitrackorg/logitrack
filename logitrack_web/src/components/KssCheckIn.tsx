@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, Info, Moon, Shield, SkipForward, Send, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, Info, Moon, Shield, ShieldAlert, SkipForward, Send, X, Loader2, MapPin, Mic } from "lucide-react";
 import { driverApi } from "../api/driver";
+import { checkDevicePermissions } from "../utils/devicePermissions";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 import { PVTCheckIn } from "./PVTCheckIn";
 
@@ -46,7 +47,12 @@ interface Props {
 }
 
 export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepData = true }: Props) {
-  const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
+  // BUG-46: paso de permisos obligatorio ANTES de montar el test. Se ejecuta al
+  // montar; solo avanza a "kss" cuando ubicación + micrófono están concedidos.
+  const [step, setStep] = useState<"permissions" | "kss" | "voice" | "pvt">("permissions");
+  const [permChecking, setPermChecking] = useState(true);
+  const [permError, setPermError] = useState("");
+
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(4);
   const [submitting, setSubmitting] = useState(false);
@@ -84,6 +90,23 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     const t = setTimeout(() => setShowBackWarning(false), 4000);
     return () => clearTimeout(t);
   }, [showBackWarning]);
+
+  // ── BUG-46: verificación de permisos de hardware ──────────────────────────
+  // Solicita ubicación + micrófono. Si se conceden, avanza al test; si no,
+  // muestra un mensaje bloqueante con opción de reintentar.
+  const runPermissionCheck = useCallback(async () => {
+    setPermChecking(true);
+    setPermError("");
+    const result = await checkDevicePermissions();
+    if (result.granted) {
+      setStep("kss");
+    } else {
+      setPermError(result.message);
+    }
+    setPermChecking(false);
+  }, []);
+
+  useEffect(() => { void runPermissionCheck(); }, [runPermissionCheck]);
 
   const handleSkipConfirmed = async () => {
     setSkipping(true);
@@ -131,6 +154,56 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       setSubmitting(false);
     }
   };
+
+  // ── Paso de permisos (BUG-46) — bloquea el test hasta que se concedan ──────
+  if (step === "permissions") {
+    return (
+      <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+        <div className="max-w-sm w-full text-center">
+          {permChecking ? (
+            <>
+              <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-5 animate-spin" />
+              <h1 className="text-lg font-bold text-white mb-2">Verificando permisos</h1>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Necesitamos acceso al GPS y al micrófono para iniciar tu test de seguridad.
+                Aceptá los permisos que solicite tu navegador.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-5">
+                <ShieldAlert className="w-7 h-7" />
+              </div>
+              <h1 className="text-lg font-bold text-white mb-2">Permisos requeridos</h1>
+              <p className="text-sm text-slate-300 leading-relaxed mb-5">{permError}</p>
+
+              <div className="flex flex-col gap-2 mb-6 text-left">
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-xs text-slate-300">Ubicación (GPS) — seguimiento de ruta</span>
+                </div>
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-xs text-slate-300">Micrófono — prueba de voz del test</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => void runPermissionCheck()}
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors"
+              >
+                Reintentar
+              </button>
+              <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                Si ya los rechazaste, habilitá los permisos desde la configuración del sitio en tu
+                navegador y volvé a tocar "Reintentar".
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (step === "voice") return <VoiceCheckIn onDone={() => setStep("pvt")} />;
   if (step === "pvt")   return <PVTCheckIn onDone={onDone} />;
