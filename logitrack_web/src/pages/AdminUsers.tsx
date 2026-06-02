@@ -12,6 +12,8 @@ import { Card } from "../components/ui/card";
 const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
 const ROLES_WITH_BRANCH: Role[] = ["operator", "supervisor", "driver"];
 
+type DriverType = "ultima_milla" | "intersucursal";
+
 const roleLabel: Record<Role, string> = {
   operator: "Operador",
   supervisor: "Supervisor",
@@ -19,6 +21,18 @@ const roleLabel: Record<Role, string> = {
   manager: "Gerente",
   admin: "Admin",
 };
+
+const driverTypeLabel: Record<DriverType, string> = {
+  ultima_milla: "Última milla",
+  intersucursal: "Intersucursal",
+};
+
+function userDisplayLabel(u: User): string {
+  if (u.role === "driver" && u.driver_type) {
+    return `Chofer · ${driverTypeLabel[u.driver_type as DriverType] ?? u.driver_type}`;
+  }
+  return roleLabel[u.role] ?? u.role;
+}
 
 const roleBadgeColor: Record<Role, string> = {
   operator: "#3b82f6",
@@ -53,6 +67,7 @@ interface CreateState {
   email: string;
   role: Role;
   branch_id: string;
+  driver_type: DriverType | "";
   address: UserAddress;
 }
 
@@ -60,7 +75,7 @@ const emptyAddress = (): UserAddress => ({ street: "", city: "", province: "", p
 
 const emptyCreate = (): CreateState => ({
   username: "", password: "", first_name: "", last_name: "", email: "",
-  role: "operator", branch_id: "", address: emptyAddress(),
+  role: "operator", branch_id: "", driver_type: "", address: emptyAddress(),
 });
 
 const reEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,6 +104,7 @@ export function AdminUsers() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editDriverType, setEditDriverType] = useState<DriverType | "">("");
   const [editState, setEditState] = useState<EditState>({
     first_name: "", last_name: "", email: "",
     role: "operator", branch_id: "", status: "activo", address: emptyAddress(),
@@ -101,6 +117,7 @@ export function AdminUsers() {
   const [createError, setCreateError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
+  const [driverTypeFilter, setDriverTypeFilter] = useState<DriverType | "">("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "">("");
 
   const load = async () => {
@@ -118,6 +135,7 @@ export function AdminUsers() {
 
   const openEdit = (u: User) => {
     setEditingUser(u);
+    setEditDriverType((u.driver_type as DriverType) ?? "");
     setEditState({
       first_name: u.first_name ?? "",
       last_name: u.last_name ?? "",
@@ -137,6 +155,10 @@ export function AdminUsers() {
       setSaveError("La sucursal es obligatoria para este rol.");
       return;
     }
+    if (editState.role === "driver" && !editDriverType) {
+      setSaveError("El tipo de chofer es obligatorio.");
+      return;
+    }
     const validErr = validatePersonalFields(editState);
     if (validErr) { setSaveError(validErr); return; }
 
@@ -151,6 +173,7 @@ export function AdminUsers() {
       if (editState.role !== editingUser.role) payload.role = editState.role;
       if (editState.branch_id !== (editingUser.branch_id ?? "")) payload.branch_id = editState.branch_id;
       if (editState.status !== (editingUser.status ?? "activo")) payload.status = editState.status;
+      if (editState.role === "driver") payload.driver_type = editDriverType || null;
 
       const updated = await adminApi.updateUser(editingUser.id, payload);
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
@@ -163,6 +186,10 @@ export function AdminUsers() {
   const handleCreate = async () => {
     if (ROLES_WITH_BRANCH.includes(createForm.role) && !createForm.branch_id) {
       setCreateError("La sucursal es obligatoria para este rol.");
+      return;
+    }
+    if (createForm.role === "driver" && !createForm.driver_type) {
+      setCreateError("El tipo de chofer es obligatorio.");
       return;
     }
     if (!createForm.username.trim()) { setCreateError("El nombre de usuario es obligatorio."); return; }
@@ -183,6 +210,7 @@ export function AdminUsers() {
         address: createForm.address,
       };
       if (ROLES_WITH_BRANCH.includes(createForm.role)) payload.branch_id = createForm.branch_id;
+      if (createForm.role === "driver" && createForm.driver_type) payload.driver_type = createForm.driver_type;
       const newUser = await adminApi.createUser(payload);
       setUsers(prev => [...prev, newUser]);
       setShowCreate(false);
@@ -196,6 +224,7 @@ export function AdminUsers() {
 
   const filtered = users.filter(u => {
     if (roleFilter && u.role !== roleFilter) return false;
+    if (driverTypeFilter && (u.role !== "driver" || u.driver_type !== driverTypeFilter)) return false;
     if (statusFilter && (u.status ?? "activo") !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -238,6 +267,17 @@ export function AdminUsers() {
           <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
         </select>
+        {roleFilter === "driver" && (
+          <select
+            value={driverTypeFilter}
+            onChange={e => setDriverTypeFilter(e.target.value as DriverType | "")}
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+          >
+            <option value="">Todos los choferes</option>
+            <option value="ultima_milla">Última milla</option>
+            <option value="intersucursal">Intersucursal</option>
+          </select>
+        )}
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as UserStatus | "")}
@@ -247,9 +287,9 @@ export function AdminUsers() {
           <option value="activo">Activo</option>
           <option value="inactivo">Inactivo</option>
         </select>
-        {(search || roleFilter || statusFilter) && (
+        {(search || roleFilter || driverTypeFilter || statusFilter) && (
           <button
-            onClick={() => { setSearch(""); setRoleFilter(""); setStatusFilter(""); }}
+            onClick={() => { setSearch(""); setRoleFilter(""); setDriverTypeFilter(""); setStatusFilter(""); }}
             className="text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
           >
             Limpiar
@@ -292,7 +332,7 @@ export function AdminUsers() {
                     <td style={{ padding: "10px 14px", color: "var(--text-strong)" }}>{u.username}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 9999, fontSize: 12, fontWeight: 600, background: `${roleBadgeColor[u.role]}18`, color: roleBadgeColor[u.role] }}>
-                        {roleLabel[u.role]}
+                        {userDisplayLabel(u)}
                       </span>
                     </td>
                     <td style={{ padding: "10px 14px" }}>
@@ -339,7 +379,11 @@ export function AdminUsers() {
                   Rol *
                   <select value={editState.role}
                     disabled={editingUser?.id === currentUser?.id}
-                    onChange={e => setEditState(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
+                    onChange={e => {
+                      const newRole = e.target.value as Role;
+                      if (newRole !== "driver") setEditDriverType("");
+                      setEditState(s => ({ ...s, role: newRole, branch_id: ROLES_WITH_BRANCH.includes(newRole) ? s.branch_id : "" }));
+                    }}
                     style={{ ...inputStyle, ...(editingUser?.id === currentUser?.id ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}>
                     {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                   </select>
@@ -361,6 +405,16 @@ export function AdminUsers() {
                   <select value={editState.branch_id} onChange={e => setEditState(s => ({ ...s, branch_id: e.target.value }))} style={inputStyle}>
                     <option value="">— Seleccionar sucursal —</option>
                     {sortedBranches.map(b => <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>)}
+                  </select>
+                </label>
+              )}
+              {editState.role === "driver" && (
+                <label style={labelStyle}>
+                  Tipo de chofer *
+                  <select value={editDriverType} onChange={e => setEditDriverType(e.target.value as DriverType | "")} style={inputStyle}>
+                    <option value="">— Seleccionar tipo —</option>
+                    <option value="ultima_milla">Última milla</option>
+                    <option value="intersucursal">Intersucursal</option>
                   </select>
                 </label>
               )}
@@ -470,7 +524,10 @@ export function AdminUsers() {
                 <label style={labelStyle}>
                   Rol *
                   <select value={createForm.role}
-                    onChange={e => setCreateForm(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
+                    onChange={e => {
+                      const newRole = e.target.value as Role;
+                      setCreateForm(s => ({ ...s, role: newRole, branch_id: ROLES_WITH_BRANCH.includes(newRole) ? s.branch_id : "", driver_type: newRole === "driver" ? s.driver_type : "" }));
+                    }}
                     style={inputStyle}>
                     {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                   </select>
@@ -485,6 +542,16 @@ export function AdminUsers() {
                   </label>
                 )}
               </div>
+              {createForm.role === "driver" && (
+                <label style={labelStyle}>
+                  Tipo de chofer *
+                  <select value={createForm.driver_type} onChange={e => setCreateForm(s => ({ ...s, driver_type: e.target.value as DriverType | "" }))} style={inputStyle}>
+                    <option value="">— Seleccionar tipo —</option>
+                    <option value="ultima_milla">Última milla</option>
+                    <option value="intersucursal">Intersucursal</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             <SectionTitle>Datos personales</SectionTitle>
