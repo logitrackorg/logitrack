@@ -750,6 +750,26 @@ export function ShipmentDetail() {
                 </Button>
               )}
             </div>
+      </div>
+
+      {/* Banner: reservado para pickup por vehículo de otra sucursal */}
+      {reservedTrip && (
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-900/20">
+          <Truck className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-sky-900 dark:text-sky-100 flex-1">
+            <p className="font-semibold">Reservado para pickup por vehículo en tránsito</p>
+            <p className="text-sky-700 dark:text-sky-300 mt-0.5">
+              Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
+              <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
+              No requiere acción de esta sucursal.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate(`/?view=trip&trip_id=${encodeURIComponent(reservedTrip.id)}`)}
+              className="mt-2 text-xs font-semibold text-sky-800 dark:text-sky-300 hover:underline cursor-pointer"
+            >
+              Ver envíos del viaje {reservedTrip.id} →
+            </button>
           </div>
         </div>
       </div>
