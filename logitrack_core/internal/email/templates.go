@@ -453,6 +453,46 @@ const slaExpiredBodySrc = `
 </div>
 {{end}}`
 
+const claimCreatedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	✅ Tu reclamo fue registrado correctamente.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">ID del reclamo</td>
+					<td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.ClaimID}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Estado inicial</td>
+					<td><strong>{{.InitialStatus}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+					<td>{{.TrackingID}}</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Ya podés hacer el seguimiento de tu reclamo desde la página de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+					padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento &rarr;
+	</a>
+</div>
+{{end}}`
+
 const passwordResetOTPBodySrc = `
 <p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
   🔐 Tu código de verificación
@@ -489,6 +529,7 @@ var (
 	rejectedTmpl          = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 	deliveryFailedTmpl    = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
 	slaExpiredTmpl        = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
+	claimCreatedTmpl      = template.Must(template.New("claimcreated").Parse(claimCreatedBodySrc))
 	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
 	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
@@ -820,6 +861,33 @@ func renderSLAExpiredNotification(s model.Shipment, trackBaseURL string, org mod
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("Tu envío %s presenta demora", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderClaimCreatedNotification(claim model.Claim, shipment model.Shipment, trackURL string, org model.OrganizationConfig) string {
+	type claimCreatedData struct {
+		ClaimID       string
+		InitialStatus string
+		TrackingID    string
+		TrackURL      string
+	}
+	data := claimCreatedData{
+		ClaimID:       claim.ID,
+		InitialStatus: "Abierto",
+		TrackingID:    shipment.TrackingID,
+		TrackURL:      trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := claimCreatedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu reclamo %s fue registrado", claim.ID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,

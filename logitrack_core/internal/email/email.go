@@ -219,6 +219,23 @@ func (s *Service) SendSLAExpiredNotification(shipment model.Shipment) {
 	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (SLA vencido)", org.Email)
 }
 
+// SendClaimCreatedNotification notifica al cliente que su reclamo quedó registrado.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
+	if s == nil {
+		return
+	}
+	if shipment.Recipient.Email == "" {
+		log.Printf("[email] reclamo creado: destinatario de %s sin email registrado — omitido", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Tu reclamo %s fue registrado — %s", claim.ID, org.Name)
+	body := renderClaimCreatedNotification(claim, shipment, trackURL, org)
+	s.sendOne(shipment.Recipient.Email, subj, body, claim.ID, "destinatario (reclamo creado)", org.Email)
+}
+
 // SendRejectedNotification sends a rejection notification email to the shipment's sender.
 // CA-01: called when a shipment transitions to "rechazado".
 // CA-02: only the sender is notified.

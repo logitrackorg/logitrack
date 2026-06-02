@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -28,6 +29,21 @@ func newClaimSetup() (*ClaimService, testSetup) {
 		eventStore,
 	)
 	return claimSvc, ts
+}
+
+type fakeClaimCreatedEmailSender struct {
+	calls chan claimCreatedEmailCall
+}
+
+type claimCreatedEmailCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+}
+
+func (f *fakeClaimCreatedEmailSender) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
+	if f.calls != nil {
+		f.calls <- claimCreatedEmailCall{claim: claim, shipment: shipment}
+	}
 }
 
 func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
@@ -114,6 +130,39 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].EventType != model.EventClaimCreated {
 		t.Fatalf("expected one claim_created event, got %+v", events)
+	}
+}
+
+func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimCreatedEmailSender{calls: make(chan claimCreatedEmailCall, 1)}
+	claimSvc.SetClaimCreatedEmailService(fakeEmail)
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDelay,
+		Description: "Demora en la entrega del paquete",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, nil)
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+
+	select {
+	case got := <-fakeEmail.calls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.claim.Status != model.ClaimStatusOpen {
+			t.Fatalf("expected initial open status, got %s", got.claim.Status)
+		}
+		if got.shipment.TrackingID != ship.TrackingID {
+			t.Fatalf("expected shipment %s, got %s", ship.TrackingID, got.shipment.TrackingID)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("expected claim-created email call")
 	}
 }
 

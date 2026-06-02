@@ -24,10 +24,16 @@ type ClaimEvidenceUpload struct {
 }
 
 type ClaimService struct {
-	claimRepo      repository.ClaimRepository
-	claimEventRepo repository.ClaimEventRepository
-	shipmentRepo   repository.ShipmentRepository
-	eventStore     repository.EventStore
+	claimRepo            repository.ClaimRepository
+	claimEventRepo       repository.ClaimEventRepository
+	shipmentRepo         repository.ShipmentRepository
+	eventStore           repository.EventStore
+	claimCreatedEmailSvc ClaimCreatedEmailSender
+}
+
+// ClaimCreatedEmailSender sends the customer-facing notification after a public claim is created.
+type ClaimCreatedEmailSender interface {
+	SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment)
 }
 
 func NewClaimService(
@@ -42,6 +48,11 @@ func NewClaimService(
 		shipmentRepo:   shipmentRepo,
 		eventStore:     eventStore,
 	}
+}
+
+// SetClaimCreatedEmailService wires the customer-facing claim-created email sender.
+func (s *ClaimService) SetClaimCreatedEmailService(svc ClaimCreatedEmailSender) {
+	s.claimCreatedEmailSvc = svc
 }
 
 func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
@@ -168,6 +179,9 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	}); err != nil {
 		rollbackClaim()
 		return model.Claim{}, err
+	}
+	if s.claimCreatedEmailSvc != nil {
+		go s.claimCreatedEmailSvc.SendClaimCreatedNotification(claim, shipment)
 	}
 	// If the shipment's SLA is already expired, move the claim directly to InReview.
 	if isSLAExpired(shipment, now) {
