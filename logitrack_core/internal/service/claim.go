@@ -169,6 +169,28 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		rollbackClaim()
 		return model.Claim{}, err
 	}
+	// If the shipment's SLA is already expired, move the claim directly to InReview.
+	if isSLAExpired(shipment, now) {
+		updatedAt := now
+		if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, updatedAt); err != nil {
+			return model.Claim{}, err
+		}
+		if err := s.appendClaimEvent(model.DomainEvent{
+			ID:         uuid.NewString(),
+			TrackingID: claim.ID,
+			EventType:  model.EventClaimInReview,
+			Payload: model.ClaimInReviewPayload{
+				FromStatus: model.ClaimStatusOpen,
+				ToStatus:   model.ClaimStatusInReview,
+			},
+			ChangedBy: createdBy,
+			Timestamp: updatedAt,
+		}); err != nil {
+			return model.Claim{}, err
+		}
+		claim.Status = model.ClaimStatusInReview
+		claim.UpdatedAt = updatedAt
+	}
 
 	return claim, nil
 }
