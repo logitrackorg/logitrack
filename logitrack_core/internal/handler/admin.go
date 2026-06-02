@@ -37,24 +37,26 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 }
 
 type createUserRequest struct {
-	Username  string        `json:"username"   binding:"required"`
-	Password  string        `json:"password"   binding:"required"`
-	Role      model.Role    `json:"role"       binding:"required"`
-	BranchID  string        `json:"branch_id"`
-	FirstName string        `json:"first_name" binding:"required"`
-	LastName  string        `json:"last_name"  binding:"required"`
-	Email     string        `json:"email"      binding:"required"`
-	Address   model.Address `json:"address"    binding:"required"`
+	Username   string           `json:"username"   binding:"required"`
+	Password   string           `json:"password"   binding:"required"`
+	Role       model.Role       `json:"role"       binding:"required"`
+	BranchID   string           `json:"branch_id"`
+	FirstName  string           `json:"first_name" binding:"required"`
+	LastName   string           `json:"last_name"  binding:"required"`
+	Email      string           `json:"email"      binding:"required"`
+	Address    model.Address    `json:"address"    binding:"required"`
+	DriverType model.DriverType `json:"driver_type"`
 }
 
 type updateUserRequest struct {
-	FirstName *string           `json:"first_name"`
-	LastName  *string           `json:"last_name"`
-	Email     *string           `json:"email"`
-	Role      *model.Role       `json:"role"`
-	BranchID  *string           `json:"branch_id"`
-	Status    *model.UserStatus `json:"status"`
-	Address   *model.Address    `json:"address"`
+	FirstName  *string           `json:"first_name"`
+	LastName   *string           `json:"last_name"`
+	Email      *string           `json:"email"`
+	Role       *model.Role       `json:"role"`
+	BranchID   *string           `json:"branch_id"`
+	Status     *model.UserStatus `json:"status"`
+	Address    *model.Address    `json:"address"`
+	DriverType *model.DriverType `json:"driver_type"`
 }
 
 func validatePassword(password string) error {
@@ -121,14 +123,15 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 	user, err := h.authRepo.CreateUser(repository.UserCreate{
-		Username:  req.Username,
-		Password:  req.Password,
-		Role:      req.Role,
-		BranchID:  req.BranchID,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Email:     req.Email,
-		Address:   req.Address,
+		Username:   req.Username,
+		Password:   req.Password,
+		Role:       req.Role,
+		BranchID:   req.BranchID,
+		FirstName:  req.FirstName,
+		LastName:   req.LastName,
+		Email:      req.Email,
+		Address:    req.Address,
+		DriverType: req.DriverType,
 	})
 	if err != nil {
 		switch err.Error() {
@@ -190,6 +193,10 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 			return
 		}
 	}
+	if req.DriverType != nil && *req.DriverType != model.DriverTypeLastMile && *req.DriverType != model.DriverTypeInterBranch {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tipo de chofer inválido."})
+		return
+	}
 
 	currentUser, _ := c.Get("user")
 	cu := currentUser.(model.User)
@@ -201,14 +208,15 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 
 	update := repository.UserUpdate{
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Email:     req.Email,
-		Role:      req.Role,
-		BranchID:  req.BranchID,
-		Status:    req.Status,
-		Address:   req.Address,
-		UpdatedBy: updatedBy,
+		FirstName:  req.FirstName,
+		LastName:   req.LastName,
+		Email:      req.Email,
+		Role:       req.Role,
+		BranchID:   req.BranchID,
+		Status:     req.Status,
+		Address:    req.Address,
+		DriverType: req.DriverType,
+		UpdatedBy:  updatedBy,
 	}
 	user, err := h.authRepo.UpdateUser(id, update)
 	if err != nil {
