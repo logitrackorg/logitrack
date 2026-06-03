@@ -237,6 +237,21 @@ func (s *Service) SendPasswordResetOTP(to, username, otp string) {
 	s.sendOne(to, "Tu código de verificación — LogiTrack", body, "", "password reset", org.Email)
 }
 
+// SendPasswordChangedNotification sends a security notice to the user when their password
+// is changed successfully. Errors are logged and swallowed (fire-and-forget).
+func (s *Service) SendPasswordChangedNotification(to, username string) {
+	if s == nil {
+		return
+	}
+	if to == "" {
+		log.Printf("[email] password changed: dirección de email vacía para %s — omitido", username)
+		return
+	}
+	org := s.orgConfig()
+	body := renderPasswordChanged(username, org)
+	s.sendOne(to, "Tu contraseña fue modificada — LogiTrack", body, "", "password changed", org.Email)
+}
+
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {
