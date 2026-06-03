@@ -14,6 +14,22 @@ import { SelectMenu } from "../components/ui/SelectMenu";
 import { TopbarActions } from "../components/topbarContext";
 import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
 
+// ── Delayed badge helper ───────────────────────────────────────────────────
+// Mirrors the default SLA threshold: 24 h historical avg × 1.5 = 36 h.
+// Only applied to states the SLA engine monitors; terminal/pre-operative
+// states are excluded so the badge never appears on delivered/cancelled items.
+const SLA_MONITORED: ReadonlySet<string> = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+const DELAYED_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 36 h in ms
+
+function isLikelyDelayed(s: Shipment): boolean {
+  if (!SLA_MONITORED.has(s.status) || !s.updated_at) return false;
+  return Date.now() - new Date(s.updated_at).getTime() > DELAYED_THRESHOLD_MS;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
   const v = s.corrections?.[key];
@@ -611,6 +627,15 @@ export function ShipmentList() {
                       <td className={tdClass}>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} />
+                          {isLikelyDelayed(s) && (
+                            <span
+                              title="Este envío lleva más de 36 h en su estado actual, superando el umbral del motor SLA"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap"
+                            >
+                              <Clock className="w-3 h-3" />
+                              Demorado
+                            </span>
+                          )}
                           {s.has_incident && (
                             <span
                               title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}

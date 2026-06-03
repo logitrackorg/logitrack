@@ -293,36 +293,50 @@ func (s *SLAAnomalyService) runCheck() error {
 			continue // at or above ceiling
 		}
 
-		// AC2 — persist priority escalation.
-		newScore := escalatedScore(sh.priorityScore, nextPriority)
-		_, err := s.db.Exec(`
-			UPDATE shipments
-			SET priority = $1, priority_score = $2, updated_at = $3
-			WHERE tracking_id = $4`,
-			nextPriority, newScore, now, sh.trackingID,
-		)
-		if err != nil {
-			log.Printf("[SLAAnomalyService] update priority %s: %v", sh.trackingID, err)
-			continue
+		// AC2 — persist priority escalation (only when AutoEscalate is enabled).
+		// When the kill-switch is off, detection and audit logging still run so
+		// operators can see what *would* have been escalated, but the shipment's
+		// priority in the DB is left untouched.
+		if cfg.IsAutoEscalateEnabled() {
+			newScore := escalatedScore(sh.priorityScore, nextPriority)
+			_, err := s.db.Exec(`
+				UPDATE shipments
+				SET priority = $1, priority_score = $2, updated_at = $3
+				WHERE tracking_id = $4`,
+				nextPriority, newScore, now, sh.trackingID,
+			)
+			if err != nil {
+				log.Printf("[SLAAnomalyService] update priority %s: %v", sh.trackingID, err)
+				continue
+			}
 		}
 
-		// AC3 — append audit entry.
+		// AC3 — append audit entry (always, regardless of AutoEscalate).
+		reason := fmt.Sprintf(
+			"Prioridad incrementada automáticamente por exceso de tiempo en estado %s",
+			anomalyStatusDisplayName(sh.status),
+		)
+		if !cfg.IsAutoEscalateEnabled() {
+			reason += " [repriorización deshabilitada — sin cambios en DB]"
+		}
 		entry := model.PriorityLog{
 			TrackingID:   sh.trackingID,
 			Timestamp:    now,
 			PriorityFrom: sh.priority,
 			PriorityTo:   nextPriority,
-			Reason: fmt.Sprintf(
-				"Prioridad incrementada automáticamente por exceso de tiempo en estado %s",
-				anomalyStatusDisplayName(sh.status),
-			),
+			Reason:       reason,
 		}
 		if err := s.logRepo.Append(entry); err != nil {
 			log.Printf("[SLAAnomalyService] log append %s: %v", sh.trackingID, err)
 		}
 
-		log.Printf("[SLAAnomalyService] escalated %s: %s → %s (dwell %.1fh, avg %.1fh, status %s, ceiling %s)",
-			sh.trackingID, sh.priority, nextPriority, dwellHours, avg, sh.status, cfg.PriorityCeiling)
+		if cfg.IsAutoEscalateEnabled() {
+			log.Printf("[SLAAnomalyService] escalated %s: %s → %s (dwell %.1fh, avg %.1fh, status %s, ceiling %s)",
+				sh.trackingID, sh.priority, nextPriority, dwellHours, avg, sh.status, cfg.PriorityCeiling)
+		} else {
+			log.Printf("[SLAAnomalyService] detected (no-escalate) %s: demorado en %s (dwell %.1fh, avg %.1fh) — kill-switch activo",
+				sh.trackingID, sh.status, dwellHours, avg)
+		}
 	}
 
 	return nil

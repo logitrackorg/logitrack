@@ -84,6 +84,44 @@ export function DashboardHost() {
 
   const resumenTabRef = useRef<ResumenTabRef>(null);
 
+  // ── Drag-to-scroll para la barra de tabs (mouse) ──────────────────────────
+  // Permite arrastrar el contenedor con click sostenido en escritorio, además
+  // del swipe táctil nativo que ya funciona con overflow-x-auto en móvil.
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ dragging: false, startX: 0, scrollLeft: 0 });
+
+  const onTabsMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    dragState.current = { dragging: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  };
+
+  const onTabsMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const { dragging, startX, scrollLeft } = dragState.current;
+    if (!dragging || !tabsScrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - tabsScrollRef.current.offsetLeft;
+    tabsScrollRef.current.scrollLeft = scrollLeft - (x - startX);
+  };
+
+  const stopDrag = () => {
+    dragState.current.dragging = false;
+    if (tabsScrollRef.current) {
+      tabsScrollRef.current.style.cursor = "";
+      tabsScrollRef.current.style.userSelect = "";
+    }
+  };
+
+  // Suppress tab-change clicks that were actually drag gestures (moved > 5 px).
+  const onTabsClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const movedX = Math.abs(e.pageX - el.offsetLeft - dragState.current.startX);
+    if (movedX > 5) e.stopPropagation();
+  };
+
   const sharedProps = {
     dateFrom,
     dateTo,
@@ -120,7 +158,16 @@ export function DashboardHost() {
             }
           />
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-3 flex gap-0 overflow-x-auto scroll-smooth scrollbar-hide">
+        <div
+          ref={tabsScrollRef}
+          className="max-w-7xl mx-auto px-4 sm:px-6 mt-3 flex gap-0 overflow-x-auto scroll-smooth scrollbar-hide touch-pan-x select-none"
+          style={{ WebkitOverflowScrolling: "touch" }}
+          onMouseDown={onTabsMouseDown}
+          onMouseMove={onTabsMouseMove}
+          onMouseUp={stopDrag}
+          onMouseLeave={stopDrag}
+          onClickCapture={onTabsClickCapture}
+        >
           {tabs.map((t) => {
             const Icon = t.icon;
             return (
@@ -179,7 +226,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`h-11 px-4 flex items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:ring-inset rounded-t-md ${
+      className={`h-11 px-4 flex shrink-0 items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:ring-inset rounded-t-md ${
         active
           ? "border-[#2563eb] text-[#2563eb] font-semibold bg-blue-50/50"
           : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50/60 font-medium"

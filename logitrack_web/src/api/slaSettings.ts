@@ -15,6 +15,9 @@ export interface SLASettings {
   priority_ceiling: "media" | "alta";
   enabled_states: string[];
   cache_interval_minutes: number;
+  /** Kill-switch: cuando es false el motor detecta demoras y las registra en
+   *  el log pero NO modifica la prioridad en la base de datos. Default: true. */
+  auto_escalate: boolean;
 }
 
 export const slaSettingsApi = {

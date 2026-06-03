@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Gauge, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power } from "lucide-react";
 import { slaSettingsApi, type SLASettings } from "../api/slaSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -277,6 +277,67 @@ export function SlaSettings() {
               )
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Card 5: Kill-switch de repriorización ───────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3 border-b border-slate-100">
+          <CardTitle className="text-base">Repriorización automática</CardTitle>
+          <CardDescription>
+            Cuando está deshabilitado, el motor sigue detectando envíos demorados y los registra
+            en el log de auditoría, pero <strong>no modifica la prioridad</strong> en la base de datos.
+            Útil para auditar el motor sin efectos secundarios operativos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <label className="flex items-center justify-between gap-4 cursor-pointer group">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                (draft.auto_escalate ?? true) ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+              }`}>
+                <Power className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {(draft.auto_escalate ?? true) ? "Habilitada" : "Deshabilitada"}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {(draft.auto_escalate ?? true)
+                    ? "Las prioridades se actualizan automáticamente al detectar demoras."
+                    : "Solo detección y log — sin cambios en la base de datos."}
+                </p>
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div className="relative shrink-0">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={draft.auto_escalate ?? true}
+                onChange={(e) => setDraft({ ...draft, auto_escalate: e.target.checked })}
+              />
+              <div
+                onClick={() => setDraft({ ...draft, auto_escalate: !(draft.auto_escalate ?? true) })}
+                className={`w-12 h-6 rounded-full cursor-pointer transition-colors duration-200 ${
+                  (draft.auto_escalate ?? true) ? "bg-emerald-500" : "bg-slate-300"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all duration-200 ${
+                  (draft.auto_escalate ?? true) ? "translate-x-6" : "translate-x-0.5"
+                }`} style={{ position: "relative", marginTop: 2 }} />
+              </div>
+            </div>
+          </label>
+          {!(draft.auto_escalate ?? true) && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-700 leading-snug">
+                El motor detectará demoras pero <strong>no aplicará cambios</strong>. Los eventos
+                seguirán apareciendo en la Auditoría SLA marcados como "sin cambios en DB".
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
