@@ -2,11 +2,14 @@ package handler
 
 import (
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
+
+var reHHMM = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // validCeilings is the set of priority levels the admin may choose as ceiling.
 var validCeilings = map[string]bool{"media": true, "alta": true}
@@ -49,6 +52,13 @@ func (h *SLASettingsHandler) Update(c *gin.Context) {
 	if len(cfg.EnabledStates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "enabled_states no puede estar vacío"})
 		return
+	}
+	if cfg.EscalationTime != "" && !reHHMM.MatchString(cfg.EscalationTime) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "escalation_time debe tener el formato HH:MM (ej. 23:00)"})
+		return
+	}
+	if cfg.EscalationTime == "" {
+		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
 	}
 
 	if err := h.repo.Update(cfg); err != nil {

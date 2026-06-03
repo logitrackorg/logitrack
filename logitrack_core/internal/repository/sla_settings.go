@@ -59,6 +59,9 @@ func (r *SLASettingsRepository) Get() model.SLASettings {
 	if cfg.AutoEscalate == nil {
 		cfg.AutoEscalate = model.DefaultSLASettings().AutoEscalate
 	}
+	if cfg.EscalationTime == "" {
+		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
+	}
 	return cfg
 }
 

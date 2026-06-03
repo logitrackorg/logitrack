@@ -30,6 +30,13 @@ type SLASettings struct {
 	// Use a pointer so that JSON omission (old config files) can be defaulted
 	// to true without ambiguity with an explicit false.
 	AutoEscalate *bool `json:"auto_escalate,omitempty"`
+
+	// EscalationTime is the wall-clock time (Argentina time, "HH:MM" 24-hour)
+	// at which the Executor fires the once-daily priority escalation. The
+	// Collector continues to refresh averages into a daily buffer throughout the
+	// day; at EscalationTime those averages are consolidated and used to evaluate
+	// and escalate all active shipments. Default "23:00".
+	EscalationTime string `json:"escalation_time,omitempty"`
 }
 
 // MonitoredStatusCodes returns the canonical list of active status codes the
@@ -81,6 +88,7 @@ func DefaultSLASettings() SLASettings {
 		EnabledStates:        MonitoredStatusCodes(),
 		CacheIntervalMinutes: 60,
 		AutoEscalate:         boolPtr(true),
+		EscalationTime:       "23:00",
 	}
 }
 

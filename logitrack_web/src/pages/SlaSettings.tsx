@@ -249,7 +249,7 @@ export function SlaSettings() {
       {/* ── Card 4: Frecuencia de recálculo ─────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3 border-b border-slate-100">
-          <CardTitle className="text-base">Frecuencia de recálculo de promedios</CardTitle>
+          <CardTitle className="text-base">Frecuencia de recálculo de promedios (Collector)</CardTitle>
           <CardDescription>
             Tiempo en minutos que el motor reutiliza los promedios históricos calculados antes de
             consultar la base de datos nuevamente. Valores más altos reducen la carga en la base de datos.
@@ -280,7 +280,37 @@ export function SlaSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Card 5: Kill-switch de repriorización ───────────────────────────── */}
+      {/* ── Card 5: Hora de repriorización ─────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3 border-b border-slate-100">
+          <CardTitle className="text-base">Hora de repriorización diaria</CardTitle>
+          <CardDescription>
+            El Collector calcula y acumula promedios a lo largo del día. A la hora indicada, el
+            Executor consolida esos datos y aplica los saltos de prioridad en la base de datos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="time"
+              value={draft.escalation_time ?? "23:00"}
+              onChange={(e) => setDraft({ ...draft, escalation_time: e.target.value })}
+              className="h-9 px-3 text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+            />
+            <span className="text-sm text-slate-500">hora local Argentina (ART, UTC−3)</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Define a qué hora se aplicarán los saltos de prioridad.{" "}
+            <span className="text-amber-600 font-medium">
+              Nota: El ruteo automático diario se actualiza a las 02:00 AM. Se recomienda
+              programar esta repriorización <em>antes</em> de esa hora para que la asignación de
+              vehículos tome los valores actualizados.
+            </span>
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ── Card 6: Kill-switch de repriorización ───────────────────────────── */}
       <Card>
         <CardHeader className="pb-3 border-b border-slate-100">
           <CardTitle className="text-base">Repriorización automática</CardTitle>
@@ -291,14 +321,20 @@ export function SlaSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
-          <label className="flex items-center justify-between gap-4 cursor-pointer group">
-            <div className="flex items-center gap-2.5">
+          {/*
+            The <label> wraps the entire row so clicking anywhere — icon, text,
+            or the visual switch — toggles the hidden checkbox via the browser's
+            native label association. No extra onClick handlers are needed.
+          */}
+          <label className="flex items-center justify-between gap-4 cursor-pointer select-none group">
+            {/* Left: icon + text */}
+            <div className="flex items-center gap-2.5 min-w-0">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                 (draft.auto_escalate ?? true) ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
               }`}>
                 <Power className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800">
                   {(draft.auto_escalate ?? true) ? "Habilitada" : "Deshabilitada"}
                 </p>
@@ -309,24 +345,19 @@ export function SlaSettings() {
                 </p>
               </div>
             </div>
-            {/* Toggle switch */}
-            <div className="relative shrink-0">
+
+            {/* Right: toggle switch — uses Tailwind peer pattern for reliable styling */}
+            <div className="relative w-12 h-6 shrink-0">
               <input
                 type="checkbox"
-                className="sr-only"
+                className="sr-only peer"
                 checked={draft.auto_escalate ?? true}
                 onChange={(e) => setDraft({ ...draft, auto_escalate: e.target.checked })}
               />
-              <div
-                onClick={() => setDraft({ ...draft, auto_escalate: !(draft.auto_escalate ?? true) })}
-                className={`w-12 h-6 rounded-full cursor-pointer transition-colors duration-200 ${
-                  (draft.auto_escalate ?? true) ? "bg-emerald-500" : "bg-slate-300"
-                }`}
-              >
-                <div className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-all duration-200 ${
-                  (draft.auto_escalate ?? true) ? "translate-x-6" : "translate-x-0.5"
-                }`} style={{ position: "relative", marginTop: 2 }} />
-              </div>
+              {/* Track */}
+              <div className="absolute inset-0 rounded-full bg-slate-300 peer-checked:bg-emerald-500 transition-colors duration-200" />
+              {/* Thumb */}
+              <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-6" />
             </div>
           </label>
           {!(draft.auto_escalate ?? true) && (

@@ -303,6 +303,7 @@ func main() {
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
 	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo, shipmentRepo, branchRepo)
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo)
 	slaSettingsRepo := repository.NewSLASettingsRepository()
 	// Migración de arranque: fuerza la lista EnabledStates a la lista canónica
 	// derivada de las constantes de estado del modelo, sobreescribiendo cualquier
@@ -522,6 +523,7 @@ func main() {
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)

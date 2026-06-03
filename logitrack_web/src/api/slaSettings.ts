@@ -18,6 +18,9 @@ export interface SLASettings {
   /** Kill-switch: cuando es false el motor detecta demoras y las registra en
    *  el log pero NO modifica la prioridad en la base de datos. Default: true. */
   auto_escalate: boolean;
+  /** Hora de Argentina (24 h, "HH:MM") en la que el Executor dispara la
+   *  repriorización diaria. Default: "23:00". */
+  escalation_time: string;
 }
 
 export const slaSettingsApi = {
