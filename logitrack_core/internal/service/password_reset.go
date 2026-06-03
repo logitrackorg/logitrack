@@ -172,6 +172,10 @@ func (s *PasswordResetService) ConfirmReset(username, otp, newPassword string) e
 		log.Printf("[password_reset] error marcando token como usado para %s: %v", username, err)
 	}
 
+	if user.Email != "" {
+		go s.emailSvc.SendPasswordChangedNotification(user.Email, user.Username)
+	}
+
 	_ = s.accessLogRepo.Log(model.AccessLog{
 		ID:        uuid.NewString(),
 		Username:  user.Username,

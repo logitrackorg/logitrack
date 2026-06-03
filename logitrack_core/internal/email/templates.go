@@ -375,6 +375,32 @@ const deliveryFailedBodySrc = `
 </div>
 {{end}}`
 
+const passwordChangedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  ✅ Tu contraseña fue modificada exitosamente.
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+  Hola, <strong>{{.Username}}</strong>. Te confirmamos que la contraseña de tu cuenta en LogiTrack fue actualizada correctamente.
+</p>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+  <p style="margin:0;color:#166534;font-size:14px;line-height:1.6;">
+    Si vos realizaste este cambio, no necesitás hacer nada más.
+  </p>
+</div>
+
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+  <p style="margin:0 0 6px;font-weight:700;color:#b91c1c;font-size:14px;">¿No fuiste vos?</p>
+  <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.6;">
+    Si no realizaste este cambio, contactá de inmediato con el soporte de LogiTrack para proteger tu cuenta.
+  </p>
+</div>
+
+<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+  Este es un mensaje automático de seguridad. No respondas a este email.
+</p>`
+
 const passwordResetOTPBodySrc = `
 <p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
   🔐 Tu código de verificación
@@ -411,6 +437,7 @@ var (
 	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
 	deliveryFailedTmpl      = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
 	passwordResetOTPTmpl    = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
+	passwordChangedTmpl     = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -697,6 +724,24 @@ func renderDeliveryFailedNotification(s model.Shipment, attemptDate string, atte
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("No pudimos entregar tu envío %s%s", s.TrackingID, subjectSuffix),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderPasswordChanged(username string, org model.OrganizationConfig) string {
+	type changedData struct {
+		Username string
+	}
+	var bodyBuf bytes.Buffer
+	if err := passwordChangedTmpl.Execute(&bodyBuf, changedData{Username: username}); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    "Tu contraseña fue modificada — LogiTrack",
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,
