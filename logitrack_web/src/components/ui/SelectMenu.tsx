@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { cn } from "@/lib/utils";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 export type SelectOption = { value: string; label: string };
@@ -41,8 +42,6 @@ export function SelectMenu({
   className = "",
 }: SelectMenuProps) {
   const [open, setOpen] = useState(false);
-  const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -125,29 +124,6 @@ export function SelectMenu({
     }
   };
 
-  const h = size === "sm" ? 36 : 40;
-
-  const triggerStyle: CSSProperties = {
-    height: h,
-    minWidth: 0,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    padding: "0 12px",
-    borderRadius: 10,
-    border: `1px solid ${focus ? "var(--brand)" : hover ? "var(--border-strong)" : "var(--border)"}`,
-    background: "var(--bg-card)",
-    color: selected || value === "" ? "var(--text-primary)" : "var(--text-muted)",
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    boxShadow: focus ? "0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent)" : "none",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-    width: "100%",
-  };
-
   return (
     <div ref={wrapRef} className={className} style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -158,11 +134,21 @@ export function SelectMenu({
         aria-label={ariaLabel}
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={onKeyDown}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        style={triggerStyle}
+        className={cn(
+          "inline-flex items-center justify-between w-full gap-2 px-3",
+          "rounded-[10px] border text-sm font-medium",
+          "border-blue-200 hover:border-blue-400 focus:border-blue-500",
+          "focus:ring-[3px] focus:ring-blue-500/20",
+          "transition-[border-color,box-shadow] duration-150",
+          size === "sm" ? "h-9" : "h-10",
+          disabled && "opacity-60 cursor-not-allowed",
+          !disabled && "cursor-pointer",
+        )}
+        style={{
+          background: "var(--bg-card)",
+          color: selected || value === "" ? "var(--text-primary)" : "var(--text-muted)",
+          minWidth: 0,
+        }}
       >
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {selectedLabel}
@@ -228,26 +214,12 @@ export function SelectMenu({
                 aria-selected={isSelected}
                 onMouseEnter={() => setActiveIdx(optIdx)}
                 onClick={() => commit(it.value)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  color: isSelected ? "var(--brand)" : "var(--text-primary)",
-                  fontWeight: isSelected ? 600 : 500,
-                  background: isActive
-                    ? isSelected
-                      ? "var(--brand-tint)"
-                      : "var(--bg-hover)"
-                    : isSelected
-                    ? "var(--brand-tint)"
-                    : "transparent",
-                }}
+                className={cn(
+                  "flex items-center justify-between gap-2 px-[10px] py-2",
+                  "rounded-lg text-sm cursor-pointer whitespace-nowrap",
+                  (isActive || isSelected) ? "bg-blue-50" : "bg-transparent",
+                  isSelected ? "text-blue-600 font-semibold" : "text-[var(--text-primary)] font-medium",
+                )}
               >
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
                 {isSelected && <Check size={15} style={{ flexShrink: 0 }} />}

@@ -68,7 +68,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           left: pad + 2,
           top: "50%",
           transform: "translateY(-50%)",
-          color: "#f59e0b",
+          color: "#f97316",
           opacity: isDark ? 0.35 : 0,
           transition: "opacity 0.7s ease",
         }}
@@ -81,7 +81,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           right: pad + 3,
           top: "50%",
           transform: "translateY(-50%)",
-          color: "#cbd5e1",
+          color: "#2563eb",
           opacity: isDark ? 0 : 0.45,
           transition: "opacity 0.7s ease",
         }}
@@ -131,7 +131,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
             transform: isDark ? "rotate(0deg) scale(1)" : "rotate(90deg) scale(0.4)",
           }}
         >
-          <Moon size={compact ? 13 : 15} color="#e2e8f0" fill="#e2e8f0" />
+          <Moon size={compact ? 13 : 15} color="#2563eb" fill="#2563eb" />
         </span>
       </span>
     </button>

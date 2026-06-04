@@ -11,9 +11,9 @@ type GradientCardProps = React.HTMLAttributes<HTMLDivElement> & {
 };
 
 const TONES: Record<NonNullable<GradientCardProps["tone"]>, string> = {
-  brand: "from-[#1e3a5f] to-[#2c5282] shadow-[0_4px_12px_rgba(30,58,95,0.15)]",
+  brand: "from-blue-600 to-blue-800 shadow-[0_4px_12px_rgba(37,99,235,0.2)]",
   emerald: "from-emerald-700 to-emerald-500 shadow-[0_4px_12px_rgba(5,150,105,0.18)]",
-  amber: "from-amber-700 to-amber-500 shadow-[0_4px_12px_rgba(180,83,9,0.18)]",
+  amber: "from-orange-500 to-orange-700 shadow-[0_4px_12px_rgba(249,115,22,0.2)]",
   rose: "from-rose-700 to-rose-500 shadow-[0_4px_12px_rgba(225,29,72,0.18)]",
 };
 
@@ -21,7 +21,7 @@ export function GradientCard({ className, tone = "brand", ...props }: GradientCa
   return (
     <div
       className={cn(
-        "rounded-xl bg-gradient-to-br p-5 text-white",
+        "rounded-xl bg-gradient-to-br p-5 text-white cursor-pointer hover:shadow-lg transition-shadow duration-200",
         TONES[tone],
         className,
       )}

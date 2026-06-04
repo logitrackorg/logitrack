@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
+import { Button } from "./button";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -193,39 +194,21 @@ export function ConfirmDialog({
             justifyContent: "flex-end",
           }}
         >
-          <button
+          <Button
+            size="lg"
+            variant="outline"
             onClick={onCancel}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              background: "var(--bg-card)",
-              color: "var(--text-secondary)",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "background 0.2s",
-            }}
           >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
+            variant={variant === "danger" ? "destructive" : "default"}
             onClick={() => onConfirm(requireComment ? trimmedNotes : undefined)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "none",
-              background: variant === "danger" ? "var(--danger-c)" : "#1e3a5f",
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "background 0.2s",
-            }}
             disabled={!canConfirm}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

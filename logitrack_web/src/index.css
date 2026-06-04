@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/plus-jakarta-sans";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -24,12 +24,33 @@ h3 { font-size: 0.9375rem; }
 
 /* ─── Design tokens ──────────────────────────────────────── */
 :root {
-  /* Brand */
-  --brand-900: #0f2744;
-  --brand-800: #1e3a5f;
+  /* Brand - Blue */
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
   --brand-700: #1d4ed8;
-  --brand-100: #e0eaff;
-  --brand-50:  #eff6ff;
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8f;
+  --brand-950: #172554;
+
+  /* Accent - Orange */
+  --accent: #f97316;
+  --accent-hover: #ea580c;
+  --accent-50: #fff7ed;
+  --accent-100: #ffedd5;
+  --accent-200: #fed7aa;
+  --accent-300: #fdba74;
+  --accent-400: #fb923c;
+  --accent-500: #f97316;
+  --accent-600: #ea580c;
+  --accent-700: #c2410c;
+  --accent-800: #9a3412;
+  --accent-900: #7c2d12;
+  --accent-950: #431407;
 
   /* Neutrals */
   --gray-900: #111827;
@@ -43,7 +64,7 @@ h3 { font-size: 0.9375rem; }
   /* Semantic */
   --text-primary:   var(--gray-900);
   --text-secondary: var(--gray-500);
-  --text-muted:     var(--gray-400);
+  --text-muted:     #64748B;
   --border: oklch(0.922 0 0);
   --bg-page:        #f8fafc;
   --bg-card:        #ffffff;
@@ -51,7 +72,7 @@ h3 { font-size: 0.9375rem; }
 
   /* Status colors */
   --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-warning: #f97316;
   --color-danger:  #ef4444;
   --color-info:    #3b82f6;
 
@@ -202,6 +223,14 @@ h3 { font-size: 0.9375rem; }
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
 }
 
+/* NewShipment form — override inline style outline:none with visible focus ring */
+.new-shipment-form input:focus,
+.new-shipment-form select:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5) !important;
+}
+
 .input::placeholder,
 .textarea::placeholder {
   color: var(--text-muted);
@@ -337,8 +366,8 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 }
 
 /* Status badge colors */
-.badge-pending          { background: #9ca3af; color: #fff; }
-.badge-in_progress      { background: #f59e0b; color: #fff; }
+.badge-pending          { background: var(--text-muted); color: #fff; }
+.badge-in_progress      { background: #f97316; color: #fff; }
 .badge-pre_transit      { background: #06b6d4; color: #fff; }
 .badge-in_transit       { background: #3b82f6; color: #fff; }
 .badge-at_branch        { background: #8b5cf6; color: #fff; }
@@ -350,21 +379,6 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 .badge-returned         { background: #6b7280; color: #fff; }
 .badge-cancelled        { background: #b91c1c; color: #fff; }
 
-/* Priority badge */
-.badge-priority {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  border: 1px solid;
-}
-
-.badge-alta  { background: var(--danger-bg); color: var(--danger-text); border-color: var(--danger-border); }
-.badge-media { background: var(--warn-bg);   color: var(--warn-text);   border-color: var(--warn-border); }
-.badge-baja  { background: var(--ok-bg);     color: var(--ok-text);     border-color: var(--ok-border); }
 
 /* ─── Modal overlay ──────────────────────────────────────── */
 .modal-overlay {
@@ -463,7 +477,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   border: 0;
 }
 
-@theme inline { --font-heading: var(--font-sans); --font-sans: 'Geist Variable', sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
+@theme inline { --font-heading: var(--font-sans); --font-sans: 'Plus Jakarta Sans Variable', sans-serif; --color-sidebar-ring: var(--sidebar-ring); --color-sidebar-border: var(--sidebar-border); --color-sidebar-accent-foreground: var(--sidebar-accent-foreground); --color-sidebar-accent: var(--sidebar-accent); --color-sidebar-primary-foreground: var(--sidebar-primary-foreground); --color-sidebar-primary: var(--sidebar-primary); --color-sidebar-foreground: var(--sidebar-foreground); --color-sidebar: var(--sidebar); --color-chart-5: var(--chart-5); --color-chart-4: var(--chart-4); --color-chart-3: var(--chart-3); --color-chart-2: var(--chart-2); --color-chart-1: var(--chart-1); --color-ring: var(--ring); --color-input: var(--input); --color-border: var(--border); --color-destructive: var(--destructive); --color-accent-foreground: var(--accent-foreground); --color-accent: var(--accent); --color-muted-foreground: var(--muted-foreground); --color-muted: var(--muted); --color-secondary-foreground: var(--secondary-foreground); --color-secondary: var(--secondary); --color-primary-foreground: var(--primary-foreground); --color-primary: var(--primary); --color-popover-foreground: var(--popover-foreground); --color-popover: var(--popover); --color-card-foreground: var(--card-foreground); --color-card: var(--card); --color-foreground: var(--foreground); --color-background: var(--background); --radius-sm: calc(var(--radius) * 0.6); --radius-md: calc(var(--radius) * 0.8); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.4); --radius-2xl: calc(var(--radius) * 1.8); --radius-3xl: calc(var(--radius) * 2.2); --radius-4xl: calc(var(--radius) * 2.6); }
 
 .dark { --background: oklch(0.145 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.205 0 0); --card-foreground: oklch(0.985 0 0); --popover: oklch(0.205 0 0); --popover-foreground: oklch(0.985 0 0); --primary: oklch(0.922 0 0); --primary-foreground: oklch(0.205 0 0); --secondary: oklch(0.269 0 0); --secondary-foreground: oklch(0.985 0 0); --muted: oklch(0.269 0 0); --muted-foreground: oklch(0.708 0 0); --accent: oklch(0.269 0 0); --accent-foreground: oklch(0.985 0 0); --destructive: oklch(0.704 0.191 22.216); --border: oklch(1 0 0 / 10%); --input: oklch(1 0 0 / 15%); --ring: oklch(0.556 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --sidebar: oklch(0.205 0 0); --sidebar-foreground: oklch(0.985 0 0); --sidebar-primary: oklch(0.488 0.243 264.376); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.269 0 0); --sidebar-accent-foreground: oklch(0.985 0 0); --sidebar-border: oklch(1 0 0 / 10%); --sidebar-ring: oklch(0.556 0 0); }
 
@@ -473,7 +487,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   body {
     @apply bg-background text-foreground; }
   html {
-    @apply font-sans; } }
+    @apply font-sans transition-colors duration-300; } }
 
 /* ─── Dashboard animations ────────────────────────────────── */
 @keyframes fade-in {
@@ -522,10 +536,10 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --fc-now-indicator-color:   #ef4444;
   --fc-event-border-color:    transparent;
   --fc-event-text-color:      #ffffff;
-  --fc-button-bg-color:       #1e3a5f;
-  --fc-button-border-color:   #1e3a5f;
-  --fc-button-hover-bg-color: #15294a;
-  --fc-button-active-bg-color:#0f1e36;
+  --fc-button-bg-color:       #2563eb;
+  --fc-button-border-color:   #2563eb;
+  --fc-button-hover-bg-color: #1d4ed8;
+  --fc-button-active-bg-color:#1e40af;
   --fc-highlight-color:       rgba(37, 99, 235, 0.1);
 }
 
@@ -553,7 +567,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
 /* Eventos planificados (borde punteado ámbar — sin aplicar, hoy) */
 .fc-planned .fc-event-main { opacity: 0.88; }
-.fc .fc-planned { border: 1.5px dashed #f59e0b !important; background: rgba(245,158,11,0.15) !important; }
+.fc .fc-planned { border: 1.5px dashed #f97316 !important; background: rgba(249,115,22,0.15) !important; }
 
 /* Eventos de pronóstico (D+1, D+2 — rayado sutil) */
 .fc .fc-forecast {
@@ -602,10 +616,10 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
   /* Texto */
   --text-primary:   #111827;
-  --text-heading:   #1e3a5f;
+  --text-heading:   #1e3a8f;
   --text-strong:    #374151;
   --text-secondary: #6b7280;
-  --text-muted:     #9ca3af;
+  --text-muted:     #64748B;
   --text-faint:     #cbd5e1;
 
   /* Marca */
@@ -614,6 +628,12 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --brand-tint:        #eff6ff;
   --brand-tint-border: #bfdbfe;
   --on-brand:          #ffffff;
+
+  /* Acento - Naranja */
+  --accent:        #f97316;
+  --accent-hover:  #ea580c;
+  --accent-tint:        #fff7ed;
+  --accent-tint-border: #fed7aa;
 
   /* Estado: éxito */
   --ok:        #10b981;
@@ -628,7 +648,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --danger-border: #fecaca;
 
   /* Estado: advertencia */
-  --warn:        #f59e0b;
+  --warn:        #f97316;
   --warn-text:   #92400e;
   --warn-bg:     #fffbeb;
   --warn-border: #fde68a;
@@ -647,8 +667,9 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
   /* Chrome */
   --topbar-bg:           rgba(255,255,255,0.92);
-  --sidebar-bg:          #0f2744;
-  --sidebar-border:      #1e3a5f;
+  --sidebar-bg:          #1e3a5f;
+  --sidebar-border:      #1e40af;
+  --sidebar-hover:       #1e40af;
   --theme-toggle-border: rgba(0,0,0,0.12);
 }
 
@@ -663,9 +684,15 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --gray-50:  #1b2436;
 
   /* Marca: botón primario visible en oscuro */
-  --brand-900: #2563eb;
+  --brand-900: #3b82f6;
   --brand-800: #2563eb;
-  --brand-700: #3b82f6;
+  --brand-700: #1d4ed8;
+
+  /* Acento - Naranja */
+  --accent:        #fb923c;
+  --accent-hover:  #f97316;
+  --accent-tint:        rgba(251,146,60,0.16);
+  --accent-tint-border: rgba(251,146,60,0.34);
 
   /* Superficies */
   --bg-page:      #0b111f;
@@ -708,10 +735,10 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --danger-border: rgba(239,68,68,0.36);
 
   /* Estado: advertencia */
-  --warn:        #f59e0b;
+  --warn:        #f97316;
   --warn-text:   #fbbf24;
-  --warn-bg:     rgba(245,158,11,0.15);
-  --warn-border: rgba(245,158,11,0.34);
+  --warn-bg:     rgba(249,115,22,0.15);
+  --warn-border: rgba(249,115,22,0.34);
 
   /* Estado: info */
   --info:        #3b82f6;
@@ -727,7 +754,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
   /* Estado semántico legacy */
   --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-warning: #f97316;
   --color-danger:  #ef4444;
   --color-info:    #3b82f6;
 
@@ -741,6 +768,7 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   --topbar-bg:           rgba(13,20,34,0.82);
   --sidebar-bg:          #0c1424;
   --sidebar-border:      #1c2842;
+  --sidebar-hover:       #1e40af;
   --theme-toggle-border: rgba(255,255,255,0.18);
 
   /* Alineación de tokens shadcn (ui/card, ui/button, etc.) con la
@@ -929,17 +957,17 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 .dark .hover\:bg-sky-50\/60:hover   { background-color: var(--info-bg) !important; }
 
 /* ─── Remapeo de clases Tailwind arbitrarias (valor [#hex]) en oscuro ───
-   Solo las que romperían contraste. Los fondos navy (bg-[#1e3a5f] etc.)
+   Solo las que romperían contraste. Los fondos sidebar oscuros se dejan.
    se dejan: ya son oscuros y llevan texto claro encima. */
-.dark .text-\[\#1e3a5f\],
 .dark .text-\[\#15294a\],
-.dark .text-\[\#0f2744\],
 .dark .text-\[\#162d4a\],
 .dark .text-\[\#1e293b\],
 .dark .text-\[\#0f172a\]     { color: var(--text-heading) !important; }
 .dark .text-\[\#2563eb\],
 .dark .text-\[\#1d4ed8\],
 .dark .text-\[\#1e40af\]     { color: var(--brand) !important; }
+.dark .text-\[\#f97316\],
+.dark .text-\[\#ea580c\]     { color: var(--accent) !important; }
 .dark .bg-\[\#e0eaff\],
 .dark .bg-\[\#dbeafe\]       { background-color: var(--brand-tint) !important; }
 .dark .bg-\[\#eff6ff\],

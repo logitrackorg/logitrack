@@ -525,6 +525,7 @@ export function NotificationBell() {
           </button>
           <button
             onClick={dismissCriticalAlert}
+            aria-label="Descartar alerta"
             title="Descartar"
             style={{ flexShrink: 0, background: "none", border: "none", color: "#fca5a5", cursor: "pointer", display: "flex", padding: 4 }}
           >
@@ -560,7 +561,7 @@ export function NotificationBell() {
                   <CheckCheck size={14} /> Marcar todas
                 </button>
               )}
-              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", display: "flex" }}>
+              <button onClick={() => setOpen(false)} aria-label="Cerrar panel" style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", display: "flex" }}>
                 <X size={16} />
               </button>
             </div>

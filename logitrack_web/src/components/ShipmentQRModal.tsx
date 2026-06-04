@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { Package, Smartphone, Printer, Download } from 'lucide-react';
 import './ShipmentQRModal.css';
 
 interface Props {
@@ -18,7 +19,7 @@ const ShipmentQRModal: React.FC<Props> = ({
   onClose,
   trackingId,
   qrCodeBase64,
-  title = "📦 Código QR del Envío",
+  title = "Código QR del Envío",
   subtitle,
   showTrackingLabel = true,
   showActions = true,
@@ -85,7 +86,7 @@ const ShipmentQRModal: React.FC<Props> = ({
         <div className="qr-payment-card" onClick={(e) => e.stopPropagation()}>
           <button className="qr-payment-close" onClick={onClose} aria-label="Cerrar">✕</button>
           <div className="qr-payment-header">
-            <div className="qr-payment-icon">📱</div>
+            <div className="qr-payment-icon"><Smartphone className="w-5 h-5" /></div>
             <h2 className="qr-payment-title">{title ?? "QR de cobro"}</h2>
             {subtitle && <p className="qr-payment-subtitle">{subtitle}</p>}
           </div>
@@ -108,7 +109,7 @@ const ShipmentQRModal: React.FC<Props> = ({
     <div className="qr-modal-overlay" onClick={onClose}>
       <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="qr-modal-header">
-          <h2>{title}</h2>
+          <h2><Package className="w-4 h-4 inline" /> {title}</h2>
           <button className="qr-modal-close" onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
@@ -139,10 +140,10 @@ const ShipmentQRModal: React.FC<Props> = ({
           {showActions && (
             <>
               <button className="btn-primary" onClick={handlePrint}>
-                🖨️ Imprimir
+                <Printer className="w-4 h-4" /> Imprimir
               </button>
               <button className="btn-secondary" onClick={handleDownload}>
-                💾 Descargar PNG
+                <Download className="w-4 h-4" /> Descargar PNG
               </button>
             </>
           )}

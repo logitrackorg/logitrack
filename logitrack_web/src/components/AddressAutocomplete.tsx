@@ -95,9 +95,10 @@ interface Props {
   placeholder?: string;
   style?: React.CSSProperties;
   required?: boolean;
+  className?: string;
 }
 
-export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelect, placeholder, style, required }: Props) {
+export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelect, placeholder, style, required, className }: Props) {
   const value = valueProp ?? "";
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -161,6 +162,7 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <input
+        className={className}
         style={style}
         value={value}
         required={required}
