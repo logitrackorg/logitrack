@@ -4,27 +4,40 @@ package model
 type FleetStatus string
 
 const (
-	FleetStatusCritical FleetStatus = "CRÍTICO"
-	FleetStatusIdle     FleetStatus = "OCIOSO"
-	FleetStatusStable   FleetStatus = "ESTABLE"
+	FleetStatusCritical    FleetStatus = "CRÍTICO"
+	FleetStatusWarning     FleetStatus = "ADVERTENCIA"
+	FleetStatusPreventive  FleetStatus = "PREVENTIVO"
+	FleetStatusIdle        FleetStatus = "OCIOSO"
+	FleetStatusStable      FleetStatus = "ESTABLE"
 )
 
-// FleetSuggestion is the output of the fleet-capacity heuristic engine.
+// FleetSuggestion is the output of the heuristic fleet-capacity engine.
 type FleetSuggestion struct {
-	// Status is the heuristic outcome: CRÍTICO, OCIOSO, or ESTABLE.
+	// Status is the heuristic outcome: one of the FleetStatus constants.
 	Status FleetStatus `json:"status"`
 	// Message is the human-readable recommendation for the operator.
 	Message string `json:"message"`
-	// DelayRatePct is the percentage of active monitored shipments that are
-	// currently delayed (the metric that triggered the rule).
+
+	// ── SLA metrics ────────────────────────────────────────────────────────
+	// DelayRatePct is the % of active monitored shipments currently delayed.
 	DelayRatePct float64 `json:"delay_rate_pct"`
-	// VolumeChangePct is the % change in shipment volume this week vs last week.
-	// Negative = drop. Only meaningful when Status == OCIOSO.
-	VolumeChangePct float64 `json:"volume_change_pct"`
-	// ThisWeekCount and LastWeekCount are the raw shipment counts used for the
-	// volume comparison, exposed so the frontend can show supporting data.
-	ThisWeekCount int `json:"this_week_count"`
-	LastWeekCount int `json:"last_week_count"`
+
+	// ── Operational metrics (new) ──────────────────────────────────────────
+	// ActiveDrivers is the total number of drivers with status='activo'.
+	ActiveDrivers int `json:"active_drivers"`
+	// IdleDrivers is the number of active drivers with 0 shipments assigned today.
+	IdleDrivers int `json:"idle_drivers"`
+	// OrphanShipments is the count of out_for_delivery shipments not assigned
+	// to any driver route today.
+	OrphanShipments int `json:"orphan_shipments"`
+	// ActiveDriversLoad is the average number of shipments per driver that has
+	// at least one shipment assigned today.
+	ActiveDriversLoad float64 `json:"active_drivers_load"`
+	// DriversNeeded is the calculated number of extra drivers required to cover
+	// orphan shipments (only set when Status == CRÍTICO).
+	DriversNeeded int `json:"drivers_needed,omitempty"`
+	// CapacityUsedPct is the load vs MaxPackagesPerDriver (only set for PREVENTIVO).
+	CapacityUsedPct float64 `json:"capacity_used_pct,omitempty"`
 }
 
 // SLAMetrics is the response payload for GET /stats/sla-metrics.
