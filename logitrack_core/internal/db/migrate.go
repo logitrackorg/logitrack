@@ -567,6 +567,36 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
 
+		-- Autenticación de Doble Factor (2FA)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_secret TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_enrolled_at TIMESTAMPTZ;
+
+		-- Tokens temporales con scope limitado para flujo 2FA
+		CREATE TABLE IF NOT EXISTS two_fa_pending_sessions (
+			token         TEXT PRIMARY KEY,
+			user_id       TEXT NOT NULL,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			expires_at    TIMESTAMPTZ NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+		CREATE INDEX IF NOT EXISTS idx_2fa_pending_user ON two_fa_pending_sessions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_2fa_pending_expires ON two_fa_pending_sessions(expires_at);
+
+		-- Registro de códigos OTP usados (prevención de replay attacks)
+		CREATE TABLE IF NOT EXISTS two_fa_used_codes (
+			user_id    TEXT NOT NULL,
+			code       TEXT NOT NULL,
+			used_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, code)
+		);
+		-- Auto-limpieza: códigos más antiguos de 2 minutos son irrelevantes
+		CREATE INDEX IF NOT EXISTS idx_2fa_used_codes_cleanup ON two_fa_used_codes(used_at);
+
+		-- Auditoría específica de eventos 2FA
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+
 		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
 		CREATE TABLE IF NOT EXISTS fatigue_blocks (
 			id           TEXT PRIMARY KEY,

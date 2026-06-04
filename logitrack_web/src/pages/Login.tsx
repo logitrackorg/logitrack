@@ -1,48 +1,49 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { authApi } from "@/api/auth";
 import { AlertCircle, CheckCircle2, ChevronDown, Truck, Package, MapPin } from "lucide-react";
 import { publicTrackingApi, type PublicStats } from "@/api/publicTracking";
 import { passwordResetApi } from "@/api/passwordReset";
 
 const STAT_LABELS: { key: keyof PublicStats; label: string }[] = [
   { key: "total_shipments", label: "Envíos gestionados" },
-  { key: "in_transit",      label: "En tránsito" },
+  { key: "in_transit", label: "En tránsito" },
   { key: "active_branches", label: "Sucursales activas" },
 ];
 
 const TEST_USERS = [
-  { u: "op_caba",        p: "op_caba123",        r: "Operador",    branch: "CABA" },
-  { u: "sup_caba",       p: "sup_caba123",        r: "Supervisor",  branch: "CABA" },
-  { u: "op_cordoba",     p: "op_cordoba123",      r: "Operador",    branch: "Córdoba" },
-  { u: "sup_cordoba",    p: "sup_cordoba123",      r: "Supervisor",  branch: "Córdoba" },
-  { u: "op_mendoza",     p: "op_mendoza123",      r: "Operador",    branch: "Mendoza" },
-  { u: "sup_mendoza",    p: "sup_mendoza123",      r: "Supervisor",  branch: "Mendoza" },
-  { u: "op_posadas",     p: "op_posadas123",       r: "Operador",    branch: "Posadas" },
-  { u: "gerente",        p: "gerente123",          r: "Gerente",     branch: "" },
-  { u: "admin",          p: "admin123",            r: "Admin",       branch: "" },
-  { u: "chofer_caba",          p: "chofer_caba123",            r: "Chofer Última milla",   branch: "CABA" },
-  { u: "chofer_caba2",         p: "chofer_caba2123",           r: "Chofer Última milla",   branch: "CABA" },
-  { u: "chofer_cordoba",       p: "chofer_cordoba123",         r: "Chofer Última milla",   branch: "Córdoba" },
-  { u: "chofer_mendoza",       p: "chofer_mendoza123",         r: "Chofer Última milla",   branch: "Mendoza" },
-  { u: "chofer_posadas",       p: "chofer_posadas123",         r: "Chofer Última milla",   branch: "Posadas" },
+  { u: "op_caba", p: "op_caba123", r: "Operador", branch: "CABA" },
+  { u: "sup_caba", p: "sup_caba123", r: "Supervisor", branch: "CABA" },
+  { u: "op_cordoba", p: "op_cordoba123", r: "Operador", branch: "Córdoba" },
+  { u: "sup_cordoba", p: "sup_cordoba123", r: "Supervisor", branch: "Córdoba" },
+  { u: "op_mendoza", p: "op_mendoza123", r: "Operador", branch: "Mendoza" },
+  { u: "sup_mendoza", p: "sup_mendoza123", r: "Supervisor", branch: "Mendoza" },
+  { u: "op_posadas", p: "op_posadas123", r: "Operador", branch: "Posadas" },
+  { u: "gerente", p: "gerente123", r: "Gerente", branch: "" },
+  { u: "admin", p: "admin123", r: "Admin", branch: "" },
+  { u: "chofer_caba", p: "chofer_caba123", r: "Chofer Última milla", branch: "CABA" },
+  { u: "chofer_caba2", p: "chofer_caba2123", r: "Chofer Última milla", branch: "CABA" },
+  { u: "chofer_cordoba", p: "chofer_cordoba123", r: "Chofer Última milla", branch: "Córdoba" },
+  { u: "chofer_mendoza", p: "chofer_mendoza123", r: "Chofer Última milla", branch: "Mendoza" },
+  { u: "chofer_posadas", p: "chofer_posadas123", r: "Chofer Última milla", branch: "Posadas" },
   { u: "chofer_inter_1", p: "chofer_inter_1_123", r: "Chofer Intersucursal", branch: "" },
   { u: "chofer_inter_2", p: "chofer_inter_2_123", r: "Chofer Intersucursal", branch: "" },
 ];
 
 const ROLE_STYLES: Record<string, string> = {
-  "Operador":   "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  "Operador": "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
   "Supervisor": "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
-  "Gerente":    "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  "Admin":      "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
-  "Chofer Última milla":  "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
+  "Gerente": "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  "Admin": "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
+  "Chofer Última milla": "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200",
   "Chofer Intersucursal": "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
 };
 
 const FEATURES = [
-  { icon: Truck,   text: "Seguimiento en tiempo real de envíos" },
+  { icon: Truck, text: "Seguimiento en tiempo real de envíos" },
   { icon: Package, text: "Gestión de flota y vehículos" },
-  { icon: MapPin,  text: "Control por sucursal y región" },
+  { icon: MapPin, text: "Control por sucursal y región" },
 ];
 
 type ResetStep = "idle" | "username" | "otp";
@@ -70,8 +71,8 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [showTestUsers, setShowTestUsers] = useState(false);
   const [stats, setStats] = useState<PublicStats | null>(null);
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const { setToken, setUser } = useAuth();
 
   const [resetStep, setResetStep] = useState<ResetStep>("idle");
   const [resetUsername, setResetUsername] = useState("");
@@ -108,10 +109,63 @@ export function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     try {
-      await login(username, password);
+      console.log('🔵 Intentando login...');
+
+      // ✨ CAMBIO: Llamar directamente a la API, NO al context
+      const response = await authApi.login(username, password);
+
+      console.log('🔵 Response completa:', response);
+
+      // Si requiere 2FA (ya lo tiene activado)
+      if (response && response.requires_2fa) {
+        console.log('✅ Redirigiendo a /2fa/verify');
+        navigate("/2fa/verify", {
+          state: { session_token: response.session_token }
+        });
+        return;
+      }
+
+      // Si NO tiene 2FA activado, forzar activación
+      if (response && response.user) {
+        const user = response.user;
+        console.log('🔵 Chequeando usuario:', {
+          role: user.role,
+          two_fa_enabled: user.two_fa_enabled
+        });
+
+        const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
+        if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
+          console.log('✅ Usuario sin 2FA detectado');
+
+          // ✨ GUARDAR TOKEN TEMPORALMENTE para que pueda activar 2FA
+          localStorage.setItem("token", response.token!);
+          localStorage.setItem("user", JSON.stringify(response.user));
+
+          console.log('✅ Navegando a /2fa/setup-required');
+          navigate("/2fa/setup-required", {
+            state: {
+              message: "Debes activar la autenticación de doble factor para continuar",
+              skipAuth: true // ← Flag para que sepa que ya tiene token
+            }
+          });
+
+          // ✨ NO llamar setToken/setUser del context aún
+          return;
+        }
+      }
+
+      // ✨ Flujo normal: guardar en context
+      console.log('✅ Login normal, guardando en context');
+      localStorage.setItem("token", response.token!);
+      localStorage.setItem("user", JSON.stringify(response.user));
+      setToken(response.token!);
+      setUser(response.user!);
+
       navigate("/");
     } catch (e: unknown) {
+      console.error('❌ Error en login:', e);
       const code = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
       setError(code === "account_inactive" ? "inactive" : "credentials");
     } finally {

@@ -1,8 +1,10 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@11
 COPY package.json pnpm-lock.yaml .npmrc ./
-RUN pnpm install --frozen-lockfile
+
+RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm rebuild esbuild
 COPY . .
 ARG VITE_API_URL=http://localhost:8080/api/v1
 RUN pnpm run build

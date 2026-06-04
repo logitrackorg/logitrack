@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,10 +16,11 @@ import (
 type AuthHandler struct {
 	repo      repository.AuthRepository
 	accessLog repository.AccessLogRepository
+	twoFARepo repository.TwoFARepository
 }
 
-func NewAuthHandler(repo repository.AuthRepository, accessLog repository.AccessLogRepository) *AuthHandler {
-	return &AuthHandler{repo: repo, accessLog: accessLog}
+func NewAuthHandler(repo repository.AuthRepository, accessLog repository.AccessLogRepository, twoFARepo repository.TwoFARepository, ) *AuthHandler {
+	return &AuthHandler{repo: repo, accessLog: accessLog, twoFARepo: twoFARepo,}
 }
 
 func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
@@ -54,6 +56,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
 		h.log(req.Username, "", model.AccessEventLoginFailure)
@@ -64,10 +67,38 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
+
+	if user.TwoFAEnabled {
+		
+		sessionToken, err := h.twoFARepo.CreatePendingSession(
+			c.Request.Context(),
+			user.ID,
+			5*time.Minute, 
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error creando sesión temporal"})
+			return
+		}
+
+		h.log(user.Username, user.ID, "2fa_required")
+		
+		c.JSON(http.StatusOK, model.LoginResponse{
+			Requires2FA:  true,
+			SessionToken: sessionToken,
+		
+		})
+		return
+	}
+
 	token := uuid.NewString()
 	h.repo.SaveToken(token, user)
 	h.log(user.Username, user.ID, model.AccessEventLoginSuccess)
-	c.JSON(http.StatusOK, model.LoginResponse{Token: token, User: user})
+	
+	c.JSON(http.StatusOK, model.LoginResponse{
+		Token:       token,
+		User:        user,
+		Requires2FA: false, 
+	})
 }
 
 // Logout invalidates the current Bearer token.

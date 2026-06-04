@@ -1,12 +1,15 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { authApi, type User, type Role } from "../api/auth";
+import { authApi, type User, type Role, type LoginResponse } from "@/api/auth";
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResponse | void>;
   logout: () => void;
   hasRole: (...roles: Role[]) => boolean;
+  setSession: (token: string, user: User) => void;
+  setUser: (user: User | null) => void; 
+  setToken: (token: string | null) => void; 
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -18,12 +21,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? (JSON.parse(stored) as User) : null;
   });
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string): Promise<LoginResponse | void> => {
     const res = await authApi.login(username, password);
-    localStorage.setItem("token", res.token);
+
+    if (res.requires_2fa) {
+      return res;
+    }
+    localStorage.setItem("token", res.token!);
     localStorage.setItem("user", JSON.stringify(res.user));
-    setToken(res.token);
-    setUser(res.user);
+    setToken(res.token!);
+    setUser(res.user!);
+
+    return res;
   };
 
   const logout = () => {
@@ -35,10 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const hasRole = (...roles: Role[]) => !!user && roles.includes(user.role);
+  const hasRole = (...roles: Role[]) => {
+    return user ? roles.includes(user.role) : false;
+  };
+
+  const setSession = (newToken: string, newUser: User) => {
+    localStorage.setItem("token", newToken);
+    localStorage.setItem("user", JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, token, login, logout, hasRole, setSession, setUser, setToken  }}>
       {children}
     </AuthContext.Provider>
   );
