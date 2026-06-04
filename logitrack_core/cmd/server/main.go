@@ -354,6 +354,21 @@ func main() {
 	routingSvc.SetBranchGraphService(branchGraphSvc)
 	shipmentSvc.SetBranchGraphService(branchGraphSvc)
 
+	// Shared metrics repo
+	metricsRepo := repository.NewPostgresRoutingMetricsRepository(database)
+
+	// BranchGraph handler (repo+svc already exist above)
+	branchGraphHandler := handler.NewBranchGraphHandler(branchGraphSvc)
+
+	// Forecast + RollingPlan
+	forecastSvc := service.NewForecastService(metricsRepo, branchRepo)
+	rollingPlanSvc := service.NewRollingPlanService(forecastSvc, routingPlanRepo, vehicleRepo)
+	routingForecastHandler := handler.NewRoutingForecastHandler(forecastSvc, rollingPlanSvc)
+
+	// Metrics
+	routingMetricsSvc := service.NewRoutingMetricsService(metricsRepo)
+	routingMetricsHandler := handler.NewRoutingMetricsHandler(routingMetricsSvc)
+
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
 	// Generar plan global al arrancar solo si no existe uno para hoy,
@@ -545,6 +560,11 @@ func main() {
 	protected.GET("/auto-reports/generated/:id", managerAdmin, autoReportHandler.GetGenerated)
 	protected.GET("/auto-reports/generated/:id/csv", managerAdmin, autoReportHandler.DownloadCSV)
 
+	// RoutingForecast — manager + admin
+	protected.GET("/admin/routing/forecast", managerAdmin, routingForecastHandler.GetForecast)
+	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
+	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
+
 	// Driver route — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
@@ -642,6 +662,12 @@ func main() {
 	protected.GET("/branches/:id/zones", authenticated, branchZoneHandler.ListZones)
 	protected.POST("/shipments/:tracking_id/move-zone", shipmentWrite, branchZoneHandler.MoveZone)
 
+	// BranchGraph — admin only
+	protected.GET("/admin/branches/graph", adminOnly, branchGraphHandler.GetGraph)
+	protected.POST("/admin/branches/graph/derive", adminOnly, branchGraphHandler.Derive)
+	protected.POST("/admin/branches/graph", adminOnly, branchGraphHandler.CreateEdge)
+	protected.PATCH("/admin/branches/graph/:from/:to", adminOnly, branchGraphHandler.SetEnabled)
+
 	// Inspection (supervisor-only) — approve from Revision or classify lost/destroyed
 	supervisorOnly := middleware.RequireRoles(model.RoleSupervisor)
 	protected.POST("/shipments/:tracking_id/approve-revision", supervisorOnly, inspectionHandler.ApproveFromRevision)
@@ -656,6 +682,13 @@ func main() {
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
+
+	// RoutingMetrics — admin only
+	protected.GET("/admin/routing/metrics/plan", adminOnly, routingMetricsHandler.GetPlanMetrics)
+	protected.GET("/admin/routing/metrics/apply", adminOnly, routingMetricsHandler.GetApplyMetrics)
+	protected.GET("/admin/routing/metrics/hops", adminOnly, routingMetricsHandler.GetHopMetrics)
+	protected.GET("/admin/routing/metrics/od-volume", adminOnly, routingMetricsHandler.GetODVolume)
+	protected.GET("/admin/routing/metrics/summary", adminOnly, routingMetricsHandler.GetSummary)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
