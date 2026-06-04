@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import type { Shipment, ShipmentStatus } from "../api/shipments";
 
 type KPI = {
@@ -95,7 +96,7 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 leading-tight">{kpi.label}</div>
             {kpi.key === "sla_risk" && count > 0 && (
               <div className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 rounded px-1.5 py-0.5 inline-block">
-                ⚠ Próximas 24 h
+                <AlertTriangle size={10} className="inline align-[-1px]" /> Próximas 24 h
               </div>
             )}
           </button>

@@ -38,7 +38,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         cursor: "pointer",
         padding: 0,
         flexShrink: 0,
-        transition: "background 0.7s ease, border-color 0.7s ease",
+        transition: "background 0.4s ease, border-color 0.4s ease",
         overflow: "hidden",
         WebkitTapHighlightColor: "transparent",
       }}
@@ -50,7 +50,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           position: "absolute",
           inset: 0,
           opacity: isDark ? 1 : 0,
-          transition: "opacity 0.7s ease",
+          transition: "opacity 0.4s ease",
           pointerEvents: "none",
         }}
       >
@@ -70,7 +70,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           transform: "translateY(-50%)",
           color: "#f97316",
           opacity: isDark ? 0.35 : 0,
-          transition: "opacity 0.7s ease",
+          transition: "opacity 0.4s ease",
         }}
       />
       <Moon
@@ -83,7 +83,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           transform: "translateY(-50%)",
           color: "#2563eb",
           opacity: isDark ? 0 : 0.45,
-          transition: "opacity 0.7s ease",
+          transition: "opacity 0.4s ease",
         }}
       />
 
@@ -104,7 +104,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
             : "0 1px 4px rgba(234,179,8,0.55)",
           transform: `translateX(${isDark ? travel : 0}px)`,
           transition:
-            "transform 0.65s cubic-bezier(0.34,1.4,0.64,1), background 0.7s ease, box-shadow 0.7s ease",
+            "transform 0.45s cubic-bezier(0.34,1.4,0.64,1), background 0.4s ease, box-shadow 0.4s ease",
           display: "grid",
           placeItems: "center",
         }}
@@ -114,7 +114,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           style={{
             gridArea: "1 / 1",
             display: "flex",
-            transition: "opacity 0.5s ease, transform 0.65s cubic-bezier(0.34,1.4,0.64,1)",
+            transition: "opacity 0.4s ease, transform 0.45s cubic-bezier(0.34,1.4,0.64,1)",
             opacity: isDark ? 0 : 1,
             transform: isDark ? "rotate(-90deg) scale(0.4)" : "rotate(0deg) scale(1)",
           }}
@@ -126,7 +126,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
           style={{
             gridArea: "1 / 1",
             display: "flex",
-            transition: "opacity 0.5s ease, transform 0.65s cubic-bezier(0.34,1.4,0.64,1)",
+            transition: "opacity 0.4s ease, transform 0.45s cubic-bezier(0.34,1.4,0.64,1)",
             opacity: isDark ? 1 : 0,
             transform: isDark ? "rotate(0deg) scale(1)" : "rotate(90deg) scale(0.4)",
           }}

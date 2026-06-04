@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Package, Smartphone, Printer, Download } from 'lucide-react';
+import { Package, Smartphone, Printer, Download, X } from 'lucide-react';
 import './ShipmentQRModal.css';
 
 interface Props {
@@ -84,7 +84,7 @@ const ShipmentQRModal: React.FC<Props> = ({
     return (
       <div className="qr-modal-overlay" onClick={onClose}>
         <div className="qr-payment-card" onClick={(e) => e.stopPropagation()}>
-          <button className="qr-payment-close" onClick={onClose} aria-label="Cerrar">✕</button>
+          <button className="qr-payment-close" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
           <div className="qr-payment-header">
             <div className="qr-payment-icon"><Smartphone className="w-5 h-5" /></div>
             <h2 className="qr-payment-title">{title ?? "QR de cobro"}</h2>
@@ -111,7 +111,7 @@ const ShipmentQRModal: React.FC<Props> = ({
         <div className="qr-modal-header">
           <h2><Package className="w-4 h-4 inline" /> {title}</h2>
           <button className="qr-modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
+            <X size={18} />
           </button>
         </div>
         {subtitle && (
