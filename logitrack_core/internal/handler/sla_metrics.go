@@ -164,10 +164,20 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		}
 	}
 
-	// ── 4. Current per-status averages from the Collector in-memory cache ───────
+	// ── 4. Current per-status averages — filtered to states with active shipments
+	// Build a set of status codes that actually have ≥ 1 active shipment so that
+	// ghost states (states in the Collector cache but empty in the DB) are not
+	// sent to the frontend and produce phantom bars in the chart.
+	activeStatusSet := make(map[string]bool, len(actives))
+	for _, r := range actives {
+		activeStatusSet[r.status] = true
+	}
 	currentAvgMap := h.svc.GetCurrentAverages()
 	currentAverages := make([]model.SLAStateAverage, 0, len(currentAvgMap))
 	for code, avgH := range currentAvgMap {
+		if !activeStatusSet[code] {
+			continue // skip states with no active shipments
+		}
 		label := slaStatusLabel[code]
 		if label == "" {
 			label = code

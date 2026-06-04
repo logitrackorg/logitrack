@@ -21,13 +21,15 @@ export interface SLASettings {
   /** Hora de Argentina (24 h, "HH:MM") en la que el Executor dispara la
    *  repriorización diaria. Default: "23:00". */
   escalation_time: string;
-  /** ISO timestamp de la última vez que el Collector calculó promedios.
-   *  Null si el motor aún no corrió desde el último reinicio. */
-  last_calculated_at?: string | null;
+  /** Pre-formatted Argentina-time string sent by the server (e.g. "14/06/2026, 23:05:12").
+   *  Empty string when no calculation has run yet. Display verbatim — no date parsing. */
+  last_calculated_at?: string;
   /** Estado actual del Collector: "sin medicion" | "en proceso" | "completado" */
   calculation_status?: string;
   /** Duración del último ciclo del Collector (ej. "45ms", "2.3s"). Vacío si no corrió. */
   last_calculation_duration?: string;
+  /** Modo de ejecución del Collector: "periodic" | "daily". Default "periodic". */
+  calculation_mode?: "periodic" | "daily";
 }
 
 export const slaSettingsApi = {

@@ -32,11 +32,14 @@ type SLASettings struct {
 	AutoEscalate *bool `json:"auto_escalate,omitempty"`
 
 	// EscalationTime is the wall-clock time (Argentina time, "HH:MM" 24-hour)
-	// at which the Executor fires the once-daily priority escalation. The
-	// Collector continues to refresh averages into a daily buffer throughout the
-	// day; at EscalationTime those averages are consolidated and used to evaluate
-	// and escalate all active shipments. Default "23:00".
+	// at which the Executor fires the once-daily priority escalation. Default "23:00".
 	EscalationTime string `json:"escalation_time,omitempty"`
+
+	// CalculationMode controls when the Collector runs:
+	//   "periodic" — runs asynchronously every CacheIntervalMinutes (default).
+	//   "daily"    — runs once, immediately before the Executor at EscalationTime;
+	//                CacheIntervalMinutes is ignored in this mode.
+	CalculationMode string `json:"calculation_mode,omitempty"`
 }
 
 // MonitoredStatusCodes returns the canonical list of active status codes the
@@ -89,6 +92,7 @@ func DefaultSLASettings() SLASettings {
 		CacheIntervalMinutes: 60,
 		AutoEscalate:         boolPtr(true),
 		EscalationTime:       "23:00",
+		CalculationMode:      "periodic",
 	}
 }
 

@@ -173,8 +173,7 @@ func NewSLAAnomalyService(
 	}
 }
 
-// GetLastCalculatedAt returns the timestamp when the Collector last refreshed
-// the averages, or nil if no calculation has occurred yet in this process run.
+// GetLastCalculatedAt returns the raw timestamp or nil (kept for internal use).
 func (s *SLAAnomalyService) GetLastCalculatedAt() *time.Time {
 	s.cacheMu.RLock()
 	defer s.cacheMu.RUnlock()
@@ -183,6 +182,20 @@ func (s *SLAAnomalyService) GetLastCalculatedAt() *time.Time {
 	}
 	t := s.lastCalculatedAt
 	return &t
+}
+
+// GetLastCalculatedAtFormatted returns a pre-formatted Argentina-time string
+// (e.g. "14/06/2026, 23:05:12") so the frontend can display it verbatim
+// without any timezone conversion. Returns "" when no calculation has run.
+// Uses the server's clock (honours time-travel advances) rather than real time.
+func (s *SLAAnomalyService) GetLastCalculatedAtFormatted() string {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	if s.lastCalculatedAt.IsZero() {
+		return ""
+	}
+	art := time.FixedZone("ART", -3*60*60)
+	return s.lastCalculatedAt.In(art).Format("02/01/2006, 15:04:05")
 }
 
 // GetCurrentAverages returns a copy of the most recently computed per-status
@@ -219,37 +232,70 @@ func (s *SLAAnomalyService) GetLastCalculationDuration() string {
 	return s.lastDuration
 }
 
-// RunCheck is the entry point called by the clock handler. It always runs the
-// Collector (to keep averages fresh), then checks whether the Executor should
-// fire for today at the configured EscalationTime.
+// RunCheck is the entry point called by the clock handler on every tick.
+//
+// Behaviour depends on CalculationMode (read from settings each tick so
+// admin changes take effect without a restart):
+//
+//   - "periodic" (default): Collector runs asynchronously on every tick,
+//     independent of the Executor. The Executor fires separately when the
+//     wall-clock matches EscalationTime.
+//
+//   - "daily": Collector does NOT run on periodic ticks. When EscalationTime
+//     arrives, the Collector runs synchronously first (so the consolidated
+//     averages are fresh), then the Executor processes the escalations.
 func (s *SLAAnomalyService) RunCheck() {
-	// ── Collector ─────────────────────────────────────────────────────────────
-	s.collectMu.Lock()
-	if !s.collecting {
-		s.collecting = true
-		s.collectMu.Unlock()
-		go func() {
-			defer func() {
-				s.collectMu.Lock()
-				s.collecting = false
-				s.collectMu.Unlock()
-			}()
-			if err := s.collect(); err != nil {
-				log.Printf("[SLAAnomalyService] collector error: %v", err)
-			}
-		}()
-	} else {
-		s.collectMu.Unlock()
+	cfg := s.settingsRepo.Get()
+	mode := cfg.CalculationMode
+	if mode == "" {
+		mode = "periodic"
 	}
 
-	// ── Executor ──────────────────────────────────────────────────────────────
-	cfg := s.settingsRepo.Get()
-	if s.shouldEscalateNow(cfg.EscalationTime) {
-		go func() {
-			if err := s.execute(cfg); err != nil {
-				log.Printf("[SLAAnomalyService] executor error: %v", err)
-			}
-		}()
+	switch mode {
+	case "daily":
+		// In daily mode the Collector only runs at EscalationTime, immediately
+		// before the Executor, sharing the same tick detection.
+		if s.shouldEscalateNow(cfg.EscalationTime) {
+			go func() {
+				// Collect first (synchronous within this goroutine so averages
+				// are ready before execute starts).
+				if err := s.collect(); err != nil {
+					log.Printf("[SLAAnomalyService] daily collector error: %v", err)
+				}
+				if err := s.execute(cfg); err != nil {
+					log.Printf("[SLAAnomalyService] executor error: %v", err)
+				}
+			}()
+		}
+
+	default: // "periodic"
+		// Collector runs asynchronously on every tick (non-blocking).
+		s.collectMu.Lock()
+		if !s.collecting {
+			s.collecting = true
+			s.collectMu.Unlock()
+			go func() {
+				defer func() {
+					s.collectMu.Lock()
+					s.collecting = false
+					s.collectMu.Unlock()
+				}()
+				if err := s.collect(); err != nil {
+					log.Printf("[SLAAnomalyService] collector error: %v", err)
+				}
+			}()
+		} else {
+			s.collectMu.Unlock()
+		}
+
+		// Executor fires separately when EscalationTime matches.
+		if s.shouldEscalateNow(cfg.EscalationTime) {
+			go func() {
+				if err := s.execute(cfg); err != nil {
+					log.Printf("[SLAAnomalyService] executor error: %v", err)
+				}
+			}()
+		}
 	}
 }
 
@@ -318,10 +364,10 @@ func (s *SLAAnomalyService) collect() error {
 		durStr = fmt.Sprintf("%.2fs", elapsed.Seconds())
 	}
 
-	// cacheMu is already used inside refreshAverages; we take it here again for
-	// lastCalculatedAt, calcStatus and lastDuration which live alongside avgByState.
+	// Use clock.Now() (not time.Now()) so the timestamp respects any admin
+	// time-travel override and is consistent with the frontend simulation.
 	s.cacheMu.Lock()
-	s.lastCalculatedAt = time.Now()
+	s.lastCalculatedAt = clock.Now()
 	s.calcStatus = "completado"
 	s.lastDuration = durStr
 	s.cacheMu.Unlock()

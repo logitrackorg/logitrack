@@ -62,6 +62,9 @@ func (r *SLASettingsRepository) Get() model.SLASettings {
 	if cfg.EscalationTime == "" {
 		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
 	}
+	if cfg.CalculationMode != "periodic" && cfg.CalculationMode != "daily" {
+		cfg.CalculationMode = model.DefaultSLASettings().CalculationMode
+	}
 	return cfg
 }
 

@@ -10,6 +10,8 @@ import (
 	"github.com/logitrack/core/internal/service"
 )
 
+var validCalculationModes = map[string]bool{"periodic": true, "daily": true}
+
 var reHHMM = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // validCeilings is the set of priority levels the admin may choose as ceiling.
@@ -27,18 +29,20 @@ func NewSLASettingsHandler(repo *repository.SLASettingsRepository, svc *service.
 }
 
 // Get returns the current SLA settings plus runtime telemetry from the
-// Collector: last-calculated timestamp, calculation status, and duration.
+// Collector: last-calculated timestamp (pre-formatted string), status, duration.
 func (h *SLASettingsHandler) Get(c *gin.Context) {
 	cfg := h.repo.Get()
 	type response struct {
 		model.SLASettings
-		LastCalculatedAt        interface{} `json:"last_calculated_at"`         // *time.Time or nil
-		CalculationStatus       string      `json:"calculation_status"`         // "sin medicion"|"en proceso"|"completado"
-		LastCalculationDuration string      `json:"last_calculation_duration"`  // e.g. "45ms" or ""
+		// LastCalculatedAt is a pre-formatted string (Argentina time, server-side)
+		// so the frontend can display it verbatim without timezone conversion.
+		LastCalculatedAt        string `json:"last_calculated_at"`        // "DD/MM/AAAA, HH:MM:SS" or ""
+		CalculationStatus       string `json:"calculation_status"`        // "sin medicion"|"en proceso"|"completado"
+		LastCalculationDuration string `json:"last_calculation_duration"` // e.g. "45ms" or ""
 	}
 	c.JSON(http.StatusOK, response{
 		SLASettings:             cfg,
-		LastCalculatedAt:        h.svc.GetLastCalculatedAt(),
+		LastCalculatedAt:        h.svc.GetLastCalculatedAtFormatted(),
 		CalculationStatus:       h.svc.GetCalculationStatus(),
 		LastCalculationDuration: h.svc.GetLastCalculationDuration(),
 	})
@@ -74,6 +78,13 @@ func (h *SLASettingsHandler) Update(c *gin.Context) {
 	}
 	if cfg.EscalationTime == "" {
 		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
+	}
+	if cfg.CalculationMode != "" && !validCalculationModes[cfg.CalculationMode] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "calculation_mode debe ser 'periodic' o 'daily'"})
+		return
+	}
+	if cfg.CalculationMode == "" {
+		cfg.CalculationMode = model.DefaultSLASettings().CalculationMode
 	}
 
 	if err := h.repo.Update(cfg); err != nil {

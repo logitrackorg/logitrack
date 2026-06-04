@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power, Clock, Loader2 } from "lucide-react";
-import { fmtDateTime } from "../utils/date";
 import { slaSettingsApi, type SLASettings } from "../api/slaSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -247,47 +246,86 @@ export function SlaSettings() {
         </CardContent>
       </Card>
 
-      {/* ── Card 4: Frecuencia de recálculo ─────────────────────────────────── */}
+      {/* ── Card 4: Modo + Frecuencia de recálculo ──────────────────────────── */}
       <Card>
         <CardHeader className="pb-3 border-b border-slate-100">
-          <CardTitle className="text-base">Frecuencia de recálculo de promedios (Collector)</CardTitle>
+          <CardTitle className="text-base">Modo y frecuencia del Collector</CardTitle>
           <CardDescription>
-            Tiempo en minutos que el motor reutiliza los promedios históricos calculados antes de
-            consultar la base de datos nuevamente. Valores más altos reducen la carga en la base de datos.
+            Define cómo y cuándo el motor recalcula los promedios históricos de permanencia por estado.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              max={1440}
-              value={draft.cache_interval_minutes}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 1) setDraft({ ...draft, cache_interval_minutes: v });
-              }}
-              className="w-28 h-9 text-center text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-            <span className="text-sm text-slate-500">minutos</span>
-            <span className="text-[11px] text-slate-400 ml-2">
-              (equivale a{" "}
-              {draft.cache_interval_minutes >= 60
-                ? `${(draft.cache_interval_minutes / 60).toFixed(1)} h`
-                : `${draft.cache_interval_minutes} min`}
-              )
-            </span>
+        <CardContent className="pt-4 space-y-4">
+          {/* Mode radio buttons */}
+          <div className="flex flex-col gap-2">
+            {(
+              [
+                { value: "periodic", label: "Periódico (cada X min)", desc: "El Collector corre en segundo plano cada ciertos minutos, independiente de la repriorización." },
+                { value: "daily",    label: "Una vez al día (junto a la repriorización)", desc: "El Collector corre justo antes del Executor a la hora programada. El intervalo de minutos se ignora." },
+              ] as const
+            ).map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                  (draft.calculation_mode ?? "periodic") === opt.value
+                    ? "border-amber-400 bg-amber-50/60"
+                    : "border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="calculation_mode"
+                  value={opt.value}
+                  checked={(draft.calculation_mode ?? "periodic") === opt.value}
+                  onChange={() => setDraft({ ...draft, calculation_mode: opt.value })}
+                  className="mt-0.5 accent-amber-500 shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{opt.label}</p>
+                  <p className="text-[11px] text-slate-500">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
           </div>
+
+          {/* Interval input — disabled when mode == "daily" */}
+          <div className={`transition-opacity ${(draft.calculation_mode ?? "periodic") === "daily" ? "opacity-40 pointer-events-none" : ""}`}>
+            <p className="text-xs font-semibold text-slate-600 mb-2">
+              Intervalo de recálculo (Modo Periódico)
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                disabled={(draft.calculation_mode ?? "periodic") === "daily"}
+                value={draft.cache_interval_minutes}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1) setDraft({ ...draft, cache_interval_minutes: v });
+                }}
+                className="w-28 h-9 text-center text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-slate-100"
+              />
+              <span className="text-sm text-slate-500">minutos</span>
+              <span className="text-[11px] text-slate-400 ml-2">
+                (equivale a{" "}
+                {draft.cache_interval_minutes >= 60
+                  ? `${(draft.cache_interval_minutes / 60).toFixed(1)} h`
+                  : `${draft.cache_interval_minutes} min`}
+                )
+              </span>
+            </div>
+          </div>
+
           {/* Telemetría del Collector — runtime state devuelto por el GET */}
-          <div className="mt-3 flex flex-col gap-1.5">
-            {/* Última ejecución */}
+          <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
+            {/* Última ejecución — string pre-formateado desde el servidor */}
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <p className="text-xs text-slate-400">
                 Último cálculo:{" "}
                 <span className="font-medium text-slate-500">
                   {settings?.last_calculated_at
-                    ? fmtDateTime(settings.last_calculated_at)
+                    ? settings.last_calculated_at
                     : "Pendiente"}
                 </span>
               </p>
