@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck, Clock } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -22,6 +22,17 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ZoneBadge } from "../components/ZoneBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+
+// Mirrors the SLA engine default threshold: 24 h avg × 1.5 = 36 h.
+// Only applied to states the SLA engine monitors (same list as ShipmentList).
+const SLA_MONITORED_DETAIL = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+function isShipmentDelayed(s: Shipment): boolean {
+  if (!SLA_MONITORED_DETAIL.has(s.status) || !s.updated_at) return false;
+  return Date.now() - new Date(s.updated_at).getTime() > 36 * 60 * 60 * 1000;
+}
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { customerApi, type Customer } from "../api/customers";
@@ -609,6 +620,15 @@ export function ShipmentDetail() {
           <code className="text-xl font-mono font-bold text-slate-900 tracking-tight">{shipment.tracking_id}</code>
           <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
           <PriorityBadge priority={shipment.priority} />
+          {isShipmentDelayed(shipment) && (
+            <span
+              title="Este envío lleva más de 36 h en su estado actual, superando el umbral del motor SLA"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap"
+            >
+              <Clock className="w-3 h-3 shrink-0" />
+              Demorado
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {hasRole("supervisor", "admin", "operator") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (

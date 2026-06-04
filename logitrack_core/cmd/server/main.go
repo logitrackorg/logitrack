@@ -318,8 +318,11 @@ func main() {
 	} else {
 		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
 	}
-	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
 	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
+	// Both handlers need the service to expose runtime state (LastCalculatedAt,
+	// CurrentAverages), so they are created after the service.
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo, slaAnomalySvc)
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc)
 	// Attach to the clock callback so every admin clock tick triggers a check.
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
 	_ = slaAnomalySvc // referenced via closure below
@@ -538,6 +541,7 @@ func main() {
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)

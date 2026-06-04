@@ -2,11 +2,17 @@ package handler
 
 import (
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/service"
 )
+
+var validCalculationModes = map[string]bool{"periodic": true, "daily": true}
+
+var reHHMM = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
 
 // validCeilings is the set of priority levels the admin may choose as ceiling.
 var validCeilings = map[string]bool{"media": true, "alta": true}
@@ -15,15 +21,31 @@ var validCeilings = map[string]bool{"media": true, "alta": true}
 // Access is restricted to admin by the router middleware.
 type SLASettingsHandler struct {
 	repo *repository.SLASettingsRepository
+	svc  *service.SLAAnomalyService
 }
 
-func NewSLASettingsHandler(repo *repository.SLASettingsRepository) *SLASettingsHandler {
-	return &SLASettingsHandler{repo: repo}
+func NewSLASettingsHandler(repo *repository.SLASettingsRepository, svc *service.SLAAnomalyService) *SLASettingsHandler {
+	return &SLASettingsHandler{repo: repo, svc: svc}
 }
 
-// Get returns the current SLA settings (defaults if the file does not exist yet).
+// Get returns the current SLA settings plus runtime telemetry from the
+// Collector: last-calculated timestamp (pre-formatted string), status, duration.
 func (h *SLASettingsHandler) Get(c *gin.Context) {
-	c.JSON(http.StatusOK, h.repo.Get())
+	cfg := h.repo.Get()
+	type response struct {
+		model.SLASettings
+		// LastCalculatedAt is a pre-formatted string (Argentina time, server-side)
+		// so the frontend can display it verbatim without timezone conversion.
+		LastCalculatedAt        string `json:"last_calculated_at"`        // "DD/MM/AAAA, HH:MM:SS" or ""
+		CalculationStatus       string `json:"calculation_status"`        // "sin medicion"|"en proceso"|"completado"
+		LastCalculationDuration string `json:"last_calculation_duration"` // e.g. "45ms" or ""
+	}
+	c.JSON(http.StatusOK, response{
+		SLASettings:             cfg,
+		LastCalculatedAt:        h.svc.GetLastCalculatedAtFormatted(),
+		CalculationStatus:       h.svc.GetCalculationStatus(),
+		LastCalculationDuration: h.svc.GetLastCalculationDuration(),
+	})
 }
 
 // Update validates and persists new SLA settings.
@@ -49,6 +71,20 @@ func (h *SLASettingsHandler) Update(c *gin.Context) {
 	if len(cfg.EnabledStates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "enabled_states no puede estar vacío"})
 		return
+	}
+	if cfg.EscalationTime != "" && !reHHMM.MatchString(cfg.EscalationTime) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "escalation_time debe tener el formato HH:MM (ej. 23:00)"})
+		return
+	}
+	if cfg.EscalationTime == "" {
+		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
+	}
+	if cfg.CalculationMode != "" && !validCalculationModes[cfg.CalculationMode] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "calculation_mode debe ser 'periodic' o 'daily'"})
+		return
+	}
+	if cfg.CalculationMode == "" {
+		cfg.CalculationMode = model.DefaultSLASettings().CalculationMode
 	}
 
 	if err := h.repo.Update(cfg); err != nil {
