@@ -16,8 +16,11 @@ export const TwoFASetup: React.FC = () => {
       const data = await twoFAApi.setup();
       setSetupData(data);
       setStep('scan');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al iniciar configuración');
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error || 'Error de verificación';
+      setError(errorMsg);
+      setCode('');
     } finally {
       setLoading(false);
     }
@@ -34,8 +37,11 @@ export const TwoFASetup: React.FC = () => {
     try {
       await twoFAApi.confirm({ code });
       setStep('success');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Código de verificación inválido');
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error || 'Error de verificación';
+      setError(errorMsg);
+      setCode('');
     } finally {
       setLoading(false);
     }
@@ -76,11 +82,11 @@ export const TwoFASetup: React.FC = () => {
             <h3 className="font-semibold mb-4 text-center">
               Escanea este código QR con Google Authenticator
             </h3>
-            
+
             {/* QR Code desde data URL del backend */}
             <div className="flex justify-center mb-4">
-              <img 
-                src={setupData.qr_code_url} 
+              <img
+                src={setupData.qr_code_url}
                 alt="QR Code 2FA"
                 className="w-64 h-64"
               />

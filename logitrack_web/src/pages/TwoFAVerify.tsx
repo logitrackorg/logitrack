@@ -37,11 +37,11 @@ export const TwoFAVerify: React.FC = () => {
       // CA 1: Validación exitosa - guardar token definitivo
       setSession(response.token, response.user);
       navigate('/dashboard');
-    } catch (err: any) {
-      // CA 2: Código inválido o vencido
-      const errorMsg = err.response?.data?.error || 'Error de verificación';
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error || 'Error de verificación';
       setError(errorMsg);
-      setCode(''); // Limpiar para reintentar
+      setCode('');
     } finally {
       setLoading(false);
     }

@@ -14,7 +14,7 @@ export const TwoFASetupRequired: React.FC = () => {
   const [attempts, setAttempts] = useState(0); // ← NUEVO
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null); // ← NUEVO
   const [cooldownSeconds, setCooldownSeconds] = useState(0); // ← NUEVO
-  
+
   const navigate = useNavigate();
   const location = useLocation();
   const { setToken, setUser } = useAuth();
@@ -40,7 +40,7 @@ export const TwoFASetupRequired: React.FC = () => {
     const interval = setInterval(() => {
       const now = Date.now();
       const remaining = Math.ceil((cooldownUntil - now) / 1000);
-      
+
       if (remaining <= 0) {
         setCooldownUntil(null);
         setCooldownSeconds(0);
@@ -62,8 +62,11 @@ export const TwoFASetupRequired: React.FC = () => {
       setStep('scan');
       setAttempts(0); // Reset intentos al generar nuevo QR
       setCooldownUntil(null);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al iniciar configuración');
+    } catch (err: unknown) {
+      const errorMsg = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error || 'Error de verificación';
+      setError(errorMsg);
+      setCode('');
     } finally {
       setLoading(false);
     }
@@ -75,7 +78,7 @@ export const TwoFASetupRequired: React.FC = () => {
       return;
     }
 
-    
+
     if (cooldownUntil && Date.now() < cooldownUntil) {
       setError(`Demasiados intentos. Espera ${cooldownSeconds} segundos.`);
       return;
@@ -83,37 +86,37 @@ export const TwoFASetupRequired: React.FC = () => {
 
     setLoading(true);
     setError('');
-    
+
     try {
       await twoFAApi.confirm({ code });
-      
-     
+
+
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         const user = JSON.parse(storedUser);
         user.two_fa_enabled = true;
         user.two_fa_enrolled_at = new Date().toISOString();
         localStorage.setItem('user', JSON.stringify(user));
-        
+
         const token = localStorage.getItem('token');
         if (token) {
           setToken(token);
           setUser(user);
         }
       }
-      
+
       setStep('success');
       setAttempts(0);
       setCooldownUntil(null);
-      
+
       setTimeout(() => {
         navigate('/');
       }, 2000);
-    } catch (err: any) {
-      
+    } catch (err: unknown) {
+
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
-      
+
       if (newAttempts >= 3) {
         const cooldownTime = Date.now() + 60000; // 60 segundos
         setCooldownUntil(cooldownTime);
@@ -132,7 +135,7 @@ export const TwoFASetupRequired: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center p-6">
       <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
-        
+
         {step === 'intro' && (
           <div className="p-8">
             <div className="text-center mb-6">
@@ -178,10 +181,10 @@ export const TwoFASetupRequired: React.FC = () => {
         {step === 'scan' && setupData && (
           <div className="p-8">
             <h2 className="text-2xl font-bold text-center mb-6">Escanea este Código QR</h2>
-            
+
             <div className="flex justify-center mb-6">
-              <img 
-                src={setupData.qr_code_url} 
+              <img
+                src={setupData.qr_code_url}
                 alt="QR Code 2FA"
                 className="w-72 h-72 border-4 border-gray-200 rounded-lg"
               />
@@ -207,7 +210,7 @@ export const TwoFASetupRequired: React.FC = () => {
           <div className="p-8">
             <h2 className="text-2xl font-bold text-center mb-6">Ingresa el Código</h2>
 
-            
+
             {attempts > 0 && !cooldownUntil && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                 <p className="text-sm text-yellow-800 text-center">
@@ -216,7 +219,7 @@ export const TwoFASetupRequired: React.FC = () => {
               </div>
             )}
 
-           
+
             {cooldownUntil && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                 <p className="text-sm text-red-800 text-center font-semibold">
@@ -234,9 +237,8 @@ export const TwoFASetupRequired: React.FC = () => {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
               disabled={!!cooldownUntil}
-              className={`w-full text-center text-4xl tracking-widest border-2 rounded-lg p-4 mb-4 focus:border-blue-500 focus:outline-none ${
-                cooldownUntil ? 'bg-gray-100 cursor-not-allowed' : ''
-              }`}
+              className={`w-full text-center text-4xl tracking-widest border-2 rounded-lg p-4 mb-4 focus:border-blue-500 focus:outline-none ${cooldownUntil ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
               maxLength={6}
               autoFocus={!cooldownUntil}
             />
