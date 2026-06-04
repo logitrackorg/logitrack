@@ -229,8 +229,11 @@ func main() {
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
 	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
-	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
-	messagingSvc.SetSystemConfigGetter(sysConfigSvc)         // permite forzar email desde config de admin
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)      // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	messagingSvc.SetSLAExpiredEmailFallback(emailSvc)          // email fallback cuando WhatsApp no disponible para SLA vencido (LOGITRACK-124)
+	messagingSvc.SetClaimEmailFallback(emailSvc)               // email fallback cuando WhatsApp no disponible para reclamos (LOGITRACK-123/125/486)
+	messagingSvc.SetSystemConfigGetter(sysConfigSvc)           // permite forzar email desde config de admin
+	claimSvc.SetClaimWAService(messagingSvc)                   // WhatsApp al reclamante, email como fallback (LOGITRACK-123/125/486)
 	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
 	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
@@ -303,6 +306,7 @@ func main() {
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetBranchZoneService(branchZoneSvc)
 	routingSvc.SetSLAExpiredEmailService(emailSvc)
+	routingSvc.SetSLAExpiredWAService(messagingSvc) // WhatsApp al cliente en SLA vencido, email como fallback (LOGITRACK-124)
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA

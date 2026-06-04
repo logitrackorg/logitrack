@@ -959,7 +959,7 @@ func renderClaimCreatedNotification(claim model.Claim, shipment model.Shipment, 
 	}
 	data := claimCreatedData{
 		ClaimID:       claim.ID,
-		InitialStatus: "Abierto",
+		InitialStatus: claimStatusLabel(claim.Status),
 		TrackingID:    shipment.TrackingID,
 		TrackURL:      trackURL,
 	}

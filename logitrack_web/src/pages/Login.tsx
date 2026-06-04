@@ -432,7 +432,7 @@ export function Login() {
                 <p className="text-sm text-gray-500">Ingresá tu nombre de usuario</p>
               </div>
 
-              <div className="space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); handleSendCode(); }} className="space-y-4">
                 <div className="space-y-1.5">
                   <label htmlFor="reset-username" className="text-sm font-semibold text-gray-700">
                     Usuario
@@ -503,7 +503,7 @@ export function Login() {
                   <p className="text-sm text-green-700">¡Contraseña actualizada! Ya podés iniciar sesión.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); if (canConfirm) handleConfirmReset(); }} className="space-y-4">
                   <div className="space-y-1.5">
                     <label htmlFor="otp-code" className="text-sm font-semibold text-gray-700">
                       Código de verificación
@@ -611,7 +611,7 @@ export function Login() {
                   >
                     Reenviar código
                   </button>
-                </div>
+                </form>
               )}
             </div>
           )}

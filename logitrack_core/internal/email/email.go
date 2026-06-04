@@ -202,21 +202,27 @@ func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemp
 }
 
 // SendSLAExpiredNotification sends a customer-facing email when the shipment SLA expires.
-// CA-01: only the recipient is notified.
+// CA-01: both recipient and sender are notified.
 // CA-02: intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendSLAExpiredNotification(shipment model.Shipment) {
 	if s == nil {
-		return
-	}
-	if shipment.Recipient.Email == "" {
-		log.Printf("[email] SLA vencido: destinatario de %s sin email registrado — omitido", shipment.TrackingID)
 		return
 	}
 	org := s.orgConfig()
 	trackBase := s.effectiveTrackBaseURL(org)
 	subj := fmt.Sprintf("Tu envío %s presenta demora — %s", shipment.TrackingID, org.Name)
 	body := renderSLAExpiredNotification(shipment, trackBase, org)
-	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (SLA vencido)", org.Email)
+
+	if shipment.Recipient.Email != "" {
+		s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (SLA vencido)", org.Email)
+	} else {
+		log.Printf("[email] SLA vencido: destinatario de %s sin email registrado — omitido", shipment.TrackingID)
+	}
+	if shipment.Sender.Email != "" {
+		s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (SLA vencido)", org.Email)
+	} else {
+		log.Printf("[email] SLA vencido: remitente de %s sin email registrado — omitido", shipment.TrackingID)
+	}
 }
 
 // SendClaimCreatedNotification notifica al cliente que su reclamo quedó registrado.

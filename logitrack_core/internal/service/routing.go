@@ -48,14 +48,21 @@ type RoutingService struct {
 	zoneSvc            *ZoneService           // nullable; needed for safe-route mode
 	branchZoneSvc      *BranchZoneService     // nullable; auto-move entrada→salida on ApplyPlan
 	notifSvc           *NotificationService   // nullable; SLA risk notifications (LOGITRACK-404)
-	slaExpiredEmailSvc SLAExpiredEmailSender  // nullable; customer email on SLA expiry
+	slaExpiredEmailSvc SLAExpiredEmailSender  // nullable; customer email on SLA expiry (LOGITRACK-124)
+	slaExpiredWASvc    SLAExpiredWASender     // nullable; customer WhatsApp on SLA expiry (LOGITRACK-124)
 	dispatchVolumeSvc  DispatchVolumeNotifier // nullable; LOGITRACK-409 CA-05 reset after apply
 }
 
 // SLAExpiredEmailSender is the minimal interface needed to notify the shipment recipient
-// when a shipment has exceeded its ETA.
+// when a shipment has exceeded its ETA via email.
 type SLAExpiredEmailSender interface {
 	SendSLAExpiredNotification(shipment model.Shipment)
+}
+
+// SLAExpiredWASender is the minimal interface needed to notify sender and recipient
+// via WhatsApp (with email fallback) when a shipment has exceeded its ETA.
+type SLAExpiredWASender interface {
+	SendSLAExpiredWhatsApp(shipment model.Shipment)
 }
 
 func NewRoutingService(
@@ -93,6 +100,11 @@ func (s *RoutingService) SetNotificationService(svc *NotificationService) {
 // SetSLAExpiredEmailService wires the customer-facing SLA-expired email sender.
 func (s *RoutingService) SetSLAExpiredEmailService(svc SLAExpiredEmailSender) {
 	s.slaExpiredEmailSvc = svc
+}
+
+// SetSLAExpiredWAService wires the WhatsApp (+ email fallback) sender for SLA-expired notifications.
+func (s *RoutingService) SetSLAExpiredWAService(svc SLAExpiredWASender) {
+	s.slaExpiredWASvc = svc
 }
 
 // SetDispatchVolumeService inyecta el checker de volumen mínimo para reset post-apply (CA-05).
@@ -1719,9 +1731,14 @@ func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.Rout
 					continue
 				}
 				shCopy := sh
-				if s.slaExpiredEmailSvc != nil {
+				// WhatsApp al remitente/destinatario (con fallback a email) — LOGITRACK-124
+				if s.slaExpiredWASvc != nil {
+					go s.slaExpiredWASvc.SendSLAExpiredWhatsApp(shCopy)
+				} else if s.slaExpiredEmailSvc != nil {
+					// fallback directo a email si no hay servicio de WA configurado
 					go s.slaExpiredEmailSvc.SendSLAExpiredNotification(shCopy)
 				}
+				// Notificación interna a operadores/supervisores — LOGITRACK-404
 				if s.notifSvc != nil {
 					go s.notifSvc.NotifySLAExpired(shCopy, branchID)
 				}
