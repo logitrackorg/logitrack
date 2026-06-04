@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power, Clock } from "lucide-react";
+import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power, Clock, Loader2 } from "lucide-react";
 import { fmtDateTime } from "../utils/date";
 import { slaSettingsApi, type SLASettings } from "../api/slaSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -278,17 +278,26 @@ export function SlaSettings() {
               )
             </span>
           </div>
-          {/* Último cálculo — runtime state devuelto por el GET junto con la config */}
-          <div className="flex items-center gap-1.5 mt-3">
-            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <p className="text-xs text-slate-400">
-              Último cálculo:{" "}
-              <span className="font-medium text-slate-500">
-                {settings?.last_calculated_at
-                  ? fmtDateTime(settings.last_calculated_at)
-                  : "Pendiente"}
-              </span>
-            </p>
+          {/* Telemetría del Collector — runtime state devuelto por el GET */}
+          <div className="mt-3 flex flex-col gap-1.5">
+            {/* Última ejecución */}
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <p className="text-xs text-slate-400">
+                Último cálculo:{" "}
+                <span className="font-medium text-slate-500">
+                  {settings?.last_calculated_at
+                    ? fmtDateTime(settings.last_calculated_at)
+                    : "Pendiente"}
+                </span>
+              </p>
+            </div>
+
+            {/* Estado del ciclo actual + duración */}
+            <CollectorStatusBadge
+              status={settings?.calculation_status}
+              duration={settings?.last_calculation_duration}
+            />
           </div>
         </CardContent>
       </Card>
@@ -404,6 +413,61 @@ export function SlaSettings() {
           ) : "Guardar cambios"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Collector telemetry badge ─────────────────────────────────────────────────
+
+function CollectorStatusBadge({
+  status,
+  duration,
+}: {
+  status?: string;
+  duration?: string;
+}) {
+  const s = status ?? "sin medicion";
+
+  const dot =
+    s === "en proceso"
+      ? "bg-amber-400 animate-pulse"
+      : s === "completado"
+        ? "bg-emerald-500"
+        : "bg-slate-300";
+
+  const label =
+    s === "en proceso"
+      ? "En proceso"
+      : s === "completado"
+        ? "Completado"
+        : "Sin medición";
+
+  const textColor =
+    s === "en proceso"
+      ? "text-amber-600"
+      : s === "completado"
+        ? "text-emerald-600"
+        : "text-slate-400";
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* Estado */}
+      <div className="inline-flex items-center gap-1.5">
+        {s === "en proceso" ? (
+          <Loader2 className="w-3 h-3 text-amber-500 animate-spin shrink-0" />
+        ) : (
+          <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+        )}
+        <span className={`text-xs font-medium ${textColor}`}>{label}</span>
+      </div>
+
+      {/* Duración — solo visible cuando hay dato */}
+      {duration && (
+        <span className="text-xs text-slate-400">
+          · Tiempo de ejecución:{" "}
+          <span className="font-mono font-semibold text-slate-500">{duration}</span>
+        </span>
+      )}
     </div>
   );
 }

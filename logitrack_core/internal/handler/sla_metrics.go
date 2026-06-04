@@ -177,6 +177,9 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		return currentAverages[i].AvgHours > currentAverages[j].AvgHours
 	})
 
+	// ── 5. Fleet capacity heuristic ─────────────────────────────────────────────
+	fleetSugg := analyzeFleet(h.db, now, delayedTotal, activeTotal)
+
 	c.JSON(http.StatusOK, model.SLAMetrics{
 		SlaHealthRate:   slaHealthRate,
 		ActiveTotal:     activeTotal,
@@ -184,5 +187,73 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		Bottlenecks:     bottlenecks,
 		DelayTrend:      trend,
 		CurrentAverages: currentAverages,
+		FleetSuggestion: fleetSugg,
 	})
+}
+
+// ── Fleet heuristic helper ────────────────────────────────────────────────────
+
+// analyzeFleet applies three priority-ordered rules to decide fleet status:
+//
+//	DÉFICIT  — SLA delay rate > 15 % (overloaded fleet)
+//	OCIOSO   — delay rate < 2 % AND shipment volume dropped ≥ 10 % vs last week
+//	ESTABLE  — everything else
+//
+// Volume data is queried relative to `now` (clock.Now()) to stay consistent
+// with time-travel testing. Errors from the volume query are handled
+// gracefully: if the query fails the volume metrics default to 0 and the
+// rule falls through to ESTABLE.
+func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) model.FleetSuggestion {
+	// ── Delay rate ─────────────────────────────────────────────────────────────
+	var delayRatePct float64
+	if activeTotal > 0 {
+		delayRatePct = math.Round(float64(delayedTotal)/float64(activeTotal)*1000) / 10
+	}
+
+	// ── Volume trend: this week vs last week ───────────────────────────────────
+	thisWeekStart := now.AddDate(0, 0, -7)
+	lastWeekStart := now.AddDate(0, 0, -14)
+
+	var thisWeekCount, lastWeekCount int
+	_ = db.QueryRow(
+		`SELECT COUNT(*) FROM shipments WHERE created_at >= $1 AND created_at < $2`,
+		thisWeekStart, now,
+	).Scan(&thisWeekCount)
+	_ = db.QueryRow(
+		`SELECT COUNT(*) FROM shipments WHERE created_at >= $1 AND created_at < $2`,
+		lastWeekStart, thisWeekStart,
+	).Scan(&lastWeekCount)
+
+	var volumeChangePct float64
+	if lastWeekCount > 0 {
+		volumeChangePct = math.Round(
+			float64(thisWeekCount-lastWeekCount)/float64(lastWeekCount)*1000,
+		) / 10
+	}
+
+	base := model.FleetSuggestion{
+		DelayRatePct:    delayRatePct,
+		VolumeChangePct: volumeChangePct,
+		ThisWeekCount:   thisWeekCount,
+		LastWeekCount:   lastWeekCount,
+	}
+
+	// ── RULE 1: DÉFICIT — delay rate exceeds critical threshold ───────────────
+	if delayRatePct > 15.0 {
+		base.Status = model.FleetStatusCritical
+		base.Message = "⚠️ ALERTA: Déficit de capacidad detectado. Se sugiere asignar o contratar choferes de refuerzo para estabilizar la operación."
+		return base
+	}
+
+	// ── RULE 2: OCIOSO — low delay AND volume dropped ≥ 10 % ─────────────────
+	if delayRatePct < 2.0 && volumeChangePct <= -10.0 {
+		base.Status = model.FleetStatusIdle
+		base.Message = "💡 INFO: Capacidad ociosa detectada. Oportunidad para optimizar rutas o reducir flota activa temporalmente."
+		return base
+	}
+
+	// ── RULE 3: ESTABLE — balanced ────────────────────────────────────────────
+	base.Status = model.FleetStatusStable
+	base.Message = "✅ OPERACIÓN ESTABLE: Flota equilibrada con la demanda actual."
+	return base
 }

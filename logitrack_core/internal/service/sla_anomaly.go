@@ -141,6 +141,15 @@ type SLAAnomalyService struct {
 	// Protected by cacheMu (same lock as avgByState).
 	lastCalculatedAt time.Time
 
+	// calcStatus and lastDuration are telemetry fields updated by collect().
+	// Protected by cacheMu so reads and writes are race-free even when the
+	// endpoint is polled at the same millisecond as a collection cycle.
+	//
+	// calcStatus values: "sin medicion" | "en proceso" | "completado"
+	// lastDuration is a human-readable string, e.g. "12ms" or "2.3s".
+	calcStatus   string
+	lastDuration string
+
 	// ── Executor state ───────────────────────────────────────────────────────
 	executorMu      sync.Mutex
 	lastEscalatedAt time.Time // prevents multiple escalations in the same minute
@@ -160,6 +169,7 @@ func NewSLAAnomalyService(
 		logRepo:      logRepo,
 		settingsRepo: settingsRepo,
 		debugMode:    debug,
+		calcStatus:   "sin medicion",
 	}
 }
 
@@ -188,6 +198,25 @@ func (s *SLAAnomalyService) GetCurrentAverages() map[string]float64 {
 		out[k] = v
 	}
 	return out
+}
+
+// GetCalculationStatus returns the current collector state:
+// "sin medicion", "en proceso", or "completado".
+func (s *SLAAnomalyService) GetCalculationStatus() string {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	if s.calcStatus == "" {
+		return "sin medicion"
+	}
+	return s.calcStatus
+}
+
+// GetLastCalculationDuration returns a human-readable string of how long the
+// last collector cycle took (e.g. "12ms", "2.3s"). Empty string if not run yet.
+func (s *SLAAnomalyService) GetLastCalculationDuration() string {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	return s.lastDuration
 }
 
 // RunCheck is the entry point called by the clock handler. It always runs the
@@ -253,6 +282,12 @@ func (s *SLAAnomalyService) shouldEscalateNow(escalationTime string) bool {
 // collect refreshes the per-status average from the DB (respecting the cache
 // TTL) and appends a snapshot to the daily buffer.
 func (s *SLAAnomalyService) collect() error {
+	// ── Telemetry: mark "en proceso" and capture start time ──────────────────
+	start := time.Now()
+	s.cacheMu.Lock()
+	s.calcStatus = "en proceso"
+	s.cacheMu.Unlock()
+
 	cfg := s.settingsRepo.Get()
 	cacheTTL := time.Duration(cfg.CacheIntervalMinutes) * time.Minute
 	if s.debugMode {
@@ -261,17 +296,34 @@ func (s *SLAAnomalyService) collect() error {
 
 	snap, err := s.refreshAverages(cacheTTL)
 	if err != nil {
+		// Even on error, restore status so the UI doesn't stay stuck on "en proceso".
+		s.cacheMu.Lock()
+		s.calcStatus = "sin medicion"
+		s.cacheMu.Unlock()
 		return fmt.Errorf("refreshing averages: %w", err)
 	}
 	if len(snap) == 0 {
+		s.cacheMu.Lock()
+		s.calcStatus = "sin medicion"
+		s.cacheMu.Unlock()
 		return nil // no history yet
 	}
 
-	// Stamp the collection time so the UI can show "Último cálculo: HH:MM".
+	// ── Telemetry: mark "completado", record timestamp and duration ───────────
+	elapsed := time.Since(start)
+	var durStr string
+	if elapsed < time.Second {
+		durStr = fmt.Sprintf("%dms", elapsed.Milliseconds())
+	} else {
+		durStr = fmt.Sprintf("%.2fs", elapsed.Seconds())
+	}
+
 	// cacheMu is already used inside refreshAverages; we take it here again for
-	// lastCalculatedAt which lives alongside avgByState.
+	// lastCalculatedAt, calcStatus and lastDuration which live alongside avgByState.
 	s.cacheMu.Lock()
 	s.lastCalculatedAt = time.Now()
+	s.calcStatus = "completado"
+	s.lastDuration = durStr
 	s.cacheMu.Unlock()
 
 	art := time.FixedZone("ART", -3*60*60)

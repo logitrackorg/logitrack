@@ -26,17 +26,21 @@ func NewSLASettingsHandler(repo *repository.SLASettingsRepository, svc *service.
 	return &SLASettingsHandler{repo: repo, svc: svc}
 }
 
-// Get returns the current SLA settings plus the runtime LastCalculatedAt timestamp.
+// Get returns the current SLA settings plus runtime telemetry from the
+// Collector: last-calculated timestamp, calculation status, and duration.
 func (h *SLASettingsHandler) Get(c *gin.Context) {
 	cfg := h.repo.Get()
-	// Merge runtime state so the frontend can show "Último cálculo: HH:MM".
 	type response struct {
 		model.SLASettings
-		LastCalculatedAt interface{} `json:"last_calculated_at"` // *time.Time or nil
+		LastCalculatedAt        interface{} `json:"last_calculated_at"`         // *time.Time or nil
+		CalculationStatus       string      `json:"calculation_status"`         // "sin medicion"|"en proceso"|"completado"
+		LastCalculationDuration string      `json:"last_calculation_duration"`  // e.g. "45ms" or ""
 	}
 	c.JSON(http.StatusOK, response{
-		SLASettings:      cfg,
-		LastCalculatedAt: h.svc.GetLastCalculatedAt(),
+		SLASettings:             cfg,
+		LastCalculatedAt:        h.svc.GetLastCalculatedAt(),
+		CalculationStatus:       h.svc.GetCalculationStatus(),
+		LastCalculationDuration: h.svc.GetLastCalculationDuration(),
 	})
 }
 

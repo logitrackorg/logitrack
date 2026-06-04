@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, RefreshCw, ShieldCheck, ShieldAlert } from "lucide-react";
+import { AlertCircle, RefreshCw, ShieldCheck, ShieldAlert, TrendingDown, CheckCircle2 } from "lucide-react";
+import type { FleetStatus } from "../../api/slaMetrics";
 import {
   ResponsiveContainer,
   BarChart,
@@ -112,6 +113,9 @@ export default function SlaTab() {
           Actualizar
         </button>
       </div>
+
+      {/* ── Recomendación operativa (heurística de flota) ───────────────────── */}
+      <FleetSuggestionCard suggestion={metrics.fleet_suggestion} />
 
       {/* ── Row 1: KPI card ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -287,6 +291,97 @@ export default function SlaTab() {
           </Card>
         );
       })()}
+    </div>
+  );
+}
+
+// ── FleetSuggestionCard ───────────────────────────────────────────────────────
+
+const FLEET_CONFIG: Record<
+  FleetStatus,
+  { border: string; bg: string; iconColor: string; icon: React.ReactNode }
+> = {
+  CRÍTICO: {
+    border: "border-rose-300",
+    bg:     "bg-rose-50/70",
+    iconColor: "text-rose-600",
+    icon:   <TrendingDown className="w-5 h-5" />,
+  },
+  OCIOSO: {
+    border: "border-blue-200",
+    bg:     "bg-blue-50/60",
+    iconColor: "text-blue-600",
+    icon:   <TrendingDown className="w-5 h-5" />,
+  },
+  ESTABLE: {
+    border: "border-emerald-200",
+    bg:     "bg-emerald-50/40",
+    iconColor: "text-emerald-600",
+    icon:   <CheckCircle2 className="w-5 h-5" />,
+  },
+};
+
+function FleetSuggestionCard({
+  suggestion,
+}: {
+  suggestion: import("../../api/slaMetrics").FleetSuggestion;
+}) {
+  const cfg = FLEET_CONFIG[suggestion.status] ?? FLEET_CONFIG["ESTABLE"];
+
+  return (
+    <div className={`rounded-xl border p-4 sm:p-5 ${cfg.bg} ${cfg.border}`}>
+      <div className="flex items-start gap-3">
+        {/* Icon */}
+        <div className={`shrink-0 mt-0.5 ${cfg.iconColor}`}>{cfg.icon}</div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            Recomendación Operativa — Heurística de Flota
+          </p>
+          <p className="text-sm font-semibold text-slate-800 leading-snug">
+            {suggestion.message}
+          </p>
+
+          {/* Supporting metrics */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+            <span className="text-[11px] text-slate-500">
+              Demoras actuales:{" "}
+              <span className="font-bold text-slate-700">
+                {suggestion.delay_rate_pct.toFixed(1)} %
+              </span>
+            </span>
+            <span className="text-[11px] text-slate-500">
+              Volumen (7 d):{" "}
+              <span className="font-bold text-slate-700">
+                {suggestion.this_week_count} envíos
+              </span>
+            </span>
+            {suggestion.last_week_count > 0 && (
+              <span className="text-[11px] text-slate-500">
+                vs semana anterior:{" "}
+                <span
+                  className={`font-bold ${
+                    suggestion.volume_change_pct < 0
+                      ? "text-rose-600"
+                      : "text-emerald-600"
+                  }`}
+                >
+                  {suggestion.volume_change_pct > 0 ? "+" : ""}
+                  {suggestion.volume_change_pct.toFixed(1)} %
+                </span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Status badge */}
+        <span
+          className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.iconColor}`}
+        >
+          {suggestion.status}
+        </span>
+      </div>
     </div>
   );
 }

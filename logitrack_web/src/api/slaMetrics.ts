@@ -25,6 +25,17 @@ export interface SLAStateAverage {
   avg_hours: number;  // rounded to 1 decimal
 }
 
+export type FleetStatus = "CRÍTICO" | "OCIOSO" | "ESTABLE";
+
+export interface FleetSuggestion {
+  status: FleetStatus;
+  message: string;
+  delay_rate_pct: number;
+  volume_change_pct: number;
+  this_week_count: number;
+  last_week_count: number;
+}
+
 export interface SLAMetrics {
   sla_health_rate: number;   // 0–100
   active_total: number;
@@ -34,6 +45,8 @@ export interface SLAMetrics {
   /** Promedios actuales por estado, del caché en memoria del Collector.
    *  Vacío si el motor aún no corrió desde el último reinicio del servidor. */
   current_averages: SLAStateAverage[];
+  /** Resultado del motor heurístico de capacidad de flota. */
+  fleet_suggestion: FleetSuggestion;
 }
 
 export const slaMetricsApi = {

@@ -24,6 +24,10 @@ export interface SLASettings {
   /** ISO timestamp de la última vez que el Collector calculó promedios.
    *  Null si el motor aún no corrió desde el último reinicio. */
   last_calculated_at?: string | null;
+  /** Estado actual del Collector: "sin medicion" | "en proceso" | "completado" */
+  calculation_status?: string;
+  /** Duración del último ciclo del Collector (ej. "45ms", "2.3s"). Vacío si no corrió. */
+  last_calculation_duration?: string;
 }
 
 export const slaSettingsApi = {
