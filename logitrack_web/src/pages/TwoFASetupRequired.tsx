@@ -112,7 +112,7 @@ export const TwoFASetupRequired: React.FC = () => {
       setTimeout(() => {
         navigate('/');
       }, 2000);
-    } catch (err: unknown) {
+    } catch {
 
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
