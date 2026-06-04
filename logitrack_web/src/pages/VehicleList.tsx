@@ -31,22 +31,16 @@ const vehicleStatusLabels: Record<VehicleStatus, string> = {
   inactivo: "Inactivo",
 };
 
-const getStatusColor = (status: VehicleStatus): string => {
+function statusClasses(status: VehicleStatus) {
   switch (status) {
-    case "disponible":
-      return "#10b981";
-    case "en_carga":
-      return "#f59e0b";
-    case "mantenimiento":
-      return "#f97316";
-    case "en_transito":
-      return "#3b82f6";
-    case "inactivo":
-      return "#6b7280";
-    default:
-      return "#9ca3af";
+    case "disponible": return { bg: "bg-green-100", text: "text-green-700", dot: "bg-green-500", iconBg: "bg-green-50" };
+    case "en_carga": return { bg: "bg-amber-100", text: "text-amber-700", dot: "bg-amber-500", iconBg: "bg-amber-50" };
+    case "mantenimiento": return { bg: "bg-orange-100", text: "text-orange-700", dot: "bg-orange-500", iconBg: "bg-orange-50" };
+    case "en_transito": return { bg: "bg-violet-100", text: "text-violet-700", dot: "bg-violet-500", iconBg: "bg-violet-50" };
+    case "inactivo": return { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-500", iconBg: "bg-gray-50" };
+    default: return { bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400", iconBg: "bg-slate-50" };
   }
-};
+}
 
 export function VehicleList() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -309,66 +303,60 @@ const handleAddShipment = async () => {
 
       {/* New Vehicle modal */}
       {showForm && isAdmin && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        <div className="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center p-4"
           onClick={handleCancel}
         >
-          <div
-            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 460, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          <div className="bg-white rounded-xl p-6 max-w-[460px] w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Registrar nuevo vehículo</h2>
-              <button onClick={handleCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="m-0 text-lg font-bold">Registrar nuevo vehículo</h2>
+              <button onClick={handleCancel} className="bg-transparent border-none text-2xl cursor-pointer text-slate-600">✕</button>
             </div>
 
             {error && (
-              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
-                {error}
-              </div>
+              <div className="px-3 py-2 rounded-md mb-3 text-sm bg-rose-50 border border-rose-200 text-rose-700">{error}</div>
             )}
             {success && (
-              <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
-                {success}
-              </div>
+              <div className="px-3 py-2 rounded-md mb-3 text-sm bg-emerald-50 border border-emerald-200 text-emerald-700">{success}</div>
             )}
 
             <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Patente *</label>
+              <div className="mb-4">
+                <label className="block mb-1.5 font-medium text-sm">Patente *</label>
                 <input
                   type="text"
                   value={formData.license_plate}
                   onChange={(e) => setFormData({ ...formData, license_plate: e.target.value.toUpperCase() })}
                   placeholder="Ej.: AB123CD"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, textTransform: "uppercase", boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm uppercase box-border"
                 />
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Tipo *</label>
+              <div className="mb-4">
+                <label className="block mb-1.5 font-medium text-sm">Tipo *</label>
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as VehicleType })}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white box-border"
                 >
                   {Object.entries(vehicleTypeLabels).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Modo *</label>
+              <div className="mb-4">
+                <label className="block mb-1.5 font-medium text-sm">Modo *</label>
                 <select
                   value={formData.mode}
                   onChange={(e) => setFormData({ ...formData, mode: e.target.value as import("../api/vehicles").VehicleMode })}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white box-border"
                 >
                   <option value="ultima_milla">Última milla (entrega local)</option>
                   <option value="inter_sucursal">Inter-sucursal (transferencia)</option>
                 </select>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Capacidad (kg) *</label>
+              <div className="mb-4">
+                <label className="block mb-1.5 font-medium text-sm">Capacidad (kg) *</label>
                 <input
                   type="number"
                   value={formData.capacity_kg || ""}
@@ -376,16 +364,16 @@ const handleAddShipment = async () => {
                   placeholder="Ej.: 500"
                   min="1"
                   step="0.1"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm box-border"
                 />
               </div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", marginBottom: 6, fontWeight: 500, fontSize: 14 }}>Sucursal base *</label>
+              <div className="mb-5">
+                <label className="block mb-1.5 font-medium text-sm">Sucursal base *</label>
                 <select
                   value={formData.branch_id}
                   onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
                   required
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white box-border"
                 >
                   <option value="">Seleccioná una sucursal...</option>
                   {branches.map(b => (
@@ -393,11 +381,11 @@ const handleAddShipment = async () => {
                   ))}
                 </select>
               </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" onClick={handleCancel} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 500 }}>
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={handleCancel} className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm bg-slate-100 text-slate-800">
                   Cancelar
                 </button>
-                <button type="submit" style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}>
+                <button type="submit" className="px-4 py-2 rounded-md border-none cursor-pointer font-semibold text-sm text-white bg-[#1e3a5f]">
                   Registrar
                 </button>
               </div>
@@ -471,29 +459,13 @@ const handleAddShipment = async () => {
 
       {/* Mensajes */}
       {error && (
-        <div style={{
-          background: "var(--danger-bg)",
-          border: "1px solid var(--danger-border)",
-          color: "var(--danger-text)",
-          padding: "12px 16px",
-          borderRadius: 6,
-          marginBottom: 20,
-          fontSize: 14,
-        }}>
+        <div className="px-4 py-3 rounded-md mb-5 text-sm bg-rose-50 border border-rose-200 text-rose-700">
           {error}
         </div>
       )}
 
       {success && (
-        <div style={{
-          background: "var(--ok-bg)",
-          border: "1px solid var(--ok-border)",
-          color: "var(--ok-text)",
-          padding: "12px 16px",
-          borderRadius: 6,
-          marginBottom: 20,
-          fontSize: 14,
-        }}>
+        <div className="px-4 py-3 rounded-md mb-5 text-sm bg-emerald-50 border border-emerald-200 text-emerald-700">
           {success}
         </div>
       )}
@@ -635,17 +607,8 @@ const handleAddShipment = async () => {
                         </span>
                       </td>
                       <td className={tdClass}>
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            background: `${getStatusColor(v.status)}20`,
-                            color: getStatusColor(v.status),
-                          }}
-                        >
-                          <span
-                            className="w-2 h-2 rounded-full"
-                            style={{ background: getStatusColor(v.status) }}
-                          />
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusClasses(v.status).bg} ${statusClasses(v.status).text}`}>
+                          <span className={`w-2 h-2 rounded-full ${statusClasses(v.status).dot}`} />
                           {vehicleStatusLabels[v.status]}
                         </span>
                       </td>
@@ -684,31 +647,31 @@ const handleAddShipment = async () => {
 
       {/* Load Shipments modal */}
       {loadModalVehicle && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+        <div className="fixed inset-0 bg-black/40 z-[1000] flex items-center justify-center"
           onClick={closeLoadModal}>
-          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 28, width: 480, maxWidth: "95vw", maxHeight: "85vh", overflowY: "auto" }}
+          <div className="bg-white rounded-xl p-7 w-[480px] max-w-[95vw] max-h-[85vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div className="flex justify-between items-center mb-5">
               <div>
-                <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-heading)" }}>Cargar envíos</h2>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-secondary)" }}>
-                  <code style={{ fontWeight: 700 }}>{loadModalVehicle.license_plate}</code>
+                <h2 className="m-0 text-lg text-slate-900">Cargar envíos</h2>
+                <p className="mt-1 text-xs text-slate-600">
+                  <code className="font-bold">{loadModalVehicle.license_plate}</code>
                   {" · "}{vehicleTypeLabels[loadModalVehicle.type]}
                   {" · "}{loadModalVehicle.capacity_kg} kg de capacidad
                 </p>
               </div>
-              <button onClick={closeLoadModal} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+              <button onClick={closeLoadModal} className="bg-transparent border-none text-2xl cursor-pointer text-slate-600">✕</button>
             </div>
 
             {/* Already loaded */}
             {loadAdded.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 8px" }}>
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-slate-800 m-0 mb-2">
                   Envíos cargados ({loadAdded.length}):
                 </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <div className="flex flex-wrap gap-1.5">
                   {loadAdded.map(tid => (
-                    <span key={tid} style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", borderRadius: 6, padding: "3px 10px", fontSize: 13, fontWeight: 600, color: "var(--ok-text)" }}>
+                    <span key={tid} className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700">
                       {tid}
                     </span>
                   ))}
@@ -717,9 +680,9 @@ const handleAddShipment = async () => {
             )}
 
             {/* Input */}
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 8px" }}>Agregar envío:</p>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>LT-</span>
+            <p className="text-xs font-semibold text-slate-800 m-0 mb-2">Agregar envío:</p>
+            <div className="flex gap-2 items-center">
+              <span className="text-sm font-bold text-slate-600 whitespace-nowrap">LT-</span>
               <input
                 autoFocus
                 value={loadInput}
@@ -727,23 +690,25 @@ const handleAddShipment = async () => {
                 onKeyDown={e => { if (e.key === "Enter") handleAddShipment(); }}
                 placeholder="A1B2C3D4"
                 maxLength={20}
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, fontFamily: "monospace", letterSpacing: 1 }}
+                className="flex-1 px-3 py-2 rounded-md border border-slate-300 text-sm font-mono tracking-wide"
               />
               <button
                 onClick={handleAddShipment}
                 disabled={loadBusy || !loadInput.trim()}
-                style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", cursor: loadBusy || !loadInput.trim() ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14, opacity: loadBusy || !loadInput.trim() ? 0.6 : 1 }}
+                className={`px-4 py-2 rounded-md border-none font-semibold text-sm text-white bg-[#1e3a5f] ${
+                  loadBusy || !loadInput.trim() ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
                 {loadBusy ? "Agregando…" : "Agregar"}
               </button>
             </div>
             {loadError && (
-              <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--danger-text)" }}>{loadError}</p>
+              <p className="mt-2 text-xs text-rose-700">{loadError}</p>
             )}
 
-            <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+            <div className="mt-5 flex justify-end">
               <button onClick={closeLoadModal}
-                style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 20px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+                className="px-5 py-2 rounded-md border-none cursor-pointer font-semibold text-sm bg-slate-100 text-slate-800">
                 Listo
               </button>
             </div>
@@ -759,45 +724,45 @@ const handleAddShipment = async () => {
         const destBranch = vehicle?.destination_branch ? branches.find(b => b.id === vehicle.destination_branch) : null;
         return (
           <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            className="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center p-4"
             onClick={() => !endingTrip && setShowEndTripModal(false)}
           >
             <div
-              style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+              className="bg-white rounded-xl p-6 max-w-[440px] w-full shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Finalizar viaje</h2>
-                <button onClick={() => !endingTrip && setShowEndTripModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: endingTrip ? "not-allowed" : "pointer", color: "var(--text-secondary)" }}>✕</button>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold m-0">Finalizar viaje</h2>
+                <button onClick={() => !endingTrip && setShowEndTripModal(false)}
+                  className={`bg-transparent border-none text-2xl ${endingTrip ? "cursor-not-allowed" : "cursor-pointer"} text-slate-600`}>✕</button>
               </div>
-              <p style={{ fontSize: 14, color: "var(--text-strong)", margin: "0 0 12px" }}>
+              <p className="text-sm text-slate-800 m-0 mb-3">
                 ¿Confirmás finalizar el viaje del vehículo <strong>{selectedForAssign}</strong>?
               </p>
-              <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
-                <p style={{ margin: "0 0 6px" }}>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-xs text-slate-800">
+                <p className="m-0 mb-1.5">
                   • Los {numShipments} envío{numShipments !== 1 ? "s" : ""} pasarán al estado <strong>En sucursal</strong>{destBranch ? <> en <strong>{destBranch.name}</strong></> : ""}.
                 </p>
-                <p style={{ margin: 0 }}>
+                <p className="m-0">
                   • El vehículo quedará <strong>Disponible</strong>.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setShowEndTripModal(false)}
                   disabled={endingTrip}
-                  style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: endingTrip ? "not-allowed" : "pointer", fontWeight: 500, opacity: endingTrip ? 0.6 : 1 }}
+                  className={`px-4 py-2 rounded-md border font-medium text-sm ${
+                    endingTrip ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                  } border-slate-200 bg-white text-slate-800`}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={confirmEndTrip}
                   disabled={endingTrip}
-                  style={{
-                    padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                    background: endingTrip ? "var(--text-muted)" : "var(--danger-c)",
-                    color: "#fff", cursor: endingTrip ? "not-allowed" : "pointer",
-                    opacity: endingTrip ? 0.7 : 1,
-                  }}
+                  className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm ${
+                    endingTrip ? "opacity-70 cursor-not-allowed bg-slate-400" : "cursor-pointer bg-rose-600"
+                  }`}
                 >
                   {endingTrip ? "Finalizando..." : "Finalizar viaje"}
                 </button>
@@ -944,126 +909,74 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
   }, [vehicle.license_plate]);
 
   const currentBranch = branches.find(b => b.id === vehicle.assigned_branch);
+  const sClasses = statusClasses(vehicle.status);
   return (
     <>
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
+      className="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        style={{
-          background: "var(--bg-card)",
-          borderRadius: 12,
-          padding: 24,
-          maxWidth: 560,
-          width: "100%",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-        }}
+        className="bg-white rounded-xl p-6 max-w-[560px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div className="flex justify-between items-center mb-5">
           <div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, textTransform: "uppercase" }}>Detalle del vehículo</p>
-            <h2 style={{ fontSize: 24, fontWeight: 700, margin: "4px 0 0", color: "var(--text-primary)" }}>
+            <p className="text-xs text-slate-600 m-0 uppercase">Detalle del vehículo</p>
+            <h2 className="text-2xl font-bold mt-1 text-slate-900">
               {vehicle.license_plate}
             </h2>
           </div>
           <button
             onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              fontSize: 24,
-              cursor: "pointer",
-              color: "var(--text-secondary)",
-              padding: "4px 8px",
-            }}
+            className="bg-transparent border-none text-2xl cursor-pointer text-slate-600 px-2 py-1"
           >
             ✕
           </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 12,
-              background: getStatusColor(vehicle.status) + "20",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg style={{ width: 28, height: 28, color: getStatusColor(vehicle.status) }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex items-center gap-3 mb-6">
+          <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 ${sClasses.iconBg}`}>
+            <svg className={`w-7 h-7 ${sClasses.text}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
             </svg>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 9999,
-                  background: getStatusColor(vehicle.status) + "20",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: getStatusColor(vehicle.status),
-                }}
-              >
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${sClasses.bg} ${sClasses.text}`}>
                 {vehicleStatusLabels[vehicle.status]}
               </span>
             </div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>
+            <p className="text-xs text-slate-600 mt-1">
               ID: #{vehicle.id}
             </p>
           </div>
         </div>
 
-        <div
-          style={{
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 16,
-            marginBottom: 20,
-          }}
-        >
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Información del vehículo</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-5">
+          <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Información del vehículo</h3>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Tipo</p>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicleTypeLabels[vehicle.type]}</p>
+              <p className="text-xs text-slate-600 m-0 mb-0.5">Tipo</p>
+              <p className="text-sm font-semibold text-slate-900 m-0">{vehicleTypeLabels[vehicle.type]}</p>
             </div>
             <div>
-              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Capacidad</p>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{vehicle.capacity_kg} kg</p>
+              <p className="text-xs text-slate-600 m-0 mb-0.5">Capacidad</p>
+              <p className="text-sm font-semibold text-slate-900 m-0">{vehicle.capacity_kg} kg</p>
             </div>
             {vehicle.updated_at && (
               <div>
-                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Última actualización</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", margin: 0 }}>
+                <p className="text-xs text-slate-600 m-0 mb-0.5">Última actualización</p>
+                <p className="text-sm font-medium text-slate-800 m-0">
                   {new Date(vehicle.updated_at).toLocaleString()}
                 </p>
               </div>
             )}
             {vehicle.updated_by && (
               <div>
-                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Actualizado por</p>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", margin: 0 }}>{vehicle.updated_by}</p>
+                <p className="text-xs text-slate-600 m-0 mb-0.5">Actualizado por</p>
+                <p className="text-sm font-medium text-slate-800 m-0">{vehicle.updated_by}</p>
               </div>
             )}
           </div>
@@ -1071,20 +984,10 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
         {/* Acciones de viaje — operador / supervisor de la sucursal correspondiente */}
         {!readOnly && canEndTrip && (
-          <div style={{ marginBottom: 16 }}>
+          <div className="mb-4">
             <button
               onClick={onEndTrip}
-              style={{
-                width: "100%",
-                background: "var(--danger-c)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "10px 16px",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: 14,
-              }}
+              className="w-full py-2.5 px-4 rounded-lg border-none cursor-pointer font-semibold text-sm text-white bg-rose-600"
             >
               Finalizar viaje
             </button>
@@ -1093,11 +996,11 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
 
         {/* Cambio de estado — solo admin */}
         {!readOnly && hideShipments && (
-          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Cambiar estado</h3>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Cambiar estado</h3>
 
             {["en_carga", "en_transito"].includes(currentStatus) && (
-              <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "var(--warn-text)" }}>
+              <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-amber-50 border border-amber-200 text-amber-800">
                 El estado <strong>{vehicleStatusLabels[currentStatus]}</strong> es gestionado automáticamente por las operaciones de viaje y no puede cambiarse de forma manual.
               </div>
             )}
@@ -1105,24 +1008,20 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             {!["en_carga", "en_transito"].includes(currentStatus) && (
               <>
                 {currentShipments.length > 0 && (
-                  <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 6, padding: "8px 12px", marginBottom: 10, fontSize: 13, color: "var(--warn-text)" }}>
+                  <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-amber-50 border border-amber-200 text-amber-800">
                     Este vehículo tiene {currentShipments.length} envío{currentShipments.length !== 1 ? "s" : ""} asignado{currentShipments.length !== 1 ? "s" : ""}. El cambio de estado se aplicará de forma forzada.
                   </div>
                 )}
                 {statusError && (
-                  <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-                    {statusError}
-                  </div>
+                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{statusError}</div>
                 )}
                 {statusSuccess && (
-                  <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-                    {statusSuccess}
-                  </div>
+                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700">{statusSuccess}</div>
                 )}
                 <select
                   value={selectedStatus}
                   onChange={(e) => { setSelectedStatus(e.target.value as VehicleStatus | ""); setStatusError(""); setStatusSuccess(""); }}
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", marginBottom: 8 }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white mb-2"
                 >
                   <option value="">Seleccioná el nuevo estado…</option>
                   {MANUAL_STATUSES.filter(s => s.value !== currentStatus).map(s => (
@@ -1134,17 +1033,14 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                   value={statusNotes}
                   onChange={(e) => setStatusNotes(e.target.value)}
                   placeholder="Notas (opcional)"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, marginBottom: 8, boxSizing: "border-box" }}
+                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm mb-2 box-border"
                 />
                 <button
                   onClick={handleStatusChange}
                   disabled={!selectedStatus || statusBusy}
-                  style={{
-                    background: !selectedStatus || statusBusy ? "var(--text-muted)" : "#1e3a5f",
-                    color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px",
-                    cursor: !selectedStatus || statusBusy ? "not-allowed" : "pointer",
-                    fontWeight: 600, width: "100%", opacity: statusBusy ? 0.7 : 1,
-                  }}
+                  className={`w-full py-2 px-4 rounded-md border-none font-semibold text-white text-sm ${
+                    !selectedStatus || statusBusy ? "bg-slate-400 cursor-not-allowed opacity-70" : "bg-[#1e3a5f] cursor-pointer"
+                  }`}
                 >
                   {statusBusy ? "Actualizando…" : "Actualizar estado"}
                 </button>
@@ -1154,51 +1050,33 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         )}
 
           {/* Branch asignado */}
-        <div
-          style={{
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 16,
-            marginBottom: 16,
-          }}
-        >
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Sucursal actual</h3>
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Sucursal actual</h3>
           {currentBranch ? (
-            <div style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: hasShipments ? 0 : 12,
-            }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+            <div className="bg-white border border-slate-200 rounded-lg p-3 mb-0">
+              <p className="text-base font-bold text-slate-900 m-0">
                 {currentBranch.name}
               </p>
-              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+              <p className="text-xs text-slate-600 mt-0.5">
                 {currentBranch.address.city}, {currentBranch.province}
               </p>
             </div>
           ) : (
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: hasShipments ? 0 : "0 0 12px" }}>Sin sucursal asignada</p>
+            <p className="text-xs text-slate-600 m-0">Sin sucursal asignada</p>
           )}
 
           {!hasShipments && canAssignBranch && (
             <>
               {branchError && (
-                <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-                  {branchError}
-                </div>
+                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{branchError}</div>
               )}
               {branchSuccess && (
-                <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", color: "var(--ok-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-                  {branchSuccess}
-                </div>
+                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700">{branchSuccess}</div>
               )}
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)", marginBottom: 8 }}
+                className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white mb-2"
               >
                 <option value="">Cambiar sucursal...</option>
                 {branches.map(b => (
@@ -1208,12 +1086,9 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               <button
                 onClick={handleAssignBranch}
                 disabled={assigningBranch || !selectedBranch}
-                style={{
-                  background: assigningBranch || !selectedBranch ? "var(--text-muted)" : "#1e3a5f",
-                  color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px",
-                  cursor: assigningBranch || !selectedBranch ? "not-allowed" : "pointer",
-                  fontWeight: 600, width: "100%", opacity: assigningBranch ? 0.7 : 1,
-                }}
+                className={`w-full py-2 px-4 rounded-md border-none font-semibold text-white text-sm ${
+                  assigningBranch || !selectedBranch ? "bg-slate-400 cursor-not-allowed opacity-70" : "bg-[#1e3a5f] cursor-pointer"
+                }`}
               >
                 {assigningBranch ? "Asignando..." : "Asignar sucursal"}
               </button>
@@ -1222,76 +1097,45 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         </div>
 
         {/* Envíos asignados */}
-        {!hideShipments && <div
-          style={{
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 16,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: 0 }}>Envíos asignados</h3>
+        {!hideShipments && <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-slate-800 m-0">Envíos asignados</h3>
             {!readOnly && currentStatus === "en_carga" && currentShipments.length > 1 && (
               <button
                 onClick={() => setShowUnassignAllConfirm(true)}
                 disabled={unassignAllBusy || unassigning !== null}
-                style={{
-                  background: unassignAllBusy || unassigning !== null ? "var(--danger-border)" : "var(--danger-bg)",
-                  color: "var(--danger-text)",
-                  border: "1px solid var(--danger-border)",
-                  borderRadius: 6,
-                  padding: "6px 12px",
-                  cursor: unassignAllBusy || unassigning !== null ? "not-allowed" : "pointer",
-                  fontWeight: 600,
-                  fontSize: 12,
-                  whiteSpace: "nowrap",
-                }}
+                className={`px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap ${
+                  unassignAllBusy || unassigning !== null
+                    ? "border-rose-200 bg-rose-100 text-rose-700 cursor-not-allowed"
+                    : "border-rose-200 bg-rose-50 text-rose-700 cursor-pointer"
+                }`}
               >
                 {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
               </button>
             )}
           </div>
           {unassignError && (
-            <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 8, fontSize: 13 }}>
-              {unassignError}
-            </div>
+            <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{unassignError}</div>
           )}
           {currentShipments.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {currentShipments.map((trackingId) => (
                 <div
                   key={trackingId}
-                  style={{
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
+                  className="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between"
                 >
                   <div>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
+                    <p className="text-base font-bold text-slate-900 m-0">
                       {trackingId}
                     </p>
-                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                    <p className="text-xs text-slate-600 mt-0.5">
                       ID de seguimiento
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div className="flex gap-2 items-center">
                     <Link
                       to={`/shipments/${trackingId}`}
-                      style={{
-                        background: "#1e3a5f",
-                        color: "#fff",
-                        textDecoration: "none",
-                        borderRadius: 6,
-                        padding: "6px 12px",
-                        fontSize: 13,
-                        fontWeight: 500,
-                      }}
+                      className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[#1e3a5f] no-underline"
                       onClick={onClose}
                     >
                       Ver
@@ -1301,22 +1145,11 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                         onClick={() => handleUnassign(trackingId)}
                         disabled={unassigning === trackingId || unassignAllBusy}
                         title="Desasignar envío"
-                        style={{
-                          background: unassigning === trackingId ? "var(--bg-muted)" : "var(--danger-bg)",
-                          color: "var(--danger-text)",
-                          border: "1px solid var(--danger-border)",
-                          borderRadius: 6,
-                          width: 32,
-                          height: 32,
-                          cursor: unassigning === trackingId || unassignAllBusy ? "not-allowed" : "pointer",
-                          fontWeight: 700,
-                          fontSize: 16,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                          opacity: unassigning === trackingId || unassignAllBusy ? 0.5 : 1,
-                        }}
+                        className={`w-8 h-8 rounded-md border text-base font-bold flex items-center justify-center shrink-0 ${
+                          unassigning === trackingId || unassignAllBusy
+                            ? "bg-slate-100 text-rose-700 border-rose-200 cursor-not-allowed opacity-50"
+                            : "bg-rose-50 text-rose-700 border-rose-200 cursor-pointer"
+                        }`}
                       >
                         {unassigning === trackingId ? "…" : "✕"}
                       </button>
@@ -1326,85 +1159,78 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               ))}
             </div>
           ) : (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "20px 0",
-                color: "var(--text-secondary)",
-              }}
-            >
-              <svg style={{ width: 32, height: 32, margin: "0 auto 8px", opacity: 0.5 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="text-center py-5 text-slate-600">
+              <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
-              <p style={{ fontSize: 14, margin: 0 }}>Sin envíos asignados</p>
-              <p style={{ fontSize: 12, margin: "4px 0 0" }}>Este vehículo no tiene envíos cargados</p>
+              <p className="text-sm m-0">Sin envíos asignados</p>
+              <p className="text-xs mt-1">Este vehículo no tiene envíos cargados</p>
             </div>
           )}
         </div>}
 
         {/* QR del vehículo */}
         {qrBase64 && (
-          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginTop: 16, textAlign: "center" }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", margin: "0 0 12px" }}>Código QR del vehículo</h3>
-            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 12px" }}>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-4 text-center">
+            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Código QR del vehículo</h3>
+            <p className="text-xs text-slate-600 m-0 mb-3">
               El chofer escanea este QR para reclamar el viaje del día.
             </p>
             <img
               src={`data:image/png;base64,${qrBase64}`}
               alt={`QR ${vehicle.license_plate}`}
-              style={{ width: 160, height: 160, display: "block", margin: "0 auto", imageRendering: "pixelated" }}
+              className="w-40 h-40 block mx-auto [image-rendering:pixelated]"
             />
-            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "10px 0 0", fontFamily: "monospace" }}>{vehicle.license_plate}</p>
+            <p className="text-[11px] text-slate-400 mt-2.5 font-mono">{vehicle.license_plate}</p>
           </div>
         )}
       </div>
     </div>
     {showUnassignAllConfirm && (
       <div
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        className="fixed inset-0 bg-black/55 z-[1100] flex items-center justify-center p-4"
         onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
       >
         <div
-          style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}
+          className="bg-white rounded-xl p-6 max-w-[440px] w-full shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Desasignar todos los envíos</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold m-0">Desasignar todos los envíos</h2>
             <button
               onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
-              style={{ background: "none", border: "none", fontSize: 22, cursor: unassignAllBusy ? "not-allowed" : "pointer", color: "var(--text-secondary)" }}
+              className={`bg-transparent border-none text-2xl ${unassignAllBusy ? "cursor-not-allowed" : "cursor-pointer"} text-slate-600`}
             >
               ✕
             </button>
           </div>
-          <p style={{ fontSize: 14, color: "var(--text-strong)", margin: "0 0 12px" }}>
+          <p className="text-sm text-slate-800 m-0 mb-3">
             ¿Confirmás desasignar los <strong>{currentShipments.length} envíos</strong> cargados en el vehículo <strong>{vehicle.license_plate}</strong>?
           </p>
-          <div style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
-            <p style={{ margin: "0 0 6px" }}>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-xs text-slate-800">
+            <p className="m-0 mb-1.5">
               • Los envíos volverán al estado <strong>En sucursal</strong>.
             </p>
-            <p style={{ margin: 0 }}>
+            <p className="m-0">
               • El vehículo quedará <strong>Disponible</strong>.
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div className="flex gap-2 justify-end">
             <button
               onClick={() => setShowUnassignAllConfirm(false)}
               disabled={unassignAllBusy}
-              style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: unassignAllBusy ? "not-allowed" : "pointer", fontWeight: 500, opacity: unassignAllBusy ? 0.6 : 1 }}
+              className={`px-4 py-2 rounded-md border font-medium text-sm ${
+                unassignAllBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+              } border-slate-200 bg-white text-slate-800`}
             >
               Cancelar
             </button>
             <button
               onClick={handleUnassignAll}
               disabled={unassignAllBusy}
-              style={{
-                padding: "8px 20px", borderRadius: 6, border: "none", fontWeight: 600,
-                background: unassignAllBusy ? "var(--text-muted)" : "var(--danger-c)",
-                color: "#fff", cursor: unassignAllBusy ? "not-allowed" : "pointer",
-                opacity: unassignAllBusy ? 0.7 : 1,
-              }}
+              className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm ${
+                unassignAllBusy ? "opacity-70 cursor-not-allowed bg-slate-400" : "cursor-pointer bg-rose-600"
+              }`}
             >
               {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
             </button>

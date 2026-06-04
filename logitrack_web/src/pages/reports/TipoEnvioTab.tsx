@@ -30,8 +30,13 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  express: "#f59e0b",
+  express: "#f97316",
   normal: "#2563eb",
+};
+
+const TYPE_BG: Record<string, string> = {
+  express: "bg-orange-500",
+  normal: "bg-blue-600",
 };
 
 const TYPE_ORDER = ["express", "normal"];
@@ -76,6 +81,7 @@ export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTa
       count,
       pct,
       fill: TYPE_COLORS[t] ?? "#94a3b8",
+      bgClass: TYPE_BG[t] ?? "bg-slate-400",
     };
   });
 
@@ -130,7 +136,7 @@ export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTa
               {chartData.map((d) => (
                 <Card key={d.key} className="p-5">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
+                    <div className={`w-3 h-3 rounded-full shrink-0 ${d.bgClass}`} />
                     <span className="text-sm font-medium text-slate-600">{d.label}</span>
                   </div>
                   <p className="text-2xl font-bold text-slate-900 tabular-nums">{d.count}</p>
@@ -178,7 +184,7 @@ export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTa
                       <LabelList
                         dataKey="count"
                         position="top"
-                        style={{ fill: "#334155", fontSize: 13, fontWeight: 600 }}
+                        className="fill-slate-700 text-[13px] font-semibold"
                       />
                     </Bar>
                   </BarChart>
@@ -208,8 +214,7 @@ export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTa
                         <td className="px-5 py-3 text-slate-700 font-medium">
                           <div className="flex items-center gap-2">
                             <div
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: d.fill }}
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${d.bgClass}`}
                             />
                             {d.label}
                           </div>

@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { AlertCircle, CheckCircle2, ChevronDown, Truck, Package, MapPin } from "lucide-react";
 import { publicTrackingApi, type PublicStats } from "@/api/publicTracking";
 import { passwordResetApi } from "@/api/passwordReset";
+import { Button } from "@/components/ui/button";
 
 const STAT_LABELS: { key: keyof PublicStats; label: string }[] = [
   { key: "total_shipments", label: "Envíos gestionados" },
@@ -54,7 +55,7 @@ function formatCountdown(seconds: number): string {
 }
 
 const INPUT_CLASS =
-  "w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all";
+  "w-full h-12 px-4 rounded-lg border border-blue-200 bg-white dark:bg-gray-800 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all";
 
 const SPINNER = (
   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -182,26 +183,21 @@ export function Login() {
     !resetLoading;
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-[1fr_480px] bg-[#eff6ff]">
+    <div className="min-h-screen grid lg:grid-cols-[1fr_480px] bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
 
       {/* ── Panel izquierdo — branding ── */}
-      <div className="hidden lg:flex flex-col justify-between p-12 bg-[#1e3a5f] relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between p-12 bg-blue-950 relative overflow-hidden">
 
         {/* Grid decorativo */}
-        <div className="absolute inset-0"
-          style={{
-            backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
-            backgroundSize: "48px 48px"
-          }}
-        />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
         {/* Círculos de fondo */}
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-blue-500/5 -translate-x-1/2 translate-y-1/2" />
-        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-[#f97316]/5 translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute top-0 right-0 w-[300px] h-[300px] rounded-full bg-orange-500/5 translate-x-1/2 -translate-y-1/2" />
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="w-9 h-9 bg-[#f97316] rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
             <Truck className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -215,7 +211,7 @@ export function Login() {
           <div className="space-y-4">
             <h1 className="text-4xl font-bold text-white leading-[1.15] tracking-tight">
               Gestión logística<br />
-              <span className="text-[#f97316]">centralizada</span>
+              <span className="text-orange-500">centralizada</span>
             </h1>
             <p className="text-slate-400 text-base leading-relaxed max-w-sm">
               Coordiná envíos, flota y sucursales desde una sola plataforma con control de acceso por rol.
@@ -253,15 +249,15 @@ export function Login() {
       </div>
 
       {/* ── Panel derecho ── */}
-      <div className="flex items-center justify-center p-6 bg-white border-l border-slate-200">
+      <div className="flex items-center justify-center p-6 bg-white dark:bg-gray-800 border-l border-slate-200 dark:border-gray-700">
         <div className="w-full max-w-[360px] space-y-7">
 
           {/* Logo mobile */}
           <div className="flex items-center gap-2.5 lg:hidden">
-            <div className="w-8 h-8 bg-[#f97316] rounded-xl flex items-center justify-center">
+            <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center">
               <Truck className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-[#1e3a5f] text-base">LogiTrack</span>
+            <span className="font-bold text-blue-900 text-base">LogiTrack</span>
           </div>
 
           {/* ─── Login ─── */}
@@ -322,10 +318,11 @@ export function Login() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                  variant="default"
+                  className="w-full h-12 rounded-xl text-sm font-semibold shadow-sm shadow-blue-500/20"
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -333,13 +330,13 @@ export function Login() {
                       Ingresando...
                     </span>
                   ) : "Ingresar"}
-                </button>
+                </Button>
               </form>
 
               <button
                 type="button"
                 onClick={() => { setResetStep("username"); setResetError(""); }}
-                className="w-full text-sm text-[#2563eb] hover:underline text-center mt-1 cursor-pointer"
+                className="w-full text-sm text-blue-600 dark:text-blue-400 hover:underline text-center mt-1 cursor-pointer"
               >
                 ¿Olvidaste tu contraseña?
               </button>
@@ -366,7 +363,7 @@ export function Login() {
                         onClick={() => { setUsername(u); setPassword(p); }}
                         className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
                       >
-                        <span className="text-xs font-semibold text-gray-800 group-hover:text-[#2563eb] transition-colors">{u}</span>
+                        <span className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{u}</span>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
                           {r}
                         </span>
@@ -409,11 +406,12 @@ export function Login() {
                   </div>
                 )}
 
-                <button
+                <Button
                   type="button"
                   disabled={!resetUsername.trim() || resetLoading}
                   onClick={handleSendCode}
-                  className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                  variant="default"
+                  className="w-full h-12 rounded-xl text-sm font-semibold shadow-sm shadow-blue-500/20"
                 >
                   {resetLoading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -421,7 +419,7 @@ export function Login() {
                       Enviando...
                     </span>
                   ) : "Enviar código"}
-                </button>
+                </Button>
               </div>
 
               <button
@@ -471,7 +469,7 @@ export function Login() {
                       onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ""))}
                       placeholder="000000"
                       autoFocus
-                      className="w-full h-14 px-4 rounded-xl border border-slate-200 bg-slate-50 font-mono text-center text-2xl tracking-widest text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] focus:bg-white transition-all"
+                      className="w-full h-14 px-4 rounded-lg border border-blue-200 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-center text-2xl tracking-widest text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     />
                   </div>
 
@@ -541,11 +539,12 @@ export function Login() {
                     </div>
                   )}
 
-                  <button
+                  <Button
                     type="button"
                     disabled={!canConfirm}
                     onClick={handleConfirmReset}
-                    className="w-full h-12 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] active:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm shadow-blue-500/20 cursor-pointer"
+                    variant="default"
+                    className="w-full h-12 rounded-xl text-sm font-semibold shadow-sm shadow-blue-500/20"
                   >
                     {resetLoading ? (
                       <span className="flex items-center justify-center gap-2">
@@ -553,13 +552,13 @@ export function Login() {
                         Confirmando...
                       </span>
                     ) : "Confirmar"}
-                  </button>
+                  </Button>
 
                   <button
                     type="button"
                     disabled={otpSecondsLeft > 0}
                     onClick={() => { setResetError(""); setResetStep("username"); }}
-                    className="w-full text-sm text-center disabled:text-slate-300 disabled:cursor-not-allowed text-[#2563eb] hover:underline cursor-pointer"
+                    className="w-full text-sm text-center disabled:text-slate-300 disabled:cursor-not-allowed text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                   >
                     Reenviar código
                   </button>

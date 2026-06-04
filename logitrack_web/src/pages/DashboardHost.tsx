@@ -17,7 +17,8 @@ import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { ReportFilters } from "../components/ReportFilters";
 import { PageHeader } from "../components/ui/page-header";
-import { defaultRange, Skeleton } from "../utils/dashboard";
+import { defaultRange } from "../utils/dashboard";
+import { SkeletonCard } from "../components/ui/skeleton";
 import type { ResumenTabRef } from "./reports/ResumenTab";
 
 const ResumenTab = lazy(() => import("./reports/ResumenTab"));
@@ -140,7 +141,7 @@ export function DashboardHost() {
       {/* Contenido del tab activo */}
       <div className="max-w-7xl mx-auto p-4 sm:p-6">
         <div key={activeTab} className="animate-fade-in">
-          <Suspense fallback={<Skeleton className="h-96" />}>
+          <Suspense fallback={<SkeletonCard className="h-96" />}>
             {activeTab === "resumen" && (
               <ResumenTab
                 ref={resumenTabRef}
@@ -179,9 +180,9 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`h-11 px-4 flex items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:ring-inset rounded-t-md ${
+      className={`h-11 px-4 flex items-center gap-2 text-sm border-b-2 transition-all duration-200 whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:ring-inset rounded-t-md ${
         active
-          ? "border-[#2563eb] text-[#2563eb] font-semibold bg-blue-50/50"
+          ? "border-blue-600 text-blue-600 font-semibold bg-blue-50/50"
           : "border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50/60 font-medium"
       }`}
     >

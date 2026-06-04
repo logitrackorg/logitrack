@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check } from "lucide-react";
+import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check, Info, CreditCard } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { paymentApi, type Payment } from "../api/payments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
@@ -476,7 +476,7 @@ export function NewShipment() {
         </button>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-5">
+      <form onSubmit={handleSubmit} className="grid gap-5 new-shipment-form">
 
         {/* Remitente */}
         <Section title="Remitente" icon={<User className="w-4 h-4" />}
@@ -618,7 +618,7 @@ export function NewShipment() {
               gap: 10,
               alignItems: "flex-start",
             }}>
-              <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
               <p style={{ fontSize: 12, color: "var(--info-text)", margin: 0, lineHeight: 1.5 }}>
                 Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
                 <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
@@ -924,7 +924,7 @@ function PaymentModal({
         margin: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
       }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
+            <div style={{ fontSize: 32, marginBottom: 8 }}><CreditCard className="w-8 h-8" /></div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
             Pago pendiente
           </h2>
@@ -1023,7 +1023,7 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
               <BreakdownRow label="Entrega a domicilio" value={formatCurrencyARS(quote.breakdown.last_mile_surcharge)} />
             )}
             {quote.breakdown.risky_zone_surcharge > 0 && (
-              <BreakdownRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
+              <BreakdownRow label={<><AlertTriangle className="w-3.5 h-3.5" /> Recargo zona peligrosa</>} value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
             )}
             {quote.breakdown.shipment_multiplier !== 1 && (
               <BreakdownRow
@@ -1044,10 +1044,10 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
   );
 }
 
-function BreakdownRow({ label, value }: { label: string; value: string }) {
+function BreakdownRow({ label, value }: { label: React.ReactNode; value: string }) {
   return (
     <div className="flex justify-between items-center">
-      <span className="text-white/75">{label}</span>
+      <span className="text-white/75 flex items-center gap-1">{label}</span>
       <span className="font-semibold tabular-nums">{value}</span>
     </div>
   );
@@ -1133,6 +1133,6 @@ const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   background: "var(--bg-card)",
-  outline: "none",
+  outline: "none", // focus ring provided via .new-shipment-form CSS rule
   transition: "border-color 0.15s, box-shadow 0.15s",
 };

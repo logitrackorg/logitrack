@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck, CreditCard, Info, MapPin, Printer, QrCode, Circle, Flag, ChevronDown } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -27,6 +27,7 @@ import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapaci
 import { customerApi, type Customer } from "../api/customers";
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
+import { Button } from "../components/ui/button";
 import { fmtDate, fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
@@ -546,13 +547,34 @@ export function ShipmentDetail() {
   };
 
   if (error) return (
-    <div style={{ padding: 24 }}>
-      <p style={{ color: "var(--danger-c)" }}>{error}</p>
-      <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
+    <div className="p-6">
+      <p className="text-[var(--danger-text)]">{error}</p>
+      <Button variant="outline" onClick={() => navigate("/")} className="mt-2">
+        <ArrowLeft className="w-4 h-4" /> Volver al listado
+      </Button>
     </div>
   );
 
-  if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
+  if (!shipment) return (
+    <div className="p-6 max-w-[1200px] mx-auto">
+      <div className="animate-pulse space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="h-8 w-48 bg-slate-200 rounded" />
+          <div className="h-6 w-24 bg-slate-200 rounded-full" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="h-48 bg-slate-200 rounded-lg" />
+            <div className="h-32 bg-slate-200 rounded-lg" />
+          </div>
+          <div className="space-y-4">
+            <div className="h-40 bg-slate-200 rounded-lg" />
+            <div className="h-24 bg-slate-200 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
   const isAtDestinationBranch = shipment.status === "at_hub" && shipment.current_location === shipment.final_branch_id;
@@ -599,7 +621,7 @@ export function ShipmentDetail() {
         Volver al listado
       </button>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start" }}>
+      <div className={`grid ${isMobile ? "grid-cols-1 gap-4" : "grid-cols-[720px_300px] gap-8"} items-start`}>
 
       {/* ── Left column ── */}
       <div>
@@ -681,14 +703,12 @@ export function ShipmentDetail() {
         const attempts = shipment.delivery_attempts ?? 0;
         const atLimit = attempts >= maxDeliveryAttempts;
         return (
-          <div style={{
-            background: atLimit ? "var(--danger-bg)" : "var(--warn-bg)",
-            border: `1px solid ${atLimit ? "var(--danger-border)" : "var(--warn-border)"}`,
-            borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-            fontSize: 13, color: atLimit ? "var(--danger-text)" : "var(--warn-text)",
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <span>{atLimit ? "🚫" : "⚠️"}</span>
+          <div className={`flex items-center gap-2.5 rounded-lg px-3.5 py-2.5 mb-3.5 text-[13px] ${
+            atLimit
+              ? "bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]"
+              : "bg-[var(--warn-bg)] border border-[var(--warn-border)] text-[var(--warn-text)]"
+          }`}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               Intentos de entrega fallidos:{" "}
               <strong>{attempts}/{maxDeliveryAttempts}</strong>
@@ -699,9 +719,9 @@ export function ShipmentDetail() {
       })()}
 
       {shipment.status === "draft" && branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
-        <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: "var(--warn-text)" }}>
-          <strong>⚠️ La sucursal receptora está al límite de capacidad</strong>
-          <div style={{ marginTop: 4, color: "var(--warn-text)" }}>
+        <div className="bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-lg p-3 mb-3.5 text-[13px] text-[var(--warn-text)]">
+          <strong><AlertTriangle className="w-4 h-4 inline shrink-0 align-text-bottom" /> La sucursal receptora está al límite de capacidad</strong>
+          <div className="mt-1 text-[var(--warn-text)]">
             {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés confirmar el envío, pero la sucursal estará por encima de su capacidad.
           </div>
         </div>
@@ -731,7 +751,7 @@ export function ShipmentDetail() {
       ) : (
         /* ── Read-only info grid ── */
         <>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3 mb-4`}>
             {(() => {
               const cor = shipment.corrections ?? {};
               const cv = (key: string, original: string) =>
@@ -803,7 +823,7 @@ export function ShipmentDetail() {
                   })()}
                   {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
                   {shipment.current_location && (
-                    <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
+                    <InfoRow label="Ubicación actual" value={<><MapPin className="w-4 h-4 inline" /> {branchLabelById(shipment.current_location, branches)}</>} />
                   )}
                   {shipment.current_zone && (
                     <InfoRow label="Zona" value={<ZoneBadge zone={shipment.current_zone} />} />
@@ -818,81 +838,62 @@ export function ShipmentDetail() {
 
  {/*  BOTÓN GENERAR QR */}
 {shipment.status !== "draft" && (
-  <button
+  <Button
+    variant="outline"
     onClick={handleGenerateQR}
     disabled={!shipment.tracking_id || generatingQR}
     title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
-    style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border-strong)",
-      borderRadius: 6,
-      padding: "6px 12px",
-      cursor: (!shipment.tracking_id || generatingQR) ? "not-allowed" : "pointer",
-      fontSize: 13,
-      fontWeight: 600,
-      color: "var(--text-strong)",
-      opacity: (!shipment.tracking_id || generatingQR) ? 0.5 : 1,
-    }}
+    className="mr-2"
   >
-    {generatingQR ? "Generando..." : "📱 Generar QR"}
-  </button>
+    {generatingQR ? <><Loader2 className="w-4 h-4 animate-spin" /> Generando...</> : <><QrCode className="w-4 h-4" /> Generar QR</>}
+  </Button>
 )}
 
 {/* BOTÓN IMPRIMIR ALTA — CA-1, CA-2, CA-3, CA-4 */}
 {hasRole("operator", "supervisor", "admin") && shipment.status !== "draft" && (
-  <button
+  <Button
+    variant="outline"
     onClick={handlePrintDocument}
     disabled={printingDoc}
     title="Imprimir comprobante de alta del envío"
-    style={{
-      background: "var(--bg-card)",
-      border: "1px solid var(--border-strong)",
-      borderRadius: 6,
-      padding: "6px 12px",
-      cursor: printingDoc ? "not-allowed" : "pointer",
-      fontSize: 13,
-      fontWeight: 600,
-      color: "var(--text-strong)",
-      opacity: printingDoc ? 0.5 : 1,
-    }}
   >
-    {printingDoc ? "Generando..." : "🖨️ Imprimir alta"}
-  </button>
+    {printingDoc ? <><Loader2 className="w-4 h-4 animate-spin" /> Generando...</> : <><Printer className="w-4 h-4" /> Imprimir alta</>}
+  </Button>
 )}
 
       {/* Zona actions — mover entre zonas internas de sucursal */}
       {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--ok-bg)", border: "1px solid var(--ok-border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ok-text)" }}>
+        <div className="bg-[var(--ok-bg)] border border-[var(--ok-border)] rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[13px] font-semibold text-[var(--ok-text)]">
               Zona actual: <ZoneBadge zone={shipment.current_zone} />
             </span>
             {shipment.current_zone === "entrada" && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--ok)", background: "var(--bg-card)", color: "var(--ok-text)" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-[var(--ok)] bg-[var(--bg-card)] text-[var(--ok-text)] disabled:opacity-50">
                   Mover a Salida
                 </button>
-                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--warn)", background: "var(--bg-card)", color: "var(--warn-text)" }}>
+                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-[var(--warn)] bg-[var(--bg-card)] text-[var(--warn-text)] disabled:opacity-50">
                   Mover a Revisión
                 </button>
               </>
             )}
             {shipment.current_zone === "salida" && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--warn)", background: "var(--bg-card)", color: "var(--warn-text)" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-[var(--warn)] bg-[var(--bg-card)] text-[var(--warn-text)] disabled:opacity-50">
                   Mover a Revisión
                 </button>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--brand)", background: "var(--bg-card)", color: "var(--brand)" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-blue-600 bg-[var(--bg-card)] text-blue-600 disabled:opacity-50">
                   Reingresar a Entrada
                 </button>
               </>
             )}
             {shipment.current_zone === "revision" && hasRole("supervisor") && (
               <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--ok)", background: "var(--bg-card)", color: "var(--ok-text)" }}>
+                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-[var(--ok)] bg-[var(--bg-card)] text-[var(--ok-text)] disabled:opacity-50">
                   Aprobar (→ Salida)
                 </button>
-                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid var(--danger-c)", background: "var(--bg-card)", color: "var(--danger-text)" }}>
+                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold border-2 border-red-600 bg-[var(--bg-card)] text-[var(--danger-text)] disabled:opacity-50">
                   Clasificar (Perdido/Destruido)
                 </button>
               </>
@@ -903,8 +904,8 @@ export function ShipmentDetail() {
 
       {/* Status update — supervisor y operador (no admin) */}
       {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--brand-tint)", border: "1px solid var(--brand-tint-border)" }}>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--brand-strong)" }}>
+        <div className="bg-[var(--brand-tint)] border border-[var(--brand-tint-border)] rounded-xl p-4 mb-4">
+          <p className="m-0 text-[13px] text-[var(--brand-strong)]">
             {shipment.status === "loaded"
               ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
               : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
@@ -913,10 +914,10 @@ export function ShipmentDetail() {
       )}
 
       {nextStatuses.length > 0 && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Actualizar estado</h2>
-          <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-4">
+          <h2 className="text-base m-0 mb-3.5">Actualizar estado</h2>
+          <form onSubmit={handleUpdateStatus} className="grid gap-2.5">
+            <div className="flex gap-2 flex-wrap">
               {nextStatuses.map((s) => (
                 <button key={s} type="button" onClick={() => {
                   if (s === "loaded") {
@@ -928,12 +929,11 @@ export function ShipmentDetail() {
                     }
                   }
                 }}
-                  style={{
-                    padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                    border: newStatus === s ? "2px solid var(--text-heading)" : "2px solid var(--border)",
-                    background: newStatus === s ? "var(--brand-tint)" : "var(--bg-card)",
-                    color: newStatus === s ? "var(--text-heading)" : "var(--text-strong)",
-                  }}>
+                  className={`px-3.5 py-1.5 rounded-md cursor-pointer text-[13px] font-semibold transition-colors ${
+                    newStatus === s
+                      ? "border-2 border-[var(--text-heading)] bg-[var(--brand-tint)] text-[var(--text-heading)]"
+                      : "border-2 border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)]"
+                  }`}>
                   {STATUS_LABELS[s]}
                 </button>
               ))}
@@ -943,7 +943,7 @@ export function ShipmentDetail() {
                 value={selectedDriverId}
                 onChange={(e) => setSelectedDriverId(e.target.value)}
                 required
-                style={inputStyle}
+                className="px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm"
               >
                 <option value="">Seleccioná un chofer (obligatorio)</option>
                 {drivers.map((d) => (
@@ -957,7 +957,7 @@ export function ShipmentDetail() {
                 onChange={(e) => setRecipientDni(e.target.value)}
                 placeholder="DNI del destinatario (obligatorio)"
                 required
-                style={inputStyle}
+                className="px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm"
               />
             )}
             {newStatus === "returned" && !shipment.parent_shipment_id && (
@@ -966,7 +966,7 @@ export function ShipmentDetail() {
                 onChange={(e) => setSenderDni(e.target.value)}
                 placeholder="DNI del remitente (obligatorio)"
                 required
-                style={inputStyle}
+                className="px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm"
               />
             )}
             {newStatus === "returned" && !!shipment.parent_shipment_id && (
@@ -975,13 +975,13 @@ export function ShipmentDetail() {
                 onChange={(e) => setRecipientDni(e.target.value)}
                 placeholder="DNI del destinatario -remitente original- (obligatorio)"
                 required
-                style={inputStyle}
+                className="px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm"
               />
             )}
             {newStatus === "at_hub" && shipment.status === "delivery_failed" && (() => {
               const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_hub")?.location;
               return returnLocation ? (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary)" }}>
+                <p className="m-0 text-[13px] text-[var(--text-secondary)]">
                   Devolviendo a: <strong>{branchLabel(returnLocation, branches)}</strong>
                 </p>
               ) : null;
@@ -989,35 +989,27 @@ export function ShipmentDetail() {
             <input value={notes} onChange={(e) => setNotes(e.target.value)}
               placeholder={newStatus === "delivery_failed" ? "Motivo obligatorio (ej: destinatario ausente)" : "Notas (opcional)"}
               required={newStatus === "delivery_failed"}
-              style={inputStyle} />
+              className="px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm" />
             {newStatus === "delivery_failed" && !notes.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El motivo es obligatorio para registrar un intento fallido.</p>
+              <p className="m-0 text-xs text-[var(--danger-text)]">El motivo es obligatorio para registrar un intento fallido.</p>
             )}
             {newStatus === "delivered" && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
+              <p className="m-0 text-xs text-[var(--danger-text)]">El DNI del destinatario es obligatorio para marcar como entregado.</p>
             )}
             {newStatus === "returned" && !shipment.parent_shipment_id && !senderDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
+              <p className="m-0 text-xs text-[var(--danger-text)]">El DNI del remitente es obligatorio para registrar la devolución.</p>
             )}
             {newStatus === "returned" && !!shipment.parent_shipment_id && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--danger-text)" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
+              <p className="m-0 text-xs text-[var(--danger-text)]">El DNI del destinatario es obligatorio para registrar la devolución.</p>
             )}
-            {updateError && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{updateError}</p>}
+            {updateError && <p className="text-[var(--danger-c)] m-0 text-[13px]">{updateError}</p>}
             {(() => {
               const returnedDniMissing = newStatus === "returned" && (shipment.parent_shipment_id ? !recipientDni.trim() : !senderDni.trim());
               const disabled = !newStatus || updating || (newStatus === "delivery_failed" && !notes.trim()) || (newStatus === "out_for_delivery" && !selectedDriverId) || (newStatus === "delivered" && !recipientDni.trim()) || returnedDniMissing;
               return (
-            <button type="submit"
-              disabled={disabled}
-              style={{
-                background: !disabled ? "#1e3a5f" : "var(--bg-muted)",
-                color: !disabled ? "#fff" : "var(--text-muted)",
-                border: "none", borderRadius: 6, padding: "8px 16px",
-                cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
-                fontWeight: 600, alignSelf: "start",
-              }}>
+            <Button type="submit" disabled={disabled} className="self-start">
               {updating ? "Actualizando..." : "Confirmar cambio"}
-            </button>
+            </Button>
               );
             })()}
           </form>
@@ -1025,43 +1017,39 @@ export function ShipmentDetail() {
       )}
 
       {shipment.status === "delivered" && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "var(--ok-bg)", border: "1px solid var(--ok-border)" }}>
-          <p style={{ margin: 0, color: "var(--ok-text)", fontWeight: 600 }}>Este envío fue entregado.</p>
+        <div className="bg-[var(--ok-bg)] border border-[var(--ok-border)] rounded-xl p-4 mb-4">
+          <p className="m-0 text-[var(--ok-text)] font-semibold">Este envío fue entregado.</p>
         </div>
       )}
 
       {/* Event history — hidden for drafts */}
       {shipment.status !== "draft" && (
-      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>)}
+      <h2 className="text-base mb-3">Historial de eventos</h2>)}
       {shipment.status !== "draft" && (events.length === 0 ? (
-        <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Sin eventos registrados.</p>
+        <p className="text-[var(--text-secondary)] text-sm">Sin eventos registrados.</p>
       ) : (
-        <div style={{ position: "relative", paddingLeft: 24 }}>
-          <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "var(--border)" }} />
+        <div className="relative pl-6">
+          <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-[var(--border)]" />
           {[...events].reverse().map((ev) => (
-            <div key={ev.id} style={{ position: "relative", marginBottom: 12 }}>
-              <div style={{
-                position: "absolute", left: -24, top: 4,
-                width: 14, height: 14, borderRadius: "50%",
-                background: "#1e3a5f", border: "2px solid var(--bg-card)", boxShadow: "0 0 0 2px var(--border)",
-              }} />
-              <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+            <div key={ev.id} className="relative mb-3">
+              <div className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-blue-700 border-2 border-[var(--bg-card)] shadow-[0_0_0_2px_var(--border)]" />
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-2.5 text-[13px]">
                 {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
                   <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>
+                    <div className="flex justify-between mb-0.5">
+                      <span className="font-semibold">
                         {ev.current_location.type === "DESTINATION_BRANCH"
                           ? "En Sucursal Destino"
                           : ev.current_location.type === "ORIGIN_BRANCH"
                           ? `En Sucursal Origen (${ev.current_location.branch_code})`
                           : "En tránsito"} — {ev.current_location.status}
                       </span>
-                      <span style={{ color: "var(--text-muted)" }}>{fmt(ev.timestamp)}</span>
+                      <span className="text-[var(--text-muted)]">{fmt(ev.timestamp)}</span>
                     </div>
-                    <div style={{ color: "var(--text-secondary)", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                    <div className="text-[var(--text-secondary)] flex gap-4 flex-wrap">
                       <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
                     </div>
-                    <p style={{ margin: "4px 0 0", color: "var(--danger-text)", fontWeight: 500 }}>
+                    <p className="mt-1 mb-0 text-[var(--danger-text)] font-medium">
                       Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
                         day: "2-digit",
                         month: "2-digit",
@@ -1071,27 +1059,27 @@ export function ShipmentDetail() {
                   </>
                 ) : (
                   <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>{formatShipmentEventLabel(ev)}</span>
-                      <span style={{ color: "var(--text-muted)" }}>{fmt(ev.timestamp)}</span>
+                    <div className="flex justify-between mb-0.5">
+                      <span className="font-semibold">{formatShipmentEventLabel(ev)}</span>
+                      <span className="text-[var(--text-muted)]">{fmt(ev.timestamp)}</span>
                     </div>
-                    <div style={{ color: "var(--text-secondary)", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                    <div className="text-[var(--text-secondary)] flex gap-4 flex-wrap">
                       <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
                       {ev.location && (() => {
                         const b = branches.find(x => x.id === ev.location);
                         return (
-                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "var(--text-muted)" }}>{b.province}</span></>}</span>
+                          <span><MapPin className="w-4 h-4 inline" /> <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span className="text-[var(--text-muted)]">{b.province}</span></>}</span>
                         );
                       })()}
                     </div>
-                    {ev.notes && <p style={{ margin: "4px 0 0", color: "var(--text-secondary)" }}>{ev.notes}</p>}
+                    {ev.notes && <p className="mt-1 mb-0 text-[var(--text-secondary)]">{ev.notes}</p>}
                     {ev.event_type === "claim_created" && ev.notes && (() => {
                       const m = ev.notes.match(/REC-\d+/);
                       if (m) {
                         const claimId = m[0];
                         return (
-                          <p style={{ margin: "6px 0 0" }}>
-                            <Link to={`/claims/${claimId}`} style={{ color: "var(--text-heading)", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
+                          <p className="mt-1.5 mb-0">
+                            <Link to={`/claims/${claimId}`} className="text-[var(--text-heading)] font-bold">Ver reclamo {claimId}</Link>
                           </p>
                         );
                       }
@@ -1108,93 +1096,78 @@ export function ShipmentDetail() {
       </div>{/* end left column */}
 
       {/* ── Right column: Price, Vehicle & Comments ── */}
-      <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
+      <div className={isMobile ? "" : "sticky top-6"}>
         {/* Price Card */}
         {shipment.price != null && shipment.status !== "draft" && (
           <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
         )}
 
         {/* Vehicle Card */}
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
+        <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-4">
+          <h2 className="text-base m-0 mb-3">Vehículo asignado</h2>
           {loadingVehicle ? (
-            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Cargando...</p>
+            <p className="text-[var(--text-secondary)] text-[13px] m-0">Cargando...</p>
           ) : assignedVehicle ? (
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 10,
-                  background: "#10b98120",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}>
-                  <svg style={{ width: 24, height: 24, color: "var(--ok)" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
-                  </svg>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+                  <Truck className="w-6 h-6 text-emerald-600" />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div className="flex-1">
                   <p
                     onClick={() => setShowVehicleDetail(true)}
-                    style={{ fontSize: 16, fontWeight: 700, color: "var(--text-heading)", margin: 0, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
+                    className="text-base font-bold text-[var(--text-heading)] m-0 cursor-pointer underline decoration-dotted"
                   >
                     {assignedVehicle.license_plate}
                   </p>
-                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                     {assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
                   </p>
                 </div>
-                <div style={{
-                  padding: "4px 10px", borderRadius: 9999,
-                  background: "#10b98120",
-                  fontSize: 11, fontWeight: 600, color: "var(--ok)",
-                }}>
+                <div className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-[11px] font-semibold text-emerald-600">
                   {assignedVehicle.status_label}
                 </div>
               </div>
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+              <div className="border-t border-[var(--border)] pt-2.5">
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span style={{ color: "var(--text-secondary)" }}>ID: </span>
-                    <span style={{ fontWeight: 600, color: "var(--text-strong)" }}>#{assignedVehicle.id}</span>
+                    <span className="text-[var(--text-secondary)]">ID: </span>
+                    <span className="font-semibold text-[var(--text-strong)]">#{assignedVehicle.id}</span>
                   </div>
                   {assignedVehicle.updated_by && (
                     <div>
-                      <span style={{ color: "var(--text-secondary)" }}>Por: </span>
-                      <span style={{ fontWeight: 600, color: "var(--text-strong)" }}>{assignedVehicle.updated_by}</span>
+                      <span className="text-[var(--text-secondary)]">Por: </span>
+                      <span className="font-semibold text-[var(--text-strong)]">{assignedVehicle.updated_by}</span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <svg style={{ width: 32, height: 32, color: "var(--text-muted)", margin: "0 auto 8px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
-              </svg>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Sin vehículo asignado</p>
+            <div className="text-center py-4">
+              <Truck className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
+              <p className="text-[13px] text-[var(--text-secondary)] m-0">Sin vehículo asignado</p>
             </div>
           )}
         </div>
 
         {/* Incidents Card */}
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Incidencias</h2>
+        <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-4">
+          <h2 className="text-base m-0 mb-3">Incidencias</h2>
           {incidents.length === 0 ? (
-            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Sin incidencias registradas.</p>
+            <p className="text-[var(--text-secondary)] text-[13px] m-0">Sin incidencias registradas.</p>
           ) : (
-            <div style={{ display: "grid", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+            <div className="grid gap-2 max-h-[400px] overflow-y-auto">
               {incidents.map((inc) => (
-                <div key={inc.id} style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: "var(--warn-text)", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
+                <div key={inc.id} className="bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-lg p-2.5 text-[13px]">
+                  <div className="flex justify-between items-start mb-1.5">
+                    <span className="font-bold text-[var(--warn-text)] bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded px-[7px] py-px text-[11px]">
                       {INCIDENT_TYPE_LABELS[inc.incident_type] ?? inc.incident_type}
                     </span>
-                    <span style={{ color: "var(--text-muted)", fontSize: 11, whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDateTime(inc.created_at)}</span>
+                    <span className="text-[var(--text-muted)] text-[11px] whitespace-nowrap ml-2">{fmtDateTime(inc.created_at)}</span>
                   </div>
-                  <p style={{ margin: "4px 0 0", color: "var(--text-strong)", whiteSpace: "pre-wrap" as const }}>{inc.description}</p>
-                  <p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: 11 }}>Reportado por: {inc.reported_by}</p>
+                  <p className="mt-1 mb-0 text-[var(--text-strong)] whitespace-pre-wrap">{inc.description}</p>
+                  <p className="mt-1.5 mb-0 text-[var(--text-muted)] text-[11px]">Reportado por: {inc.reported_by}</p>
                 </div>
               ))}
             </div>
@@ -1202,18 +1175,18 @@ export function ShipmentDetail() {
         </div>
 
         {/* Comments Card */}
-        <div style={{ ...cardStyle }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comentarios</h2>
+        <div className="bg-[var(--bg-subtle)] rounded-xl p-4">
+          <h2 className="text-base m-0 mb-3">Comentarios</h2>
           {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && !operatorOutOfBranch && (
-            <div style={{ marginBottom: 12 }}>
+            <div className="mb-3">
               <textarea
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Agregar un comentario..."
                 rows={2}
-                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
+                className="w-full px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm resize-y font-[inherit] box-border"
               />
-              <button
+              <Button
                 disabled={addingComment || !newComment.trim()}
                 onClick={async () => {
                   if (!trackingId || !newComment.trim()) return;
@@ -1227,23 +1200,23 @@ export function ShipmentDetail() {
                     setAddingComment(false);
                   }
                 }}
-                style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+                className="mt-1.5"
               >
                 {addingComment ? "Agregando..." : "Agregar comentario"}
-              </button>
+              </Button>
             </div>
           )}
           {comments.length === 0 ? (
-            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: 0 }}>Sin comentarios todavía.</p>
+            <p className="text-[var(--text-secondary)] text-[13px] m-0">Sin comentarios todavía.</p>
           ) : (
-            <div style={{ display: "grid", gap: 8, maxHeight: 500, overflowY: "auto" }}>
+            <div className="grid gap-2 max-h-[500px] overflow-y-auto">
               {comments.map((c) => (
-                <div key={c.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600 }}>{c.author}</span>
-                    <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
+                <div key={c.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-2.5 text-[13px]">
+                  <div className="flex justify-between mb-1">
+                    <span className="font-semibold">{c.author}</span>
+                    <span className="text-[var(--text-muted)] text-xs">{fmtDateTime(c.created_at)}</span>
                   </div>
-                  <p style={{ margin: 0, color: "var(--text-strong)", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
+                  <p className="m-0 text-[var(--text-strong)] whitespace-pre-wrap">{c.body}</p>
                 </div>
               ))}
             </div>
@@ -1267,28 +1240,28 @@ export function ShipmentDetail() {
       {/* Incident report modal */}
       {showIncidentModal && trackingId && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          className="fixed inset-0 bg-black/45 z-[200] flex items-center justify-center p-4"
           onClick={() => setShowIncidentModal(false)}
         >
           <div
-            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            className="bg-[var(--bg-card)] rounded-xl p-6 max-w-[480px] w-full shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>Registrar incidencia</h2>
-              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="m-0 text-lg text-[var(--text-primary)]">Registrar incidencia</h2>
+              <button onClick={() => setShowIncidentModal(false)} aria-label="Cerrar" className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)]">✕</button>
             </div>
             {incidentError && (
-              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+              <div className="bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-3 py-2 rounded-md mb-3 text-[13px]">
                 {incidentError}
               </div>
             )}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Tipo de incidencia</label>
+            <div className="mb-3.5">
+              <label className="block text-[13px] font-semibold text-[var(--text-strong)] mb-1.5">Tipo de incidencia</label>
               <select
                 value={incidentType}
                 onChange={(e) => setIncidentType(e.target.value as IncidentType)}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: 6, fontSize: 13, background: "var(--bg-card)" }}
+                className="w-full px-2.5 py-2 border border-[var(--border-strong)] rounded-md text-[13px] bg-[var(--bg-card)]"
               >
                 {(Object.entries(INCIDENT_TYPE_LABELS) as [IncidentType, string][]).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
@@ -1296,27 +1269,26 @@ export function ShipmentDetail() {
               </select>
             </div>
             {TERMINAL_INCIDENT_STATUS[incidentType] && (
-              <div style={{ background: "var(--warn-bg)", border: "1px solid var(--warn)", color: "var(--warn-text)", padding: "10px 12px", borderRadius: 6, marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+              <div className="bg-[var(--warn-bg)] border border-[var(--warn)] text-[var(--warn-text)] px-3 py-2.5 rounded-md mb-3.5 text-[13px] leading-relaxed">
                 <strong>Atención:</strong> Al confirmar esta incidencia, el envío quedará en estado <strong>{incidentType === "extraviado" ? "Extraviado" : "Daño total"}</strong> y no podrá continuar su flujo. Esta acción es irreversible.
               </div>
             )}
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Descripción</label>
+            <div className="mb-[18px]">
+              <label className="block text-[13px] font-semibold text-[var(--text-strong)] mb-1.5">Descripción</label>
               <textarea
                 value={incidentDescription}
                 onChange={(e) => setIncidentDescription(e.target.value)}
                 placeholder="Describí el problema detectado..."
                 rows={4}
-                style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", border: "1px solid var(--border-strong)", borderRadius: 6, fontSize: 13, fontFamily: "inherit", resize: "vertical" as const }}
+                className="w-full box-border px-2.5 py-2 border border-[var(--border-strong)] rounded-md text-[13px] font-[inherit] resize-y"
               />
             </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowIncidentModal(false)}
-                style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+            <div className="flex gap-2.5 justify-end">
+              <Button variant="outline" onClick={() => setShowIncidentModal(false)}>
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={TERMINAL_INCIDENT_STATUS[incidentType] ? "destructive" : "default"}
                 disabled={reportingIncident || !incidentDescription.trim()}
                 onClick={async () => {
                   if (!incidentDescription.trim()) return;
@@ -1338,9 +1310,9 @@ export function ShipmentDetail() {
                     setReportingIncident(false);
                   }
                 }}
-                style={{ background: TERMINAL_INCIDENT_STATUS[incidentType] ? "var(--danger-c)" : "var(--warn)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
+              >
                 {reportingIncident ? "Registrando..." : TERMINAL_INCIDENT_STATUS[incidentType] ? "Confirmar y cerrar envío" : "Confirmar registro"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1349,31 +1321,31 @@ export function ShipmentDetail() {
       {/* Vehicle picker modal for loaded */}
       {showVehiclePicker && shipment && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          className="fixed inset-0 bg-black/45 z-[200] flex items-center justify-center p-4"
           onClick={() => setShowVehiclePicker(false)}
         >
           <div
-            style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
+            className="bg-[var(--bg-card)] rounded-xl p-6 max-w-[520px] w-full max-h-[80vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>Asignar vehículo — Cargar en vehículo</h2>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="m-0 text-lg text-[var(--text-primary)]">Asignar vehículo — Cargar en vehículo</h2>
+              <button onClick={() => setShowVehiclePicker(false)} aria-label="Cerrar" className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)]">✕</button>
             </div>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-secondary)" }}>
+            <p className="m-0 mb-4 text-[13px] text-[var(--text-secondary)]">
               Seleccioná un vehículo disponible en esta sucursal. Peso del envío: <strong>{effectiveWeightKg(shipment)} kg</strong>.
             </p>
             {vehiclePickerError && (
-              <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger-text)", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
+              <div className="bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-3 py-2 rounded-md mb-3 text-[13px]">
                 {vehiclePickerError}
               </div>
             )}
             {loadingVehicles ? (
-              <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Cargando vehículos disponibles...</p>
+              <p className="text-[var(--text-secondary)] text-[13px]">Cargando vehículos disponibles...</p>
             ) : availableVehicles.length === 0 ? (
-              <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
+              <p className="text-[var(--text-secondary)] text-[13px]">No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              <div className="flex flex-col gap-2 mb-4">
                 {availableVehicles.map((v) => {
                   const usedKg = (v.assigned_shipments ?? []).length > 0
                     ? v.capacity_kg - v.capacity_kg // we don't have weights here, show raw capacity
@@ -1384,42 +1356,36 @@ export function ShipmentDetail() {
                     <div
                       key={v.license_plate}
                       onClick={() => setSelectedVehiclePlate(v.license_plate)}
-                      style={{
-                        border: isSelected ? "2px solid #1e3a5f" : "1px solid var(--border)",
-                        borderRadius: 8, padding: "12px 14px", cursor: "pointer",
-                        background: isSelected ? "var(--brand-tint)" : "var(--bg-card)",
-                        display: "flex", alignItems: "center", gap: 12,
-                      }}
+                      className={`flex items-center gap-3 rounded-lg px-3.5 py-3 cursor-pointer transition-colors ${
+                        isSelected
+                          ? "border-2 border-blue-700 bg-[var(--brand-tint)]"
+                          : "border border-[var(--border)] bg-[var(--bg-card)]"
+                      }`}
                     >
-                      <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "var(--text-primary)" }}>{v.license_plate}</p>
-                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-secondary)" }}>
+                      <div className="flex-1">
+                        <p className="m-0 font-bold text-[15px] text-[var(--text-primary)]">{v.license_plate}</p>
+                        <p className="mt-0.5 mb-0 text-xs text-[var(--text-secondary)]">
                           {v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
                           {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
                           {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>
                       </div>
-                      {isSelected && <span style={{ color: "var(--text-heading)", fontWeight: 700 }}>✓</span>}
+                      {isSelected && <span className="text-[var(--text-heading)] font-bold">✓</span>}
                     </div>
                   );
                 })}
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", cursor: "pointer", fontWeight: 500 }}>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowVehiclePicker(false)}>
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleAssignVehicle}
                 disabled={!selectedVehiclePlate || assigningVehicle}
-                style={{
-                  padding: "8px 16px", borderRadius: 6, border: "none", fontWeight: 600, cursor: !selectedVehiclePlate || assigningVehicle ? "default" : "pointer",
-                  background: !selectedVehiclePlate || assigningVehicle ? "var(--bg-muted)" : "#1e3a5f",
-                  color: !selectedVehiclePlate || assigningVehicle ? "var(--text-muted)" : "#fff",
-                }}
               >
                 {assigningVehicle ? "Asignando..." : "Asignar vehículo"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1434,13 +1400,13 @@ export function ShipmentDetail() {
       )}
 
       {showCancelModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: "28px 32px", maxWidth: 440, width: "calc(100vw - 32px)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "var(--danger-text)" }}>Cancelar envío</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--text-secondary)" }}>
+        <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center">
+          <div className="bg-[var(--bg-card)] rounded-xl px-8 py-7 max-w-[440px] w-[calc(100vw-32px)] shadow-[0_8px_32px_rgba(0,0,0,0.18)]">
+            <h2 className="m-0 mb-2 text-lg text-[var(--danger-text)]">Cancelar envío</h2>
+            <p className="m-0 mb-5 text-sm text-[var(--text-secondary)]">
               Esta acción es irreversible. El envío pasará a <strong>Cancelado</strong> y no podrá continuar en tránsito.
             </p>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)", display: "block", marginBottom: 6 }}>
+            <label className="text-xs font-semibold text-[var(--text-strong)] block mb-1.5">
               Motivo de cancelación *
             </label>
             <textarea
@@ -1448,18 +1414,16 @@ export function ShipmentDetail() {
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="Describí el motivo de la cancelación..."
               rows={4}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, boxSizing: "border-box", resize: "vertical" }}
+              className="w-full px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm box-border resize-y"
             />
-            {cancelError && <p style={{ color: "var(--danger-c)", fontSize: 13, margin: "8px 0 0" }}>{cancelError}</p>}
-            <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setShowCancelModal(false)} disabled={cancelling}
-                style={{ background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
+            {cancelError && <p className="text-[var(--danger-c)] text-[13px] mt-2 mb-0">{cancelError}</p>}
+            <div className="flex gap-2.5 mt-5 justify-end">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)} disabled={cancelling}>
                 Volver
-              </button>
-              <button type="button" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}
-                style={{ background: cancelReason.trim() ? "var(--danger-c)" : "var(--danger-border)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: cancelReason.trim() ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 700 }}>
+              </Button>
+              <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
                 {cancelling ? "Cancelando..." : "Confirmar cancelación"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1475,36 +1439,12 @@ export function ShipmentDetail() {
       )}
 
       {qrError && (
-        <div style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          background: "var(--danger-bg)",
-          border: "1px solid var(--danger-border)",
-          color: "var(--danger-text)",
-          padding: "12px 16px",
-          borderRadius: 8,
-          fontSize: 13,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          zIndex: 1001,
-        }}>
+        <div className="fixed bottom-6 right-6 bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-4 py-3 rounded-lg text-[13px] shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[1001]">
           {qrError}
         </div>
       )}
       {printDocError && (
-        <div style={{
-          position: "fixed",
-          bottom: qrError ? 80 : 24,
-          right: 24,
-          background: "var(--danger-bg)",
-          border: "1px solid var(--danger-border)",
-          color: "var(--danger-text)",
-          padding: "12px 16px",
-          borderRadius: 8,
-          fontSize: 13,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          zIndex: 1001,
-        }}>
+        <div className={`fixed ${qrError ? "bottom-20" : "bottom-6"} right-6 bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-4 py-3 rounded-lg text-[13px] shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[1001]`}>
           {printDocError}
         </div>
       )}
@@ -1538,30 +1478,25 @@ const DELIVERY_METHODS = [
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-      border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8,
-      padding: "10px 12px", display: "flex", justifyContent: "space-between",
-      alignItems: "center", gap: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    }}>
-      <div style={{ fontSize: 13, color: "var(--brand)", lineHeight: 1.5, minWidth: 0 }}>
-        <span style={{ fontWeight: 700 }}>{customer.name}</span>
-        <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>·</span>
+    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 border border-[var(--brand-tint-border)] bg-[var(--brand-tint)] rounded-lg p-2.5 flex justify-between items-center gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+      <div className="text-[13px] text-blue-600 leading-relaxed min-w-0">
+        <span className="font-bold">{customer.name}</span>
+        <span className="text-[var(--text-secondary)] mx-1.5">·</span>
         <span>{customer.phone}</span>
         {customer.address.city && (
           <>
-            <span style={{ color: "var(--text-secondary)", margin: "0 6px" }}>·</span>
+            <span className="text-[var(--text-secondary)] mx-1.5">·</span>
             <span>{customer.address.city}, {customer.address.province}</span>
           </>
         )}
       </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <div className="flex gap-1.5 shrink-0">
         <button type="button" onClick={onApply}
-          style={{ background: "var(--brand)", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+          className="bg-blue-600 text-white border-none rounded-md px-3 py-1.5 cursor-pointer text-xs font-semibold">
           Usar datos
         </button>
         <button type="button" onClick={onDismiss}
-          style={{ background: "none", color: "var(--text-secondary)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>
+          className="bg-transparent text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 cursor-pointer text-xs">
           ✕
         </button>
       </div>
@@ -1787,86 +1722,77 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
   };
 
   return (
-    <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "var(--text-secondary)" }}>
+    <div className="grid gap-4 mb-4">
+      <div className="flex gap-5 text-[13px] text-[var(--text-secondary)]">
         <span>Creado: {createdAt}</span>
-        <span>ID del borrador: <code style={{ background: "var(--bg-muted)", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "var(--text-strong)" }}>{draftId}</code></span>
+        <span>ID del borrador: <code className="bg-[var(--bg-muted)] px-1.5 py-0.5 rounded text-xs text-[var(--text-strong)]">{draftId}</code></span>
       </div>
 
       {/* Remitente */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Remitente</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+      <fieldset className={fsClass}>
+        <legend className={legClass}>Remitente</legend>
+        <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
           <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: senderNameError ? "var(--danger-c)" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
-            {senderNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{senderNameError}</span>}
+            <input className={`${inpClass} ${senderNameError ? "border-[var(--danger-c)]" : ""}`} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
+            {senderNameError && <span className="text-red-600 text-xs">{senderNameError}</span>}
           </DField>
-          <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
+          <DField label="Teléfono *"><input className={inpClass} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
+          <DField label="Email"><input className={inpClass} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
-            <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
+            <input className={inpClass} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
             {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
           </DField>
           <DField label="Calle *">
-            <AddressAutocomplete style={inp} required value={form.sender.address.street ?? ""}
+            <AddressAutocomplete className={inpClass} required value={form.sender.address.street ?? ""}
               onChange={(v) => setSenderAddr("street", v)}
               onAddressSelect={(p) => onChange({ ...form, sender: { ...form.sender, address: { ...form.sender.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
               placeholder="Av. Corrientes 1234, Buenos Aires" />
           </DField>
-          <DField label="Ciudad *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
+          <DField label="Ciudad *"><input className={inpClass} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
           <DField label="Provincia *">
-            <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
+            <select className={inpClass} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
               <option value="">Seleccionar</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Código postal *"><input style={inp} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
+          <DField label="Código postal *"><input className={inpClass} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
         </div>
       </fieldset>
 
       {/* Destinatario */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Destinatario</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+      <fieldset className={fsClass}>
+        <legend className={legClass}>Destinatario</legend>
+        <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
           <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: recipientNameError ? "var(--danger-c)" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
-            {recipientNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{recipientNameError}</span>}
+            <input className={`${inpClass} ${recipientNameError ? "border-[var(--danger-c)]" : ""}`} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
+            {recipientNameError && <span className="text-red-600 text-xs">{recipientNameError}</span>}
           </DField>
-          <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
+          <DField label="Teléfono *"><input className={inpClass} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
+          <DField label="Email"><input className={inpClass} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
           <DField label="DNI *">
-            <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
+            <input className={inpClass} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
             {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
           </DField>
           <DField label="Calle *">
-            <AddressAutocomplete style={inp} required value={form.recipient.address.street ?? ""}
+            <AddressAutocomplete className={inpClass} required value={form.recipient.address.street ?? ""}
               onChange={(v) => setRecipientAddr("street", v)}
               onAddressSelect={(p) => onChange({ ...form, recipient: { ...form.recipient, address: { ...form.recipient.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
               placeholder="San Martín 456, Córdoba" />
           </DField>
-          <DField label="Ciudad *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
+          <DField label="Ciudad *"><input className={inpClass} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
           <DField label="Provincia *">
-            <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
+            <select className={inpClass} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
               <option value="">Seleccionar</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </DField>
-          <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
+          <DField label="Código postal *"><input className={inpClass} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
         </div>
         {/* CA-05: Privacy notice — shown once the operator has entered recipient data */}
         {(form.recipient.name || form.recipient.dni) && (
-          <div style={{
-            marginTop: 10,
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "1px solid var(--info-border)",
-            background: "var(--bg-hover)",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-          }}>
-            <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
-            <p style={{ fontSize: 12, color: "var(--info)", margin: 0, lineHeight: 1.5 }}>
+          <div className="mt-2.5 px-3.5 py-2.5 rounded-lg border border-[var(--info-border)] bg-[var(--bg-hover)] flex gap-2.5 items-start">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <p className="text-xs text-[var(--info)] m-0 leading-relaxed">
               Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
               <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
               Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
@@ -1876,30 +1802,30 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
       </fieldset>
 
       {/* Sucursales */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Sucursales</legend>
-        <div style={{ display: "grid", gap: 12 }}>
+      <fieldset className={fsClass}>
+        <legend className={legClass}>Sucursales</legend>
+        <div className="grid gap-3">
           {/* Sucursal de origen */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Sucursal de origen *</div>
+            <div className="text-[11px] font-semibold text-[var(--text-strong)] mb-1.5">Sucursal de origen *</div>
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
-                <div style={{ border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
-                  {selected && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>}
-                  <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 6 }}>Asignada a tu sucursal — no se puede cambiar.</div>
+                <div className="border border-[var(--brand-tint-border)] bg-[var(--brand-tint)] rounded-lg p-2.5">
+                  <div className="text-[13px] font-semibold text-[var(--text-heading)]">{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
+                  {selected && <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{selected.address.street}, {selected.address.city}</div>}
+                  <div className="text-[10px] text-[var(--text-secondary)] mt-1.5">Asignada a tu sucursal — no se puede cambiar.</div>
                 </div>
               );
             })() : (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return selected ? (
-                <div style={{ border: "1px solid var(--brand-tint-border)", background: "var(--brand-tint)", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{selected.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>
+                <div className="border border-[var(--brand-tint-border)] bg-[var(--brand-tint)] rounded-lg p-2.5">
+                  <div className="text-[13px] font-semibold text-[var(--text-heading)]">{selected.name}</div>
+                  <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{selected.address.street}, {selected.address.city}</div>
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Sin sucursal asignada</div>
+                <div className="text-xs text-[var(--text-muted)]">Sin sucursal asignada</div>
               );
             })()}
           </div>
@@ -1909,11 +1835,11 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
             if (!finalBranch) return null;
             return (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>Sucursal final</div>
-                <div style={{ border: "1px solid var(--ok-border)", background: "var(--ok-bg)", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-heading)" }}>{finalBranch.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{finalBranch.address.street}, {finalBranch.address.city}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 6 }}>Sucursal más cercana al domicilio del destinatario.</div>
+                <div className="text-[11px] font-semibold text-[var(--text-strong)] mb-1.5">Sucursal final</div>
+                <div className="border border-[var(--ok-border)] bg-[var(--ok-bg)] rounded-lg p-2.5">
+                  <div className="text-[13px] font-semibold text-[var(--text-heading)]">{finalBranch.name}</div>
+                  <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</div>
+                  <div className="text-[10px] text-[var(--text-secondary)] mt-1.5">Sucursal más cercana al domicilio del destinatario.</div>
                 </div>
               </div>
             );
@@ -1922,44 +1848,44 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
       </fieldset>
 
       {/* Paquete */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Paquete</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+      <fieldset className={fsClass}>
+        <legend className={legClass}>Paquete</legend>
+        <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
           <DField label="Peso (kg) *" error={envelopeOverweight ? "Un sobre no puede superar 5 kg; usá una caja" : undefined}>
-            <input style={{ ...inp, borderColor: envelopeOverweight ? "var(--danger-c)" : undefined }}
+            <input className={`${inpClass} ${envelopeOverweight ? "border-[var(--danger-c)]" : ""}`}
               type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
               onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
           </DField>
           <DField label="Tipo de paquete *">
-            <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
+            <select className={inpClass} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
               {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </DField>
           <DField label="Tipo de envío">
-            <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
+            <select className={inpClass} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
               {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </DField>
           <DField label="Ventana horaria">
-            <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
+            <select className={inpClass} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
               {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </DField>
-          <DField label="Método de entrega" style={{ gridColumn: "1 / -1" }}>
-            <select style={inp} value={form.delivery_method ?? "ultima_milla"} onChange={(e) => set("delivery_method", e.target.value)}>
+          <DField label="Método de entrega" className="col-span-full">
+            <select className={inpClass} value={form.delivery_method ?? "ultima_milla"} onChange={(e) => set("delivery_method", e.target.value)}>
               {DELIVERY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
           </DField>
-          <DField label="" style={{ gridColumn: "1 / -1" }}>
-            <div style={{ display: "flex", gap: 20 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+          <DField label="" className="col-span-full">
+            <div className="flex gap-5">
+              <label className="flex items-center gap-2 cursor-pointer text-[13px]">
                 <input type="checkbox" checked={!!form.is_fragile} onChange={(e) => set("is_fragile", e.target.checked)} />
                 Contenido frágil (manipular con cuidado)
               </label>
             </div>
           </DField>
-          <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
-            <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='ej: "Mantener vertical"' />
+          <DField label="Instrucciones especiales" className="col-span-full">
+            <input className={inpClass} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='ej: "Mantener vertical"' />
           </DField>
         </div>
       </fieldset>
@@ -2001,73 +1927,68 @@ function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confi
       )}
 
       {/* Acciones */}
-      <div style={{ border: "1px solid var(--warn-border)", background: "var(--warn-bg)", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <h2 style={{ fontSize: "1rem", margin: 0, color: "var(--warn-text)" }}>Borrador — pendiente de confirmación</h2>
+      <div className="border border-[var(--warn-border)] bg-[var(--warn-bg)] rounded-xl px-[18px] py-3.5">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
+          <h2 className="text-base m-0 text-[var(--warn-text)]">Borrador — pendiente de confirmación</h2>
           {/* Auto-save status */}
           {autoSaveStatus === "saving" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--warn-text)" }}>
-              <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
+            <span className="inline-flex items-center gap-1 text-xs text-[var(--warn-text)]">
+              <Loader2 className="animate-spin w-3 h-3" />Guardando…
             </span>
           )}
           {autoSaveStatus === "saved" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ok-text)" }}>
-              <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
+            <span className="inline-flex items-center gap-1 text-xs text-[var(--ok-text)]">
+              <Check className="w-3 h-3" />Guardado automáticamente
             </span>
           )}
           {autoSaveStatus === "error" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--danger-text)" }}>
-              <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
+            <span className="inline-flex items-center gap-1 text-xs text-[var(--danger-text)]">
+              <AlertCircle className="w-3 h-3" />{autoSaveError || "Error al guardar"}
             </span>
           )}
         </div>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--warn-text)" }}>
+        <p className="m-0 mb-3 text-[13px] text-[var(--warn-text)]">
           Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
         </p>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--warn-text)" }}>
+        <p className="m-0 mb-3 text-[13px] text-[var(--warn-text)]">
           <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
         </p>
-        {confirmError && <p style={{ color: "var(--danger-c)", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
+        {confirmError && <p className="text-[var(--danger-c)] m-0 mb-2 text-[13px]">{confirmError}</p>}
         {discardConfirm ? (
-          <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--danger-text)" }}>
+          <div className="bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg p-2.5 mb-2.5">
+            <p className="m-0 mb-2.5 text-[13px] font-semibold text-[var(--danger-text)]">
               ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={onDiscard} disabled={confirming}
-                style={{ background: "var(--danger-c)", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
+            <div className="flex gap-2">
+              <Button onClick={onDiscard} disabled={confirming} variant="destructive" size="sm">
                 Sí, descartar
-              </button>
-              <button onClick={() => setDiscardConfirm(false)}
-                style={{ background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              </Button>
+              <Button onClick={() => setDiscardConfirm(false)} variant="outline" size="sm">
                 Cancelar
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onConfirm}
-            disabled={confirming || envelopeOverweight}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
+        <div className="flex gap-2.5 flex-wrap">
+          <Button onClick={onConfirm} disabled={confirming || envelopeOverweight}>
             {confirming ? "Procesando..." : "Continuar al pago"}
-          </button>
-          <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
-            style={{ background: "var(--danger-bg)", color: "var(--danger-text)", border: "1px solid var(--danger-border)", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
+          </Button>
+          <Button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm} variant="outline" className="ml-auto">
             Descartar borrador
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-function DField({ label, children, style, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; error?: string }) {
+function DField({ label, children, style, className, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; className?: string; error?: string }) {
   return (
-    <div style={{ display: "grid", gap: 4, position: "relative", ...style }}>
+    <div className={`grid gap-1 relative ${className ?? ""}`} style={style}>
       {label && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>{label}</label>
-          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "var(--danger-c)", lineHeight: 1.2 }}>{error}</span>}
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-[var(--text-strong)]">{label}</label>
+          {error && <span className="text-[11px] font-medium text-[var(--danger-c)] leading-tight">{error}</span>}
         </div>
       )}
       {children}
@@ -2075,9 +1996,9 @@ function DField({ label, children, style, error }: { label: string; children: Re
   );
 }
 
-const fsStyle: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 10, padding: "14px 18px" };
-const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "var(--text-heading)", padding: "0 6px" };
-const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 13, width: "100%", boxSizing: "border-box" };
+const fsClass = "border border-[var(--border)] rounded-xl p-3.5";
+const legClass = "font-bold text-[13px] text-[var(--text-heading)] px-1.5";
+const inpClass = "px-2.5 py-1.5 rounded-md border border-[var(--border-strong)] text-[13px] w-full box-border";
 
 function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, destination, branches }: {
   events: ShipmentEvent[];
@@ -2115,49 +2036,56 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
   const isDelivered = lastEvent?.to_status === "delivered";
 
   const statusColors: Record<ShipmentStatus, string> = {
-    draft: "#9ca3af", at_origin_hub: "#f59e0b", loaded: "#06b6d4", in_transit: "#3b82f6",
-    at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
-    redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
-    delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
-    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
-    pending_payment: "#d97706",
+    draft: "bg-gray-400 border-gray-400", at_origin_hub: "bg-amber-500 border-amber-500", loaded: "bg-cyan-500 border-cyan-500", in_transit: "bg-blue-500 border-blue-500",
+    at_hub: "bg-violet-500 border-violet-500", out_for_delivery: "bg-orange-500 border-orange-500", delivery_failed: "bg-red-500 border-red-500",
+    redelivery_scheduled: "bg-orange-400 border-orange-400", no_entregado: "bg-gray-500 border-gray-500", rechazado: "bg-red-600 border-red-600",
+    delivered: "bg-green-500 border-green-500", ready_for_pickup: "bg-cyan-600 border-cyan-600", ready_for_return: "bg-violet-600 border-violet-600",
+    returned: "bg-gray-500 border-gray-500", cancelled: "bg-red-700 border-red-700", lost: "bg-gray-700 border-gray-700", destroyed: "bg-gray-800 border-gray-800", expired: "bg-gray-400 border-gray-400",
+    pending_payment: "bg-amber-600 border-amber-600",
   };
 
-  const solidLine = (color = "var(--border)") => (
-    <div style={{ width: 40, height: 2, background: color, flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
+  const statusRingColors: Record<ShipmentStatus, string> = {
+    draft: "var(--text-muted)", at_origin_hub: "ring-amber-500/20", loaded: "ring-cyan-500/20", in_transit: "ring-blue-500/20",
+    at_hub: "ring-violet-500/20", out_for_delivery: "ring-orange-500/20", delivery_failed: "ring-red-500/20",
+    redelivery_scheduled: "ring-orange-400/20", no_entregado: "ring-gray-500/20", rechazado: "ring-red-600/20",
+    delivered: "ring-emerald-500/20", ready_for_pickup: "ring-cyan-600/20", ready_for_return: "ring-violet-600/20",
+    returned: "ring-gray-500/20", cancelled: "ring-red-700/20", lost: "ring-gray-700/20", destroyed: "ring-gray-800/20", expired: "var(--text-muted)",
+    pending_payment: "ring-amber-600/20",
+  };
+
+  const solidLine = (color = "bg-[var(--border)]") => (
+    <div className={`w-10 h-0.5 ${color} shrink-0 mx-1 mb-6`} />
   );
   const dashedLine = () => (
-    <div style={{ width: 40, height: 2, background: "repeating-linear-gradient(to right, var(--border-strong) 0, var(--border-strong) 5px, transparent 5px, transparent 9px)", flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
+    <div className="w-10 h-0.5 shrink-0 mx-1 mb-6 bg-[repeating-linear-gradient(to_right,var(--border-strong)_0,var(--border-strong)_5px,transparent_5px,transparent_9px)]" />
   );
 
   return (
-    <div style={{ ...cardStyle, marginBottom: 16 }}>
-      <h3 style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-heading)", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+    <div className="bg-[var(--bg-subtle)] rounded-xl p-4 mb-4">
+      <h3 className="m-0 mb-4 text-[13px] text-[var(--text-heading)] uppercase tracking-wide">
         Route · {origin} → {destination}
       </h3>
-      <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
+      <div className="flex items-center gap-0 overflow-x-auto pb-1">
         {stops.map((stop, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: stop.current ? statusColors[stop.status] : "var(--border)",
-                border: stop.current ? `3px solid ${statusColors[stop.status]}` : "3px solid var(--border)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: stop.current ? `0 0 0 3px ${statusColors[stop.status]}33` : "none",
-              }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: stop.current ? "#fff" : "var(--text-muted)" }}>{i + 1}</span>
+          <div key={i} className="flex items-center shrink-0">
+            <div className="flex flex-col items-center gap-1">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                stop.current
+                  ? `${statusColors[stop.status]} border-[3px] ${statusColors[stop.status]} ${statusRingColors[stop.status]} ring-[3px]`
+                  : "bg-[var(--border)] border-[3px] border-[var(--border)]"
+              }`}>
+                <Circle className="w-3.5 h-3.5 text-white" fill="currentColor" />
               </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
+              <div className="text-center max-w-[80px]">
                 {(() => {
                   const b = branches.find(x => x.id === stop.location);
                   return (
-                    <div style={{ fontSize: 11, fontWeight: stop.current ? 700 : 500, color: stop.current ? "var(--text-heading)" : "var(--text-secondary)", whiteSpace: "nowrap" as const }}>{b?.name ?? stop.location}</div>
+                    <div className={`text-[11px] whitespace-nowrap ${stop.current ? "font-bold text-[var(--text-heading)]" : "font-medium text-[var(--text-secondary)]"}`}>{b?.name ?? stop.location}</div>
                   );
                 })()}
-                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{fmtDate(stop.timestamp)}</div>
+                <div className="text-[10px] text-[var(--text-muted)]">{fmtDate(stop.timestamp)}</div>
                 {stop.location === finalBranchId && (
-                  <div style={{ fontSize: 10, color: "var(--purple)", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
+                  <div className="text-[10px] text-violet-600 font-semibold mt-0.5">Sucursal final</div>
                 )}
               </div>
             </div>
@@ -2169,11 +2097,11 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
         {isDelivering && (
           <>
             {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg-subtle)", border: "3px dashed var(--warn)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 14, color: "var(--warn)" }}>🚚</span>
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border-[3px] border-dashed border-amber-500 flex items-center justify-center">
+                <Truck className="w-4 h-4 text-amber-500" />
               </div>
-              <div style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600, whiteSpace: "nowrap" as const }}>Destinatario</div>
+              <div className="text-[11px] text-amber-500 font-semibold whitespace-nowrap">Destinatario</div>
             </div>
           </>
         )}
@@ -2182,15 +2110,15 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
         {isInTransit && nextBranch && (
           <>
             {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--bg-subtle)", border: "3px dashed var(--border-strong)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--border-strong)" }}>{stops.length + 1}</span>
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border-[3px] border-dashed border-[var(--border-strong)] flex items-center justify-center">
+                <Circle className="w-4 h-4 text-[var(--border-strong)]" />
               </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
+              <div className="text-center max-w-[80px]">
                 {(() => {
                   const b = branches.find(x => x.id === nextBranch);
                   return (
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
+                    <div className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">{b?.name ?? nextBranch}</div>
                   );
                 })()}
               </div>
@@ -2202,19 +2130,13 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
         {finalBranch && !stops.some(s => s.location === finalBranchId) && !isDelivered && !isDelivering && (
           <>
             {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: "var(--bg-subtle)", border: "3px dashed var(--purple)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--purple)" }}>
-                  {stops.length + (isInTransit && nextBranch ? 2 : 1)}
-                </span>
+            <div className="flex flex-col items-center gap-1 shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[var(--bg-subtle)] border-[3px] border-dashed border-violet-500 flex items-center justify-center">
+                <Circle className="w-4 h-4 text-violet-500" />
               </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                <div style={{ fontSize: 11, color: "var(--purple)", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Sucursal final</div>
+              <div className="text-center max-w-[80px]">
+                <div className="text-[11px] text-violet-500 font-semibold whitespace-nowrap">{finalBranch.name}</div>
+                <div className="text-[10px] text-[var(--text-muted)]">Sucursal final</div>
               </div>
             </div>
           </>
@@ -2222,20 +2144,20 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
 
         {/* Final destination — always shown */}
         <>
-          {isDelivered ? solidLine("var(--ok)") : dashedLine()}
-          <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: isDelivered ? "var(--ok)" : "var(--bg-subtle)",
-              border: isDelivered ? "3px solid var(--ok)" : "3px dashed var(--border-strong)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: isDelivered ? "0 0 0 3px #10b98133" : "none",
-            }}>
-              <span style={{ fontSize: 14, color: isDelivered ? "#fff" : "var(--border-strong)" }}>
-                {isDelivered ? "✓" : "🏁"}
-              </span>
+          {isDelivered ? solidLine("bg-emerald-500") : dashedLine()}
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+              isDelivered
+                ? "bg-emerald-500 border-[3px] border-emerald-500 ring-[3px] ring-emerald-500/20"
+                : "bg-[var(--bg-subtle)] border-[3px] border-dashed border-[var(--border-strong)]"
+            }`}>
+              {isDelivered ? (
+                <Check className="w-4 h-4 text-white" />
+              ) : (
+                <Flag className="w-4 h-4 text-[var(--border-strong)]" />
+              )}
             </div>
-            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "var(--ok-text)" : "var(--text-muted)", whiteSpace: "nowrap" as const }}>Destinatario</div>
+            <div className={`text-[11px] whitespace-nowrap ${isDelivered ? "font-bold text-emerald-600" : "font-normal text-[var(--text-muted)]"}`}>Destinatario</div>
           </div>
         </>
       </div>
@@ -2245,18 +2167,18 @@ function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, desti
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={cardStyle}>
-      <h3 style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text-heading)", textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</h3>
-      <div style={{ display: "grid", gap: 6 }}>{children}</div>
+    <div className="bg-[var(--bg-subtle)] rounded-xl p-4 border-l-[3px] border-blue-500">
+      <h3 className="m-0 mb-3 text-[13px] text-[var(--text-heading)] uppercase tracking-wide">{title}</h3>
+      <div className="grid gap-1.5">{children}</div>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
-      <span style={{ color: "var(--text-muted)", minWidth: 90, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontWeight: 500 }}>{value}</span>
+    <div className="flex gap-2 text-[13px]">
+      <span className="text-[var(--text-muted)] min-w-[90px] shrink-0">{label}</span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }
@@ -2264,38 +2186,18 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 function PriceCard({ price, breakdown }: { price: number; breakdown?: import("../api/shipments").PriceBreakdown }) {
   const [open, setOpen] = useState(false);
   return (
-    <div
-      style={{
-        background: "linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%)",
-        borderRadius: 12,
-        padding: 18,
-        marginBottom: 16,
-        color: "#fff",
-        boxShadow: "0 4px 12px rgba(30, 58, 95, 0.15)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            background: "rgba(255, 255, 255, 0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <svg style={{ width: 22, height: 22 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="bg-gradient-to-br from-blue-900 to-blue-800 rounded-xl p-[18px] mb-4 text-white shadow-[0_4px_12px_rgba(30,58,95,0.15)]">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+          <svg className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <div className="flex-1 min-w-0">
+          <p className="m-0 text-[11px] text-white/70 font-semibold uppercase tracking-wide">
             Precio del envío
           </p>
-          <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+          <p className="mt-0.5 mb-0 text-2xl font-extrabold tabular-nums">
             {formatCurrencyARS(price)}
           </p>
         </div>
@@ -2306,46 +2208,14 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            style={{
-              width: "100%",
-              background: "rgba(255, 255, 255, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "8px 12px",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              transition: "background 0.15s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.18)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")}
+            className="w-full bg-white/10 hover:bg-white/[0.18] border border-white/15 text-white rounded-lg px-3 py-2 cursor-pointer text-xs font-semibold flex items-center justify-between transition-colors"
           >
             <span>{open ? "Ocultar desglose" : "Ver desglose"}</span>
-            <svg
-              style={{ width: 14, height: 14, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
 
           {open && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: "12px 4px 0",
-                borderTop: "1px solid rgba(255, 255, 255, 0.15)",
-                display: "grid",
-                gap: 8,
-                fontSize: 12,
-              }}
-            >
+            <div className="mt-3 pt-3 border-t border-white/15 grid gap-2 text-xs">
               <PriceRow label="Tarifa base" value={formatCurrencyARS(breakdown.base_fare)} />
               <PriceRow
                 label={`Distancia (${breakdown.distance_km.toFixed(1)} km)`}
@@ -2358,7 +2228,7 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
                 <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
               )}
               {breakdown.risky_zone_surcharge > 0 && (
-                <PriceRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
+                <PriceRow label={<><AlertTriangle className="w-3.5 h-3.5" /> Recargo zona peligrosa</>} value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
               )}
               {breakdown.shipment_multiplier !== 1 && (
                 <PriceRow label="Tipo de envío (express)" value={formatCurrencyARS((breakdown.base_fare + breakdown.distance_cost) * (breakdown.shipment_multiplier - 1))} />
@@ -2369,19 +2239,9 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
               {breakdown.fragile_surplus > 0 && (
                 <PriceRow label="Recargo frágil" value={formatCurrencyARS(breakdown.fragile_surplus)} />
               )}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  paddingTop: 10,
-                  marginTop: 4,
-                  borderTop: "1px solid rgba(255, 255, 255, 0.15)",
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
+              <div className="flex justify-between pt-2.5 mt-1 border-t border-white/15 font-bold text-[13px]">
                 <span>Total</span>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatCurrencyARS(breakdown.total)}</span>
+                <span className="tabular-nums">{formatCurrencyARS(breakdown.total)}</span>
               </div>
             </div>
           )}
@@ -2391,35 +2251,31 @@ function PriceCard({ price, breakdown }: { price: number; breakdown?: import("..
   );
 }
 
-function PriceRow({ label, value }: { label: string; value: string }) {
+function PriceRow({ label, value }: { label: React.ReactNode; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ color: "rgba(255, 255, 255, 0.75)" }}>{label}</span>
-      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    <div className="flex justify-between items-center">
+      <span className="text-white/75 flex items-center gap-1">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
 
-const cardStyle: React.CSSProperties = { background: "var(--bg-subtle)", borderRadius: 10, padding: 16 };
-const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14 };
-const backBtn: React.CSSProperties = { background: "none", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
-
 // InfoRowEx: same as InfoRow but supports showing original value when corrected
 function InfoRowEx({ label, value, corrected, original }: { label: string; value: string; corrected: boolean; original: string }) {
   return (
-    <div style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "flex-start" }}>
-      <span style={{ color: "var(--text-muted)", minWidth: 90, flexShrink: 0 }}>{label}</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontWeight: 500 }}>{value}</span>
+    <div className="flex gap-2 text-[13px] items-start">
+      <span className="text-[var(--text-muted)] min-w-[90px] shrink-0">{label}</span>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex gap-1.5 items-center">
+          <span className="font-medium">{value}</span>
           {corrected && (
-            <span style={{ fontSize: 10, fontWeight: 700, background: "var(--warn-bg)", color: "var(--warn-text)", border: "1px solid var(--warn-border)", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" as const }}>
+            <span className="text-[10px] font-bold bg-[var(--warn-bg)] text-[var(--warn-text)] border border-[var(--warn-border)] rounded px-[5px] py-px whitespace-nowrap">
               Modificado
             </span>
           )}
         </div>
         {corrected && original && (
-          <span style={{ fontSize: 11, color: "var(--text-muted)", textDecoration: "line-through" }}>{original}</span>
+          <span className="text-[11px] text-[var(--text-muted)] line-through">{original}</span>
         )}
       </div>
     </div>
@@ -2437,76 +2293,76 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
   const isMobile = useIsMobile();
   const set = (key: string, value: string) => onChange({ ...form, [key]: value });
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--text-heading)" }}>Corregir datos del envío</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+    <div className="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center p-4">
+      <div className="bg-[var(--bg-card)] rounded-xl p-6 max-w-[680px] w-full max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="m-0 text-lg text-[var(--text-heading)]">Corregir datos del envío</h2>
+          <button onClick={onClose} aria-label="Cerrar" className="bg-transparent border-none text-xl cursor-pointer text-[var(--text-secondary)]">✕</button>
         </div>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--text-secondary)" }}>
+        <p className="m-0 mb-4 text-[13px] text-[var(--text-secondary)]">
           Los datos originales no se modifican. Los cambios quedan registrados en el historial de comentarios.
         </p>
 
         {/* Remitente */}
-        <fieldset style={fsStyle}>
-          <legend style={legStyle}>Remitente</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Nombre"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
-            <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
-            <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
-            <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
+        <fieldset className={fsClass}>
+          <legend className={legClass}>Remitente</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
+            <DField label="Nombre"><input className={inpClass} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input className={inpClass} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Email"><input className={inpClass} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
+            <DField label="DNI"><input className={inpClass} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
             <DField label="Calle (origen)">
-              <input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
+              <input className={inpClass} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </DField>
-            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_city}</div></DField>
-            <DField label="Provincia (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_province}</div></DField>
-            <DField label="Código postal (origen)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.origin_postal_code}</div></DField>
+            <DField label="Ciudad (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_city}</div></DField>
+            <DField label="Provincia (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_province}</div></DField>
+            <DField label="Código postal (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_postal_code}</div></DField>
           </div>
         </fieldset>
 
         {/* Destinatario */}
-        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Destinatario</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Nombre"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
-            <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
-            <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
-            <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
+        <fieldset className={`${fsClass} mt-3`}>
+          <legend className={legClass}>Destinatario</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
+            <DField label="Nombre"><input className={inpClass} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input className={inpClass} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Email"><input className={inpClass} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
+            <DField label="DNI"><input className={inpClass} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
             <DField label="Calle (destino)">
-              <input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
+              <input className={inpClass} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
             </DField>
-            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_city}</div></DField>
-            <DField label="Provincia (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_province}</div></DField>
-            <DField label="Código postal (destino)"><div style={{ ...inp, background: "var(--bg-muted)", color: "var(--text-secondary)" }}>{form.destination_postal_code}</div></DField>
+            <DField label="Ciudad (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_city}</div></DField>
+            <DField label="Provincia (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_province}</div></DField>
+            <DField label="Código postal (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_postal_code}</div></DField>
           </div>
         </fieldset>
 
         {/* Paquete */}
-        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Paquete</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+        <fieldset className={`${fsClass} mt-3`}>
+          <legend className={legClass}>Paquete</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
             <DField label="Ventana horaria">
-              <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
+              <select className={inpClass} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </DField>
-            <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
-              <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
+            <DField label="Instrucciones especiales" className="col-span-full">
+              <input className={inpClass} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 8, marginBottom: 0 }}>
+          <p className="text-[11px] text-[var(--text-secondary)] mt-2 mb-0">
             Peso, tipo de paquete, tipo de envío y marca de frágil quedan fijos al crear el envío. La ventana horaria solo puede cambiarse a una opción de igual o menor recargo (no se permite pasar de Flexible a Mañana/Tarde).
           </p>
         </fieldset>
 
-        {error && <p style={{ color: "var(--danger-c)", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button onClick={onClose} disabled={saving} style={{ background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
+        {error && <p className="text-[var(--danger-c)] text-[13px] mt-3 mb-0">{error}</p>}
+        <div className="flex gap-2.5 mt-4">
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
-          </button>
-          <button onClick={onSave} disabled={saving} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: saving ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>
+          </Button>
+          <Button onClick={onSave} disabled={saving}>
             {saving ? "Guardando..." : "Guardar correcciones"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -2542,16 +2398,13 @@ function PendingPaymentPanel({
   };
 
   return (
-    <div style={{
-      background: "var(--warn-bg)", border: "1px solid var(--warn-border)",
-      borderRadius: 12, padding: 20, marginBottom: 16,
-    }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "var(--warn-text)" }}>
-          💳 Pago pendiente
+    <div className="bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-xl p-5 mb-4">
+      <div className="flex items-baseline justify-between mb-3.5 gap-3 flex-wrap">
+        <div className="font-bold text-[15px] text-[var(--warn-text)]">
+          <CreditCard className="w-4 h-4" /> Pago pendiente
         </div>
         {payment && (
-          <div style={{ fontSize: 13, color: "var(--warn-text)" }}>
+          <div className="text-[13px] text-[var(--warn-text)]">
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
@@ -2569,23 +2422,17 @@ function PendingPaymentPanel({
           onError={setError}
         />
       ) : (
-        <p style={{ fontSize: 13, color: "var(--warn-text)" }}>Cargando información de pago…</p>
+        <p className="text-[13px] text-[var(--warn-text)]">Cargando información de pago…</p>
       )}
-      {error && <p style={{ color: "var(--danger-text)", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--warn-border)", display: "flex", justifyContent: "flex-end" }}>
-        <button
+      {error && <p className="text-[var(--danger-text)] text-xs mt-2.5 mb-0">{error}</p>}
+      <div className="mt-3.5 pt-3.5 border-t border-[var(--warn-border)] flex justify-end">
+        <Button
+          variant="outline"
           onClick={handleBackToDraft}
           disabled={reverting}
-          style={{
-            border: "1px solid var(--warn-border)", borderRadius: 8,
-            background: "var(--bg-card)", color: "var(--warn-text)",
-            fontSize: 13, fontWeight: 600, cursor: "pointer",
-            padding: "8px 16px",
-            opacity: reverting ? 0.6 : 1,
-          }}
         >
           {reverting ? "Procesando…" : "← Volver a borrador"}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Search, AlertCircle, Filter } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
-import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel, statusColor } from "../api/branches";
+import { branchApi, type Branch, type BranchCapacity, type CreateBranchPayload, type UpdateBranchPayload, statusLabel } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { softBadgeStyle } from "../utils/badgeTone";
 import { fmtDateTime } from "../utils/date";
 import { TopbarActions } from "../components/topbarContext";
 import { Card } from "../components/ui/card";
@@ -28,7 +26,6 @@ type SortKey = "name" | "city" | "province" | "status" | "updated_at";
 export function BranchList() {
   const isMobile = useIsMobile();
   const { hasRole } = useAuth();
-  const { theme } = useTheme();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -158,62 +155,62 @@ export function BranchList() {
         </Card>
       ) : (
         <Card className="overflow-x-auto">
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <table className="w-full border-collapse text-sm">
             <thead>
-              <tr style={{ borderBottom: "2px solid var(--border)" }}>
-                <th style={thStyle}><button onClick={() => handleSort("name")} style={sortBtn}>Nombre{sortIcon("name")}</button></th>
-                <th style={thStyle}><button onClick={() => handleSort("city")} style={sortBtn}>Ubicación{sortIcon("city")}</button></th>
-                <th style={isMobile ? { display: "none" } : thStyle}>Dirección</th>
-                <th style={isMobile ? { display: "none" } : thStyle}>Horarios</th>
-                <th style={thStyle}><button onClick={() => handleSort("status")} style={sortBtn}>Estado{sortIcon("status")}</button></th>
-                {canViewCapacity && <th style={isMobile ? { display: "none" } : thStyle}>Capacidad</th>}
-                <th style={isMobile ? { display: "none" } : thStyle}><button onClick={() => handleSort("updated_at")} style={sortBtn}>Actualizado{sortIcon("updated_at")}</button></th>
-                {isAdmin && <th style={thStyle}>Acciones</th>}
+              <tr className="border-b-2 border-[var(--border)]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"><button onClick={() => handleSort("name")} className="bg-transparent border-none cursor-pointer text-inherit font-semibold text-xs uppercase tracking-wider p-0">Nombre{sortIcon("name")}</button></th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"><button onClick={() => handleSort("city")} className="bg-transparent border-none cursor-pointer text-inherit font-semibold text-xs uppercase tracking-wider p-0">Ubicación{sortIcon("city")}</button></th>
+                <th className={isMobile ? "hidden" : "px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"}>Dirección</th>
+                <th className={isMobile ? "hidden" : "px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"}>Horarios</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"><button onClick={() => handleSort("status")} className="bg-transparent border-none cursor-pointer text-inherit font-semibold text-xs uppercase tracking-wider p-0">Estado{sortIcon("status")}</button></th>
+                {canViewCapacity && <th className={isMobile ? "hidden" : "px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"}>Capacidad</th>}
+                <th className={isMobile ? "hidden" : "px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider"}><button onClick={() => handleSort("updated_at")} className="bg-transparent border-none cursor-pointer text-inherit font-semibold text-xs uppercase tracking-wider p-0">Actualizado{sortIcon("updated_at")}</button></th>
+                {isAdmin && <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Acciones</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.map((b) => (
-                <tr key={b.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: 600 }}>{b.name}</div>
+                <tr key={b.id} className="border-b border-[var(--border)]">
+                  <td className="px-3 py-2.5 align-middle">
+                    <div className="font-semibold">{b.name}</div>
                   </td>
-                  <td style={tdStyle}>{b.address.city}, {b.province}</td>
-                  <td style={isMobile ? { display: "none" } : tdStyle}>{b.address.street}</td>
-                  <td style={isMobile ? { display: "none" } : { ...tdStyle, color: b.hours ? "var(--text-strong)" : "var(--text-muted)", fontSize: 13 }}>
+                  <td className="px-3 py-2.5 align-middle">{b.address.city}, {b.province}</td>
+                  <td className={isMobile ? "hidden" : "px-3 py-2.5 align-middle"}>{b.address.street}</td>
+                  <td className={isMobile ? "hidden" : `px-3 py-2.5 align-middle text-[13px] ${b.hours ? "text-[var(--text-strong)]" : "text-[var(--text-muted)]"}`}>
                     {b.hours || "—"}
                   </td>
-                  <td style={tdStyle}>
-                    <span style={{
-                      display: "inline-block", padding: "2px 10px", borderRadius: 12,
-                      fontSize: 12, fontWeight: 600,
-                      ...softBadgeStyle(statusColor(b.status), theme === "dark"),
-                    }}>
+                  <td className="px-3 py-2.5 align-middle">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border border-transparent ${
+                      b.status === "activo"
+                        ? "bg-green-600 text-white dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/40"
+                        : b.status === "inactivo"
+                        ? "bg-gray-500 text-white dark:bg-gray-500/20 dark:text-gray-300 dark:border-gray-500/40"
+                        : "bg-red-600 text-white dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40"
+                    }`}>
                       {statusLabel(b.status)}
                     </span>
                   </td>
                   {canViewCapacity && (
-                    <td style={isMobile ? { display: "none" } : tdStyle}>
+                    <td className={isMobile ? "hidden" : "px-3 py-2.5 align-middle"}>
                       <CapacityIndicator cap={capacities[b.id]} />
                     </td>
                   )}
-                  <td style={isMobile ? { display: "none" } : tdStyle}>
-                    <div style={{ fontSize: 12 }}>{fmtDateTime(b.updated_at)}</div>
-                    {b.updated_by && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>por {b.updated_by}</div>}
+                  <td className={isMobile ? "hidden" : "px-3 py-2.5 align-middle"}>
+                    <div className="text-xs">{fmtDateTime(b.updated_at)}</div>
+                    {b.updated_by && <div className="text-[11px] text-[var(--text-muted)]">por {b.updated_by}</div>}
                   </td>
                   {isAdmin && (
-                    <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 6 }}>
+                    <td className="px-3 py-2.5 align-middle">
+                      <div className="flex gap-1.5">
                         <button onClick={() => { setEditing(b); setError(""); }}
                           disabled={b.status !== "activo"}
-                          style={{
-                            ...actionBtn, opacity: b.status !== "activo" ? 0.4 : 1,
-                          }}
+                          className={`bg-[var(--bg-muted)] border border-[var(--border-strong)] rounded px-2.5 py-1 cursor-pointer text-xs font-medium ${b.status !== "activo" ? "opacity-40" : ""}`}
                           title={b.status !== "activo" ? "No se puede editar una sucursal inactiva" : "Editar datos"}
                         >
                           Editar
                         </button>
                         <button onClick={() => { setStatusModal(b); setError(""); }}
-                          style={actionBtn}>
+                          className="bg-[var(--bg-muted)] border border-[var(--border-strong)] rounded px-2.5 py-1 cursor-pointer text-xs font-medium">
                           Estado
                         </button>
                       </div>
@@ -279,30 +276,31 @@ export function BranchList() {
 
 function CapacityIndicator({ cap }: { cap?: BranchCapacity }) {
   if (!cap) {
-    return <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>;
+    return <span className="text-xs text-[var(--text-muted)]">—</span>;
   }
 
   const pct = Math.min(cap.percentage, 100);
-  const barColor = cap.alert ? "var(--danger-c)" : pct >= 60 ? "var(--warn)" : "var(--ok)";
-  const textColor = cap.alert ? "var(--danger-text)" : "var(--text-strong)";
 
   return (
-    <div style={{ minWidth: 120 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: textColor }}>
+    <div className="min-w-[120px]">
+      <div className="flex justify-between items-center mb-0.5">
+        <span className={`text-xs font-semibold ${cap.alert ? "text-[var(--danger-text)]" : "text-[var(--text-strong)]"}`}>
           {cap.current} / {cap.max_capacity} bultos
         </span>
         {cap.alert && (
-          <span style={{ fontSize: 11, color: "var(--danger-text)", fontWeight: 700, marginLeft: 4 }}>⚠</span>
+          <span className="text-[11px] text-[var(--danger-text)] font-bold ml-1">⚠</span>
         )}
       </div>
-      <div style={{ background: "var(--bg-muted)", borderRadius: 4, height: 6, overflow: "hidden" }}>
-        <div style={{
-          width: `${pct}%`, height: "100%", borderRadius: 4,
-          background: barColor, transition: "width 0.3s",
-        }} />
+      <div className="bg-[var(--bg-muted)] rounded h-1.5 overflow-hidden">
+        <div className={`h-full rounded transition-[width] duration-300 ${
+          cap.alert
+            ? "bg-[var(--danger-c)]"
+            : pct >= 60
+            ? "bg-[var(--warn)]"
+            : "bg-[var(--ok)]"
+        }`} style={{ width: `${pct}%` }} />
       </div>
-      <div style={{ fontSize: 11, color: cap.alert ? "var(--danger-text)" : "var(--text-secondary)", marginTop: 2 }}>
+      <div className={`text-[11px] mt-0.5 ${cap.alert ? "text-[var(--danger-text)]" : "text-[var(--text-secondary)]"}`}>
         {Math.round(pct)}% ocupado
       </div>
     </div>
@@ -381,47 +379,47 @@ function BranchFormModal({
 
     return (
       <Modal onClose={onClose}>
-        <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Confirmar cambio de capacidad</h2>
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ padding: 14, background: "var(--bg-subtle)", borderRadius: 8, border: "1px solid var(--border)" }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>{form.name || initial.name}</div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", display: "grid", gap: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <h2 className="m-0 mb-5 text-lg">Confirmar cambio de capacidad</h2>
+        <div className="grid gap-3">
+          <div className="p-3.5 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border)]">
+            <div className="font-semibold mb-2">{form.name || initial.name}</div>
+            <div className="text-xs text-[var(--text-secondary)] grid gap-1.5">
+              <div className="flex justify-between">
                 <span>Bultos actuales en el almacén:</span>
-                <strong style={{ color: "var(--text-strong)" }}>{currentCount} bultos</strong>
+                <strong className="text-[var(--text-strong)]">{currentCount} bultos</strong>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div className="flex justify-between">
                 <span>Capacidad anterior:</span>
                 <span>{initial.max_capacity} bultos</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div className="flex justify-between">
                 <span>Nueva capacidad:</span>
-                <strong style={{ color: "var(--text-heading)" }}>{form.max_capacity} bultos</strong>
+                <strong className="text-[var(--text-heading)]">{form.max_capacity} bultos</strong>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div className="flex justify-between">
                 <span>Ocupación con nueva capacidad:</span>
-                <strong style={{ color: overCapacity ? "var(--danger-text)" : newPct >= 80 ? "var(--warn-text)" : "var(--ok-text)" }}>
+                <strong className={overCapacity ? "text-[var(--danger-text)]" : newPct >= 80 ? "text-[var(--warn-text)]" : "text-[var(--ok-text)]"}>
                   {newPct}%
                 </strong>
               </div>
             </div>
           </div>
           {overCapacity && (
-            <div style={{ padding: "10px 14px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, fontSize: 13, color: "var(--danger-text)", display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+            <div className="px-3.5 py-2.5 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg text-xs text-[var(--danger-text)] flex gap-2 items-start">
+              <span className="font-bold shrink-0">⚠</span>
               <span>La nueva capacidad ({form.max_capacity}) es menor que los bultos actuales ({currentCount}). El almacén quedaría con exceso de carga.</span>
             </div>
           )}
           {!overCapacity && newPct >= 80 && (
-            <div style={{ padding: "10px 14px", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: 8, fontSize: 13, color: "var(--warn-text)", display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ fontWeight: 700, flexShrink: 0 }}>⚠</span>
+            <div className="px-3.5 py-2.5 bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-lg text-xs text-[var(--warn-text)] flex gap-2 items-start">
+              <span className="font-bold shrink-0">⚠</span>
               <span>Con esta capacidad, el almacén quedaría al {newPct}% de ocupación.</span>
             </div>
           )}
-          {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" onClick={() => setStep("form")} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Volver</button>
-            <button type="button" onClick={doSubmit} disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
+          {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
+          <div className="flex gap-2 justify-end mt-1">
+            <button type="button" onClick={() => setStep("form")} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Volver</button>
+            <button type="button" onClick={doSubmit} disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
               {submitting ? "Guardando..." : "Confirmar cambio"}
             </button>
           </div>
@@ -432,18 +430,18 @@ function BranchFormModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>{title}</h2>
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+      <h2 className="m-0 mb-5 text-lg">{title}</h2>
+      <form onSubmit={handleSubmit} className="grid gap-[14px]">
         {!isEdit && (
           <Field label="ID (opcional — se genera automáticamente si se deja vacío)">
-            <input style={inputStyle} value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="ej. caba-02" />
+            <input className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" value={form.id} onChange={(e) => set("id", e.target.value)} placeholder="ej. caba-02" />
           </Field>
         )}
         <Field label="Nombre *">
-          <input style={inputStyle} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="ej. CDBA-02" />
+          <input className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="ej. CDBA-02" />
         </Field>
         <Field label="Calle *">
-          <AddressAutocomplete style={inputStyle} required value={form.street}
+          <AddressAutocomplete className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" required value={form.street}
             onChange={(v) => set("street", v)}
             onAddressSelect={(p) => {
               if (p.street) set("street", p.street);
@@ -453,24 +451,24 @@ function BranchFormModal({
             }}
             placeholder="Av. Corrientes 1234, Rosario" />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Ciudad *">
-            <input style={inputStyle} required value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="Buenos Aires" />
+            <input className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" required value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="Buenos Aires" />
           </Field>
           <Field label="Provincia *">
-            <select style={inputStyle} required value={form.province} onChange={(e) => set("province", e.target.value)}>
+            <select className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" required value={form.province} onChange={(e) => set("province", e.target.value)}>
               <option value="">Seleccioná...</option>
               {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </Field>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Código postal *">
-            <input style={inputStyle} required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
+            <input className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" required value={form.postal_code} onChange={(e) => set("postal_code", e.target.value)} placeholder="C1043" />
           </Field>
           <Field label="Capacidad máxima (bultos) *">
             <input
-              style={inputStyle}
+              className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border"
               type="number"
               min={1}
               required
@@ -481,16 +479,16 @@ function BranchFormModal({
         </div>
         <Field label="Horarios de atención">
           <input
-            style={inputStyle}
+            className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border"
             value={form.hours}
             onChange={(e) => set("hours", e.target.value)}
             placeholder="ej. Lunes a Viernes 9:00-18:00hs"
           />
         </Field>
-        {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
+        {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
+        <div className="flex gap-2 justify-end mt-2">
+          <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
+          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : submitLabel}
           </button>
         </div>
@@ -529,23 +527,25 @@ function StatusModal({
 
   return (
     <Modal onClose={onClose}>
-      <h2 style={{ margin: "0 0 20px", fontSize: 18 }}>Cambiar estado</h2>
-      <div style={{ marginBottom: 16, padding: 12, background: "var(--bg-subtle)", borderRadius: 8 }}>
-        <strong>{branch.name}</strong> <span style={{ color: "var(--text-muted)" }}>— {branch.address.city}</span>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-          Estado actual: <span style={{ color: statusColor(branch.status), fontWeight: 600 }}>{statusLabel(branch.status)}</span>
+      <h2 className="m-0 mb-5 text-lg">Cambiar estado</h2>
+      <div className="mb-4 p-3 bg-[var(--bg-subtle)] rounded-lg">
+        <strong>{branch.name}</strong> <span className="text-[var(--text-muted)]">— {branch.address.city}</span>
+        <div className="text-xs text-[var(--text-secondary)] mt-0.5">
+          Estado actual: <span className={`font-semibold ${
+            branch.status === "activo" ? "text-green-600" : branch.status === "inactivo" ? "text-gray-500" : "text-red-600"
+          }`}>{statusLabel(branch.status)}</span>
         </div>
       </div>
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+      <form onSubmit={handleSubmit} className="grid gap-[14px]">
         <Field label="Nuevo estado">
-          <select style={inputStyle} value={status} onChange={(e) => setStatus(e.target.value as Branch["status"])}>
+          <select className="px-2.5 py-2 rounded-md border border-[var(--border-strong)] text-sm w-full box-border" value={status} onChange={(e) => setStatus(e.target.value as Branch["status"])}>
             {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </Field>
-        {(localError || error) && <p style={{ color: "var(--danger-c)", margin: 0, fontSize: 13 }}>{localError || error}</p>}
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose} style={{ ...btnSecondary, opacity: submitting ? 0.5 : 1 }} disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} style={{ ...btnPrimary, opacity: submitting ? 0.7 : 1 }}>
+        {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
+          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : "Actualizar"}
           </button>
         </div>
@@ -558,14 +558,8 @@ function StatusModal({
 
 function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex",
-      alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
-    }} onClick={onClose}>
-      <div style={{
-        background: "var(--bg-card)", borderRadius: 12, padding: "24px 28px", maxWidth: 520,
-        width: "100%", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-      }} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4" onClick={onClose}>
+      <div className="bg-[var(--bg-card)] rounded-xl px-7 py-6 max-w-[520px] w-full max-h-[90vh] overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.2)]" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -574,17 +568,9 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gap: 4 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>{label}</label>
+    <div className="grid gap-1">
+      <label className="text-xs font-semibold text-[var(--text-strong)]">{label}</label>
       {children}
     </div>
   );
 }
-
-const thStyle: React.CSSProperties = { textAlign: "left", padding: "10px 12px", color: "var(--text-secondary)", fontWeight: 600, fontSize: 12, textTransform: "uppercase" as const, letterSpacing: 0.5 };
-const tdStyle: React.CSSProperties = { padding: "10px 12px", verticalAlign: "middle" };
-const sortBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, padding: 0 };
-const actionBtn: React.CSSProperties = { background: "var(--bg-muted)", border: "1px solid var(--border-strong)", borderRadius: 5, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 500 };
-const inputStyle: React.CSSProperties = { padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, width: "100%", boxSizing: "border-box" as const };
-const btnPrimary: React.CSSProperties = { background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 };
-const btnSecondary: React.CSSProperties = { background: "var(--bg-card)", color: "var(--text-strong)", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500, fontSize: 14 };

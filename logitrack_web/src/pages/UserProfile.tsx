@@ -106,43 +106,29 @@ export function UserProfile() {
         <ArrowLeft className="w-4 h-4" />
         Volver
       </button>
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
-        <div style={{ flex: "0 0 240px", minWidth: 220 }}>
-          <div style={{ marginBottom: 24 }}>
-            <h3 style={{ marginBottom: 12 }}>Secciones</h3>
+      <div className="flex gap-6 items-start">
+        <div className="flex-none w-60 min-w-[220px]">
+          <div className="mb-6">
+            <h3 className="mb-3">Secciones</h3>
             <button
               type="button"
               onClick={() => setActiveTab("profile")}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                padding: "12px 16px",
-                border: "none",
-                borderRadius: 8,
-                background: activeTab === "profile" ? "#1e3a5f" : "var(--bg-page)",
-                color: activeTab === "profile" ? "#fff" : "var(--text-primary)",
-                cursor: "pointer",
-                fontWeight: activeTab === "profile" ? 700 : 500,
-                marginBottom: 12,
-              }}
+              className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
+                activeTab === "profile"
+                  ? "bg-[#1e3a5f] text-white font-bold"
+                  : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
+              }`}
             >
               Mi Perfil
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("security")}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                padding: "12px 16px",
-                border: "none",
-                borderRadius: 8,
-                background: activeTab === "security" ? "#1e3a5f" : "var(--bg-page)",
-                color: activeTab === "security" ? "#fff" : "var(--text-primary)",
-                cursor: "pointer",
-                fontWeight: activeTab === "security" ? 700 : 500,
-                marginBottom: 12,
-              }}
+              className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
+                activeTab === "security"
+                  ? "bg-[#1e3a5f] text-white font-bold"
+                  : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
+              }`}
             >
               Seguridad
             </button>
@@ -150,18 +136,11 @@ export function UserProfile() {
               <button
                 type="button"
                 onClick={() => setActiveTab("historial")}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "12px 16px",
-                  border: "none",
-                  borderRadius: 8,
-                  background: activeTab === "historial" ? "#1e3a5f" : "#f8fafc",
-                  color: activeTab === "historial" ? "#fff" : "#0f172a",
-                  cursor: "pointer",
-                  fontWeight: activeTab === "historial" ? 700 : 500,
-                  marginBottom: 12,
-                }}
+                className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
+                  activeTab === "historial"
+                    ? "bg-[#1e3a5f] text-white font-bold"
+                    : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
+                }`}
               >
                 Historial de Fatiga
               </button>
@@ -170,120 +149,98 @@ export function UserProfile() {
         </div>
 
         {/* Main Content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="flex-1 min-w-0">
           {activeTab === "historial" && isDriver ? (
             <div>
-              <h2 style={{ marginBottom: 16 }}>Historial de Fatiga</h2>
+              <h2 className="mb-4">Historial de Fatiga</h2>
               {historyLoading ? (
-                <p style={{ color: "#64748b" }}>Cargando historial...</p>
+                <p className="text-slate-500">Cargando historial...</p>
               ) : !historyResult || historyResult.request_status === "sin_solicitud" ? (
                 <div>
-                  <p style={{ marginBottom: 16, color: "#475569", fontSize: 14 }}>
+                  <p className="mb-4 text-slate-600 text-sm">
                     Tu historial de check-ins de fatiga es privado. Para consultarlo, solicitá acceso a tu supervisor.
                   </p>
                   <button
                     onClick={handleRequestHistory}
                     disabled={requestingHistory}
-                    style={{
-                      background: "#1e3a5f",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "10px 20px",
-                      cursor: requestingHistory ? "not-allowed" : "pointer",
-                      fontSize: 14,
-                      fontWeight: 500,
-                    }}
+                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {requestingHistory ? "Enviando..." : "Solicitar acceso a mi historial"}
                   </button>
                 </div>
               ) : historyResult.request_status === "pending" ? (
-                <div style={{ padding: "16px 20px", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 8, color: "#78350f", fontSize: 14 }}>
+                <div className="px-5 py-4 bg-yellow-50 border border-yellow-300 rounded-lg text-amber-900 text-sm">
                   Solicitud pendiente — tu supervisor revisará tu petición a la brevedad.
                 </div>
               ) : historyResult.request_status === "rejected" ? (
                 <div>
-                  <div style={{ padding: "16px 20px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#7f1d1d", fontSize: 14, marginBottom: 16 }}>
+                  <div className="px-5 py-4 bg-red-50 border border-red-300 rounded-lg text-red-900 text-sm mb-4">
                     Tu solicitud fue rechazada. Podés volver a solicitarla si necesitás acceso.
                   </div>
                   <button
                     onClick={handleRequestHistory}
                     disabled={requestingHistory}
-                    style={{
-                      background: "#1e3a5f",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "10px 20px",
-                      cursor: requestingHistory ? "not-allowed" : "pointer",
-                      fontSize: 14,
-                      fontWeight: 500,
-                    }}
+                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {requestingHistory ? "Enviando..." : "Volver a solicitar acceso"}
                   </button>
                 </div>
               ) : historyResult.ok && historyResult.history ? (
                 <div>
-                  <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+                  <p className="text-xs text-slate-500 mb-3">
                     Acceso aprobado · {historyResult.total} registro{historyResult.total !== 1 ? "s" : ""}
                   </p>
                   {historyResult.history.length === 0 ? (
-                    <p style={{ color: "#94a3b8", fontSize: 14 }}>Sin check-ins registrados aún.</p>
+                    <p className="text-slate-400 text-sm">Sin check-ins registrados aún.</p>
                   ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-xs">
                         <thead>
-                          <tr style={{ background: "#f8fafc" }}>
-                            <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Fecha</th>
-                            <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>KSS</th>
-                            <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Sueño</th>
-                            <th style={{ padding: "8px 12px", textAlign: "center", fontWeight: 600, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Estado</th>
+                          <tr className="bg-slate-50">
+                            <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">Fecha</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">KSS</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Sueño</th>
+                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Estado</th>
                           </tr>
                         </thead>
                         <tbody>
                           {historyResult.history.map((rec) => {
                             const [yy, mm, dd] = rec.date.split("-");
                             return (
-                              <tr key={rec.recorded_at || rec.date} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                                <td style={{ padding: "8px 12px", color: "#334155" }}>
+                              <tr key={rec.recorded_at || rec.date} className="border-b border-slate-100">
+                                <td className="px-3 py-2 text-slate-700">
                                   {dd}/{mm}/{yy}
                                   {rec.recorded_at && (
-                                    <span style={{ marginLeft: 6, color: "#94a3b8", fontSize: 11 }}>
+                                    <span className="ml-1.5 text-slate-400 text-[11px]">
                                       {new Date(rec.recorded_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                                     </span>
                                   )}
                                 </td>
-                                <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                <td className="px-3 py-2 text-center">
                                   {rec.skipped ? (
-                                    <span style={{ color: "#d97706", fontWeight: 600, fontSize: 11 }}>Saltado</span>
+                                    <span className="text-amber-600 font-semibold text-[11px]">Saltado</span>
                                   ) : (
-                                    <span style={{
-                                      display: "inline-block",
-                                      padding: "2px 8px",
-                                      borderRadius: 4,
-                                      fontWeight: 700,
-                                      fontSize: 12,
-                                      background: rec.kss_level <= 4 ? "#d1fae5" : rec.kss_level <= 7 ? "#fef3c7" : "#fee2e2",
-                                      color: rec.kss_level <= 4 ? "#065f46" : rec.kss_level <= 7 ? "#92400e" : "#7f1d1d",
-                                    }}>
+                                    <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
+                                      rec.kss_level <= 4 ? "bg-emerald-100 text-emerald-800" : rec.kss_level <= 7 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
+                                    }`}>
                                       {rec.kss_level}
                                     </span>
                                   )}
                                 </td>
-                                <td style={{ padding: "8px 12px", textAlign: "center", color: "#334155" }}>
+                                <td className="px-3 py-2 text-center text-slate-700">
                                   {rec.skipped ? "—" : `${rec.horas_sueno}h`}
                                 </td>
-                                <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                <td className="px-3 py-2 text-center">
                                   {rec.skipped ? (
-                                    <span style={{ color: "#d97706", fontSize: 11 }}>Salteado</span>
+                                    <span className="text-amber-600 text-[11px]">Salteado</span>
                                   ) : rec.drift_score != null ? (
-                                    <span style={{ fontSize: 11, fontWeight: 600, color: rec.drift_score <= 29 ? "#059669" : rec.drift_score < 60 ? "#d97706" : "#dc2626" }}>
+                                    <span className={`text-[11px] font-semibold ${
+                                      rec.drift_score <= 29 ? "text-emerald-600" : rec.drift_score < 60 ? "text-amber-600" : "text-red-600"
+                                    }`}>
                                       Score: {rec.drift_score}
                                     </span>
                                   ) : (
-                                    <span style={{ color: "#cbd5e1", fontSize: 11 }}>—</span>
+                                    <span className="text-slate-300 text-[11px]">—</span>
                                   )}
                                 </td>
                               </tr>
@@ -298,15 +255,15 @@ export function UserProfile() {
             </div>
           ) : activeTab === "profile" ? (
             <div>
-              <h2 style={{ marginBottom: 16 }}>Mi Perfil</h2>
+              <h2 className="mb-4">Mi Perfil</h2>
               {loadingProfile ? (
                 <p>Cargando perfil...</p>
               ) : profileError ? (
-                <p style={{ color: "var(--danger-text)" }}>{profileError}</p>
+                <p className="text-[var(--danger-text)]">{profileError}</p>
               ) : (
-                <div style={{ display: "grid", gap: 16, maxWidth: 520 }}>
+                <div className="grid gap-4 max-w-[520px]">
                   <div>
-                    <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+                    <label className="block mb-1.5 font-medium">
                       Nombre Completo
                     </label>
                     <input
@@ -314,19 +271,12 @@ export function UserProfile() {
                       value={profile?.full_name || ""}
                       readOnly
                       disabled
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid var(--border-strong)",
-                        borderRadius: 6,
-                        background: "var(--bg-page)",
-                        color: "var(--text-strong)",
-                      }}
+                      className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-md bg-[var(--bg-page)] text-[var(--text-strong)]"
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+                    <label className="block mb-1.5 font-medium">
                       Email
                     </label>
                     <input
@@ -334,19 +284,12 @@ export function UserProfile() {
                       value={profile?.email || ""}
                       readOnly
                       disabled
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid var(--border-strong)",
-                        borderRadius: 6,
-                        background: "var(--bg-page)",
-                        color: "var(--text-strong)",
-                      }}
+                      className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-md bg-[var(--bg-page)] text-[var(--text-strong)]"
                     />
                   </div>
 
                   <div>
-                    <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+                    <label className="block mb-1.5 font-medium">
                       Rol de Usuario
                     </label>
                     <input
@@ -354,20 +297,13 @@ export function UserProfile() {
                       value={profile?.role || ""}
                       readOnly
                       disabled
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        border: "1px solid var(--border-strong)",
-                        borderRadius: 6,
-                        background: "var(--bg-page)",
-                        color: "var(--text-strong)",
-                      }}
+                      className="w-full px-3 py-2.5 border border-[var(--border-strong)] rounded-md bg-[var(--bg-page)] text-[var(--text-strong)]"
                     />
                   </div>
 
                   {(profile?.branch_name || profile?.branch_id) && (
                     <div>
-                      <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+                      <label className="block mb-1.5 font-medium">
                         Sucursal Asignada
                       </label>
                       <input
@@ -375,14 +311,7 @@ export function UserProfile() {
                         value={profile.branch_name || profile.branch_id}
                         readOnly
                         disabled
-                        style={{
-                          width: "100%",
-                          padding: "10px 12px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: 6,
-                          background: "#f8fafc",
-                          color: "#334155",
-                        }}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-slate-50 text-slate-700"
                       />
                     </div>
                   )}
@@ -391,10 +320,10 @@ export function UserProfile() {
             </div>
           ) : (
             <div>
-              <h2 style={{ marginBottom: 16 }}>Seguridad</h2>
-              <form onSubmit={handleSubmit} style={{ maxWidth: 520 }}>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>
+              <h2 className="mb-4">Seguridad</h2>
+              <form onSubmit={handleSubmit} className="max-w-[520px]">
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">
                     Contraseña Actual
                   </label>
                   <input
@@ -402,18 +331,12 @@ export function UserProfile() {
                     value={form.current_password}
                     onChange={(e) => handleChange("current_password", e.target.value)}
                     required
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      border: "1px solid var(--border-strong)",
-                      borderRadius: 6,
-                      fontSize: 14,
-                    }}
+                    className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
 
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">
                     Nueva Contraseña
                   </label>
                   <input
@@ -423,25 +346,23 @@ export function UserProfile() {
                     onBlur={() => setNewPasswordTouched(true)}
                     required
                     minLength={8}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      border: `1px solid ${newPasswordTouched && (form.new_password.length < 8 || !/\d/.test(form.new_password)) ? "#ef4444" : "var(--border-strong)"}`,
-                      borderRadius: 6,
-                      fontSize: 14,
-                    }}
+                    className={`w-full px-3 py-2 rounded-md text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                      newPasswordTouched && (form.new_password.length < 8 || !/\d/.test(form.new_password))
+                        ? "border-red-500"
+                        : "border-[var(--border-strong)]"
+                    }`}
                   />
                   {form.new_password.length > 0 && (() => {
                     const ok8 = form.new_password.length >= 8;
                     const okNum = /\d/.test(form.new_password);
                     const item = (met: boolean, text: string) => (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "var(--ok-text)" : "var(--danger-text)" }}>
-                        <span style={{ fontWeight: 700 }}>{met ? "✓" : "✗"}</span>
+                      <div className={`flex items-center gap-1.5 text-[0.78rem] ${met ? "text-[var(--ok-text)]" : "text-[var(--danger-text)]"}`}>
+                        <span className="font-bold">{met ? "✓" : "✗"}</span>
                         {text}
                       </div>
                     );
                     return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "var(--bg-subtle)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                      <div className="flex flex-col gap-1 mt-1.5 px-2.5 py-2 bg-[var(--bg-subtle)] rounded-md border border-[var(--border)]">
                         {item(ok8, "Al menos 8 caracteres")}
                         {item(okNum, "Al menos un número")}
                       </div>
@@ -449,8 +370,8 @@ export function UserProfile() {
                   })()}
                 </div>
 
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>
+                <div className="mb-6">
+                  <label className="block mb-1 font-medium">
                     Confirmar Nueva Contraseña
                   </label>
                   <input
@@ -460,32 +381,21 @@ export function UserProfile() {
                     onBlur={() => setConfirmPasswordTouched(true)}
                     required
                     minLength={8}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      border: `1px solid ${confirmPasswordTouched && form.confirm_password.length > 0 && form.new_password !== form.confirm_password ? "#ef4444" : "var(--border-strong)"}`,
-                      borderRadius: 6,
-                      fontSize: 14,
-                    }}
+                    className={`w-full px-3 py-2 rounded-md text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                      confirmPasswordTouched && form.confirm_password.length > 0 && form.new_password !== form.confirm_password
+                        ? "border-red-500"
+                        : "border-[var(--border-strong)]"
+                    }`}
                   />
                   {confirmPasswordTouched && form.confirm_password.length > 0 && form.new_password !== form.confirm_password && (
-                    <p style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>Las contraseñas no coinciden.</p>
+                    <p className="text-xs text-red-500 mt-1">Las contraseñas no coinciden.</p>
                   )}
                 </div>
 
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  style={{
-                    background: "#1e3a5f",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "10px 20px",
-                    cursor: passwordLoading ? "not-allowed" : "pointer",
-                    fontSize: 14,
-                    fontWeight: 500,
-                  }}
+                  className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {passwordLoading ? "Cambiando..." : "Guardar Cambios"}
                 </button>

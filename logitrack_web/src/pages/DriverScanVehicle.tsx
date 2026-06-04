@@ -207,8 +207,7 @@ export default function DriverScanVehicle() {
         {/* QR Scanner viewport */}
         <div
           id="driver-qr-reader"
-          className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block" : "hidden"}`}
-          style={{ minHeight: scanning ? 280 : 0 }}
+          className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[280px]" : "hidden min-h-0"}`}
         />
 
         {!scanning ? (

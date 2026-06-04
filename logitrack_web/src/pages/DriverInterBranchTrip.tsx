@@ -831,18 +831,12 @@ export function DriverInterBranchTrip() {
 
       {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
       {fatigueBlocked && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9999,
-          background: "#1a1a2e",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          padding: 32, textAlign: "center", gap: 24,
-        }}>
-          <span style={{ fontSize: 64 }}>⚠️</span>
-          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <span className="text-6xl">⚠️</span>
+          <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
           </h2>
-          <p style={{ color: "#94a3b8", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
+          <p className="text-slate-400 text-base leading-relaxed m-0">
             Tu supervisor fue notificado.<br/>
             Esperá su indicación antes de continuar.
           </p>
@@ -851,19 +845,13 @@ export function DriverInterBranchTrip() {
 
       {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
       {!fatigueBlocked && fatigueUnblockedBy && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 9999,
-          background: "#0d1f12",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          padding: 32, textAlign: "center", gap: 24,
-        }}>
-          <span style={{ fontSize: 64 }}>✅</span>
-          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>
+        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <span className="text-6xl">✅</span>
+          <h2 className="text-white text-[22px] font-bold m-0">
             Ruta autorizada
           </h2>
-          <p style={{ color: "#86efac", fontSize: 16, lineHeight: 1.6, margin: 0 }}>
-            Tu supervisor <strong style={{ color: "#fff" }}>{fatigueUnblockedBy}</strong> autorizó<br/>
+          <p className="text-green-300 text-base leading-relaxed m-0">
+            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
             que continúes la ruta.
           </p>
           <button
@@ -871,17 +859,7 @@ export function DriverInterBranchTrip() {
               if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
               setFatigueUnblockedBy(null);
             }}
-            style={{
-              marginTop: 8,
-              padding: "12px 36px",
-              borderRadius: 10,
-              border: "none",
-              background: "#16a34a",
-              color: "#fff",
-              fontSize: 16,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
           >
             Continuar
           </button>
@@ -937,16 +915,16 @@ function StepperBar({
           const isPending = !isOriginPt && stopIdx > currentStopIdx;
           const isLast = idx === allPoints.length - 1;
 
-          let dotBg = "var(--text-secondary)";
+          let dotCls = "bg-slate-400";
           let dotContent = <span className="text-[9px] font-bold text-white">{idx}</span>;
           if (isOriginPt) {
-            dotBg = "#1e3a5f";
+            dotCls = "bg-[#1e3a5f]";
             dotContent = <Truck className="w-3 h-3 text-white" />;
           } else if (isCompleted) {
-            dotBg = "var(--ok)";
+            dotCls = "bg-emerald-500";
             dotContent = <span className="text-[9px] font-bold text-white">✓</span>;
           } else if (isCurrent) {
-            dotBg = "var(--info)";
+            dotCls = "bg-sky-500";
             dotContent = <MapPin className="w-3 h-3 text-white" />;
           }
 
@@ -954,8 +932,7 @@ function StepperBar({
             <div key={pt.id + idx} className="flex items-start flex-1 min-w-0">
               <div className="flex flex-col items-center min-w-[48px]">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isCurrent ? "ring-4 ring-sky-200" : ""}`}
-                  style={{ background: dotBg }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${dotCls} ${isCurrent ? "ring-4 ring-sky-200" : ""}`}
                 >
                   {dotContent}
                 </div>
@@ -965,8 +942,7 @@ function StepperBar({
               </div>
               {!isLast && (
                 <div
-                  className="flex-1 h-0.5 mt-[13px] mx-1"
-                  style={{ background: isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "var(--ok)" : "var(--border)" }}
+                  className={`flex-1 h-0.5 mt-[13px] mx-1 ${isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "bg-emerald-500" : "bg-slate-200"}`}
                 />
               )}
             </div>
@@ -1154,8 +1130,7 @@ function QRModal({
   return (
     /* Backdrop — z-[9999] para quedar por encima de Leaflet (z ~400) y del nav */
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(15,27,52,0.72)" }}
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-[#0f1b34]/70"
       onClick={onClose}
     >
       {/* Card — click dentro no cierra */}

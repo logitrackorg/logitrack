@@ -250,8 +250,7 @@ export function InterBranchTripsList() {
             {/* Viewport de cámara */}
             <div
               id="operator-trip-qr-reader"
-              className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block" : "hidden"}`}
-              style={{ minHeight: scanning ? 260 : 0 }}
+              className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[260px]" : "hidden"}`}
             />
 
             {!scanning ? (

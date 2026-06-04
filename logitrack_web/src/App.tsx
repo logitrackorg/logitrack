@@ -25,6 +25,9 @@ import { DriverRoute } from "./pages/DriverRoute";
 import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
+import { VehicleStatus } from "./pages/VehicleStatus";
+import { AvailableVehicles } from "./pages/AvailableVehicles";
+import { VehicleAssignment } from "./pages/VehicleAssignment";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
@@ -180,13 +183,13 @@ function AppRoutes() {
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute roles={["supervisor", "manager"]}>
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
             <Dashboard />
           </ProtectedRoute>
         } />
 
         <Route path="/kpi-detail" element={
-          <ProtectedRoute roles={["supervisor", "manager"]}>
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
             <KpiDetail />
           </ProtectedRoute>
         } />
@@ -254,6 +257,22 @@ function AppRoutes() {
         <Route path="/vehicles" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
             <VehicleList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/vehicles/:plate/status" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleStatus />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/:plate/assign" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleAssignment />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/available" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <AvailableVehicles />
           </ProtectedRoute>
         } />
 

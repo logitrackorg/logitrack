@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown } from "lucide-react";
+import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, PackageOpen } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
@@ -13,6 +13,8 @@ import { Card } from "../components/ui/card";
 import { SelectMenu } from "../components/ui/SelectMenu";
 import { TopbarActions } from "../components/topbarContext";
 import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
+import { Button } from "../components/ui/button";
+import { Skeleton, SkeletonLine } from "../components/ui/skeleton";
 
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
@@ -84,7 +86,7 @@ interface BulkResult {
 }
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all";
 
 export function ShipmentList() {
   const [searchParams] = useSearchParams();
@@ -194,6 +196,7 @@ export function ShipmentList() {
     }
     return true;
   });
+  filtered.sort((a, b) => (b.priority_score ?? 0) - (a.priority_score ?? 0));
 
   const eligibleInView = filtered.filter((s) => BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus));
   const allEligibleSelected = eligibleInView.length > 0 && eligibleInView.every((s) => selected.has(s.tracking_id));
@@ -264,13 +267,14 @@ export function ShipmentList() {
               </span>
             )}
           </button>
-          <button
+          <Button
+            variant="default"
+            size="lg"
             onClick={() => navigate("/new")}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Nuevo envío
-          </button>
+          </Button>
         </TopbarActions>
       )}
 
@@ -284,7 +288,7 @@ export function ShipmentList() {
       {/* Status chips + search/date/branch */}
       <Card className="mb-4 p-4">
         {/* Chips de estado */}
-        <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b border-slate-100">
+        <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b border-slate-100 dark:border-slate-700">
           {(
             [
               { label: "Activos",           value: "active" },
@@ -303,8 +307,8 @@ export function ShipmentList() {
                 onClick={() => setStatusFilter(value)}
                 className={`inline-flex items-center h-8 px-3 rounded-full text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? "bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                    ? "bg-blue-900 text-white border-blue-900 shadow-sm"
+                    : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 }`}
               >
                 {label}
@@ -319,8 +323,7 @@ export function ShipmentList() {
                 "delivery_failed", "ready_for_pickup", "",
               ].includes(statusFilter) ? "" : statusFilter}
               onChange={(e) => { if (e.target.value) setStatusFilter(e.target.value as StatusFilter); }}
-              className="h-8 pl-3 pr-8 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 cursor-pointer appearance-none hover:border-slate-300 focus:outline-none focus:border-[#2563eb]"
-              style={{ minWidth: 110 }}
+              className="h-8 pl-3 pr-8 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 cursor-pointer appearance-none hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 min-w-[110px]"
             >
               <option value="">Más estados…</option>
               <option value="at_origin_hub">En sucursal origen</option>
@@ -374,7 +377,7 @@ export function ShipmentList() {
               placeholder="Desde"
               className={inputClass}
             />
-            <span className="text-slate-300">—</span>
+            <span className="text-slate-300 dark:text-slate-600">—</span>
             <input
               type="date"
               value={dateTo}
@@ -393,7 +396,7 @@ export function ShipmentList() {
           </div>
 
           {isOperator ? (
-            <span className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f]">
+            <span className="inline-flex items-center gap-1.5 h-10 px-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm font-semibold text-blue-900 dark:text-blue-300">
               <MapPin className="w-3.5 h-3.5" />
               {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
             </span>
@@ -432,8 +435,8 @@ export function ShipmentList() {
 
       {/* Expired-drafts notice */}
       {statusFilter === "expired" && (
-        <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-xl border border-slate-300 bg-slate-100 text-sm text-slate-700">
-          <Clock className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
+        <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300">
+          <Clock className="w-4 h-4 shrink-0 mt-0.5 text-slate-500 dark:text-slate-400" />
           <span>
             Mostrando borradores expirados. Visibles solo para supervisores y gerentes hasta que se eliminen los datos personales (según <strong>Configuración del sistema</strong>).
           </span>
@@ -442,8 +445,8 @@ export function ShipmentList() {
 
       {/* Bulk action toolbar */}
       {canBulk && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-          <span className="text-sm font-semibold text-[#1e3a5f]">
+        <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-3 bg-blue-600 text-white rounded-lg">
+          <span className="text-sm font-semibold">
             {selected.size} {selected.size === 1 ? "envío seleccionado" : "envíos seleccionados"}
           </span>
           <button
@@ -460,7 +463,7 @@ export function ShipmentList() {
           </button>
           <button
             onClick={() => setSelected(new Set())}
-            className="ml-auto text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
+            className="ml-auto text-xs text-white/80 hover:text-white underline cursor-pointer"
           >
             Cancelar selección
           </button>
@@ -470,73 +473,76 @@ export function ShipmentList() {
       {loading ? (
         /* Skeleton table */
         <Card className="overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="h-4 w-24 rounded bg-slate-200 animate-pulse" />
+          <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-700">
+            <Skeleton className="h-4 w-24" />
           </div>
-          <div className="divide-y divide-slate-100">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <div className="divide-y divide-slate-100 dark:divide-slate-700">
+            {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center gap-4 px-5 py-4">
-                <div className="h-3 w-28 rounded bg-slate-200 animate-pulse" />
-                <div className="h-3 flex-1 rounded bg-slate-100 animate-pulse" />
-                <div className="h-3 flex-1 rounded bg-slate-100 animate-pulse" />
-                <div className="h-3 w-20 rounded bg-slate-200 animate-pulse" />
-                <div className="h-5 w-24 rounded-full bg-slate-200 animate-pulse" />
+                <Skeleton className="h-3 w-28" />
+                <SkeletonLine className="flex-1" />
+                <SkeletonLine className="flex-1" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-24 rounded-full" />
               </div>
             ))}
           </div>
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="py-14 px-6 text-center">
-          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <Search className="w-5 h-5 text-slate-400" />
+          <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <PackageOpen className="w-5 h-5 text-slate-400" />
           </div>
-          <p className="text-sm font-semibold text-slate-700 mb-1">No se encontraron envíos</p>
-          <p className="text-xs text-slate-400 mb-5">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">No se encontraron envíos</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-5">
             {query || statusFilter !== "active" || dateFrom || dateTo || branchFilter
               ? "Probá ajustando los filtros aplicados."
               : "Todavía no hay envíos registrados."}
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
             {(query || statusFilter !== "active" || dateFrom || dateTo) && (
-              <button
+              <Button
+                variant="outline"
+                size="default"
                 onClick={() => { setQuery(""); setStatusFilter("active"); setDateFrom(""); setDateTo(""); }}
-                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
                 Limpiar filtros
-              </button>
+              </Button>
             )}
             {hasRole("operator", "supervisor") && (
-              <button
+              <Button
+                variant="default"
+                size="default"
                 onClick={() => navigate("/new")}
-                className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-xs font-semibold cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Nuevo envío
-              </button>
+                Crear envío
+              </Button>
             )}
           </div>
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               {filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}
             </p>
-            {hasRole("manager") && (
-              <button
+            {hasRole("manager", "admin") && (
+              <Button
+                variant="outline"
+                size="default"
                 onClick={() => exportToCSV(filtered, branches)}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 Exportar CSV
-              </button>
+              </Button>
             )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead>
-                <tr className="bg-slate-50/50 text-left border-b border-slate-100">
+                <tr className="bg-slate-50/50 dark:bg-slate-900/50 text-left border-b border-slate-100 dark:border-slate-700">
                   {canBulk && (
                     <th className="px-4 py-3 w-10 text-center">
                       {eligibleInView.length > 0 && (
@@ -545,7 +551,7 @@ export function ShipmentList() {
                           checked={allEligibleSelected}
                           onChange={toggleSelectAll}
                           title="Seleccionar todos los elegibles"
-                          className="cursor-pointer accent-[#1e3a5f]"
+                          className="cursor-pointer accent-blue-900"
                         />
                       )}
                     </th>
@@ -573,8 +579,8 @@ export function ShipmentList() {
                         if (target.tagName === "INPUT") return;
                         navigate(`/shipments/${s.tracking_id}`);
                       }}
-                      className={`border-b border-slate-100 cursor-pointer transition-colors ${
-                        isChecked ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                      className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-colors ${
+                        isChecked ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800"
                       }`}
                     >
                       {canBulk && (
@@ -584,26 +590,26 @@ export function ShipmentList() {
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => toggleSelect(s.tracking_id)}
-                              className="cursor-pointer accent-[#1e3a5f]"
+                              className="cursor-pointer accent-blue-900"
                             />
                           )}
                         </td>
                       )}
                       <td className={tdClass}>
-                        <code className={`text-xs font-mono ${s.status === "draft" ? "text-slate-400" : "text-slate-700"}`}>
+                        <code className={`text-xs font-mono ${s.status === "draft" ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
                           {s.tracking_id}
                         </code>
                       </td>
                       <td className={tdClass}>{corr(s, "sender_name", s.sender.name)}</td>
                       <td className={tdClass}>{corr(s, "recipient_name", s.recipient.name)}</td>
                       <td className={tdClass}>
-                        <span className="text-slate-600">{corr(s, "origin_city", s.sender.address.city)}</span>
-                        <span className="mx-1.5 text-slate-300">→</span>
-                        <span className="text-slate-600">{corr(s, "destination_city", s.recipient.address.city)}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{corr(s, "origin_city", s.sender.address.city)}</span>
+                        <span className="mx-1.5 text-slate-300 dark:text-slate-600">→</span>
+                        <span className="text-slate-600 dark:text-slate-400">{corr(s, "destination_city", s.recipient.address.city)}</span>
                       </td>
                       <td className={tdClass}>
                         {s.status === "draft" && (!s.weight_kg || s.weight_kg <= 0)
-                          ? <span className="text-slate-400 text-xs italic">Sin definir</span>
+                          ? <span className="text-slate-400 dark:text-slate-500 text-xs italic">Sin definir</span>
                           : <span className="tabular-nums whitespace-nowrap">{corr(s, "weight_kg", s.weight_kg)} kg</span>
                         }
                       </td>
@@ -614,15 +620,15 @@ export function ShipmentList() {
                           {s.has_incident && (
                             <span
                               title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
                             >
                               <AlertTriangle className="w-3 h-3" />
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className={`${tdClass} text-slate-500`}>{fmtDate(s.created_at)}</td>
-                      <td className={`${tdClass} text-slate-500`}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
+                      <td className={`${tdClass} text-slate-500 dark:text-slate-400`}>{fmtDate(s.created_at)}</td>
+                      <td className={`${tdClass} text-slate-500 dark:text-slate-400`}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -635,19 +641,19 @@ export function ShipmentList() {
       {/* Bulk confirm modal */}
       {bulkConfirm && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">Confirmar actualización masiva</h3>
-            <p className="text-sm text-slate-700 mb-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Confirmar actualización masiva</h3>
+            <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
               Se actualizarán <strong>{bulkConfirm.count}</strong> {bulkConfirm.count === 1 ? "envío" : "envíos"} al estado{" "}
               <strong>"{actionLabel(bulkConfirm.action)}"</strong>.
             </p>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               Los envíos que no admitan esta transición serán omitidos sin cancelar la operación.
             </p>
 
             {bulkConfirm.action === "out_for_delivery" && (
               <div className="mb-4">
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                   Chofer asignado
                 </label>
                 <select
@@ -667,14 +673,14 @@ export function ShipmentList() {
               <button
                 onClick={() => setBulkConfirm(null)}
                 disabled={bulkLoading}
-                className="h-10 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 disabled:opacity-50 cursor-pointer"
+                className="h-10 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-300 disabled:opacity-50 cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={executeBulk}
                 disabled={bulkLoading || (bulkConfirm.action === "out_for_delivery" && !bulkDriverId)}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-blue-900 hover:bg-blue-950 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {bulkLoading ? "Procesando…" : "Confirmar"}
               </button>
@@ -686,31 +692,31 @@ export function ShipmentList() {
       {/* Bulk result modal */}
       {bulkResult && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-900 mb-3">Resultado de la actualización masiva</h3>
-            <p className="text-sm text-slate-700 mb-2">
-              <strong className="text-emerald-600">{bulkResult.updated}</strong>{" "}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-3">Resultado de la actualización masiva</h3>
+            <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+              <strong className="text-emerald-600 dark:text-emerald-400">{bulkResult.updated}</strong>{" "}
               {bulkResult.updated === 1 ? "envío actualizado" : "envíos actualizados"} exitosamente.
             </p>
             {bulkResult.skipped.length > 0 && (
               <>
-                <p className="text-sm text-slate-700 mb-2">
-                  <strong className="text-amber-600">{bulkResult.skipped.length}</strong>{" "}
+                <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                  <strong className="text-amber-600 dark:text-amber-400">{bulkResult.skipped.length}</strong>{" "}
                   {bulkResult.skipped.length === 1 ? "envío omitido" : "envíos omitidos"}:
                 </p>
-                <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-lg mb-4">
+                <div className="max-h-52 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg mb-4">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-slate-50">
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">ID</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Motivo</th>
+                      <tr className="bg-slate-50 dark:bg-slate-800">
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">ID</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Motivo</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bulkResult.skipped.map((s) => (
-                        <tr key={s.tracking_id} className="border-t border-slate-100">
-                          <td className="px-3 py-2"><code className="font-mono">{s.tracking_id}</code></td>
-                          <td className="px-3 py-2 text-slate-500">{s.reason}</td>
+                        <tr key={s.tracking_id} className="border-t border-slate-100 dark:border-slate-700">
+                          <td className="px-3 py-2"><code className="font-mono text-slate-700 dark:text-slate-300">{s.tracking_id}</code></td>
+                          <td className="px-3 py-2 text-slate-500 dark:text-slate-400">{s.reason}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -721,7 +727,7 @@ export function ShipmentList() {
             <div className="flex justify-end">
               <button
                 onClick={() => setBulkResult(null)}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-blue-900 hover:bg-blue-950 text-white text-sm font-semibold cursor-pointer"
               >
                 Aceptar
               </button>
@@ -733,5 +739,5 @@ export function ShipmentList() {
   );
 }
 
-const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
-const tdClass = "px-4 py-3 text-slate-700";
+const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider";
+const tdClass = "px-4 py-3 text-slate-700 dark:text-slate-300";

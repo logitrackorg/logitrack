@@ -106,7 +106,7 @@ export function RoutingMetrics({ embedded = false }: { embedded?: boolean } = {}
                 <select
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
-                  className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] min-w-[200px]"
+                  className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-blue-600/20 focus:border-blue-600 min-w-[200px]"
                 >
                   <option value="">Todas</option>
                   {branches.map((b) => (
@@ -137,7 +137,7 @@ export function RoutingMetrics({ embedded = false }: { embedded?: boolean } = {}
               <button
                 onClick={() => void load()}
                 disabled={loading}
-                className="h-10 px-4 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] disabled:opacity-50 flex items-center gap-2"
+                className="h-10 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refrescar

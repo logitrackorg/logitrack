@@ -147,7 +147,7 @@ export default function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) 
                       dataKey="successRate"
                       position="center"
                       formatter={(v) => `${Number(v).toFixed(1)}%`}
-                      style={{ fill: "#fff", fontSize: 12, fontWeight: 600 }}
+                      className="fill-white text-xs font-semibold"
                     />
                   </Bar>
                   <Bar
