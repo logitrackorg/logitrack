@@ -136,6 +136,11 @@ type SLAAnomalyService struct {
 	dailyAvgBuffer  []map[string]float64 // each element = one snapshot
 	bufferDay       string               // "YYYY-MM-DD" of the current buffer day
 
+	// lastCalculatedAt records when the Collector last successfully refreshed
+	// the per-status averages. Exposed via GetLastCalculatedAt() for the UI.
+	// Protected by cacheMu (same lock as avgByState).
+	lastCalculatedAt time.Time
+
 	// ── Executor state ───────────────────────────────────────────────────────
 	executorMu      sync.Mutex
 	lastEscalatedAt time.Time // prevents multiple escalations in the same minute
@@ -156,6 +161,33 @@ func NewSLAAnomalyService(
 		settingsRepo: settingsRepo,
 		debugMode:    debug,
 	}
+}
+
+// GetLastCalculatedAt returns the timestamp when the Collector last refreshed
+// the averages, or nil if no calculation has occurred yet in this process run.
+func (s *SLAAnomalyService) GetLastCalculatedAt() *time.Time {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	if s.lastCalculatedAt.IsZero() {
+		return nil
+	}
+	t := s.lastCalculatedAt
+	return &t
+}
+
+// GetCurrentAverages returns a copy of the most recently computed per-status
+// dwell-time averages (hours). Returns nil when no calculation has run yet.
+func (s *SLAAnomalyService) GetCurrentAverages() map[string]float64 {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	if len(s.avgByState) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(s.avgByState))
+	for k, v := range s.avgByState {
+		out[k] = v
+	}
+	return out
 }
 
 // RunCheck is the entry point called by the clock handler. It always runs the
@@ -234,6 +266,13 @@ func (s *SLAAnomalyService) collect() error {
 	if len(snap) == 0 {
 		return nil // no history yet
 	}
+
+	// Stamp the collection time so the UI can show "Último cálculo: HH:MM".
+	// cacheMu is already used inside refreshAverages; we take it here again for
+	// lastCalculatedAt which lives alongside avgByState.
+	s.cacheMu.Lock()
+	s.lastCalculatedAt = time.Now()
+	s.cacheMu.Unlock()
 
 	art := time.FixedZone("ART", -3*60*60)
 	today := clock.Now().In(art).Format("2006-01-02")
@@ -401,11 +440,17 @@ func (s *SLAAnomalyService) execute(cfg model.SLASettings) error {
 
 		if cfg.IsAutoEscalateEnabled() {
 			newScore := escalatedScore(sh.priorityScore, nextPriority)
+			// DO NOT update updated_at. The executor changes the priority label
+			// but does not change the shipment's *state*. updated_at is used by
+			// the metrics handler as a proxy for "when did this state begin":
+			// resetting it to clock.Now() would make dwellH ≈ 0 immediately
+			// after escalation, causing the shipment to vanish from the delay
+			// count on the very next metrics poll.
 			if _, err := s.db.Exec(`
 				UPDATE shipments
-				SET priority = $1, priority_score = $2, updated_at = $3
-				WHERE tracking_id = $4`,
-				nextPriority, newScore, now, sh.trackingID,
+				SET priority = $1, priority_score = $2
+				WHERE tracking_id = $3`,
+				nextPriority, newScore, sh.trackingID,
 			); err != nil {
 				log.Printf("[SLAAnomalyService] update priority %s: %v", sh.trackingID, err)
 				continue

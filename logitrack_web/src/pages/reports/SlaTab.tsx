@@ -239,6 +239,54 @@ export default function SlaTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Row 3: Current averages chart ───────────────────────────────────── */}
+      {(() => {
+        const avgs = metrics.current_averages ?? [];
+        const hasData = avgs.some((a) => a.avg_hours > 0);
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-slate-700">
+                Promedio Histórico Actual por Estado (Horas)
+              </CardTitle>
+              <p className="text-[11px] text-slate-400">
+                Tiempo promedio que los envíos permanecen en cada estado, según el último ciclo del Collector
+              </p>
+            </CardHeader>
+            <CardContent>
+              {!hasData ? (
+                <div className="flex items-center justify-center h-[220px] text-slate-400 text-sm text-center px-6">
+                  Los promedios aún no han sido calculados en este ciclo
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={avgs} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
+                    <XAxis type="number" tick={{ fontSize: 11 }} unit=" h" allowDecimals={false} />
+                    <YAxis
+                      type="category"
+                      dataKey="status"
+                      width={145}
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v}
+                    />
+                    <Tooltip
+                      formatter={(val) => [`${Number(val).toFixed(1)} h`, "Promedio"]}
+                      contentStyle={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="avg_hours" radius={[0, 4, 4, 0]} maxBarSize={28} fill={COLOR_LINE} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }

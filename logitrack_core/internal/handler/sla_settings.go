@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/service"
 )
 
 var reHHMM = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -18,15 +19,25 @@ var validCeilings = map[string]bool{"media": true, "alta": true}
 // Access is restricted to admin by the router middleware.
 type SLASettingsHandler struct {
 	repo *repository.SLASettingsRepository
+	svc  *service.SLAAnomalyService
 }
 
-func NewSLASettingsHandler(repo *repository.SLASettingsRepository) *SLASettingsHandler {
-	return &SLASettingsHandler{repo: repo}
+func NewSLASettingsHandler(repo *repository.SLASettingsRepository, svc *service.SLAAnomalyService) *SLASettingsHandler {
+	return &SLASettingsHandler{repo: repo, svc: svc}
 }
 
-// Get returns the current SLA settings (defaults if the file does not exist yet).
+// Get returns the current SLA settings plus the runtime LastCalculatedAt timestamp.
 func (h *SLASettingsHandler) Get(c *gin.Context) {
-	c.JSON(http.StatusOK, h.repo.Get())
+	cfg := h.repo.Get()
+	// Merge runtime state so the frontend can show "Último cálculo: HH:MM".
+	type response struct {
+		model.SLASettings
+		LastCalculatedAt interface{} `json:"last_calculated_at"` // *time.Time or nil
+	}
+	c.JSON(http.StatusOK, response{
+		SLASettings:      cfg,
+		LastCalculatedAt: h.svc.GetLastCalculatedAt(),
+	})
 }
 
 // Update validates and persists new SLA settings.

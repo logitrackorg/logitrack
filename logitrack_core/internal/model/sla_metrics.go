@@ -20,6 +20,17 @@ type SLAMetrics struct {
 	// Each entry counts how many escalation events were logged by the SLA engine
 	// on that day (sourced from priority_logs.json).
 	DelayTrend []SLADayCount `json:"delay_trend"`
+
+	// CurrentAverages is the most recently computed per-status average dwell
+	// time in hours. Empty when the Collector has not run yet in this process
+	// lifecycle. Sorted by AvgHours descending for chart readability.
+	CurrentAverages []SLAStateAverage `json:"current_averages"`
+}
+
+// SLAStateAverage holds the average dwell time for a single shipment status.
+type SLAStateAverage struct {
+	Status   string  `json:"status"`    // Spanish display name
+	AvgHours float64 `json:"avg_hours"` // hours; 0 = no data
 }
 
 // SLABottleneck aggregates delayed shipments by their current status.

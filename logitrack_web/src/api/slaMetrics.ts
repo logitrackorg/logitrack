@@ -20,12 +20,20 @@ export interface SLADayCount {
   count: number;
 }
 
+export interface SLAStateAverage {
+  status: string;     // Spanish display name
+  avg_hours: number;  // rounded to 1 decimal
+}
+
 export interface SLAMetrics {
   sla_health_rate: number;   // 0–100
   active_total: number;
   delayed_total: number;
   bottlenecks: SLABottleneck[];
   delay_trend: SLADayCount[];
+  /** Promedios actuales por estado, del caché en memoria del Collector.
+   *  Vacío si el motor aún no corrió desde el último reinicio del servidor. */
+  current_averages: SLAStateAverage[];
 }
 
 export const slaMetricsApi = {

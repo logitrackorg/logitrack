@@ -303,7 +303,6 @@ func main() {
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
 	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo, shipmentRepo, branchRepo)
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo)
 	slaSettingsRepo := repository.NewSLASettingsRepository()
 	// Migración de arranque: fuerza la lista EnabledStates a la lista canónica
 	// derivada de las constantes de estado del modelo, sobreescribiendo cualquier
@@ -315,8 +314,11 @@ func main() {
 	} else {
 		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
 	}
-	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
 	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
+	// Both handlers need the service to expose runtime state (LastCalculatedAt,
+	// CurrentAverages), so they are created after the service.
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo, slaAnomalySvc)
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc)
 	// Attach to the clock callback so every admin clock tick triggers a check.
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
 	_ = slaAnomalySvc // referenced via closure below

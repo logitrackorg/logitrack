@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power } from "lucide-react";
+import { Gauge, AlertCircle, CheckCircle2, RefreshCw, Power, Clock } from "lucide-react";
+import { fmtDateTime } from "../utils/date";
 import { slaSettingsApi, type SLASettings } from "../api/slaSettings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 
@@ -276,6 +277,18 @@ export function SlaSettings() {
                 : `${draft.cache_interval_minutes} min`}
               )
             </span>
+          </div>
+          {/* Último cálculo — runtime state devuelto por el GET junto con la config */}
+          <div className="flex items-center gap-1.5 mt-3">
+            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <p className="text-xs text-slate-400">
+              Último cálculo:{" "}
+              <span className="font-medium text-slate-500">
+                {settings?.last_calculated_at
+                  ? fmtDateTime(settings.last_calculated_at)
+                  : "Pendiente"}
+              </span>
+            </p>
           </div>
         </CardContent>
       </Card>

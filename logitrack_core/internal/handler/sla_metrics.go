@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/service"
 )
 
 // slaMonitoredStatuses mirrors the SLA engine's default allow-list — only
@@ -44,15 +46,20 @@ const delayThresholdHours = 36.0
 type SLAMetricsHandler struct {
 	db      *sql.DB
 	logRepo *repository.PriorityLogRepository
+	svc     *service.SLAAnomalyService
 }
 
-func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository) *SLAMetricsHandler {
-	return &SLAMetricsHandler{db: db, logRepo: logRepo}
+func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository, svc *service.SLAAnomalyService) *SLAMetricsHandler {
+	return &SLAMetricsHandler{db: db, logRepo: logRepo, svc: svc}
 }
 
 // Get computes and returns the three SLA metrics in a single response.
 func (h *SLAMetricsHandler) Get(c *gin.Context) {
-	now := time.Now()
+	// CRITICAL: use clock.Now() — not time.Now() — so that the dwell-time
+	// calculation stays on the same timeline as the executor and the shipment
+	// updated_at timestamps. Using time.Now() when the admin clock is advanced
+	// (time-travel testing) produces negative dwell values → 0 delays reported.
+	now := clock.Now()
 
 	// ── 1. Query active shipments (status + updated_at) ──────────────────────
 	rows, err := h.db.Query(`
@@ -118,28 +125,64 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	})
 
 	// ── 3. Delay trend from priority_logs.json (last 7 calendar days) ─────────
+	// Anchor the 7-day window to the LATEST timestamp in the log, not to
+	// clock.Now(). This prevents the time-travel testing scenario from
+	// producing an empty chart: log entries are written with clock.Now()
+	// (e.g. +7d), and using clock.Now() as "today" would still work only if
+	// the clock is identical at read time. Using the log's own max timestamp
+	// makes the window self-consistent regardless of when the endpoint is hit.
 	logs := h.logRepo.ListAll()
-	dayCounts := map[string]int{}
-	cutoff := now.AddDate(0, 0, -7).Truncate(24 * time.Hour)
-	for _, entry := range logs {
-		if entry.Timestamp.Before(cutoff) {
-			continue
+	var trend []model.SLADayCount
+	if len(logs) == 0 {
+		// No log entries yet — return an explicitly empty slice (not nil) so
+		// the chart receives [] and can show an appropriate empty state.
+		trend = []model.SLADayCount{}
+	} else {
+		// Find the most recent entry to anchor the 7-day window.
+		var maxTs time.Time
+		for _, entry := range logs {
+			if entry.Timestamp.After(maxTs) {
+				maxTs = entry.Timestamp
+			}
 		}
-		day := entry.Timestamp.Format("2006-01-02")
-		dayCounts[day]++
-	}
-	// Fill all 7 days even when count is 0 so the chart has a continuous X axis.
-	trend := make([]model.SLADayCount, 7)
-	for i := 6; i >= 0; i-- {
-		day := now.AddDate(0, 0, -i).Format("2006-01-02")
-		trend[6-i] = model.SLADayCount{Date: day, Count: dayCounts[day]}
+		cutoff := maxTs.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+		dayCounts := map[string]int{}
+		for _, entry := range logs {
+			if entry.Timestamp.Before(cutoff) {
+				continue
+			}
+			day := entry.Timestamp.Format("2006-01-02")
+			dayCounts[day]++
+		}
+		// Fill all 7 days relative to maxTs, even when count is 0, so the
+		// chart always has a continuous X axis.
+		trend = make([]model.SLADayCount, 7)
+		for i := 6; i >= 0; i-- {
+			day := maxTs.AddDate(0, 0, -i).Format("2006-01-02")
+			trend[6-i] = model.SLADayCount{Date: day, Count: dayCounts[day]}
+		}
 	}
 
+	// ── 4. Current per-status averages from the Collector in-memory cache ───────
+	currentAvgMap := h.svc.GetCurrentAverages()
+	currentAverages := make([]model.SLAStateAverage, 0, len(currentAvgMap))
+	for code, avgH := range currentAvgMap {
+		label := slaStatusLabel[code]
+		if label == "" {
+			label = code
+		}
+		currentAverages = append(currentAverages, model.SLAStateAverage{Status: label, AvgHours: math.Round(avgH*10) / 10})
+	}
+	sort.Slice(currentAverages, func(i, j int) bool {
+		return currentAverages[i].AvgHours > currentAverages[j].AvgHours
+	})
+
 	c.JSON(http.StatusOK, model.SLAMetrics{
-		SlaHealthRate: slaHealthRate,
-		ActiveTotal:   activeTotal,
-		DelayedTotal:  delayedTotal,
-		Bottlenecks:   bottlenecks,
-		DelayTrend:    trend,
+		SlaHealthRate:   slaHealthRate,
+		ActiveTotal:     activeTotal,
+		DelayedTotal:    delayedTotal,
+		Bottlenecks:     bottlenecks,
+		DelayTrend:      trend,
+		CurrentAverages: currentAverages,
 	})
 }

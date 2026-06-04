@@ -21,6 +21,9 @@ export interface SLASettings {
   /** Hora de Argentina (24 h, "HH:MM") en la que el Executor dispara la
    *  repriorización diaria. Default: "23:00". */
   escalation_time: string;
+  /** ISO timestamp de la última vez que el Collector calculó promedios.
+   *  Null si el motor aún no corrió desde el último reinicio. */
+  last_calculated_at?: string | null;
 }
 
 export const slaSettingsApi = {
