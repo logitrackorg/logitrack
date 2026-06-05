@@ -163,7 +163,8 @@ export function ShipmentDetail() {
   } | null>(null);
 
   const statusOptimistic = useOptimisticUpdate<Shipment>(
-    async (_optimisticShipment: Shipment) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (_shipment: Shipment) => {
       const p = pendingUpdateRef.current!;
       await shipmentApi.updateStatus(trackingId!, {
         status: p.status,

@@ -52,6 +52,7 @@ function InfoRowEx({ label, value, corrected, original }: { label: string; value
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function InfoCards({ shipment, branches, events, isMobile: _isMobile }: InfoCardsProps) {
   const fmt = fmtDateTime;
   const cor = shipment.corrections ?? {};
