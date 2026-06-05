@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
 )
 
@@ -517,7 +518,13 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
 		       rejected_by_recipient, chatbot_metadata
 		FROM shipments WHERE tracking_id = $1`, trackingID)
-	return scanShipment(row)
+	s, err := scanShipment(row)
+	if err == nil {
+		now := clock.Now()
+		s.IsDelayed = s.ComputeIsDelayed(now)
+		s.IsAtRisk = s.ComputeIsAtRisk(now)
+	}
+	return s, err
 }
 
 func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.Shipment, error) {
@@ -565,7 +572,16 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		return nil, err
 	}
 	defer rows.Close()
-	return scanShipments(rows)
+	list, err := scanShipments(rows)
+	if err != nil {
+		return nil, err
+	}
+	now := clock.Now()
+	for i := range list {
+		list[i].IsDelayed = list[i].ComputeIsDelayed(now)
+		list[i].IsAtRisk = list[i].ComputeIsAtRisk(now)
+	}
+	return list, nil
 }
 
 func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, error) {
@@ -593,7 +609,16 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		return nil, err
 	}
 	defer rows.Close()
-	return scanShipments(rows)
+	list, err := scanShipments(rows)
+	if err != nil {
+		return nil, err
+	}
+	now := clock.Now()
+	for i := range list {
+		list[i].IsDelayed = list[i].ComputeIsDelayed(now)
+		list[i].IsAtRisk = list[i].ComputeIsAtRisk(now)
+	}
+	return list, nil
 }
 
 func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.Stats, error) {

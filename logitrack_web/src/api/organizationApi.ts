@@ -18,6 +18,10 @@ export interface OrganizationConfig {
   phone: string;
   email: string;
   track_url: string;
+  primary_color?: string;
+  accent_color?: string;
+  sidebar_color?: string;
+  logo_url?: string;
   updated_at?: string;
   updated_by?: string;
 }

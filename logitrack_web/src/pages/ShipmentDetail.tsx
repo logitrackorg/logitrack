@@ -24,6 +24,15 @@ import { PriorityBadge } from "../components/PriorityBadge";
 import { ZoneBadge } from "../components/ZoneBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { extractErrorMessage } from "../utils/errors";
+
+const SLA_MONITORED_DETAIL = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+function isShipmentDelayed(s: Shipment): boolean {
+  if (!SLA_MONITORED_DETAIL.has(s.status) || !s.updated_at) return false;
+  return Date.now() - new Date(s.updated_at).getTime() > 36 * 60 * 60 * 1000;
+}
 import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { DetailPageSkeleton } from "../components/ui/skeleton";
@@ -650,6 +659,11 @@ export function ShipmentDetail() {
                 </code>
                 <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
                 <PriorityBadge priority={shipment.priority} />
+                {(shipment.is_delayed ?? isShipmentDelayed(shipment)) && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]">
+                    Demorado
+                  </span>
+                )}
               </div>
 
               {/* Route: origin → destination */}

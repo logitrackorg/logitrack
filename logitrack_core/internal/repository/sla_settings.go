@@ -54,6 +54,17 @@ func (r *SLASettingsRepository) Get() model.SLASettings {
 	if len(cfg.EnabledStates) == 0 {
 		cfg.EnabledStates = model.DefaultSLASettings().EnabledStates
 	}
+	// AutoEscalate nil means the field was absent in an older config file;
+	// default to true so existing deployments are not silently disabled.
+	if cfg.AutoEscalate == nil {
+		cfg.AutoEscalate = model.DefaultSLASettings().AutoEscalate
+	}
+	if cfg.EscalationTime == "" {
+		cfg.EscalationTime = model.DefaultSLASettings().EscalationTime
+	}
+	if cfg.CalculationMode != "periodic" && cfg.CalculationMode != "daily" {
+		cfg.CalculationMode = model.DefaultSLASettings().CalculationMode
+	}
 	return cfg
 }
 

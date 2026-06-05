@@ -23,6 +23,23 @@ type SLASettings struct {
 	// CacheIntervalMinutes controls how long the computed per-status averages
 	// are reused before a fresh DB query is issued. Default 60 minutes.
 	CacheIntervalMinutes int `json:"cache_interval_minutes"`
+
+	// AutoEscalate controls whether the engine actually writes priority changes
+	// to the shipments table. When false, anomaly detection and logging still
+	// run (entries still appear in priority_logs.json) but no DB write occurs.
+	// Use a pointer so that JSON omission (old config files) can be defaulted
+	// to true without ambiguity with an explicit false.
+	AutoEscalate *bool `json:"auto_escalate,omitempty"`
+
+	// EscalationTime is the wall-clock time (Argentina time, "HH:MM" 24-hour)
+	// at which the Executor fires the once-daily priority escalation. Default "23:00".
+	EscalationTime string `json:"escalation_time,omitempty"`
+
+	// CalculationMode controls when the Collector runs:
+	//   "periodic" — runs asynchronously every CacheIntervalMinutes (default).
+	//   "daily"    — runs once, immediately before the Executor at EscalationTime;
+	//                CacheIntervalMinutes is ignored in this mode.
+	CalculationMode string `json:"calculation_mode,omitempty"`
 }
 
 // MonitoredStatusCodes returns the canonical list of active status codes the
@@ -62,6 +79,9 @@ func MonitoredStatusCodes() []string {
 	}
 }
 
+// AutoEscalateDefault is the production default for the kill-switch.
+func boolPtr(b bool) *bool { return &b }
+
 // DefaultSLASettings returns safe, production-ready defaults used when no
 // configuration file exists yet.
 func DefaultSLASettings() SLASettings {
@@ -70,5 +90,14 @@ func DefaultSLASettings() SLASettings {
 		PriorityCeiling:      "alta",
 		EnabledStates:        MonitoredStatusCodes(),
 		CacheIntervalMinutes: 60,
+		AutoEscalate:         boolPtr(true),
+		EscalationTime:       "23:00",
+		CalculationMode:      "periodic",
 	}
+}
+
+// IsAutoEscalateEnabled returns true when AutoEscalate is nil (old config
+// without the field — treat as enabled) or explicitly set to true.
+func (s SLASettings) IsAutoEscalateEnabled() bool {
+	return s.AutoEscalate == nil || *s.AutoEscalate
 }

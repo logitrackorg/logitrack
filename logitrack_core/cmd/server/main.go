@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 	"log"
 	"os"
 	"strconv"
@@ -63,6 +64,7 @@ func main() {
 
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
+	twoFARepo := repository.NewTwoFARepository(database)
 	branchRepo := repository.NewPostgresBranchRepository(database)
 	vehicleRepo := repository.NewPostgresVehicleRepository(database)
 	routeRepo := repository.NewPostgresRouteRepository(database)
@@ -238,6 +240,7 @@ func main() {
 	} else {
 		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
 	}
+	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
@@ -249,7 +252,7 @@ func main() {
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	claimHandler := handler.NewClaimHandler(claimSvc)
-	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
+	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo, twoFARepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	vehicleHandler.SetBranchZoneService(branchZoneSvc)
@@ -262,6 +265,7 @@ func main() {
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
+	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
 	// schedules; el scheduler in-process dispara la generación y guarda el snapshot.
@@ -314,8 +318,11 @@ func main() {
 	} else {
 		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
 	}
-	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo)
 	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
+	// Both handlers need the service to expose runtime state (LastCalculatedAt,
+	// CurrentAverages), so they are created after the service.
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo, slaAnomalySvc)
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc)
 	// Attach to the clock callback so every admin clock tick triggers a check.
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
 	_ = slaAnomalySvc // referenced via closure below
@@ -423,12 +430,24 @@ func main() {
 
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	twoFAHandler.RegisterRoutes(api, middleware.Auth(authRepo)) 
 	passwordResetHandler.RegisterRoutes(api)
 	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.Auth(authRepo))
+
+	// Tarea periódica: limpiar códigos OTP expirados (cada 5 minutos)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_ = twoFARepo.CleanupExpiredCodes(ctx)
+			cancel()
+		}
+	}()
 
 	protected.GET("/auth/me", authHandler.Me)
 
@@ -537,6 +556,7 @@ func main() {
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
