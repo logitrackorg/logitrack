@@ -106,6 +106,8 @@ export function Login() {
     return () => clearInterval(interval);
   }, [resetStep]);
 
+  // En el handleSubmit, reemplaza TODO el bloque de 2FA (línea ~113-170)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -113,58 +115,51 @@ export function Login() {
 
     try {
       console.log('🔵 Intentando login...');
-
-      // ✨ CAMBIO: Llamar directamente a la API, NO al context
       const response = await authApi.login(username, password);
-
       console.log('🔵 Response completa:', response);
 
-      // Si requiere 2FA (ya lo tiene activado)
+      // ══════════════════════════════════════════════
+      // CASO 1: Usuario CON 2FA ya activado
+      // ══════════════════════════════════════════════
       if (response && response.requires_2fa) {
-        console.log('✅ Redirigiendo a /2fa/verify');
+        console.log('✅ Usuario tiene 2FA activo - redirigiendo a verificación');
         navigate("/2fa/verify", {
           state: { session_token: response.session_token }
         });
         return;
       }
 
-      // Si NO tiene 2FA activado, forzar activación
+      // ══════════════════════════════════════════════
+      // CASO 2: Usuario SIN 2FA (debe activarlo)
+      // ══════════════════════════════════════════════
       if (response && response.user) {
         const user = response.user;
-        console.log('🔵 Chequeando usuario:', {
-          role: user.role,
-          two_fa_enabled: user.two_fa_enabled
-        });
-
         const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
-        if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
-          console.log('✅ Usuario sin 2FA detectado');
 
-          // ✨ GUARDAR TOKEN TEMPORALMENTE para que pueda activar 2FA
-          localStorage.setItem("token", response.token!);
-          localStorage.setItem("user", JSON.stringify(response.user));
+        if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
+          console.log('⚠️ Usuario sin 2FA detectado - debe activarlo');
+
+          // 🔑 CLAVE: Guardar token EN SESSIONSTORAGE con flag especial
+          sessionStorage.setItem("pending_2fa_setup", "true");
+          sessionStorage.setItem("temp_token", response.token!);
+          sessionStorage.setItem("temp_user", JSON.stringify(user));
 
           console.log('✅ Navegando a /2fa/setup-required');
-          navigate("/2fa/setup-required", {
-            state: {
-              message: "Debes activar la autenticación de doble factor para continuar",
-              skipAuth: true // ← Flag para que sepa que ya tiene token
-            }
-          });
-
-          // ✨ NO llamar setToken/setUser del context aún
+          navigate("/2fa/setup-required");
           return;
         }
       }
 
-      // ✨ Flujo normal: guardar en context
-      console.log('✅ Login normal, guardando en context');
+      // ══════════════════════════════════════════════
+      // CASO 3: Login normal (drivers o usuarios sin 2FA requerido)
+      // ══════════════════════════════════════════════
+      console.log('✅ Login normal - guardando en context');
       localStorage.setItem("token", response.token!);
       localStorage.setItem("user", JSON.stringify(response.user));
       setToken(response.token!);
       setUser(response.user!);
-
       navigate("/");
+
     } catch (e: unknown) {
       console.error('❌ Error en login:', e);
       const code = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
