@@ -148,6 +148,59 @@ type Shipment struct {
 	// ConfirmationEmailSentAt registra cuándo se enviaron los emails de confirmación
 	// al destinatario y al remitente. Nil = aún no enviados. Usado para dedup (CA-05).
 	ConfirmationEmailSentAt *time.Time `json:"confirmation_email_sent_at,omitempty"`
+
+	// IsDelayed is a computed (non-persisted) field set by the projection layer
+	// after each fetch using clock.Now() so that admin time-travel advances are
+	// honoured. Omitted from JSON when false.
+	IsDelayed bool `json:"is_delayed,omitempty"`
+
+	// IsAtRisk is set when the shipment is in the warning band: dwell time has
+	// exceeded the baseline average (SLAAtRiskThresholdHours) but not yet the
+	// critical threshold (SLADelayThresholdHours). Shown as "SLA Comprometido"
+	// (yellow) in the UI. Computed (non-persisted). Omitted when false.
+	IsAtRisk bool `json:"is_at_risk,omitempty"`
+}
+
+// slaMonitoredForDelay is the canonical set of states where LogiTrack is
+// responsible for moving the shipment forward and delay is meaningful.
+var slaMonitoredForDelay = map[Status]bool{
+	StatusAtOriginHub:        true,
+	StatusAtHub:              true,
+	StatusLoaded:             true,
+	StatusInTransit:          true,
+	StatusOutForDelivery:     true,
+	StatusRedeliveryScheduled: true,
+	StatusReadyForReturn:     true,
+}
+
+// SLAAtRiskThresholdHours is the warning threshold (100 % of the fallback
+// per-state average of 24 h). Shipments with dwell in the range
+// (SLAAtRiskThresholdHours, SLADelayThresholdHours] are "SLA Comprometido".
+const SLAAtRiskThresholdHours = 24.0
+
+// SLADelayThresholdHours is the canonical 36-hour threshold shared by both
+// the backend (ComputeIsDelayed) and the frontend fallback computation.
+const SLADelayThresholdHours = 36.0
+
+// ComputeIsDelayed reports whether the shipment has been in its current
+// monitored state longer than SLADelayThresholdHours. Pass clock.Now() to
+// honour any admin time-travel override — never use time.Now() here.
+func (s *Shipment) ComputeIsDelayed(now time.Time) bool {
+	if !slaMonitoredForDelay[s.Status] {
+		return false
+	}
+	return now.Sub(s.UpdatedAt).Hours() > SLADelayThresholdHours
+}
+
+// ComputeIsAtRisk reports whether the shipment is in the "SLA Comprometido"
+// warning band: dwell has exceeded the baseline average but not yet the
+// critical threshold. Use clock.Now() to honour admin time-travel overrides.
+func (s *Shipment) ComputeIsAtRisk(now time.Time) bool {
+	if !slaMonitoredForDelay[s.Status] {
+		return false
+	}
+	dwell := now.Sub(s.UpdatedAt).Hours()
+	return dwell > SLAAtRiskThresholdHours && dwell <= SLADelayThresholdHours
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.

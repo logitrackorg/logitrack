@@ -555,12 +555,17 @@ func (s *SLAAnomalyService) execute(cfg model.SLASettings) error {
 			}
 		}
 
-		reason := fmt.Sprintf(
-			"Prioridad incrementada automáticamente por exceso de tiempo en estado %s",
-			anomalyStatusDisplayName(sh.status),
-		)
-		if !cfg.IsAutoEscalateEnabled() {
-			reason += " [repriorización deshabilitada — sin cambios en DB]"
+		var reason string
+		if cfg.IsAutoEscalateEnabled() {
+			reason = fmt.Sprintf(
+				"Prioridad incrementada automáticamente por exceso de tiempo en estado %s",
+				anomalyStatusDisplayName(sh.status),
+			)
+		} else {
+			reason = fmt.Sprintf(
+				"[SIMULACIÓN] El envío requiere repriorización a %s, pero el escalado automático está apagado",
+				nextPriority,
+			)
 		}
 		entry := model.PriorityLog{
 			TrackingID:   sh.trackingID,

@@ -112,6 +112,12 @@ export interface Shipment {
   delivery_attempts?: number;
   is_returning?: boolean;
   rejected_by_recipient?: boolean;
+  /** Computed server-side using clock.Now(). True when the shipment has
+   *  been in a monitored state for > 36 h. Absent (undefined) when false. */
+  is_delayed?: boolean;
+  /** Warning band: dwell > 24 h but ≤ 36 h ("SLA Comprometido").
+   *  Absent (undefined) when false. Mutually exclusive with is_delayed. */
+  is_at_risk?: boolean;
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;

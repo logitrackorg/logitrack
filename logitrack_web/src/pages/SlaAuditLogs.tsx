@@ -241,8 +241,6 @@ export function SlaAuditLogs() {
                   <tr>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">ID de Envío</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Fecha y Hora</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Remitente</th>
-                    <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Destinatario</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Sucursal / Ciudad</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Salto de Prioridad</th>
                     <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Motivo</th>
@@ -251,7 +249,7 @@ export function SlaAuditLogs() {
                 <tbody>
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-sm text-slate-400">
+                      <td colSpan={5} className="py-8 text-center text-sm text-slate-400">
                         No hay registros que coincidan con los filtros aplicados.
                       </td>
                     </tr>
@@ -268,12 +266,6 @@ export function SlaAuditLogs() {
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-500 tabular-nums whitespace-nowrap">
                           {fmtDateTime(log.timestamp)}
-                        </td>
-                        <td className="py-3 px-4 text-xs text-slate-700 whitespace-nowrap">
-                          {log.sender_name || <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="py-3 px-4 text-xs text-slate-700 whitespace-nowrap">
-                          {log.receiver_name || <span className="text-slate-300">—</span>}
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">
                           {log.current_branch || log.origin_city || <span className="text-slate-300">—</span>}
