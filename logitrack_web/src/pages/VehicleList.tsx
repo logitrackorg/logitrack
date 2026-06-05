@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Filter } from "lucide-react";
+import { Plus, Filter, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { fmtDateTime } from "@/utils/date";
 import { vehicleApi, type Vehicle, type VehicleStatus, type VehicleStatusResponse, type VehicleType } from "../api/vehicles";
 import { interBranchTripsApi, type InterBranchTrip } from "../api/interBranchTrips";
 import { shipmentApi } from "../api/shipments";
@@ -12,7 +15,7 @@ import { Card } from "../components/ui/card";
 import { SelectMenu } from "../components/ui/SelectMenu";
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all";
 const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
 const tdClass = "px-4 py-3 text-slate-700";
 
@@ -293,7 +296,7 @@ const handleAddShipment = async () => {
         <TopbarActions>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--brand-strong)] hover:brightness-90 text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Nuevo vehículo
@@ -385,7 +388,7 @@ const handleAddShipment = async () => {
                 <button type="button" onClick={handleCancel} className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm bg-slate-100 text-slate-800">
                   Cancelar
                 </button>
-                <button type="submit" className="px-4 py-2 rounded-md border-none cursor-pointer font-semibold text-sm text-white bg-[#1e3a5f]">
+                <button type="submit" className="px-4 py-2 rounded-md border-none cursor-pointer font-semibold text-sm text-white bg-[var(--brand-strong)]">
                   Registrar
                 </button>
               </div>
@@ -416,7 +419,7 @@ const handleAddShipment = async () => {
           </button>
 
           {isOperator ? (
-            <span className="h-10 inline-flex items-center px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-medium text-[#1e3a5f]">
+            <span className="h-10 inline-flex items-center px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-medium text-[var(--brand-strong)]">
               {branches.find(b => b.id === branchFilter)?.name ?? branchFilter}
             </span>
           ) : (
@@ -482,12 +485,12 @@ const handleAddShipment = async () => {
               onClick={() => setModeTab(mode)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 active
-                  ? "border-[#1e3a5f] text-[#1e3a5f]"
+                  ? "border-[var(--brand-strong)] text-[var(--brand-strong)]"
                   : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
               {label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${active ? "bg-[#1e3a5f] text-white" : "bg-slate-100 text-slate-600"}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${active ? "bg-[var(--brand-strong)] text-white" : "bg-slate-100 text-slate-600"}`}>
                 {count}
               </span>
             </button>
@@ -554,7 +557,7 @@ const handleAddShipment = async () => {
                       <td className={tdClass}>{vehicleTypeLabels[v.type]}</td>
                       <td className={tdClass}>
                         {assignedBranch ? (
-                          <span className="text-[#1e3a5f] font-medium">{assignedBranch.name}</span>
+                          <span className="text-[var(--brand-strong)] font-medium">{assignedBranch.name}</span>
                         ) : (
                           <span className="text-slate-400 italic">Sin sucursal</span>
                         )}
@@ -562,7 +565,7 @@ const handleAddShipment = async () => {
                       {modeTab === "inter_sucursal" && (
                         <td className={tdClass}>
                           {destinationBranch ? (
-                            <span className="text-[#1e3a5f] font-medium">{destinationBranch.name}</span>
+                            <span className="text-[var(--brand-strong)] font-medium">{destinationBranch.name}</span>
                           ) : (
                             <span className="text-slate-400">—</span>
                           )}
@@ -616,7 +619,7 @@ const handleAddShipment = async () => {
                         {hasRole("operator", "supervisor") && (v.status === "disponible" || v.status === "en_carga") && (
                           <button
                             onClick={(e) => { e.stopPropagation(); openLoadModal(v); }}
-                            className="inline-flex items-center h-8 px-3 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] text-white text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer"
+                            className="inline-flex items-center h-8 px-3 rounded-md bg-[var(--brand-strong)] hover:brightness-90 text-white text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer"
                           >
                             Cargar envíos
                           </button>
@@ -695,7 +698,7 @@ const handleAddShipment = async () => {
               <button
                 onClick={handleAddShipment}
                 disabled={loadBusy || !loadInput.trim()}
-                className={`px-4 py-2 rounded-md border-none font-semibold text-sm text-white bg-[#1e3a5f] ${
+                className={`px-4 py-2 rounded-md border-none font-semibold text-sm text-white bg-[var(--brand-strong)] ${
                   loadBusy || !loadInput.trim() ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
                 }`}
               >
@@ -911,27 +914,22 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
   const currentBranch = branches.find(b => b.id === vehicle.assigned_branch);
   const sClasses = statusClasses(vehicle.status);
   return (
-    <>
-    <div
-      className="fixed inset-0 bg-black/45 z-[1000] flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl p-6 max-w-[560px] w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open onClose={onClose}>
+      <DialogContent className="max-w-[560px]">
+        <div className="px-6">
         <div className="flex justify-between items-center mb-5">
           <div>
-            <p className="text-xs text-slate-600 m-0 uppercase">Detalle del vehículo</p>
-            <h2 className="text-2xl font-bold mt-1 text-slate-900">
+            <p className="text-xs text-[var(--text-secondary)] m-0 uppercase">Detalle del vehículo</p>
+            <h2 className="text-2xl font-bold mt-1 text-[var(--text-primary)]">
               {vehicle.license_plate}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="bg-transparent border-none text-2xl cursor-pointer text-slate-600 px-2 py-1"
+            className="cursor-pointer shrink-0 rounded-md p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors duration-200"
+            aria-label="Cerrar"
           >
-            ✕
+            <X size={18} />
           </button>
         </div>
 
@@ -948,35 +946,35 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                 {vehicleStatusLabels[vehicle.status]}
               </span>
             </div>
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="text-xs text-[var(--text-secondary)] mt-1">
               ID: #{vehicle.id}
             </p>
           </div>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-5">
-          <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Información del vehículo</h3>
+        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4 mb-5">
+          <h3 className="text-sm font-semibold text-[var(--text-strong)] m-0 mb-3">Información del vehículo</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-slate-600 m-0 mb-0.5">Tipo</p>
-              <p className="text-sm font-semibold text-slate-900 m-0">{vehicleTypeLabels[vehicle.type]}</p>
+              <p className="text-xs text-[var(--text-secondary)] m-0 mb-0.5">Tipo</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)] m-0">{vehicleTypeLabels[vehicle.type]}</p>
             </div>
             <div>
-              <p className="text-xs text-slate-600 m-0 mb-0.5">Capacidad</p>
-              <p className="text-sm font-semibold text-slate-900 m-0">{vehicle.capacity_kg} kg</p>
+              <p className="text-xs text-[var(--text-secondary)] m-0 mb-0.5">Capacidad</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)] m-0">{vehicle.capacity_kg} kg</p>
             </div>
             {vehicle.updated_at && (
               <div>
-                <p className="text-xs text-slate-600 m-0 mb-0.5">Última actualización</p>
-                <p className="text-sm font-medium text-slate-800 m-0">
-                  {new Date(vehicle.updated_at).toLocaleString()}
+                <p className="text-xs text-[var(--text-secondary)] m-0 mb-0.5">Última actualización</p>
+                <p className="text-sm font-medium text-[var(--text-strong)] m-0">
+                  {fmtDateTime(vehicle.updated_at)}
                 </p>
               </div>
             )}
             {vehicle.updated_by && (
               <div>
-                <p className="text-xs text-slate-600 m-0 mb-0.5">Actualizado por</p>
-                <p className="text-sm font-medium text-slate-800 m-0">{vehicle.updated_by}</p>
+                <p className="text-xs text-[var(--text-secondary)] m-0 mb-0.5">Actualizado por</p>
+                <p className="text-sm font-medium text-[var(--text-strong)] m-0">{vehicle.updated_by}</p>
               </div>
             )}
           </div>
@@ -985,22 +983,19 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
         {/* Acciones de viaje — operador / supervisor de la sucursal correspondiente */}
         {!readOnly && canEndTrip && (
           <div className="mb-4">
-            <button
-              onClick={onEndTrip}
-              className="w-full py-2.5 px-4 rounded-lg border-none cursor-pointer font-semibold text-sm text-white bg-rose-600"
-            >
+            <Button variant="destructive" onClick={onEndTrip} className="w-full">
               Finalizar viaje
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Cambio de estado — solo admin */}
         {!readOnly && hideShipments && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Cambiar estado</h3>
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-[var(--text-strong)] m-0 mb-3">Cambiar estado</h3>
 
             {["en_carga", "en_transito"].includes(currentStatus) && (
-              <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-amber-50 border border-amber-200 text-amber-800">
+              <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-[var(--warn-bg)] border border-[var(--warn-border)] text-[var(--warn-text)]">
                 El estado <strong>{vehicleStatusLabels[currentStatus]}</strong> es gestionado automáticamente por las operaciones de viaje y no puede cambiarse de forma manual.
               </div>
             )}
@@ -1008,20 +1003,20 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
             {!["en_carga", "en_transito"].includes(currentStatus) && (
               <>
                 {currentShipments.length > 0 && (
-                  <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-amber-50 border border-amber-200 text-amber-800">
+                  <div className="px-3 py-2 rounded-md mb-2.5 text-xs bg-[var(--warn-bg)] border border-[var(--warn-border)] text-[var(--warn-text)]">
                     Este vehículo tiene {currentShipments.length} envío{currentShipments.length !== 1 ? "s" : ""} asignado{currentShipments.length !== 1 ? "s" : ""}. El cambio de estado se aplicará de forma forzada.
                   </div>
                 )}
                 {statusError && (
-                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{statusError}</div>
+                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]">{statusError}</div>
                 )}
                 {statusSuccess && (
-                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700">{statusSuccess}</div>
+                  <div className="px-3 py-2 rounded-md mb-2 text-xs bg-[var(--ok-bg)] border border-[var(--ok-border)] text-[var(--ok-text)]">{statusSuccess}</div>
                 )}
                 <select
                   value={selectedStatus}
                   onChange={(e) => { setSelectedStatus(e.target.value as VehicleStatus | ""); setStatusError(""); setStatusSuccess(""); }}
-                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white mb-2"
+                  className="w-full px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm bg-[var(--bg-card)] text-[var(--text-primary)] mb-2"
                 >
                   <option value="">Seleccioná el nuevo estado…</option>
                   {MANUAL_STATUSES.filter(s => s.value !== currentStatus).map(s => (
@@ -1033,109 +1028,102 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
                   value={statusNotes}
                   onChange={(e) => setStatusNotes(e.target.value)}
                   placeholder="Notas (opcional)"
-                  className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm mb-2 box-border"
+                  className="w-full px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm mb-2 box-border bg-[var(--bg-card)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 />
-                <button
+                <Button
                   onClick={handleStatusChange}
                   disabled={!selectedStatus || statusBusy}
-                  className={`w-full py-2 px-4 rounded-md border-none font-semibold text-white text-sm ${
-                    !selectedStatus || statusBusy ? "bg-slate-400 cursor-not-allowed opacity-70" : "bg-[#1e3a5f] cursor-pointer"
-                  }`}
+                  className="w-full"
                 >
                   {statusBusy ? "Actualizando…" : "Actualizar estado"}
-                </button>
+                </Button>
               </>
             )}
           </div>
         )}
 
           {/* Branch asignado */}
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Sucursal actual</h3>
+        <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-[var(--text-strong)] m-0 mb-3">Sucursal actual</h3>
           {currentBranch ? (
-            <div className="bg-white border border-slate-200 rounded-lg p-3 mb-0">
-              <p className="text-base font-bold text-slate-900 m-0">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3 mb-0">
+              <p className="text-base font-bold text-[var(--text-primary)] m-0">
                 {currentBranch.name}
               </p>
-              <p className="text-xs text-slate-600 mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {currentBranch.address.city}, {currentBranch.province}
               </p>
             </div>
           ) : (
-            <p className="text-xs text-slate-600 m-0">Sin sucursal asignada</p>
+            <p className="text-xs text-[var(--text-secondary)] m-0">Sin sucursal asignada</p>
           )}
 
           {!hasShipments && canAssignBranch && (
             <>
               {branchError && (
-                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{branchError}</div>
+                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]">{branchError}</div>
               )}
               {branchSuccess && (
-                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-emerald-50 border border-emerald-200 text-emerald-700">{branchSuccess}</div>
+                <div className="px-3 py-2 rounded-md mb-2 text-xs bg-[var(--ok-bg)] border border-[var(--ok-border)] text-[var(--ok-text)]">{branchSuccess}</div>
               )}
               <select
                 value={selectedBranch}
                 onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white mb-2"
+                className="w-full px-3 py-2 rounded-md border border-[var(--border-strong)] text-sm bg-[var(--bg-card)] text-[var(--text-primary)] mb-2"
               >
                 <option value="">Cambiar sucursal...</option>
                 {branches.map(b => (
                   <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>
                 ))}
               </select>
-              <button
+              <Button
                 onClick={handleAssignBranch}
                 disabled={assigningBranch || !selectedBranch}
-                className={`w-full py-2 px-4 rounded-md border-none font-semibold text-white text-sm ${
-                  assigningBranch || !selectedBranch ? "bg-slate-400 cursor-not-allowed opacity-70" : "bg-[#1e3a5f] cursor-pointer"
-                }`}
+                className="w-full"
               >
                 {assigningBranch ? "Asignando..." : "Asignar sucursal"}
-              </button>
+              </Button>
             </>
           )}
         </div>
 
         {/* Envíos asignados */}
-        {!hideShipments && <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+        {!hideShipments && <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold text-slate-800 m-0">Envíos asignados</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-strong)] m-0">Envíos asignados</h3>
             {!readOnly && currentStatus === "en_carga" && currentShipments.length > 1 && (
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={() => setShowUnassignAllConfirm(true)}
                 disabled={unassignAllBusy || unassigning !== null}
-                className={`px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap ${
-                  unassignAllBusy || unassigning !== null
-                    ? "border-rose-200 bg-rose-100 text-rose-700 cursor-not-allowed"
-                    : "border-rose-200 bg-rose-50 text-rose-700 cursor-pointer"
-                }`}
               >
                 {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
-              </button>
+              </Button>
             )}
           </div>
           {unassignError && (
-            <div className="px-3 py-2 rounded-md mb-2 text-xs bg-rose-50 border border-rose-200 text-rose-700">{unassignError}</div>
+            <div className="px-3 py-2 rounded-md mb-2 text-xs bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]">{unassignError}</div>
           )}
           {currentShipments.length > 0 ? (
             <div className="flex flex-col gap-2">
               {currentShipments.map((trackingId) => (
                 <div
                   key={trackingId}
-                  className="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between"
+                  className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-3 flex items-center justify-between"
                 >
                   <div>
-                    <p className="text-base font-bold text-slate-900 m-0">
+                    <p className="text-base font-bold text-[var(--text-primary)] m-0">
                       {trackingId}
                     </p>
-                    <p className="text-xs text-slate-600 mt-0.5">
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                       ID de seguimiento
                     </p>
                   </div>
                   <div className="flex gap-2 items-center">
                     <Link
                       to={`/shipments/${trackingId}`}
-                      className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[#1e3a5f] no-underline"
+                      className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-[var(--brand-strong)] no-underline"
                       onClick={onClose}
                     >
                       Ver
@@ -1159,21 +1147,21 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               ))}
             </div>
           ) : (
-            <div className="text-center py-5 text-slate-600">
+            <div className="text-center py-5 text-[var(--text-secondary)]">
               <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
               <p className="text-sm m-0">Sin envíos asignados</p>
-              <p className="text-xs mt-1">Este vehículo no tiene envíos cargados</p>
+              <p className="text-xs mt-1 text-[var(--text-muted)]">Este vehículo no tiene envíos cargados</p>
             </div>
           )}
         </div>}
 
         {/* QR del vehículo */}
         {qrBase64 && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-4 text-center">
-            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-3">Código QR del vehículo</h3>
-            <p className="text-xs text-slate-600 m-0 mb-3">
+          <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-4 mt-4 text-center">
+            <h3 className="text-sm font-semibold text-[var(--text-strong)] m-0 mb-3">Código QR del vehículo</h3>
+            <p className="text-xs text-[var(--text-secondary)] m-0 mb-3">
               El chofer escanea este QR para reclamar el viaje del día.
             </p>
             <img
@@ -1181,63 +1169,37 @@ export function VehicleDetailModal({ vehicle, onClose, onRefresh, readOnly, canA
               alt={`QR ${vehicle.license_plate}`}
               className="w-40 h-40 block mx-auto [image-rendering:pixelated]"
             />
-            <p className="text-[11px] text-slate-400 mt-2.5 font-mono">{vehicle.license_plate}</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-2.5 font-mono">{vehicle.license_plate}</p>
           </div>
         )}
-      </div>
-    </div>
-    {showUnassignAllConfirm && (
-      <div
-        className="fixed inset-0 bg-black/55 z-[1100] flex items-center justify-center p-4"
-        onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
-      >
-        <div
-          className="bg-white rounded-xl p-6 max-w-[440px] w-full shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold m-0">Desasignar todos los envíos</h2>
-            <button
-              onClick={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}
-              className={`bg-transparent border-none text-2xl ${unassignAllBusy ? "cursor-not-allowed" : "cursor-pointer"} text-slate-600`}
-            >
-              ✕
-            </button>
-          </div>
-          <p className="text-sm text-slate-800 m-0 mb-3">
-            ¿Confirmás desasignar los <strong>{currentShipments.length} envíos</strong> cargados en el vehículo <strong>{vehicle.license_plate}</strong>?
-          </p>
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-xs text-slate-800">
-            <p className="m-0 mb-1.5">
-              • Los envíos volverán al estado <strong>En sucursal</strong>.
-            </p>
-            <p className="m-0">
-              • El vehículo quedará <strong>Disponible</strong>.
-            </p>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => setShowUnassignAllConfirm(false)}
-              disabled={unassignAllBusy}
-              className={`px-4 py-2 rounded-md border font-medium text-sm ${
-                unassignAllBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-              } border-slate-200 bg-white text-slate-800`}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleUnassignAll}
-              disabled={unassignAllBusy}
-              className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm ${
-                unassignAllBusy ? "opacity-70 cursor-not-allowed bg-slate-400" : "cursor-pointer bg-rose-600"
-              }`}
-            >
-              {unassignAllBusy ? "Desasignando…" : "Desasignar todos"}
-            </button>
-          </div>
         </div>
-      </div>
+      </DialogContent>
+      {showUnassignAllConfirm && (
+      <Dialog open onClose={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}>
+        <DialogContent className="max-w-[440px]">
+          <DialogHeader onClose={() => !unassignAllBusy && setShowUnassignAllConfirm(false)}>
+            <DialogTitle>Desasignar todos los envíos</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <p className="text-sm text-[var(--text-strong)] m-0 mb-3">
+              ¿Confirmás desasignar los <strong>{currentShipments.length} envíos</strong> cargados en el vehículo <strong>{vehicle.license_plate}</strong>?
+            </p>
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border)] rounded-lg p-3 mb-4 text-xs text-[var(--text-strong)]">
+              <p className="m-0 mb-1.5">• Los envíos volverán al estado <strong>En sucursal</strong>.</p>
+              <p className="m-0">• El vehículo quedará <strong>Disponible</strong>.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUnassignAllConfirm(false)} disabled={unassignAllBusy}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleUnassignAll} disabled={unassignAllBusy}>
+              {unassignAllBusy ? "Desasignando…" : "Confirmar desasignación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     )}
-    </>
+    </Dialog>
   );
 }
