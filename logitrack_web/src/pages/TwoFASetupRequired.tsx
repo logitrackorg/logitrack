@@ -1,39 +1,75 @@
 // src/pages/TwoFASetupRequired.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { twoFAApi } from '../api/two-fa';
 import { useAuth } from '../context/AuthContext';
 import type { TwoFASetupResponse } from '../types/two-fa';
 
 export const TwoFASetupRequired: React.FC = () => {
-  const [step, setStep] = useState<'intro' | 'scan' | 'confirm' | 'success'>('intro');
+  const [step, setStep] = useState<'init' | 'scan' | 'confirm' | 'success'>('init');
   const [setupData, setSetupData] = useState<TwoFASetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [attempts, setAttempts] = useState(0); // ← NUEVO
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null); // ← NUEVO
-  const [cooldownSeconds, setCooldownSeconds] = useState(0); // ← NUEVO
+  
+  // 🔒 Sistema de intentos y cooldown
+  const [attempts, setAttempts] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const navigate = useNavigate();
-  const location = useLocation();
-  const { setToken, setUser } = useAuth();
+  const { setSession, logout } = useAuth();
 
-  const message = location.state?.message || "La autenticación de doble factor es obligatoria";
-
-  // ✨ NUEVO: Proteger contra refresh
+  // 🔒 VALIDACIÓN DE ACCESO
   useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      // Si ya tiene 2FA activado, no debería estar aquí
-      if (parsedUser.two_fa_enabled) {
-        navigate('/');
-      }
-    }
-  }, [navigate]);
+    console.log('🔍 Verificando acceso a setup 2FA...');
+    
+    const isPending = sessionStorage.getItem("pending_2fa_setup");
+    const tempToken = sessionStorage.getItem("temp_token");
+    const tempUser = sessionStorage.getItem("temp_user");
 
-  // ✨ NUEVO: Countdown del cooldown
+    // Si NO hay flag de setup pendiente → redirect a login
+    if (isPending !== "true" || !tempToken || !tempUser) {
+      console.log('❌ Acceso no autorizado - redirigiendo a login');
+      sessionStorage.clear();
+      logout();
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    try {
+      const user = JSON.parse(tempUser);
+      console.log('✅ Acceso válido para:', user.username);
+      
+      // Verificar que el usuario realmente necesita 2FA
+      const requiresRoles = ['admin', 'manager', 'supervisor', 'operator'];
+      if (!requiresRoles.includes(user.role)) {
+        console.log('❌ Usuario no requiere 2FA');
+        sessionStorage.clear();
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      // Si ya tiene 2FA activado, completar el login
+      if (user.two_fa_enabled) {
+        console.log('✅ Usuario ya tiene 2FA - completando login');
+        sessionStorage.clear();
+        setSession(tempToken, user);
+        navigate('/', { replace: true });
+        return;
+      }
+
+      console.log('✅ Usuario puede configurar 2FA');
+      
+    } catch (e) {
+      console.error('❌ Error validando acceso:', e);
+      sessionStorage.clear();
+      logout();
+      navigate('/login', { replace: true });
+    }
+  }, [navigate, logout, setSession]);
+
+  // ⏱️ Countdown del cooldown
   useEffect(() => {
     if (!cooldownUntil) return;
 
@@ -53,20 +89,46 @@ export const TwoFASetupRequired: React.FC = () => {
     return () => clearInterval(interval);
   }, [cooldownUntil]);
 
+  // 🚫 Prevenir recarga accidental
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (step !== 'success') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [step]);
+
   const handleInitSetup = async () => {
     setLoading(true);
     setError('');
+    
     try {
+      console.log('🔵 Generando QR...');
+      
+      // Usar el token temporal para la API
+      const tempToken = sessionStorage.getItem("temp_token");
+      if (!tempToken) {
+        throw new Error('Token no disponible');
+      }
+
       const data = await twoFAApi.setup();
+      console.log('✅ QR generado');
       setSetupData(data);
       setStep('scan');
-      setAttempts(0); // Reset intentos al generar nuevo QR
+      
+      // Reset intentos al generar nuevo QR
+      setAttempts(0);
       setCooldownUntil(null);
+      
     } catch (err: unknown) {
+      console.error('❌ Error generando QR:', err);
       const errorMsg = (err as { response?: { data?: { error?: string } } })
-        ?.response?.data?.error || 'Error de verificación';
+        ?.response?.data?.error || 'Error al iniciar configuración';
       setError(errorMsg);
-      setCode('');
     } finally {
       setLoading(false);
     }
@@ -78,7 +140,7 @@ export const TwoFASetupRequired: React.FC = () => {
       return;
     }
 
-
+    // Verificar cooldown
     if (cooldownUntil && Date.now() < cooldownUntil) {
       setError(`Demasiados intentos. Espera ${cooldownSeconds} segundos.`);
       return;
@@ -88,37 +150,49 @@ export const TwoFASetupRequired: React.FC = () => {
     setError('');
 
     try {
+      console.log('🔵 Confirmando código...');
       await twoFAApi.confirm({ code });
+      console.log('✅ 2FA activado exitosamente');
 
+      // Obtener datos del usuario
+      const tempToken = sessionStorage.getItem("temp_token");
+      const tempUserStr = sessionStorage.getItem("temp_user");
 
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        user.two_fa_enabled = true;
-        user.two_fa_enrolled_at = new Date().toISOString();
-        localStorage.setItem('user', JSON.stringify(user));
-
-        const token = localStorage.getItem('token');
-        if (token) {
-          setToken(token);
-          setUser(user);
-        }
+      if (!tempToken || !tempUserStr) {
+        throw new Error('Datos de sesión no disponibles');
       }
 
+      const user = JSON.parse(tempUserStr);
+      user.two_fa_enabled = true;
+      user.two_fa_enrolled_at = new Date().toISOString();
+
+      // 🧹 LIMPIAR SESSION STORAGE
+      sessionStorage.clear();
+
+      // ✅ GUARDAR EN CONTEXT Y LOCALSTORAGE
+      setSession(tempToken, user);
+
       setStep('success');
+      
+      // Reset intentos en caso de éxito
       setAttempts(0);
       setCooldownUntil(null);
 
       setTimeout(() => {
-        navigate('/');
+        console.log('✅ Redirigiendo al dashboard');
+        navigate('/', { replace: true });
       }, 2000);
-    } catch {
-
+      
+    } catch (err: unknown) {
+      console.error('❌ Error confirmando código:', err);
+      
+      // Incrementar intentos
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
 
       if (newAttempts >= 3) {
-        const cooldownTime = Date.now() + 60000; // 60 segundos
+        // Activar cooldown de 60 segundos
+        const cooldownTime = Date.now() + 60000;
         setCooldownUntil(cooldownTime);
         setCooldownSeconds(60);
         setError(`Código incorrecto. Has fallado ${newAttempts} veces. Espera 60 segundos antes de reintentar.`);
@@ -132,18 +206,28 @@ export const TwoFASetupRequired: React.FC = () => {
     }
   };
 
+  const handleCancel = () => {
+    console.log('🔵 Usuario canceló setup');
+    sessionStorage.clear();
+    logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-slate-900 flex items-center justify-center p-6">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden p-8">
 
-        {step === 'intro' && (
-          <div className="p-8">
+        {/* Paso 1: Iniciar */}
+        {step === 'init' && (
+          <div className="space-y-4">
             <div className="text-center mb-6">
               <div className="text-6xl mb-4">🔐</div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
                 Seguridad Requerida
               </h1>
-              <p className="text-gray-600">{message}</p>
+              <p className="text-gray-600">
+                Debes activar la autenticación de doble factor para continuar
+              </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
@@ -170,17 +254,26 @@ export const TwoFASetupRequired: React.FC = () => {
             </button>
 
             <button
-              onClick={() => navigate('/login')}
+              onClick={handleCancel}
               className="w-full text-gray-600 hover:text-gray-800 text-sm"
             >
               ← Volver al login
             </button>
+
+            {error && (
+              <div className="bg-red-50 text-red-700 p-3 rounded text-sm mt-4">
+                {error}
+              </div>
+            )}
           </div>
         )}
 
+        {/* Paso 2: Escanear QR */}
         {step === 'scan' && setupData && (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold text-center mb-6">Escanea este Código QR</h2>
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-center mb-6">
+              Escanea este Código QR
+            </h2>
 
             <div className="flex justify-center mb-6">
               <img
@@ -191,7 +284,9 @@ export const TwoFASetupRequired: React.FC = () => {
             </div>
 
             <div className="bg-gray-50 p-4 rounded border mb-6">
-              <p className="text-sm font-medium mb-2">⚠️ Clave de respaldo (anótala):</p>
+              <p className="text-sm font-medium mb-2">
+                ⚠️ Clave de respaldo (anótala):
+              </p>
               <code className="block bg-white p-2 rounded border text-sm break-all">
                 {setupData.secret}
               </code>
@@ -199,18 +294,28 @@ export const TwoFASetupRequired: React.FC = () => {
 
             <button
               onClick={() => setStep('confirm')}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 mb-2"
             >
               Ya escaneé el código →
+            </button>
+
+            <button
+              onClick={handleCancel}
+              className="w-full text-gray-600 hover:text-gray-800 text-sm"
+            >
+              ← Cancelar
             </button>
           </div>
         )}
 
+        {/* Paso 3: Confirmar código */}
         {step === 'confirm' && (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold text-center mb-6">Ingresa el Código</h2>
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-center mb-6">
+              Ingresa el Código
+            </h2>
 
-
+            {/* Indicador de intentos */}
             {attempts > 0 && !cooldownUntil && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                 <p className="text-sm text-yellow-800 text-center">
@@ -219,7 +324,7 @@ export const TwoFASetupRequired: React.FC = () => {
               </div>
             )}
 
-
+            {/* Indicador de cooldown */}
             {cooldownUntil && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                 <p className="text-sm text-red-800 text-center font-semibold">
@@ -237,10 +342,11 @@ export const TwoFASetupRequired: React.FC = () => {
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
               disabled={!!cooldownUntil}
-              className={`w-full text-center text-4xl tracking-widest border-2 rounded-lg p-4 mb-4 focus:border-blue-500 focus:outline-none ${cooldownUntil ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+              className={`w-full text-center text-4xl tracking-widest border-2 rounded-lg p-4 mb-4 focus:border-blue-500 focus:outline-none ${
+                cooldownUntil ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
               maxLength={6}
-              autoFocus={!cooldownUntil}
+              autoFocus
             />
 
             {error && (
@@ -252,15 +358,24 @@ export const TwoFASetupRequired: React.FC = () => {
             <button
               onClick={handleConfirm}
               disabled={loading || code.length !== 6 || !!cooldownUntil}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 mb-2"
             >
               {loading ? 'Verificando...' : 'Confirmar Activación'}
+            </button>
+
+            <button
+              onClick={handleCancel}
+              disabled={loading}
+              className="w-full text-gray-600 hover:text-gray-800 text-sm"
+            >
+              ← Cancelar
             </button>
           </div>
         )}
 
+        {/* Paso 4: Éxito */}
         {step === 'success' && (
-          <div className="p-8 text-center">
+          <div className="text-center">
             <div className="text-6xl mb-4">✅</div>
             <h2 className="text-2xl font-bold mb-2">¡Listo!</h2>
             <p className="text-gray-600 mb-4">

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-do
 import { ToastContainer } from "./components/Toast";
 import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -401,10 +402,12 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/track" element={<PublicTracking />} />
-            <Route path="*" element={<AppRoutes />} />
-          </Routes>
+          <TwoFAGuard>
+            <Routes>
+              <Route path="/track" element={<PublicTracking />} />
+              <Route path="*" element={<AppRoutes />} />
+            </Routes>
+          </TwoFAGuard>
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

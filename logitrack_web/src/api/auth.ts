@@ -5,7 +5,14 @@ export const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    // Primero intentar obtener el token de localStorage
+    let token = localStorage.getItem("token");
+
+    // Si no hay, intentar obtener el temporal de sessionStorage
+    if (!token) {
+      token = sessionStorage.getItem("temp_token");
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
