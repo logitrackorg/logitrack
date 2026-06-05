@@ -28,14 +28,14 @@ export function ReportExport({ onExportPDF, onExportExcel, loading }: ReportExpo
           <div className="absolute right-0 top-full mt-1 z-20 w-36 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden origin-top-right transition-all duration-150">
             <button
               onClick={() => { setOpen(false); onExportPDF(); }}
-              className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-blue-50"
+              className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:bg-blue-50"
               aria-label="Exportar como PDF"
             >
               PDF
             </button>
             <button
               onClick={() => { setOpen(false); onExportExcel(); }}
-              className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:bg-blue-50"
+              className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 text-left cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 focus-visible:bg-blue-50"
               aria-label="Exportar como Excel"
             >
               Excel

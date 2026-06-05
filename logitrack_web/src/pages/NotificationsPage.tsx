@@ -5,6 +5,25 @@ import { notificationApi, fetchServerClockOffsetMs, type Notification } from "..
 
 const PAGE_SIZE = 20;
 
+const NOTIF_ACCENT: Record<string, string> = {
+  destination_arrival: "emerald-400",
+  return_arrival: "orange-400",
+  return_started: "orange-500",
+  return_completed: "amber-500",
+  sla_risk: "red-500",
+  sla_expired: "red-700",
+  min_fill_reached: "violet-600",
+  route_assigned: "sky-500",
+  route_reassigned: "amber-500",
+  trip_driver_assigned: "emerald-500",
+  chatbot_rejected_by_recipient: "orange-500",
+  chatbot_cancelled_by_sender: "red-500",
+};
+
+function accentClass(type: string, prefix: "text" | "bg"): string {
+  return `${prefix}-${NOTIF_ACCENT[type] ?? "blue-500"}`;
+}
+
 function relativeTime(dateStr: string, clockOffsetMs = 0): string {
   const diff = (Date.now() + clockOffsetMs) - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -26,37 +45,22 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function typeAccent(type: string): string {
-  if (type === "destination_arrival") return "#34d399";
-  if (type === "return_arrival")      return "#fb923c";
-  if (type === "return_started")      return "#f97316";
-  if (type === "return_completed")    return "#f59e0b";
-  if (type === "sla_risk")            return "#ef4444";
-  if (type === "sla_expired")         return "#b91c1c";
-  if (type === "min_fill_reached")    return "#7c3aed";
-  if (type === "route_assigned")        return "#0ea5e9";
-  if (type === "route_reassigned")      return "#f59e0b";
-  if (type === "trip_driver_assigned")          return "#10b981";
-  if (type === "chatbot_rejected_by_recipient") return "#f97316";
-  if (type === "chatbot_cancelled_by_sender")   return "#ef4444";
-  return "#3b82f6";
-}
-
 function NotifIcon({ type }: { type: string }) {
-  if (type === "shipment_received")             return <Package      size={18} color="#60a5fa" />;
-  if (type === "destination_arrival")           return <Building2    size={18} color="#34d399" />;
-  if (type === "return_arrival")                return <RotateCcw    size={18} color="#fb923c" />;
-  if (type === "return_started")                return <RotateCcw    size={18} color="#f97316" />;
-  if (type === "return_completed")              return <PackageCheck size={18} color="#f59e0b" />;
-  if (type === "sla_risk")                      return <AlertTriangle size={18} color="#ef4444" />;
-  if (type === "sla_expired")                   return <AlertOctagon size={18} color="#b91c1c" />;
-  if (type === "min_fill_reached")              return <Truck        size={18} color="#7c3aed" />;
-  if (type === "route_assigned")                return <MapPin       size={18} color="#0ea5e9" />;
-  if (type === "route_reassigned")              return <MapPin       size={18} color="#f59e0b" />;
-  if (type === "trip_driver_assigned")          return <UserCheck    size={18} color="#10b981" />;
-  if (type === "chatbot_rejected_by_recipient") return <Bot          size={18} color="#f97316" />;
-  if (type === "chatbot_cancelled_by_sender")   return <Bot          size={18} color="#ef4444" />;
-  return <Bell size={18} color="#94a3b8" />;
+  const cls = accentClass(type, "text");
+  if (type === "shipment_received")             return <Package      size={18} className="text-blue-400" />;
+  if (type === "destination_arrival")           return <Building2    size={18} className={cls} />;
+  if (type === "return_arrival")                return <RotateCcw    size={18} className={cls} />;
+  if (type === "return_started")                return <RotateCcw    size={18} className={cls} />;
+  if (type === "return_completed")              return <PackageCheck size={18} className={cls} />;
+  if (type === "sla_risk")                      return <AlertTriangle size={18} className={cls} />;
+  if (type === "sla_expired")                   return <AlertOctagon size={18} className={cls} />;
+  if (type === "min_fill_reached")              return <Truck        size={18} className={cls} />;
+  if (type === "route_assigned")                return <MapPin       size={18} className={cls} />;
+  if (type === "route_reassigned")              return <MapPin       size={18} className={cls} />;
+  if (type === "trip_driver_assigned")          return <UserCheck    size={18} className={cls} />;
+  if (type === "chatbot_rejected_by_recipient") return <Bot          size={18} className={cls} />;
+  if (type === "chatbot_cancelled_by_sender")   return <Bot          size={18} className={cls} />;
+  return <Bell size={18} className="text-slate-400" />;
 }
 
 function parseSLAEta(body: string): Date | null {
@@ -80,6 +84,21 @@ function slaCountdown(eta: Date, clockOffsetMs = 0): string {
   if (hrs < 24) return `vence en ${hrs} h`;
   const days = Math.floor(hrs / 24);
   return `vence en ${days} d`;
+}
+
+function notifRowBg(n: Notification): string {
+  if (n.read_at) return "bg-white";
+  if (n.type === "sla_risk" || n.type === "sla_expired") return "bg-red-50";
+  if (n.type === "return_completed" || n.type === "return_arrival") return "bg-amber-50";
+  if (n.type === "min_fill_reached") return "bg-violet-50";
+  return "bg-blue-50";
+}
+
+function notifRowBorder(n: Notification): string {
+  if (n.read_at) return "border-l-transparent";
+  if (n.type === "return_completed" || n.type === "return_arrival") return "border-l-amber-500";
+  if (n.type === "min_fill_reached") return "border-l-violet-500";
+  return "border-l-transparent";
 }
 
 export function NotificationsPage() {
@@ -185,36 +204,15 @@ export function NotificationsPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 16px" }}>
+    <div className="mx-auto max-w-[860px] px-4 py-8">
       {/* Page title */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 24,
-          flexWrap: "wrap",
-          gap: 12,
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text-heading)" }}>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="m-0 text-xl font-bold text-slate-900">
           Notificaciones
         </h1>
         <button
           onClick={handleMarkAllRead}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "#1e3a5f",
-            color: "#e2e8f0",
-            border: "none",
-            borderRadius: 7,
-            padding: "7px 14px",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 500,
-          }}
+          className="inline-flex items-center gap-1.5 bg-[#1e3a5f] text-slate-200 border-none rounded-lg px-3.5 py-1.5 cursor-pointer text-xs font-medium"
         >
           <CheckCheck size={15} />
           Marcar todas como leídas
@@ -222,17 +220,9 @@ export function NotificationsPage() {
       </div>
 
       {/* Filters */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          marginBottom: 20,
-          flexWrap: "wrap",
-          alignItems: "flex-end",
-        }}
-      >
-        <div style={{ flex: "1 1 200px", minWidth: 160 }}>
-          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
+      <div className="flex gap-2.5 mb-5 flex-wrap items-end">
+        <div className="flex-[1_1_200px] min-w-[160px]">
+          <label className="block text-xs text-slate-500 mb-1">
             Buscar
           </label>
           <input
@@ -241,65 +231,34 @@ export function NotificationsPage() {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Título o contenido..."
-            style={{
-              width: "100%",
-              padding: "7px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              fontSize: 13,
-              boxSizing: "border-box",
-            }}
+            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
           />
         </div>
-        <div style={{ flex: "0 1 160px" }}>
-          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
+        <div className="flex-[0_1_160px]">
+          <label className="block text-xs text-slate-500 mb-1">
             Desde
           </label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "7px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              fontSize: 13,
-              boxSizing: "border-box",
-            }}
+            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
           />
         </div>
-        <div style={{ flex: "0 1 160px" }}>
-          <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
+        <div className="flex-[0_1_160px]">
+          <label className="block text-xs text-slate-500 mb-1">
             Hasta
           </label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "7px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              fontSize: 13,
-              boxSizing: "border-box",
-            }}
+            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
           />
         </div>
         <button
           onClick={handleSearch}
-          style={{
-            padding: "7px 18px",
-            background: "#1e3a5f",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            alignSelf: "flex-end",
-          }}
+          className="px-4.5 py-1.5 bg-[#1e3a5f] text-white border-none rounded-md cursor-pointer text-xs font-semibold self-end"
         >
           Buscar
         </button>
@@ -307,82 +266,40 @@ export function NotificationsPage() {
 
       {/* List */}
       {loading ? (
-        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 40 }}>Cargando...</div>
+        <div className="text-center text-slate-500 py-10">Cargando...</div>
       ) : notifications.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            color: "var(--text-muted)",
-            padding: 48,
-            background: "var(--bg-page)",
-            borderRadius: 10,
-            border: "1px dashed var(--border)",
-          }}
-        >
-          <Bell size={36} color="var(--text-faint)" style={{ marginBottom: 12 }} />
-          <div style={{ fontSize: 14 }}>No hay notificaciones</div>
+        <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-200">
+          <Bell size={36} className="text-slate-300 mb-3" />
+          <div className="text-sm">No hay notificaciones</div>
         </div>
       ) : (
-        <div
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            overflow: "hidden",
-            background: "var(--bg-card)",
-          }}
-        >
+        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
           {notifications.map((n, idx) => (
             <div
               key={n.id}
               onClick={() => handleItemClick(n)}
-              style={{
-                display: "flex",
-                gap: 14,
-                alignItems: "flex-start",
-                padding: "14px 20px",
-                borderBottom: idx < notifications.length - 1 ? "1px solid var(--bg-inset)" : "none",
-                background: n.read_at ? "var(--bg-card)" : (n.type === "sla_risk" || n.type === "sla_expired") ? "var(--danger-bg)" : (n.type === "return_completed" || n.type === "return_arrival") ? "var(--warn-bg)" : n.type === "min_fill_reached" ? "var(--purple-bg)" : "var(--brand-tint)",
-                borderLeft: (n.type === "return_completed" || n.type === "return_arrival") && !n.read_at ? "3px solid var(--warn)" : n.type === "min_fill_reached" && !n.read_at ? "3px solid var(--purple)" : "3px solid transparent",
-                cursor: "pointer",
-                transition: "background 0.15s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = n.read_at ? "var(--bg-card)" : (n.type === "sla_risk" || n.type === "sla_expired") ? "var(--danger-bg)" : (n.type === "return_completed" || n.type === "return_arrival") ? "var(--warn-bg)" : n.type === "min_fill_reached" ? "var(--purple-bg)" : "var(--brand-tint)")
-              }
+              className={`flex gap-3.5 items-start px-5 py-3.5 ${idx < notifications.length - 1 ? "border-b border-slate-100" : ""} ${notifRowBg(n)} border-l-[3px] ${notifRowBorder(n)} cursor-pointer transition-colors duration-150 hover:bg-blue-50`}
             >
-              <div style={{ marginTop: 3, flexShrink: 0 }}>
+              <div className="mt-0.5 shrink-0">
                 <NotifIcon type={n.type} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                    gap: 12,
-                    flexWrap: "wrap",
-                  }}
-                >
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-baseline gap-3 flex-wrap">
                   <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: n.read_at ? 400 : 600,
-                      color: "var(--text-primary)",
-                    }}
+                    className={`text-sm ${n.read_at ? "font-normal" : "font-semibold"} text-slate-900`}
                   >
                     {n.title}
                   </span>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
-                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                  <div className="flex gap-2.5 items-center shrink-0">
+                    <span className="text-slate-400 text-xs">
                       {relativeTime(n.created_at, clockOffsetMs)}
                     </span>
-                    <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+                    <span className="text-slate-300 text-xs">
                       {formatDate(n.created_at)}
                     </span>
                   </div>
                 </div>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 3 }}>
+                <div className="text-xs text-slate-500 mt-0.5">
                   {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
                 </div>
                 {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
@@ -392,39 +309,32 @@ export function NotificationsPage() {
                   const label = slaCountdown(eta, clockOffsetMs);
                   if (label === "venció") return null; // sla_expired ya cubre este estado
                   return (
-                    <div style={{ fontSize: 12, marginTop: 3, fontWeight: 600, color: typeAccent(n.type) }}>
+                    <div className={`text-xs mt-0.5 font-semibold ${accentClass(n.type, "text")}`}>
                       {label}
                     </div>
                   );
                 })()}
                 {/* Label para sla_expired */}
                 {n.type === "sla_expired" && (
-                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: typeAccent(n.type) }}>
+                  <div className={`text-xs mt-0.5 font-bold ${accentClass(n.type, "text")}`}>
                     SLA vencido
                   </div>
                 )}
                 {/* Acción requerida para return_completed y return_arrival — CA-05 */}
                 {(n.type === "return_completed" || n.type === "return_arrival") && (
-                  <div style={{ fontSize: 12, marginTop: 3, fontWeight: 700, color: "var(--warn)" }}>
+                  <div className="text-xs mt-0.5 font-bold text-amber-500">
                     Acción requerida: coordinar entrega con remitente
                   </div>
                 )}
                 {n.resource_id && (
-                  <div style={{ fontSize: 11, color: "var(--info)", marginTop: 4 }}>
+                  <div className="text-xs text-blue-500 mt-1">
                     #{n.resource_id}
                   </div>
                 )}
               </div>
               {!n.read_at && (
                 <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: typeAccent(n.type),
-                    flexShrink: 0,
-                    marginTop: 7,
-                  }}
+                  className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${accentClass(n.type, "bg")}`}
                 />
               )}
             </div>
@@ -434,47 +344,30 @@ export function NotificationsPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 20,
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+        <div className="flex justify-between items-center mt-5 flex-wrap gap-2">
+          <span className="text-xs text-slate-500">
             {total} resultado{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}
           </span>
-          <div style={{ display: "flex", gap: 6 }}>
+          <div className="flex gap-1.5">
             <button
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "1px solid var(--border)",
-                background: offset === 0 ? "var(--bg-page)" : "var(--bg-card)",
-                color: offset === 0 ? "var(--text-muted)" : "var(--text-heading)",
-                cursor: offset === 0 ? "not-allowed" : "pointer",
-                fontSize: 13,
-              }}
+              className={`px-3.5 py-1.5 rounded-md border border-slate-200 text-xs ${
+                offset === 0
+                  ? "bg-slate-50 text-slate-400 cursor-not-allowed"
+                  : "bg-white text-slate-900 cursor-pointer"
+              }`}
             >
               ← Anterior
             </button>
             <button
               disabled={offset + PAGE_SIZE >= total}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "1px solid var(--border)",
-                background: offset + PAGE_SIZE >= total ? "var(--bg-page)" : "var(--bg-card)",
-                color: offset + PAGE_SIZE >= total ? "var(--text-muted)" : "var(--text-heading)",
-                cursor: offset + PAGE_SIZE >= total ? "not-allowed" : "pointer",
-                fontSize: 13,
-              }}
+              className={`px-3.5 py-1.5 rounded-md border border-slate-200 text-xs ${
+                offset + PAGE_SIZE >= total
+                  ? "bg-slate-50 text-slate-400 cursor-not-allowed"
+                  : "bg-white text-slate-900 cursor-pointer"
+              }`}
             >
               Siguiente →
             </button>

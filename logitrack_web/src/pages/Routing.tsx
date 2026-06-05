@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { branchApi, branchLabelById, type Branch } from "../api/branches";
 
@@ -723,32 +724,20 @@ export function Routing({ mode }: RoutingProps = {}) {
         actions={
           <div className="flex gap-2">
             {isDirty && (
-              <button
-                onClick={handleDiscard}
-                disabled={applying}
-                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-              >
+              <Button variant="outline" onClick={handleDiscard} disabled={applying}>
                 Descartar cambios
-              </button>
+              </Button>
             )}
             {canRegenerate && !isForecast && (
-              <button
-                onClick={handleRegenerate}
-                disabled={loading || applying}
-                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors flex items-center gap-2"
-              >
+              <Button variant="outline" onClick={handleRegenerate} disabled={loading || applying}>
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                 Regenerar plan
-              </button>
+              </Button>
             )}
             {canApply && !isForecast && (
-              <button
-                onClick={handleApply}
-                disabled={applying || loading || !plan}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-              >
+              <Button size="lg" onClick={handleApply} disabled={applying || loading || !plan}>
                 {applying ? "Aplicando…" : "Aplicar plan"}
-              </button>
+              </Button>
             )}
           </div>
         }
@@ -773,7 +762,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 onClick={() => void loadHorizonDay(idx)}
                 className={`h-9 px-4 rounded-lg text-sm font-semibold transition-colors cursor-pointer border ${
                   isSelected
-                    ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                    ? "bg-blue-600 text-white border-blue-600"
                     : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                 }`}
               >
@@ -812,7 +801,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 const bp = globalPlan.branch_plans.find((b) => b.branch_id === newBranch);
                 if (bp) void applyBranchPlan(bp.plan);
               }}
-              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               {globalPlan.branch_plans.map((bp) => (
                 <option key={bp.branch_id} value={bp.branch_id}>
@@ -858,13 +847,9 @@ export function Routing({ mode }: RoutingProps = {}) {
               : " Contactá a un manager o admin para generarlo manualmente."}
           </p>
           {canRegenerate && !isForecast && (
-            <button
-              onClick={handleRegenerate}
-              disabled={!branchId}
-              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-            >
+            <Button size="lg" onClick={handleRegenerate} disabled={!branchId}>
               Generar plan ahora
-            </button>
+            </Button>
           )}
         </Card>
       )}
@@ -1221,7 +1206,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                   <select
                     value={addStopBranchId}
                     onChange={(e) => setAddStopBranchId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                    className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="">— Elegí una sucursal —</option>
                     {candidateBranches.map((b) => (
@@ -1272,19 +1257,12 @@ export function Routing({ mode }: RoutingProps = {}) {
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
-                <button
-                  onClick={closeAddStop}
-                  className="h-9 px-3 rounded-md text-sm text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
+                <Button variant="ghost" onClick={closeAddStop}>
                   Cancelar
-                </button>
-                <button
-                  onClick={saveAddStop}
-                  disabled={!addStopBranchId || addStopShipments.size === 0}
-                  className="h-9 px-4 rounded-md text-sm font-semibold bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white cursor-pointer"
-                >
+                </Button>
+                <Button onClick={saveAddStop} disabled={!addStopBranchId || addStopShipments.size === 0}>
                   Agregar parada
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1319,7 +1297,7 @@ function TabButton({
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 -mb-px border-b-2 text-sm font-semibold transition-colors cursor-pointer ${
         active
-          ? "border-[#1e3a5f] text-[#1e3a5f]"
+          ? "border-blue-600 text-blue-600"
           : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
       }`}
     >
@@ -1328,7 +1306,7 @@ function TabButton({
       {badge > 0 && (
         <span
           className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold tabular-nums ${
-            active ? "bg-[#1e3a5f] text-white" : "bg-slate-200 text-slate-700"
+            active ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"
           }`}
         >
           {badge}
@@ -1762,13 +1740,9 @@ function DriverRouteCard({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {hasPendingShipments(assignment) && onEditStops && (
-            <button
-              onClick={onEditStops}
-              disabled={applying}
-              className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
-            >
+            <Button size="sm" onClick={onEditStops} disabled={applying}>
               Aplicar
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -2050,13 +2024,9 @@ function InterBranchSection({
                     {DISPATCH_RULE_LABELS[a.rule]}
                   </span>
                   {!a.in_transit && hasPendingShipments(a) && onApplyVehicle && (
-                    <button
-                      onClick={() => onApplyVehicle(a.vehicle_id)}
-                      disabled={applying}
-                      className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
-                    >
-                      Aplicar
-                    </button>
+                  <Button size="sm" onClick={() => onApplyVehicle(a.vehicle_id)} disabled={applying}>
+                    Aplicar
+                  </Button>
                   )}
                 </div>
               </div>
@@ -2229,12 +2199,9 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
               </div>
             </>
           )}
-          <button
-            onClick={onClose}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold transition-colors cursor-pointer"
-          >
+          <Button size="lg" onClick={onClose}>
             Cerrar
-          </button>
+          </Button>
         </div>
       </div>
     </div>

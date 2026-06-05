@@ -112,7 +112,7 @@ export function Gauge({
         <path
           d={arcPath(0, 180)}
           fill="none"
-          stroke="var(--gray-200, #e5e7eb)"
+          stroke="var(--gray-200, #e2e8f0)"
           strokeWidth={ARC_STROKE_WIDTH}
           strokeLinecap="round"
         />

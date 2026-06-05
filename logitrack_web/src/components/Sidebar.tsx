@@ -31,8 +31,6 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
-  SIDEBAR_RAIL_WIDTH as RAIL_WIDTH,
-  SIDEBAR_EXPANDED_WIDTH as EXPANDED_WIDTH,
   SIDEBAR_HOVER_DELAY_MS as HOVER_DELAY_MS,
   SIDEBAR_PINNED_STORAGE_KEY,
   SIDEBAR_PINNED_EVENT,
@@ -59,7 +57,7 @@ const SECTIONS: NavSection[] = [
     title: "Operación",
     items: [
       { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager", "admin"] },
       { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
       { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor"] },
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
@@ -139,7 +137,6 @@ export function Sidebar() {
   }, [mobileOpen]);
 
   const expanded = isMobile ? mobileOpen : pinned || hovered;
-  const width = isMobile ? EXPANDED_WIDTH : expanded ? EXPANDED_WIDTH : RAIL_WIDTH;
 
   const visibleSections = useMemo(() => {
     if (!user) return [];
@@ -171,13 +168,7 @@ export function Sidebar() {
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="Abrir menú"
-          style={{
-            position: "fixed", top: 10, left: 10, zIndex: 90,
-            width: 40, height: 40, borderRadius: 8,
-            background: "#1e3a5f", color: "#fff", border: "none",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          }}
+          className="fixed top-2.5 left-2.5 z-[90] w-10 h-10 rounded-lg bg-[var(--sidebar-bg)] text-white flex items-center justify-center cursor-pointer shadow-md border-0"
         >
           <Menu size={20} />
         </button>
@@ -187,10 +178,7 @@ export function Sidebar() {
       {isMobile && mobileOpen && (
         <div
           onClick={closeMobile}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-            zIndex: 95,
-          }}
+          className="fixed inset-0 bg-black/50 z-[95]"
         />
       )}
 
@@ -199,44 +187,22 @@ export function Sidebar() {
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         aria-expanded={expanded}
-        style={{
-          position: "fixed",
-          top: 0, left: 0, bottom: 0,
-          width,
-          background: "var(--sidebar-bg)",
-          color: "#cbd5e1",
-          display: "flex",
-          flexDirection: "column",
-          borderRight: "1px solid var(--sidebar-border)",
-          transition: "width 0.18s ease, transform 0.22s ease",
-          zIndex: 100,
-          transform: isMobile && !mobileOpen ? "translateX(-100%)" : "translateX(0)",
-          overflow: "hidden",
-        }}
+        className={`fixed top-0 left-0 bottom-0 flex flex-col bg-[var(--sidebar-bg)] text-slate-300 border-r border-sidebar-border transition-[width,transform] duration-200 ease-in-out z-[100] overflow-hidden ${
+          isMobile && !mobileOpen ? "-translate-x-full" : "translate-x-0"
+        } ${expanded ? "w-60" : "w-[68px]"}`}
       >
         {/* Header / Brand */}
-        <div style={{
-          height: 56,
-          display: "flex", alignItems: "center",
-          padding: expanded ? "0 16px" : "0",
-          justifyContent: expanded ? "space-between" : "center",
-          borderBottom: "1px solid var(--sidebar-border)",
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden" }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: 800, fontSize: 14, flexShrink: 0,
-            }}>
+        <div
+          className={`h-14 flex items-center shrink-0 border-b border-sidebar-border ${
+            expanded ? "px-4 justify-between" : "px-0 justify-center"
+          }`}
+        >
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
               LT
             </div>
             {expanded && (
-              <span style={{
-                fontWeight: 800, fontSize: 15, letterSpacing: 0.5,
-                color: "#e2e8f0", whiteSpace: "nowrap",
-              }}>
+              <span className="font-extrabold text-[15px] tracking-[0.5px] text-slate-200 whitespace-nowrap">
                 LogiTrack
               </span>
             )}
@@ -245,10 +211,7 @@ export function Sidebar() {
             <button
               onClick={closeMobile}
               aria-label="Cerrar menú"
-              style={{
-                background: "none", border: "none", color: "#94a3b8",
-                cursor: "pointer", padding: 4, display: "flex",
-              }}
+              className="bg-transparent border-0 text-slate-400 cursor-pointer p-1 flex"
             >
               <X size={18} />
             </button>
@@ -256,29 +219,19 @@ export function Sidebar() {
         </div>
 
         {/* Nav sections (scrollable) */}
-        <nav style={{
-          flex: 1,
-          overflowY: "auto",
-          overflowX: "hidden",
-          padding: "12px 0",
-        }}>
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3">
           {visibleSections.map((section, idx) => (
-            <div key={section.title} style={{ marginBottom: idx === visibleSections.length - 1 ? 0 : 4 }}>
-              {/* Títulos de sección solo cuando está fijado o en mobile — en hover no, para no mover los ítems */}
+            <div
+              key={section.title}
+              className={idx === visibleSections.length - 1 ? "" : "mb-1"}
+            >
+              {/* Section titles only when pinned or mobile — not on hover to avoid shifting items */}
               {(pinned || isMobile) && expanded ? (
-                <div style={{
-                  padding: "6px 20px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                  color: "#64748b",
-                  whiteSpace: "nowrap",
-                }}>
+                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-slate-500 whitespace-nowrap">
                   {section.title}
                 </div>
               ) : idx > 0 ? (
-                <div style={{ height: 1, background: "var(--sidebar-border)", margin: "6px 14px" }} />
+                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" />
               ) : null}
               {section.items.map((item) => (
                 <SidebarLink
@@ -293,41 +246,19 @@ export function Sidebar() {
         </nav>
 
         {/* Footer: pin toggle + user + logout */}
-        <div style={{
-          borderTop: "1px solid var(--sidebar-border)",
-          padding: expanded ? "10px 12px" : "10px 0",
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}>
+        <div
+          className={`border-t border-sidebar-border shrink-0 flex flex-col gap-1.5 ${
+            expanded ? "py-2.5 px-3" : "py-2.5 px-0"
+          }`}
+        >
           {/* Pin toggle (desktop only) */}
           {!isMobile && (
             <button
               onClick={() => setPinned((v) => !v)}
               title={pinned ? "Contraer menú" : "Fijar menú expandido"}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#64748b",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: expanded ? "flex-start" : "center",
-                gap: 10,
-                padding: "8px 10px",
-                borderRadius: 8,
-                fontSize: 12,
-                transition: "background 0.15s, color 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#1e3a5f";
-                e.currentTarget.style.color = "#cbd5e1";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#64748b";
-              }}
+              className={`bg-transparent border-0 text-slate-500 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-slate-300 ${
+                expanded ? "justify-start" : "justify-center"
+              }`}
             >
               {pinned ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
               {expanded && <span>{pinned ? "Contraer" : "Fijar expandido"}</span>}
@@ -338,38 +269,21 @@ export function Sidebar() {
           <NavLink
             to="/profile"
             onClick={isMobile ? closeMobile : undefined}
-            style={{
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "8px 10px",
-              borderRadius: 8,
-              background: "#152e52",
-              color: "#cbd5e1",
-              justifyContent: expanded ? "flex-start" : "center",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1e3a5f")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#152e52")}
+            className={
+              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-blue-950 text-slate-300 transition-colors duration-150 hover:bg-[var(--sidebar-bg)] ${
+                expanded ? "justify-start" : "justify-center"
+              }`
+            }
           >
-            <div style={{
-              width: 30, height: 30, borderRadius: "50%",
-              background: "linear-gradient(135deg, #60a5fa, #2563eb)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: 700, fontSize: 12, flexShrink: 0,
-            }}>
+            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
               {user.username.slice(0, 2).toUpperCase()}
             </div>
             {expanded && (
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{
-                  fontSize: 13, fontWeight: 600, color: "#e2e8f0",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
                   {user.username}
                 </div>
-                <div style={{ fontSize: 11, color: "#64748b" }}>
+                <div className="text-[11px] text-slate-500">
                   {ROLE_LABELS[user.role] ?? user.role}
                 </div>
               </div>
@@ -380,28 +294,9 @@ export function Sidebar() {
           <button
             onClick={logout}
             title="Cerrar sesión"
-            style={{
-              background: "none",
-              border: "1px solid #1e3a5f",
-              color: "#94a3b8",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              padding: "8px 10px",
-              borderRadius: 8,
-              justifyContent: expanded ? "flex-start" : "center",
-              fontSize: 13,
-              transition: "background 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#1e3a5f";
-              e.currentTarget.style.color = "#fca5a5";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "#94a3b8";
-            }}
+            className={`bg-transparent border border-[var(--sidebar-bg)] text-slate-400 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-red-300 ${
+              expanded ? "justify-start" : "justify-center"
+            }`}
           >
             <LogOut size={16} />
             {expanded && <span>Cerrar sesión</span>}
@@ -422,36 +317,22 @@ function SidebarLink({
   onNavigate?: () => void;
 }) {
   const Icon = item.icon;
-  const [hover, setHover] = useState(false);
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onNavigate}
       title={expanded ? undefined : item.label}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={({ isActive }) => {
-        const bg = isActive ? "#1e3a5f" : hover ? "#152e52" : "transparent";
-        const color = isActive || hover ? "#e2e8f0" : "#94a3b8";
-        return {
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: expanded ? "9px 20px" : "9px 0",
-          margin: "1px 8px",
-          justifyContent: expanded ? "flex-start" : "center",
-          textDecoration: "none",
-          color,
-          background: bg,
-          borderRadius: 8,
-          fontSize: 13,
-          fontWeight: isActive ? 600 : 500,
-          position: "relative",
-          whiteSpace: "nowrap",
-          transition: "background 0.12s, color 0.12s",
-          boxShadow: isActive ? "inset 3px 0 0 #60a5fa" : "none",
-        };
+      className={({ isActive }) => {
+        const base =
+          "flex items-center gap-3 my-px mx-2 rounded-lg text-[13px] relative whitespace-nowrap transition-colors duration-[120ms]";
+        const pad = expanded
+          ? "py-2.5 px-5 justify-start"
+          : "py-2.5 px-0 justify-center";
+        if (isActive) {
+          return `${base} ${pad} no-underline text-slate-200 font-semibold bg-[var(--sidebar-bg)] border-l-[3px] border-blue-400`;
+        }
+        return `${base} ${pad} no-underline text-slate-400 font-medium hover:bg-[var(--sidebar-hover)] hover:text-slate-200`;
       }}
     >
       <Icon size={18} strokeWidth={2} />

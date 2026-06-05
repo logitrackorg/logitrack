@@ -22,13 +22,13 @@ import { SlaSettings } from "./pages/SlaSettings";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
-import { TwoFAVerify } from "./pages/TwoFAVerify";
-import { TwoFASetup } from "./pages/TwoFASetup";
-import { TwoFASetupRequired } from "./pages/TwoFASetupRequired"; 
 import { DriverRoute } from "./pages/DriverRoute";
 import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
+import { VehicleStatus } from "./pages/VehicleStatus";
+import { AvailableVehicles } from "./pages/AvailableVehicles";
+import { VehicleAssignment } from "./pages/VehicleAssignment";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
@@ -171,8 +171,6 @@ function AppRoutes() {
       <main>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/2fa/verify" element={<TwoFAVerify />} />
-          <Route path="/2fa/setup-required" element={<TwoFASetupRequired />} /> 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </main>
@@ -181,218 +179,228 @@ function AppRoutes() {
 
   return (
     <SupervisorFatigueGuard>
-      <AppShell>
-        <Routes>
-          <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
+    <AppShell>
+      <Routes>
+        <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
-          <Route path="/dashboard" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/kpi-detail" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <KpiDetail />
-            </ProtectedRoute>
-          } />
+        <Route path="/kpi-detail" element={
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <KpiDetail />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <ShipmentList />
-            </ProtectedRoute>
-          } />
+        <Route path="/" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <ShipmentList />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/sla-audit" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <SlaAuditLogs />
-            </ProtectedRoute>
-          } />
+        <Route path="/sla-audit" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <SlaAuditLogs />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/admin/sla-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <SlaSettings />
-            </ProtectedRoute>
-          } />
+        <Route path="/admin/sla-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <SlaSettings />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/claims" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <Claims />
-            </ProtectedRoute>
-          } />
+        <Route path="/claims" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <Claims />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/claims/:id" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <Claims />
-            </ProtectedRoute>
-          } />
+        <Route path="/claims/:id" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <Claims />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/shipments/:trackingId" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <ShipmentDetail />
-            </ProtectedRoute>
-          } />
+        <Route path="/shipments/:trackingId" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <ShipmentDetail />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/calendar" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <TripsCalendar />
-            </ProtectedRoute>
-          } />
+        <Route path="/calendar" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <TripsCalendar />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/inter-branch-trips/:id/recepcion" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <OperatorTripReception />
-            </ProtectedRoute>
-          } />
+        <Route path="/inter-branch-trips/:id/recepcion" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <OperatorTripReception />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/new" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <NewShipment />
-            </ProtectedRoute>
-          } />
+        <Route path="/new" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <NewShipment />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/drafts" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <DraftList />
-            </ProtectedRoute>
-          } />
+        <Route path="/drafts" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <DraftList />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/vehicles" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
-              <VehicleList />
-            </ProtectedRoute>
-          } />
+        <Route path="/vehicles" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <VehicleList />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/branches" element={
-            <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
-              <BranchList />
-            </ProtectedRoute>
-          } />
+        <Route path="/vehicles/:plate/status" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleStatus />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/:plate/assign" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleAssignment />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/available" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <AvailableVehicles />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/ml-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <MLConfig />
-            </ProtectedRoute>
-          } />
+        <Route path="/branches" element={
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+            <BranchList />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/system-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <SystemConfig />
-            </ProtectedRoute>
-          } />
+        <Route path="/ml-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <MLConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/pricing-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <PricingConfig />
-            </ProtectedRoute>
-          } />
+        <Route path="/system-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <SystemConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/repartos" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <Repartos />
-            </ProtectedRoute>
-          } />
+        <Route path="/pricing-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <PricingConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/inter-sucursal" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <InterSucursal />
-            </ProtectedRoute>
-          } />
+        <Route path="/repartos" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <Repartos />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/viajes" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
-              <InterBranchTripsList />
-            </ProtectedRoute>
-          } />
+        <Route path="/inter-sucursal" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <InterSucursal />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/reports/drivers" element={<Navigate to="/dashboard?tab=choferes" replace />} />
-          <Route path="/reports/incidents" element={<Navigate to="/dashboard?tab=reclamos" replace />} />
-          <Route path="/reports/billing" element={<Navigate to="/dashboard?tab=facturacion" replace />} />
-          <Route path="/reports/branch-ranking" element={<Navigate to="/dashboard?tab=ranking" replace />} />
-          <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
-          <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
-          <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
+        <Route path="/viajes" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <InterBranchTripsList />
+          </ProtectedRoute>
+        } />
 
-          {/* Legacy redirects */}
-          <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
-          <Route path="/operations/trips" element={<Navigate to="/viajes" replace />} />
+        <Route path="/reports/drivers" element={<Navigate to="/dashboard?tab=choferes" replace />} />
+        <Route path="/reports/incidents" element={<Navigate to="/dashboard?tab=reclamos" replace />} />
+        <Route path="/reports/billing" element={<Navigate to="/dashboard?tab=facturacion" replace />} />
+        <Route path="/reports/branch-ranking" element={<Navigate to="/dashboard?tab=ranking" replace />} />
+        <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
+        <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
+        <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
 
-          <Route path="/routing-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <RoutingConfig />
-            </ProtectedRoute>
-          } />
+        {/* Legacy redirects */}
+        <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
+        <Route path="/operations/trips" element={<Navigate to="/viajes" replace />} />
 
-          <Route path="/fatigue-config" element={
-            <ProtectedRoute roles={["admin"]}>
-              <FatigueConfig />
-            </ProtectedRoute>
-          } />
+        <Route path="/routing-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <RoutingConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/supervisor/fatigue" element={
-            <ProtectedRoute roles={["supervisor", "manager"]}>
-              <SupervisorFatigue />
-            </ProtectedRoute>
-          } />
+        <Route path="/fatigue-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <FatigueConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/zones" element={
-            <ProtectedRoute roles={["admin"]}>
-              <ZoneManagement />
-            </ProtectedRoute>
-          } />
+        <Route path="/supervisor/fatigue" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <SupervisorFatigue />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/organization" element={
-            <ProtectedRoute roles={["admin"]}>
-              <OrganizationConfig />
-            </ProtectedRoute>
-          } />
+        <Route path="/zones" element={
+          <ProtectedRoute roles={["admin"]}>
+            <ZoneManagement />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/admin/users" element={
-            <ProtectedRoute roles={["admin"]}>
-              <AdminUsers />
-            </ProtectedRoute>
-          } />
+        <Route path="/organization" element={
+          <ProtectedRoute roles={["admin"]}>
+            <OrganizationConfig />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/bulk-upload" element={
-            <ProtectedRoute roles={["operator", "supervisor"]}>
-              <BulkUpload />
-            </ProtectedRoute>
-          } />
+        <Route path="/admin/users" element={
+          <ProtectedRoute roles={["admin"]}>
+            <AdminUsers />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/admin/access-logs" element={
-            <ProtectedRoute roles={["admin"]}>
-              <AccessLog />
-            </ProtectedRoute>
-          } />
+        <Route path="/bulk-upload" element={
+          <ProtectedRoute roles={["operator", "supervisor"]}>
+            <BulkUpload />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/profile" element={
-            <ProtectedRoute>
-              <UserProfile />
-            </ProtectedRoute>
-          } />
+        <Route path="/admin/access-logs" element={
+          <ProtectedRoute roles={["admin"]}>
+            <AccessLog />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/profile/2fa/setup" element={
-            <ProtectedRoute roles={["admin", "manager", "supervisor", "operator"]}>
-              <TwoFASetup />
-            </ProtectedRoute>
-          } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <UserProfile />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/notifications" element={
-            <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
-              <NotificationsPage />
-            </ProtectedRoute>
-          } />
+        <Route path="/notifications" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
+            <NotificationsPage />
+          </ProtectedRoute>
+        } />
 
-          <Route path="/auto-reports" element={
-            <ProtectedRoute roles={["manager"]}>
-              <AutoReports />
-            </ProtectedRoute>
-          } />
+        <Route path="/auto-reports" element={
+          <ProtectedRoute roles={["manager"]}>
+            <AutoReports />
+          </ProtectedRoute>
+        } />
 
-          <Route path="*" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
-        </Routes>
-        <ToastContainer />
-      </AppShell>
+        <Route path="*" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
+      </Routes>
+      <ToastContainer />
+    </AppShell>
     </SupervisorFatigueGuard>
   );
 }

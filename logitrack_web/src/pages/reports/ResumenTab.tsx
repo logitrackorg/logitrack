@@ -21,7 +21,8 @@ import { StatCard } from "../../components/ui/stat-card";
 import { Gauge } from "../../components/charts/Gauge";
 import { Doughnut, type DoughnutDataItem } from "../../components/charts/Doughnut";
 import { Sparkline } from "../../components/charts/Sparkline";
-import { toDateInput, Skeleton } from "../../utils/dashboard";
+import { toDateInput } from "../../utils/dashboard";
+import { SkeletonCard } from "../../components/ui/skeleton";
 import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
 
 const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "success" | "warning" | "danger" | "info" }> = {
@@ -46,7 +47,7 @@ const statusConfig: Record<ShipmentStatus, { label: string; tone: "default" | "s
   pending_payment: { label: "Pago pendiente", tone: "warning" },
 };
 
-const BRANCH_COLORS = ["#2563eb","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#ec4899","#84cc16"];
+const BRANCH_COLORS = ["#2563eb","#f97316","#22c55e","#ef4444","#8b5cf6","#06b6d4","#ec4899","#84cc16"];
 const TOOLTIP_STYLE = { fontSize:12, borderRadius:10, border:"1px solid #e2e8f0", boxShadow:"0 8px 24px rgba(0,0,0,0.1)", padding:"10px 14px", background:"rgba(255,255,255,0.97)" };
 const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider";
 const tdClass = "px-4 py-3 text-slate-700";
@@ -194,11 +195,11 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
 
   const renderKpiCards = () => loading ? (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <Skeleton className="h-28" /><Skeleton className="h-28" /><Skeleton className="h-28" /><Skeleton className="h-28" />
+      <SkeletonCard className="h-28" /><SkeletonCard className="h-28" /><SkeletonCard className="h-28" /><SkeletonCard className="h-28" />
     </div>
   ) : (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <GradientCard tone="brand" className="hover:shadow-[0_8px_24px_rgba(30,58,95,0.25)] transition-shadow duration-200">
+      <GradientCard tone="brand" className="hover:shadow-[0_8px_24px_rgba(37,99,235,0.3)] transition-shadow duration-200">
         <div className="flex items-start gap-3">
           <GradientCardIcon><Box className="w-5 h-5" /></GradientCardIcon>
           <div className="flex-1 min-w-0">
@@ -238,12 +239,12 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Ciclo promedio</h2>
         </div>
         <div className="p-5 flex items-center justify-center">
-          <Gauge value={stats.avg_cycle_time_hours} min={0} max={72} thresholds={[{value:24,color:"#10b981"},{value:48,color:"#f59e0b"},{value:72,color:"#ef4444"}]} label="Ciclo promedio" unit="h" />
+          <Gauge value={stats.avg_cycle_time_hours} min={0} max={72} thresholds={[{value:24,color:"#22c55e"},{value:48,color:"#f97316"},{value:72,color:"#ef4444"}]} label="Ciclo promedio" unit="h" />
         </div>
       </Card>}
       {doughnutItems.length>0&&<Card>
         <div className="px-5 pt-5 pb-3 flex items-center gap-2 border-b border-slate-100">
-          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#10b981]" />
+          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-blue-600 to-emerald-500" />
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por sucursal</h2>
         </div>
         <div className="p-5 flex items-center justify-center">
@@ -257,13 +258,13 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
     <Card>
       <div className="px-5 pt-5 pb-3 flex items-baseline justify-between border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#1e3a5f]" />
+          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-blue-600 to-blue-950" />
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Distribución por estado</h2>
         </div>
         <div className="flex items-center gap-3">
           <p className="text-xs text-slate-500 hidden sm:block">Click en una tarjeta para filtrar</p>
           <button onClick={()=>setShowAllStatuses(!showAllStatuses)}
-            className="text-xs font-semibold text-[#2563eb] hover:text-[#1d4ed8] cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 rounded">
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 rounded">
             {showAllStatuses?"Solo con datos":"Mostrar todos"}
           </button>
         </div>
@@ -271,7 +272,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
       <div className="px-5 pb-5">
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {Array.from({length:10}).map((_,i)=><Skeleton key={i} className="h-16" />)}
+            {Array.from({length:10}).map((_,i)=><SkeletonCard key={i} className="h-16" />)}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
@@ -291,12 +292,12 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
     <Card>
       <div className="px-5 pt-5 pb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-[#2563eb] to-[#10b981]" />
+          <div className="w-1 h-5 rounded-full bg-gradient-to-b from-blue-600 to-emerald-500" />
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos creados vs entregados por día</h2>
         </div>
       </div>
       <div className="p-5">
-        {loading ? <Skeleton className="h-56 w-full" />
+        {loading ? <SkeletonCard className="h-56 w-full" />
         : chartData.length===0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <LayoutDashboard className="w-10 h-10 text-slate-300 mb-3" />
@@ -318,7 +319,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
             </ResponsiveContainer>
             <div className="flex items-center justify-center gap-5 mt-3 pt-3 border-t border-slate-100">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                <span className="inline-block w-2 h-2 rounded-sm bg-[#2563eb]" /> Creados
+                <span className="inline-block w-2 h-2 rounded-sm bg-blue-600" /> Creados
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                 <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" /> Entregados
@@ -331,7 +332,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   );
 
   const renderCancellationChart = () => {
-    if (loading) return <Card><div className="px-5 pt-5 pb-4"><Skeleton className="h-20 w-full" /></div></Card>;
+    if (loading) return <Card><div className="px-5 pt-5 pb-4"><SkeletonCard className="h-20 w-full" /></div></Card>;
     const sortedDays = cancellationData?.by_day ? Object.entries(cancellationData.by_day).sort(([a],[b])=>a.localeCompare(b)) : [];
     const lineData = sortedDays.map(([date,count])=>({date,cancelaciones:count}));
     const noData = !cancellationData||cancellationData.total===0||!lineData.some(d=>d.cancelaciones>0);
@@ -392,7 +393,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
         <div className="w-1 h-5 rounded-full bg-gradient-to-b from-amber-500 to-amber-300" />
         <h2 className="text-base font-semibold text-slate-900 tracking-tight">Tiempo promedio por estado</h2>
       </div>
-      {loading ? <div className="p-5"><Skeleton className="h-48 w-full" /></div>
+      {loading ? <div className="p-5"><SkeletonCard className="h-48 w-full" /></div>
       : !avgTimeData||avgTimeData.length===0 ? <div className="p-5"><p className="text-xs text-slate-400 text-center py-8">Sin datos suficientes para calcular tiempos promedio</p></div>
       : <div className="p-5">
         <div className="rounded-xl bg-white border border-slate-100 p-4">
@@ -423,11 +424,11 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
           <h2 className="text-base font-semibold text-slate-900 tracking-tight">Envíos recientes</h2>
         </div>
         <button onClick={()=>navigate("/")}
-          className="inline-flex items-center gap-1 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]/50 rounded">
+          className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 rounded">
           Ver todos <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
-      {loading ? <div className="p-5 space-y-3">{Array.from({length:3}).map((_,i)=><Skeleton key={i} className="h-10 w-full" />)}</div>
+      {loading ? <div className="p-5 space-y-3">{Array.from({length:3}).map((_,i)=><SkeletonCard key={i} className="h-10 w-full" />)}</div>
       : (stats?.recent_shipments?.length??0)===0 ? (
         <div className="p-12 text-center">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3"><Package className="w-6 h-6 text-slate-400" /></div>
@@ -446,7 +447,7 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
             <tbody>{(stats?.recent_shipments??[]).map((s,i)=>(
               <tr key={s.tracking_id} onClick={()=>navigate(`/shipments/${s.tracking_id}`)}
                 className={`border-b border-slate-100 cursor-pointer transition-all ${i%2===0?"bg-white":"bg-slate-50/20"} hover:bg-blue-50/70 hover:shadow-[0_1px_4px_rgba(37,99,235,0.08)]`}>
-                <td className={tdClass}><code className="text-xs font-mono text-[#1e3a5f] font-semibold bg-slate-50 px-1.5 py-0.5 rounded">{s.tracking_id}</code></td>
+                <td className={tdClass}><code className="text-xs font-mono text-blue-950 font-semibold bg-slate-50 px-1.5 py-0.5 rounded">{s.tracking_id}</code></td>
                 <td className={tdClass}>{s.recipient.name}</td>
                 <td className={`${tdClass} text-slate-500`}>{s.recipient.address.city}</td>
                 <td className={tdClass}><StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} /></td>

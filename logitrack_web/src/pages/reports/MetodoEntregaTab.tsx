@@ -31,7 +31,12 @@ const METHOD_LABELS: Record<string, string> = {
 
 const METHOD_COLORS: Record<string, string> = {
   ultima_milla: "#2563eb",
-  retiro_sucursal: "#10b981",
+  retiro_sucursal: "#22c55e",
+};
+
+const METHOD_BG: Record<string, string> = {
+  ultima_milla: "bg-blue-600",
+  retiro_sucursal: "bg-green-500",
 };
 
 const METHOD_ORDER = ["ultima_milla", "retiro_sucursal"];
@@ -76,6 +81,7 @@ export default function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoE
       count,
       pct,
       fill: METHOD_COLORS[m] ?? "#94a3b8",
+      bgClass: METHOD_BG[m] ?? "bg-slate-400",
     };
   });
 
@@ -130,7 +136,7 @@ export default function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoE
               {chartData.map((d) => (
                 <Card key={d.key} className="p-5">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.fill }} />
+                    <div className={`w-3 h-3 rounded-full shrink-0 ${d.bgClass}`} />
                     <span className="text-sm font-medium text-slate-600">{d.label}</span>
                   </div>
                   <p className="text-2xl font-bold text-slate-900 tabular-nums">{d.count}</p>
@@ -178,7 +184,7 @@ export default function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoE
                       <LabelList
                         dataKey="count"
                         position="top"
-                        style={{ fill: "#334155", fontSize: 13, fontWeight: 600 }}
+                        className="fill-slate-700 text-[13px] font-semibold"
                       />
                     </Bar>
                   </BarChart>
@@ -208,8 +214,7 @@ export default function MetodoEntregaTab({ dateFrom, dateTo, branchId }: MetodoE
                         <td className="px-5 py-3 text-slate-700 font-medium">
                           <div className="flex items-center gap-2">
                             <div
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: d.fill }}
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${d.bgClass}`}
                             />
                             {d.label}
                           </div>

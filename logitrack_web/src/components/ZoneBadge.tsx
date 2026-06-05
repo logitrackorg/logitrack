@@ -9,7 +9,7 @@ const config: Record<BranchZoneType, { label: string; bg: string }> = {
 
 export function ZoneBadge({ zone }: { zone?: BranchZoneType | null }) {
   if (!zone) return null;
-  const cfg = config[zone] ?? { label: zone, bg: "#9ca3af" };
+  const cfg = config[zone] ?? { label: zone, bg: "var(--text-muted)" };
   return (
     <span style={{
       display: "inline-flex",

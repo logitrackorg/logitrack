@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { setAddToast } from "../utils/toast";
 
-type ToastType = "success" | "error";
+type ToastType = "success" | "error" | "info" | "warning";
 
 interface ToastMessage {
   id: number;
   type: ToastType;
   message: string;
 }
+
+const typeStyles: Record<ToastType, string> = {
+  success: "border-l-green-500 bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200",
+  error: "border-l-red-500 bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200",
+  info: "border-l-blue-500 bg-blue-50 dark:bg-blue-950 text-blue-800 dark:text-blue-200",
+  warning: "border-l-orange-500 bg-orange-50 dark:bg-orange-950 text-orange-800 dark:text-orange-200",
+};
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -27,27 +34,17 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div style={{
-      position: "fixed", top: 16, right: 16, zIndex: 9999,
-      display: "flex", flexDirection: "column", gap: 8,
-    }}>
+    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2">
       {toasts.map((t) => (
-        <div key={t.id} style={{
-          padding: "12px 16px",
-          borderRadius: 8,
-          minWidth: 260,
-          maxWidth: 360,
-          background: t.type === "success" ? "var(--ok)" : "var(--danger-c)",
-          color: "#fff",
-          fontSize: 14,
-          fontWeight: 500,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-        }}>
+        <div
+          key={t.id}
+          className={`border-l-4 rounded-lg px-4 py-3 min-w-[260px] max-w-[360px] shadow-lg flex items-center justify-between gap-2 text-sm font-medium ${typeStyles[t.type]}`}
+        >
           <span>{t.message}</span>
           <button
             onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
-            style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
+            aria-label="Descartar notificación"
+            className="bg-transparent border-none cursor-pointer text-inherit text-base leading-none p-0 opacity-70 hover:opacity-100"
           >×</button>
         </div>
       ))}

@@ -388,51 +388,41 @@ export function BulkUpload() {
       {/* ── IDLE ── */}
       {stage === "idle" && (
         <>
-          <div style={{
-            border: "1px solid var(--border)", borderRadius: 10, padding: "16px 20px",
-            marginBottom: 24, background: "var(--bg-page)",
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
-          }}>
+          <div className="border border-gray-200 rounded-lg p-4 md:p-5 mb-6 bg-white flex items-center justify-between gap-4">
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Paso 1 — Descargar plantilla</div>
-              <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              <div className="font-semibold text-sm mb-1">Paso 1 — Descargar plantilla</div>
+              <div className="text-xs text-gray-500">
                 Completá la plantilla CSV y volvé a subirla. No modifiques los encabezados de columna.
               </div>
             </div>
             <button
               onClick={downloadTemplate}
-              style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 7, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}
+              className="bg-blue-700 hover:bg-blue-800 transition-colors text-white rounded-md px-4 py-2 cursor-pointer text-xs font-semibold whitespace-nowrap"
             >
               ↓ Descargar plantilla
             </button>
           </div>
 
           {parseError && (
-            <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "12px 16px", marginBottom: 20, color: "var(--danger-text)", fontSize: 14 }}>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5 text-red-700 text-sm">
               <strong>Error:</strong> {parseError}
             </div>
           )}
 
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Paso 2 — Subir tu CSV</div>
+          <div className="font-semibold text-sm mb-2.5">Paso 2 — Subir tu CSV</div>
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: `2px dashed ${isDragging ? "var(--brand)" : "var(--border)"}`,
-              borderRadius: 12,
-              padding: "52px 24px",
-              textAlign: "center",
-              cursor: "pointer",
-              background: isDragging ? "var(--brand-tint)" : "var(--bg-page)",
-              transition: "border-color 0.15s, background 0.15s",
-            }}
+            className={`border-2 border-dashed ${
+              isDragging ? "border-blue-500 bg-blue-100" : "border-blue-300 bg-blue-50"
+            } rounded-xl py-12 md:py-14 px-6 text-center cursor-pointer transition-colors`}
           >
-            <div style={{ fontSize: 36, marginBottom: 12, lineHeight: 1 }}>📂</div>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Arrastrá y soltá tu CSV acá</div>
-            <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>o hacé clic para explorar — solo archivos .csv</div>
-            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileInput} style={{ display: "none" }} />
+            <div className="text-4xl mb-3 leading-none">📂</div>
+            <div className="font-semibold text-sm mb-1.5">Arrastrá y soltá tu CSV acá</div>
+            <div className="text-gray-500 text-xs">o hacé clic para explorar — solo archivos .csv</div>
+            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileInput} className="hidden" />
           </div>
         </>
       )}
@@ -440,48 +430,48 @@ export function BulkUpload() {
       {/* ── PREVIEW ── */}
       {stage === "preview" && (
         <>
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            <StatCard value={validCount} label="Listas para importar" color="var(--ok-text)" bg="var(--ok-bg)" border="var(--ok-border)" />
+          <div className="flex gap-3 mb-5 flex-wrap">
+            <StatCard value={validCount} label="Listas para importar" className="bg-green-50 border border-green-200 text-green-700" />
             {invalidCount > 0 && (
-              <StatCard value={invalidCount} label="Filas con errores (omitidas)" color="var(--danger-text)" bg="var(--danger-bg)" border="var(--danger-border)" />
+              <StatCard value={invalidCount} label="Filas con errores (omitidas)" className="bg-red-50 border border-red-200 text-red-700" />
             )}
-            <StatCard value={rows.length} label="Total de filas" color="var(--text-primary)" bg="var(--bg-page)" border="var(--border)" />
+            <StatCard value={rows.length} label="Total de filas" className="bg-white border border-gray-200 text-gray-900" />
           </div>
 
           {validCount === 0 && (
-            <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 8, padding: "12px 16px", marginBottom: 16, color: "var(--danger-text)", fontSize: 14 }}>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4 text-red-700 text-sm">
               No se encontraron filas válidas. Corregí los errores que se muestran abajo y volvé a subir el archivo.
             </div>
           )}
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto", marginBottom: 20 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="border border-gray-200 rounded-lg overflow-auto mb-5">
+            <table className="w-full text-xs">
               <thead>
-                <tr style={{ background: "var(--bg-inset)" }}>
-                  <th style={TH}>Fila</th>
-                  <th style={TH}>Remitente</th>
-                  <th style={TH}>Destinatario</th>
-                  <th style={TH}>Peso</th>
-                  <th style={TH}>Paquete</th>
-                  <th style={TH}>Estado / Errores</th>
+                <tr className="bg-gray-50">
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Fila</th>
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Remitente</th>
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Destinatario</th>
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Peso</th>
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Paquete</th>
+                  <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Estado / Errores</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr
                     key={row.rowNumber}
-                    style={{ background: row.status === "valid" ? "var(--ok-bg)" : "var(--danger-bg)", borderTop: "1px solid var(--border)" }}
+                    className={`${row.status === "valid" ? "bg-green-50" : "bg-red-50"} border-t border-gray-200`}
                   >
-                    <td style={TD}>{row.rowNumber}</td>
-                    <td style={TD}>{row.raw.sender_name || <em style={{ color: "var(--text-muted)" }}>—</em>}</td>
-                    <td style={TD}>{row.raw.recipient_name || <em style={{ color: "var(--text-muted)" }}>—</em>}</td>
-                    <td style={TD}>{row.raw.weight_kg ? `${row.raw.weight_kg} kg` : "—"}</td>
-                    <td style={TD}>{row.raw.package_type || "—"}</td>
-                    <td style={TD}>
+                    <td className="px-3.5 py-2.5 align-top">{row.rowNumber}</td>
+                    <td className="px-3.5 py-2.5 align-top">{row.raw.sender_name || <em className="text-gray-400">—</em>}</td>
+                    <td className="px-3.5 py-2.5 align-top">{row.raw.recipient_name || <em className="text-gray-400">—</em>}</td>
+                    <td className="px-3.5 py-2.5 align-top">{row.raw.weight_kg ? `${row.raw.weight_kg} kg` : "—"}</td>
+                    <td className="px-3.5 py-2.5 align-top">{row.raw.package_type || "—"}</td>
+                    <td className="px-3.5 py-2.5 align-top">
                       {row.status === "valid" ? (
-                        <span style={{ color: "var(--ok)", fontWeight: 600 }}>✓ Válida</span>
+                        <span className="text-green-600 font-semibold">✓ Válida</span>
                       ) : (
-                        <ul style={{ margin: 0, paddingLeft: 18, color: "var(--danger-text)" }}>
+                        <ul className="m-0 pl-4 text-red-600">
                           {row.errors.map((e, i) => <li key={i}>{e}</li>)}
                         </ul>
                       )}
@@ -492,10 +482,12 @@ export function BulkUpload() {
             </table>
           </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={reset} style={secondaryBtn}>← Subir otro archivo</button>
+          <div className="flex gap-3">
+            <button onClick={reset} className="bg-gray-100 text-gray-700 border border-gray-200 rounded-md px-5 py-2 cursor-pointer text-sm hover:bg-gray-200 transition-colors">
+              ← Subir otro archivo
+            </button>
             {validCount > 0 && (
-              <button onClick={handleUpload} style={primaryBtn}>
+              <button onClick={handleUpload} className="bg-blue-700 hover:bg-blue-800 transition-colors text-white rounded-md px-5 py-2 cursor-pointer text-sm font-semibold">
                 Importar {validCount} envío{validCount !== 1 ? "s" : ""}
               </button>
             )}
@@ -505,18 +497,17 @@ export function BulkUpload() {
 
       {/* ── UPLOADING ── */}
       {stage === "uploading" && (
-        <div style={{ textAlign: "center", padding: "64px 0" }}>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>
+        <div className="text-center py-16">
+          <div className="text-sm font-semibold mb-5">
             Importando envíos…
           </div>
-          <div style={{ background: "var(--bg-muted)", borderRadius: 999, height: 10, maxWidth: 440, margin: "0 auto 14px", overflow: "hidden" }}>
-            <div style={{
-              background: "#1e3a5f", height: "100%",
-              width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
-              transition: "width 0.25s",
-            }} />
+          <div className="bg-gray-100 rounded-full h-2.5 max-w-[440px] mx-auto mb-3.5 overflow-hidden">
+            <div
+              className="bg-blue-700 h-full transition-all duration-250"
+              style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+            />
           </div>
-          <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>{progress.current} de {progress.total}</div>
+          <div className="text-gray-500 text-xs">{progress.current} de {progress.total}</div>
         </div>
       )}
 
@@ -529,37 +520,37 @@ export function BulkUpload() {
 
         return (
           <>
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>Importación completada</h2>
+            <h2 className="mt-0 mb-4">Importación completada</h2>
 
-            <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
-              <StatCard value={succeeded.length} label="Envíos creados" color="var(--ok-text)" bg="var(--ok-bg)" border="var(--ok-border)" />
+            <div className="flex gap-3 mb-7 flex-wrap">
+              <StatCard value={succeeded.length} label="Envíos creados" className="bg-green-50 border border-green-200 text-green-700" />
               {apiErrors.length > 0 && (
-                <StatCard value={apiErrors.length} label="Fallidos (error al importar)" color="var(--danger-text)" bg="var(--danger-bg)" border="var(--danger-border)" />
+                <StatCard value={apiErrors.length} label="Fallidos (error al importar)" className="bg-red-50 border border-red-200 text-red-700" />
               )}
               {skipped.length > 0 && (
-                <StatCard value={skipped.length} label="Omitidos (validación)" color="var(--warn-text)" bg="var(--warn-bg)" border="var(--warn-border)" />
+                <StatCard value={skipped.length} label="Omitidos (validación)" className="bg-amber-50 border border-amber-200 text-amber-600" />
               )}
             </div>
 
             {succeeded.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Envíos creados</div>
-                <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div className="mb-6">
+                <div className="font-semibold text-sm mb-2">Envíos creados</div>
+                <div className="border border-gray-200 rounded-lg overflow-auto">
+                  <table className="w-full text-xs">
                     <thead>
-                      <tr style={{ background: "var(--bg-inset)" }}>
-                        <th style={TH}>Fila</th>
-                        <th style={TH}>ID de seguimiento</th>
+                      <tr className="bg-gray-50">
+                        <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Fila</th>
+                        <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">ID de seguimiento</th>
                       </tr>
                     </thead>
                     <tbody>
                       {succeeded.map((r) => (
-                        <tr key={r.rowNumber} style={{ borderTop: "1px solid var(--border)" }}>
-                          <td style={TD}>{r.rowNumber}</td>
-                          <td style={TD}>
+                        <tr key={r.rowNumber} className="border-t border-gray-200">
+                          <td className="px-3.5 py-2.5 align-top">{r.rowNumber}</td>
+                          <td className="px-3.5 py-2.5 align-top">
                             <button
                               onClick={() => navigate(`/shipments/${r.trackingId}`)}
-                              style={{ background: "none", border: "none", color: "var(--brand)", cursor: "pointer", padding: 0, fontSize: 13, textDecoration: "underline" }}
+                              className="bg-transparent border-none text-blue-600 cursor-pointer p-0 text-xs underline hover:text-blue-700 transition-colors"
                             >
                               {r.trackingId}
                             </button>
@@ -573,27 +564,27 @@ export function BulkUpload() {
             )}
 
             {hasFailures && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8, color: "var(--danger-text)" }}>Filas no importadas</div>
-                <div style={{ border: "1px solid var(--danger-border)", borderRadius: 8, overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div className="mb-6">
+                <div className="font-semibold text-sm mb-2 text-red-700">Filas no importadas</div>
+                <div className="border border-red-200 rounded-lg overflow-auto">
+                  <table className="w-full text-xs">
                     <thead>
-                      <tr style={{ background: "var(--danger-bg)" }}>
-                        <th style={TH}>Fila</th>
-                        <th style={TH}>Motivo</th>
+                      <tr className="bg-red-50">
+                        <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Fila</th>
+                        <th className="px-3.5 py-2.5 text-left font-semibold text-xs text-gray-500 whitespace-nowrap">Motivo</th>
                       </tr>
                     </thead>
                     <tbody>
                       {apiErrors.map((r) => (
-                        <tr key={`api-${r.rowNumber}`} style={{ borderTop: "1px solid var(--danger-border)" }}>
-                          <td style={TD}>{r.rowNumber}</td>
-                          <td style={{ ...TD, color: "var(--danger-text)" }}>Error al importar: {r.error}</td>
+                        <tr key={`api-${r.rowNumber}`} className="border-t border-red-200">
+                          <td className="px-3.5 py-2.5 align-top">{r.rowNumber}</td>
+                          <td className="px-3.5 py-2.5 align-top text-red-700">Error al importar: {r.error}</td>
                         </tr>
                       ))}
                       {skipped.map((r) => (
-                        <tr key={`skip-${r.rowNumber}`} style={{ borderTop: "1px solid var(--danger-border)" }}>
-                          <td style={TD}>{r.rowNumber}</td>
-                          <td style={{ ...TD, color: "var(--warn-text)" }}>Validación: {r.errors.join("; ")}</td>
+                        <tr key={`skip-${r.rowNumber}`} className="border-t border-red-200">
+                          <td className="px-3.5 py-2.5 align-top">{r.rowNumber}</td>
+                          <td className="px-3.5 py-2.5 align-top text-amber-600">Validación: {r.errors.join("; ")}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -602,9 +593,13 @@ export function BulkUpload() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={reset} style={secondaryBtn}>Importar otro archivo</button>
-              <button onClick={() => navigate("/")} style={primaryBtn}>Ver envíos</button>
+            <div className="flex gap-3">
+              <button onClick={reset} className="bg-gray-100 text-gray-700 border border-gray-200 rounded-md px-5 py-2 cursor-pointer text-sm hover:bg-gray-200 transition-colors">
+                Importar otro archivo
+              </button>
+              <button onClick={() => navigate("/")} className="bg-blue-700 hover:bg-blue-800 transition-colors text-white rounded-md px-5 py-2 cursor-pointer text-sm font-semibold">
+                Ver envíos
+              </button>
             </div>
           </>
         );
@@ -613,26 +608,11 @@ export function BulkUpload() {
   );
 }
 
-function StatCard({ value, label, color, bg, border }: { value: number; label: string; color: string; bg: string; border: string }) {
+function StatCard({ value, label, className }: { value: number; label: string; className?: string }) {
   return (
-    <div style={{ flex: "1 1 140px", background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "14px 18px" }}>
-      <div style={{ fontSize: 26, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 13, color, opacity: 0.8 }}>{label}</div>
+    <div className={`flex-[1_1_140px] rounded-lg px-4 py-3.5 ${className ?? ""}`}>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-xs opacity-80">{label}</div>
     </div>
   );
 }
-
-const TH: React.CSSProperties = {
-  padding: "10px 14px", textAlign: "left", fontWeight: 600, fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap",
-};
-const TD: React.CSSProperties = {
-  padding: "10px 14px", verticalAlign: "top",
-};
-const primaryBtn: React.CSSProperties = {
-  background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 7,
-  padding: "9px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600,
-};
-const secondaryBtn: React.CSSProperties = {
-  background: "var(--bg-inset)", color: "var(--text-strong)", border: "1px solid var(--border)",
-  borderRadius: 7, padding: "9px 20px", cursor: "pointer", fontSize: 14,
-};

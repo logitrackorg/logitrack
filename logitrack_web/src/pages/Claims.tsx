@@ -55,18 +55,18 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
   { value: "improcedente", label: "Improcedente" },
 ];
 
-function statusBadgeStyle(status: ClaimStatus): React.CSSProperties {
+function statusBadgeClass(status: ClaimStatus): string {
   switch (status) {
     case "open":
-      return { background: "var(--info)", color: "#fff" };
+      return "bg-blue-500 text-white";
     case "in_review":
-      return { background: "var(--brand)", color: "#fff" };
+      return "bg-blue-600 text-white";
     case "pending_customer":
-      return { background: "var(--warn)", color: "#1e293b" };
+      return "bg-amber-500 text-slate-900";
     case "derived":
-      return { background: "#64748b", color: "#fff" };
+      return "bg-slate-500 text-white";
     default:
-      return { background: "var(--ok)", color: "#fff" };
+      return "bg-emerald-500 text-white";
   }
 }
 
@@ -84,7 +84,7 @@ export function Claims() {
   const [categoryDraft, setCategoryDraft] = useState<Record<string, ClaimCategory | "">>({});
   const [eventsByClaim, setEventsByClaim] = useState<Record<string, ClaimEvent[]>>({});
   const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
-  
+
   // Confirm dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -183,7 +183,7 @@ export function Claims() {
     if (!nextCategory) return;
 
     const categoryLabel = CATEGORY_OPTIONS.find((c) => c.value === nextCategory)?.label ?? nextCategory;
-    
+
     // Show confirm dialog
     setConfirmDialog({
       isOpen: true,
@@ -213,7 +213,7 @@ export function Claims() {
 
   const handleResolve = async (id: string, resolution: ClaimResolutionType) => {
     const resolutionLabel = RESOLUTION_OPTIONS.find((o) => o.value === resolution)?.label ?? resolution;
-    
+
     // Show confirm dialog
     setConfirmDialog({
       isOpen: true,
@@ -312,7 +312,7 @@ export function Claims() {
 
               <div className="flex flex-wrap gap-3">
                 <div className="flex flex-col gap-1">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Sucursal</label>
+                  <label className="text-xs font-semibold text-slate-600">Sucursal</label>
                   <select
                     value={selectedBranch}
                     onChange={(e) => setSelectedBranch(e.target.value)}
@@ -326,7 +326,7 @@ export function Claims() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Estado</label>
+                  <label className="text-xs font-semibold text-slate-600">Estado</label>
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
@@ -340,7 +340,7 @@ export function Claims() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>ID reclamo</label>
+                  <label className="text-xs font-semibold text-slate-600">ID reclamo</label>
                   <input
                     value={selectedClaimId}
                     onChange={(e) => setSelectedClaimId(e.target.value)}
@@ -449,43 +449,30 @@ export function Claims() {
                 }}
               >
                 <summary
-                  style={{
-                    cursor: "pointer",
-                    listStyle: "none",
-                    padding: "18px 20px",
-                    borderBottom: "1px solid var(--border)",
-                    background: "linear-gradient(180deg, var(--bg-card) 0%, var(--bg-page) 100%)",
-                  }}
+                  className="cursor-pointer list-none px-5 py-[18px] border-b border-slate-200 bg-gradient-to-b from-white to-slate-50"
                 >
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-heading)", background: "rgba(30,58,95,0.08)", padding: "3px 8px", borderRadius: 999 }}>
+                  <div className="flex flex-wrap gap-3 items-center justify-between">
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-xs font-extrabold tracking-wide uppercase text-slate-900 bg-[#1e3a5f]/[0.08] px-2 py-0.5 rounded-full">
                           {claim.id}
                         </span>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Envío {claim.tracking_id}</span>
+                        <span className="text-xs text-slate-400">Envío {claim.tracking_id}</span>
                       </div>
-                      <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                      <div className="text-xs text-slate-500">
                         {CLAIM_TYPE_LABELS[claim.claim_type]}
                       </div>
                     </div>
                     <span
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 800,
-                        boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
-                        ...statusBadgeStyle(claim.status),
-                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-extrabold shadow-[0_1px_2px_rgba(15,23,42,0.08)] ${statusBadgeClass(claim.status)}`}
                     >
                       {CLAIM_STATUS_LABELS[claim.status]}
                     </span>
                   </div>
                 </summary>
 
-                <div style={{ padding: "18px 20px 20px", display: "grid", gap: 16 }}>
-                  <div style={{ display: "grid", gap: 8, fontSize: 13, color: "var(--text-strong)", lineHeight: 1.45 }}>
+                <div className="px-5 py-[18px] grid gap-4">
+                  <div className="grid gap-2 text-xs text-slate-700 leading-relaxed">
                     <div><strong>Creado por:</strong> {claim.created_by}</div>
                     <div><strong>Descripción:</strong> {claim.description}</div>
                     <div><strong>Creado:</strong> {fmtDateTime(claim.created_at)}</div>
@@ -496,31 +483,18 @@ export function Claims() {
                   </div>
 
                   {claim.evidence_file_name && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", border: "1px solid var(--border)", borderRadius: 16, padding: "14px 16px", background: "var(--bg-page)" }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Evidencia adjunta</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", wordBreak: "break-word" }}>{claim.evidence_file_name}</div>
+                    <div className="flex flex-wrap gap-3 items-center justify-between border border-slate-200 rounded-2xl px-4 py-3.5 bg-slate-50">
+                      <div className="min-w-0">
+                        <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Evidencia adjunta</div>
+                        <div className="text-sm font-bold text-slate-900 break-words">{claim.evidence_file_name}</div>
                         {claim.evidence_upload_date && (
-                          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
+                          <div className="text-xs text-slate-500">Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
                         )}
                       </div>
                       <button
                         type="button"
                         onClick={() => handleDownloadEvidence(claim.id, claim.evidence_file_name ?? "evidencia")}
-                        style={{
-                          background: "linear-gradient(180deg, #1e3a5f 0%, #162b49 100%)",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 12,
-                          padding: "10px 14px",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          boxShadow: "0 8px 18px rgba(30,58,95,0.14)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
+                        className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] inline-flex items-center gap-2"
                       >
                         <Download className="w-4 h-4" />
                         Descargar evidencia
@@ -529,21 +503,13 @@ export function Claims() {
                   )}
 
                   {!isManager && (
-                    <div style={{ display: "grid", gap: 12, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "end" }}>
-                        <label style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Derivar a</label>
+                    <div className="grid gap-3 border-t border-slate-200 pt-4">
+                      <div className="flex flex-wrap gap-2.5 items-end">
+                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
                         <select
                           value={categoryDraft[claim.id] ?? ""}
                           onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
-                          style={{
-                            minWidth: 240,
-                            border: "1px solid var(--border)",
-                            borderRadius: 12,
-                            padding: "10px 12px",
-                            fontSize: 13,
-                            background: "var(--bg-card)",
-                            boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-                          }}
+                          className="min-w-[240px] border border-slate-200 rounded-xl px-3 py-2.5 text-xs bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                         >
                           <option value="">Seleccionar área</option>
                           {CATEGORY_OPTIONS.map((cat) => (
@@ -554,44 +520,21 @@ export function Claims() {
                           type="button"
                           onClick={() => handleUpdateCategory(claim.id)}
                           disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                          style={{
-                            background: "linear-gradient(180deg, #1e3a5f 0%, #162b49 100%)",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 12,
-                            padding: "10px 14px",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            minHeight: 42,
-                            cursor: "pointer",
-                            opacity: !categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.55 : 1,
-                            boxShadow: "0 8px 18px rgba(30,58,95,0.14)",
-                          }}
+                          className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
                         >
                           Aplicar
                         </button>
                       </div>
 
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-                        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Resolver</span>
+                      <div className="flex flex-wrap gap-2.5 items-center">
+                        <span className="text-xs text-slate-500 font-bold uppercase tracking-wide">Resolver</span>
                         {RESOLUTION_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
                             type="button"
                             onClick={() => handleResolve(claim.id, opt.value)}
                             disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                            style={{
-                              background: "var(--warn-bg)",
-                              color: "var(--text-primary)",
-                              border: "1px solid var(--warn-border)",
-                              borderRadius: 999,
-                              padding: "9px 14px",
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
-                              boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-                            }}
+                            className="bg-amber-50 text-slate-900 border border-amber-200 rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-60"
                           >
                             {opt.label}
                           </button>
@@ -626,18 +569,7 @@ export function Claims() {
                             });
                           }}
                           disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                          style={{
-                            background: "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: 999,
-                            padding: "9px 14px",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            opacity: busyId === claim.id || String(claim.status).startsWith("resolved_") ? 0.6 : 1,
-                            boxShadow: "0 8px 18px rgba(14,165,233,0.18)",
-                          }}
+                          className="bg-gradient-to-b from-sky-500 to-sky-600 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(14,165,233,0.18)] disabled:opacity-60"
                         >
                           Solicitar más info
                         </button>
@@ -646,18 +578,7 @@ export function Claims() {
                             type="button"
                             onClick={() => handleMarkInReview(claim.id)}
                             disabled={busyId === claim.id}
-                            style={{
-                              background: "linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%)",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 999,
-                              padding: "9px 14px",
-                              fontSize: 12,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              opacity: busyId === claim.id ? 0.6 : 1,
-                              boxShadow: "0 8px 18px rgba(37,99,235,0.18)",
-                            }}
+                            className="bg-gradient-to-b from-blue-600 to-blue-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(37,99,235,0.18)] disabled:opacity-60"
                           >
                             Pasar a revisión
                           </button>
@@ -666,37 +587,31 @@ export function Claims() {
                     </div>
                   )}
 
-                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                  <div className="border-t border-slate-200 pt-4">
                     <details>
-                      <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: "var(--text-secondary)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                      <summary className="cursor-pointer text-xs font-extrabold text-slate-500 mb-2 uppercase tracking-wide">
                         Historial del reclamo
                       </summary>
-                      <div style={{ marginTop: 8 }}>
+                      <div className="mt-2">
                         {eventsLoadingId === claim.id ? (
-                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Cargando historial…</p>
+                          <p className="m-0 text-xs text-slate-400">Cargando historial…</p>
                         ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
-                          <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>Sin eventos registrados.</p>
+                          <p className="m-0 text-xs text-slate-400">Sin eventos registrados.</p>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div className="flex flex-col gap-2">
                             {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
                               <div
                                 key={ev.id}
-                                style={{
-                                  border: "1px solid var(--border)",
-                                  borderRadius: 8,
-                                  padding: "8px 10px",
-                                  fontSize: 13,
-                                  background: "var(--bg-page)",
-                                }}
+                                className="border border-slate-200 rounded-lg px-2.5 py-2 text-xs bg-slate-50"
                               >
-                                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                                  <span style={{ fontWeight: 600, color: "var(--text-heading)" }}>
+                                <div className="flex justify-between gap-2 mb-1">
+                                  <span className="font-semibold text-slate-900">
                                     {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
                                   </span>
-                                  <span style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{fmtDateTime(ev.timestamp)}</span>
+                                  <span className="text-slate-400 whitespace-nowrap">{fmtDateTime(ev.timestamp)}</span>
                                 </div>
-                                {ev.notes && <div style={{ color: "var(--text-secondary)" }}>{ev.notes}</div>}
-                                <div style={{ color: "var(--text-secondary)", fontSize: 12, marginTop: 4 }}>
+                                {ev.notes && <div className="text-slate-500">{ev.notes}</div>}
+                                <div className="text-slate-500 text-xs mt-1">
                                   por <strong>{ev.changed_by}</strong>
                                   {ev.from_status && ev.to_status && (
                                     <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>

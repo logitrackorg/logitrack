@@ -1,103 +1,76 @@
-import type { ReactNode } from "react";
+import { AlertTriangle } from "lucide-react";
 import type { Shipment, ShipmentStatus } from "../api/shipments";
-
-type StatusFilterValue = ShipmentStatus | "active" | "sla_risk" | "sla_compromised" | "";
 
 type KPI = {
   key: string;
   label: string;
-  subtitle?: string;
-  color: string;
-  bg: string;
-  border: string;
-  filterValue: StatusFilterValue;
+  filterValue: ShipmentStatus | "active" | "sla_risk" | "problem" | "";
   count: (list: Shipment[]) => number;
-  badge?: (count: number) => ReactNode;
 };
 
-const SLA_MONITORED_SET = new Set([
-  "at_origin_hub", "at_hub", "loaded", "in_transit",
-  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
-]);
-const AT_RISK_MS  = 24 * 60 * 60 * 1000; // 24 h
-const DELAYED_MS  = 36 * 60 * 60 * 1000; // 36 h
-
 const KPIS: KPI[] = [
-  // 1 — En tránsito
   {
     key: "in_transit",
     label: "En tránsito",
-    color: "var(--brand)",
-    bg: "var(--brand-tint)",
-    border: "var(--brand-tint-border)",
     filterValue: "in_transit",
     count: (list) => list.filter((s) => s.status === "in_transit").length,
   },
-
-  // 2 — En sucursal
+  {
+    key: "out_for_delivery",
+    label: "Última milla",
+    filterValue: "out_for_delivery",
+    count: (list) => list.filter((s) => s.status === "out_for_delivery").length,
+  },
   {
     key: "at_hub",
     label: "En sucursal",
-    color: "var(--purple-text)",
-    bg: "var(--purple-bg)",
-    border: "var(--purple-bg)",
     filterValue: "at_hub",
-    count: (list) =>
-      list.filter((s) => s.status === "at_hub" || s.status === "at_origin_hub").length,
+    count: (list) => list.filter((s) => s.status === "at_hub" || s.status === "at_origin_hub").length,
   },
-
-  // 3 — SLA Comprometido (warning / amarillo)
-  {
-    key: "sla_compromised",
-    label: "SLA Comprometido",
-    subtitle: "Próximos a vencer",
-    color: "#b45309",           // amber-700
-    bg: "rgba(245,158,11,0.08)",
-    border: "#fcd34d",          // amber-300
-    filterValue: "sla_compromised",
-    count: (list) =>
-      list.filter((s) => {
-        // Prefer server-computed flag (honours admin time-travel via clock.Now()).
-        if (s.is_at_risk !== undefined) return s.is_at_risk;
-        if (!SLA_MONITORED_SET.has(s.status) || !s.updated_at) return false;
-        const dwell = Date.now() - new Date(s.updated_at).getTime();
-        return dwell > AT_RISK_MS && dwell <= DELAYED_MS;
-      }).length,
-    badge: (count) =>
-      count > 0 ? (
-        <div className="mt-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 inline-block">
-          24–36 h en estado
-        </div>
-      ) : null,
-  },
-
-  // 4 — Demorados (crítico / rojo)
   {
     key: "sla_risk",
-    label: "Demorados",
-    color: "var(--danger-c, #ef4444)",
-    bg: "var(--danger-bg, #fef2f2)",
-    border: "var(--danger-border, #fecaca)",
+    label: "Riesgo SLA",
     filterValue: "sla_risk",
-    count: (list) =>
-      list.filter((s) => {
-        if (s.is_delayed !== undefined) return s.is_delayed;
-        if (!SLA_MONITORED_SET.has(s.status) || !s.updated_at) return false;
-        return Date.now() - new Date(s.updated_at).getTime() > DELAYED_MS;
-      }).length,
-    badge: (count) =>
-      count > 0 ? (
-        <div className="mt-1.5 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 inline-block">
-          +36 h sin cambio de estado
-        </div>
-      ) : null,
+    count: (list) => {
+      const cutoff = Date.now() + 24 * 60 * 60 * 1000;
+      return list.filter(
+        (s) =>
+          s.priority === "alta" &&
+          s.estimated_delivery_at &&
+          new Date(s.estimated_delivery_at).getTime() < cutoff &&
+          !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status),
+      ).length;
+    },
   },
 ];
+
+/** KPI-specific Tailwind class sets, using CSS variable arbitrary values for palette tokens. */
+const KPI_STYLES: Record<string, { active: string; count: string }> = {
+  in_transit: {
+    active: "bg-[var(--brand-tint)] border-[var(--brand-tint-border)] shadow-[0_0_0_2px_var(--brand-tint-border)] -translate-y-px",
+    count: "text-[var(--brand)]",
+  },
+  out_for_delivery: {
+    active: "bg-[var(--warn-bg)] border-[var(--warn-border)] shadow-[0_0_0_2px_var(--warn-border)] -translate-y-px",
+    count: "text-[var(--warn)]",
+  },
+  at_hub: {
+    active: "bg-[var(--purple-bg)] border-[var(--purple-bg)] shadow-[0_0_0_2px_var(--purple-bg)] -translate-y-px",
+    count: "text-[var(--purple-text)]",
+  },
+  sla_risk: {
+    active: "bg-[var(--warn-bg)] border-[var(--warn-border)] shadow-[0_0_0_2px_var(--warn-border)] -translate-y-px",
+    count: "text-[var(--warn-text)]",
+  },
+};
+
+const inactiveClasses = "bg-[var(--bg-card)] border-[var(--border)] shadow-sm";
+const countFaint = "text-[var(--text-faint)]";
 
 type Props = {
   shipments: Shipment[];
   activeFilter: string;
-  onFilter: (v: StatusFilterValue) => void;
+  onFilter: (v: ShipmentStatus | "active" | "sla_risk" | "") => void;
 };
 
 export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
@@ -108,33 +81,24 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
       {KPIS.map((kpi) => {
         const count = kpi.count(shipments);
         const isActive = activeFilter === kpi.filterValue;
+        const style = KPI_STYLES[kpi.key];
         return (
           <button
             key={kpi.key}
-            onClick={() => onFilter(isActive ? "active" : kpi.filterValue)}
-            className="text-left rounded-xl p-3.5 border transition-all cursor-pointer"
-            style={{
-              background: isActive ? kpi.bg : "var(--bg-card)",
-              borderColor: isActive ? kpi.border : "var(--border)",
-              boxShadow: isActive ? `0 0 0 2px ${kpi.border}` : "0 1px 3px rgba(0,0,0,0.06)",
-              transform: isActive ? "translateY(-1px)" : undefined,
-            }}
+            onClick={() => onFilter(isActive ? "active" : kpi.filterValue as ShipmentStatus | "active" | "sla_risk" | "")}
+            className={`text-left rounded-xl p-3.5 border transition-all cursor-pointer ${isActive ? style.active : inactiveClasses}`}
           >
             <div
-              className="text-2xl font-bold tabular-nums leading-none mb-1"
-              style={{ color: count > 0 ? kpi.color : "var(--text-faint)" }}
+              className={`text-2xl font-bold tabular-nums leading-none mb-1 ${count > 0 ? style.count : countFaint}`}
             >
               {count}
             </div>
-            <div className="text-xs font-semibold text-slate-500 leading-tight">
-              {kpi.label}
-            </div>
-            {kpi.subtitle && (
-              <div className="text-[10px] text-slate-400 leading-tight mt-0.5">
-                {kpi.subtitle}
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 leading-tight">{kpi.label}</div>
+            {kpi.key === "sla_risk" && count > 0 && (
+              <div className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 rounded px-1.5 py-0.5 inline-block">
+                <AlertTriangle size={10} className="inline align-[-1px]" /> Próximas 24 h
               </div>
             )}
-            {kpi.badge?.(count)}
           </button>
         );
       })}

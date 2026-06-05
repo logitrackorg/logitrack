@@ -423,8 +423,8 @@ export function DriverRoute() {
           <div className="mt-3">
             <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
               <div
+                ref={el => { if (el) el.style.width = `${progressPct}%`; }}
                 className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
-                style={{ width: `${progressPct}%` }}
               />
             </div>
           </div>

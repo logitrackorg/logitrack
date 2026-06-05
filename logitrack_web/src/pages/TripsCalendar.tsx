@@ -77,32 +77,25 @@ export default function TripsCalendar() {
   const closeTrip = () => { setSelectedTrip(null); setPopoverRect(null); };
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1500, margin: "0 auto" }}>
+    <div className="p-6 max-w-[1500px] mx-auto">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Calendar size={22} style={{ color: "var(--brand-800)" }} />
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-heading)" }}>Calendario de viajes</h1>
+      <div className="flex items-center justify-between mb-3.5 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <Calendar size={22} className="text-[#1e3a5f]" />
+          <h1 className="m-0 text-xl font-bold text-slate-900">Calendario de viajes</h1>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="flex gap-2 items-center flex-wrap">
           {/* Switch de vista */}
-          <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+          <div className="flex border border-slate-200 rounded-lg overflow-hidden">
             {(["timeline", "semana"] as ViewMode[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                style={{
-                  padding: "6px 14px",
-                  background: view === v ? "var(--brand-800)" : "var(--bg-card)",
-                  color: view === v ? "#fff" : "var(--text-primary)",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: view === v ? 700 : 400,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}
+                className={`px-3.5 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer border-none ${
+                  view === v
+                    ? "bg-[#1e3a5f] text-white font-bold"
+                    : "bg-white text-slate-900 font-normal"
+                }`}
               >
                 {v === "timeline" ? <><Truck size={14} /> Por vehículo</> : <><Calendar size={14} /> Semana</>}
               </button>
@@ -113,7 +106,7 @@ export default function TripsCalendar() {
           <select
             value={kindFilter}
             onChange={(e) => setKindFilter(e.target.value as KindFilter)}
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", color: "var(--text-primary)", fontSize: 13, cursor: "pointer" }}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-900 text-sm cursor-pointer"
           >
             <option value="all">Todos los tipos</option>
             <option value="inter_branch">Inter-sucursal</option>
@@ -122,7 +115,7 @@ export default function TripsCalendar() {
 
           <button
             onClick={() => setRefreshKey((k) => k + 1)}
-            style={{ background: "var(--bg-subtle)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)", fontSize: 13 }}
+            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 cursor-pointer flex items-center gap-1.5 text-slate-900 text-sm"
           >
             <RefreshCw size={14} />
             Actualizar
@@ -186,7 +179,6 @@ function TripPopover({
   const driver = trip.driver_id ? driverMap[trip.driver_id] : null;
   const driverName = driver ? (driver.full_name || driver.username) : null;
   const isLastMile = trip.kind === "last_mile";
-  const kindColor = isLastMile ? "var(--ok)" : "var(--brand-800)";
   const status = STATUS_STYLE[trip.status]?.label ?? trip.status;
 
   const W = 340;
@@ -202,39 +194,30 @@ function TripPopover({
 
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={onClose} />
+      <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "fixed",
-          top,
-          left,
-          width: W,
-          maxHeight: "calc(100vh - 16px)",
-          overflowY: "auto",
-          background: "var(--bg-card)",
-          border: "1px solid var(--border)",
-          borderLeft: `4px solid ${kindColor}`,
-          borderRadius: 12,
-          padding: "16px 18px",
-          boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
-          zIndex: 41,
-        }}
+        style={{ position: "fixed", top, left, width: W }}
+        className="bg-white border border-slate-200 rounded-xl p-4 shadow-xl z-41 max-h-[calc(100vh-16px)] overflow-y-auto"
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, fontSize: 16, color: "var(--text-primary)" }}>{trip.license_plate}</span>
-            <span style={{ background: isLastMile ? "rgba(16,185,129,0.15)" : "rgba(37,99,235,0.15)", color: kindColor, fontSize: 11, padding: "2px 9px", borderRadius: 999, fontWeight: 600 }}>
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="font-bold text-base text-slate-900">{trip.license_plate}</span>
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+              isLastMile
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-blue-100 text-blue-600"
+            }`}>
               {isLastMile ? "Última milla" : "Inter-sucursal"}
             </span>
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{status}</span>
+            <span className="text-xs text-slate-400">{status}</span>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+          <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-slate-400">
             <X size={18} />
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 12 }}>
+        <div className="flex gap-5 flex-wrap mb-3">
           <Field icon={<Clock size={13} />} label="Salida planificada" value={hhmm(trip.scheduled_departure_at)} />
           <Field icon={<Clock size={13} />} label="Llegada estimada" value={hhmm(trip.estimated_arrival_at)} />
           {trip.started_at && <Field icon={<Clock size={13} />} label="Inició (real)" value={hhmm(trip.started_at)} />}
@@ -244,24 +227,24 @@ function TripPopover({
         </div>
 
         {/* Itinerario con ETAs */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}>
-            <MapPin size={13} style={{ color: "var(--text-muted)" }} />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+            <MapPin size={13} className="text-slate-400" />
             <strong>{branchLabelById(trip.origin_branch_id, branches)}</strong>
-            <span style={{ color: "var(--text-muted)" }}>· salida {hhmm(trip.scheduled_departure_at)}</span>
+            <span className="text-slate-400">· salida {hhmm(trip.scheduled_departure_at)}</span>
           </div>
           {(trip.stops ?? []).map((st, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)", paddingLeft: 8 }}>
-              <span style={{ color: "var(--border)" }}>↓</span>
-              <MapPin size={13} style={{ color: "var(--text-muted)" }} />
+            <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600 pl-2">
+              <span className="text-slate-200">↓</span>
+              <MapPin size={13} className="text-slate-400" />
               <strong>{branchLabelById(st.branch_id, branches)}</strong>
-              {st.estimated_arrival_at && <span style={{ color: "var(--text-muted)" }}>· llega {hhmm(st.estimated_arrival_at)}</span>}
-              <span style={{ color: "var(--text-muted)" }}>· {st.shipment_ids.length} entrega{st.shipment_ids.length !== 1 ? "s" : ""}</span>
+              {st.estimated_arrival_at && <span className="text-slate-400">· llega {hhmm(st.estimated_arrival_at)}</span>}
+              <span className="text-slate-400">· {st.shipment_ids.length} entrega{st.shipment_ids.length !== 1 ? "s" : ""}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>ID: {trip.id}</div>
+        <div className="mt-2.5 text-[11px] text-slate-400">ID: {trip.id}</div>
       </div>
     </>
   );
@@ -269,12 +252,12 @@ function TripPopover({
 
 function Field({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontSize: 10.5, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: 4 }}>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10.5px] text-slate-400 uppercase tracking-wide flex items-center gap-1">
         {icon}
         {label}
       </span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{value}</span>
+      <span className="text-sm font-semibold text-slate-900">{value}</span>
     </div>
   );
 }
