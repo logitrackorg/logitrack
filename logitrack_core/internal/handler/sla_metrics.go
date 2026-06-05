@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/clock"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
@@ -48,10 +49,11 @@ type SLAMetricsHandler struct {
 	db      *sql.DB
 	logRepo *repository.PriorityLogRepository
 	svc     *service.SLAAnomalyService
+	fleetML *ml.FleetMLService
 }
 
-func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository, svc *service.SLAAnomalyService) *SLAMetricsHandler {
-	return &SLAMetricsHandler{db: db, logRepo: logRepo, svc: svc}
+func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository, svc *service.SLAAnomalyService, fleetML *ml.FleetMLService) *SLAMetricsHandler {
+	return &SLAMetricsHandler{db: db, logRepo: logRepo, svc: svc, fleetML: fleetML}
 }
 
 // Get computes and returns the three SLA metrics in a single response.
@@ -188,17 +190,19 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		return currentAverages[i].AvgHours > currentAverages[j].AvgHours
 	})
 
-	// ── 5. Fleet capacity heuristic ─────────────────────────────────────────────
-	fleetSugg := analyzeFleet(h.db, now, delayedTotal, activeTotal)
+	// ── 5. Fleet analysis: heuristic + ML in parallel ────────────────────────────
+	fleetSugg, heuristicDiag, mlPred := h.analyzeFleet(now, delayedTotal, activeTotal)
 
 	c.JSON(http.StatusOK, model.SLAMetrics{
-		SlaHealthRate:   slaHealthRate,
-		ActiveTotal:     activeTotal,
-		DelayedTotal:    delayedTotal,
-		Bottlenecks:     bottlenecks,
-		DelayTrend:      trend,
-		CurrentAverages: currentAverages,
-		FleetSuggestion: fleetSugg,
+		SlaHealthRate:      slaHealthRate,
+		ActiveTotal:        activeTotal,
+		DelayedTotal:       delayedTotal,
+		Bottlenecks:        bottlenecks,
+		DelayTrend:         trend,
+		CurrentAverages:    currentAverages,
+		FleetSuggestion:    fleetSugg,
+		HeuristicDiagnosis: heuristicDiag,
+		MLPrediction:       mlPred,
 	})
 }
 
@@ -209,18 +213,18 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 // near-capacity situations (Case C).
 const maxPackagesPerDriver = 30
 
-// analyzeFleet applies a five-case priority-ordered heuristic that crosses
-// SLA delay data with real-time fleet and route information:
+// analyzeFleet collects operational metrics from DB, runs the heuristic and
+// (when available) the ML model, and returns all three results:
+//   - FleetSuggestion  — operational metrics + heuristic status (backward compat)
+//   - FleetDiagnosis   — heuristic classification with message
+//   - *FleetDiagnosis  — ML classification with confidence; nil if model not loaded
 //
-//	CASO A (ADVERTENCIA)  — SLA > 10 % AND idle drivers exist
-//	CASO B (CRÍTICO)      — SLA > 10 % AND no idle drivers AND orphan shipments
-//	CASO C (PREVENTIVO)   — SLA < 5 % AND no idle drivers AND load > 90 % capacity
-//	CASO D (OCIOSO)       — SLA < 2 % AND load < 50 % capacity
-//	DEFAULT (ESTABLE)     — everything else
-//
-// All DB queries use `now` (clock.Now()) so time-travel testing stays
-// consistent. Query errors default to 0 and fall through to ESTABLE.
-func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) model.FleetSuggestion {
+// All DB queries use `now` (clock.Now()) for time-travel consistency.
+func (h *SLAMetricsHandler) analyzeFleet(now time.Time, delayedTotal, activeTotal int) (
+	model.FleetSuggestion, model.FleetDiagnosis, *model.FleetDiagnosis,
+) {
+	db := h.db
+
 	// ── Delay rate ─────────────────────────────────────────────────────────────
 	var delayRatePct float64
 	if activeTotal > 0 {
@@ -234,8 +238,6 @@ func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) mode
 	).Scan(&activeDrivers)
 
 	// ── Today's route assignments ─────────────────────────────────────────────
-	// Fetch each active driver's assigned shipment count from today's routes.
-	// Routes in 'pendiente' or 'en_curso' are both considered active.
 	today := now.Format("2006-01-02")
 	type driverLoad struct {
 		driverID    string
@@ -258,7 +260,6 @@ func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) mode
 		}
 	}
 
-	// Drivers with ≥ 1 shipment assigned today.
 	driversWithLoad := make(map[string]int, len(loads))
 	totalAssigned := 0
 	for _, dl := range loads {
@@ -271,16 +272,12 @@ func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) mode
 		idleDrivers = 0
 	}
 
-	// Average load per busy driver (not per all active drivers, to avoid
-	// diluting the metric with truly idle drivers).
 	var activeDriversLoad float64
 	if busyDrivers > 0 {
 		activeDriversLoad = math.Round(float64(totalAssigned)/float64(busyDrivers)*10) / 10
 	}
 
 	// ── Orphan shipments ───────────────────────────────────────────────────────
-	// out_for_delivery shipments whose tracking_id does not appear in any
-	// active route for today.
 	var orphanShipments int
 	_ = db.QueryRow(
 		`SELECT COUNT(*)
@@ -296,63 +293,122 @@ func analyzeFleet(db *sql.DB, now time.Time, delayedTotal, activeTotal int) mode
 		today,
 	).Scan(&orphanShipments)
 
-	base := model.FleetSuggestion{
+	// ── 1. Heuristic classification (always runs) ─────────────────────────────
+	heurStatus := runHeuristic(delayRatePct, idleDrivers, orphanShipments, activeDriversLoad)
+	heurMsg := fleetStatusMessage(heurStatus, idleDrivers, orphanShipments, activeDriversLoad)
+
+	// Build the operational-metrics struct (backward compat).
+	sugg := model.FleetSuggestion{
+		Status:            heurStatus,
+		Message:           heurMsg,
 		DelayRatePct:      delayRatePct,
 		ActiveDrivers:     activeDrivers,
 		IdleDrivers:       idleDrivers,
 		OrphanShipments:   orphanShipments,
 		ActiveDriversLoad: activeDriversLoad,
 	}
+	if heurStatus == model.FleetStatusCritical {
+		sugg.DriversNeeded = int(math.Ceil(float64(orphanShipments) / maxPackagesPerDriver))
+	} else if heurStatus == model.FleetStatusPreventive {
+		sugg.CapacityUsedPct = math.Round(activeDriversLoad/float64(maxPackagesPerDriver)*1000) / 10
+	}
 
-	// ── CASO A: Ineficiencia de ruteo ─────────────────────────────────────────
-	// SLA comprometido pero hay choferes desocupados → problema de asignación,
-	// no de capacidad. Debe resolverse antes de contratar.
+	rawMetrics := &model.FleetRawMetrics{
+		TotalShipments:       activeTotal,
+		SlaDelayPct:          delayRatePct,
+		OrphanShipments:      orphanShipments,
+		IdleDrivers:          idleDrivers,
+		ActiveDrivers:        activeDrivers,
+		ActiveDriversLoad:    activeDriversLoad,
+		SuggestedDriverDelta: calcDriverDelta(delayRatePct, idleDrivers, orphanShipments, activeDrivers, activeTotal),
+	}
+
+	heurDiag := model.FleetDiagnosis{
+		Status:     heurStatus,
+		Message:    heurMsg,
+		RawMetrics: rawMetrics,
+	}
+
+	// ── 2. ML classification (runs when model is loaded) ──────────────────────
+	var mlPred *model.FleetDiagnosis
+	if h.fleetML != nil && h.fleetML.IsReady() {
+		mlStatus, confidence, voteDist := h.fleetML.PredictFleetState(
+			int(now.Weekday()), activeTotal, delayRatePct,
+			orphanShipments, idleDrivers, activeDriversLoad,
+		)
+		mlMsg := fleetStatusMessage(mlStatus, idleDrivers, orphanShipments, activeDriversLoad)
+		mlPred = &model.FleetDiagnosis{
+			Status:           mlStatus,
+			Message:          mlMsg,
+			Confidence:       math.Round(confidence*10000) / 10000,
+			RawMetrics:       rawMetrics,
+			VoteDistribution: voteDist,
+		}
+	}
+
+	return sugg, heurDiag, mlPred
+}
+
+// runHeuristic applies the deterministic five-case fleet classification.
+func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments int, activeDriversLoad float64) model.FleetStatus {
 	if delayRatePct > 10.0 && idleDrivers > 0 {
-		base.Status = model.FleetStatusWarning
-		base.Message = "⚠️ Ineficiencia detectada: SLA comprometido, pero hay " +
+		return model.FleetStatusWarning
+	}
+	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
+		return model.FleetStatusCritical
+	}
+	if delayRatePct < 5.0 && idleDrivers == 0 && activeDriversLoad > float64(maxPackagesPerDriver)*0.90 {
+		return model.FleetStatusPreventive
+	}
+	if delayRatePct < 2.0 && activeDriversLoad < float64(maxPackagesPerDriver)*0.50 {
+		return model.FleetStatusIdle
+	}
+	return model.FleetStatusStable
+}
+
+// fleetStatusMessage returns the operator-facing message for a given fleet status.
+func fleetStatusMessage(status model.FleetStatus, idleDrivers, orphanShipments int, activeDriversLoad float64) string {
+	switch status {
+	case model.FleetStatusWarning:
+		return "⚠️ Ineficiencia detectada: SLA comprometido, pero hay " +
 			itoa(idleDrivers) + " chofer(es) inactivo(s). " +
 			"Revise la asignación de rutas antes de sumar flota."
-		return base
-	}
-
-	// ── CASO B: Déficit crítico ───────────────────────────────────────────────
-	// SLA comprometido, sin choferes libres y hay envíos sin asignar.
-	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
+	case model.FleetStatusCritical:
 		driversNeeded := int(math.Ceil(float64(orphanShipments) / maxPackagesPerDriver))
-		base.Status = model.FleetStatusCritical
-		base.DriversNeeded = driversNeeded
-		base.Message = "🚨 Capacidad rebasada: Todos los choferes están ocupados. " +
+		return "🚨 Capacidad rebasada: Todos los choferes están ocupados. " +
 			"Se requieren " + itoa(driversNeeded) + " vehículo(s) extra para absorber " +
 			itoa(orphanShipments) + " envío(s) estancado(s)."
-		return base
-	}
-
-	// ── CASO C: Alerta preventiva ─────────────────────────────────────────────
-	// SLA estable pero la flota está cerca del límite físico → riesgo ante picos.
-	capacityThresholdHigh := float64(maxPackagesPerDriver) * 0.90
-	if delayRatePct < 5.0 && idleDrivers == 0 && activeDriversLoad > capacityThresholdHigh {
+	case model.FleetStatusPreventive:
 		capacityUsedPct := math.Round(activeDriversLoad/float64(maxPackagesPerDriver)*1000) / 10
-		base.Status = model.FleetStatusPreventive
-		base.CapacityUsedPct = capacityUsedPct
-		base.Message = "⚡ Flota al límite: El SLA es estable, pero la operación está al " +
+		return "⚡ Flota al límite: El SLA es estable, pero la operación está al " +
 			ftoa(capacityUsedPct) + "% de su capacidad física. " +
 			"Riesgo alto ante un pico de demanda."
-		return base
-	}
-
-	// ── CASO D: Capacidad ociosa ──────────────────────────────────────────────
-	capacityThresholdLow := float64(maxPackagesPerDriver) * 0.50
-	if delayRatePct < 2.0 && activeDriversLoad < capacityThresholdLow {
-		base.Status = model.FleetStatusIdle
-		base.Message = "💡 Optimización posible: Baja demanda. Se pueden consolidar rutas " +
+	case model.FleetStatusIdle:
+		return "💡 Optimización posible: Baja demanda. Se pueden consolidar rutas " +
 			"y desafectar vehículos temporalmente sin impactar el servicio."
-		return base
+	default:
+		return "✅ Operación equilibrada: La proporción entre envíos, asignaciones y cumplimiento SLA es óptima."
 	}
+}
 
-	// ── DEFAULT: Operación equilibrada ────────────────────────────────────────
-	base.Status = model.FleetStatusStable
-	base.Message = "✅ Operación equilibrada: La proporción entre envíos, asignaciones y cumplimiento SLA es óptima."
-	return base
+// calcDriverDelta returns the recommended change in driver headcount:
+//
+//	> 0  hire/activate that many drivers  (SLA crisis, no idle drivers, orphan shipments exist)
+//	< 0  temporarily deactivate abs(n)    (very low demand, more drivers than needed)
+//	  0  no staffing action required
+func calcDriverDelta(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int) int {
+	// AGREGAR: SLA crítico, todos los choferes ocupados y envíos sin cubrir.
+	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
+		return int(math.Ceil(float64(orphanShipments) / float64(maxPackagesPerDriver)))
+	}
+	// QUITAR: demanda muy baja — hay más capacidad instalada que carga real.
+	if delayRatePct < 2.0 {
+		driversNeeded := int(math.Ceil(float64(totalShipments) / float64(maxPackagesPerDriver)))
+		if surplus := activeDrivers - driversNeeded; surplus > 0 {
+			return -surplus
+		}
+	}
+	return 0
 }
 
 // itoa converts an int to its decimal string representation without importing strconv.

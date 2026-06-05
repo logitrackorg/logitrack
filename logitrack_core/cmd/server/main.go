@@ -17,6 +17,7 @@ import (
 	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
@@ -322,7 +323,14 @@ func main() {
 	// Both handlers need the service to expose runtime state (LastCalculatedAt,
 	// CurrentAverages), so they are created after the service.
 	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo, slaAnomalySvc)
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc)
+
+	fleetModelPath := os.Getenv("FLEET_ML_MODEL_PATH")
+	if fleetModelPath == "" {
+		fleetModelPath = "fleet_model.json"
+	}
+	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
+
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
 	// Attach to the clock callback so every admin clock tick triggers a check.
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
 	_ = slaAnomalySvc // referenced via closure below

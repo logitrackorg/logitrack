@@ -11,33 +11,48 @@ const (
 	FleetStatusStable      FleetStatus = "ESTABLE"
 )
 
-// FleetSuggestion is the output of the heuristic fleet-capacity engine.
+// FleetSuggestion holds the raw operational metrics collected from DB.
+// Status and Message are derived from the heuristic (for backward compat).
 type FleetSuggestion struct {
-	// Status is the heuristic outcome: one of the FleetStatus constants.
-	Status FleetStatus `json:"status"`
-	// Message is the human-readable recommendation for the operator.
-	Message string `json:"message"`
+	Status  FleetStatus `json:"status"`
+	Message string      `json:"message"`
 
-	// ── SLA metrics ────────────────────────────────────────────────────────
-	// DelayRatePct is the % of active monitored shipments currently delayed.
-	DelayRatePct float64 `json:"delay_rate_pct"`
-
-	// ── Operational metrics (new) ──────────────────────────────────────────
-	// ActiveDrivers is the total number of drivers with status='activo'.
-	ActiveDrivers int `json:"active_drivers"`
-	// IdleDrivers is the number of active drivers with 0 shipments assigned today.
-	IdleDrivers int `json:"idle_drivers"`
-	// OrphanShipments is the count of out_for_delivery shipments not assigned
-	// to any driver route today.
-	OrphanShipments int `json:"orphan_shipments"`
-	// ActiveDriversLoad is the average number of shipments per driver that has
-	// at least one shipment assigned today.
+	DelayRatePct      float64 `json:"delay_rate_pct"`
+	ActiveDrivers     int     `json:"active_drivers"`
+	IdleDrivers       int     `json:"idle_drivers"`
+	OrphanShipments   int     `json:"orphan_shipments"`
 	ActiveDriversLoad float64 `json:"active_drivers_load"`
-	// DriversNeeded is the calculated number of extra drivers required to cover
-	// orphan shipments (only set when Status == CRÍTICO).
-	DriversNeeded int `json:"drivers_needed,omitempty"`
-	// CapacityUsedPct is the load vs MaxPackagesPerDriver (only set for PREVENTIVO).
-	CapacityUsedPct float64 `json:"capacity_used_pct,omitempty"`
+	DriversNeeded     int     `json:"drivers_needed,omitempty"`
+	CapacityUsedPct   float64 `json:"capacity_used_pct,omitempty"`
+}
+
+// FleetRawMetrics holds the raw operational numbers used by both engines.
+// Attached to every FleetDiagnosis so the frontend can show an analytics panel.
+type FleetRawMetrics struct {
+	TotalShipments    int     `json:"total_shipments"`
+	SlaDelayPct       float64 `json:"sla_delay_pct"`
+	OrphanShipments   int     `json:"orphan_shipments"`
+	IdleDrivers       int     `json:"idle_drivers"`
+	ActiveDrivers     int     `json:"active_drivers"`
+	ActiveDriversLoad float64 `json:"active_drivers_load"`
+
+	// SuggestedDriverDelta is the recommended change in driver count.
+	// Positive → hire/activate that many drivers.
+	// Negative → temporarily deactivate abs(delta) drivers.
+	// Zero → no staffing action required.
+	SuggestedDriverDelta int `json:"suggested_driver_delta"`
+}
+
+// FleetDiagnosis is the output of one fleet-classification engine
+// (either the deterministic heuristic or the Random Forest).
+type FleetDiagnosis struct {
+	Status     FleetStatus      `json:"status"`
+	Message    string           `json:"message"`
+	Confidence float64          `json:"confidence,omitempty"`        // 0–1; set by ML only
+	RawMetrics *FleetRawMetrics `json:"raw_metrics,omitempty"`       // always set
+	// VoteDistribution maps each FleetStatus label to its vote share (0–100).
+	// Set by the ML engine only.
+	VoteDistribution map[string]int `json:"vote_distribution,omitempty"`
 }
 
 // SLAMetrics is the response payload for GET /stats/sla-metrics.
@@ -66,9 +81,17 @@ type SLAMetrics struct {
 	// lifecycle. Sorted by AvgHours descending for chart readability.
 	CurrentAverages []SLAStateAverage `json:"current_averages"`
 
-	// FleetSuggestion is the output of the heuristic fleet-capacity engine.
-	// Always present (never nil) so the frontend can render the card.
+	// FleetSuggestion contains the raw operational metrics (drivers, loads, etc.)
+	// and the heuristic classification for backward compatibility.
 	FleetSuggestion FleetSuggestion `json:"fleet_suggestion"`
+
+	// HeuristicDiagnosis is the result of the deterministic five-case heuristic.
+	// Always present.
+	HeuristicDiagnosis FleetDiagnosis `json:"heuristic_diagnosis"`
+
+	// MLPrediction is the result of the Random Forest.  Nil when the model has
+	// not been loaded (first startup before fleet_model.json exists).
+	MLPrediction *FleetDiagnosis `json:"ml_prediction,omitempty"`
 }
 
 // SLAStateAverage holds the average dwell time for a single shipment status.
