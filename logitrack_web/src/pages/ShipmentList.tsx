@@ -14,21 +14,28 @@ import { SelectMenu } from "../components/ui/SelectMenu";
 import { TopbarActions } from "../components/topbarContext";
 import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
 
-// ── Delayed badge helper ───────────────────────────────────────────────────
-// Mirrors the default SLA threshold: 24 h historical avg × 1.5 = 36 h.
-// Only applied to states the SLA engine monitors; terminal/pre-operative
-// states are excluded so the badge never appears on delivered/cancelled items.
+// ── SLA badge helpers ──────────────────────────────────────────────────────
+// Mirror the SLA thresholds from the Go model (SLAAtRiskThresholdHours = 24 h,
+// SLADelayThresholdHours = 36 h). Used as client-side fallback when the
+// server-computed flags (is_at_risk / is_delayed) are absent.
 const SLA_MONITORED: ReadonlySet<string> = new Set([
   "at_origin_hub", "at_hub", "loaded", "in_transit",
   "out_for_delivery", "redelivery_scheduled", "ready_for_return",
 ]);
-const DELAYED_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 36 h in ms
+const AT_RISK_THRESHOLD_MS  = 24 * 60 * 60 * 1000; // 24 h — warning band start
+const DELAYED_THRESHOLD_MS  = 36 * 60 * 60 * 1000; // 36 h — critical threshold
+
+function isLikelyAtRisk(s: Shipment): boolean {
+  if (!SLA_MONITORED.has(s.status) || !s.updated_at) return false;
+  const dwell = Date.now() - new Date(s.updated_at).getTime();
+  return dwell > AT_RISK_THRESHOLD_MS && dwell <= DELAYED_THRESHOLD_MS;
+}
 
 function isLikelyDelayed(s: Shipment): boolean {
   if (!SLA_MONITORED.has(s.status) || !s.updated_at) return false;
   return Date.now() - new Date(s.updated_at).getTime() > DELAYED_THRESHOLD_MS;
 }
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
 
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
@@ -83,7 +90,7 @@ function exportToCSV(shipments: Shipment[], branches: Branch[]) {
   URL.revokeObjectURL(url);
 }
 
-type StatusFilter = ShipmentStatus | "active" | "expired" | "sla_risk" | "";
+type StatusFilter = ShipmentStatus | "active" | "expired" | "sla_risk" | "sla_compromised" | "";
 
 const BULK_ELIGIBLE_STATUSES: ShipmentStatus[] = ["at_hub", "delivery_failed"];
 
@@ -174,16 +181,15 @@ export function ShipmentList() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
 
-  const slaCutoff = new Date().getTime() + 24 * 60 * 60 * 1000;
   const filtered = shipments.filter((s) => {
     // Expired drafts are never shown outside the explicit "expired" filter,
     // even if the server returned them (e.g. during a filter transition).
     if (statusFilter !== "expired" && s.status === "expired") return false;
     if (statusFilter === "active" && (s.status === "delivered" || s.status === "draft" || s.status === "returned" || s.status === "cancelled" || s.status === "lost" || s.status === "destroyed")) return false;
     if (statusFilter === "sla_risk") {
-      const cutoff = slaCutoff;
-      if (s.priority !== "alta" || !s.estimated_delivery_at || new Date(s.estimated_delivery_at).getTime() >= cutoff) return false;
-      if (["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status)) return false;
+      if (!(s.is_delayed ?? isLikelyDelayed(s))) return false;
+    } else if (statusFilter === "sla_compromised") {
+      if (!(s.is_at_risk ?? isLikelyAtRisk(s))) return false;
     } else if (statusFilter === "at_hub") {
       if (s.status !== "at_hub" && s.status !== "at_origin_hub") return false;
     } else if (statusFilter !== "active" && statusFilter !== "" && s.status !== statusFilter) return false;

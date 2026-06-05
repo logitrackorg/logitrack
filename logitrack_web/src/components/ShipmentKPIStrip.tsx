@@ -1,17 +1,29 @@
+import type { ReactNode } from "react";
 import type { Shipment, ShipmentStatus } from "../api/shipments";
+
+type StatusFilterValue = ShipmentStatus | "active" | "sla_risk" | "sla_compromised" | "";
 
 type KPI = {
   key: string;
   label: string;
+  subtitle?: string;
   color: string;
   bg: string;
   border: string;
-  filterValue: ShipmentStatus | "active" | "sla_risk" | "problem" | "";
+  filterValue: StatusFilterValue;
   count: (list: Shipment[]) => number;
+  badge?: (count: number) => ReactNode;
 };
 
+const SLA_MONITORED_SET = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+const AT_RISK_MS  = 24 * 60 * 60 * 1000; // 24 h
+const DELAYED_MS  = 36 * 60 * 60 * 1000; // 36 h
 
 const KPIS: KPI[] = [
+  // 1 — En tránsito
   {
     key: "in_transit",
     label: "En tránsito",
@@ -21,15 +33,8 @@ const KPIS: KPI[] = [
     filterValue: "in_transit",
     count: (list) => list.filter((s) => s.status === "in_transit").length,
   },
-  {
-    key: "out_for_delivery",
-    label: "Última milla",
-    color: "var(--warn)",
-    bg: "var(--warn-bg)",
-    border: "var(--warn-border)",
-    filterValue: "out_for_delivery",
-    count: (list) => list.filter((s) => s.status === "out_for_delivery").length,
-  },
+
+  // 2 — En sucursal
   {
     key: "at_hub",
     label: "En sucursal",
@@ -37,32 +42,62 @@ const KPIS: KPI[] = [
     bg: "var(--purple-bg)",
     border: "var(--purple-bg)",
     filterValue: "at_hub",
-    count: (list) => list.filter((s) => s.status === "at_hub" || s.status === "at_origin_hub").length,
+    count: (list) =>
+      list.filter((s) => s.status === "at_hub" || s.status === "at_origin_hub").length,
   },
+
+  // 3 — SLA Comprometido (warning / amarillo)
+  {
+    key: "sla_compromised",
+    label: "SLA Comprometido",
+    subtitle: "Próximos a vencer",
+    color: "#b45309",           // amber-700
+    bg: "rgba(245,158,11,0.08)",
+    border: "#fcd34d",          // amber-300
+    filterValue: "sla_compromised",
+    count: (list) =>
+      list.filter((s) => {
+        // Prefer server-computed flag (honours admin time-travel via clock.Now()).
+        if (s.is_at_risk !== undefined) return s.is_at_risk;
+        if (!SLA_MONITORED_SET.has(s.status) || !s.updated_at) return false;
+        const dwell = Date.now() - new Date(s.updated_at).getTime();
+        return dwell > AT_RISK_MS && dwell <= DELAYED_MS;
+      }).length,
+    badge: (count) =>
+      count > 0 ? (
+        <div className="mt-1.5 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 inline-block">
+          24–36 h en estado
+        </div>
+      ) : null,
+  },
+
+  // 4 — Demorados (crítico / rojo)
   {
     key: "sla_risk",
-    label: "Riesgo SLA",
-    color: "var(--warn-text)",
-    bg: "var(--warn-bg)",
-    border: "var(--warn-border)",
+    label: "Demorados",
+    color: "var(--danger-c, #ef4444)",
+    bg: "var(--danger-bg, #fef2f2)",
+    border: "var(--danger-border, #fecaca)",
     filterValue: "sla_risk",
-    count: (list) => {
-      const cutoff = Date.now() + 24 * 60 * 60 * 1000;
-      return list.filter(
-        (s) =>
-          s.priority === "alta" &&
-          s.estimated_delivery_at &&
-          new Date(s.estimated_delivery_at).getTime() < cutoff &&
-          !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status),
-      ).length;
-    },
+    count: (list) =>
+      list.filter((s) => {
+        if (s.is_delayed !== undefined) return s.is_delayed;
+        if (!SLA_MONITORED_SET.has(s.status) || !s.updated_at) return false;
+        return Date.now() - new Date(s.updated_at).getTime() > DELAYED_MS;
+      }).length,
+    badge: (count) =>
+      count > 0 ? (
+        <div className="mt-1.5 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 inline-block">
+          +36 h sin cambio de estado
+        </div>
+      ) : null,
   },
 ];
 
 type Props = {
   shipments: Shipment[];
   activeFilter: string;
-  onFilter: (v: ShipmentStatus | "active" | "sla_risk" | "") => void;
+  onFilter: (v: StatusFilterValue) => void;
 };
 
 export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
@@ -76,7 +111,7 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
         return (
           <button
             key={kpi.key}
-            onClick={() => onFilter(isActive ? "active" : kpi.filterValue as ShipmentStatus | "active" | "sla_risk" | "")}
+            onClick={() => onFilter(isActive ? "active" : kpi.filterValue)}
             className="text-left rounded-xl p-3.5 border transition-all cursor-pointer"
             style={{
               background: isActive ? kpi.bg : "var(--bg-card)",
@@ -91,12 +126,15 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
             >
               {count}
             </div>
-            <div className="text-xs font-semibold text-slate-500 leading-tight">{kpi.label}</div>
-            {kpi.key === "sla_risk" && count > 0 && (
-              <div className="mt-1.5 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block">
-                ⚠ Próximas 24 h
+            <div className="text-xs font-semibold text-slate-500 leading-tight">
+              {kpi.label}
+            </div>
+            {kpi.subtitle && (
+              <div className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                {kpi.subtitle}
               </div>
             )}
+            {kpi.badge?.(count)}
           </button>
         );
       })}

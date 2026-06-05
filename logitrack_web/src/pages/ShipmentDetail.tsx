@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck, Clock } from "lucide-react";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
 import {
   shipmentApi,
   type Shipment,
@@ -620,12 +620,11 @@ export function ShipmentDetail() {
           <code className="text-xl font-mono font-bold text-slate-900 tracking-tight">{shipment.tracking_id}</code>
           <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
           <PriorityBadge priority={shipment.priority} />
-          {isShipmentDelayed(shipment) && (
+          {(shipment.is_delayed ?? isShipmentDelayed(shipment)) && (
             <span
               title="Este envío lleva más de 36 h en su estado actual, superando el umbral del motor SLA"
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap"
+              className="bg-red-500/20 text-red-500 border border-red-500 px-2 py-1 rounded text-xs font-bold uppercase ml-2 whitespace-nowrap"
             >
-              <Clock className="w-3 h-3 shrink-0" />
               Demorado
             </span>
           )}
