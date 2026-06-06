@@ -750,6 +750,8 @@ export function ShipmentDetail() {
                 </Button>
               )}
             </div>
+          </div>
+        </div>
       </div>
 
       {/* Banner: reservado para pickup por vehículo de otra sucursal */}
