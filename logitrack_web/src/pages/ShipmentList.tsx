@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, LayoutList, Truck } from "lucide-react";
+import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, LayoutList, Truck, PackageOpen } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
@@ -89,6 +89,21 @@ const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all";
 
 type ViewMode = "flat" | "trip";
+
+function isLikelyDelayed(s: Shipment): boolean {
+  if (!s.estimated_delivery_date) return false;
+  const now = new Date();
+  const est = new Date(s.estimated_delivery_date);
+  return est < now && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+}
+
+function isLikelyAtRisk(s: Shipment): boolean {
+  if (!s.estimated_delivery_date) return false;
+  const now = new Date();
+  const est = new Date(s.estimated_delivery_date);
+  const hoursLeft = (est.getTime() - now.getTime()) / 36e5;
+  return hoursLeft >= 0 && hoursLeft <= 24 && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+}
 
 export function ShipmentList() {
   const [searchParams, setSearchParams] = useSearchParams();
