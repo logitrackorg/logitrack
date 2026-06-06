@@ -105,12 +105,6 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
 	}
 
-	// Bloquear si ya existe un reclamo activo para este envío
-	if existing, err := s.claimRepo.GetLatestByTrackingID(trackingID); err == nil {
-		if !strings.HasPrefix(string(existing.Status), "resolved_") {
-			return model.Claim{}, fmt.Errorf("ya existe un reclamo activo (%s) para este envío en estado %s", existing.ID, existing.Status)
-		}
-	}
 
 	claimID, err := s.claimRepo.NextID()
 	if err != nil {
