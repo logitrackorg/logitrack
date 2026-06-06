@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
@@ -12,6 +12,8 @@ import {
 import { slaMetricsApi, type SLAMetrics } from "../../api/slaMetrics";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Skeleton } from "../../utils/dashboard";
+import { ReportExport } from "../../components/ReportExport";
+import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const COLOR_OK   = "#22c55e";
@@ -53,21 +55,82 @@ function LineTooltip({ active, payload, label }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SlaTab() {
-  const [metrics, setMetrics]       = useState<SLAMetrics | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [metrics, setMetrics] = useState<SLAMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(false);
 
-  const load = (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true);
+  const load = () => {
     setError(false);
     slaMetricsApi
       .get()
-      .then((data) => { setMetrics(data); setLoading(false); setRefreshing(false); })
-      .catch(() => { setError(true); setLoading(false); setRefreshing(false); });
+      .then((data) => { setMetrics(data); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
   };
 
   useEffect(() => { load(); }, []);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const exportPDF = useCallback(async () => {
+    await exportToPDF(contentRef, `metricas_sla_${new Date().toISOString().slice(0, 10)}.pdf`);
+  }, []);
+
+  const exportExcel = useCallback(() => {
+    if (!metrics) return;
+    const date = new Date().toISOString().slice(0, 10);
+    exportToExcel(
+      [
+        {
+          name: "Diagnóstico",
+          data: [
+            {
+              Modelo:  "Heurística",
+              Estado:  metrics.heuristic_diagnosis.status,
+              Mensaje: metrics.heuristic_diagnosis.message,
+            },
+            ...(metrics.ml_prediction
+              ? [{
+                  Modelo:          "Random Forest",
+                  Estado:          metrics.ml_prediction.status,
+                  Mensaje:         metrics.ml_prediction.message,
+                  "Confianza (%)": Math.round((metrics.ml_prediction.confidence ?? 0) * 100),
+                }]
+              : []),
+          ],
+        },
+        {
+          name: "KPIs SLA",
+          data: [{
+            "Tasa cumplimiento SLA (%)": metrics.sla_health_rate.toFixed(1),
+            "Envíos demorados":          metrics.delayed_total,
+            "Envíos activos":            metrics.active_total,
+            "Tasa demora (%)":           metrics.fleet_suggestion.delay_rate_pct.toFixed(1),
+            "Choferes activos":          metrics.fleet_suggestion.active_drivers,
+            "Choferes inactivos":        metrics.fleet_suggestion.idle_drivers,
+            "Envíos huérfanos":          metrics.fleet_suggestion.orphan_shipments,
+          }],
+        },
+        {
+          name: "Cuellos de botella",
+          data: metrics.bottlenecks.map((b) => ({ Estado: b.status, "Cant. demorados": b.count })),
+        },
+        {
+          name: "Tendencia 7 días",
+          data: metrics.delay_trend.map((d) => ({ Fecha: d.date, Escalados: d.count })),
+        },
+        ...(metrics.current_averages?.some((a) => a.avg_hours > 0)
+          ? [{
+              name: "Prom. por estado",
+              data: metrics.current_averages.map((a) => ({
+                Estado:           a.status,
+                "Horas promedio": a.avg_hours.toFixed(1),
+              })),
+            }]
+          : []),
+      ],
+      `metricas_sla_${date}.xlsx`,
+    );
+  }, [metrics]);
 
   if (loading) return <Skeleton className="h-96" />;
 
@@ -77,7 +140,7 @@ export default function SlaTab() {
         <AlertCircle className="w-8 h-8 text-rose-400" />
         <p className="text-sm">No se pudieron cargar las métricas SLA.</p>
         <button
-          onClick={() => load(true)}
+          onClick={() => load()}
           className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" /> Reintentar
@@ -97,17 +160,13 @@ export default function SlaTab() {
 
   return (
     <div className="space-y-6">
-      {/* ── Refresh ──────────────────────────────────────────────────────────── */}
+      {/* ── Export ───────────────────────────────────────────────────────────── */}
       <div className="flex justify-end">
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          Actualizar
-        </button>
+        <ReportExport onExportPDF={exportPDF} onExportExcel={exportExcel} />
       </div>
+
+      {/* ── Capturable content ───────────────────────────────────────────────── */}
+      <div ref={contentRef} className="space-y-6">
 
       {/* ── Comparison panel: heuristic vs ML ────────────────────────────────── */}
       <FleetComparisonPanel
@@ -248,6 +307,7 @@ export default function SlaTab() {
           </Card>
         );
       })()}
+      </div>{/* end contentRef */}
     </div>
   );
 }
