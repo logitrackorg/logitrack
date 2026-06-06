@@ -698,6 +698,7 @@ func main() {
 	publicAPI.GET("/claims/:id", claimHandler.GetPublicClaim)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
+	publicAPI.GET("/config", sysConfigHandler.GetPublicConfig)
 	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {

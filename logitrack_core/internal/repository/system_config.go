@@ -24,10 +24,10 @@ func (r *postgresSystemConfigRepository) Get() model.SystemConfig {
 	var cfg model.SystemConfig
 	err := r.db.QueryRow(`
 		SELECT max_delivery_attempts, draft_retention_days, draft_purge_days, 
-		       pickup_deadline_days, force_email_notifications, max_reschedules,max_reschedule_days
+		       pickup_deadline_days, force_email_notifications, max_reschedules,max_reschedule_days,two_fa_cooldown_minutes
 		FROM system_config WHERE id = 1`).
 		Scan(&cfg.MaxDeliveryAttempts, &cfg.DraftRetentionDays, &cfg.DraftPurgeDays, 
-			&cfg.PickupDeadlineDays, &cfg.ForceEmailNotifications, &cfg.MaxReschedules, &cfg.MaxRescheduleDays)
+			&cfg.PickupDeadlineDays, &cfg.ForceEmailNotifications, &cfg.MaxReschedules, &cfg.MaxRescheduleDays, &cfg.TwoFACooldownMinutes,)
 	if err != nil {
 		log.Printf("❌ [REPO] Error leyendo config: %v", err)
 		return model.DefaultSystemConfig()
@@ -47,7 +47,8 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		     pickup_deadline_days        = $4,
 		     force_email_notifications   = $5,
 		     max_reschedules             = $6,
-			 max_reschedule_days         = $7
+			 max_reschedule_days         = $7,
+			 two_fa_cooldown_minutes 	 = $8
 		 WHERE id = 1`,
 		cfg.MaxDeliveryAttempts,
 		cfg.DraftRetentionDays,
@@ -55,7 +56,8 @@ func (r *postgresSystemConfigRepository) Update(cfg model.SystemConfig) error {
 		cfg.PickupDeadlineDays,
 		cfg.ForceEmailNotifications,
 		cfg.MaxReschedules, 
-		cfg.MaxRescheduleDays, 
+		cfg.MaxRescheduleDays,
+		cfg.TwoFACooldownMinutes, 
 	)
 	if err != nil {
 		log.Printf("[ERROR] Update failed: %v", err) 

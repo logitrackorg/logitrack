@@ -145,7 +145,8 @@ export function SystemConfig() {
       draft.pickup_deadline_days !== config.pickup_deadline_days ||
       draft.force_email_notifications !== config.force_email_notifications ||
       draft.max_reschedules !== config.max_reschedules ||
-      draft.max_reschedule_days !== config.max_reschedule_days
+      draft.max_reschedule_days !== config.max_reschedule_days ||
+      draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes
     );
 
   return (
@@ -572,6 +573,79 @@ export function SystemConfig() {
                 <p>
                   Los clientes podrán reprogramar dentro de los próximos <strong>{draft.max_reschedule_days}</strong> {draft.max_reschedule_days === 1 ? 'día' : 'días'} desde la fecha original. Cambios aplicados inmediatamente para nuevas solicitudes.
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ✅ NUEVO: Seguridad 2FA */}
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-slate-500" />
+                <CardTitle>Seguridad 2FA</CardTitle>
+              </div>
+              <CardDescription>
+                Tiempo de bloqueo obligatorio después de 3 intentos fallidos de código durante la activación o verificación de autenticación de doble factor. Rango permitido: 1–10 minutos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-semibold text-slate-700 min-w-[200px]">
+                  Bloqueo tras 3 intentos fallidos
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, two_fa_cooldown_minutes: Math.max(1, d.two_fa_cooldown_minutes - 1) } : d
+                      )
+                    }
+                    disabled={draft.two_fa_cooldown_minutes <= 1}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Minus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <span className="min-w-[60px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                    {draft.two_fa_cooldown_minutes} min
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft((d) =>
+                        d ? { ...d, two_fa_cooldown_minutes: Math.min(10, d.two_fa_cooldown_minutes + 1) } : d
+                      )
+                    }
+                    disabled={draft.two_fa_cooldown_minutes >= 10}
+                    className="h-9 w-9 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-slate-700" />
+                  </button>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={draft.two_fa_cooldown_minutes}
+                    onChange={(e) =>
+                      setDraft((d) =>
+                        d ? { ...d, two_fa_cooldown_minutes: Number(e.target.value) } : d
+                      )
+                    }
+                    className="w-32 accent-[#1e3a5f]"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs text-slate-500">
+                <p>
+                  Después de 3 códigos incorrectos, el usuario debe esperar <strong>{draft.two_fa_cooldown_minutes}</strong> {draft.two_fa_cooldown_minutes === 1 ? 'minuto' : 'minutos'} antes de poder reintentar. Aplica tanto en la configuración inicial como en el login con 2FA activo.
+                </p>
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
+                  <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-800">
+                    <strong className="font-semibold">Recomendación:</strong> Se sugiere configurar al menos <strong>5 minutos</strong> para mitigar ataques de fuerza bruta. Un cooldown muy bajo (1-2 minutos) puede facilitar intentos automatizados de adivinación de códigos TOTP.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
