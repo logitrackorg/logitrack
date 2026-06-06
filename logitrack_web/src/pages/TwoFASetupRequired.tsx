@@ -33,7 +33,7 @@ export const TwoFASetupRequired: React.FC = () => {
           setCooldownMinutes(config.two_fa_cooldown_minutes);
           console.log('⚙️ Cooldown configurado:', config.two_fa_cooldown_minutes, 'minutos');
         }
-      } catch (err) {
+      } catch  {
         console.error('Error cargando config de cooldown, usando 1 min por defecto');
         if (!cancelled) setCooldownMinutes(1);
       }
