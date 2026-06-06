@@ -6,6 +6,9 @@ import type {
   PickupResponse,
   RescheduleResponse,
   CancelResponse,
+  FileClaimResponse,
+  ClaimType,
+  DamageSubtype,
 } from '../types/chatbot';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1';
@@ -77,6 +80,30 @@ export const chatbotService = {
     const response = await chatbotAPI.post('/sender/auth', {
       tracking_id: trackingId,
       sender_dni: senderDni,
+    });
+    return response.data;
+  },
+
+  // US5: Crear reclamo desde chatbot
+  fileClaim: async (
+    trackingId: string,
+    claimantDni: string,
+    claimantName: string,
+    claimType: ClaimType,
+    damageSubtypes: DamageSubtype[],
+    description: string,
+    evidenceFile?: File
+  ): Promise<FileClaimResponse> => {
+    const form = new FormData();
+    form.append('tracking_id', trackingId);
+    form.append('claimant_dni', claimantDni);
+    form.append('claimant_name', claimantName);
+    form.append('claim_type', claimType);
+    form.append('damage_subtypes', damageSubtypes.join(','));
+    form.append('description', description);
+    if (evidenceFile) form.append('evidence', evidenceFile);
+    const response = await chatbotAPI.post<FileClaimResponse>('/claim', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },

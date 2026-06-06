@@ -5,11 +5,22 @@ import { chatbotService } from '../../api/chatbot';
 import type {
   ChatMessage,
   Shipment,
-  ChatOption
+  ChatOption,
+  ClaimType,
+  DamageSubtype,
 } from '../../types/chatbot';
 import './chatbot.css';
 
-type ChatState = 'initial' | 'authenticating' | 'authenticated' | 'menu' | 'processing';
+type ChatState =
+  | 'initial'
+  | 'authenticating'
+  | 'authenticated'
+  | 'menu'
+  | 'processing'
+  | 'claim_damage_subtypes'
+  | 'claim_description'
+  | 'claim_evidence';
+
 type UserType = 'recipient' | 'sender' | null;
 
 export const ChatbotWidget: React.FC = () => {
@@ -18,12 +29,20 @@ export const ChatbotWidget: React.FC = () => {
   const [state, setState] = useState<ChatState>('initial');
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState<string>('');
+  const [recipientName, setRecipientName] = useState<string>('');
   const [senderDni, setSenderDni] = useState<string>('');
   const [userType, setUserType] = useState<UserType>(null);
   const [awaitingDni, setAwaitingDni] = useState(false);
   const [trackingId, setTrackingId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(true);
+  // US5: estado del reclamo en construcción
+  const [claimType, setClaimType] = useState<ClaimType | null>(null);
+  const [damageSubtypes, setDamageSubtypes] = useState<DamageSubtype[]>([]);
+  const [claimDescription, setClaimDescription] = useState<string>('');
+  const [claimEvidenceFile, setClaimEvidenceFile] = useState<File | null>(null);
+  const [evidenceRequired, setEvidenceRequired] = useState(false);
+
   const sessionTimeoutRef = useRef<number | null>(null);
   const SESSION_DURATION = 60000; // 1 minuto en milisegundos
   const [timeRemaining, setTimeRemaining] = useState(60);
@@ -81,12 +100,33 @@ export const ChatbotWidget: React.FC = () => {
 
       setShipment(response.shipment);
       setRecipientDni(dni);
+      setRecipientName(response.recipient_name);
       setTrackingId(trackingId);
       setState('authenticated');
       setSessionActive(true);
 
       const menuOptions = buildMenuOptions(response.available_actions);
       resetSessionTimer();
+
+      // Si hay reclamo activo, informar y NO ofrecer crear uno nuevo
+      if (response.active_claim) {
+        const statusLabel: Record<string, string> = {
+          open: 'Abierto',
+          in_review: 'En revisión',
+          pending_customer: 'Pendiente de tu respuesta',
+          derived: 'Derivado',
+        };
+        const label = statusLabel[response.active_claim.status] ?? response.active_claim.status;
+        addBotMessage(
+          `¡Hola, ${response.recipient_name}! ✅\n\n` +
+          `Encontré tu envío: ${trackingId}\n` +
+          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+          `📋 Ya tenés un reclamo abierto: **${response.active_claim.claim_id}** (${label}).\n` +
+          `No podés abrir otro hasta que se resuelva el actual.`,
+          menuOptions.length > 0 ? menuOptions : [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
+        );
+        return;
+      }
 
       if (menuOptions.length > 0) {
         addBotMessage(
@@ -191,6 +231,11 @@ export const ChatbotWidget: React.FC = () => {
         value: 'cancel',
         action: 'cancel',
       },
+      file_claim: {
+        label: '📋 Hacer un reclamo',
+        value: 'file_claim',
+        action: 'file_claim',
+      },
     };
 
     return availableActions.map(action => optionsMap[action]).filter(Boolean);
@@ -202,7 +247,6 @@ export const ChatbotWidget: React.FC = () => {
 
     if (state === 'authenticating') {
       if (!trackingId) {
-        // Paso 1: guardar tracking ID y preguntar rol
         setTrackingId(input);
         addBotMessage(
           '¿Cómo ingresás al sistema?',
@@ -212,13 +256,45 @@ export const ChatbotWidget: React.FC = () => {
           ]
         );
       } else if (awaitingDni) {
-        // Paso 3: autenticar con el DNI según el rol seleccionado
         setAwaitingDni(false);
         if (userType === 'sender') {
           await handleSenderAuthenticate(trackingId, input);
         } else {
           await handleAuthenticate(trackingId, input);
         }
+      }
+      return;
+    }
+
+    // US5: descripción del reclamo
+    if (state === 'claim_description') {
+      if (input.trim().length < 10) {
+        addBotMessage('Por favor describí el problema con al menos 10 caracteres.');
+        return;
+      }
+      if (input.trim().length > 400) {
+        addBotMessage('La descripción no puede superar los 400 caracteres.');
+        return;
+      }
+      setClaimDescription(input.trim());
+
+      // ¿requiere evidencia?
+      const needsEvidence = claimType === 'damage' && damageSubtypes.includes('product_damaged');
+      setEvidenceRequired(needsEvidence);
+
+      if (needsEvidence) {
+        setState('claim_evidence');
+        addBotMessage(
+          '📎 Para este tipo de reclamo es **obligatorio** adjuntar una foto o documento del daño.\n\nUsá el botón 📎 para adjuntarlo.',
+        );
+      } else if (claimType === 'damage') {
+        setState('claim_evidence');
+        addBotMessage(
+          '¿Querés adjuntar una foto o documento de respaldo? (opcional)\n\nPodés usar el botón 📎 o continuar sin adjunto.',
+          [{ label: '⏭ Continuar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const }]
+        );
+      } else {
+        await handleSubmitClaim(null);
       }
     }
   };
@@ -303,6 +379,34 @@ export const ChatbotWidget: React.FC = () => {
     }
   }, [timeRemaining, sessionActive, state]);
 
+  const handleSubmitClaim = async (evidence: File | null) => {
+    if (!claimType || !trackingId) return;
+    const name = userType === 'sender'
+      ? (shipment?.sender.name ?? '')
+      : (recipientName || shipment?.recipient.name || '');
+    const dni = userType === 'sender' ? senderDni : recipientDni;
+    try {
+      const res = await chatbotService.fileClaim(
+        trackingId, dni, name, claimType, damageSubtypes, claimDescription, evidence ?? undefined
+      );
+      addBotMessage(
+        `✅ ${res.message}\n\nGuardá el número de reclamo: **${res.claim_id}**`,
+        [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
+      );
+      window.dispatchEvent(new CustomEvent('chatbot:claim-created', { detail: { claimId: res.claim_id, trackingId } }));
+    } catch (err) {
+      const apiErr = err as { response?: { data?: { error?: string } } };
+      addBotMessage('❌ ' + (apiErr.response?.data?.error || 'No se pudo registrar el reclamo. Intentá de nuevo.'));
+    } finally {
+      setClaimType(null);
+      setDamageSubtypes([]);
+      setClaimDescription('');
+      setClaimEvidenceFile(null);
+      setEvidenceRequired(false);
+      setState('authenticated');
+    }
+  };
+
   const handleOptionClick = async (action: string, value: string) => {
     if (!sessionActive) {
       addBotMessage('⏱️ Tu sesión ha expirado por seguridad. Por favor vuelve a autenticarte.');
@@ -346,6 +450,68 @@ export const ChatbotWidget: React.FC = () => {
         case 'restart':
           handleRestart();
           break;
+
+        // US5: flujo de reclamo
+        case 'file_claim':
+          addBotMessage(
+            '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?',
+            [
+              { label: '📦 Daño / Faltante',       value: 'damage',        action: 'select_claim_type' as const },
+              { label: '🕐 Demora en entrega',      value: 'delay',         action: 'select_claim_type' as const },
+              { label: '🚫 No lo recibí',           value: 'not_delivered', action: 'select_claim_type' as const },
+              { label: '😡 Maltrato del personal',  value: 'bad_treatment', action: 'select_claim_type' as const },
+              { label: '📝 Datos incorrectos',      value: 'wrong_data',    action: 'select_claim_type' as const },
+              { label: '❓ Otro',                   value: 'other',         action: 'select_claim_type' as const },
+            ]
+          );
+          setState('authenticated');
+          break;
+
+        case 'select_claim_type': {
+          const selectedType = value as ClaimType;
+          setClaimType(selectedType);
+          setDamageSubtypes([]);
+          if (selectedType === 'damage') {
+            setState('claim_damage_subtypes');
+            addBotMessage(
+              '¿Qué tipo de daño o faltante?  (podés elegir más de uno)',
+              [
+                { label: '📦 Producto dañado',    value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
+                { label: '📉 Falta mercadería',   value: 'missing_products',  action: 'toggle_damage_subtype' as const },
+                { label: '📫 Embalaje dañado',    value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+                { label: '✅ Listo, continuar',   value: 'done',              action: 'confirm_damage_subtypes' as const },
+              ]
+            );
+          } else {
+            setState('claim_description');
+            addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
+          }
+          break;
+        }
+
+        case 'toggle_damage_subtype': {
+          const sub = value as DamageSubtype;
+          setDamageSubtypes(prev =>
+            prev.includes(sub) ? prev.filter(s => s !== sub) : [...prev, sub]
+          );
+          // No avanzar de estado, el usuario confirma con "Listo"
+          setState('claim_damage_subtypes');
+          break;
+        }
+
+        case 'confirm_damage_subtypes':
+          setState('claim_description');
+          addBotMessage('Describí brevemente el problema (mínimo 10 caracteres, máximo 400):');
+          break;
+
+        case 'skip_claim_evidence':
+          await handleSubmitClaim(null);
+          break;
+
+        case 'confirm_claim_submit':
+          await handleSubmitClaim(claimEvidenceFile);
+          break;
+
         default:
           addBotMessage('Opción no reconocida. Por favor intenta de nuevo.');
       }
@@ -657,8 +823,29 @@ export const ChatbotWidget: React.FC = () => {
             placeholder={
               state === 'authenticated'
                 ? 'Selecciona una opción...'
+                : state === 'claim_evidence'
+                ? 'Seleccioná un archivo o usá las opciones...'
                 : 'Escribe tu respuesta...'
             }
+            showFileUpload={state === 'claim_evidence'}
+            fileUploadDisabled={loading}
+            onFileSelect={(file) => {
+              setClaimEvidenceFile(file);
+              addUserMessage(`📎 ${file.name}`);
+              // Si la evidencia es obligatoria, sólo se puede confirmar o cambiar el archivo.
+              // Si es opcional, también se puede saltar.
+              const confirmOptions: ChatOption[] = [
+                { label: '✅ Confirmar y enviar reclamo', value: 'confirm', action: 'confirm_claim_submit' as const },
+                { label: '🔄 Cambiar archivo', value: 'change', action: 'skip_claim_evidence' as const },
+              ];
+              if (!evidenceRequired) {
+                confirmOptions.push({ label: '⏭ Enviar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const });
+              }
+              addBotMessage(
+                `📎 Archivo seleccionado: **${file.name}**\n\n¿Confirmás que querés adjuntarlo al reclamo?`,
+                confirmOptions
+              );
+            }}
           />
         </div>
       )}

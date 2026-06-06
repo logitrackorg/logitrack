@@ -105,6 +105,13 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
 	}
 
+	// Bloquear si ya existe un reclamo activo para este envío
+	if existing, err := s.claimRepo.GetLatestByTrackingID(trackingID); err == nil {
+		if !strings.HasPrefix(string(existing.Status), "resolved_") {
+			return model.Claim{}, fmt.Errorf("ya existe un reclamo activo (%s) para este envío en estado %s", existing.ID, existing.Status)
+		}
+	}
+
 	claimID, err := s.claimRepo.NextID()
 	if err != nil {
 		return model.Claim{}, err
@@ -297,6 +304,19 @@ func (s *ClaimService) GetLatestByTrackingID(trackingID string) (model.Claim, er
 		return model.Claim{}, repository.ErrClaimNotFound
 	}
 	return s.claimRepo.GetLatestByTrackingID(trackingID)
+}
+
+// GetLatestActiveClaimByTrackingID devuelve el reclamo más reciente no resuelto para un envío.
+// Retorna ErrClaimNotFound si no existe o si el único reclamo ya está resuelto.
+func (s *ClaimService) GetLatestActiveClaimByTrackingID(trackingID string) (model.Claim, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingID(strings.TrimSpace(trackingID))
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if strings.HasPrefix(string(claim.Status), "resolved_") {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return claim, nil
 }
 
 func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error) {
