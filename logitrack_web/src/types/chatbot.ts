@@ -16,6 +16,11 @@ export interface FileClaimResponse {
   message: string;
 }
 
+export interface ClaimRespondResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface ChatbotAuthResponse {
   success: boolean;
   recipient_name: string;
@@ -125,7 +130,10 @@ export type ChatAction =
   | 'restart'
   | 'as_recipient'
   | 'as_sender'
-  // US5: reclamos
+  // US4/US5: reclamos
+  | 'respond_claim'
+  | 'skip_claim_response_evidence'
+  | 'confirm_claim_response'
   | 'file_claim'
   | 'select_claim_type'
   | 'toggle_damage_subtype'

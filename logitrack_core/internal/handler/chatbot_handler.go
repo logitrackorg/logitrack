@@ -144,6 +144,10 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 				ClaimID: claim.ID,
 				Status:  string(claim.Status),
 			}
+			// Si el reclamo está esperando respuesta del cliente, habilitar esa acción
+			if claim.Status == model.ClaimStatusPendingCustomer {
+				actions = append(actions, "respond_claim")
+			}
 		} else {
 			// Sin reclamo activo: ofrecer la acción de crear uno
 			// (solo si el envío no está en draft o cancelado)

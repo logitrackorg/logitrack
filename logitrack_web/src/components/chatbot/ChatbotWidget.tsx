@@ -17,6 +17,8 @@ type ChatState =
   | 'authenticated'
   | 'menu'
   | 'processing'
+  | 'claim_response'
+  | 'claim_response_evidence'
   | 'claim_damage_subtypes'
   | 'claim_description'
   | 'claim_evidence';
@@ -36,6 +38,11 @@ export const ChatbotWidget: React.FC = () => {
   const [trackingId, setTrackingId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(true);
+  // US4: estado del flujo de respuesta a reclamo pendiente
+  const [activeClaim, setActiveClaim] = useState<{ claim_id: string; status: string } | null>(null);
+  const [claimResponseText, setClaimResponseText] = useState<string>('');
+  const [pendingClaimId, setPendingClaimId] = useState<string>('');
+  const [pendingEvidenceFile, setPendingEvidenceFile] = useState<File | null>(null);
   // US5: estado del reclamo en construcción
   const [claimType, setClaimType] = useState<ClaimType | null>(null);
   const [damageSubtypes, setDamageSubtypes] = useState<DamageSubtype[]>([]);
@@ -102,29 +109,46 @@ export const ChatbotWidget: React.FC = () => {
       setRecipientDni(dni);
       setRecipientName(response.recipient_name);
       setTrackingId(trackingId);
+      setActiveClaim(response.active_claim ?? null);
       setState('authenticated');
       setSessionActive(true);
 
       const menuOptions = buildMenuOptions(response.available_actions);
       resetSessionTimer();
 
-      // Si hay reclamo activo, informar y NO ofrecer crear uno nuevo
+      // Si hay reclamo activo, informar y actuar según el estado
       if (response.active_claim) {
-        const statusLabel: Record<string, string> = {
-          open: 'Abierto',
-          in_review: 'En revisión',
-          pending_customer: 'Pendiente de tu respuesta',
-          derived: 'Derivado',
-        };
-        const label = statusLabel[response.active_claim.status] ?? response.active_claim.status;
-        addBotMessage(
-          `¡Hola, ${response.recipient_name}! ✅\n\n` +
-          `Encontré tu envío: ${trackingId}\n` +
-          `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
-          `📋 Ya tenés un reclamo abierto: **${response.active_claim.claim_id}** (${label}).\n` +
-          `No podés abrir otro hasta que se resuelva el actual.`,
-          menuOptions.length > 0 ? menuOptions : [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
-        );
+        const { claim_id, status } = response.active_claim;
+
+        if (status === 'pending_customer') {
+          // Reclamo esperando respuesta del cliente — flujo proactivo (US-4)
+          addBotMessage(
+            `¡Hola, ${response.recipient_name}! ✅\n\n` +
+            `Encontré tu envío: ${trackingId}\n` +
+            `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+            `📋 Tu reclamo **${claim_id}** está esperando tu respuesta.\n` +
+            `¿Querés responderlo ahora?`,
+            [
+              { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
+              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+            ]
+          );
+        } else {
+          const statusLabel: Record<string, string> = {
+            open: 'Abierto',
+            in_review: 'En revisión',
+            derived: 'Derivado',
+          };
+          const label = statusLabel[status] ?? status;
+          addBotMessage(
+            `¡Hola, ${response.recipient_name}! ✅\n\n` +
+            `Encontré tu envío: ${trackingId}\n` +
+            `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+            `📋 Ya tenés un reclamo abierto: **${claim_id}** (${label}).\n` +
+            `No podés abrir otro hasta que se resuelva el actual.`,
+            menuOptions.length > 0 ? menuOptions : [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
+          );
+        }
         return;
       }
 
@@ -236,6 +260,11 @@ export const ChatbotWidget: React.FC = () => {
         value: 'file_claim',
         action: 'file_claim',
       },
+      respond_claim: {
+        label: '💬 Responder reclamo pendiente',
+        value: 'respond_claim',
+        action: 'respond_claim',
+      },
     };
 
     return availableActions.map(action => optionsMap[action]).filter(Boolean);
@@ -263,6 +292,22 @@ export const ChatbotWidget: React.FC = () => {
           await handleAuthenticate(trackingId, input);
         }
       }
+      return;
+    }
+
+    // US4: texto de respuesta al reclamo pendiente
+    if (state === 'claim_response') {
+      if (input.trim().length === 0) return;
+      if (input.trim().length > 400) {
+        addBotMessage('⚠️ La respuesta no puede superar los 400 caracteres. Por favor resumila un poco.');
+        return;
+      }
+      setClaimResponseText(input.trim());
+      setState('claim_response_evidence');
+      addBotMessage(
+        '¿Querés adjuntar una foto o documento de respaldo? (opcional)\n\nPodés usar el botón 📎 para adjuntar, o continuar sin adjunto.',
+        [{ label: '⏭️ Continuar sin adjunto', value: 'skip', action: 'skip_claim_response_evidence' as const }]
+      );
       return;
     }
 
@@ -379,6 +424,36 @@ export const ChatbotWidget: React.FC = () => {
     }
   }, [timeRemaining, sessionActive, state]);
 
+  // US-4: enviar respuesta a reclamo pendiente_customer
+  const handleSubmitClaimResponse = async (file: File | null) => {
+    if (!pendingClaimId) return;
+    setLoading(true);
+    try {
+      const dni = userType === 'sender' ? senderDni : recipientDni;
+      await chatbotService.respondToClaim(pendingClaimId, dni, claimResponseText, file ?? undefined);
+      addBotMessage(
+        '✅ Tu respuesta fue enviada correctamente.\n\n' +
+        'El equipo la revisará y te avisaremos cuando haya novedades.'
+      );
+      window.dispatchEvent(new CustomEvent('chatbot:claim-response-sent', {
+        detail: { claimId: pendingClaimId },
+      }));
+      setPendingClaimId('');
+      setClaimResponseText('');
+      setPendingEvidenceFile(null);
+      setState('authenticated');
+      addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
+        { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const },
+      ]);
+    } catch (error) {
+      const apiErr = error as { response?: { data?: { error?: string } } };
+      addBotMessage('❌ ' + (apiErr.response?.data?.error || 'No se pudo enviar la respuesta. Intentá de nuevo.'));
+      setState('claim_response_evidence');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmitClaim = async (evidence: File | null) => {
     if (!claimType || !trackingId) return;
     const name = userType === 'sender'
@@ -451,6 +526,21 @@ export const ChatbotWidget: React.FC = () => {
           handleRestart();
           break;
 
+        // US4: responder reclamo pendiente_customer
+        case 'respond_claim':
+          setPendingClaimId(activeClaim?.claim_id ?? '');
+          setState('claim_response');
+          addBotMessage('✏️ Escribí tu respuesta al equipo de LogiTrack (máximo 400 caracteres):');
+          break;
+
+        case 'skip_claim_response_evidence':
+          await handleSubmitClaimResponse(null);
+          break;
+
+        case 'confirm_claim_response':
+          await handleSubmitClaimResponse(pendingEvidenceFile);
+          break;
+
         // US5: flujo de reclamo
         case 'file_claim':
           addBotMessage(
@@ -491,11 +581,26 @@ export const ChatbotWidget: React.FC = () => {
 
         case 'toggle_damage_subtype': {
           const sub = value as DamageSubtype;
-          setDamageSubtypes(prev =>
-            prev.includes(sub) ? prev.filter(s => s !== sub) : [...prev, sub]
-          );
-          // No avanzar de estado, el usuario confirma con "Listo"
+          const newSubtypes = damageSubtypes.includes(sub)
+            ? damageSubtypes.filter(s => s !== sub)
+            : [...damageSubtypes, sub];
+          setDamageSubtypes(newSubtypes);
           setState('claim_damage_subtypes');
+
+          // Redibujar el menú con checkmarks para reflejar selección actual
+          const label = (s: DamageSubtype, base: string) =>
+            newSubtypes.includes(s) ? `✅ ${base}` : `⬜ ${base}`;
+          addBotMessage(
+            newSubtypes.length === 0
+              ? '¿Qué tipo de daño o faltante? (podés elegir más de uno)'
+              : `Seleccionados: ${newSubtypes.length}. ¿Alguno más o continuás?`,
+            [
+              { label: label('product_damaged',   'Producto dañado'),  value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
+              { label: label('missing_products',  'Falta mercadería'), value: 'missing_products',  action: 'toggle_damage_subtype' as const },
+              { label: label('packaging_damaged', 'Embalaje dañado'),  value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+              { label: '✅ Listo, continuar',                           value: 'done',              action: 'confirm_damage_subtypes' as const },
+            ]
+          );
           break;
         }
 
@@ -823,28 +928,40 @@ export const ChatbotWidget: React.FC = () => {
             placeholder={
               state === 'authenticated'
                 ? 'Selecciona una opción...'
-                : state === 'claim_evidence'
+                : state === 'claim_evidence' || state === 'claim_response_evidence'
                 ? 'Seleccioná un archivo o usá las opciones...'
                 : 'Escribe tu respuesta...'
             }
-            showFileUpload={state === 'claim_evidence'}
+            showFileUpload={state === 'claim_evidence' || state === 'claim_response_evidence'}
             fileUploadDisabled={loading}
             onFileSelect={(file) => {
-              setClaimEvidenceFile(file);
               addUserMessage(`📎 ${file.name}`);
-              // Si la evidencia es obligatoria, sólo se puede confirmar o cambiar el archivo.
-              // Si es opcional, también se puede saltar.
-              const confirmOptions: ChatOption[] = [
-                { label: '✅ Confirmar y enviar reclamo', value: 'confirm', action: 'confirm_claim_submit' as const },
-                { label: '🔄 Cambiar archivo', value: 'change', action: 'skip_claim_evidence' as const },
-              ];
-              if (!evidenceRequired) {
-                confirmOptions.push({ label: '⏭ Enviar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const });
+
+              if (state === 'claim_response_evidence') {
+                // Flujo US-4: respuesta a reclamo pendiente
+                setPendingEvidenceFile(file);
+                addBotMessage(
+                  `📎 Archivo seleccionado: **${file.name}**\n\n¿Confirmás que querés adjuntarlo a tu respuesta?`,
+                  [
+                    { label: '✅ Confirmar y enviar respuesta', value: 'confirm', action: 'confirm_claim_response' as const },
+                    { label: '🔄 Cambiar archivo', value: 'change', action: 'skip_claim_response_evidence' as const },
+                  ]
+                );
+              } else {
+                // Flujo US-5: nuevo reclamo
+                setClaimEvidenceFile(file);
+                const confirmOptions: ChatOption[] = [
+                  { label: '✅ Confirmar y enviar reclamo', value: 'confirm', action: 'confirm_claim_submit' as const },
+                  { label: '🔄 Cambiar archivo', value: 'change', action: 'skip_claim_evidence' as const },
+                ];
+                if (!evidenceRequired) {
+                  confirmOptions.push({ label: '⏭ Enviar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const });
+                }
+                addBotMessage(
+                  `📎 Archivo seleccionado: **${file.name}**\n\n¿Confirmás que querés adjuntarlo al reclamo?`,
+                  confirmOptions
+                );
               }
-              addBotMessage(
-                `📎 Archivo seleccionado: **${file.name}**\n\n¿Confirmás que querés adjuntarlo al reclamo?`,
-                confirmOptions
-              );
             }}
           />
         </div>

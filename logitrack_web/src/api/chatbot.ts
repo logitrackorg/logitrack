@@ -7,6 +7,7 @@ import type {
   RescheduleResponse,
   CancelResponse,
   FileClaimResponse,
+  ClaimRespondResponse,
   ClaimType,
   DamageSubtype,
 } from '../types/chatbot';
@@ -103,6 +104,24 @@ export const chatbotService = {
     form.append('description', description);
     if (evidenceFile) form.append('evidence', evidenceFile);
     const response = await chatbotAPI.post<FileClaimResponse>('/claim', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // US4: Responder a reclamo pending_customer
+  respondToClaim: async (
+    claimId: string,
+    claimantDni: string,
+    responseText: string,
+    evidenceFile?: File
+  ): Promise<ClaimRespondResponse> => {
+    const form = new FormData();
+    form.append('claim_id', claimId);
+    form.append('claimant_dni', claimantDni);
+    form.append('response_text', responseText);
+    if (evidenceFile) form.append('evidence', evidenceFile);
+    const response = await chatbotAPI.post<ClaimRespondResponse>('/claim/respond', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
