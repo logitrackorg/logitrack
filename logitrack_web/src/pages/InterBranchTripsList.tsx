@@ -308,6 +308,7 @@ function TripCard({
   myBranchId: string;
   driverMap: Record<string, UserProfile>;
 }) {
+  const navigate = useNavigate();
   const stops = useMemo<TripStop[]>(() => {
     if (trip.stops && trip.stops.length > 0) return trip.stops;
     if (trip.destination_branch_id) {
@@ -427,7 +428,7 @@ function TripCard({
         </div>
 
         {/* Carga total */}
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
           <span className="inline-flex items-center gap-1">
             <Package className="w-3 h-3" />
             {trip.shipment_ids.length} envíos totales
@@ -440,12 +441,19 @@ function TripCard({
             const driver = driverMap[trip.driver_id];
             const label  = driver ? (driver.full_name || driver.username) : "–";
             return (
-              <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+              <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
                 <Truck className="w-3 h-3 text-slate-400" />
                 {label}
               </span>
             );
           })()}
+          <button
+            type="button"
+            onClick={() => navigate(`/?view=trip&trip_id=${encodeURIComponent(trip.id)}`)}
+            className="ml-auto text-[11px] font-semibold text-[#1e3a5f] hover:underline cursor-pointer"
+          >
+            Ver envíos agrupados →
+          </button>
         </div>
       </CardContent>
     </Card>

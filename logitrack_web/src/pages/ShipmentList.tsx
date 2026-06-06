@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, PackageOpen } from "lucide-react";
-import { shipmentApi, type Shipment, type ShipmentStatus, INCIDENT_TYPE_LABELS } from "../api/shipments";
+import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, LayoutList, Truck, PackageOpen } from "lucide-react";
+import { shipmentApi, type Shipment, type ShipmentStatus } from "../api/shipments";
 import { branchApi, type Branch } from "../api/branches";
 import { usersApi, type UserProfile } from "../api/users";
+import { interBranchTripsApi, type InterBranchTrip } from "../api/interBranchTrips";
 import { fmtDate } from "../utils/date";
-import { StatusBadge } from "../components/StatusBadge";
-import { PriorityBadge } from "../components/PriorityBadge";
-import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { filterActiveTrips, groupShipmentsByTrip } from "../utils/groupShipmentsByTrip";
 import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/card";
 import { SelectMenu } from "../components/ui/SelectMenu";
@@ -15,29 +14,7 @@ import { TopbarActions } from "../components/topbarContext";
 import { ShipmentKPIStrip } from "../components/ShipmentKPIStrip";
 import { Button } from "../components/ui/button";
 import { Skeleton, SkeletonLine } from "../components/ui/skeleton";
-
-// ── SLA badge helpers ──────────────────────────────────────────────────────
-// Mirror the SLA thresholds from the Go model (SLAAtRiskThresholdHours = 24 h,
-// SLADelayThresholdHours = 36 h). Used as client-side fallback when the
-// server-computed flags (is_at_risk / is_delayed) are absent.
-const SLA_MONITORED: ReadonlySet<string> = new Set([
-  "at_origin_hub", "at_hub", "loaded", "in_transit",
-  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
-]);
-const AT_RISK_THRESHOLD_MS  = 24 * 60 * 60 * 1000; // 24 h — warning band start
-const DELAYED_THRESHOLD_MS  = 36 * 60 * 60 * 1000; // 36 h — critical threshold
-
-function isLikelyAtRisk(s: Shipment): boolean {
-  if (!SLA_MONITORED.has(s.status) || !s.updated_at) return false;
-  const dwell = Date.now() - new Date(s.updated_at).getTime();
-  return dwell > AT_RISK_THRESHOLD_MS && dwell <= DELAYED_THRESHOLD_MS;
-}
-
-function isLikelyDelayed(s: Shipment): boolean {
-  if (!SLA_MONITORED.has(s.status) || !s.updated_at) return false;
-  return Date.now() - new Date(s.updated_at).getTime() > DELAYED_THRESHOLD_MS;
-}
-// ──────────────────────────────────────────────────────────────────────────
+import { ShipmentRow, ShipmentTableHeader, ShipmentTripGroups } from "../components/ShipmentTripGroups";
 
 // Returns the corrected value if one exists, otherwise the original.
 function corr(s: Shipment, key: string, fallback: string | number): string {
@@ -111,9 +88,35 @@ interface BulkResult {
 const inputClass =
   "h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all";
 
+type ViewMode = "flat" | "trip";
+
+function isLikelyDelayed(s: Shipment): boolean {
+  if (!s.estimated_delivery_at) return false;
+  const now = new Date();
+  const est = new Date(s.estimated_delivery_at);
+  return est < now && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+}
+
+function isLikelyAtRisk(s: Shipment): boolean {
+  if (!s.estimated_delivery_at) return false;
+  const now = new Date();
+  const est = new Date(s.estimated_delivery_at);
+  const hoursLeft = (est.getTime() - now.getTime()) / 36e5;
+  return hoursLeft >= 0 && hoursLeft <= 24 && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
+}
+
 export function ShipmentList() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [trips, setTrips] = useState<InterBranchTrip[]>([]);
+  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    searchParams.get("view") === "trip" ? "trip" : "flat",
+  );
+  const [expandedTripIds, setExpandedTripIds] = useState<Set<string>>(() => {
+    const id = searchParams.get("trip_id");
+    return id ? new Set([id]) : new Set();
+  });
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
     (searchParams.get("status") as StatusFilter) ??
@@ -148,13 +151,26 @@ export function ShipmentList() {
   // when a statusFilter change requires a new server request.
   const loadedWithExpiredRef = useRef(statusFilter === "expired");
 
+  const tripBranchParam =
+    user?.role === "manager" && branchFilter ? branchFilter : undefined;
+
   const load = async (withExpired: boolean) => {
     setLoading(true);
     setSelected(new Set());
     try {
       const params = withExpired ? { include_expired: "true" } : undefined;
-      const data = await shipmentApi.list(params);
+      const [data, tripsData, drivers] = await Promise.all([
+        shipmentApi.list(params),
+        interBranchTripsApi.listByBranch(tripBranchParam).catch(() => [] as InterBranchTrip[]),
+        usersApi.listDrivers().catch(() => [] as UserProfile[]),
+      ]);
       setShipments(data ?? []);
+      setTrips(filterActiveTrips(tripsData ?? []));
+      const dMap: Record<string, string> = {};
+      drivers.forEach((d) => {
+        dMap[d.id] = d.full_name || d.username;
+      });
+      setDriverMap(dMap);
     } finally {
       setLoading(false);
     }
@@ -167,6 +183,12 @@ export function ShipmentList() {
     branchApi.listActive().then(setBranches).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== "manager") return;
+    load(loadedWithExpiredRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchFilter]);
 
   // Reload from server when toggling to/from the expired-drafts view, since
   // expired items are excluded by default and need a separate server param.
@@ -222,6 +244,44 @@ export function ShipmentList() {
 
   const eligibleInView = filtered.filter((s) => BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus));
   const allEligibleSelected = eligibleInView.length > 0 && eligibleInView.every((s) => selected.has(s.tracking_id));
+
+  const { groups, ungrouped } = useMemo(
+    () => groupShipmentsByTrip(filtered, trips),
+    [filtered, trips],
+  );
+
+  const setViewModeAndParams = (mode: ViewMode) => {
+    setViewMode(mode);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (mode === "trip") next.set("view", "trip");
+      else next.delete("view");
+      return next;
+    }, { replace: true });
+  };
+
+  const toggleTripExpanded = (tripId: string) => {
+    setExpandedTripIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tripId)) next.delete(tripId);
+      else next.add(tripId);
+      return next;
+    });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("view", "trip");
+      next.set("trip_id", tripId);
+      return next;
+    }, { replace: true });
+  };
+
+  useEffect(() => {
+    const tripId = searchParams.get("trip_id");
+    if (searchParams.get("view") === "trip" && tripId) {
+      setViewMode("trip");
+      setExpandedTripIds((prev) => new Set([...prev, tripId]));
+    }
+  }, [searchParams]);
 
   const toggleSelect = (trackingId: string) => {
     setSelected((prev) => {
@@ -546,10 +606,51 @@ export function ShipmentList() {
         </Card>
       ) : (
         <Card className="overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              {filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                {filtered.length} {filtered.length !== 1 ? "envíos" : "envío"}
+                {viewMode === "trip" && groups.length > 0 && (
+                  <span className="normal-case font-medium text-slate-400 ml-2">
+                    · {groups.length} viaje{groups.length !== 1 ? "s" : ""} activo{groups.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </p>
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewModeAndParams("flat")}
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                    viewMode === "flat"
+                      ? "bg-[#1e3a5f] text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <LayoutList className="w-3.5 h-3.5" />
+                  Lista plana
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewModeAndParams("trip");
+                    const deepLinkTrip = searchParams.get("trip_id");
+                    if (deepLinkTrip) {
+                      setExpandedTripIds(new Set([deepLinkTrip]));
+                    } else {
+                      setExpandedTripIds(new Set(groups.map((g) => g.trip.id)));
+                    }
+                  }}
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                    viewMode === "trip"
+                      ? "bg-[#1e3a5f] text-white"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  Por viaje
+                </button>
+              </div>
+            </div>
             {hasRole("manager", "admin") && (
               <Button
                 variant="outline"
@@ -561,111 +662,52 @@ export function ShipmentList() {
               </Button>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-900/50 text-left border-b border-slate-100 dark:border-slate-700">
-                  {canBulk && (
-                    <th className="px-4 py-3 w-10 text-center">
-                      {eligibleInView.length > 0 && (
-                        <input
-                          type="checkbox"
-                          checked={allEligibleSelected}
-                          onChange={toggleSelectAll}
-                          title="Seleccionar todos los elegibles"
-                          className="cursor-pointer accent-blue-900"
-                        />
-                      )}
-                    </th>
-                  )}
-                  <th className={thClass}>ID de seguimiento</th>
-                  <th className={thClass}>Remitente</th>
-                  <th className={thClass}>Destinatario</th>
-                  <th className={thClass}>Origen → Destino</th>
-                  <th className={thClass}>Peso</th>
-                  <th className={thClass}>Prioridad</th>
-                  <th className={thClass}>Estado</th>
-                  <th className={thClass}>Creado</th>
-                  <th className={thClass}>Entrega est.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => {
-                  const isEligible = BULK_ELIGIBLE_STATUSES.includes(s.status as ShipmentStatus);
-                  const isChecked = selected.has(s.tracking_id);
-                  return (
-                    <tr
+          {viewMode === "trip" ? (
+            <>
+              <div className="overflow-x-auto border-b border-slate-100 dark:border-slate-700">
+                <table className="w-full text-sm min-w-[900px]">
+                  <ShipmentTableHeader
+                    canBulk={canBulk}
+                    showSelectAll={eligibleInView.length > 0}
+                    allSelected={allEligibleSelected}
+                    onSelectAll={toggleSelectAll}
+                  />
+                </table>
+              </div>
+              <ShipmentTripGroups
+                groups={groups}
+                ungrouped={ungrouped}
+                expandedTripIds={expandedTripIds}
+                onToggleTrip={toggleTripExpanded}
+                canBulk={canBulk}
+                selected={selected}
+                onToggleSelect={toggleSelect}
+                driverMap={driverMap}
+              />
+            </>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[900px]">
+                <ShipmentTableHeader
+                  canBulk={canBulk}
+                  showSelectAll={eligibleInView.length > 0}
+                  allSelected={allEligibleSelected}
+                  onSelectAll={toggleSelectAll}
+                />
+                <tbody>
+                  {filtered.map((s) => (
+                    <ShipmentRow
                       key={s.tracking_id}
-                      onClick={(e) => {
-                        const target = e.target as HTMLElement;
-                        if (target.tagName === "INPUT") return;
-                        navigate(`/shipments/${s.tracking_id}`);
-                      }}
-                      className={`border-b border-slate-100 dark:border-slate-700 cursor-pointer transition-colors ${
-                        isChecked ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800"
-                      }`}
-                    >
-                      {canBulk && (
-                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                          {isEligible && (
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleSelect(s.tracking_id)}
-                              className="cursor-pointer accent-blue-900"
-                            />
-                          )}
-                        </td>
-                      )}
-                      <td className={tdClass}>
-                        <code className={`text-xs font-mono ${s.status === "draft" ? "text-slate-400 dark:text-slate-500" : "text-slate-700 dark:text-slate-300"}`}>
-                          {s.tracking_id}
-                        </code>
-                      </td>
-                      <td className={tdClass}>{corr(s, "sender_name", s.sender.name)}</td>
-                      <td className={tdClass}>{corr(s, "recipient_name", s.recipient.name)}</td>
-                      <td className={tdClass}>
-                        <span className="text-slate-600 dark:text-slate-400">{corr(s, "origin_city", s.sender.address.city)}</span>
-                        <span className="mx-1.5 text-slate-300 dark:text-slate-600">→</span>
-                        <span className="text-slate-600 dark:text-slate-400">{corr(s, "destination_city", s.recipient.address.city)}</span>
-                      </td>
-                      <td className={tdClass}>
-                        {s.status === "draft" && (!s.weight_kg || s.weight_kg <= 0)
-                          ? <span className="text-slate-400 dark:text-slate-500 text-xs italic">Sin definir</span>
-                          : <span className="tabular-nums whitespace-nowrap">{corr(s, "weight_kg", s.weight_kg)} kg</span>
-                        }
-                      </td>
-                      <td className={tdClass}><PriorityBadge priority={s.priority} /></td>
-                      <td className={tdClass}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} />
-                          {isLikelyDelayed(s) && (
-                            <span
-                              title="Este envío lleva más de 36 h en su estado actual, superando el umbral del motor SLA"
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap"
-                            >
-                              <Clock className="w-3 h-3" />
-                              Demorado
-                            </span>
-                          )}
-                          {s.has_incident && (
-                            <span
-                              title={s.incident_type ? INCIDENT_TYPE_LABELS[s.incident_type] : "Incidencia registrada"}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-                            >
-                              <AlertTriangle className="w-3 h-3" />
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={`${tdClass} text-slate-500 dark:text-slate-400`}>{fmtDate(s.created_at)}</td>
-                      <td className={`${tdClass} text-slate-500 dark:text-slate-400`}>{s.estimated_delivery_at ? fmtDate(s.estimated_delivery_at) : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      shipment={s}
+                      canBulk={canBulk}
+                      selected={selected}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       )}
 
@@ -769,6 +811,3 @@ export function ShipmentList() {
     </div>
   );
 }
-
-const thClass = "px-4 py-3 text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider";
-const tdClass = "px-4 py-3 text-slate-700 dark:text-slate-300";

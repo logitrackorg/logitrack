@@ -33,22 +33,36 @@ var uuidGen = func() (string, error) {
 // Apply hace validación per-item contra el estado actual antes de mutar — no es transaccional
 // porque shipment, vehicle y route viven en stores distintos.
 type RoutingService struct {
-	cfgSvc          *RoutingConfigService
-	shipmentRepo    repository.ShipmentRepository
-	vehicleRepo     repository.VehicleRepository
-	branchRepo      repository.BranchRepository
-	authRepo        repository.AuthRepository
-	routeSvc        *RouteService
-	shipmentSvc     *ShipmentService
-	planRepo        repository.RoutingPlanRepository
-	osrmClient      *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
-	orsClient       *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
+	cfgSvc             *RoutingConfigService
+	shipmentRepo       repository.ShipmentRepository
+	vehicleRepo        repository.VehicleRepository
+	branchRepo         repository.BranchRepository
+	authRepo           repository.AuthRepository
+	routeSvc           *RouteService
+	shipmentSvc        *ShipmentService
+	planRepo           repository.RoutingPlanRepository
+	osrmClient         *osrm.Client // nullable; sin OSRM se usa Haversine para la matriz
+	orsClient          *ors.Client  // nullable; usado en modo segura para evitar polígonos (avoid_polygons)
 	interBranchTripSvc *InterBranchTripService
-	graphSvc        *BranchGraphService  // nullable; used for stale-replan
-	zoneSvc         *ZoneService         // nullable; needed for safe-route mode
-	branchZoneSvc   *BranchZoneService   // nullable; auto-move entrada→salida on ApplyPlan
-	notifSvc        *NotificationService // nullable; SLA risk notifications (LOGITRACK-404)
-	dispatchVolumeSvc  DispatchVolumeNotifier   // nullable; LOGITRACK-409 CA-05 reset after apply
+	graphSvc           *BranchGraphService    // nullable; used for stale-replan
+	zoneSvc            *ZoneService           // nullable; needed for safe-route mode
+	branchZoneSvc      *BranchZoneService     // nullable; auto-move entrada→salida on ApplyPlan
+	notifSvc           *NotificationService   // nullable; SLA risk notifications (LOGITRACK-404)
+	slaExpiredEmailSvc SLAExpiredEmailSender  // nullable; customer email on SLA expiry (LOGITRACK-124)
+	slaExpiredWASvc    SLAExpiredWASender     // nullable; customer WhatsApp on SLA expiry (LOGITRACK-124)
+	dispatchVolumeSvc  DispatchVolumeNotifier // nullable; LOGITRACK-409 CA-05 reset after apply
+}
+
+// SLAExpiredEmailSender is the minimal interface needed to notify the shipment recipient
+// when a shipment has exceeded its ETA via email.
+type SLAExpiredEmailSender interface {
+	SendSLAExpiredNotification(shipment model.Shipment)
+}
+
+// SLAExpiredWASender is the minimal interface needed to notify sender and recipient
+// via WhatsApp (with email fallback) when a shipment has exceeded its ETA.
+type SLAExpiredWASender interface {
+	SendSLAExpiredWhatsApp(shipment model.Shipment)
 }
 
 func NewRoutingService(
@@ -81,6 +95,16 @@ func (s *RoutingService) SetInterBranchTripService(svc *InterBranchTripService) 
 
 func (s *RoutingService) SetNotificationService(svc *NotificationService) {
 	s.notifSvc = svc
+}
+
+// SetSLAExpiredEmailService wires the customer-facing SLA-expired email sender.
+func (s *RoutingService) SetSLAExpiredEmailService(svc SLAExpiredEmailSender) {
+	s.slaExpiredEmailSvc = svc
+}
+
+// SetSLAExpiredWAService wires the WhatsApp (+ email fallback) sender for SLA-expired notifications.
+func (s *RoutingService) SetSLAExpiredWAService(svc SLAExpiredWASender) {
+	s.slaExpiredWASvc = svc
 }
 
 // SetDispatchVolumeService inyecta el checker de volumen mínimo para reset post-apply (CA-05).
@@ -204,7 +228,7 @@ func (s *RoutingService) generatePlan(_ context.Context, pc *planContext) (model
 					windowClosed = localHour >= cfg.MorningWindowEndHour
 				case model.TimeWindowAfternoon:
 					windowClosed = localHour >= cfg.AfternoonWindowEndHour
-				// "flexible" o vacío: nunca diferir por ventana.
+					// "flexible" o vacío: nunca diferir por ventana.
 				}
 				if windowClosed {
 					plan.Unassigned = append(plan.Unassigned, model.UnassignedShipment{
@@ -351,8 +375,6 @@ func (s *RoutingService) generatePlan(_ context.Context, pc *planContext) (model
 
 	return plan, nil
 }
-
-
 
 // filterAvailableVehicles devuelve todos los vehículos elegibles para despacho desde la sucursal.
 func (s *RoutingService) filterAvailableVehicles(branchID string) ([]model.Vehicle, map[string]float64) {
@@ -855,9 +877,9 @@ func (s *RoutingService) binPackLastMileVehicles(
 	})
 
 	type bucket struct {
-		vehicle  model.Vehicle
+		vehicle   model.Vehicle
 		shipments []string
-		weight   float64
+		weight    float64
 	}
 	buckets := make([]*bucket, len(vehicles))
 	for i, v := range vehicles {
@@ -891,10 +913,10 @@ func (s *RoutingService) binPackLastMileVehicles(
 			continue
 		}
 		out = append(out, model.LastMileAssignment{
-			VehicleID:    b.vehicle.ID,
-			LicensePlate: b.vehicle.LicensePlate,
-			CapacityKg:   b.vehicle.CapacityKg,
-			Shipments:    b.shipments,
+			VehicleID:     b.vehicle.ID,
+			LicensePlate:  b.vehicle.LicensePlate,
+			CapacityKg:    b.vehicle.CapacityKg,
+			Shipments:     b.shipments,
 			TotalWeightKg: roundKg(b.weight),
 		})
 	}
@@ -1207,23 +1229,23 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				continue
 			}
 
-		// Auto-move from Entrada to Salida if needed (US-05 CA-02)
-		if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
-			if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
-				items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
+			// Auto-move from Entrada to Salida if needed (US-05 CA-02)
+			if s.branchZoneSvc != nil && sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+				if err := s.branchZoneSvc.MoveShipment(tid, username, branchID, "", model.ZoneSalida, model.RoleSupervisor); err != nil {
+					items = append(items, failedItem(tid, target, "error_auto_mover_a_salida"))
+					continue
+				}
+			}
+
+			if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
+				items = append(items, failedItem(tid, target, err.Error()))
 				continue
 			}
-		}
-
-		if err := s.vehicleRepo.AddShipment(v.ID, tid); err != nil {
-			items = append(items, failedItem(tid, target, err.Error()))
-			continue
-		}
-		_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-			Status:    model.StatusLoaded,
-			ChangedBy: username,
-			Notes:     "Carga automática al aplicar plan de ruteo inter-sucursal",
-		})
+			_, err = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
+				Status:    model.StatusLoaded,
+				ChangedBy: username,
+				Notes:     "Carga automática al aplicar plan de ruteo inter-sucursal",
+			})
 			if err != nil {
 				_ = s.vehicleRepo.RemoveShipment(v.ID, tid)
 				items = append(items, failedItem(tid, target, err.Error()))
@@ -1681,14 +1703,12 @@ func (s *RoutingService) RunSLARiskCheck() {
 // checkSLARisk evaluates SLA state for each shipment and fires/resets notifications.
 //
 // State machine per shipment:
-//   inactive  → nothing
-//   active, remaining >= horizon → reset both flags (exited risk window)
-//   active, 0 <= remaining < horizon → sla_risk once (CA-04); reset expired flag if set
-//   active, remaining < 0 (expired) → sla_expired once; sla_risk flag stays
+//
+//	inactive  → nothing
+//	active, remaining >= horizon → reset both flags (exited risk window)
+//	active, 0 <= remaining < horizon → sla_risk once (CA-04); reset expired flag if set
+//	active, remaining < 0 (expired) → sla_expired once; sla_risk flag stays
 func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.RoutingConfig, now time.Time) {
-	if s.notifSvc == nil {
-		return
-	}
 	for _, sh := range shipments {
 		if !isSLAActive(sh) {
 			continue
@@ -1711,7 +1731,17 @@ func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.Rout
 					continue
 				}
 				shCopy := sh
-				go s.notifSvc.NotifySLAExpired(shCopy, branchID)
+				// WhatsApp al remitente/destinatario (con fallback a email) — LOGITRACK-124
+				if s.slaExpiredWASvc != nil {
+					go s.slaExpiredWASvc.SendSLAExpiredWhatsApp(shCopy)
+				} else if s.slaExpiredEmailSvc != nil {
+					// fallback directo a email si no hay servicio de WA configurado
+					go s.slaExpiredEmailSvc.SendSLAExpiredNotification(shCopy)
+				}
+				// Notificación interna a operadores/supervisores — LOGITRACK-404
+				if s.notifSvc != nil {
+					go s.notifSvc.NotifySLAExpired(shCopy, branchID)
+				}
 			}
 		} else if critical {
 			// Send at-risk notification once per entry into risk window (CA-04)
@@ -2129,9 +2159,9 @@ func (s *RoutingService) consolidateCrossBranchDispatches(plan *model.GlobalRout
 			// Peso por tramo de A: peso_vivo al entrar en cada segmento.
 			// Empezamos con el peso completo; restamos dropoffs, sumamos pickups.
 			type tramo struct {
-				from     string
-				to       string
-				liveKgIn float64 // peso al entrar en este tramo
+				from      string
+				to        string
+				liveKgIn  float64 // peso al entrar en este tramo
 				liveKgOut float64 // peso al salir (= in - dropoffs + pickups)
 			}
 
@@ -2678,10 +2708,10 @@ func (s *RoutingService) piggybackUnassigned(plan *model.RoutingPlan, branchID s
 	}
 
 	piggybackable := map[string]bool{
-		"esperando_consolidacion":     true,
-		"sin_vehiculos_para_destino":  true,
-		"sobrepeso_excede_vehiculo":   true,
-		"sin_vehiculos_disponibles":   true,
+		"esperando_consolidacion":    true,
+		"sin_vehiculos_para_destino": true,
+		"sobrepeso_excede_vehiculo":  true,
+		"sin_vehiculos_disponibles":  true,
 	}
 
 	var stillUnassigned []model.UnassignedShipment
@@ -2771,7 +2801,6 @@ func (s *RoutingService) branchDistance(b1, b2 string) float64 {
 	}
 	return ml.ComputeDistance(br1.Province, br2.Province)
 }
-
 
 // buildDurationMatrix construye una matriz NxN (depot + entregas) con tiempos
 // en segundos y distancias en metros. Intenta OSRM si hay cliente; si falla
@@ -4188,9 +4217,9 @@ func routeMetrics(r vrp.Route, totalStops int) (coverage float64, wait float64) 
 // findBestDepartureForRoute prueba horarios candidatos para un chofer dado
 // (con sus shipments asignados) y devuelve la mejor combinación según el
 // score:
-//   1. mayor cobertura de ventana
-//   2. menor tiempo de espera total (desempate)
-//   3. salida más temprana (desempate final)
+//  1. mayor cobertura de ventana
+//  2. menor tiempo de espera total (desempate)
+//  3. salida más temprana (desempate final)
 //
 // Construye sub-problems con un solo chofer y los shipments de su ruta,
 // reutilizando la matriz global (indexada por su posición en `deliveries`).
@@ -4931,8 +4960,8 @@ func (s *RoutingService) enforceFleetBalance(plan *model.GlobalRoutingPlan, cfg 
 	// Se cuentan: vehículos disponibles ahora en la sucursal menos los que salen en despachos
 	// one-way, más los que retornan vía round-trip + los en tránsito inbound.
 	type branchVehicleCount struct {
-		present int // vehículos en la sucursal ahora mismo
-		outgoing int // despachos one-way que salen de la sucursal
+		present   int // vehículos en la sucursal ahora mismo
+		outgoing  int // despachos one-way que salen de la sucursal
 		returning int // round-trips + inbound
 	}
 	counts := map[string]*branchVehicleCount{}
@@ -5096,8 +5125,8 @@ func (s *RoutingService) tryProjectedDispatch(
 		return
 	}
 	rescuableReasons := map[string]bool{
-		"sin_vehiculos_disponibles":    true,
-		"sin_vehiculos_para_destino":   true,
+		"sin_vehiculos_disponibles":  true,
+		"sin_vehiculos_para_destino": true,
 	}
 	for _, incoming := range plan.IncomingVehicles {
 		if incoming.EstimatedArrivalAt == nil {

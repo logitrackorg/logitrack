@@ -210,6 +210,7 @@ func main() {
 	}, orgSvc)
 	if emailSvc != nil {
 		shipmentSvc.SetEmailService(emailSvc)
+		claimSvc.SetClaimEmailService(emailSvc)
 		log.Printf("[email] servicio SMTP habilitado — host: %s:%d", os.Getenv("SMTP_HOST"), smtpPort)
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
@@ -228,14 +229,17 @@ func main() {
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
 	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
-	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
-	messagingSvc.SetSystemConfigGetter(sysConfigSvc)         // permite forzar email desde config de admin
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)      // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	messagingSvc.SetSLAExpiredEmailFallback(emailSvc)          // email fallback cuando WhatsApp no disponible para SLA vencido (LOGITRACK-124)
+	messagingSvc.SetClaimEmailFallback(emailSvc)               // email fallback cuando WhatsApp no disponible para reclamos (LOGITRACK-123/125/486)
+	messagingSvc.SetSystemConfigGetter(sysConfigSvc)           // permite forzar email desde config de admin
+	claimSvc.SetClaimWAService(messagingSvc)                   // WhatsApp al reclamante, email como fallback (LOGITRACK-123/125/486)
 	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
-	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)  // WhatsApp primero, email fallback
-	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)    // WhatsApp primero, email fallback (CA-01/CA-02)
-	shipmentSvc.SetRejectedService(messagingSvc)             // WhatsApp primero, email fallback (LOGITRACK-429)
-	shipmentSvc.SetDeliveryFailedService(messagingSvc)       // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)   // WhatsApp primero, email fallback (CA-01/CA-02)
+	shipmentSvc.SetRejectedService(messagingSvc)            // WhatsApp primero, email fallback (LOGITRACK-429)
+	shipmentSvc.SetDeliveryFailedService(messagingSvc)      // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {
@@ -248,7 +252,7 @@ func main() {
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc,) 
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -301,6 +305,8 @@ func main() {
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetBranchZoneService(branchZoneSvc)
+	routingSvc.SetSLAExpiredEmailService(emailSvc)
+	routingSvc.SetSLAExpiredWAService(messagingSvc) // WhatsApp al cliente en SLA vencido, email como fallback (LOGITRACK-124)
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
@@ -610,7 +616,7 @@ func main() {
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
-	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)      // LOGITRACK-499
+	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)

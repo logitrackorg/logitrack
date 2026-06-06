@@ -201,6 +201,84 @@ func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemp
 	s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (entrega fallida)", org.Email)
 }
 
+// SendSLAExpiredNotification sends a customer-facing email when the shipment SLA expires.
+// CA-01: both recipient and sender are notified.
+// CA-02: intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendSLAExpiredNotification(shipment model.Shipment) {
+	if s == nil {
+		return
+	}
+	org := s.orgConfig()
+	trackBase := s.effectiveTrackBaseURL(org)
+	subj := fmt.Sprintf("Tu envío %s presenta demora — %s", shipment.TrackingID, org.Name)
+	body := renderSLAExpiredNotification(shipment, trackBase, org)
+
+	if shipment.Recipient.Email != "" {
+		s.sendOne(shipment.Recipient.Email, subj, body, shipment.TrackingID, "destinatario (SLA vencido)", org.Email)
+	} else {
+		log.Printf("[email] SLA vencido: destinatario de %s sin email registrado — omitido", shipment.TrackingID)
+	}
+	if shipment.Sender.Email != "" {
+		s.sendOne(shipment.Sender.Email, subj, body, shipment.TrackingID, "remitente (SLA vencido)", org.Email)
+	} else {
+		log.Printf("[email] SLA vencido: remitente de %s sin email registrado — omitido", shipment.TrackingID)
+	}
+}
+
+// SendClaimCreatedNotification notifica al cliente que su reclamo quedó registrado.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
+	if s == nil {
+		return
+	}
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] reclamo creado: reclamante de %s sin email registrado — omitido (CA-04)", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Tu reclamo %s fue registrado — %s", claim.ID, org.Name)
+	body := renderClaimCreatedNotification(claim, shipment, trackURL, org)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (reclamo creado)", org.Email)
+}
+
+// SendClaimInfoRequestedNotification avisa al reclamante que debe enviar más información.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string) {
+	if s == nil {
+		return
+	}
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] solicitud de info reclamo %s: reclamante sin email registrado — omitido (CA-04)", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Necesitamos más información sobre tu reclamo %s — %s", claim.ID, org.Name)
+	body := renderClaimInfoRequestedNotification(claim, shipment, supervisorNotes, trackURL, org)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (solicitud de info reclamo)", org.Email)
+}
+
+// SendClaimResolvedNotification informa al reclamante el cierre del reclamo.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string) {
+	if s == nil {
+		return
+	}
+	customer, role, ok := ClaimantCustomer(claim, shipment)
+	if !ok || customer.Email == "" {
+		log.Printf("[email] reclamo resuelto %s: reclamante sin email registrado — omitido (CA-04)", claim.ID)
+		return
+	}
+	org := s.orgConfig()
+	trackURL := buildTrackURL(s.effectiveTrackBaseURL(org), shipment.TrackingID)
+	subj := fmt.Sprintf("Tu reclamo %s fue resuelto — %s", claim.ID, org.Name)
+	body := renderClaimResolvedNotification(claim, shipment, resolutionNotes, trackURL, org)
+	s.sendOne(customer.Email, subj, body, claim.ID, role+" (reclamo resuelto)", org.Email)
+}
+
 // SendRejectedNotification sends a rejection notification email to the shipment's sender.
 // CA-01: called when a shipment transitions to "rechazado".
 // CA-02: only the sender is notified.
@@ -255,11 +333,11 @@ func (s *Service) SendPasswordChangedNotification(to, username string) {
 // sendOne sends a single HTML email. All errors are logged and swallowed (CA-02).
 func (s *Service) sendOne(to, subject, htmlBody, trackingID, role, replyTo string) {
 	if err := s.send(to, subject, htmlBody, replyTo); err != nil {
-		log.Printf("[email] ERROR al enviar confirmación a %s (%s) para %s: %v (CA-02 — evento no afectado)",
+		log.Printf("[email] ERROR al enviar email a %s (%s) para %s: %v (CA-02 — evento no afectado)",
 			to, role, trackingID, err)
 		return
 	}
-	log.Printf("[email] confirmación enviada a %s (%s) para %s", to, role, trackingID)
+	log.Printf("[email] email enviado a %s (%s) para %s", to, role, trackingID)
 }
 
 // send builds and delivers a single HTML email via SMTP.

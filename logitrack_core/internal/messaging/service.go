@@ -74,6 +74,8 @@ type Service struct {
 	deliveryEmailSvc       DeliveryConfirmedEmailFallback
 	rejectedEmailSvc       RejectedEmailFallback
 	deliveryFailedEmailSvc DeliveryFailedEmailSender
+	slaExpiredEmailSvc     SLAExpiredEmailFallback
+	claimEmailFallback     ClaimEmailFallback
 	routingCfg             RoutingConfigGetter
 	sysConfig              SystemConfigGetter
 }
@@ -504,6 +506,277 @@ func buildDeliveryFailedWhatsAppMessage(shipment model.Shipment, attemptsUsed, m
 	}
 	msg += "\nPresentate con tu DNI para retirar el paquete."
 
+	if trackURL != "" {
+		msg += "\n\nSeguí tu envío en: " + trackURL
+	}
+	return msg
+}
+
+// ── Reclamos (LOGITRACK-123 / 125 / 486) ─────────────────────────────────────
+
+// ClaimEmailFallback is the minimal interface for the email fallback on claim notifications.
+type ClaimEmailFallback interface {
+	SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment)
+	SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string)
+}
+
+// SetClaimEmailFallback wires the email service used when WhatsApp is unavailable
+// for claim notifications.
+func (s *Service) SetClaimEmailFallback(svc ClaimEmailFallback) {
+	s.claimEmailFallback = svc
+}
+
+// SendClaimCreatedWhatsApp notifica al reclamante que su reclamo quedó registrado.
+// Intenta WhatsApp primero; cae a email si no tiene teléfono o Twilio falla.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimCreatedWhatsApp(claim model.Claim, shipment model.Shipment) {
+	customer, _, ok := claimantCustomer(claim, shipment)
+	if !ok {
+		log.Printf("[messaging] reclamo creado %s: reclamante no identificado — notificación omitida", claim.ID)
+		return
+	}
+	trackURL := s.claimTrackURL(claim.ID)
+	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+		msg := buildClaimCreatedWhatsAppMessage(claim, shipment, trackURL)
+		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp reclamo creado falló para %s (%s): %v — usando email como fallback",
+				claim.ID, customer.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp reclamo creado enviado a %s para %s", customer.Phone, claim.ID)
+			return
+		}
+	}
+	if s.claimEmailFallback != nil {
+		s.claimEmailFallback.SendClaimCreatedNotification(claim, shipment)
+	} else {
+		log.Printf("[messaging] sin canal disponible para notificar reclamo creado %s — omitido", claim.ID)
+	}
+}
+
+// SendClaimInfoRequestedWhatsApp avisa al reclamante que debe enviar más información.
+// Intenta WhatsApp primero; cae a email si no tiene teléfono o Twilio falla.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimInfoRequestedWhatsApp(claim model.Claim, shipment model.Shipment, supervisorNotes string) {
+	customer, _, ok := claimantCustomer(claim, shipment)
+	if !ok {
+		log.Printf("[messaging] solicitud de info reclamo %s: reclamante no identificado — notificación omitida", claim.ID)
+		return
+	}
+	trackURL := s.claimTrackURL(claim.ID)
+	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+		msg := buildClaimInfoRequestedWhatsAppMessage(claim, supervisorNotes, trackURL)
+		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp solicitud info reclamo falló para %s (%s): %v — usando email como fallback",
+				claim.ID, customer.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp solicitud info reclamo enviado a %s para %s", customer.Phone, claim.ID)
+			return
+		}
+	}
+	if s.claimEmailFallback != nil {
+		s.claimEmailFallback.SendClaimInfoRequestedNotification(claim, shipment, supervisorNotes)
+	} else {
+		log.Printf("[messaging] sin canal disponible para notificar solicitud de info reclamo %s — omitido", claim.ID)
+	}
+}
+
+// SendClaimResolvedWhatsApp informa al reclamante el cierre del reclamo.
+// Intenta WhatsApp primero; cae a email si no tiene teléfono o Twilio falla.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendClaimResolvedWhatsApp(claim model.Claim, shipment model.Shipment, resolutionNotes string) {
+	customer, _, ok := claimantCustomer(claim, shipment)
+	if !ok {
+		log.Printf("[messaging] reclamo resuelto %s: reclamante no identificado — notificación omitida", claim.ID)
+		return
+	}
+	trackURL := s.claimTrackURL(claim.ID)
+	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+		msg := buildClaimResolvedWhatsAppMessage(claim, resolutionNotes, trackURL)
+		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
+			log.Printf("[messaging] WhatsApp reclamo resuelto falló para %s (%s): %v — usando email como fallback",
+				claim.ID, customer.Phone, err)
+		} else {
+			log.Printf("[messaging] WhatsApp reclamo resuelto enviado a %s para %s", customer.Phone, claim.ID)
+			return
+		}
+	}
+	if s.claimEmailFallback != nil {
+		s.claimEmailFallback.SendClaimResolvedNotification(claim, shipment, resolutionNotes)
+	} else {
+		log.Printf("[messaging] sin canal disponible para notificar reclamo resuelto %s — omitido", claim.ID)
+	}
+}
+
+func (s *Service) claimTrackURL(claimID string) string {
+	base := s.trackBaseURL()
+	if base == "" {
+		return ""
+	}
+	return base + "/track?claim=" + claimID
+}
+
+// claimantCustomer identifica al reclamante dentro del envío por DNI (o nombre como fallback).
+// Duplica la lógica de email.ClaimantCustomer para evitar dependencia circular.
+func claimantCustomer(claim model.Claim, shipment model.Shipment) (model.Customer, string, bool) {
+	dni := strings.TrimSpace(claim.ClaimantDNI)
+	if dni != "" {
+		if strings.TrimSpace(shipment.Sender.DNI) == dni {
+			return shipment.Sender, "remitente", true
+		}
+		if strings.TrimSpace(shipment.Recipient.DNI) == dni {
+			return shipment.Recipient, "destinatario", true
+		}
+		return model.Customer{}, "", false
+	}
+	name := normalizeForClaim(claim.CreatedBy)
+	if name == "" {
+		return model.Customer{}, "", false
+	}
+	if normalizeForClaim(shipment.Sender.Name) == name {
+		return shipment.Sender, "remitente", true
+	}
+	if normalizeForClaim(shipment.Recipient.Name) == name {
+		return shipment.Recipient, "destinatario", true
+	}
+	return model.Customer{}, "", false
+}
+
+func normalizeForClaim(name string) string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(name)))
+	return strings.Join(fields, " ")
+}
+
+func buildClaimCreatedWhatsAppMessage(claim model.Claim, shipment model.Shipment, trackURL string) string {
+	msg := fmt.Sprintf("📋 Tu reclamo *%s* fue registrado exitosamente.\n\n", claim.ID)
+	msg += fmt.Sprintf("📦 *Envío:* %s\n", claim.TrackingID)
+	msg += fmt.Sprintf("📝 *Descripción:* %s\n", claim.Description)
+	msg += fmt.Sprintf("🔖 *Estado inicial:* %s\n", claimStatusLabelWA(claim.Status))
+	msg += "\nPodés seguir el estado de tu reclamo en cualquier momento."
+	if trackURL != "" {
+		msg += "\n\nSeguí tu reclamo en: " + trackURL
+	}
+	return msg
+}
+
+func buildClaimInfoRequestedWhatsAppMessage(claim model.Claim, supervisorNotes, trackURL string) string {
+	msg := fmt.Sprintf("ℹ️ Tu reclamo *%s* necesita información adicional.\n\n", claim.ID)
+	if supervisorNotes != "" {
+		msg += fmt.Sprintf("💬 *Mensaje del equipo:* %s\n\n", supervisorNotes)
+	}
+	msg += "Por favor, respondé con la información solicitada para continuar con la gestión."
+	if trackURL != "" {
+		msg += "\n\nSeguí tu reclamo en: " + trackURL
+	}
+	return msg
+}
+
+func buildClaimResolvedWhatsAppMessage(claim model.Claim, resolutionNotes, trackURL string) string {
+	msg := fmt.Sprintf("✅ Tu reclamo *%s* fue resuelto.\n\n", claim.ID)
+	msg += fmt.Sprintf("🔖 *Estado final:* %s\n", claimStatusLabelWA(claim.Status))
+	if resolutionNotes != "" {
+		msg += fmt.Sprintf("💬 *Detalle:* %s\n", resolutionNotes)
+	}
+	msg += "\nGracias por contactarte con nosotros."
+	if trackURL != "" {
+		msg += "\n\nVer detalle del reclamo: " + trackURL
+	}
+	return msg
+}
+
+func claimStatusLabelWA(status model.ClaimStatus) string {
+	switch status {
+	case model.ClaimStatusOpen:
+		return "Abierto"
+	case model.ClaimStatusInReview:
+		return "En revisión"
+	case model.ClaimStatusPendingCustomer:
+		return "Pendiente del cliente"
+	case model.ClaimStatusDerived:
+		return "Derivado"
+	case model.ClaimStatusResolvedOperativa:
+		return "Resuelto: operativo"
+	case model.ClaimStatusResolvedComercial:
+		return "Resuelto: comercial"
+	case model.ClaimStatusResolvedRRHH:
+		return "Resuelto: RRHH"
+	case model.ClaimStatusResolvedImprocedente:
+		return "Resuelto: improcedente"
+	default:
+		return string(status)
+	}
+}
+
+// ── SLA vencido (LOGITRACK-124) ───────────────────────────────────────────────
+
+// SLAExpiredEmailFallback is the minimal interface for the email fallback on SLA expiry.
+type SLAExpiredEmailFallback interface {
+	SendSLAExpiredNotification(shipment model.Shipment)
+}
+
+// SetSLAExpiredEmailFallback wires the email service used when WhatsApp is unavailable
+// for SLA-expired notifications.
+func (s *Service) SetSLAExpiredEmailFallback(svc SLAExpiredEmailFallback) {
+	s.slaExpiredEmailSvc = svc
+}
+
+// SendSLAExpiredWhatsApp notifies both the sender and the recipient via WhatsApp
+// that the shipment has exceeded its estimated delivery date.
+// Falls back to email (via slaExpiredEmailSvc) when WhatsApp is unavailable.
+// Intended to be called as a goroutine (fire-and-forget).
+func (s *Service) SendSLAExpiredWhatsApp(shipment model.Shipment) {
+	trackURL := ""
+	if base := s.trackBaseURL(); base != "" {
+		trackURL = base + "/track?id=" + shipment.TrackingID
+	}
+
+	sentAny := false
+
+	if !s.forceEmail() && s.whatsappConfigured() {
+		msg := buildSLAExpiredWhatsAppMessage(shipment, trackURL)
+
+		// Notificar al destinatario.
+		if shipment.Recipient.Phone != "" {
+			if err := s.sendWhatsApp(shipment.Recipient.Phone, msg); err != nil {
+				log.Printf("[messaging] WhatsApp SLA vencido falló para destinatario de %s (%s): %v",
+					shipment.TrackingID, shipment.Recipient.Phone, err)
+			} else {
+				sentAny = true
+				log.Printf("[messaging] WhatsApp SLA vencido enviado a destinatario %s para %s",
+					shipment.Recipient.Phone, shipment.TrackingID)
+			}
+		} else {
+			log.Printf("[messaging] destinatario de %s sin teléfono — WhatsApp SLA vencido omitido", shipment.TrackingID)
+		}
+
+		// Notificar al remitente.
+		if shipment.Sender.Phone != "" {
+			if err := s.sendWhatsApp(shipment.Sender.Phone, msg); err != nil {
+				log.Printf("[messaging] WhatsApp SLA vencido falló para remitente de %s (%s): %v",
+					shipment.TrackingID, shipment.Sender.Phone, err)
+			} else {
+				sentAny = true
+				log.Printf("[messaging] WhatsApp SLA vencido enviado a remitente %s para %s",
+					shipment.Sender.Phone, shipment.TrackingID)
+			}
+		} else {
+			log.Printf("[messaging] remitente de %s sin teléfono — WhatsApp SLA vencido omitido", shipment.TrackingID)
+		}
+	}
+
+	// Fallback a email si no se pudo enviar por WhatsApp.
+	if !sentAny && s.slaExpiredEmailSvc != nil {
+		s.slaExpiredEmailSvc.SendSLAExpiredNotification(shipment)
+	}
+}
+
+func buildSLAExpiredWhatsAppMessage(shipment model.Shipment, trackURL string) string {
+	msg := fmt.Sprintf("⚠️ El envío *%s* superó su fecha estimada de entrega.\n\n", shipment.TrackingID)
+	if shipment.EstimatedDeliveryAt != nil {
+		msg += fmt.Sprintf("📅 *Fecha estimada:* %s\n", formatShortDate(*shipment.EstimatedDeliveryAt))
+	}
+	msg += fmt.Sprintf("👤 *Destinatario:* %s\n", shipment.Recipient.Name)
+	msg += "\nNuestro equipo está trabajando para resolver la demora. Lamentamos los inconvenientes."
 	if trackURL != "" {
 		msg += "\n\nSeguí tu envío en: " + trackURL
 	}

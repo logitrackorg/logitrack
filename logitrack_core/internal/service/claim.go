@@ -28,6 +28,23 @@ type ClaimService struct {
 	claimEventRepo repository.ClaimEventRepository
 	shipmentRepo   repository.ShipmentRepository
 	eventStore     repository.EventStore
+	claimEmailSvc  ClaimEmailSender
+	claimWASvc     ClaimWASender
+}
+
+// ClaimEmailSender sends customer-facing claim notifications by email.
+type ClaimEmailSender interface {
+	SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment)
+	SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string)
+}
+
+// ClaimWASender sends customer-facing claim notifications via WhatsApp
+// (with email as fallback when WhatsApp is unavailable).
+type ClaimWASender interface {
+	SendClaimCreatedWhatsApp(claim model.Claim, shipment model.Shipment)
+	SendClaimInfoRequestedWhatsApp(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedWhatsApp(claim model.Claim, shipment model.Shipment, resolutionNotes string)
 }
 
 func NewClaimService(
@@ -42,6 +59,16 @@ func NewClaimService(
 		shipmentRepo:   shipmentRepo,
 		eventStore:     eventStore,
 	}
+}
+
+// SetClaimEmailService wires the customer-facing claim email sender.
+func (s *ClaimService) SetClaimEmailService(svc ClaimEmailSender) {
+	s.claimEmailSvc = svc
+}
+
+// SetClaimWAService wires the WhatsApp (+ email fallback) sender for claim notifications.
+func (s *ClaimService) SetClaimWAService(svc ClaimWASender) {
+	s.claimWASvc = svc
 }
 
 func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
@@ -116,6 +143,7 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		Status:             model.ClaimStatusOpen,
 		Description:        description,
 		CreatedBy:          createdBy,
+		ClaimantDNI:        claimantDNI,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 		AssignedCategory:   "",
@@ -168,6 +196,35 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	}); err != nil {
 		rollbackClaim()
 		return model.Claim{}, err
+	}
+	// If the shipment's SLA is already expired, move the claim directly to InReview
+	// before sending the notification so the email reflects the actual state.
+	if isSLAExpired(shipment, now) {
+		updatedAt := now
+		if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, updatedAt); err != nil {
+			return model.Claim{}, err
+		}
+		if err := s.appendClaimEvent(model.DomainEvent{
+			ID:         uuid.NewString(),
+			TrackingID: claim.ID,
+			EventType:  model.EventClaimInReview,
+			Payload: model.ClaimInReviewPayload{
+				FromStatus: model.ClaimStatusOpen,
+				ToStatus:   model.ClaimStatusInReview,
+			},
+			ChangedBy: createdBy,
+			Timestamp: updatedAt,
+		}); err != nil {
+			return model.Claim{}, err
+		}
+		claim.Status = model.ClaimStatusInReview
+		claim.UpdatedAt = updatedAt
+	}
+
+	if s.claimWASvc != nil {
+		go s.claimWASvc.SendClaimCreatedWhatsApp(claim, shipment)
+	} else if s.claimEmailSvc != nil {
+		go s.claimEmailSvc.SendClaimCreatedNotification(claim, shipment)
 	}
 
 	return claim, nil
@@ -391,6 +448,17 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	claim.ResolutionType = resolution
 	claim.Status = status
 	claim.UpdatedAt = updatedAt
+
+	if s.claimWASvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimWASvc.SendClaimResolvedWhatsApp(claim, shipment, notes)
+		}
+	} else if s.claimEmailSvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimEmailSvc.SendClaimResolvedNotification(claim, shipment, notes)
+		}
+	}
+
 	return claim, nil
 }
 
@@ -430,6 +498,17 @@ func (s *ClaimService) RequestCustomerInfo(id string, changedBy, branchID, notes
 
 	claim.Status = model.ClaimStatusPendingCustomer
 	claim.UpdatedAt = updatedAt
+
+	if s.claimWASvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimWASvc.SendClaimInfoRequestedWhatsApp(claim, shipment, notes)
+		}
+	} else if s.claimEmailSvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimEmailSvc.SendClaimInfoRequestedNotification(claim, shipment, notes)
+		}
+	}
+
 	return claim, nil
 }
 

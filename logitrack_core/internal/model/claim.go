@@ -91,6 +91,7 @@ type Claim struct {
 	Status             ClaimStatus         `json:"status"`
 	Description        string              `json:"description"`
 	CreatedBy          string              `json:"created_by"`
+	ClaimantDNI        string              `json:"claimant_dni,omitempty"`
 	CreatedAt          time.Time           `json:"created_at"`
 	UpdatedAt          time.Time           `json:"updated_at"`
 	AssignedCategory   ClaimCategory       `json:"assigned_category,omitempty"`
