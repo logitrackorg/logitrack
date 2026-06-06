@@ -91,16 +91,16 @@ const inputClass =
 type ViewMode = "flat" | "trip";
 
 function isLikelyDelayed(s: Shipment): boolean {
-  if (!s.estimated_delivery_date) return false;
+  if (!s.estimated_delivery_at) return false;
   const now = new Date();
-  const est = new Date(s.estimated_delivery_date);
+  const est = new Date(s.estimated_delivery_at);
   return est < now && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
 }
 
 function isLikelyAtRisk(s: Shipment): boolean {
-  if (!s.estimated_delivery_date) return false;
+  if (!s.estimated_delivery_at) return false;
   const now = new Date();
-  const est = new Date(s.estimated_delivery_date);
+  const est = new Date(s.estimated_delivery_at);
   const hoursLeft = (est.getTime() - now.getTime()) / 36e5;
   return hoursLeft >= 0 && hoursLeft <= 24 && !["delivered", "returned", "cancelled", "lost", "destroyed"].includes(s.status);
 }
