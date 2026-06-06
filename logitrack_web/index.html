@@ -4,7 +4,24 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b111f" media="(prefers-color-scheme: dark)" />
     <title>logitrack_web</title>
+    <script>
+      // Aplica el tema antes del primer paint para evitar flash (FOUC).
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme:preference");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

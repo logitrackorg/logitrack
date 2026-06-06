@@ -18,8 +18,10 @@ type Pusher interface {
 
 // NotificationService handles creation and retrieval of in-app notifications.
 type NotificationService struct {
-	repo repository.NotificationRepository
-	hub  Pusher
+	repo               repository.NotificationRepository
+	hub                Pusher
+	fatigueBlockRepo   repository.FatigueBlockRepository
+	interBranchTripSvc *InterBranchTripService
 }
 
 // NewNotificationService creates a new NotificationService.
@@ -30,6 +32,16 @@ func NewNotificationService(repo repository.NotificationRepository) *Notificatio
 // SetHub wires in the SSE hub so that new notifications are pushed in real time.
 func (s *NotificationService) SetHub(hub Pusher) {
 	s.hub = hub
+}
+
+// SetFatigueBlockRepo wires in the fatigue block repository (LOGITRACK-499).
+func (s *NotificationService) SetFatigueBlockRepo(repo repository.FatigueBlockRepository) {
+	s.fatigueBlockRepo = repo
+}
+
+// SetInterBranchTripService wires in the inter-branch trip service for fatigue block lookups (LOGITRACK-499).
+func (s *NotificationService) SetInterBranchTripService(svc *InterBranchTripService) {
+	s.interBranchTripSvc = svc
 }
 
 // statusLabel returns a human-readable label for the given shipment status.
@@ -549,8 +561,9 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 // NotifyFatigueAlert sends an urgent notification to all supervisors of the given
 // branch when a driver's composite fatigue score reaches the RED (high risk) level.
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.
+// driverID is the driver's user UUID; driverUsername is used for dedup and display.
 // Intended to be called as a goroutine (fire-and-forget).
-func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, driverFullName string, score int) {
+func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsername, driverFullName string, score int) {
 	since := clock.Now().Add(-1 * time.Hour)
 	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
 	if err != nil {
@@ -558,6 +571,20 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverUsername, drive
 	}
 	if exists {
 		return
+	}
+
+	// Crear bloqueo de pantalla para el chofer ANTES del early return (LOGITRACK-499).
+	// Aplica siempre, incluso si el chofer no tiene sucursal (ej: intersucursal).
+	if s.fatigueBlockRepo != nil {
+		var tripID *string
+		if s.interBranchTripSvc != nil {
+			if trip, err := s.interBranchTripSvc.GetActiveByDriver(driverID); err == nil {
+				tripID = &trip.ID
+			}
+		}
+		if err := s.fatigueBlockRepo.Create(driverID, tripID); err != nil {
+			log.Printf("[NotificationService] NotifyFatigueAlert: error creando fatigue_block: %v", err)
+		}
 	}
 
 	supervisors, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})
@@ -698,6 +725,39 @@ func (s *NotificationService) NotifyRouteReassigned(oldDriverID, tripID, tripDat
 // involucradas en el viaje cuando un chofer lo reclama vía QR.
 // branchIDs es la lista de sucursales a notificar (origen + destino cuando aplica).
 // Diseñado para llamarse como goroutine (fire-and-forget).
+// NotifyClaimCustomerResponded notifica a supervisores y operadores de la sucursal
+// que el cliente respondió al reclamo pending_customer vía chatbot (US-4).
+func (s *NotificationService) NotifyClaimCustomerResponded(claim model.Claim, branchID string) {
+	title := "Cliente respondió al reclamo"
+	body := fmt.Sprintf("El cliente respondió al reclamo %s. Está listo para ser revisado.", claim.ID)
+	now := clock.Now().UTC()
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleSupervisor,
+		model.RoleOperator,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyClaimCustomerResponded GetUsersByBranchAndRoles error: %v", err)
+		return
+	}
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationClaimCustomerResponded,
+			Title:      title,
+			Body:       body,
+			ResourceID: claim.ID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyClaimCustomerResponded Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(u.ID)
+		}
+	}
+}
+
 func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, branchIDs []string) {
 	// Dedup: si ya se notificó este viaje en los últimos 5 minutos, saltar.
 	since := clock.Now().Add(-5 * time.Minute)

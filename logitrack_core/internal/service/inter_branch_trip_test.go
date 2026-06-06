@@ -161,6 +161,7 @@ func (r *fakeTripRepo) ListByOriginBranch(branchID string) []model.InterBranchTr
 func (r *fakeTripRepo) ListByStopBranch(branchID string) []model.InterBranchTrip   { return nil }
 func (r *fakeTripRepo) ListAllActive() []model.InterBranchTrip                     { return nil }
 func (r *fakeTripRepo) AddShipment(tripID, shipmentID string) error                { return nil }
+func (r *fakeTripRepo) ListByDateRange(from, to time.Time) []model.InterBranchTrip { return nil }
 
 // =============================================================================
 // Fake AuthRepository (minimal — only GetUserByID needed for AssignDriver)
@@ -188,6 +189,8 @@ func (f *fakeAuthRepoForTrip) ChangePassword(_ context.Context, _, _, _ string) 
 	return nil
 }
 func (f *fakeAuthRepoForTrip) ListByRole(_ model.Role, _ string) []model.User { return nil }
+func (f *fakeAuthRepoForTrip) FindUserByUsername(_ string) (model.User, bool)  { return model.User{}, false }
+func (f *fakeAuthRepoForTrip) UpdatePassword(_, _ string) error                { return nil }
 
 // =============================================================================
 // Helpers

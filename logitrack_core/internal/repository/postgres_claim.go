@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/logitrack/core/internal/model"
@@ -28,14 +29,15 @@ func (r *postgresClaimRepository) Create(claim model.Claim) error {
 	}
 	_, err := r.db.Exec(
 		`INSERT INTO shipment_claims
-			(id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			(id, tracking_id, claim_type, status, description, created_by, claimant_dni, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 		claim.ID,
 		claim.TrackingID,
 		string(claim.ClaimType),
 		string(claim.Status),
 		claim.Description,
 		claim.CreatedBy,
+		nullString(claim.ClaimantDNI),
 		claim.CreatedAt,
 		claim.UpdatedAt,
 		string(claim.AssignedCategory),
@@ -63,133 +65,27 @@ func (r *postgresClaimRepository) Delete(id string) error {
 
 func (r *postgresClaimRepository) GetByID(id string) (model.Claim, error) {
 	row := r.db.QueryRow(
-		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date
-		 FROM shipment_claims WHERE id = $1`,
+		`SELECT `+claimSelectColumns+` FROM shipment_claims WHERE id = $1`,
 		id,
 	)
-	var claim model.Claim
-	var claimType string
-	var status string
-	var assignedCategory sql.NullString
-	var resolutionType sql.NullString
-	var evidenceFileName sql.NullString
-	var evidenceFilePath sql.NullString
-	var evidenceMimeType sql.NullString
-	var evidenceUploadDate sql.NullTime
-	if err := row.Scan(
-		&claim.ID,
-		&claim.TrackingID,
-		&claimType,
-		&status,
-		&claim.Description,
-		&claim.CreatedBy,
-		&claim.CreatedAt,
-		&claim.UpdatedAt,
-		&assignedCategory,
-		&resolutionType,
-		&claim.IsAutomatic,
-		&evidenceFileName,
-		&evidenceFilePath,
-		&evidenceMimeType,
-		&evidenceUploadDate,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return model.Claim{}, ErrClaimNotFound
-		}
-		return model.Claim{}, err
-	}
-	claim.ClaimType = model.ClaimType(claimType)
-	claim.Status = model.ClaimStatus(status)
-	if assignedCategory.Valid {
-		claim.AssignedCategory = model.ClaimCategory(assignedCategory.String)
-	}
-	if resolutionType.Valid {
-		claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
-	}
-	if evidenceFileName.Valid {
-		claim.EvidenceFileName = evidenceFileName.String
-	}
-	if evidenceFilePath.Valid {
-		claim.EvidenceFilePath = evidenceFilePath.String
-	}
-	if evidenceMimeType.Valid {
-		claim.EvidenceMimeType = evidenceMimeType.String
-	}
-	if evidenceUploadDate.Valid {
-		t := evidenceUploadDate.Time
-		claim.EvidenceUploadDate = &t
-	}
-	return claim, nil
+	return r.scanClaimRow(row)
 }
 
 func (r *postgresClaimRepository) GetLatestByTrackingID(trackingID string) (model.Claim, error) {
 	row := r.db.QueryRow(
-		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date
+		`SELECT `+claimSelectColumns+`
 		 FROM shipment_claims
 		 WHERE tracking_id = $1
 		 ORDER BY updated_at DESC
 		 LIMIT 1`,
 		trackingID,
 	)
-	var claim model.Claim
-	var claimType string
-	var status string
-	var assignedCategory sql.NullString
-	var resolutionType sql.NullString
-	var evidenceFileName sql.NullString
-	var evidenceFilePath sql.NullString
-	var evidenceMimeType sql.NullString
-	var evidenceUploadDate sql.NullTime
-	if err := row.Scan(
-		&claim.ID,
-		&claim.TrackingID,
-		&claimType,
-		&status,
-		&claim.Description,
-		&claim.CreatedBy,
-		&claim.CreatedAt,
-		&claim.UpdatedAt,
-		&assignedCategory,
-		&resolutionType,
-		&claim.IsAutomatic,
-		&evidenceFileName,
-		&evidenceFilePath,
-		&evidenceMimeType,
-		&evidenceUploadDate,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return model.Claim{}, ErrClaimNotFound
-		}
-		return model.Claim{}, err
-	}
-	claim.ClaimType = model.ClaimType(claimType)
-	claim.Status = model.ClaimStatus(status)
-	if assignedCategory.Valid {
-		claim.AssignedCategory = model.ClaimCategory(assignedCategory.String)
-	}
-	if resolutionType.Valid {
-		claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
-	}
-	if evidenceFileName.Valid {
-		claim.EvidenceFileName = evidenceFileName.String
-	}
-	if evidenceFilePath.Valid {
-		claim.EvidenceFilePath = evidenceFilePath.String
-	}
-	if evidenceMimeType.Valid {
-		claim.EvidenceMimeType = evidenceMimeType.String
-	}
-	if evidenceUploadDate.Valid {
-		t := evidenceUploadDate.Time
-		claim.EvidenceUploadDate = &t
-	}
-	return claim, nil
+	return r.scanClaimRow(row)
 }
 
 func (r *postgresClaimRepository) ListAll() ([]model.Claim, error) {
 	rows, err := r.db.Query(
-		`SELECT id, tracking_id, claim_type, status, description, created_by, created_at, updated_at, assigned_category, resolution_type, is_automatic, evidence_file_name, evidence_file_path, evidence_mime_type, evidence_upload_date
-		 FROM shipment_claims ORDER BY created_at DESC`,
+		`SELECT ` + claimSelectColumns + ` FROM shipment_claims ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -198,58 +94,20 @@ func (r *postgresClaimRepository) ListAll() ([]model.Claim, error) {
 
 	var result []model.Claim
 	for rows.Next() {
-		var claim model.Claim
-		var claimType string
-		var status string
-		var assignedCategory sql.NullString
-		var resolutionType sql.NullString
-		var evidenceFileName sql.NullString
-		var evidenceFilePath sql.NullString
-		var evidenceMimeType sql.NullString
-		var evidenceUploadDate sql.NullTime
-		if err := rows.Scan(
-			&claim.ID,
-			&claim.TrackingID,
-			&claimType,
-			&status,
-			&claim.Description,
-			&claim.CreatedBy,
-			&claim.CreatedAt,
-			&claim.UpdatedAt,
-			&assignedCategory,
-			&resolutionType,
-			&claim.IsAutomatic,
-			&evidenceFileName,
-			&evidenceFilePath,
-			&evidenceMimeType,
-			&evidenceUploadDate,
-		); err != nil {
+		claim, err := r.scanClaimRows(rows)
+		if err != nil {
 			return nil, err
-		}
-		claim.ClaimType = model.ClaimType(claimType)
-		claim.Status = model.ClaimStatus(status)
-		if assignedCategory.Valid {
-			claim.AssignedCategory = model.ClaimCategory(assignedCategory.String)
-		}
-		if resolutionType.Valid {
-			claim.ResolutionType = model.ClaimResolutionType(resolutionType.String)
-		}
-		if evidenceFileName.Valid {
-			claim.EvidenceFileName = evidenceFileName.String
-		}
-		if evidenceFilePath.Valid {
-			claim.EvidenceFilePath = evidenceFilePath.String
-		}
-		if evidenceMimeType.Valid {
-			claim.EvidenceMimeType = evidenceMimeType.String
-		}
-		if evidenceUploadDate.Valid {
-			t := evidenceUploadDate.Time
-			claim.EvidenceUploadDate = &t
 		}
 		result = append(result, claim)
 	}
 	return result, nil
+}
+
+func nullString(s string) interface{} {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return s
 }
 
 func (r *postgresClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {

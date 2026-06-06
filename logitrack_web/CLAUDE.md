@@ -5,10 +5,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev       # Dev server at http://localhost:5173
-npm run build     # tsc -b (type-check) + Vite production build — use to validate TS
-npm run lint      # ESLint on all .ts/.tsx files
-npm run preview   # Preview production build
+npm run dev          # Dev server at http://localhost:5173
+npm run build        # tsc -b (type-check) + Vite production build — use to validate TS
+npm run build:clean  # Same as build but forces CI=true NO_COLOR=1 (ANSI-free output for grep)
+npm run lint         # ESLint on all .ts/.tsx files
+npm run preview      # Preview production build
+bash scripts/check_build.sh  # Runs build:clean and greps only errors
+```
+
+**System Rule — ANSI escape codes**: When piping `npm run build` to `grep`, `tee`, or any text processor, ALWAYS set `CI=true NO_COLOR=1` (use `npm run build:clean`) and pass `-a / --text` to grep. Otherwise ANSI color codes produce "binary file matches" and the output is useless. Example:
+
+```bash
+# CORRECT
+npm run build:clean 2>&1 | grep -a "error"
+
+# WRONG — produces "binary file matches"
+npm run build 2>&1 | grep "error"
 ```
 
 No test framework is installed. **`npm run build` is the required validation step before marking any frontend change as done** — it runs `tsc -b` (type-check) + Vite build and will catch type errors and broken imports.
@@ -59,6 +71,7 @@ src/
 | `/vehicles/available` | AvailableVehicles | supervisor, manager, admin |
 | `/branches` | BranchList | operator, supervisor, manager, admin |
 | `/routing` | Routing (plan diario inteligente) | operator, supervisor |
+| `/calendar` | TripsCalendar (calendario de viajes aplicados + planificados de hoy) | operator, supervisor, manager |
 | `/routing-config` | RoutingConfig | admin |
 | `/ml-config` | MLConfig | admin |
 | `/system-config` | SystemConfig | admin |

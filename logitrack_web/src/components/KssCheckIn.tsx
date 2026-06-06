@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, Info, Moon, Shield, SkipForward, Send, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, Info, Moon, Shield, ShieldAlert, SkipForward, Send, X, Loader2, MapPin, Mic } from "lucide-react";
 import { driverApi } from "../api/driver";
+import { checkDevicePermissions } from "../utils/devicePermissions";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 import { PVTCheckIn } from "./PVTCheckIn";
 
@@ -19,10 +20,10 @@ const KSS_LEVELS = [
 ] as const;
 
 function kssAccentColor(v: number): string {
-  if (v <= 3) return "#10b981"; // emerald — alerta
-  if (v <= 5) return "#f59e0b"; // amber   — leve somnolencia
-  if (v <= 7) return "#f97316"; // orange  — somnolencia
-  return "#ef4444";             // rose    — alto riesgo
+  if (v <= 3) return "var(--ok)";     // emerald — alerta
+  if (v <= 5) return "var(--warn)";   // amber   — leve somnolencia
+  if (v <= 7) return "var(--warn)";   // orange  — somnolencia
+  return "var(--danger-c)";           // rose    — alto riesgo
 }
 
 function kssBandLabel(v: number): { text: string; cls: string } {
@@ -37,10 +38,21 @@ interface Props {
   onDone: () => void;
   /** Cantidad de misfires que dispararon este check-in. Se muestra en el toast de skip. */
   misfireCount?: number;
+  /**
+   * true  → el driver aún no reportó horas de sueño hoy, mostrar el campo.
+   * false → ya existe un registro de sueño para este día logístico, omitir el campo.
+   * Default: true (comportamiento seguro ante datos desconocidos).
+   */
+  requiresSleepData?: boolean;
 }
 
-export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
-  const [step, setStep] = useState<"kss" | "voice" | "pvt">("kss");
+export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepData = true }: Props) {
+  // BUG-46: paso de permisos obligatorio ANTES de montar el test. Se ejecuta al
+  // montar; solo avanza a "kss" cuando ubicación + micrófono están concedidos.
+  const [step, setStep] = useState<"permissions" | "kss" | "voice" | "pvt">("permissions");
+  const [permChecking, setPermChecking] = useState(true);
+  const [permError, setPermError] = useState("");
+
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(4);
   const [submitting, setSubmitting] = useState(false);
@@ -79,6 +91,23 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
     return () => clearTimeout(t);
   }, [showBackWarning]);
 
+  // ── BUG-46: verificación de permisos de hardware ──────────────────────────
+  // Solicita ubicación + micrófono. Si se conceden, avanza al test; si no,
+  // muestra un mensaje bloqueante con opción de reintentar.
+  const runPermissionCheck = useCallback(async () => {
+    setPermChecking(true);
+    setPermError("");
+    const result = await checkDevicePermissions();
+    if (result.granted) {
+      setStep("kss");
+    } else {
+      setPermError(result.message);
+    }
+    setPermChecking(false);
+  }, []);
+
+  useEffect(() => { void runPermissionCheck(); }, [runPermissionCheck]);
+
   const handleSkipConfirmed = async () => {
     setSkipping(true);
     try {
@@ -99,14 +128,25 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
 
   const horasNum = parseInt(horasSueno, 10);
   const horasValid = !Number.isNaN(horasNum) && horasNum >= 0 && horasNum <= 10;
-  const canSubmit = horasValid && !submitting;
+  const canSubmit = (!requiresSleepData || horasValid) && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError("");
     try {
-      await driverApi.submitCheckin({ driver_id: driverId, horas_sueno: horasNum, kss_level: kss });
+      const payload = {
+        driver_id: driverId,
+        kss_level: kss,
+        ...(requiresSleepData ? { horas_sueno: horasNum } : {}),
+      };
+      const result = await driverApi.submitCheckin(payload);
+      // Backend can still ask for sleep data if the record wasn't found
+      // (e.g. race condition or first submission without sleep). Show field and retry.
+      if (result && (result as { requires_sleep_data?: boolean }).requires_sleep_data) {
+        setError("Ingresá tus horas de sueño para continuar.");
+        return;
+      }
       setStep("voice");
     } catch {
       setError("No se pudo registrar el check-in. Intentá de nuevo.");
@@ -114,6 +154,56 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
       setSubmitting(false);
     }
   };
+
+  // ── Paso de permisos (BUG-46) — bloquea el test hasta que se concedan ──────
+  if (step === "permissions") {
+    return (
+      <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+        <div className="max-w-sm w-full text-center">
+          {permChecking ? (
+            <>
+              <Loader2 className="w-10 h-10 text-blue-400 mx-auto mb-5 animate-spin" />
+              <h1 className="text-lg font-bold text-white mb-2">Verificando permisos</h1>
+              <p className="text-sm text-slate-400 leading-relaxed">
+                Necesitamos acceso al GPS y al micrófono para iniciar tu test de seguridad.
+                Aceptá los permisos que solicite tu navegador.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-5">
+                <ShieldAlert className="w-7 h-7" />
+              </div>
+              <h1 className="text-lg font-bold text-white mb-2">Permisos requeridos</h1>
+              <p className="text-sm text-slate-300 leading-relaxed mb-5">{permError}</p>
+
+              <div className="flex flex-col gap-2 mb-6 text-left">
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-xs text-slate-300">Ubicación (GPS) — seguimiento de ruta</span>
+                </div>
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="text-xs text-slate-300">Micrófono — prueba de voz del test</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => void runPermissionCheck()}
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors"
+              >
+                Reintentar
+              </button>
+              <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                Si ya los rechazaste, habilitá los permisos desde la configuración del sitio en tu
+                navegador y volvé a tocar "Reintentar".
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (step === "voice") return <VoiceCheckIn onDone={() => setStep("pvt")} />;
   if (step === "pvt")   return <PVTCheckIn onDone={onDone} />;
@@ -190,24 +280,33 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0 }: Props) {
             </div>
           </div>
 
-          {/* Horas de sueño */}
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-              Horas de sueño (noche anterior)
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={10}
-              value={horasSueno}
-              onChange={(e) => setHorasSueno(e.target.value)}
-              placeholder="0 – 10"
-              className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {horasSueno !== "" && !horasValid && (
-              <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
-            )}
-          </div>
+          {/* Horas de sueño — solo si no hay registro para el día logístico */}
+          {requiresSleepData ? (
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+                Horas de sueño (noche anterior)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={10}
+                value={horasSueno}
+                onChange={(e) => setHorasSueno(e.target.value)}
+                placeholder="0 – 10"
+                className="w-full h-12 px-4 rounded-xl bg-slate-800 border border-slate-600 text-white text-base placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              {horasSueno !== "" && !horasValid && (
+                <p className="mt-1.5 text-xs text-rose-400">Ingresá un valor entre 0 y 10.</p>
+              )}
+            </div>
+          ) : (
+            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700">
+              <Moon className="w-4 h-4 text-blue-400 shrink-0" />
+              <p className="text-xs text-slate-400 leading-snug">
+                Horas de sueño ya registradas para este día logístico.
+              </p>
+            </div>
+          )}
 
           {/* ── KSS Slider ─────────────────────────────────────────────────── */}
           <div className="mb-8">

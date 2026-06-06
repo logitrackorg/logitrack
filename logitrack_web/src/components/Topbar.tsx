@@ -1,7 +1,9 @@
 import { useLocation } from "react-router-dom";
 import { NotificationBell } from "./NotificationBell";
+import { ThemeToggle } from "./ThemeToggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useTopbarSlotRef } from "../hooks/useTopbarSlot";
+import { cn } from "../lib/utils";
 
 /** Mapa de rutas → título legible para mostrar a la izquierda del topbar. */
 const ROUTE_TITLES: Array<{ match: RegExp; title: string }> = [
@@ -52,48 +54,27 @@ export function Topbar() {
 
   return (
     <header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-        height: 56,
-        background: "rgba(255,255,255,0.92)",
-        backdropFilter: "saturate(180%) blur(8px)",
-        WebkitBackdropFilter: "saturate(180%) blur(8px)",
-        borderBottom: "1px solid #e5e7eb",
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: isMobile ? "0 12px 0 60px" : "0 24px",
-      }}
+      className={cn(
+        "sticky top-0 z-50 h-14",
+        "bg-[var(--topbar-bg)]",
+        "backdrop-saturate-[1.8] backdrop-blur-lg",
+        "border-b border-[var(--border)]",
+        "flex items-center gap-4",
+        isMobile ? "pr-3 pl-[60px]" : "px-6",
+      )}
     >
-      <h1 style={{
-        fontSize: 15,
-        fontWeight: 700,
-        color: "#0f2744",
-        margin: 0,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        flexShrink: 0,
-      }}>
+      <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 whitespace-nowrap overflow-hidden text-ellipsis shrink-0">
         {title}
       </h1>
 
       {/* Slot para acciones de la página activa (portal target) */}
       <div
         ref={registerSlot}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 8,
-        }}
+        className="flex-1 min-w-0 flex items-center justify-end gap-2"
       />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+      <div className="flex items-center gap-3 shrink-0">
+        <ThemeToggle compact={isMobile} />
         <NotificationBell />
       </div>
     </header>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { paymentApi, type Payment } from "../api/payments";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Check, Tag, AlertCircle, Truck } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Pencil, AlertTriangle, X, Undo2, Loader2, Truck, CreditCard, Printer, QrCode, Package, CalendarDays, Scale, MapPin, ArrowRight } from "lucide-react";
+import { useOptimisticUpdate } from "../hooks/useOptimisticUpdate";
 import {
   shipmentApi,
   type Shipment,
@@ -14,7 +15,7 @@ import {
   INCIDENT_TYPE_LABELS,
   TERMINAL_INCIDENT_STATUS,
 } from "../api/shipments";
-import { CLAIM_EVENT_LABELS, type ClaimEventType } from "../api/claims";
+
 import { usersApi, type UserProfile } from "../api/users";
 import { vehicleApi, type VehicleStatusResponse } from "../api/vehicles";
 import { VehicleDetailModal } from "./VehicleList";
@@ -22,12 +23,24 @@ import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ZoneBadge } from "../components/ZoneBadge";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { extractErrorMessage } from "../utils/errors";
+
+const SLA_MONITORED_DETAIL = new Set([
+  "at_origin_hub", "at_hub", "loaded", "in_transit",
+  "out_for_delivery", "redelivery_scheduled", "ready_for_return",
+]);
+function isShipmentDelayed(s: Shipment): boolean {
+  if (!SLA_MONITORED_DETAIL.has(s.status) || !s.updated_at) return false;
+  return Date.now() - new Date(s.updated_at).getTime() > 36 * 60 * 60 * 1000;
+}
 import { useAuth } from "../context/AuthContext";
-import { branchApi, branchLabel, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
-import { customerApi, type Customer } from "../api/customers";
-import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
-import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
-import { fmtDate, fmtDateTime } from "../utils/date";
+import { branchApi, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
+import { DetailPageSkeleton } from "../components/ui/skeleton";
+import { Button } from "../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { AlertBanner } from "../components/ui/alert-banner";
+import { EventTimeline } from "../components/ui/event-timeline";
+import { fmtDateTime } from "../utils/date";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ShipmentQRModal from '../components/ShipmentQRModal';
 import PaymentMethodsPanel from '../components/PaymentMethodsPanel';
@@ -36,7 +49,15 @@ import { printShipmentDocument } from '../utils/printShipmentDocument';
 import { organizationApi, type OrganizationConfig } from '../api/organizationApi';
 import { systemConfigApi } from '../api/systemConfig';
 import { tripsApi, type InterBranchTrip } from '../api/routing';
-import { AddressAutocomplete } from '../components/AddressAutocomplete';
+import { TIME_WINDOWS } from '../constants';
+import { InfoCards } from './ShipmentDetail/components/InfoCards';
+import { RouteTimeline } from './ShipmentDetail/components/RouteTimeline';
+import { PriceCard } from './ShipmentDetail/components/PriceCard';
+import { VehicleCard } from './ShipmentDetail/components/VehicleCard';
+import { CommentsList } from './ShipmentDetail/components/CommentsList';
+import { IncidentsList } from './ShipmentDetail/components/IncidentsList';
+import { StatusUpdateForm } from './ShipmentDetail/components/StatusUpdateForm';
+import { DraftEditForm } from './ShipmentDetail/components/DraftEditForm';
 
 const TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
   draft:                [],
@@ -82,31 +103,6 @@ const STATUS_LABELS: Record<ShipmentStatus, string> = {
   pending_payment:      "Pago pendiente",
 };
 
-const PACKAGE_LABELS: Record<string, string> = {
-  envelope: "Sobre", box: "Caja",
-};
-
-const formatShipmentEventLabel = (ev: ShipmentEvent) => {
-  const claimEventType = ev.event_type as ClaimEventType | undefined;
-  if (claimEventType && claimEventType in CLAIM_EVENT_LABELS) {
-    return CLAIM_EVENT_LABELS[claimEventType];
-  }
-
-  if (ev.event_type === "incident_reported") {
-    return "Incidencia reportada";
-  }
-
-  if (ev.event_type === "edited") {
-    return STATUS_LABELS[ev.to_status];
-  }
-
-  if (ev.from_status) {
-    return `${STATUS_LABELS[ev.from_status]} → ${STATUS_LABELS[ev.to_status]}`;
-  }
-
-  return ev.to_status ? STATUS_LABELS[ev.to_status] : "Evento registrado";
-};
-
 export function ShipmentDetail() {
   const { hasRole, user } = useAuth();
   const isMobile = useIsMobile();
@@ -124,7 +120,6 @@ export function ShipmentDetail() {
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [recipientDni, setRecipientDni] = useState("");
   const [senderDni, setSenderDni] = useState("");
-  const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
@@ -156,6 +151,43 @@ export function ShipmentDetail() {
   const [selectedVehiclePlate, setSelectedVehiclePlate] = useState("");
   const [assigningVehicle, setAssigningVehicle] = useState(false);
   const [vehiclePickerError, setVehiclePickerError] = useState("");
+
+  // Optimistic status update
+  const pendingUpdateRef = useRef<{
+    status: ShipmentStatus;
+    location: string;
+    notes: string;
+    driver_id?: string;
+    recipient_dni?: string;
+    sender_dni?: string;
+  } | null>(null);
+
+  const statusOptimistic = useOptimisticUpdate<Shipment>(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async (_shipment: Shipment) => {
+      const p = pendingUpdateRef.current!;
+      await shipmentApi.updateStatus(trackingId!, {
+        status: p.status,
+        location: p.location,
+        notes: p.notes,
+        driver_id: p.driver_id,
+        recipient_dni: p.recipient_dni,
+        sender_dni: p.sender_dni,
+      });
+      const s = await shipmentApi.get(trackingId!);
+      return s;
+    },
+    {
+      onSuccess: (result: Shipment) => {
+        setShipment(result);
+        setLocation(""); setNotes(""); setSelectedDriverId(""); setRecipientDni(""); setSenderDni("");
+      },
+      onRollback: (_err: Error, previous: Shipment) => {
+        setShipment(previous);
+        setUpdateError(extractErrorMessage(_err) ?? "No se pudo actualizar el estado.");
+      },
+    },
+  );
 
   //  Estados para QR
   const [qrData, setQRData] = useState<QRResponse | null>(null);
@@ -261,7 +293,7 @@ export function ShipmentDetail() {
       setNewStatus("");
       await reload();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = extractErrorMessage(err);
       setVehiclePickerError(msg ?? "No se pudo asignar el vehículo.");
     } finally {
       setAssigningVehicle(false);
@@ -279,7 +311,7 @@ export function ShipmentDetail() {
       setQRData(data);
       setShowQRModal(true);
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar código QR';
+      const message = extractErrorMessage(err) || 'Error al generar código QR';
       setQRError(message);
     } finally {
       setGeneratingQR(false);
@@ -300,7 +332,7 @@ export function ShipmentDetail() {
       const qr = await qrService.generateQR(shipment.tracking_id);
       printShipmentDocument(shipment, branches, qr.qr_code_base64, orgConfig);
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error al generar el documento de impresión';
+      const message = extractErrorMessage(err) || 'Error al generar el documento de impresión';
       setPrintDocError(message);
     } finally {
       setPrintingDoc(false);
@@ -386,7 +418,7 @@ export function ShipmentDetail() {
       await paymentApi.requestPayment(trackingId);
       setShipment(s => s ? { ...s, status: "pending_payment" as ShipmentStatus } : s);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = extractErrorMessage(err);
       setConfirmError(msg ?? "No se pudo iniciar el pago del envío.");
     } finally {
       setConfirming(false);
@@ -406,26 +438,23 @@ export function ShipmentDetail() {
 
   const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStatus || !trackingId) return;
-    setUpdating(true);
+    if (!newStatus || !trackingId || !shipment) return;
+
+    const previousShipment = { ...shipment };
+    const optimisticShipment: Shipment = { ...shipment, status: newStatus as ShipmentStatus };
+
+    pendingUpdateRef.current = {
+      status: newStatus as ShipmentStatus,
+      location,
+      notes,
+      driver_id: newStatus === "out_for_delivery" ? selectedDriverId : undefined,
+      recipient_dni: newStatus === "delivered" || (newStatus === "returned" && !!shipment.parent_shipment_id) ? recipientDni : undefined,
+      sender_dni: newStatus === "returned" && !shipment.parent_shipment_id ? senderDni : undefined,
+    };
+
     setUpdateError("");
-    try {
-      await shipmentApi.updateStatus(trackingId, {
-        status: newStatus,
-        location,
-        notes,
-        driver_id: newStatus === "out_for_delivery" ? selectedDriverId : undefined,
-        recipient_dni: newStatus === "delivered" || (newStatus === "returned" && !!shipment?.parent_shipment_id) ? recipientDni : undefined,
-        sender_dni: newStatus === "returned" && !shipment?.parent_shipment_id ? senderDni : undefined,
-      });
-      setLocation(""); setNotes(""); setSelectedDriverId(""); setRecipientDni(""); setSenderDni("");
-      await reload();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setUpdateError(msg ?? "No se pudo actualizar el estado.");
-    } finally {
-      setUpdating(false);
-    }
+    setNewStatus("");
+    await statusOptimistic.execute(optimisticShipment, previousShipment);
   };
 
   const openCorrectionModal = () => {
@@ -521,7 +550,7 @@ export function ShipmentDetail() {
       setShowCorrectionModal(false);
       await reload();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = extractErrorMessage(err);
       setCorrectionError(msg ?? "No se pudieron guardar las correcciones.");
     } finally {
       setSavingCorrection(false);
@@ -538,7 +567,7 @@ export function ShipmentDetail() {
       setCancelReason("");
       await reload();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = extractErrorMessage(err);
       setCancelError(msg ?? "No se pudo cancelar el envío.");
     } finally {
       setCancelling(false);
@@ -546,13 +575,19 @@ export function ShipmentDetail() {
   };
 
   if (error) return (
-    <div style={{ padding: 24 }}>
-      <p style={{ color: "#ef4444" }}>{error}</p>
-      <button onClick={() => navigate("/")} style={backBtn}>← Back to list</button>
+    <div className="p-6">
+      <p className="text-[var(--danger-text)]">{error}</p>
+      <Button variant="outline" onClick={() => navigate("/")} className="mt-2">
+        <ArrowLeft className="w-4 h-4" /> Volver al listado
+      </Button>
     </div>
   );
 
-  if (!shipment) return <div style={{ padding: 24 }}>Cargando...</div>;
+  if (!shipment) return (
+    <div className="p-6 animate-fade-in">
+      <DetailPageSkeleton />
+    </div>
+  );
 
   const isAtOriginBranch = shipment.current_location === shipment.receiving_branch_id;
   const isAtDestinationBranch = shipment.status === "at_hub" && shipment.current_location === shipment.final_branch_id;
@@ -584,127 +619,210 @@ export function ShipmentDetail() {
     (s) => s !== "loaded" || !isAtDestinationBranch
   );
   const fmt = fmtDateTime;
-  const fmtAddr = (a: { street?: string; city: string; province: string; postal_code?: string }) =>
-    [a.street, a.city, a.province, a.postal_code].filter(Boolean).join(", ");
 
   const operatorOutOfBranch = (user?.role === "operator" || user?.role === "supervisor") && !!user.branch_id && user.branch_id !== shipment?.receiving_branch_id;
 
   return (
-    <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1100px] mx-auto`}>
-      <button
-        onClick={() => navigate("/")}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Volver al listado
-      </button>
+    <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-[1100px] mx-auto animate-fade-in`}>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "720px 300px", gap: isMobile ? 16 : 32, alignItems: "start" }}>
+      {/* ═══════════════════════════════════════════════════════
+          A. HERO CARD — full width, prominent
+          ═══════════════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] mb-6">
+        {/* Subtle top gradient bar */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600" />
 
-      {/* ── Left column ── */}
-      <div>
-      <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-3 min-w-0">
-          <code className="text-xl font-mono font-bold text-slate-900 tracking-tight">{shipment.tracking_id}</code>
-          <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
-          <PriorityBadge priority={shipment.priority} />
-        </div>
-        <div className="flex items-center gap-2">
-          {hasRole("supervisor", "admin", "operator") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+        <div className="p-5 sm:p-6 lg:p-7">
+          {/* Breadcrumb + back */}
+          <div className="flex items-center gap-3 mb-4">
             <button
-              onClick={openCorrectionModal}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+              type="button"
+              onClick={() => navigate("/")}
+              className="shrink-0 p-1 -ml-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors duration-200 cursor-pointer"
+              aria-label="Volver al listado"
             >
-              <Pencil className="w-3.5 h-3.5" />
-              Editar datos
+              <ArrowLeft className="w-4 h-4" />
             </button>
-          )}
-          {hasRole("operator", "supervisor", "admin") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
-            <button
-              onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-sm font-semibold text-amber-800 cursor-pointer transition-colors"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Incidencia
-            </button>
-          )}
-          {hasRole("operator", "supervisor") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
-            <button
-              onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white hover:bg-rose-50 border border-rose-300 text-sm font-semibold text-rose-700 cursor-pointer transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Cancelar
-            </button>
-          )}
+            <nav aria-label="Breadcrumb" className="text-[12px] text-[var(--text-muted)]">
+              <a href="/" className="hover:text-[var(--text-primary)] transition-colors duration-200">Envíos</a>
+              <span className="mx-1.5 opacity-40">/</span>
+              <span className="text-[var(--text-secondary)]">{shipment.tracking_id}</span>
+            </nav>
+          </div>
+
+          {/* Main row: tracking ID + badges + actions */}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              {/* Tracking ID + badges */}
+              <div className="flex items-center gap-3 flex-wrap mb-2">
+                <code className="text-2xl sm:text-[1.65rem] font-mono font-bold text-[var(--text-primary)] tracking-tight">
+                  {shipment.tracking_id}
+                </code>
+                <StatusBadge status={shipment.status} label={shipmentStatusLabelOverride(shipment)} />
+                <PriorityBadge priority={shipment.priority} />
+                {(shipment.is_delayed ?? isShipmentDelayed(shipment)) && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]">
+                    Demorado
+                  </span>
+                )}
+              </div>
+
+              {/* Route: origin → destination */}
+              <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm flex-wrap">
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                <span className="font-medium text-[var(--text-strong)]">{shipment.sender.address.city}</span>
+                <ArrowRight className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
+                <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                <span className="font-medium text-[var(--text-strong)]">{shipment.recipient.address.city}</span>
+              </div>
+
+              {/* Metadata row */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mt-3 text-[13px] text-[var(--text-muted)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  Creado {fmt(shipment.created_at)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Scale className="w-3.5 h-3.5" />
+                  {shipment.weight_kg ?? 0} kg
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5" />
+                  {shipment.shipment_type === "express" ? "Express" : "Normal"}
+                </span>
+                {shipment.is_fragile && (
+                  <span className="inline-flex items-center gap-1.5 text-[var(--warn-text)]">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Frágil
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons group */}
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              {shipment.status !== "draft" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateQR}
+                  disabled={!shipment.tracking_id || generatingQR}
+                  title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
+                  className="gap-1.5"
+                >
+                  {generatingQR ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />}
+                  QR
+                </Button>
+              )}
+
+              {hasRole("operator", "supervisor", "admin") && shipment.status !== "draft" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrintDocument}
+                  disabled={printingDoc}
+                  title="Imprimir comprobante de alta del envío"
+                  className="gap-1.5"
+                >
+                  {printingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
+                  Imprimir
+                </Button>
+              )}
+
+              {hasRole("supervisor", "admin", "operator") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+                <Button variant="outline" size="sm" onClick={openCorrectionModal} className="gap-1.5">
+                  <Pencil className="w-3.5 h-3.5" />
+                  Editar
+                </Button>
+              )}
+
+              {hasRole("operator", "supervisor", "admin") && !["draft", "pending_payment", "delivered", "returned", "cancelled", "lost", "destroyed"].includes(shipment.status) && !operatorOutOfBranch && (
+                <Button variant="outline" size="sm" onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }} className="gap-1.5 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/15">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Incidencia
+                </Button>
+              )}
+
+              {hasRole("operator", "supervisor") && ["at_origin_hub", "at_hub", "ready_for_pickup"].includes(shipment.status) && !operatorOutOfBranch && (
+                <Button variant="outline" size="sm" onClick={() => { setCancelReason(""); setCancelError(""); setShowCancelModal(true); }} className="gap-1.5 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/15">
+                  <X className="w-3.5 h-3.5" />
+                  Cancelar
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      {/* Banner: contra-envío */}
-      {shipment.parent_shipment_id && (
-        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-amber-200 bg-amber-50">
-          <Undo2 className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-900">
-            Este es un <strong>contra-envío</strong> generado a partir de{" "}
-            <a href={`/shipments/${shipment.parent_shipment_id}`} className="font-bold underline">
-              {shipment.parent_shipment_id}
-            </a>
-          </p>
-        </div>
-      )}
-
-      {/* Banner: modo devolución */}
-      {shipment.is_returning && (
-        <div className="flex items-center gap-2.5 mb-4 px-4 py-3 rounded-xl border border-violet-200 bg-violet-50">
-          <Undo2 className="w-4 h-4 text-violet-700 shrink-0" />
-          <p className="text-sm text-violet-900">Este envío está en <strong>modo devolución</strong></p>
-        </div>
-      )}
 
       {/* Banner: reservado para pickup por vehículo de otra sucursal */}
       {reservedTrip && (
-        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50">
-          <Truck className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
-          <div className="text-sm text-sky-900">
+        <div className="flex items-start gap-2.5 mb-4 px-4 py-3 rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-900/20">
+          <Truck className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
+          <div className="text-sm text-sky-900 dark:text-sky-100 flex-1">
             <p className="font-semibold">Reservado para pickup por vehículo en tránsito</p>
-            <p className="text-sky-700 mt-0.5">
+            <p className="text-sky-700 dark:text-sky-300 mt-0.5">
               Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
               <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
               No requiere acción de esta sucursal.
             </p>
+            <button
+              type="button"
+              onClick={() => navigate(`/?view=trip&trip_id=${encodeURIComponent(reservedTrip.id)}`)}
+              className="mt-2 text-xs font-semibold text-sky-800 dark:text-sky-300 hover:underline cursor-pointer"
+            >
+              Ver envíos del viaje {reservedTrip.id} →
+            </button>
           </div>
         </div>
       )}
 
-      {/* Contador de intentos de entrega */}
+      {/* ═══════════════════════════════════════════════════════
+          ALERT BANNERS
+          ═══════════════════════════════════════════════════════ */}
+      {shipment.parent_shipment_id && (
+        <AlertBanner variant="warning" icon={<Undo2 className="size-[18px]" />} className="mb-4">
+          Este es un <strong>contra-envío</strong> generado a partir de{" "}
+          <a href={`/shipments/${shipment.parent_shipment_id}`} className="font-bold underline">
+            {shipment.parent_shipment_id}
+          </a>
+        </AlertBanner>
+      )}
+
+      {shipment.is_returning && (
+        <AlertBanner variant="info" icon={<Undo2 className="size-[18px]" />} className="mb-4">
+          Este envío está en <strong>modo devolución</strong>
+        </AlertBanner>
+      )}
+
+      {reservedTrip && (
+        <AlertBanner variant="info" icon={<Truck className="size-[18px]" />} className="mb-4">
+          <p className="font-semibold m-0">Reservado para pickup por vehículo en tránsito</p>
+          <p className="text-sm mt-0.5 opacity-90 m-0">
+            Vehículo <strong>{reservedTrip.license_plate}</strong> proveniente de{" "}
+            <strong>{branchLabelById(reservedTrip.origin_branch_id, branches)}</strong> pasará a levantarlo.
+            No requiere acción de esta sucursal.
+          </p>
+        </AlertBanner>
+      )}
+
       {!shipment.is_returning && (shipment.delivery_attempts ?? 0) > 0 && (() => {
         const attempts = shipment.delivery_attempts ?? 0;
         const atLimit = attempts >= maxDeliveryAttempts;
         return (
-          <div style={{
-            background: atLimit ? "#fef2f2" : "#fffbeb",
-            border: `1px solid ${atLimit ? "#fecaca" : "#fcd34d"}`,
-            borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-            fontSize: 13, color: atLimit ? "#b91c1c" : "#92400e",
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <span>{atLimit ? "🚫" : "⚠️"}</span>
-            <span>
-              Intentos de entrega fallidos:{" "}
-              <strong>{attempts}/{maxDeliveryAttempts}</strong>
-              {atLimit && " — límite alcanzado, no se puede reintentar"}
-            </span>
-          </div>
+          <AlertBanner variant={atLimit ? "danger" : "warning"} className="mb-4">
+            Intentos de entrega fallidos: <strong>{attempts}/{maxDeliveryAttempts}</strong>
+            {atLimit && " — límite alcanzado, no se puede reintentar"}
+          </AlertBanner>
         );
       })()}
 
       {shipment.status === "draft" && branchCapacity != null && branchCapacity.current >= branchCapacity.max_capacity && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 13, color: "#92400e" }}>
-          <strong>⚠️ La sucursal receptora está al límite de capacidad</strong>
-          <div style={{ marginTop: 4, color: "#78350f" }}>
+        <AlertBanner variant="warning" className="mb-4">
+          <strong>La sucursal receptora está al límite de capacidad</strong>
+          <p className="text-sm mt-0.5 opacity-90 m-0">
             {branchCapacity.current} de {branchCapacity.max_capacity} bultos ({branchCapacity.percentage}% de ocupación). Podés confirmar el envío, pero la sucursal estará por encima de su capacidad.
-          </div>
-        </div>
+          </p>
+        </AlertBanner>
       )}
 
       {shipment.status === "pending_payment" && (
@@ -714,8 +832,10 @@ export function ShipmentDetail() {
         />
       )}
 
+      {/* ═══════════════════════════════════════════════════════
+          DRAFT MODE — edit form
+          ═══════════════════════════════════════════════════════ */}
       {shipment.status === "draft" && draftForm ? (
-        /* ── Draft edit form ── */
         <DraftEditForm
           form={draftForm}
           onChange={setDraftForm}
@@ -723,499 +843,148 @@ export function ShipmentDetail() {
           onDiscard={handleDiscardDraft}
           confirming={confirming}
           confirmError={confirmError}
-
           createdAt={fmt(shipment.created_at)}
           draftId={shipment.tracking_id}
           branches={branches}
         />
       ) : (
-        /* ── Read-only info grid ── */
         <>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            {(() => {
-              const cor = shipment.corrections ?? {};
-              const cv = (key: string, original: string) =>
-                cor[key] ? { value: cor[key], original, corrected: true } : { value: original, original, corrected: false };
-              const originParts = [
-                cor.origin_street ?? shipment.sender.address?.street,
-                cor.origin_city ?? shipment.sender.address?.city,
-                cor.origin_province ?? shipment.sender.address?.province,
-                cor.origin_postal_code ?? shipment.sender.address?.postal_code,
-              ].filter(Boolean).join(", ");
-              const originCorrected = !!(cor.origin_street || cor.origin_city || cor.origin_province || cor.origin_postal_code);
-              const originalOrigin = fmtAddr(shipment.sender.address);
-              const destParts = [
-                cor.destination_street ?? shipment.recipient.address?.street,
-                cor.destination_city ?? shipment.recipient.address?.city,
-                cor.destination_province ?? shipment.recipient.address?.province,
-                cor.destination_postal_code ?? shipment.recipient.address?.postal_code,
-              ].filter(Boolean).join(", ");
-              const destCorrected = !!(cor.destination_street || cor.destination_city || cor.destination_province || cor.destination_postal_code);
-              const originalDest = fmtAddr(shipment.recipient.address);
-              const pkgVal = cv("package_type", PACKAGE_LABELS[shipment.package_type]);
-              const instrVal = cv("special_instructions", shipment.special_instructions ?? "");
-              return <>
-                <Card title="Remitente">
-                  <InfoRowEx {...cv("sender_name", shipment.sender.name)} label="Nombre" />
-                  <InfoRowEx {...cv("sender_phone", shipment.sender.phone)} label="Teléfono" />
-                  {(shipment.sender.email || cor.sender_email) && <InfoRowEx {...cv("sender_email", shipment.sender.email ?? "")} label="Email" />}
-                  {(shipment.sender.dni || cor.sender_dni) && <InfoRowEx {...cv("sender_dni", shipment.sender.dni ?? "")} label="DNI" />}
-                  <InfoRowEx value={originParts || originalOrigin} original={originalOrigin} corrected={originCorrected} label="Origen" />
-                </Card>
-                <Card title="Destinatario">
-                  <InfoRowEx {...cv("recipient_name", shipment.recipient.name)} label="Nombre" />
-                  <InfoRowEx {...cv("recipient_phone", shipment.recipient.phone)} label="Teléfono" />
-                  {(shipment.recipient.email || cor.recipient_email) && <InfoRowEx {...cv("recipient_email", shipment.recipient.email ?? "")} label="Email" />}
-                  {(shipment.recipient.dni || cor.recipient_dni) && <InfoRowEx {...cv("recipient_dni", shipment.recipient.dni ?? "")} label="DNI" />}
-                  <InfoRowEx value={destParts || originalDest} original={originalDest} corrected={destCorrected} label="Destino" />
-                </Card>
-                <Card title="Paquete">
-                  <InfoRowEx {...pkgVal} label="Tipo" />
-                  {shipment.is_fragile && <InfoRow label="Frágil" value="Sí" />}
-                  {shipment.shipment_type && <InfoRow label="Tipo de envío" value={shipment.shipment_type === "express" ? "Express" : "Normal"} />}
-                  {(cor.time_window ?? shipment.time_window) && (() => {
-                    const tw = cor.time_window ?? shipment.time_window;
-                    const twLabel = tw === "morning" ? "Mañana" : tw === "afternoon" ? "Tarde" : "Flexible";
-                    return cor.time_window
-                      ? <InfoRowEx value={twLabel} original={shipment.time_window === "morning" ? "Mañana" : shipment.time_window === "afternoon" ? "Tarde" : "Flexible"} corrected label="Ventana horaria" />
-                      : <InfoRow label="Ventana horaria" value={twLabel} />;
-                  })()}
-                  {(() => {
-                    const changedByChat = events.some(ev => ev.notes === "Destinatario solicitó retiro en sucursal vía chatbot");
-                    const dmLabel = (shipment.delivery_method ?? "ultima_milla") === "retiro_sucursal" ? "Retiro en sucursal" : "Última milla (a domicilio)";
-                    return changedByChat
-                      ? <InfoRowEx label="Método de entrega" value="Retiro en sucursal" original="Última milla (a domicilio)" corrected />
-                      : <InfoRow label="Método de entrega" value={dmLabel} />;
-                  })()}
-                  {shipment.priority && <InfoRow label="Prioridad" value={<PriorityBadge priority={shipment.priority} />} />}
-                  <InfoRow label="Peso" value={(!shipment.weight_kg || shipment.weight_kg <= 0) && shipment.status === "draft" ? "Sin definir" : `${shipment.weight_kg} kg`} />
-                  {(shipment.special_instructions || cor.special_instructions) && <InfoRowEx {...instrVal} label="Instrucciones" />}
-                </Card>
-                <Card title="Fechas y ubicación">
-                  <InfoRow label="Creado"          value={fmt(shipment.created_at)} />
-                  {(() => {
-                    const rescheduled = (shipment.chatbot_metadata?.reschedule_count ?? 0) > 0;
-                    const originalDate = shipment.chatbot_metadata?.original_delivery_date;
-                    if (rescheduled && originalDate && shipment.estimated_delivery_at) {
-                      return <InfoRowEx label="Entrega est." value={fmt(shipment.estimated_delivery_at)} original={fmt(originalDate)} corrected />;
-                    }
-                    return <InfoRow label="Entrega est." value={shipment.estimated_delivery_at ? fmt(shipment.estimated_delivery_at) : "—"} />;
-                  })()}
-                  {shipment.delivered_at && <InfoRow label="Entregado" value={fmt(shipment.delivered_at)} />}
-                  {shipment.current_location && (
-                    <InfoRow label="Ubicación actual" value={`📍 ${branchLabelById(shipment.current_location, branches)}`} />
-                  )}
-                  {shipment.current_zone && (
-                    <InfoRow label="Zona" value={<ZoneBadge zone={shipment.current_zone} />} />
-                  )}
-                </Card>
-              </>;
-            })()}
-          </div>
-          <RouteTimeline events={events} origin={shipment.sender.address.city} receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id} finalBranchId={shipment.final_branch_id} destination={shipment.recipient.address.city} branches={branches} />
-        </>
-      )}
+          {/* ═══════════════════════════════════════════════════════
+              B. TWO-COLUMN GRID
+              ═══════════════════════════════════════════════════════ */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 lg:gap-8 items-start">
 
- {/*  BOTÓN GENERAR QR */}
-{shipment.status !== "draft" && (
-  <button
-    onClick={handleGenerateQR}
-    disabled={!shipment.tracking_id || generatingQR}
-    title={!shipment.tracking_id ? "Solo disponible para envíos confirmados" : "Generar código QR"}
-    style={{
-      background: "#fff",
-      border: "1px solid #d1d5db",
-      borderRadius: 6,
-      padding: "6px 12px",
-      cursor: (!shipment.tracking_id || generatingQR) ? "not-allowed" : "pointer",
-      fontSize: 13,
-      fontWeight: 600,
-      color: "#374151",
-      opacity: (!shipment.tracking_id || generatingQR) ? 0.5 : 1,
-    }}
-  >
-    {generatingQR ? "Generando..." : "📱 Generar QR"}
-  </button>
-)}
+            {/* ── C1. LEFT COLUMN ── */}
+            <div className="min-w-0">
+              <InfoCards shipment={shipment} branches={branches} events={events} isMobile={isMobile} />
 
-{/* BOTÓN IMPRIMIR ALTA — CA-1, CA-2, CA-3, CA-4 */}
-{hasRole("operator", "supervisor", "admin") && shipment.status !== "draft" && (
-  <button
-    onClick={handlePrintDocument}
-    disabled={printingDoc}
-    title="Imprimir comprobante de alta del envío"
-    style={{
-      background: "#fff",
-      border: "1px solid #d1d5db",
-      borderRadius: 6,
-      padding: "6px 12px",
-      cursor: printingDoc ? "not-allowed" : "pointer",
-      fontSize: 13,
-      fontWeight: 600,
-      color: "#374151",
-      opacity: printingDoc ? 0.5 : 1,
-    }}
-  >
-    {printingDoc ? "Generando..." : "🖨️ Imprimir alta"}
-  </button>
-)}
-
-      {/* Zona actions — mover entre zonas internas de sucursal */}
-      {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>
-              Zona actual: <ZoneBadge zone={shipment.current_zone} />
-            </span>
-            {shipment.current_zone === "entrada" && (
-              <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
-                  Mover a Salida
-                </button>
-                <button onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
-                  Mover a Revisión
-                </button>
-              </>
-            )}
-            {shipment.current_zone === "salida" && (
-              <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #f59e0b", background: "#fff", color: "#92400e" }}>
-                  Mover a Revisión
-                </button>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #3b82f6", background: "#fff", color: "#1e40af" }}>
-                  Reingresar a Entrada
-                </button>
-              </>
-            )}
-            {shipment.current_zone === "revision" && hasRole("supervisor") && (
-              <>
-                <button onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #10b981", background: "#fff", color: "#166534" }}>
-                  Aprobar (→ Salida)
-                </button>
-                <button onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} style={{ padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, border: "2px solid #ef4444", background: "#fff", color: "#991b1b" }}>
-                  Clasificar (Perdido/Destruido)
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Status update — supervisor y operador (no admin) */}
-      {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-          <p style={{ margin: 0, fontSize: 13, color: "#1d4ed8" }}>
-            {shipment.status === "loaded"
-              ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
-              : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
-          </p>
-        </div>
-      )}
-
-      {nextStatuses.length > 0 && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 14px" }}>Actualizar estado</h2>
-          <form onSubmit={handleUpdateStatus} style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {nextStatuses.map((s) => (
-                <button key={s} type="button" onClick={() => {
-                  if (s === "loaded") {
-                    openVehiclePicker(shipment);
-                  } else {
-                    setNewStatus(s);
-                    if (s === "out_for_delivery") {
-                      usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id, "last_mile").then(setDrivers);
-                    }
-                  }
-                }}
-                  style={{
-                    padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                    border: newStatus === s ? "2px solid #1e3a5f" : "2px solid #e5e7eb",
-                    background: newStatus === s ? "#e0eaff" : "#fff",
-                    color: newStatus === s ? "#1e3a5f" : "#374151",
-                  }}>
-                  {STATUS_LABELS[s]}
-                </button>
-              ))}
-            </div>
-            {newStatus === "out_for_delivery" && (
-              <select
-                value={selectedDriverId}
-                onChange={(e) => setSelectedDriverId(e.target.value)}
-                required
-                style={inputStyle}
-              >
-                <option value="">Seleccioná un chofer (obligatorio)</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>{d.username}</option>
-                ))}
-              </select>
-            )}
-            {newStatus === "delivered" && (
-              <input
-                value={recipientDni}
-                onChange={(e) => setRecipientDni(e.target.value)}
-                placeholder="DNI del destinatario (obligatorio)"
-                required
-                style={inputStyle}
-              />
-            )}
-            {newStatus === "returned" && !shipment.parent_shipment_id && (
-              <input
-                value={senderDni}
-                onChange={(e) => setSenderDni(e.target.value)}
-                placeholder="DNI del remitente (obligatorio)"
-                required
-                style={inputStyle}
-              />
-            )}
-            {newStatus === "returned" && !!shipment.parent_shipment_id && (
-              <input
-                value={recipientDni}
-                onChange={(e) => setRecipientDni(e.target.value)}
-                placeholder="DNI del destinatario -remitente original- (obligatorio)"
-                required
-                style={inputStyle}
-              />
-            )}
-            {newStatus === "at_hub" && shipment.status === "delivery_failed" && (() => {
-              const returnLocation = [...events].reverse().find(ev => ev.to_status === "at_hub")?.location;
-              return returnLocation ? (
-                <p style={{ margin: 0, fontSize: 13, color: "#4b5563" }}>
-                  Devolviendo a: <strong>{branchLabel(returnLocation, branches)}</strong>
-                </p>
-              ) : null;
-            })()}
-            <input value={notes} onChange={(e) => setNotes(e.target.value)}
-              placeholder={newStatus === "delivery_failed" ? "Motivo obligatorio (ej: destinatario ausente)" : "Notas (opcional)"}
-              required={newStatus === "delivery_failed"}
-              style={inputStyle} />
-            {newStatus === "delivery_failed" && !notes.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El motivo es obligatorio para registrar un intento fallido.</p>
-            )}
-            {newStatus === "delivered" && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para marcar como entregado.</p>
-            )}
-            {newStatus === "returned" && !shipment.parent_shipment_id && !senderDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del remitente es obligatorio para registrar la devolución.</p>
-            )}
-            {newStatus === "returned" && !!shipment.parent_shipment_id && !recipientDni.trim() && (
-              <p style={{ margin: 0, fontSize: 12, color: "#dc2626" }}>El DNI del destinatario es obligatorio para registrar la devolución.</p>
-            )}
-            {updateError && <p style={{ color: "#ef4444", margin: 0, fontSize: 13 }}>{updateError}</p>}
-            {(() => {
-              const returnedDniMissing = newStatus === "returned" && (shipment.parent_shipment_id ? !recipientDni.trim() : !senderDni.trim());
-              const disabled = !newStatus || updating || (newStatus === "delivery_failed" && !notes.trim()) || (newStatus === "out_for_delivery" && !selectedDriverId) || (newStatus === "delivered" && !recipientDni.trim()) || returnedDniMissing;
-              return (
-            <button type="submit"
-              disabled={disabled}
-              style={{
-                background: !disabled ? "#1e3a5f" : "#e5e7eb",
-                color: !disabled ? "#fff" : "#9ca3af",
-                border: "none", borderRadius: 6, padding: "8px 16px",
-                cursor: (newStatus && !updating && !(newStatus === "delivery_failed" && !notes.trim()) && !(newStatus === "out_for_delivery" && !selectedDriverId) && !(newStatus === "delivered" && !recipientDni.trim()) && !(newStatus === "returned" && !senderDni.trim())) ? "pointer" : "default",
-                fontWeight: 600, alignSelf: "start",
-              }}>
-              {updating ? "Actualizando..." : "Confirmar cambio"}
-            </button>
-              );
-            })()}
-          </form>
-        </div>
-      )}
-
-      {shipment.status === "delivered" && (
-        <div style={{ ...cardStyle, marginBottom: 16, background: "#d1fae5", border: "1px solid #6ee7b7" }}>
-          <p style={{ margin: 0, color: "#065f46", fontWeight: 600 }}>Este envío fue entregado.</p>
-        </div>
-      )}
-
-      {/* Event history — hidden for drafts */}
-      {shipment.status !== "draft" && (
-      <h2 style={{ fontSize: "1rem", marginBottom: 12 }}>Historial de eventos</h2>)}
-      {shipment.status !== "draft" && (events.length === 0 ? (
-        <p style={{ color: "#6b7280", fontSize: 14 }}>Sin eventos registrados.</p>
-      ) : (
-        <div style={{ position: "relative", paddingLeft: 24 }}>
-          <div style={{ position: "absolute", left: 7, top: 8, bottom: 8, width: 2, background: "#e5e7eb" }} />
-          {[...events].reverse().map((ev) => (
-            <div key={ev.id} style={{ position: "relative", marginBottom: 12 }}>
-              <div style={{
-                position: "absolute", left: -24, top: 4,
-                width: 14, height: 14, borderRadius: "50%",
-                background: "#1e3a5f", border: "2px solid #fff", boxShadow: "0 0 0 2px #e5e7eb",
-              }} />
-              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {ev.current_location.type === "DESTINATION_BRANCH"
-                          ? "En Sucursal Destino"
-                          : ev.current_location.type === "ORIGIN_BRANCH"
-                          ? `En Sucursal Origen (${ev.current_location.branch_code})`
-                          : "En tránsito"} — {ev.current_location.status}
-                      </span>
-                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-                    </div>
-                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
-                    </div>
-                    <p style={{ margin: "4px 0 0", color: "#dc2626", fontWeight: 500 }}>
-                      Entrega reprogramada para el {new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ fontWeight: 600 }}>{formatShipmentEventLabel(ev)}</span>
-                      <span style={{ color: "#9ca3af" }}>{fmt(ev.timestamp)}</span>
-                    </div>
-                    <div style={{ color: "#6b7280", display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                      <span>por <strong>{ev.changed_by?.startsWith("chatbot-recipient") ? "chatbot-Destinatario" : (ev.changed_by || "sistema")}</strong></span>
-                      {ev.location && (() => {
-                        const b = branches.find(x => x.id === ev.location);
-                        return (
-                          <span>📍 <strong>{b?.name ?? ev.location}</strong>{b && <> · {b.address.city} · <span style={{ color: "#9ca3af" }}>{b.province}</span></>}</span>
-                        );
-                      })()}
-                    </div>
-                    {ev.notes && <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{ev.notes}</p>}
-                    {ev.event_type === "claim_created" && ev.notes && (() => {
-                      const m = ev.notes.match(/REC-\d+/);
-                      if (m) {
-                        const claimId = m[0];
-                        return (
-                          <p style={{ margin: "6px 0 0" }}>
-                            <Link to={`/claims/${claimId}`} style={{ color: "#1e3a5f", fontWeight: 700 }}>Ver reclamo {claimId}</Link>
-                          </p>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ))}
-      </div>{/* end maxWidth wrapper */}
-      </div>{/* end left column */}
-
-      {/* ── Right column: Price, Vehicle & Comments ── */}
-      <div style={isMobile ? {} : { position: "sticky", top: 24 }}>
-        {/* Price Card */}
-        {shipment.price != null && shipment.status !== "draft" && (
-          <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
-        )}
-
-        {/* Vehicle Card */}
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Vehículo asignado</h2>
-          {loadingVehicle ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Cargando...</p>
-          ) : assignedVehicle ? (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 10,
-                  background: "#10b98120",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}>
-                  <svg style={{ width: 24, height: 24, color: "#10b981" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
-                  </svg>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p
-                    onClick={() => setShowVehicleDetail(true)}
-                    style={{ fontSize: 16, fontWeight: 700, color: "#1e3a5f", margin: 0, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
-                  >
-                    {assignedVehicle.license_plate}
-                  </p>
-                  <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-                    {assignedVehicle.type === "auto" ? "Auto" : assignedVehicle.type === "furgoneta" ? "Furgoneta" : "Camión"} · {assignedVehicle.capacity_kg} kg
-                  </p>
-                </div>
-                <div style={{
-                  padding: "4px 10px", borderRadius: 9999,
-                  background: "#10b98120",
-                  fontSize: 11, fontWeight: 600, color: "#10b981",
-                }}>
-                  {assignedVehicle.status_label}
-                </div>
-              </div>
-              <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
-                  <div>
-                    <span style={{ color: "#6b7280" }}>ID: </span>
-                    <span style={{ fontWeight: 600, color: "#374151" }}>#{assignedVehicle.id}</span>
-                  </div>
-                  {assignedVehicle.updated_by && (
-                    <div>
-                      <span style={{ color: "#6b7280" }}>Por: </span>
-                      <span style={{ fontWeight: 600, color: "#374151" }}>{assignedVehicle.updated_by}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <svg style={{ width: 32, height: 32, color: "#9ca3af", margin: "0 auto 8px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a1 1 0 100-2 1 1 0 000 2z" />
-              </svg>
-              <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>Sin vehículo asignado</p>
-            </div>
-          )}
-        </div>
-
-        {/* Incidents Card */}
-        <div style={{ ...cardStyle, marginBottom: 16 }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Incidencias</h2>
-          {incidents.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin incidencias registradas.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 8, maxHeight: 400, overflowY: "auto" }}>
-              {incidents.map((inc) => (
-                <div key={inc.id} style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
-                      {INCIDENT_TYPE_LABELS[inc.incident_type] ?? inc.incident_type}
+              {/* Zone actions */}
+              {shipment.current_zone && hasRole("operator", "supervisor") && !operatorOutOfBranch && (
+                <div className="bg-[var(--ok-bg)] border border-[var(--ok-border)] rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[13px] font-semibold text-[var(--ok-text)]">
+                      Zona actual: <ZoneBadge zone={shipment.current_zone} />
                     </span>
-                    <span style={{ color: "#9ca3af", fontSize: 11, whiteSpace: "nowrap", marginLeft: 8 }}>{fmtDateTime(inc.created_at)}</span>
+                    {shipment.current_zone === "entrada" && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
+                          Mover a Salida
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
+                          Mover a Revisión
+                        </Button>
+                      </>
+                    )}
+                    {shipment.current_zone === "salida" && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
+                          Mover a Revisión
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--brand)] dark:border-blue-400 text-[var(--brand)] dark:text-blue-400 hover:bg-[var(--brand-tint)]">
+                          Reingresar a Entrada
+                        </Button>
+                      </>
+                    )}
+                    {shipment.current_zone === "revision" && hasRole("supervisor") && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
+                          Aprobar (→ Salida)
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-red-600 dark:border-red-400 text-[var(--danger-text)] hover:bg-[var(--danger-bg)]">
+                          Clasificar (Perdido/Destruido)
+                        </Button>
+                      </>
+                    )}
                   </div>
-                  <p style={{ margin: "4px 0 0", color: "#374151", whiteSpace: "pre-wrap" as const }}>{inc.description}</p>
-                  <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>Reportado por: {inc.reported_by}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )}
 
-        {/* Comments Card */}
-        <div style={{ ...cardStyle }}>
-          <h2 style={{ fontSize: "1rem", margin: "0 0 12px" }}>Comentarios</h2>
-          {hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && !operatorOutOfBranch && (
-            <div style={{ marginBottom: 12 }}>
-              <textarea
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Agregar un comentario..."
-                rows={2}
-                style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const, fontFamily: "inherit" }}
+              {/* Fleet notices */}
+              {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
+                <AlertBanner variant="info" className="mb-4">
+                  {shipment.status === "loaded"
+                    ? "Este envío está cargado en un vehículo esperando que se inicie el viaje. El estado se controla desde la página de Flota."
+                    : "Este envío está en tránsito. El estado se actualizará automáticamente cuando el vehículo complete el viaje."}
+                </AlertBanner>
+              )}
+
+              {/* Status update form */}
+              {nextStatuses.length > 0 && hasRole("supervisor", "operator") && !operatorOutOfBranch && (
+                <StatusUpdateForm
+                  nextStatuses={nextStatuses}
+                  newStatus={newStatus}
+                  onStatusSelect={(s) => {
+                    if (s === "loaded") {
+                      openVehiclePicker(shipment);
+                    } else {
+                      setNewStatus(s);
+                      if (s === "out_for_delivery") {
+                        usersApi.listDrivers(shipment.current_location ?? shipment.receiving_branch_id, "last_mile").then(setDrivers);
+                      }
+                    }
+                  }}
+                  selectedDriverId={selectedDriverId}
+                  onDriverChange={setSelectedDriverId}
+                  drivers={drivers}
+                  recipientDni={recipientDni}
+                  onRecipientDniChange={setRecipientDni}
+                  senderDni={senderDni}
+                  onSenderDniChange={setSenderDni}
+                  notes={notes}
+                  onNotesChange={setNotes}
+                  updating={statusOptimistic.isPending}
+                  updateError={updateError}
+                  onSubmit={handleUpdateStatus}
+                  shipment={shipment}
+                  events={events}
+                  branches={branches}
+                  statusLabels={STATUS_LABELS}
+                />
+              )}
+
+              {shipment.status === "delivered" && (
+                <AlertBanner variant="success" className="mb-4">
+                  Este envío fue entregado.
+                </AlertBanner>
+              )}
+
+              {/* Route timeline */}
+              <RouteTimeline
+                events={events}
+                origin={shipment.sender.address.city}
+                receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id}
+                finalBranchId={shipment.final_branch_id}
+                destination={shipment.recipient.address.city}
+                branches={branches}
               />
-              <button
-                disabled={addingComment || !newComment.trim()}
-                onClick={async () => {
+
+              {/* Event history */}
+              {shipment.status !== "draft" && (
+                <EventTimeline events={events} branches={branches} showHeading className="mb-4" />
+              )}
+            </div>
+
+            {/* ── D. RIGHT COLUMN (sidebar, sticky) ── */}
+            <div className={isMobile ? "" : "sticky top-6"}>
+              {shipment.price != null && shipment.status !== "draft" && (
+                <PriceCard price={shipment.price} breakdown={shipment.price_breakdown} />
+              )}
+
+              <VehicleCard
+                assignedVehicle={assignedVehicle}
+                loadingVehicle={loadingVehicle}
+                onShowDetail={() => setShowVehicleDetail(true)}
+              />
+
+              <IncidentsList incidents={incidents} />
+
+              <CommentsList
+                comments={comments}
+                newComment={newComment}
+                onNewCommentChange={setNewComment}
+                addingComment={addingComment}
+                canAdd={hasRole("supervisor", "admin", "operator") && shipment.status !== "delivered" && shipment.status !== "returned" && !operatorOutOfBranch}
+                onAddComment={async () => {
                   if (!trackingId || !newComment.trim()) return;
                   setAddingComment(true);
                   try {
@@ -1227,31 +996,12 @@ export function ShipmentDetail() {
                     setAddingComment(false);
                   }
                 }}
-                style={{ marginTop: 6, background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
-              >
-                {addingComment ? "Agregando..." : "Agregar comentario"}
-              </button>
+              />
             </div>
-          )}
-          {comments.length === 0 ? (
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Sin comentarios todavía.</p>
-          ) : (
-            <div style={{ display: "grid", gap: 8, maxHeight: 500, overflowY: "auto" }}>
-              {comments.map((c) => (
-                <div key={c.id} style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 600 }}>{c.author}</span>
-                    <span style={{ color: "#9ca3af", fontSize: 12 }}>{fmtDateTime(c.created_at)}</span>
-                  </div>
-                  <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" as const }}>{c.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
-      </div>{/* end two-column grid */}
+          </div>{/* end two-column grid */}
+        </>
+      )}
 
       {showCorrectionModal && shipment && (
         <CorrectionModal
@@ -1265,165 +1015,111 @@ export function ShipmentDetail() {
       )}
 
       {/* Incident report modal */}
-      {showIncidentModal && trackingId && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          onClick={() => setShowIncidentModal(false)}
-        >
-          <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Registrar incidencia</h2>
-              <button onClick={() => setShowIncidentModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
-            </div>
+      <Dialog open={showIncidentModal} onClose={() => setShowIncidentModal(false)}>
+        <DialogContent className="max-w-[480px]">
+          <DialogHeader onClose={() => setShowIncidentModal(false)}>
+            <DialogTitle>Registrar incidencia</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
             {incidentError && (
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
-                {incidentError}
-              </div>
+              <AlertBanner variant="danger" className="mb-4">{incidentError}</AlertBanner>
             )}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Tipo de incidencia</label>
-              <select
-                value={incidentType}
-                onChange={(e) => setIncidentType(e.target.value as IncidentType)}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, background: "#fff" }}
-              >
+            <div className="mb-4">
+              <label className="block text-[13px] font-semibold text-[var(--text-strong)] mb-1.5">Tipo de incidencia</label>
+              <select value={incidentType} onChange={(e) => setIncidentType(e.target.value as IncidentType)}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--border-strong)] text-sm bg-[var(--bg-card)] text-[var(--text-primary)]">
                 {(Object.entries(INCIDENT_TYPE_LABELS) as [IncidentType, string][]).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
                 ))}
               </select>
             </div>
             {TERMINAL_INCIDENT_STATUS[incidentType] && (
-              <div style={{ background: "#fef3c7", border: "1px solid #fbbf24", color: "#92400e", padding: "10px 12px", borderRadius: 6, marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+              <AlertBanner variant="warning" className="mb-4">
                 <strong>Atención:</strong> Al confirmar esta incidencia, el envío quedará en estado <strong>{incidentType === "extraviado" ? "Extraviado" : "Daño total"}</strong> y no podrá continuar su flujo. Esta acción es irreversible.
-              </div>
+              </AlertBanner>
             )}
-            <div style={{ marginBottom: 18 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Descripción</label>
-              <textarea
-                value={incidentDescription}
-                onChange={(e) => setIncidentDescription(e.target.value)}
-                placeholder="Describí el problema detectado..."
-                rows={4}
-                style={{ width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, fontFamily: "inherit", resize: "vertical" as const }}
-              />
-            </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowIncidentModal(false)}
-                style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-                Cancelar
-              </button>
-              <button
-                disabled={reportingIncident || !incidentDescription.trim()}
-                onClick={async () => {
-                  if (!incidentDescription.trim()) return;
-                  setReportingIncident(true);
-                  setIncidentError("");
-                  try {
-                    await shipmentApi.reportIncident(trackingId, incidentType, incidentDescription.trim());
-                    setShowIncidentModal(false);
-                    const [incs, s] = await Promise.all([
-                      shipmentApi.getIncidents(trackingId),
-                      shipmentApi.get(trackingId),
-                    ]);
-                    setIncidents(incs ?? []);
-                    setShipment(s);
-                  } catch (err: unknown) {
-                    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Error al registrar la incidencia.";
-                    setIncidentError(msg);
-                  } finally {
-                    setReportingIncident(false);
-                  }
-                }}
-                style={{ background: TERMINAL_INCIDENT_STATUS[incidentType] ? "#dc2626" : "#d97706", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: reportingIncident ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: reportingIncident || !incidentDescription.trim() ? 0.7 : 1 }}>
-                {reportingIncident ? "Registrando..." : TERMINAL_INCIDENT_STATUS[incidentType] ? "Confirmar y cerrar envío" : "Confirmar registro"}
-              </button>
+            <div className="mb-4">
+              <label className="block text-[13px] font-semibold text-[var(--text-strong)] mb-1.5">Descripción</label>
+              <textarea value={incidentDescription} onChange={(e) => setIncidentDescription(e.target.value)}
+                placeholder="Describí el problema detectado..." rows={4}
+                className="w-full px-3 py-2 rounded-lg border border-[var(--border-strong)] text-sm resize-y font-[inherit] bg-[var(--bg-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowIncidentModal(false)}>Cancelar</Button>
+            <Button
+              variant={TERMINAL_INCIDENT_STATUS[incidentType] ? "destructive" : "default"}
+              disabled={reportingIncident || !incidentDescription.trim()}
+              onClick={async () => {
+                if (!incidentDescription.trim()) return;
+                setReportingIncident(true);
+                setIncidentError("");
+                try {
+                  await shipmentApi.reportIncident(trackingId!, incidentType, incidentDescription.trim());
+                  setShowIncidentModal(false);
+                  const [incs, s] = await Promise.all([shipmentApi.getIncidents(trackingId!), shipmentApi.get(trackingId!)]);
+                  setIncidents(incs ?? []);
+                  setShipment(s);
+                } catch (err: unknown) {
+                  setIncidentError(extractErrorMessage(err) ?? "Error al registrar la incidencia.");
+                } finally {
+                  setReportingIncident(false);
+                }
+              }}
+            >
+              {reportingIncident ? "Registrando..." : TERMINAL_INCIDENT_STATUS[incidentType] ? "Confirmar y cerrar envío" : "Confirmar registro"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Vehicle picker modal for loaded */}
-      {showVehiclePicker && shipment && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          onClick={() => setShowVehiclePicker(false)}
-        >
-          <div
-            style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18, color: "#111827" }}>Asignar vehículo — Cargar en vehículo</h2>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
-            </div>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
-              Seleccioná un vehículo disponible en esta sucursal. Peso del envío: <strong>{effectiveWeightKg(shipment)} kg</strong>.
+      <Dialog open={showVehiclePicker} onClose={() => setShowVehiclePicker(false)}>
+        <DialogContent className="max-w-[520px]">
+          <DialogHeader onClose={() => setShowVehiclePicker(false)}>
+            <DialogTitle>Asignar vehículo — Cargar en vehículo</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <p className="text-[13px] text-[var(--text-secondary)] mb-4">
+              Seleccioná un vehículo disponible en esta sucursal. Peso del envío: <strong>{shipment ? effectiveWeightKg(shipment) : 0} kg</strong>.
             </p>
-            {vehiclePickerError && (
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "8px 12px", borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
-                {vehiclePickerError}
-              </div>
-            )}
+            {vehiclePickerError && <AlertBanner variant="danger" className="mb-4">{vehiclePickerError}</AlertBanner>}
             {loadingVehicles ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>Cargando vehículos disponibles...</p>
+              <p className="text-[var(--text-secondary)] text-[13px] py-4">Cargando vehículos disponibles...</p>
             ) : availableVehicles.length === 0 ? (
-              <p style={{ color: "#6b7280", fontSize: 13 }}>No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
+              <p className="text-[var(--text-secondary)] text-[13px] py-4">No hay vehículos disponibles en esta sucursal con capacidad suficiente.</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              <div className="flex flex-col gap-2 mb-4">
                 {availableVehicles.map((v) => {
-                  const usedKg = (v.assigned_shipments ?? []).length > 0
-                    ? v.capacity_kg - v.capacity_kg // we don't have weights here, show raw capacity
-                    : 0;
-                  const remainingKg = v.capacity_kg - usedKg;
+                  const remainingKg = v.capacity_kg;
                   const isSelected = selectedVehiclePlate === v.license_plate;
                   return (
-                    <div
-                      key={v.license_plate}
-                      onClick={() => setSelectedVehiclePlate(v.license_plate)}
-                      style={{
-                        border: isSelected ? "2px solid #1e3a5f" : "1px solid #e5e7eb",
-                        borderRadius: 8, padding: "12px 14px", cursor: "pointer",
-                        background: isSelected ? "#e0eaff" : "#fff",
-                        display: "flex", alignItems: "center", gap: 12,
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: "#111827" }}>{v.license_plate}</p>
-                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>
+                    <div key={v.license_plate} onClick={() => setSelectedVehiclePlate(v.license_plate)}
+                      className={`flex items-center gap-3 rounded-lg px-3.5 py-3 cursor-pointer transition-colors duration-200 ${
+                        isSelected ? "border-2 border-[var(--brand)] bg-[var(--brand-tint)]" : "border border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-strong)]"}`}>
+                      <div className="flex-1">
+                        <p className="m-0 font-bold text-[15px] text-[var(--text-primary)]">{v.license_plate}</p>
+                        <p className="mt-0.5 mb-0 text-xs text-[var(--text-secondary)]">
                           {v.type === "auto" ? "Auto" : v.type === "furgoneta" ? "Furgoneta" : "Camión"}
                           {" · "}Capacidad disponible: {remainingKg.toFixed(0)} kg
                           {(v.assigned_shipments ?? []).length > 0 && ` · ${v.assigned_shipments!.length} envío(s) cargado(s)`}
                         </p>
                       </div>
-                      {isSelected && <span style={{ color: "#1e3a5f", fontWeight: 700 }}>✓</span>}
+                      {isSelected && <span className="text-[var(--text-heading)] font-bold text-lg">✓</span>}
                     </div>
                   );
                 })}
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowVehiclePicker(false)} style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontWeight: 500 }}>
-                Cancelar
-              </button>
-              <button
-                onClick={handleAssignVehicle}
-                disabled={!selectedVehiclePlate || assigningVehicle}
-                style={{
-                  padding: "8px 16px", borderRadius: 6, border: "none", fontWeight: 600, cursor: !selectedVehiclePlate || assigningVehicle ? "default" : "pointer",
-                  background: !selectedVehiclePlate || assigningVehicle ? "#e5e7eb" : "#1e3a5f",
-                  color: !selectedVehiclePlate || assigningVehicle ? "#9ca3af" : "#fff",
-                }}
-              >
-                {assigningVehicle ? "Asignando..." : "Asignar vehículo"}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowVehiclePicker(false)}>Cancelar</Button>
+            <Button onClick={handleAssignVehicle} disabled={!selectedVehiclePlate || assigningVehicle}>
+              {assigningVehicle ? "Asignando..." : "Asignar vehículo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showVehicleDetail && assignedVehicle && (
         <VehicleDetailModal
@@ -1433,37 +1129,29 @@ export function ShipmentDetail() {
         />
       )}
 
-      {showCancelModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: "28px 32px", maxWidth: 440, width: "calc(100vw - 32px)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b91c1c" }}>Cancelar envío</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>
+      <Dialog open={showCancelModal} onClose={() => setShowCancelModal(false)}>
+        <DialogContent className="max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-[var(--danger-text)]">Cancelar envío</DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-2">
+            <p className="text-sm text-[var(--text-secondary)] mb-4">
               Esta acción es irreversible. El envío pasará a <strong>Cancelado</strong> y no podrá continuar en tránsito.
             </p>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>
-              Motivo de cancelación *
-            </label>
-            <textarea
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Describí el motivo de la cancelación..."
-              rows={4}
-              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", resize: "vertical" }}
-            />
-            {cancelError && <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0 0" }}>{cancelError}</p>}
-            <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setShowCancelModal(false)} disabled={cancelling}
-                style={{ background: "#fff", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#374151" }}>
-                Volver
-              </button>
-              <button type="button" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}
-                style={{ background: cancelReason.trim() ? "#b91c1c" : "#fca5a5", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: cancelReason.trim() ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 700 }}>
-                {cancelling ? "Cancelando..." : "Confirmar cancelación"}
-              </button>
-            </div>
+            <label className="text-xs font-semibold text-[var(--text-strong)] block mb-1.5">Motivo de cancelación *</label>
+            <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Describí el motivo de la cancelación..." rows={4}
+              className="w-full px-3 py-2 rounded-lg border border-[var(--border-strong)] text-sm resize-y font-[inherit] bg-[var(--bg-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all" />
+            {cancelError && <AlertBanner variant="danger" className="mt-3">{cancelError}</AlertBanner>}
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelModal(false)} disabled={cancelling}>Volver</Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason.trim()}>
+              {cancelling ? "Cancelando..." : "Confirmar cancelación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* 🆕 AGREGAR AQUÍ - MODAL DE QR */}
       {qrData && (
         <ShipmentQRModal
@@ -1475,36 +1163,12 @@ export function ShipmentDetail() {
       )}
 
       {qrError && (
-        <div style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#dc2626",
-          padding: "12px 16px",
-          borderRadius: 8,
-          fontSize: 13,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          zIndex: 1001,
-        }}>
+        <div className="fixed bottom-6 right-6 bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-4 py-3 rounded-lg text-[13px] shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[1001]">
           {qrError}
         </div>
       )}
       {printDocError && (
-        <div style={{
-          position: "fixed",
-          bottom: qrError ? 80 : 24,
-          right: 24,
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#dc2626",
-          padding: "12px 16px",
-          borderRadius: 8,
-          fontSize: 13,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          zIndex: 1001,
-        }}>
+        <div className={`fixed ${qrError ? "bottom-20" : "bottom-6"} right-6 bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] px-4 py-3 rounded-lg text-[13px] shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[1001]`}>
           {printDocError}
         </div>
       )}
@@ -1512,562 +1176,15 @@ export function ShipmentDetail() {
   );
 }
 
-const PROVINCES = [
-  "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
-  "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza",
-  "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis",
-  "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán",
-];
-const PACKAGE_TYPES = [
-  { value: "envelope", label: "Sobre" },
-  { value: "box",      label: "Caja" },
-];
-const SHIPMENT_TYPES = [
-  { value: "normal",  label: "Normal" },
-  { value: "express", label: "Express" },
-];
-const TIME_WINDOWS = [
-  { value: "flexible",  label: "Flexible" },
-  { value: "morning",   label: "Mañana (8-12)" },
-  { value: "afternoon", label: "Tarde (12-18)" },
-];
-const DELIVERY_METHODS = [
-  { value: "ultima_milla",    label: "Última milla (entrega a domicilio)" },
-  { value: "retiro_sucursal", label: "Retiro en sucursal" },
-];
 
-function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
+
+function DField({ label, children, style, className, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; className?: string; error?: string }) {
   return (
-    <div style={{
-      position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-      border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8,
-      padding: "10px 12px", display: "flex", justifyContent: "space-between",
-      alignItems: "center", gap: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    }}>
-      <div style={{ fontSize: 13, color: "#1e40af", lineHeight: 1.5, minWidth: 0 }}>
-        <span style={{ fontWeight: 700 }}>{customer.name}</span>
-        <span style={{ color: "#6b7280", margin: "0 6px" }}>·</span>
-        <span>{customer.phone}</span>
-        {customer.address.city && (
-          <>
-            <span style={{ color: "#6b7280", margin: "0 6px" }}>·</span>
-            <span>{customer.address.city}, {customer.address.province}</span>
-          </>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button type="button" onClick={onApply}
-          style={{ background: "#1e40af", color: "#fff", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-          Usar datos
-        </button>
-        <button type="button" onClick={onDismiss}
-          style={{ background: "none", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>
-          ✕
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function findFinalBranch(recipientAddress: { province?: string; latitude?: number; longitude?: number }, branches: Branch[]): Branch | null {
-  const active = branches.filter(b => b.status === "activo");
-  if (!active.length) return null;
-  if (recipientAddress.latitude != null && recipientAddress.longitude != null) {
-    let best: Branch | null = null;
-    let minDist = Infinity;
-    for (const b of active) {
-      if (b.latitude != null && b.longitude != null) {
-        const d = haversineKm(recipientAddress.latitude!, recipientAddress.longitude!, b.latitude, b.longitude);
-        if (d < minDist) { minDist = d; best = b; }
-      }
-    }
-    if (best) return best;
-  }
-  if (recipientAddress.province) {
-    const match = active.find(b => b.province === recipientAddress.province);
-    if (match) return match;
-  }
-  return null;
-}
-
-function DraftEditForm({ form, onChange, onConfirm, onDiscard, confirming, confirmError, createdAt, draftId, branches }: {
-  form: SaveDraftPayload;
-  onChange: (f: SaveDraftPayload) => void;
-  onConfirm: () => void;
-  onDiscard: () => void;
-  confirming: boolean;
-  confirmError: string;
-  createdAt: string;
-  draftId: string;
-  branches: Branch[];
-}) {
-  const isMobile = useIsMobile();
-  const { user } = useAuth();
-  const branchLocked = (user?.role === "operator" || user?.role === "supervisor") && !!user?.branch_id;
-  const [discardConfirm, setDiscardConfirm] = useState(false);
-
-  // Auto-save: debounced 1 s after every form change
-  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
-  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
-  const [autoSaveError, setAutoSaveError] = useState("");
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      setAutoSaveStatus("saving");
-      setAutoSaveError("");
-      try {
-        await shipmentApi.updateDraft(draftId, form);
-        setAutoSaveStatus("saved");
-      } catch (err: unknown) {
-        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        setAutoSaveError(msg ?? "No se pudieron guardar los cambios.");
-        setAutoSaveStatus("error");
-      }
-    }, 1000);
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form]);
-  const set = (field: string, value: unknown) => onChange({ ...form, [field]: value });
-  const setSender = (field: string, value: unknown) =>
-    onChange({ ...form, sender: { ...form.sender, [field]: value } });
-  const setSenderAddr = (field: string, value: string) =>
-    onChange({ ...form, sender: { ...form.sender, address: { ...form.sender.address, [field]: value } } });
-  const setRecipient = (field: string, value: unknown) =>
-    onChange({ ...form, recipient: { ...form.recipient, [field]: value } });
-  const setRecipientAddr = (field: string, value: string) =>
-    onChange({ ...form, recipient: { ...form.recipient, address: { ...form.recipient.address, [field]: value } } });
-
-  const [senderSuggestion, setSenderSuggestion] = useState<Customer | null>(null);
-  const [recipientSuggestion, setRecipientSuggestion] = useState<Customer | null>(null);
-  const [senderNameError, setSenderNameError] = useState("");
-  const [recipientNameError, setRecipientNameError] = useState("");
-  const senderDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recipientDNITimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Live pricing quote
-  const [quote, setQuote] = useState<QuoteResponse | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const quoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const weightKg = form.weight_kg ?? 0;
-    const packageType = form.package_type ?? "box";
-    const selectedBranch = branches.find((b) => b.id === form.receiving_branch_id);
-    const originAddress = selectedBranch
-      ? { street: selectedBranch.address.street, city: selectedBranch.address.city, province: selectedBranch.province, postal_code: selectedBranch.address.postal_code, latitude: selectedBranch.latitude, longitude: selectedBranch.longitude }
-      : form.sender.address;
-    const finalBranch = findFinalBranch(form.recipient.address, branches);
-    const destinationAddress = finalBranch
-      ? { street: finalBranch.address.street, city: finalBranch.address.city, province: finalBranch.province, postal_code: finalBranch.address.postal_code, latitude: finalBranch.latitude, longitude: finalBranch.longitude }
-      : form.recipient.address;
-    const hasMinData =
-      weightKg > 0 &&
-      !!form.package_type &&
-      !!originAddress.province &&
-      !!destinationAddress.province;
-    if (!hasMinData) { setQuote(null); return; }
-    if (quoteTimer.current) clearTimeout(quoteTimer.current);
-    quoteTimer.current = setTimeout(async () => {
-      setQuoteLoading(true);
-      try {
-        const q = await pricingApi.quote({
-          weight_kg: weightKg,
-          package_type: packageType,
-          shipment_type: form.shipment_type ?? "normal",
-          time_window: form.time_window ?? "flexible",
-          is_fragile: form.is_fragile,
-          delivery_method: form.delivery_method ?? "ultima_milla",
-          origin: originAddress,
-          destination: destinationAddress,
-        });
-        setQuote(q);
-      } catch {
-        setQuote(null);
-      } finally {
-        setQuoteLoading(false);
-      }
-    }, 400);
-    return () => { if (quoteTimer.current) clearTimeout(quoteTimer.current); };
-  }, [
-    form.weight_kg, form.package_type, form.shipment_type,
-    form.time_window, form.is_fragile, form.delivery_method,
-    form.receiving_branch_id, form.sender.address, form.recipient.address,
-    branches,
-  ]);
-
-  const reName = /^[a-zA-ZÀ-ÖØ-öø-ÿñÑ\s'-]+$/;
-  const validateNameField = (name: string) =>
-    name && !reName.test(name) ? "El nombre no puede contener números ni caracteres especiales" : "";
-
-  const handleSenderName = (name: string) => {
-    setSender("name", name);
-    setSenderNameError(validateNameField(name));
-  };
-  const handleRecipientName = (name: string) => {
-    setRecipient("name", name);
-    setRecipientNameError(validateNameField(name));
-  };
-
-  const handleSenderDNI = (raw: string) => {
-    const dni = raw.trim();
-    setSender("dni", dni);
-    setSenderSuggestion(null);
-    if (senderDNITimer.current) clearTimeout(senderDNITimer.current);
-    if (dni.length >= 7) {
-      senderDNITimer.current = setTimeout(async () => {
-        const customer = await customerApi.getByDNI(dni);
-        if (customer) setSenderSuggestion(customer);
-      }, 400);
-    }
-  };
-
-  const applySenderSuggestion = () => {
-    if (!senderSuggestion) return;
-    onChange({
-      ...form,
-      sender: {
-        ...form.sender,
-        name: senderSuggestion.name,
-        phone: (senderSuggestion.phone ?? "").replace(/\D/g, ""),
-        email: senderSuggestion.email ?? form.sender.email,
-        address: {
-          street: senderSuggestion.address.street ?? form.sender.address.street,
-          city: senderSuggestion.address.city || form.sender.address.city,
-          province: senderSuggestion.address.province || form.sender.address.province,
-          postal_code: senderSuggestion.address.postal_code ?? form.sender.address.postal_code,
-        },
-      },
-    });
-    setSenderSuggestion(null);
-  };
-
-  const handleRecipientDNI = (raw: string) => {
-    const dni = raw.trim();
-    setRecipient("dni", dni);
-    setRecipientSuggestion(null);
-    if (recipientDNITimer.current) clearTimeout(recipientDNITimer.current);
-    if (dni.length >= 7) {
-      recipientDNITimer.current = setTimeout(async () => {
-        const customer = await customerApi.getByDNI(dni);
-        if (customer) setRecipientSuggestion(customer);
-      }, 400);
-    }
-  };
-
-  const envelopeOverweight = (form.package_type ?? "box") === "envelope" && (form.weight_kg ?? 0) > 5;
-
-  const applyRecipientSuggestion = () => {
-    if (!recipientSuggestion) return;
-    onChange({
-      ...form,
-      recipient: {
-        ...form.recipient,
-        name: recipientSuggestion.name,
-        phone: (recipientSuggestion.phone ?? "").replace(/\D/g, ""),
-        email: recipientSuggestion.email ?? form.recipient.email,
-        address: {
-          street: recipientSuggestion.address.street ?? form.recipient.address.street,
-          city: recipientSuggestion.address.city || form.recipient.address.city,
-          province: recipientSuggestion.address.province || form.recipient.address.province,
-          postal_code: recipientSuggestion.address.postal_code ?? form.recipient.address.postal_code,
-        },
-      },
-    });
-    setRecipientSuggestion(null);
-  };
-
-  return (
-    <div style={{ display: "grid", gap: 16, marginBottom: 16 }}>
-      <div style={{ display: "flex", gap: 20, fontSize: 13, color: "#6b7280" }}>
-        <span>Creado: {createdAt}</span>
-        <span>ID del borrador: <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4, fontSize: 12, color: "#374151" }}>{draftId}</code></span>
-      </div>
-
-      {/* Remitente */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Remitente</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name ?? ""} onChange={(e) => handleSenderName(e.target.value)} placeholder="Carlos Mendez" />
-            {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
-          </DField>
-          <DField label="Teléfono *"><input style={inp} required value={form.sender.phone ?? ""} onChange={(e) => setSender("phone", e.target.value.replace(/\D/g, ""))} placeholder="5491112345678" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.sender.email ?? ""} onChange={(e) => setSender("email", e.target.value)} placeholder="opcional" /></DField>
-          <DField label="DNI *">
-            <input style={inp} required value={form.sender.dni ?? ""} onChange={(e) => handleSenderDNI(e.target.value)} placeholder="ej: 30123456" />
-            {senderSuggestion && <CustomerSuggestion customer={senderSuggestion} onApply={applySenderSuggestion} onDismiss={() => setSenderSuggestion(null)} />}
-          </DField>
-          <DField label="Calle *">
-            <AddressAutocomplete style={inp} required value={form.sender.address.street ?? ""}
-              onChange={(v) => setSenderAddr("street", v)}
-              onAddressSelect={(p) => onChange({ ...form, sender: { ...form.sender, address: { ...form.sender.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
-              placeholder="Av. Corrientes 1234, Buenos Aires" />
-          </DField>
-          <DField label="Ciudad *"><input style={inp} required value={form.sender.address.city ?? ""} onChange={(e) => setSenderAddr("city", e.target.value)} placeholder="Buenos Aires" /></DField>
-          <DField label="Provincia *">
-            <select style={inp} required value={form.sender.address.province ?? ""} onChange={(e) => setSenderAddr("province", e.target.value)}>
-              <option value="">Seleccionar</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </DField>
-          <DField label="Código postal *"><input style={inp} required value={form.sender.address.postal_code ?? ""} onChange={(e) => setSenderAddr("postal_code", e.target.value)} placeholder="C1043" /></DField>
-        </div>
-      </fieldset>
-
-      {/* Destinatario */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Destinatario</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Nombre *">
-            <input style={{ ...inp, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name ?? ""} onChange={(e) => handleRecipientName(e.target.value)} placeholder="Laura Gomez" />
-            {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
-          </DField>
-          <DField label="Teléfono *"><input style={inp} required value={form.recipient.phone ?? ""} onChange={(e) => setRecipient("phone", e.target.value.replace(/\D/g, ""))} placeholder="5493516784321" /></DField>
-          <DField label="Email"><input style={inp} type="email" value={form.recipient.email ?? ""} onChange={(e) => setRecipient("email", e.target.value)} placeholder="opcional" /></DField>
-          <DField label="DNI *">
-            <input style={inp} required value={form.recipient.dni ?? ""} onChange={(e) => handleRecipientDNI(e.target.value)} placeholder="ej: 28456789" />
-            {recipientSuggestion && <CustomerSuggestion customer={recipientSuggestion} onApply={applyRecipientSuggestion} onDismiss={() => setRecipientSuggestion(null)} />}
-          </DField>
-          <DField label="Calle *">
-            <AddressAutocomplete style={inp} required value={form.recipient.address.street ?? ""}
-              onChange={(v) => setRecipientAddr("street", v)}
-              onAddressSelect={(p) => onChange({ ...form, recipient: { ...form.recipient, address: { ...form.recipient.address, ...(p.street && { street: p.street }), ...(p.city && { city: p.city }), ...(p.province && { province: p.province }), ...(p.postal_code && { postal_code: p.postal_code }) } } })}
-              placeholder="San Martín 456, Córdoba" />
-          </DField>
-          <DField label="Ciudad *"><input style={inp} required value={form.recipient.address.city ?? ""} onChange={(e) => setRecipientAddr("city", e.target.value)} placeholder="Córdoba" /></DField>
-          <DField label="Provincia *">
-            <select style={inp} required value={form.recipient.address.province ?? ""} onChange={(e) => setRecipientAddr("province", e.target.value)}>
-              <option value="">Seleccionar</option>
-              {PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </DField>
-          <DField label="Código postal *"><input style={inp} required value={form.recipient.address.postal_code ?? ""} onChange={(e) => setRecipientAddr("postal_code", e.target.value)} placeholder="X5000" /></DField>
-        </div>
-        {/* CA-05: Privacy notice — shown once the operator has entered recipient data */}
-        {(form.recipient.name || form.recipient.dni) && (
-          <div style={{
-            marginTop: 10,
-            padding: "10px 14px",
-            borderRadius: 8,
-            border: "1px solid #e0f2fe",
-            background: "#f0f9ff",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-          }}>
-            <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
-            <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
-              Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
-              <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
-              Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
-            </p>
-          </div>
-        )}
-      </fieldset>
-
-      {/* Sucursales */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Sucursales</legend>
-        <div style={{ display: "grid", gap: 12 }}>
-          {/* Sucursal de origen */}
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal de origen *</div>
-            {branchLocked ? (() => {
-              const selected = branches.find(b => b.id === form.receiving_branch_id);
-              return (
-                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected?.name ?? form.receiving_branch_id ?? "—"}</div>
-                  {selected && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>}
-                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Asignada a tu sucursal — no se puede cambiar.</div>
-                </div>
-              );
-            })() : (() => {
-              const selected = branches.find(b => b.id === form.receiving_branch_id);
-              return selected ? (
-                <div style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{selected.name}</div>
-                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{selected.address.street}, {selected.address.city}</div>
-                </div>
-              ) : (
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>Sin sucursal asignada</div>
-              );
-            })()}
-          </div>
-          {/* Sucursal final */}
-          {(() => {
-            const finalBranch = findFinalBranch(form.recipient.address, branches);
-            if (!finalBranch) return null;
-            return (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Sucursal final</div>
-                <div style={{ border: "1px solid #a7f3d0", background: "#ecfdf5", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1e3a5f" }}>{finalBranch.name}</div>
-                  <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{finalBranch.address.street}, {finalBranch.address.city}</div>
-                  <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>Sucursal más cercana al domicilio del destinatario.</div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </fieldset>
-
-      {/* Paquete */}
-      <fieldset style={fsStyle}>
-        <legend style={legStyle}>Paquete</legend>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-          <DField label="Peso (kg) *" error={envelopeOverweight ? "Un sobre no puede superar 5 kg; usá una caja" : undefined}>
-            <input style={{ ...inp, borderColor: envelopeOverweight ? "#ef4444" : undefined }}
-              type="number" step="0.1" min="0.1" required value={form.weight_kg || ""}
-              onChange={(e) => set("weight_kg", parseFloat(e.target.value) || 0)} placeholder="3.5" />
-          </DField>
-          <DField label="Tipo de paquete *">
-            <select style={inp} value={form.package_type ?? "box"} onChange={(e) => set("package_type", e.target.value)}>
-              {PACKAGE_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </DField>
-          <DField label="Tipo de envío">
-            <select style={inp} value={form.shipment_type ?? "normal"} onChange={(e) => set("shipment_type", e.target.value)}>
-              {SHIPMENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </DField>
-          <DField label="Ventana horaria">
-            <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
-              {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </DField>
-          <DField label="Método de entrega" style={{ gridColumn: "1 / -1" }}>
-            <select style={inp} value={form.delivery_method ?? "ultima_milla"} onChange={(e) => set("delivery_method", e.target.value)}>
-              {DELIVERY_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </DField>
-          <DField label="" style={{ gridColumn: "1 / -1" }}>
-            <div style={{ display: "flex", gap: 20 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
-                <input type="checkbox" checked={!!form.is_fragile} onChange={(e) => set("is_fragile", e.target.checked)} />
-                Contenido frágil (manipular con cuidado)
-              </label>
-            </div>
-          </DField>
-          <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
-            <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} placeholder='ej: "Mantener vertical"' />
-          </DField>
-        </div>
-      </fieldset>
-
-      {/* Cotización */}
-      {(quote || quoteLoading) && (
-        <GradientCard tone="brand">
-          <div className="flex items-start gap-3 mb-3">
-            <GradientCardIcon><Tag className="w-5 h-5" /></GradientCardIcon>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <GradientCardLabel>Cotización del envío</GradientCardLabel>
-                {quoteLoading && <span className="text-[11px] text-white/70">Calculando…</span>}
-              </div>
-              {quote ? (
-                <>
-                  <GradientCardValue className="mt-1">{formatCurrencyARS(quote.total)}</GradientCardValue>
-                  <p className="mt-1 text-[11px] text-white/60">Precio estimado. Se confirma al crear el envío.</p>
-                </>
-              ) : (
-                <p className="mt-1 text-sm text-white/80">Completá peso, tipo de paquete y direcciones para ver la cotización.</p>
-              )}
-            </div>
-          </div>
-          {quote && (
-            <>
-              <div className="grid gap-1.5 text-xs pt-3 border-t border-white/15">
-                <div className="flex justify-between items-center"><span className="text-white/75">Tarifa base</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.base_fare)}</span></div>
-                <div className="flex justify-between items-center"><span className="text-white/75">Distancia ({quote.breakdown.distance_km.toFixed(1)} km)</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.distance_cost)}</span></div>
-                {quote.breakdown.weight_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo por peso</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.weight_surcharge)}</span></div>}
-                {quote.breakdown.last_mile_surcharge > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Entrega a domicilio</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.last_mile_surcharge)}</span></div>}
-                {quote.breakdown.shipment_multiplier !== 1 && <div className="flex justify-between items-center"><span className="text-white/75">Tipo de envío (express)</span><span className="font-semibold tabular-nums">{formatCurrencyARS((quote.breakdown.base_fare + quote.breakdown.distance_cost) * (quote.breakdown.shipment_multiplier - 1))}</span></div>}
-                {quote.breakdown.time_window_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo ventana horaria</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.time_window_surplus)}</span></div>}
-                {quote.breakdown.fragile_surplus > 0 && <div className="flex justify-between items-center"><span className="text-white/75">Recargo frágil</span><span className="font-semibold tabular-nums">{formatCurrencyARS(quote.breakdown.fragile_surplus)}</span></div>}
-              </div>
-            </>
-          )}
-        </GradientCard>
-      )}
-
-      {/* Acciones */}
-      <div style={{ border: "1px solid #fde68a", background: "#fffbeb", borderRadius: 10, padding: "14px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <h2 style={{ fontSize: "1rem", margin: 0, color: "#92400e" }}>Borrador — pendiente de confirmación</h2>
-          {/* Auto-save status */}
-          {autoSaveStatus === "saving" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#78350f" }}>
-              <Loader2 className="animate-spin" style={{ width: 12, height: 12 }} />Guardando…
-            </span>
-          )}
-          {autoSaveStatus === "saved" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#15803d" }}>
-              <Check style={{ width: 12, height: 12 }} />Guardado automáticamente
-            </span>
-          )}
-          {autoSaveStatus === "error" && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "#dc2626" }}>
-              <AlertCircle style={{ width: 12, height: 12 }} />{autoSaveError || "Error al guardar"}
-            </span>
-          )}
-        </div>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          Los cambios se guardan automáticamente. Al continuar se generará el cobro y, una vez confirmado el pago, se asignará el número de seguimiento.
-        </p>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "#78350f" }}>
-          <strong>Entrega estimada:</strong> Se calculará al confirmar el envío.
-        </p>
-        {confirmError && <p style={{ color: "#ef4444", margin: "0 0 8px", fontSize: 13 }}>{confirmError}</p>}
-        {discardConfirm ? (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
-            <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#991b1b" }}>
-              ¿Seguro que querés descartar este borrador? Esta acción no se puede deshacer.
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={onDiscard} disabled={confirming}
-                style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
-                Sí, descartar
-              </button>
-              <button onClick={() => setDiscardConfirm(false)}
-                style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={onConfirm}
-            disabled={confirming || envelopeOverweight}
-            style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: confirming || envelopeOverweight ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: envelopeOverweight ? 0.5 : 1 }}>
-            {confirming ? "Procesando..." : "Continuar al pago"}
-          </button>
-          <button onClick={() => setDiscardConfirm(true)} disabled={confirming || discardConfirm}
-            style={{ background: "#fff5f5", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontWeight: 600, fontSize: 14, marginLeft: "auto" }}>
-            Descartar borrador
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DField({ label, children, style, error }: { label: string; children: React.ReactNode; style?: React.CSSProperties; error?: string }) {
-  return (
-    <div style={{ display: "grid", gap: 4, position: "relative", ...style }}>
+    <div className={`grid gap-1 relative ${className ?? ""}`} style={style}>
       {label && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{label}</label>
-          {error && <span style={{ fontSize: 11, fontWeight: 500, color: "#ef4444", lineHeight: 1.2 }}>{error}</span>}
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-[var(--text-strong)]">{label}</label>
+          {error && <span className="text-[11px] font-medium text-[var(--danger-c)] leading-tight">{error}</span>}
         </div>
       )}
       {children}
@@ -2075,356 +1192,10 @@ function DField({ label, children, style, error }: { label: string; children: Re
   );
 }
 
-const fsStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 18px" };
-const legStyle: React.CSSProperties = { fontWeight: 700, fontSize: 13, color: "#1e3a5f", padding: "0 6px" };
-const inp: React.CSSProperties = { padding: "7px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, width: "100%", boxSizing: "border-box" };
+const fsClass = "border border-[var(--border)] rounded-xl p-3.5";
+const legClass = "font-bold text-[13px] text-[var(--text-heading)] px-1.5";
+const inpClass = "px-2.5 py-1.5 rounded-md border border-[var(--border-strong)] text-[13px] w-full box-border";
 
-function RouteTimeline({ events, origin, receivingBranchId, finalBranchId, destination, branches }: {
-  events: ShipmentEvent[];
-  origin: string;
-  receivingBranchId?: string;
-  finalBranchId?: string;
-  destination: string;
-  branches: Branch[];
-}) {
-  if (events.length === 0) return null;
-
-  const receivingBranch = receivingBranchId ? branches.find((b) => b.id === receivingBranchId) : undefined;
-  const firstStop = receivingBranch ? receivingBranch.id : origin;
-  const finalBranch = finalBranchId ? branches.find((b) => b.id === finalBranchId) : undefined;
-
-  // Confirmed stops: receiving branch (or origin fallback) + each at_hub/at_origin_hub arrival
-  const stops: { location: string; status: ShipmentStatus; timestamp: string; current: boolean }[] = [];
-
-  stops.push({ location: firstStop, status: "at_origin_hub" as ShipmentStatus, timestamp: events[0].timestamp, current: false });
-
-  // Skip events[0] — it's already the first stop. Include both at_hub and at_origin_hub so
-  // return passages through the origin branch (promoted to at_origin_hub by the backend) are shown.
-  for (const ev of events.slice(1)) {
-    if ((ev.to_status === "at_hub" || ev.to_status === "at_origin_hub") && ev.location) {
-      stops.push({ location: ev.location, status: ev.to_status, timestamp: ev.timestamp, current: false });
-    }
-  }
-
-  stops[stops.length - 1].current = true;
-
-  const lastEvent = events[events.length - 1];
-  const isInTransit = lastEvent?.to_status === "in_transit";
-  const nextBranch = isInTransit ? lastEvent.location : null;
-  const isDelivering = lastEvent?.to_status === "out_for_delivery";
-  const isDelivered = lastEvent?.to_status === "delivered";
-
-  const statusColors: Record<ShipmentStatus, string> = {
-    draft: "#9ca3af", at_origin_hub: "#f59e0b", loaded: "#06b6d4", in_transit: "#3b82f6",
-    at_hub: "#8b5cf6", out_for_delivery: "#f97316", delivery_failed: "#ef4444",
-    redelivery_scheduled: "#fb923c", no_entregado: "#6b7280", rechazado: "#dc2626",
-    delivered: "#10b981", ready_for_pickup: "#0891b2", ready_for_return: "#7c3aed",
-    returned: "#6b7280", cancelled: "#b91c1c", lost: "#374151", destroyed: "#1f2937", expired: "#9ca3af",
-    pending_payment: "#d97706",
-  };
-
-  const solidLine = (color = "#e5e7eb") => (
-    <div style={{ width: 40, height: 2, background: color, flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
-  );
-  const dashedLine = () => (
-    <div style={{ width: 40, height: 2, background: "repeating-linear-gradient(to right, #d1d5db 0, #d1d5db 5px, transparent 5px, transparent 9px)", flexShrink: 0, margin: "0 4px", marginBottom: 24 }} />
-  );
-
-  return (
-    <div style={{ ...cardStyle, marginBottom: 16 }}>
-      <h3 style={{ margin: "0 0 16px", fontSize: 13, color: "#1e3a5f", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
-        Route · {origin} → {destination}
-      </h3>
-      <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
-        {stops.map((stop, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: stop.current ? statusColors[stop.status] : "#e5e7eb",
-                border: stop.current ? `3px solid ${statusColors[stop.status]}` : "3px solid #e5e7eb",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: stop.current ? `0 0 0 3px ${statusColors[stop.status]}33` : "none",
-              }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: stop.current ? "#fff" : "#9ca3af" }}>{i + 1}</span>
-              </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                {(() => {
-                  const b = branches.find(x => x.id === stop.location);
-                  return (
-                    <div style={{ fontSize: 11, fontWeight: stop.current ? 700 : 500, color: stop.current ? "#1e3a5f" : "#6b7280", whiteSpace: "nowrap" as const }}>{b?.name ?? stop.location}</div>
-                  );
-                })()}
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>{fmtDate(stop.timestamp)}</div>
-                {stop.location === finalBranchId && (
-                  <div style={{ fontSize: 10, color: "#8b5cf6", fontWeight: 600, marginTop: 2 }}>Sucursal final</div>
-                )}
-              </div>
-            </div>
-            {i < stops.length - 1 && solidLine()}
-          </div>
-        ))}
-
-        {/* Delivering: dashed line to Recipient node */}
-        {isDelivering && (
-          <>
-            {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #f97316", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 14, color: "#f97316" }}>🚚</span>
-              </div>
-              <div style={{ fontSize: 11, color: "#f97316", fontWeight: 600, whiteSpace: "nowrap" as const }}>Destinatario</div>
-            </div>
-          </>
-        )}
-
-        {/* In transit: dashed line to uncolored next branch */}
-        {isInTransit && nextBranch && (
-          <>
-            {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f9fafb", border: "3px dashed #d1d5db", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#d1d5db" }}>{stops.length + 1}</span>
-              </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                {(() => {
-                  const b = branches.find(x => x.id === nextBranch);
-                  return (
-                    <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap" as const }}>{b?.name ?? nextBranch}</div>
-                  );
-                })()}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Final branch — shown as pending node if not yet visited */}
-        {finalBranch && !stops.some(s => s.location === finalBranchId) && !isDelivered && !isDelivering && (
-          <>
-            {dashedLine()}
-            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: "#f9fafb", border: "3px dashed #8b5cf6",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6" }}>
-                  {stops.length + (isInTransit && nextBranch ? 2 : 1)}
-                </span>
-              </div>
-              <div style={{ textAlign: "center" as const, maxWidth: 80 }}>
-                <div style={{ fontSize: 11, color: "#8b5cf6", fontWeight: 600, whiteSpace: "nowrap" as const }}>{finalBranch.name}</div>
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>Sucursal final</div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Final destination — always shown */}
-        <>
-          {isDelivered ? solidLine("#10b981") : dashedLine()}
-          <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: isDelivered ? "#10b981" : "#f9fafb",
-              border: isDelivered ? "3px solid #10b981" : "3px dashed #d1d5db",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: isDelivered ? "0 0 0 3px #10b98133" : "none",
-            }}>
-              <span style={{ fontSize: 14, color: isDelivered ? "#fff" : "#d1d5db" }}>
-                {isDelivered ? "✓" : "🏁"}
-              </span>
-            </div>
-            <div style={{ fontSize: 11, fontWeight: isDelivered ? 700 : 400, color: isDelivered ? "#065f46" : "#9ca3af", whiteSpace: "nowrap" as const }}>Destinatario</div>
-          </div>
-        </>
-      </div>
-    </div>
-  );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={cardStyle}>
-      <h3 style={{ margin: "0 0 12px", fontSize: 13, color: "#1e3a5f", textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</h3>
-      <div style={{ display: "grid", gap: 6 }}>{children}</div>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", gap: 8, fontSize: 13 }}>
-      <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontWeight: 500 }}>{value}</span>
-    </div>
-  );
-}
-
-function PriceCard({ price, breakdown }: { price: number; breakdown?: import("../api/shipments").PriceBreakdown }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      style={{
-        background: "linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%)",
-        borderRadius: 12,
-        padding: 18,
-        marginBottom: 16,
-        color: "#fff",
-        boxShadow: "0 4px 12px rgba(30, 58, 95, 0.15)",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            background: "rgba(255, 255, 255, 0.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <svg style={{ width: 22, height: 22 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Precio del envío
-          </p>
-          <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-            {formatCurrencyARS(price)}
-          </p>
-        </div>
-      </div>
-
-      {breakdown && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            style={{
-              width: "100%",
-              background: "rgba(255, 255, 255, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "8px 12px",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              transition: "background 0.15s",
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.18)")}
-            onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)")}
-          >
-            <span>{open ? "Ocultar desglose" : "Ver desglose"}</span>
-            <svg
-              style={{ width: 14, height: 14, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {open && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: "12px 4px 0",
-                borderTop: "1px solid rgba(255, 255, 255, 0.15)",
-                display: "grid",
-                gap: 8,
-                fontSize: 12,
-              }}
-            >
-              <PriceRow label="Tarifa base" value={formatCurrencyARS(breakdown.base_fare)} />
-              <PriceRow
-                label={`Distancia (${breakdown.distance_km.toFixed(1)} km)`}
-                value={formatCurrencyARS(breakdown.distance_cost)}
-              />
-              {breakdown.weight_surcharge > 0 && (
-                <PriceRow label="Recargo por peso" value={formatCurrencyARS(breakdown.weight_surcharge)} />
-              )}
-              {breakdown.last_mile_surcharge > 0 && (
-                <PriceRow label="Entrega a domicilio" value={formatCurrencyARS(breakdown.last_mile_surcharge)} />
-              )}
-              {breakdown.risky_zone_surcharge > 0 && (
-                <PriceRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(breakdown.risky_zone_surcharge)} />
-              )}
-              {breakdown.shipment_multiplier !== 1 && (
-                <PriceRow label="Tipo de envío (express)" value={formatCurrencyARS((breakdown.base_fare + breakdown.distance_cost) * (breakdown.shipment_multiplier - 1))} />
-              )}
-              {breakdown.time_window_surplus > 0 && (
-                <PriceRow label="Recargo ventana horaria" value={formatCurrencyARS(breakdown.time_window_surplus)} />
-              )}
-              {breakdown.fragile_surplus > 0 && (
-                <PriceRow label="Recargo frágil" value={formatCurrencyARS(breakdown.fragile_surplus)} />
-              )}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  paddingTop: 10,
-                  marginTop: 4,
-                  borderTop: "1px solid rgba(255, 255, 255, 0.15)",
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
-                <span>Total</span>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatCurrencyARS(breakdown.total)}</span>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function PriceRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ color: "rgba(255, 255, 255, 0.75)" }}>{label}</span>
-      <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</span>
-    </div>
-  );
-}
-
-const cardStyle: React.CSSProperties = { background: "#f9fafb", borderRadius: 10, padding: 16 };
-const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 };
-const backBtn: React.CSSProperties = { background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", cursor: "pointer", fontSize: 14 };
-
-// InfoRowEx: same as InfoRow but supports showing original value when corrected
-function InfoRowEx({ label, value, corrected, original }: { label: string; value: string; corrected: boolean; original: string }) {
-  return (
-    <div style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "flex-start" }}>
-      <span style={{ color: "#9ca3af", minWidth: 90, flexShrink: 0 }}>{label}</span>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontWeight: 500 }}>{value}</span>
-          {corrected && (
-            <span style={{ fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" as const }}>
-              Modificado
-            </span>
-          )}
-        </div>
-        {corrected && original && (
-          <span style={{ fontSize: 11, color: "#9ca3af", textDecoration: "line-through" }}>{original}</span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
   form: Record<string, string>;
@@ -2437,79 +1208,80 @@ function CorrectionModal({ form, onChange, onSave, onClose, saving, error }: {
   const isMobile = useIsMobile();
   const set = (key: string, value: string) => onChange({ ...form, [key]: value });
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem", color: "#1e3a5f" }}>Corregir datos del envío</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#6b7280" }}>✕</button>
-        </div>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#6b7280" }}>
-          Los datos originales no se modifican. Los cambios quedan registrados en el historial de comentarios.
-        </p>
+    <Dialog open onClose={onClose}>
+      <DialogContent className="max-w-[680px]">
+        <DialogHeader onClose={onClose}>
+          <DialogTitle>Corregir datos del envío</DialogTitle>
+        </DialogHeader>
+        <div className="px-6 pb-2">
+          <p className="text-[13px] text-[var(--text-secondary)] mb-4">
+            Los datos originales no se modifican. Los cambios quedan registrados en el historial de comentarios.
+          </p>
 
         {/* Remitente */}
-        <fieldset style={fsStyle}>
-          <legend style={legStyle}>Remitente</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Nombre"><input style={inp} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
-            <DField label="Teléfono"><input style={inp} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
-            <DField label="Email"><input style={inp} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
-            <DField label="DNI"><input style={inp} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
+        <fieldset className={fsClass}>
+          <legend className={legClass}>Remitente</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
+            <DField label="Nombre"><input className={inpClass} value={form.sender_name ?? ""} onChange={(e) => set("sender_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input className={inpClass} value={form.sender_phone ?? ""} onChange={(e) => set("sender_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Email"><input className={inpClass} value={form.sender_email ?? ""} onChange={(e) => set("sender_email", e.target.value)} /></DField>
+            <DField label="DNI"><input className={inpClass} value={form.sender_dni ?? ""} onChange={(e) => set("sender_dni", e.target.value)} /></DField>
             <DField label="Calle (origen)">
-              <input style={inp} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
+              <input className={inpClass} value={form.origin_street ?? ""} onChange={(e) => set("origin_street", e.target.value)} placeholder="Av. Corrientes 1234" />
             </DField>
-            <DField label="Ciudad (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_city}</div></DField>
-            <DField label="Provincia (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_province}</div></DField>
-            <DField label="Código postal (origen)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.origin_postal_code}</div></DField>
+            <DField label="Ciudad (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_city}</div></DField>
+            <DField label="Provincia (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_province}</div></DField>
+            <DField label="Código postal (origen)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.origin_postal_code}</div></DField>
           </div>
         </fieldset>
 
         {/* Destinatario */}
-        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Destinatario</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
-            <DField label="Nombre"><input style={inp} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
-            <DField label="Teléfono"><input style={inp} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
-            <DField label="Email"><input style={inp} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
-            <DField label="DNI"><input style={inp} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
+        <fieldset className={`${fsClass} mt-3`}>
+          <legend className={legClass}>Destinatario</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
+            <DField label="Nombre"><input className={inpClass} value={form.recipient_name ?? ""} onChange={(e) => set("recipient_name", e.target.value)} /></DField>
+            <DField label="Teléfono"><input className={inpClass} value={form.recipient_phone ?? ""} onChange={(e) => set("recipient_phone", e.target.value.replace(/\D/g, ""))} /></DField>
+            <DField label="Email"><input className={inpClass} value={form.recipient_email ?? ""} onChange={(e) => set("recipient_email", e.target.value)} /></DField>
+            <DField label="DNI"><input className={inpClass} value={form.recipient_dni ?? ""} onChange={(e) => set("recipient_dni", e.target.value)} /></DField>
             <DField label="Calle (destino)">
-              <input style={inp} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
+              <input className={inpClass} value={form.destination_street ?? ""} onChange={(e) => set("destination_street", e.target.value)} placeholder="San Martín 456" />
             </DField>
-            <DField label="Ciudad (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_city}</div></DField>
-            <DField label="Provincia (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_province}</div></DField>
-            <DField label="Código postal (destino)"><div style={{ ...inp, background: "#f3f4f6", color: "#6b7280" }}>{form.destination_postal_code}</div></DField>
+            <DField label="Ciudad (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_city}</div></DField>
+            <DField label="Provincia (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_province}</div></DField>
+            <DField label="Código postal (destino)"><div className={`${inpClass} bg-[var(--bg-muted)] text-[var(--text-secondary)]`}>{form.destination_postal_code}</div></DField>
           </div>
         </fieldset>
 
         {/* Paquete */}
-        <fieldset style={{ ...fsStyle, marginTop: 12 }}>
-          <legend style={legStyle}>Paquete</legend>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+        <fieldset className={`${fsClass} mt-3`}>
+          <legend className={legClass}>Paquete</legend>
+          <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-2.5`}>
             <DField label="Ventana horaria">
-              <select style={inp} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
+              <select className={inpClass} value={form.time_window ?? "flexible"} onChange={(e) => set("time_window", e.target.value)}>
                 {TIME_WINDOWS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </DField>
-            <DField label="Instrucciones especiales" style={{ gridColumn: "1 / -1" }}>
-              <input style={inp} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
+            <DField label="Instrucciones especiales" className="col-span-full">
+              <input className={inpClass} value={form.special_instructions ?? ""} onChange={(e) => set("special_instructions", e.target.value)} />
             </DField>
           </div>
-          <p style={{ fontSize: 11, color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
+          <p className="text-[11px] text-[var(--text-secondary)] mt-2 mb-0">
             Peso, tipo de paquete, tipo de envío y marca de frágil quedan fijos al crear el envío. La ventana horaria solo puede cambiarse a una opción de igual o menor recargo (no se permite pasar de Flexible a Mañana/Tarde).
           </p>
         </fieldset>
 
-        {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "12px 0 0" }}>{error}</p>}
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button onClick={onClose} disabled={saving} style={{ background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
-            Cancelar
-          </button>
-          <button onClick={onSave} disabled={saving} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 20px", cursor: saving ? "default" : "pointer", fontWeight: 700, fontSize: 14 }}>
-            {saving ? "Guardando..." : "Guardar correcciones"}
-          </button>
+        {error && <AlertBanner variant="danger" className="mt-3">{error}</AlertBanner>}
         </div>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button onClick={onSave} disabled={saving}>
+            {saving ? "Guardando..." : "Guardar correcciones"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2535,23 +1307,20 @@ function PendingPaymentPanel({
       await paymentApi.backToDraft(trackingId);
       onBackToDraft();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      const msg = extractErrorMessage(e);
       setError(msg ?? "No se pudo volver al borrador.");
       setReverting(false);
     }
   };
 
   return (
-    <div style={{
-      background: "#fffbeb", border: "1px solid #fcd34d",
-      borderRadius: 12, padding: 20, marginBottom: 16,
-    }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>
-          💳 Pago pendiente
+    <div className="bg-[var(--warn-bg)] border border-[var(--warn-border)] rounded-xl p-5 mb-4">
+      <div className="flex items-baseline justify-between mb-3.5 gap-3 flex-wrap">
+        <div className="font-bold text-[15px] text-[var(--warn-text)]">
+          <CreditCard className="w-4 h-4" /> Pago pendiente
         </div>
         {payment && (
-          <div style={{ fontSize: 13, color: "#78350f" }}>
+          <div className="text-[13px] text-[var(--warn-text)]">
             Monto:{" "}
             <strong>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
@@ -2569,23 +1338,17 @@ function PendingPaymentPanel({
           onError={setError}
         />
       ) : (
-        <p style={{ fontSize: 13, color: "#78350f" }}>Cargando información de pago…</p>
+        <p className="text-[13px] text-[var(--warn-text)]">Cargando información de pago…</p>
       )}
-      {error && <p style={{ color: "#dc2626", fontSize: 12, marginTop: 10, marginBottom: 0 }}>{error}</p>}
-      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #fde68a", display: "flex", justifyContent: "flex-end" }}>
-        <button
+      {error && <p className="text-[var(--danger-text)] text-xs mt-2.5 mb-0">{error}</p>}
+      <div className="mt-3.5 pt-3.5 border-t border-[var(--warn-border)] flex justify-end">
+        <Button
+          variant="outline"
           onClick={handleBackToDraft}
           disabled={reverting}
-          style={{
-            border: "1px solid #fcd34d", borderRadius: 8,
-            background: "#fff", color: "#92400e",
-            fontSize: 13, fontWeight: 600, cursor: "pointer",
-            padding: "8px 16px",
-            opacity: reverting ? 0.6 : 1,
-          }}
         >
           {reverting ? "Procesando…" : "← Volver a borrador"}
-        </button>
+        </Button>
       </div>
     </div>
   );

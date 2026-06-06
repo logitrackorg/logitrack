@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	//"log"
 	"fmt"
 	"time"
 
@@ -400,7 +401,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			TrackingID: de.TrackingID,
 			EventType:  model.EventClaimCreated,
 			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, payload.ClaimType),
+			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, claimTypeLabel(payload.ClaimType)),
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -587,18 +588,46 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	}
 	
 	// Inicializar metadata si no existe
-	if shipment.ChatbotMetadata == nil {
-		shipment.InitializeChatbotMetadata()
-	}
+if shipment.ChatbotMetadata == nil {
+	shipment.InitializeChatbotMetadata()
+}
 
-	// Validar que se puede reprogramar
+// ✅ Usar configuración pasada desde el handler
+maxReschedules := cmd.MaxReschedules
+maxRescheduleDays := cmd.MaxRescheduleDays
+
+// Validar que se puede reprogramar
+canReschedule, reason := shipment.CanReschedule(maxReschedules)
+if !canReschedule {
+	return model.Shipment{}, errors.New(reason)
+}
+
+// Validar que la fecha está dentro del rango permitido
+availableDates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
+validDate := false
+for _, date := range availableDates {
+	if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {
+		validDate = true
+		break
+	}
+}
+if !validDate {
+	return model.Shipment{}, fmt.Errorf("la fecha seleccionada no está disponible")
+}
+
+// Calcular días desde la fecha original
+daysFromOriginal := 0
+if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
+	daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
+}
+	/*// Validar que se puede reprogramar
 	canReschedule, reason := shipment.CanReschedule()
 	if !canReschedule {
 		return model.Shipment{}, errors.New(reason)
 	}
 
 	// Validar que la fecha está dentro del rango permitido
-	availableDates := shipment.GetAvailableRescheduleDates()
+	availableDates := shipment.GetAvailableRescheduleDates(3)
 	validDate := false
 	for _, date := range availableDates {
 		if date.Truncate(24*time.Hour).Equal(cmd.NewDeliveryDate.Truncate(24*time.Hour)) {
@@ -614,7 +643,7 @@ func (r *eventSourcedShipmentRepository) RescheduleDelivery(cmd RescheduleDelive
 	daysFromOriginal := 0
 	if shipment.ChatbotMetadata.OriginalDeliveryDate != nil {
 		daysFromOriginal = int(cmd.NewDeliveryDate.Sub(*shipment.ChatbotMetadata.OriginalDeliveryDate).Hours() / 24)
-	}
+	}*/
 
 	// ✅ NUEVO: Obtener ubicación actual del envío
 	currentLocation := model.GetCurrentLocation(&shipment)
@@ -742,4 +771,25 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 
 	r.projection.Apply(event)
 	return r.projection.Get(cmd.TrackingID)
+}
+
+func claimTypeLabel(ct model.ClaimType) string {
+	switch ct {
+	case model.ClaimTypeDamage:
+		return "Daño en mercadería"
+	case model.ClaimTypeMissing:
+		return "Faltante"
+	case model.ClaimTypeDelay:
+		return "Demora"
+	case model.ClaimTypeNotDelivered:
+		return "No entregado"
+	case model.ClaimTypeBadTreatment:
+		return "Maltrato"
+	case model.ClaimTypeWrongData:
+		return "Datos incorrectos"
+	case model.ClaimTypeOther:
+		return "Otro"
+	default:
+		return string(ct)
+	}
 }

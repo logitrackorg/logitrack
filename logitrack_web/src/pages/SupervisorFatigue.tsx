@@ -14,6 +14,7 @@ import {
   type CheckinRecord,
   type DriverFatigueStatus,
   type FatigueDashboardResponse,
+  type HistoryAccessRequest,
   type RiskLevel,
 } from "../api/supervisorFatigue";
 import { branchApi, type Branch } from "../api/branches";
@@ -62,7 +63,7 @@ function ScoreBar({
   redMin: number;
 }) {
   const color =
-    score <= greenMax ? "#10b981" : score >= redMin ? "#ef4444" : "#f59e0b";
+    score <= greenMax ? "var(--ok)" : score >= redMin ? "var(--danger-c)" : "var(--warn)";
   return (
     <div className="flex items-center gap-2 min-w-0">
       <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
@@ -183,12 +184,16 @@ function DriverRow({
   redMin,
   expanded,
   onToggle,
+  isBlocked = false,
+  isAuthorized = false,
 }: {
   driver: DriverFatigueStatus;
   greenMax: number;
   redMin: number;
   expanded: boolean;
   onToggle: () => void;
+  isBlocked?: boolean;
+  isAuthorized?: boolean;
 }) {
   const checkinTimeStr = driver.checkin_time
     ? fmtDateTime(driver.checkin_time)
@@ -211,13 +216,23 @@ function DriverRow({
           </div>
         </td>
 
-        {/* Nivel de Riesgo Total — badge + barra de score */}
+        {/* Nivel de Riesgo Total — badge + barra de score + estado de ruta */}
         <td className="py-3 px-4 min-w-[160px]">
           <RiskBadge level={driver.risk_level} />
           {driver.risk_score !== null && (
             <div className="mt-2">
               <ScoreBar score={driver.risk_score} greenMax={greenMax} redMin={redMin} />
             </div>
+          )}
+          {isBlocked && (
+            <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5 w-fit">
+              🔒 Pendiente de revisión
+            </span>
+          )}
+          {!isBlocked && isAuthorized && (
+            <span className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 w-fit">
+              ✅ Autorizado para continuar
+            </span>
           )}
         </td>
 
@@ -302,6 +317,12 @@ export function SupervisorFatigue() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [historyRequests, setHistoryRequests] = useState<HistoryAccessRequest[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [blockedDriverIds, setBlockedDriverIds] = useState<string[]>([]);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [confirmUnblockId, setConfirmUnblockId] = useState<string | null>(null);
+  const [recentlyAuthorizedIds, setRecentlyAuthorizedIds] = useState<Set<string>>(new Set());
 
   // Sync the ref with selectedBranch so the polling interval always reads the
   // latest value without stale-closure issues. Writing to a ref must happen in
@@ -345,6 +366,56 @@ export function SupervisorFatigue() {
   useEffect(() => {
     if (!isSupervisor) load();
   }, [selectedBranch, isSupervisor, load]);
+
+  // Polling de choferes bloqueados por alerta de fatiga (LOGITRACK-501)
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await supervisorFatigueApi.getBlockedDrivers(selectedBranch || undefined);
+        setBlockedDriverIds(res.blocked_driver_ids);
+      } catch { /* silencioso */ }
+    };
+    void poll();
+    const id = setInterval(poll, 10_000);
+    return () => clearInterval(id);
+  }, [selectedBranch]);
+
+  const loadHistoryRequests = useCallback(async () => {
+    try {
+      const res = await supervisorFatigueApi.listHistoryRequests("pending");
+      setHistoryRequests(res.requests);
+    } catch {
+      // non-critical — silent failure
+    }
+  }, []);
+
+  useEffect(() => { loadHistoryRequests(); }, [loadHistoryRequests]);
+
+  const handleReview = async (driverID: string, action: "approve" | "reject") => {
+    setReviewingId(driverID);
+    try {
+      await supervisorFatigueApi.reviewHistoryRequest(driverID, action);
+      await loadHistoryRequests();
+    } catch {
+      // ignore
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleUnblockFromPanel = async (driverID: string) => {
+    setUnblockingId(driverID);
+    try {
+      await supervisorFatigueApi.unblockDriver(driverID);
+      setBlockedDriverIds((prev) => prev.filter((id) => id !== driverID));
+      setRecentlyAuthorizedIds((prev) => new Set([...prev, driverID]));
+    } catch {
+      // ignore — el próximo polling lo reflejará
+    } finally {
+      setUnblockingId(null);
+      setConfirmUnblockId(null);
+    }
+  };
 
   // ── stats ─────────────────────────────────────────────────────────────────
 
@@ -427,6 +498,68 @@ export function SupervisorFatigue() {
         </div>
       )}
 
+      {/* Choferes con ruta bloqueada por alerta de fatiga (LOGITRACK-501) */}
+      {blockedDriverIds.length > 0 && (
+        <Card className="border-orange-300 bg-orange-50">
+          <CardHeader className="border-b border-orange-200 pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-800">
+              🔒 Choferes con ruta bloqueada ({blockedDriverIds.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <tbody>
+                {blockedDriverIds.map((driverID) => {
+                  const driverInfo = data?.drivers.find((d) => d.driver_id === driverID);
+                  const name = driverInfo?.full_name ?? driverInfo?.username ?? driverID;
+                  const username = driverInfo?.username ?? "";
+                  const isConfirming = confirmUnblockId === driverID;
+                  const isUnblocking = unblockingId === driverID;
+                  return (
+                    <tr key={driverID} className="border-t border-orange-200">
+                      <td className="py-3 px-4">
+                        <p className="text-sm font-semibold text-slate-900">{name}</p>
+                        {username && <p className="text-[11px] text-slate-400 font-mono">{username}</p>}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {!isConfirming ? (
+                          <button
+                            onClick={() => setConfirmUnblockId(driverID)}
+                            disabled={isUnblocking}
+                            className="h-8 px-4 rounded-lg text-white text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors"
+                            style={{ background: "#f97316" }}
+                          >
+                            🔓 Desbloquear ruta
+                          </button>
+                        ) : (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => void handleUnblockFromPanel(driverID)}
+                              disabled={isUnblocking}
+                              className="h-8 px-3 rounded-lg text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                              style={{ background: "#f97316" }}
+                            >
+                              {isUnblocking ? "Desbloqueando…" : "Sí, desbloquear"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmUnblockId(null)}
+                              disabled={isUnblocking}
+                              className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabla principal */}
       {loading ? (
         <Card className="p-10 text-center">
@@ -470,11 +603,67 @@ export function SupervisorFatigue() {
                           prev === d.driver_id ? null : d.driver_id
                         )
                       }
+                      isBlocked={blockedDriverIds.includes(d.driver_id)}
+                      isAuthorized={recentlyAuthorizedIds.has(d.driver_id)}
                     />
                   ))}
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Solicitudes de historial personal */}
+      {historyRequests.length > 0 && (
+        <Card>
+          <CardHeader className="border-b border-slate-100 pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              Solicitudes de historial personal ({historyRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
+                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
+                  <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyRequests.map((req) => (
+                  <tr key={req.driver_id} className="border-t border-slate-100">
+                    <td className="py-3 px-4">
+                      <p className="text-sm font-semibold text-slate-900">{req.full_name || req.driver_id}</p>
+                      <p className="text-[11px] text-slate-400 font-mono">{req.username}</p>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-500 tabular-nums">
+                      {new Date(req.request_date).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          disabled={reviewingId === req.driver_id}
+                          onClick={() => handleReview(req.driver_id, "approve")}
+                          className="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          disabled={reviewingId === req.driver_id}
+                          onClick={() => handleReview(req.driver_id, "reject")}
+                          className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}

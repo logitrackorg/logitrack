@@ -296,12 +296,21 @@ Motor de ruteo en `internal/service/routing.go`. El plan es **global**: cubre to
 | `morning_window_end_hour` | 14 | 1–24 | Hora de fin de la ventana "morning" (> start). |
 | `afternoon_window_start_hour` | 12 | 0–23 | Hora de inicio de la ventana "afternoon". Puede solapar con morning. |
 | `afternoon_window_end_hour` | 18 | 1–24 | Hora de fin de la ventana "afternoon" (> start). |
-| `service_time_minutes` | 10 | 1–60 | Tiempo de entrega por parada (timbre + firma). |
-| `avg_speed_kmh` | 25 | 5–120 | Velocidad promedio del chofer entre paradas. |
+| `service_time_minutes` | 10 | 1–60 | Tiempo de entrega por parada de **última milla** (timbre + firma). No aplica a inter-sucursal. |
+| `avg_speed_kmh` | 25 | 5–120 | Velocidad urbana de última milla entre paradas. **No** se usa para inter-sucursal. |
 | `last_mile_packing_strategy` | `maximize_capacity` | `balanced` \| `maximize_capacity` | Estrategia de asignación a choferes. |
 | `fleet_projection_horizon_hours` | 0 | ≥0 | WIP: ventana de horas para usar vehículos entrantes en despacho proyectado. 0 = deshabilitado. |
+| `inter_branch_dispatch_hour` | 8 | 0–23 | Hora fija de salida (local ART) de todos los despachos inter-sucursal del día. Base del scheduling del calendario. |
+| `inter_branch_avg_speed_kmh` | 60 | 20–120 | Velocidad de ruta inter-sucursal, usada como fallback cuando la arista del grafo no tiene `avg_transit_hours`. |
+| `inter_branch_stop_minutes` | 240 | 0–1440 | Dwell (descarga + carga de pallets) en una parada intermedia inter-sucursal multi-hop. Independiente de `service_time_minutes`. |
 
 Tope de peso por chofer: **150 kg hardcodeado** en `routing.go` (`MaxWeightKg`). No es configurable hoy.
+
+### Scheduling inter-sucursal (calendario)
+
+`scheduleInterBranchAssignments` (routing.go) calcula, para cada despacho inter-sucursal, la hora de salida (`EstimatedDepartureMin = inter_branch_dispatch_hour × 60`) y el arribo a cada parada. El tiempo de viaje por tramo prioriza `BranchEdge.AvgTransitHours` del grafo de sucursales (datos históricos reales o baseline 60 km/h del seed); si la arista no tiene dato, cae a `distancia × 1.3 / inter_branch_avg_speed_kmh`. En cada parada **intermedia** (todas salvo la última, incluida la primaria cuando es multi-hop) se suma `inter_branch_stop_minutes` como dwell de descarga + carga. Se ejecuta al final de `generatePlan` y se **re-ejecuta** al final de `GenerateGlobalPlan` (los pases globales mutan las paradas).
+
+Al aplicar el plan, los tiempos se persisten en el `InterBranchTrip`: `ScheduledDepartureAt`, `EstimatedArrivalAt`, y `EstimatedArrivalAt` por `TripStop` (mapeado por `branch_id`, no por índice, porque las paradas se arman condicionalmente). Última milla persiste salida desde `SuggestedDepartureMin` del VRP y llegada = salida + último stop + `service_time_minutes`.
 
 **Modos de vehículos**: cada vehículo tiene un `mode` que determina en qué pool participa:
 - `ultima_milla`: solo asignado a rutas de última milla.
@@ -499,4 +508,5 @@ Full route list is in `cmd/server/main.go`. Key public endpoints:
 | POST | /api/v1/routing/last-mile/recompute | operator/supervisor. Recalcula orden de paradas de un chofer con un RouteMode dado. |
 | GET | /api/v1/routing/config | admin only. |
 | PATCH | /api/v1/routing/config | admin only. Valida rangos. |
+| GET | /api/v1/inter-branch-trips/calendar | operator/supervisor (su sucursal), manager (toda la red). `?from=YYYY-MM-DD&to=YYYY-MM-DD`. Viajes (ambos kinds) para el calendario. |
 | GET | /health | health check |

@@ -5,11 +5,24 @@ export interface ChatbotAuthRequest {
   recipient_dni: string;
 }
 
+export interface PendingClaimInfo {
+  claim_id: string;
+  supervisor_notes: string;
+}
+
 export interface ChatbotAuthResponse {
   success: boolean;
   recipient_name: string;
   shipment: Shipment;
   available_actions: string[];
+  pending_claim?: PendingClaimInfo;
+}
+
+export interface ClaimRespondResponse {
+  success: boolean;
+  claim_id: string;
+  status: string;
+  message: string;
 }
 
 export interface Shipment {
@@ -101,4 +114,7 @@ export type ChatAction =
   | 'confirm_cancel'
   | 'restart'
   | 'as_recipient'
-  | 'as_sender';
+  | 'as_sender'
+  | 'respond_claim'
+  | 'skip_evidence'
+  | 'confirm_claim_response';

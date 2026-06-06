@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,12 +23,16 @@ import (
 const controlPhraseTemplate = "Hoy es un buen día para trabajar con seguridad, %s."
 
 type DriverHandler struct {
-	routeSvc    *service.RouteService
-	branchRepo  repository.BranchRepository
-	checkinRepo *repository.CheckinRepository
-	fatigueSvc  *service.FatigueConfigService
-	auditRepo   *repository.AuditLogRepository
-	notifSvc    *service.NotificationService
+	routeSvc         *service.RouteService
+	branchRepo       repository.BranchRepository
+	checkinRepo      *repository.CheckinRepository
+	sleepRepo        *repository.SleepRepository
+	routeStartRepo   *repository.RouteStartRepository
+	historyRepo      *repository.HistoryAccessRequestRepository
+	fatigueSvc       *service.FatigueConfigService
+	auditRepo        *repository.AuditLogRepository
+	notifSvc         *service.NotificationService
+	fatigueBlockRepo repository.FatigueBlockRepository
 }
 
 func NewDriverHandler(
@@ -36,24 +41,30 @@ func NewDriverHandler(
 	fatigueSvc *service.FatigueConfigService,
 	auditRepo *repository.AuditLogRepository,
 	notifSvc *service.NotificationService,
+	fatigueBlockRepo repository.FatigueBlockRepository,
 ) *DriverHandler {
 	return &DriverHandler{
-		routeSvc:    routeSvc,
-		branchRepo:  branchRepo,
-		checkinRepo: repository.NewCheckinRepository(),
-		fatigueSvc:  fatigueSvc,
-		auditRepo:   auditRepo,
-		notifSvc:    notifSvc,
+		routeSvc:         routeSvc,
+		branchRepo:       branchRepo,
+		checkinRepo:      repository.NewCheckinRepository(),
+		sleepRepo:        repository.NewSleepRepository(),
+		routeStartRepo:   repository.NewRouteStartRepository(),
+		historyRepo:      repository.NewHistoryAccessRequestRepository(),
+		fatigueSvc:       fatigueSvc,
+		auditRepo:        auditRepo,
+		notifSvc:         notifSvc,
+		fatigueBlockRepo: fatigueBlockRepo,
 	}
 }
 
 // checkAndNotifyFatigueRisk calcula el score de fatiga con los datos disponibles
-// en el check-in y notifica a los supervisores si el nivel es ROJO.
+// en el check-in y, si el nivel es ROJO:
+//   - Notifica a los supervisores de la sucursal.
+//   - Estampa CriticalAlertAt en el check-in del chofer para que el frontend
+//     muestre el modal de alerta crítica (Ojo de Patrón emergente).
+//
 // Debe llamarse en una goroutine (fire-and-forget).
 func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model.DriverCheckin) {
-	if h.notifSvc == nil {
-		return
-	}
 	cfg := h.fatigueSvc.Get()
 	score, level := fatigueRiskScore(checkin, cfg)
 	if level != model.RiskRed {
@@ -63,7 +74,20 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 	if fullName == "" {
 		fullName = user.Username
 	}
-	h.notifSvc.NotifyFatigueAlert(user.BranchID, user.Username, fullName, score)
+	if h.notifSvc != nil {
+		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score)
+	}
+
+	// Stamp the driver's own check-in so the polling endpoint can surface
+	// the critical alert. Only set if not already alerting (i.e. driver
+	// has not yet acknowledged a prior RED result on this check-in).
+	today := todayAR()
+	if rec, ok := h.checkinRepo.Get(user.ID, today); ok && rec.CriticalAlertAt == nil {
+		now := time.Now()
+		rec.CriticalAlertAt = &now
+		rec.CriticalAlertScore = score
+		_ = h.checkinRepo.Upsert(rec)
+	}
 }
 
 // ── Route handlers ────────────────────────────────────────────────────────────
@@ -159,25 +183,77 @@ const skipGracePeriod = 3 * time.Hour
 //   - no check-in has been recorded yet, OR
 //   - an admin reset was triggered after the existing check-in, OR
 //   - the driver had skipped and the 3-hour grace period has elapsed.
+//
+// requires_fatigue_test: true when routeStartRepo reports the driver has already
+// claimed ≥ 1 vehicle since their last check-in. This counter lives in its own
+// JSON file, independent of the check-in record, so it works even when no
+// proper KSS check-in exists (e.g. early in the day, or skeleton records
+// created by touch-event accumulation).
 func (h *DriverHandler) GetTodayCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
-	rec, ok := h.checkinRepo.Get(user.ID, todayAR())
+	cfg := h.fatigueSvc.Get()
+	logicalDate := logicalDateAR(cfg.DailyResetHour)
+	today := todayAR()
+
+	requiresFatigueTest := h.routeStartRepo.Get(user.ID, today) > 0
+
+	rec, ok := h.checkinRepo.Get(user.ID, today)
 	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "sin check-in para hoy"})
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":                 "sin check-in para hoy",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": requiresFatigueTest,
+		})
 		return
 	}
 	// Admin reset: invalidate any check-in recorded before the reset timestamp.
-	if cfg := h.fatigueSvc.Get(); cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "check-in requiere renovación"})
+	if cfg.LastCheckinReset != nil && rec.RecordedAt.Before(*cfg.LastCheckinReset) {
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":                 "check-in requiere renovación",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": requiresFatigueTest,
+		})
 		return
 	}
-	// Skipped grace period: after 3 h the gate re-appears so the driver is
-	// prompted again — without deleting the skip record from history.
+	// Skipped grace period: after 3 h the gate re-appears.
 	if rec.Skipped && time.Since(rec.RecordedAt) > skipGracePeriod {
-		c.JSON(http.StatusNotFound, gin.H{"error": "período de gracia de salto expirado"})
+		_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":                 "período de gracia de salto expirado",
+			"requires_sleep_data":   !hasSleep,
+			"requires_fatigue_test": requiresFatigueTest,
+		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+
+	_, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+	c.JSON(http.StatusOK, gin.H{
+		"ok":                    true,
+		"checkin":               rec,
+		"requires_sleep_data":   !hasSleep,
+		"requires_fatigue_test": requiresFatigueTest,
+	})
+}
+
+// MarkRouteStarted increments the route-start counter for today.
+// Called by the frontend right after a successful vehicle claim (QR or plate),
+// before navigating to the route page.
+//
+// The counter lives in routeStartRepo (data/route_starts.json), completely
+// independent of the check-in record. This guarantees it works even when:
+//   - the driver hasn't done a morning KSS check-in yet
+//   - the check-in record is a skeleton created by touch-event accumulation
+//   - AddShipmentToDriverRoute already reset the route record
+func (h *DriverHandler) MarkRouteStarted(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	count, err := h.routeStartRepo.Increment(user.ID, todayAR())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar el inicio de ruta"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "routes_started_today": count})
 }
 
 // SkipCheckin records that the driver deliberately bypassed the fatigue gate.
@@ -223,27 +299,64 @@ func (h *DriverHandler) SkipCheckin(c *gin.Context) {
 		})
 	}
 
+	// Reset the route-start counter so the gate doesn't re-fire on the
+	// immediate next scan after a skip.
+	_ = h.routeStartRepo.Reset(user.ID, today)
+
 	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
 }
 
 // SubmitCheckin records (or overwrites) the KSS fatigue check-in for today.
+//
+// Sleep optimization: horas_sueno is only required the first time per logical
+// day. Once a sleep record exists it is reused automatically — the driver is
+// never asked twice. If no record exists and the payload omits horas_sueno,
+// the endpoint responds with requires_sleep_data:true so the frontend can
+// prompt the driver before retrying.
 func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
 	var body struct {
-		HorasSueno int `json:"horas_sueno"`
-		KSSLevel   int `json:"kss_level"`
+		HorasSueno *int `json:"horas_sueno"`
+		KSSLevel   int  `json:"kss_level"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
 		return
 	}
-	if body.HorasSueno < 0 || body.HorasSueno > 10 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
-		return
-	}
 	if body.KSSLevel < 1 || body.KSSLevel > 8 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
+		return
+	}
+
+	cfg := h.fatigueSvc.Get()
+	logicalDate := logicalDateAR(cfg.DailyResetHour)
+
+	// ── Sleep optimization ────────────────────────────────────────────────────
+	// Resolve horas_sueno for this check-in:
+	//  1. If a sleep record already exists for today's logical day → reuse it.
+	//  2. If the payload provides the value → persist it and use it.
+	//  3. Otherwise → tell the frontend to collect the value first.
+	var horasSueno int
+	existing_sleep, hasSleep := h.sleepRepo.Get(user.ID, logicalDate)
+	if hasSleep {
+		horasSueno = existing_sleep.HorasSueno
+	} else if body.HorasSueno != nil {
+		v := *body.HorasSueno
+		if v < 0 || v > 10 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "horas_sueno debe estar entre 0 y 10"})
+			return
+		}
+		if err := h.sleepRepo.Upsert(user.ID, logicalDate, v); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar el registro de sueño"})
+			return
+		}
+		horasSueno = v
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"ok":                  false,
+			"requires_sleep_data": true,
+		})
 		return
 	}
 
@@ -261,7 +374,7 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	rec := model.DriverCheckin{
 		DriverID:      user.ID,
 		Date:          today,
-		HorasSueno:    body.HorasSueno,
+		HorasSueno:    horasSueno,
 		KSSLevel:      body.KSSLevel,
 		RecordedAt:    time.Now(),
 		VoiceMetrics:  existing.VoiceMetrics,
@@ -296,7 +409,11 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec})
+	// Reset the route-start counter: the driver just passed the gate so the
+	// next scan should not show the gate again until another route is claimed.
+	_ = h.routeStartRepo.Reset(user.ID, today)
+
+	c.JSON(http.StatusOK, gin.H{"ok": true, "checkin": rec, "requires_sleep_data": false})
 }
 
 // ── US4: Tactile event capture ────────────────────────────────────────────────
@@ -491,10 +608,10 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ok":           true,
+		"ok":            true,
 		"voice_metrics": current,
-		"drift_score":  driftScore,
-		"baseline":     rec.BaselineVoice,
+		"drift_score":   driftScore,
+		"baseline":      rec.BaselineVoice,
 	})
 }
 
@@ -593,8 +710,8 @@ func computeDriftScore(current, baseline model.VoiceMetrics) int {
 func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	isTripStart    := c.Query("is_trip_start") == "true"
-	isCheckpoint   := c.Query("checkpoint") == "true"
+	isTripStart := c.Query("is_trip_start") == "true"
+	isCheckpoint := c.Query("checkpoint") == "true"
 	stoppedMinutes := 0
 	if raw := c.Query("stopped_minutes"); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil {
@@ -642,13 +759,13 @@ func (h *DriverHandler) GetTestEligibility(c *gin.Context) {
 			}
 		}
 
-		// Gate A: menos de 5 misfires → no hay problema táctil.
-		if latestMisfires < 5 {
+		// Gate A: menos de 20 misfires → no hay problema táctil.
+		if latestMisfires < 15 {
 			c.JSON(http.StatusOK, gin.H{"require_test": false})
 			return
 		}
 
-		// Gate B: 5+ misfires — exige re-test si no hay check-in formal ese día
+		// Gate B: 15+ misfires — exige re-test si no hay check-in formal ese día
 		// o si el último fue hace más de 1 hora.
 		hadFormalCheckin := hasRec && (rec.KSSLevel > 0 || rec.Skipped)
 		if !hadFormalCheckin {
@@ -704,6 +821,70 @@ func (h *DriverHandler) FastForwardCheckinTime(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "new_recorded_at": rec.RecordedAt})
 }
 
+// ── Historial personal de check-ins ──────────────────────────────────────────
+
+// RequestHistory creates or resets a pending access request for the driver's
+// personal check-in history. Returns 409 if a pending or approved request already
+// exists. A previously rejected request can be re-submitted.
+func (h *DriverHandler) RequestHistory(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	existing, ok := h.historyRepo.Get(user.ID)
+	if ok {
+		if existing.Status == model.HistoryRequestPending {
+			c.JSON(http.StatusConflict, gin.H{"error": "ya tenés una solicitud pendiente de revisión"})
+			return
+		}
+		if existing.Status == model.HistoryRequestApproved {
+			c.JSON(http.StatusConflict, gin.H{"error": "ya tenés acceso aprobado a tu historial"})
+			return
+		}
+	}
+
+	req := model.HistoryAccessRequest{
+		DriverID:    user.ID,
+		Status:      model.HistoryRequestPending,
+		RequestDate: time.Now(),
+	}
+	if err := h.historyRepo.Upsert(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar la solicitud"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"ok": true, "request": req})
+}
+
+// GetPersonalHistory returns the driver's full check-in history.
+// Returns 403 unless the supervisor has approved the access request.
+func (h *DriverHandler) GetPersonalHistory(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	req, ok := h.historyRepo.Get(user.ID)
+	if !ok || req.Status != model.HistoryRequestApproved {
+		status := "sin_solicitud"
+		if ok {
+			status = string(req.Status)
+		}
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":          "acceso no autorizado — solicitá permiso a tu supervisor",
+			"request_status": status,
+		})
+		return
+	}
+
+	all := h.checkinRepo.AllForDriver(user.ID)
+	// Sort newest first — same order as the supervisor dashboard.
+	sort.Slice(all, func(i, j int) bool { return all[i].Date > all[j].Date })
+	if all == nil {
+		all = []model.DriverCheckin{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"history": all,
+		"total":   len(all),
+		"request": req,
+	})
+}
+
 // updateBaseline computes a simple running average between the existing baseline
 // and the new sample. On the first call (baseline == nil) the new sample becomes
 // the baseline directly.
@@ -723,4 +904,35 @@ func updateBaseline(baseline *model.VoiceMetrics, current model.VoiceMetrics) *m
 		PauseRatio: baseline.PauseRatio*(1-alpha) + current.PauseRatio*alpha,
 	}
 	return &updated
+}
+
+// GetFatigueBlockStatus returns whether the authenticated driver has an active
+// fatigue block. The frontend polls this endpoint every 5 s and shows a
+// full-screen overlay when blocked (LOGITRACK-499).
+func (h *DriverHandler) GetFatigueBlockStatus(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": false})
+		return
+	}
+	block, err := h.fatigueBlockRepo.GetActive(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al verificar estado de bloqueo"})
+		return
+	}
+	if block != nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": true})
+		return
+	}
+	recent, err := h.fatigueBlockRepo.GetRecentlyUnblocked(user.ID)
+	if err != nil || recent == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked": false})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"blocked":            false,
+		"recently_unblocked": true,
+		"unblocked_by":       recent.UnblockedBy,
+		"unblocked_at":       recent.UnblockedAt,
+	})
 }

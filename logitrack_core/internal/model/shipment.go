@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"  
+	"time"
+)
 
 type Status string
 
@@ -145,6 +148,59 @@ type Shipment struct {
 	// ConfirmationEmailSentAt registra cuándo se enviaron los emails de confirmación
 	// al destinatario y al remitente. Nil = aún no enviados. Usado para dedup (CA-05).
 	ConfirmationEmailSentAt *time.Time `json:"confirmation_email_sent_at,omitempty"`
+
+	// IsDelayed is a computed (non-persisted) field set by the projection layer
+	// after each fetch using clock.Now() so that admin time-travel advances are
+	// honoured. Omitted from JSON when false.
+	IsDelayed bool `json:"is_delayed,omitempty"`
+
+	// IsAtRisk is set when the shipment is in the warning band: dwell time has
+	// exceeded the baseline average (SLAAtRiskThresholdHours) but not yet the
+	// critical threshold (SLADelayThresholdHours). Shown as "SLA Comprometido"
+	// (yellow) in the UI. Computed (non-persisted). Omitted when false.
+	IsAtRisk bool `json:"is_at_risk,omitempty"`
+}
+
+// slaMonitoredForDelay is the canonical set of states where LogiTrack is
+// responsible for moving the shipment forward and delay is meaningful.
+var slaMonitoredForDelay = map[Status]bool{
+	StatusAtOriginHub:        true,
+	StatusAtHub:              true,
+	StatusLoaded:             true,
+	StatusInTransit:          true,
+	StatusOutForDelivery:     true,
+	StatusRedeliveryScheduled: true,
+	StatusReadyForReturn:     true,
+}
+
+// SLAAtRiskThresholdHours is the warning threshold (100 % of the fallback
+// per-state average of 24 h). Shipments with dwell in the range
+// (SLAAtRiskThresholdHours, SLADelayThresholdHours] are "SLA Comprometido".
+const SLAAtRiskThresholdHours = 24.0
+
+// SLADelayThresholdHours is the canonical 36-hour threshold shared by both
+// the backend (ComputeIsDelayed) and the frontend fallback computation.
+const SLADelayThresholdHours = 36.0
+
+// ComputeIsDelayed reports whether the shipment has been in its current
+// monitored state longer than SLADelayThresholdHours. Pass clock.Now() to
+// honour any admin time-travel override — never use time.Now() here.
+func (s *Shipment) ComputeIsDelayed(now time.Time) bool {
+	if !slaMonitoredForDelay[s.Status] {
+		return false
+	}
+	return now.Sub(s.UpdatedAt).Hours() > SLADelayThresholdHours
+}
+
+// ComputeIsAtRisk reports whether the shipment is in the "SLA Comprometido"
+// warning band: dwell has exceeded the baseline average but not yet the
+// critical threshold. Use clock.Now() to honour admin time-travel overrides.
+func (s *Shipment) ComputeIsAtRisk(now time.Time) bool {
+	if !slaMonitoredForDelay[s.Status] {
+		return false
+	}
+	dwell := now.Sub(s.UpdatedAt).Hours()
+	return dwell > SLAAtRiskThresholdHours && dwell <= SLADelayThresholdHours
 }
 
 // ShipmentCorrections holds non-destructive field overrides for a confirmed shipment.
@@ -348,7 +404,7 @@ type ChatbotMetadata struct {
 }
 
 // CanReschedule checks if shipment can be rescheduled via chatbot (US3)
-func (s *Shipment) CanReschedule() (bool, string) {
+/*func (s *Shipment) CanReschedule() (bool, string) {
 	if s.Status == StatusOutForDelivery {
 		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
 	}
@@ -362,7 +418,35 @@ func (s *Shipment) CanReschedule() (bool, string) {
 	}
 
 	if s.ChatbotMetadata.RescheduleCount >= s.ChatbotMetadata.MaxReschedules {
-		return false, "Has alcanzado el límite máximo de 2 reprogramaciones para este envío"
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			s.ChatbotMetadata.MaxReschedules,
+		)
+	}
+
+	return true, ""
+}*/
+
+// ✅ CÓDIGO NUEVO:
+func (s *Shipment) CanReschedule(maxReschedules int) (bool, string) {
+	if s.Status == StatusOutForDelivery {
+		return false, "Tu paquete ya está en camino y no puede ser reprogramado"
+	}
+
+	if IsTerminalStatus(s.Status) {
+		return false, "Este envío ya no puede ser modificado"
+	}
+
+	if s.ChatbotMetadata == nil {
+		return true, ""
+	}
+
+	// ✅ Usar el parámetro maxReschedules, NO el metadata
+	if s.ChatbotMetadata.RescheduleCount >= maxReschedules {
+		return false, fmt.Sprintf(
+			"Has alcanzado el límite máximo de %d reprogramaciones para este envío",
+			maxReschedules,
+		)
 	}
 
 	return true, ""
@@ -447,7 +531,7 @@ func (s *Shipment) CanRequestPickup() (bool, string) {
 }
 
 // GetAvailableRescheduleDates calculates available dates for rescheduling (US3 CA-01 & CA-03)
-func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
+func (s *Shipment) GetAvailableRescheduleDates(maxDays int) []time.Time {
 	if s.EstimatedDeliveryAt == nil {
 		return []time.Time{}
 	}
@@ -458,10 +542,10 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	}
 
 	today := time.Now().Truncate(24 * time.Hour)
-	maxDate := baseDate.AddDate(0, 0, 3)
+	maxDate := baseDate.AddDate(0, 0, maxDays)
 
 	var dates []time.Time
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= maxDays; i++ {
 		newDate := baseDate.AddDate(0, 0, i)
 		if newDate.After(today) && !newDate.After(maxDate) {
 			dates = append(dates, newDate)
@@ -471,12 +555,29 @@ func (s *Shipment) GetAvailableRescheduleDates() []time.Time {
 	return dates
 }
 
-// InitializeChatbotMetadata sets up chatbot metadata if not present
+// InitializeChatbotMetadata sets up chatbot metadata if not present.
+// maxReschedules should come from SystemConfig.MaxReschedules.
+/*func (s *Shipment) InitializeChatbotMetadata(maxReschedules int) {
+	if s.ChatbotMetadata == nil {
+		s.ChatbotMetadata = &ChatbotMetadata{
+			RescheduleCount: 0,
+			MaxReschedules:  maxReschedules, 
+		}
+
+		if s.EstimatedDeliveryAt != nil {
+			originalDate := *s.EstimatedDeliveryAt
+			s.ChatbotMetadata.OriginalDeliveryDate = &originalDate
+		}
+		}else {		
+			s.ChatbotMetadata.MaxReschedules = maxReschedules
+	}
+	}*/
+
+	// ✅ CÓDIGO NUEVO - COPIAR Y PEGAR:
 func (s *Shipment) InitializeChatbotMetadata() {
 	if s.ChatbotMetadata == nil {
 		s.ChatbotMetadata = &ChatbotMetadata{
 			RescheduleCount: 0,
-			MaxReschedules:  2,
 		}
 
 		if s.EstimatedDeliveryAt != nil {

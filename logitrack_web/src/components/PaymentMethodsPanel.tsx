@@ -67,7 +67,7 @@ export default function PaymentMethodsPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <MethodCard
         icon="🔗"
-        iconBg="#e0f2fe"
+        iconBg="var(--info-bg)"
         title="Link de Mercado Pago"
         description={
           mpAvailable
@@ -83,7 +83,7 @@ export default function PaymentMethodsPanel({
       />
       <MethodCard
         icon="📱"
-        iconBg="#e0f2fe"
+        iconBg="var(--info-bg)"
         title="QR de cobro"
         description={
           mpAvailable
@@ -99,7 +99,7 @@ export default function PaymentMethodsPanel({
       />
       <MethodCard
         icon="💵"
-        iconBg="#dcfce7"
+        iconBg="var(--ok-bg)"
         title="Pago en efectivo"
         description="El cliente paga presencialmente en la sucursal"
         disabled={confirmingCash}
@@ -144,9 +144,9 @@ type MethodCardProps = {
 
 function MethodCard({ icon, iconBg, title, description, disabled, action }: MethodCardProps) {
   const variantStyles: Record<MethodCardProps["action"]["variant"], { bg: string; color: string; border: string }> = {
-    primary: { bg: "#fff", color: "#009ee3", border: "#009ee3" },
-    success: { bg: "#f0fdf4", color: "#16a34a", border: "#86efac" },
-    cash:    { bg: "#16a34a", color: "#fff",    border: "#16a34a" },
+    primary: { bg: "var(--bg-card)", color: "var(--info)", border: "var(--info)" },
+    success: { bg: "var(--ok-bg)", color: "var(--ok)", border: "var(--ok-border)" },
+    cash:    { bg: "var(--ok)", color: "#fff",    border: "var(--ok)" },
   };
   const v = variantStyles[action.variant];
   return (
@@ -156,8 +156,8 @@ function MethodCard({ icon, iconBg, title, description, disabled, action }: Meth
         alignItems: "center",
         gap: 12,
         padding: "12px 14px",
-        background: "#fff",
-        border: "1px solid #e2e8f0",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
         borderRadius: 10,
         opacity: disabled ? 0.55 : 1,
       }}
@@ -178,10 +178,10 @@ function MethodCard({ icon, iconBg, title, description, disabled, action }: Meth
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", lineHeight: 1.2 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)", lineHeight: 1.2 }}>
           {title}
         </div>
-        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2, lineHeight: 1.3 }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.3 }}>
           {description}
         </div>
       </div>
@@ -269,7 +269,7 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
         style={{
           width: "100%",
           maxWidth: 420,
-          background: "#fff",
+          background: "var(--bg-card)",
           borderRadius: 18,
           boxShadow: "0 24px 70px rgba(15, 23, 42, 0.35)",
           overflow: "hidden",
@@ -280,7 +280,7 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
           style={{
             padding: "28px 24px 20px",
             textAlign: "center",
-            background: "linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%)",
+            background: "linear-gradient(180deg, var(--ok-bg) 0%, var(--bg-card) 100%)",
           }}
         >
           <div
@@ -288,8 +288,8 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               width: 64,
               height: 64,
               borderRadius: "50%",
-              background: "#dcfce7",
-              border: "3px solid #bbf7d0",
+              background: "var(--ok-bg)",
+              border: "3px solid var(--ok-border)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -305,13 +305,13 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               margin: 0,
               fontSize: 18,
               fontWeight: 700,
-              color: "#0f172a",
+              color: "var(--text-primary)",
               letterSpacing: "-0.01em",
             }}
           >
             Confirmar pago en efectivo
           </h2>
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#64748b", lineHeight: 1.45 }}>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.45 }}>
             Confirmá que el cliente entregó el monto en la sucursal.
           </p>
         </div>
@@ -319,8 +319,8 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
         <div style={{ padding: "0 24px" }}>
           <div
             style={{
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
+              background: "var(--bg-page)",
+              border: "1px solid var(--border)",
               borderRadius: 12,
               padding: "14px 16px",
               display: "flex",
@@ -329,10 +329,10 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               gap: 12,
             }}
           >
-            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Monto recibido
             </span>
-            <span style={{ fontSize: 20, color: "#0f172a", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 20, color: "var(--text-primary)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
               {formatted}
             </span>
           </div>
@@ -341,10 +341,10 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               marginTop: 12,
               padding: "10px 12px",
               borderRadius: 10,
-              background: "#fffbeb",
-              border: "1px solid #fde68a",
+              background: "var(--warn-bg)",
+              border: "1px solid var(--warn-border)",
               fontSize: 12,
-              color: "#92400e",
+              color: "var(--warn-text)",
               lineHeight: 1.4,
               display: "flex",
               gap: 8,
@@ -365,9 +365,9 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               flex: 1,
               padding: "11px 0",
               borderRadius: 10,
-              border: "1px solid #e2e8f0",
-              background: "#fff",
-              color: "#475569",
+              border: "1px solid var(--border)",
+              background: "var(--bg-card)",
+              color: "var(--text-secondary)",
               fontWeight: 600,
               fontSize: 14,
               cursor: "pointer",
@@ -383,7 +383,7 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
               padding: "11px 0",
               borderRadius: 10,
               border: "none",
-              background: "#16a34a",
+              background: "var(--ok)",
               color: "#fff",
               fontWeight: 700,
               fontSize: 14,

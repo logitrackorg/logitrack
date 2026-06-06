@@ -35,6 +35,12 @@ const WINDOW_COLORS: Record<string, string> = {
   flexible: "#22c55e",
 };
 
+const WINDOW_BG: Record<string, string> = {
+  morning: "bg-blue-600",
+  afternoon: "bg-amber-500",
+  flexible: "bg-green-500",
+};
+
 const WINDOW_ORDER = ["morning", "afternoon", "flexible"];
 
 export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabProps) {
@@ -77,6 +83,7 @@ export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabPro
       count,
       pct,
       fill: WINDOW_COLORS[w] ?? "#94a3b8",
+      bgClass: WINDOW_BG[w] ?? "bg-slate-400",
     };
   });
 
@@ -128,8 +135,7 @@ export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabPro
                 <Card key={d.key} className="p-5">
                   <div className="flex items-center gap-3 mb-2">
                     <div
-                      className="w-3 h-3 rounded-full shrink-0"
-                      style={{ backgroundColor: d.fill }}
+                      className={`w-3 h-3 rounded-full shrink-0 ${d.bgClass}`}
                     />
                     <span className="text-sm font-medium text-slate-600">{d.label}</span>
                   </div>
@@ -177,7 +183,7 @@ export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabPro
                     <LabelList
                       dataKey="count"
                       position="top"
-                      style={{ fill: "#334155", fontSize: 13, fontWeight: 600 }}
+                      className="fill-slate-700 text-[13px] font-semibold"
                     />
                   </Bar>
                 </BarChart>
@@ -210,8 +216,7 @@ export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabPro
                         <td className="px-5 py-3 text-slate-700 font-medium">
                           <div className="flex items-center gap-2">
                             <div
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: d.fill }}
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${d.bgClass}`}
                             />
                             {d.label}
                           </div>

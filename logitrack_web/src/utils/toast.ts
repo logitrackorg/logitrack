@@ -1,4 +1,4 @@
-type ToastType = "success" | "error";
+type ToastType = "success" | "error" | "info" | "warning";
 type AddToastFn = (type: ToastType, message: string) => void;
 
 let _addToast: AddToastFn | null = null;
@@ -12,3 +12,5 @@ export function toast(type: ToastType, message: string) {
 }
 toast.success = (message: string) => toast("success", message);
 toast.error = (message: string) => toast("error", message);
+toast.info = (message: string) => toast("info", message);
+toast.warning = (message: string) => toast("warning", message);

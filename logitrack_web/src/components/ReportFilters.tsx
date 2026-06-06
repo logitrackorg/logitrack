@@ -1,11 +1,10 @@
-import { Calendar, ChevronDown, MapPin, ArrowRight, RefreshCw } from "lucide-react";
+import { Calendar, MapPin, ArrowRight, RefreshCw } from "lucide-react";
 import type { Branch } from "../api/branches";
 import { ReportExport } from "./ReportExport";
+import { SelectMenu } from "./ui/SelectMenu";
 
 const inputClass =
   "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all duration-200 cursor-pointer";
-
-const selectClass = inputClass + " appearance-none pr-8";
 
 interface ReportFiltersProps {
   dateFrom: string;
@@ -77,26 +76,21 @@ export function ReportFilters({
           {branchLabel}
         </span>
       ) : (
-        <div className="relative">
-          <select
-            value={selectedBranch}
-            onChange={(e) => onBranchChange(e.target.value)}
-            className={selectClass}
-            aria-label="Filtrar por sucursal"
-          >
-            <option value="">Todas las sucursales</option>
-            {sortedProvinces.map((prov) => (
-              <optgroup key={prov} label={prov}>
-                {branchesByProvince[prov].map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — {b.address.city}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        </div>
+        <SelectMenu
+          value={selectedBranch}
+          onChange={onBranchChange}
+          placeholder="Todas las sucursales"
+          ariaLabel="Filtrar por sucursal"
+          size="sm"
+          className="w-[230px]"
+          groups={sortedProvinces.map((prov) => ({
+            label: prov,
+            options: branchesByProvince[prov].map((b) => ({
+              value: b.id,
+              label: `${b.name} — ${b.address.city}`,
+            })),
+          }))}
+        />
       )}
       <div className="flex items-center gap-1.5">
         <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />

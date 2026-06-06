@@ -12,6 +12,7 @@ type UserCreate struct {
 	FirstName  string
 	LastName   string
 	Email      string
+	Phone      string
 	Role       model.Role
 	BranchID   string
 	Address    model.Address
@@ -24,6 +25,7 @@ type UserUpdate struct {
 	FirstName  *string
 	LastName   *string
 	Email      *string
+	Phone      *string
 	Role       *model.Role
 	BranchID   *string // nil = no change, "" = clear branch
 	Status     *model.UserStatus
@@ -48,4 +50,6 @@ type AuthRepository interface {
 	UpdateUser(id string, update UserUpdate) (model.User, error)
 	CreateUser(cmd UserCreate) (model.User, error)
 	ChangePassword(ctx context.Context, userID, currentPassword, newHashedPassword string) error
+	FindUserByUsername(username string) (model.User, bool)
+	UpdatePassword(userID, hashedPassword string) error
 }

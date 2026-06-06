@@ -104,6 +104,12 @@ const recipientBodySrc = `
 </div>
 {{end}}
 
+<p style="margin:24px 0 0;color:#475569;font-size:13px;line-height:1.6;text-align:center;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento
+	<a href="{{.TrackURL}}" style="color:#1e3a5f;text-decoration:none;font-weight:600;">/track</a>
+	con los datos de tu envío.
+</p>
+
 <p style="margin:28px 0 0;color:#64748b;font-size:13px;text-align:center;">
   Si tenés preguntas sobre tu envío, respondé este email o usá el número de seguimiento.
 </p>`
@@ -143,7 +149,13 @@ const senderBodySrc = `
     Rastrear tu envío &rarr;
   </a>
 </div>
-{{end}}`
+{{end}}
+
+<p style="margin:24px 0 0;color:#475569;font-size:13px;line-height:1.6;text-align:center;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento
+	<a href="{{.TrackURL}}" style="color:#1e3a5f;text-decoration:none;font-weight:600;">/track</a>
+	con los datos de tu envío.
+</p>`
 
 // ─── Last mile template (CA-04) ──────────────────────────────────────────────
 
@@ -375,15 +387,232 @@ const deliveryFailedBodySrc = `
 </div>
 {{end}}`
 
+const passwordChangedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  ✅ Tu contraseña fue modificada exitosamente.
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+  Hola, <strong>{{.Username}}</strong>. Te confirmamos que la contraseña de tu cuenta en LogiTrack fue actualizada correctamente.
+</p>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+  <p style="margin:0;color:#166534;font-size:14px;line-height:1.6;">
+    Si vos realizaste este cambio, no necesitás hacer nada más.
+  </p>
+</div>
+
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+  <p style="margin:0 0 6px;font-weight:700;color:#b91c1c;font-size:14px;">¿No fuiste vos?</p>
+  <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.6;">
+    Si no realizaste este cambio, contactá de inmediato con el soporte de LogiTrack para proteger tu cuenta.
+  </p>
+</div>
+
+<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+  Este es un mensaje automático de seguridad. No respondas a este email.
+</p>`
+
+const slaExpiredBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	⚠️ Detectamos una demora en tu envío.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+					<td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.TrackingID}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Entrega estimada</td>
+					<td><strong>{{.EstimatedDelivery}}</strong></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<p style="margin:0 0 16px;color:#475569;font-size:14px;line-height:1.7;">
+	El sistema LogiTrack reconoce la demora de tu envío. A partir de este momento, el caso recibirá prioridad operativa para acelerar su revisión y resolución.
+</p>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Si necesitás ayuda, podés realizar un reclamo desde la página de seguimiento /track con los datos de tu envío.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+						padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento y reclamar &rarr;
+	</a>
+</div>
+{{end}}`
+
+const claimCreatedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	✅ Tu reclamo fue registrado correctamente.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">ID del reclamo</td>
+					<td><strong style="font-size:15px;color:#1e3a5f;letter-spacing:0.5px;">{{.ClaimID}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Estado inicial</td>
+					<td><strong>{{.InitialStatus}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">N° de seguimiento</td>
+					<td>{{.TrackingID}}</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Ya podés hacer el seguimiento de tu reclamo desde la página de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+					padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento &rarr;
+	</a>
+</div>
+{{end}}`
+
+const claimInfoRequestedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	Necesitamos más información sobre tu reclamo
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.7;">
+	Para poder dar un mejor seguimiento a tu reclamo <strong>{{.ClaimID}}</strong> del envío
+	<strong>{{.TrackingID}}</strong>, te pedimos que nos envíes una <strong>explicación escrita y/o imagen</strong>
+	que nos ayude a entender lo ocurrido.
+</p>
+
+{{if .SupervisorNotes}}
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+	<p style="margin:0 0 6px;color:#92400e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Detalle del equipo</p>
+	<p style="margin:0;color:#78350f;font-size:14px;line-height:1.6;">{{.SupervisorNotes}}</p>
+</div>
+{{end}}
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Podés responder desde la página de seguimiento de tu envío. Si ya tenés el reclamo registrado, conservá el código
+	<strong>{{.ClaimID}}</strong> para consultarlo.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+					padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento &rarr;
+	</a>
+</div>
+{{end}}`
+
+const claimResolvedBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+	Tu reclamo fue resuelto
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.7;">
+	Te informamos que el reclamo <strong>{{.ClaimID}}</strong> asociado al envío
+	<strong>{{.TrackingID}}</strong> fue cerrado con el siguiente resultado.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:24px;">
+	<tr>
+		<td style="padding:20px 24px;">
+			<table width="100%" cellpadding="4" cellspacing="0" style="font-size:14px;color:#334155;">
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Estado final</td>
+					<td><strong>{{.FinalStatusLabel}}</strong></td>
+				</tr>
+				<tr>
+					<td style="color:#64748b;white-space:nowrap;padding-right:16px;">Tipo de resolución</td>
+					<td><strong>{{.ResolutionTypeLabel}}</strong></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+<div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+	<p style="margin:0 0 6px;color:#065f46;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Detalle de la resolución</p>
+	<p style="margin:0;color:#047857;font-size:14px;line-height:1.6;">{{.ResolutionNotes}}</p>
+</div>
+
+<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;">
+	Si tenés dudas, podés consultar el estado de tu envío desde la página de seguimiento.
+</p>
+
+{{if .TrackURL}}
+<div style="text-align:center;">
+	<a href="{{.TrackURL}}"
+		 style="display:inline-block;background:#1e3a5f;color:#ffffff;text-decoration:none;
+					padding:12px 28px;border-radius:7px;font-size:14px;font-weight:600;">
+		Ir al seguimiento &rarr;
+	</a>
+</div>
+{{end}}`
+
+const passwordResetOTPBodySrc = `
+<p style="margin:0 0 20px;color:#1e293b;font-size:16px;font-weight:600;">
+  🔐 Tu código de verificación
+</p>
+
+<p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
+  Hola, <strong>{{.Username}}</strong>. Recibimos una solicitud para restablecer la contraseña de tu cuenta en LogiTrack.
+</p>
+
+<div style="text-align:center;margin:28px 0;">
+  <div style="display:inline-block;background:#f0f9ff;border:2px solid #0ea5e9;border-radius:12px;padding:20px 40px;">
+    <p style="margin:0;color:#64748b;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Código OTP</p>
+    <p style="margin:0;color:#0c4a6e;font-size:36px;font-weight:700;letter-spacing:8px;font-family:monospace;">{{.OTP}}</p>
+  </div>
+</div>
+
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px 20px;margin-bottom:24px;text-align:center;">
+  <p style="margin:0;color:#92400e;font-size:13px;">
+    ⚠️ Este código expira en <strong>5 minutos</strong>. No lo compartas con nadie.
+  </p>
+</div>
+
+<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+  Si no solicitaste este código, podés ignorar este email. Tu contraseña no cambiará.
+</p>`
+
 var (
-	baseTmpl                = template.Must(template.New("base").Parse(baseTmplSrc))
-	recipientTmpl           = template.Must(template.New("recipient").Parse(recipientBodySrc))
-	senderTmpl              = template.Must(template.New("sender").Parse(senderBodySrc))
-	lastMileTmpl            = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
-	readyForPickupTmpl      = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
-	deliveryConfirmedTmpl   = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
-	rejectedTmpl            = template.Must(template.New("rejected").Parse(rejectedBodySrc))
-	deliveryFailedTmpl      = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	baseTmpl              = template.Must(template.New("base").Parse(baseTmplSrc))
+	recipientTmpl         = template.Must(template.New("recipient").Parse(recipientBodySrc))
+	senderTmpl            = template.Must(template.New("sender").Parse(senderBodySrc))
+	lastMileTmpl          = template.Must(template.New("lastmile").Parse(lastMileBodySrc))
+	readyForPickupTmpl    = template.Must(template.New("readyforpickup").Parse(readyForPickupBodySrc))
+	deliveryConfirmedTmpl = template.Must(template.New("deliveryconfirmed").Parse(deliveryConfirmedBodySrc))
+	rejectedTmpl          = template.Must(template.New("rejected").Parse(rejectedBodySrc))
+	deliveryFailedTmpl    = template.Must(template.New("deliveryfailed").Parse(deliveryFailedBodySrc))
+	slaExpiredTmpl        = template.Must(template.New("slaexpired").Parse(slaExpiredBodySrc))
+	claimCreatedTmpl      = template.Must(template.New("claimcreated").Parse(claimCreatedBodySrc))
+	claimInfoRequestedTmpl = template.Must(template.New("claiminforequested").Parse(claimInfoRequestedBodySrc))
+	claimResolvedTmpl      = template.Must(template.New("claimresolved").Parse(claimResolvedBodySrc))
+	passwordResetOTPTmpl  = template.Must(template.New("passwordresetotp").Parse(passwordResetOTPBodySrc))
+	passwordChangedTmpl   = template.Must(template.New("passwordchanged").Parse(passwordChangedBodySrc))
 )
 
 func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig, trackBaseURL string) string {
@@ -618,6 +847,25 @@ func renderRejectedNotification(s model.Shipment, rejectionReason string, reject
 	})
 }
 
+func renderPasswordResetOTP(username, otp string, org model.OrganizationConfig) string {
+	type otpData struct {
+		Username string
+		OTP      string
+	}
+	var bodyBuf bytes.Buffer
+	if err := passwordResetOTPTmpl.Execute(&bodyBuf, otpData{Username: username, OTP: otp}); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    "Tu código de verificación — LogiTrack",
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
 func renderDeliveryFailedNotification(s model.Shipment, attemptDate string, attemptsLeft, maxAttempts int, branchName, branchAddress, branchHours string, trackURL string, org model.OrganizationConfig) string {
 	type failedData struct {
 		TrackingID      string
@@ -651,6 +899,134 @@ func renderDeliveryFailedNotification(s model.Shipment, attemptDate string, atte
 	}
 	return renderBase(baseData{
 		Subject:    fmt.Sprintf("No pudimos entregar tu envío %s%s", s.TrackingID, subjectSuffix),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderPasswordChanged(username string, org model.OrganizationConfig) string {
+	type changedData struct {
+		Username string
+	}
+	var bodyBuf bytes.Buffer
+	if err := passwordChangedTmpl.Execute(&bodyBuf, changedData{Username: username}); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    "Tu contraseña fue modificada — LogiTrack",
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderSLAExpiredNotification(s model.Shipment, trackBaseURL string, org model.OrganizationConfig) string {
+	type slaExpiredData struct {
+		TrackingID        string
+		EstimatedDelivery string
+		TrackURL          string
+	}
+	data := slaExpiredData{
+		TrackingID:        s.TrackingID,
+		EstimatedDelivery: formatEstimatedDelivery(s.EstimatedDeliveryAt),
+		TrackURL:          buildTrackURL(trackBaseURL, s.TrackingID),
+	}
+	var bodyBuf bytes.Buffer
+	if err := slaExpiredTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu envío %s presenta demora", s.TrackingID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderClaimCreatedNotification(claim model.Claim, shipment model.Shipment, trackURL string, org model.OrganizationConfig) string {
+	type claimCreatedData struct {
+		ClaimID       string
+		InitialStatus string
+		TrackingID    string
+		TrackURL      string
+	}
+	data := claimCreatedData{
+		ClaimID:       claim.ID,
+		InitialStatus: claimStatusLabel(claim.Status),
+		TrackingID:    shipment.TrackingID,
+		TrackURL:      trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := claimCreatedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu reclamo %s fue registrado", claim.ID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes, trackURL string, org model.OrganizationConfig) string {
+	type claimInfoRequestedData struct {
+		ClaimID         string
+		TrackingID      string
+		SupervisorNotes string
+		TrackURL        string
+	}
+	data := claimInfoRequestedData{
+		ClaimID:         claim.ID,
+		TrackingID:      shipment.TrackingID,
+		SupervisorNotes: strings.TrimSpace(supervisorNotes),
+		TrackURL:        trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := claimInfoRequestedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Necesitamos más información sobre tu reclamo %s", claim.ID),
+		OrgName:    orgName(org),
+		OrgAddress: org.Address,
+		OrgPhone:   org.Phone,
+		OrgEmail:   org.Email,
+		Body:       template.HTML(bodyBuf.String()), //nolint:gosec // generated from trusted templates
+	})
+}
+
+func renderClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes, trackURL string, org model.OrganizationConfig) string {
+	type claimResolvedData struct {
+		ClaimID             string
+		TrackingID          string
+		FinalStatusLabel    string
+		ResolutionTypeLabel string
+		ResolutionNotes     string
+		TrackURL            string
+	}
+	data := claimResolvedData{
+		ClaimID:             claim.ID,
+		TrackingID:          shipment.TrackingID,
+		FinalStatusLabel:    claimStatusLabel(claim.Status),
+		ResolutionTypeLabel: claimResolutionTypeLabel(claim.ResolutionType),
+		ResolutionNotes:     strings.TrimSpace(resolutionNotes),
+		TrackURL:            trackURL,
+	}
+	var bodyBuf bytes.Buffer
+	if err := claimResolvedTmpl.Execute(&bodyBuf, data); err != nil {
+		return fmt.Sprintf("<p>Error al generar el cuerpo del email: %v</p>", err)
+	}
+	return renderBase(baseData{
+		Subject:    fmt.Sprintf("Tu reclamo %s fue resuelto", claim.ID),
 		OrgName:    orgName(org),
 		OrgAddress: org.Address,
 		OrgPhone:   org.Phone,

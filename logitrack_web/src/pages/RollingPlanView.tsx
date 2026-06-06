@@ -154,8 +154,8 @@ export function RollingPlanView({ embedded = false }: { embedded?: boolean } = {
                         <div className="flex items-center gap-2 mb-2">
                           <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
                             <div
+                              ref={el => { if (el) el.style.width = `${barWidth}%`; }}
                               className={`h-full ${day.is_firm ? "bg-emerald-500" : "bg-slate-400"}`}
-                              style={{ width: `${barWidth}%` }}
                             />
                           </div>
                           <div className="text-sm tabular-nums whitespace-nowrap">

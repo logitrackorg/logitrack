@@ -5,11 +5,19 @@ import { chatbotService } from '../../api/chatbot';
 import type {
   ChatMessage,
   Shipment,
-  ChatOption
+  ChatOption,
+  PendingClaimInfo,
 } from '../../types/chatbot';
 import './chatbot.css';
 
-type ChatState = 'initial' | 'authenticating' | 'authenticated' | 'menu' | 'processing';
+type ChatState =
+  | 'initial'
+  | 'authenticating'
+  | 'authenticated'
+  | 'menu'
+  | 'processing'
+  | 'claim_response'   // esperando texto de respuesta al reclamo
+  | 'claim_evidence';  // esperando adjunto (o saltar)
 type UserType = 'recipient' | 'sender' | null;
 
 export const ChatbotWidget: React.FC = () => {
@@ -23,6 +31,10 @@ export const ChatbotWidget: React.FC = () => {
   const [awaitingDni, setAwaitingDni] = useState(false);
   const [trackingId, setTrackingId] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  // US-4: claim response state
+  const [pendingClaim, setPendingClaim] = useState<PendingClaimInfo | null>(null);
+  const [claimResponseText, setClaimResponseText] = useState<string>('');
+  const [pendingEvidenceFile, setPendingEvidenceFile] = useState<File | null>(null);
   const [sessionActive, setSessionActive] = useState(true);
   const sessionTimeoutRef = useRef<number | null>(null);
   const SESSION_DURATION = 60000; // 1 minuto en milisegundos
@@ -84,9 +96,28 @@ export const ChatbotWidget: React.FC = () => {
       setTrackingId(trackingId);
       setState('authenticated');
       setSessionActive(true);
+      resetSessionTimer();
+
+      // US-4: si hay reclamo pendiente, mostrarlo de forma proactiva
+      if (response.pending_claim) {
+        setPendingClaim(response.pending_claim);
+        const notes = response.pending_claim.supervisor_notes
+          ? `\n\n📋 El equipo necesita: "${response.pending_claim.supervisor_notes}"`
+          : '';
+        addBotMessage(
+          `¡Hola, ${response.recipient_name}! ✅\n\n` +
+          `Tu reclamo **${response.pending_claim.claim_id}** está esperando tu respuesta.` +
+          notes +
+          `\n\n¿Querés responder ahora?`,
+          [
+            { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' },
+            { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       },
+          ]
+        );
+        return;
+      }
 
       const menuOptions = buildMenuOptions(response.available_actions);
-      resetSessionTimer();
 
       if (menuOptions.length > 0) {
         addBotMessage(
@@ -176,6 +207,11 @@ export const ChatbotWidget: React.FC = () => {
 
   const buildMenuOptions = (availableActions: string[]): ChatOption[] => {
     const optionsMap: Record<string, ChatOption> = {
+      respond_claim: {
+        label: '📝 Responder reclamo pendiente',
+        value: 'respond_claim',
+        action: 'respond_claim',
+      },
       request_pickup: {
         label: '📦 Retirar por sucursal',
         value: 'pickup',
@@ -220,6 +256,25 @@ export const ChatbotWidget: React.FC = () => {
           await handleAuthenticate(trackingId, input);
         }
       }
+      return;
+    }
+
+    // US-4: capturar texto de la respuesta al reclamo
+    if (state === 'claim_response') {
+      if (input.trim().length === 0) return;
+      if (input.trim().length > 400) {
+        addBotMessage('⚠️ La respuesta no puede superar los 400 caracteres. Por favor resumila un poco.');
+        return;
+      }
+      setClaimResponseText(input.trim());
+      setState('claim_evidence');
+      addBotMessage(
+        '¿Querés adjuntar una foto o documento de respaldo?\n\n' +
+        'Podés usar el botón 📎 para adjuntar, o continuar sin adjunto.',
+        [
+          { label: '⏭️ Continuar sin adjunto', value: 'skip_evidence', action: 'skip_evidence' },
+        ]
+      );
     }
   };
 
@@ -343,6 +398,16 @@ export const ChatbotWidget: React.FC = () => {
         case 'confirm_cancel':
           await handleCancelConfirmation();
           break;
+        case 'respond_claim':
+          setState('claim_response');
+          addBotMessage('Escribí tu respuesta al equipo (máximo 400 caracteres):');
+          break;
+        case 'skip_evidence':
+          await handleSubmitClaimResponse(null);
+          break;
+        case 'confirm_claim_response':
+          await handleSubmitClaimResponse(pendingEvidenceFile);
+          break;
         case 'restart':
           handleRestart();
           break;
@@ -460,6 +525,39 @@ export const ChatbotWidget: React.FC = () => {
     addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
       { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' }
     ]);
+  };
+
+  const handleSubmitClaimResponse = async (file: File | null) => {
+    if (!pendingClaim) return;
+    setLoading(true);
+    try {
+      await chatbotService.respondToClaim(
+        pendingClaim.claim_id,
+        recipientDni,
+        claimResponseText,
+        file ?? undefined
+      );
+      addBotMessage(
+        '✅ Tu respuesta fue enviada.\n\n' +
+        'El equipo la revisará y te avisaremos cuando haya novedades.'
+      );
+      window.dispatchEvent(new CustomEvent('chatbot:claim-response-sent', {
+        detail: { claimId: pendingClaim.claim_id },
+      }));
+      setPendingClaim(null);
+      setClaimResponseText('');
+      setPendingEvidenceFile(null);
+      setState('authenticated');
+      addBotMessage('¿Hay algo más en lo que pueda ayudarte?', [
+        { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' },
+      ]);
+    } catch (error) {
+      const apiErr = error as { response?: { data?: { error?: string } } };
+      addBotMessage('❌ ' + (apiErr.response?.data?.error || 'No se pudo enviar la respuesta. Por favor intentá de nuevo.'));
+      setState('claim_evidence');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRestart = () => {
@@ -653,12 +751,29 @@ export const ChatbotWidget: React.FC = () => {
 
           <ChatInput
             onSend={handleUserInput}
-            disabled={loading || state === 'authenticated'}
+            disabled={loading || state === 'authenticated' || state === 'claim_evidence'}
+            fileUploadDisabled={false}
             placeholder={
               state === 'authenticated'
-                ? 'Selecciona una opción...'
-                : 'Escribe tu respuesta...'
+                ? 'Seleccioná una opción...'
+                : state === 'claim_response'
+                  ? 'Escribí tu respuesta (máx. 400 caracteres)...'
+                  : state === 'claim_evidence'
+                    ? 'Usá el botón 📎 o seleccioná una opción...'
+                    : 'Escribí tu respuesta...'
             }
+            showFileUpload={state === 'claim_evidence'}
+            onFileSelect={(file) => {
+              setPendingEvidenceFile(file);
+              addUserMessage(`📎 Adjunto: ${file.name}`);
+              addBotMessage(
+                `Adjunto recibido: **${file.name}**\n¿Confirmás el envío con este archivo?`,
+                [
+                  { label: '✅ Confirmar y enviar', value: 'confirm_claim_response', action: 'confirm_claim_response' },
+                  { label: '🔄 Cambiar archivo',    value: 'change_file',            action: 'skip_evidence'         },
+                ]
+              );
+            }}
           />
         </div>
       )}

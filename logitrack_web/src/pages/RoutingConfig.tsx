@@ -305,7 +305,12 @@ export function RoutingConfig() {
     (DISPATCH_FIELDS.some((f) => draft[f.key] !== config[f.key]) ||
       HOUR_KEYS.some((k) => draft[k] !== config[k]) ||
       draft.enforce_time_windows !== config.enforce_time_windows ||
-      draft.last_mile_packing_strategy !== config.last_mile_packing_strategy);
+      draft.last_mile_packing_strategy !== config.last_mile_packing_strategy ||
+      draft.inter_branch_dispatch_hour !== config.inter_branch_dispatch_hour ||
+      draft.inter_branch_avg_speed_kmh !== config.inter_branch_avg_speed_kmh ||
+      draft.inter_branch_stop_minutes !== config.inter_branch_stop_minutes ||
+      draft.backhaul_enabled !== config.backhaul_enabled ||
+      draft.keep_one_vehicle_per_branch !== config.keep_one_vehicle_per_branch);
 
   const handleGenerateGlobal = async () => {
     setGenerating(true);
@@ -357,18 +362,64 @@ export function RoutingConfig() {
                     }
                   />
                   <div
-                    className={`w-10 h-6 rounded-full transition-colors ${
-                      draft?.enforce_time_windows ? "bg-[#1e3a5f]" : "bg-slate-200"
-                    }`}
+                    className="w-10 h-6 rounded-full transition-colors"
+                    style={{
+                      background: draft?.enforce_time_windows
+                        ? "var(--brand)"
+                        : "var(--border-strong)",
+                    }}
                   />
                   <div
-                    className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform ${
                       draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
                     }`}
+                    style={{ background: "#fff" }}
                   />
                 </div>
                 <span className="text-sm text-slate-700">
                   {draft?.enforce_time_windows ? "Activo (ventanas duras)" : "Inactivo (ventanas blandas)"}
+                </span>
+              </label>
+            </div>
+
+            {/* Backhauling */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Backhauling (round-trip)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Cuando un vehículo va de A→B, si en B hay carga suficiente (min_fill o SLA) que
+                debe volver hacia A, el motor arma el retorno A→B→A en el mismo viaje.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer w-fit">
+                <div
+                  className="relative w-11 h-6 rounded-full transition-colors"
+                  style={{ background: draft?.backhaul_enabled ? "#1e3a5f" : "#e5e7eb" }}
+                  onClick={() => setDraft((d) => (d ? { ...d, backhaul_enabled: !d.backhaul_enabled } : d))}
+                >
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                </div>
+                <span className="text-sm text-slate-700">
+                  {draft?.backhaul_enabled ? "Activo" : "Inactivo"}
+                </span>
+              </label>
+            </div>
+
+            {/* Balanceo de flota */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Balanceo de flota (≥1 vehículo por sucursal)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                El motor evita vaciar una sucursal activa de vehículos reteniendo el despacho
+                de menor prioridad si quedaría sin cobertura. Nunca bloquea despachos con SLA.
+              </p>
+              <label className="flex items-center gap-3 cursor-pointer w-fit">
+                <div
+                  className="relative w-11 h-6 rounded-full transition-colors"
+                  style={{ background: draft?.keep_one_vehicle_per_branch ? "#1e3a5f" : "#e5e7eb" }}
+                  onClick={() => setDraft((d) => (d ? { ...d, keep_one_vehicle_per_branch: !d.keep_one_vehicle_per_branch } : d))}
+                >
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                </div>
+                <span className="text-sm text-slate-700">
+                  {draft?.keep_one_vehicle_per_branch ? "Activo" : "Inactivo"}
                 </span>
               </label>
             </div>
@@ -537,10 +588,10 @@ export function RoutingConfig() {
                 ).map((opt) => (
                   <label
                     key={opt.value}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all ${
                       draft.last_mile_packing_strategy === opt.value
-                        ? "border-[#1e3a5f] bg-[#1e3a5f]/5"
-                        : "border-slate-200 hover:bg-slate-50"
+                        ? "border-[#2563eb] bg-blue-50 ring-1 ring-[#2563eb]/20"
+                        : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
                     <input
@@ -551,11 +602,97 @@ export function RoutingConfig() {
                       onChange={() =>
                         setDraft((d) => (d ? { ...d, last_mile_packing_strategy: opt.value } : d))
                       }
-                      className="accent-[#1e3a5f]"
+                      className="accent-[#2563eb]"
                     />
-                    <span className="text-sm font-semibold text-slate-700">{opt.label}</span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        draft.last_mile_packing_strategy === opt.value
+                          ? "text-[#2563eb]"
+                          : "text-slate-700"
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
                   </label>
                 ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Hora de salida inter-sucursal</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Hora fija (0–23, hora local ART) a la que todos los despachos inter-sucursal del día están planificados para salir.
+                Se usa para calcular las llegadas estimadas en el calendario.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  step={1}
+                  value={draft.inter_branch_dispatch_hour ?? 8}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, inter_branch_dispatch_hour: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                  {String(draft.inter_branch_dispatch_hour ?? 8).padStart(2, "0")}:00
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Velocidad de ruta inter-sucursal (km/h)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Velocidad usada para estimar la llegada de viajes inter-sucursal cuando no hay tiempo de tránsito
+                histórico para el tramo. Es distinta de la velocidad urbana de última milla. Rango 20–120.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={20}
+                  max={120}
+                  step={5}
+                  value={draft.inter_branch_avg_speed_kmh ?? 60}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, inter_branch_avg_speed_kmh: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                  {draft.inter_branch_avg_speed_kmh ?? 60} km/h
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Tiempo en parada intermedia inter-sucursal (min)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Dwell de descarga + carga de pallets en una parada intermedia de un viaje multi-hop
+                (ej. bajar y subir envíos en Córdoba camino a Mendoza). Independiente del tiempo de
+                entrega de última milla. Rango 0–1440 min (hasta 24 h).
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  step={15}
+                  value={draft.inter_branch_stop_minutes ?? 240}
+                  onChange={(e) =>
+                    setDraft((d) => (d ? { ...d, inter_branch_stop_minutes: Number(e.target.value) } : d))
+                  }
+                  className={inputClass}
+                />
+                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                  {(() => {
+                    const m = draft.inter_branch_stop_minutes ?? 240;
+                    const h = Math.floor(m / 60);
+                    const rem = m % 60;
+                    return h > 0 ? `${h}h${rem > 0 ? ` ${rem}min` : ""}` : `${rem}min`;
+                  })()}
+                </span>
               </div>
             </div>
 

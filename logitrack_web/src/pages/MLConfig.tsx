@@ -117,12 +117,12 @@ export function MLConfig() {
     margin: "0 auto",
     padding: "32px 24px",
     fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "#1f2937",
+    color: "var(--text-primary)",
   };
 
   const cardStyle: React.CSSProperties = {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
     borderRadius: 8,
     padding: 24,
     marginBottom: 24,
@@ -132,27 +132,27 @@ export function MLConfig() {
     display: "block",
     fontWeight: 600,
     fontSize: 13,
-    color: "#374151",
+    color: "var(--text-strong)",
     marginBottom: 2,
   };
 
   const descStyle: React.CSSProperties = {
     fontSize: 12,
-    color: "#6b7280",
+    color: "var(--text-secondary)",
     marginBottom: 8,
   };
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
     padding: "6px 10px",
-    border: "1px solid #d1d5db",
+    border: "1px solid var(--border-strong)",
     borderRadius: 6,
     fontSize: 14,
     boxSizing: "border-box",
   };
 
   const btnPrimaryStyle: React.CSSProperties = {
-    background: saving ? "#9ca3af" : "#1e3a5f",
+    background: saving ? "var(--text-muted)" : "#1e3a5f",
     color: "#fff",
     border: "none",
     borderRadius: 6,
@@ -165,7 +165,7 @@ export function MLConfig() {
   if (loading) {
     return (
       <div style={containerStyle}>
-        <p style={{ color: "#6b7280" }}>Cargando configuración…</p>
+        <p style={{ color: "var(--text-secondary)" }}>Cargando configuración…</p>
       </div>
     );
   }
@@ -173,7 +173,7 @@ export function MLConfig() {
   return (
     <div style={containerStyle}>
       {activeConfig && activeConfig.id > 0 && (
-        <div style={{ marginBottom: 16, fontSize: 13, color: "#374151" }}>
+        <div style={{ marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
           Configuración activa: <strong>#{activeConfig.id}</strong> — creada por{" "}
           <strong>{activeConfig.created_by}</strong> el{" "}
           {formatDate(activeConfig.created_at)}
@@ -182,12 +182,12 @@ export function MLConfig() {
       )}
 
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "#b91c1c", fontSize: 14 }}>
+        <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "var(--danger-text)", fontSize: 14 }}>
           {error}
         </div>
       )}
       {success && (
-        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "#166534", fontSize: 14 }}>
+        <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "var(--ok-text)", fontSize: 14 }}>
           {success}
         </div>
       )}
@@ -281,10 +281,10 @@ export function MLConfig() {
             </div>
           </div>
         </div>
-        <div style={{ marginTop: 12, padding: "8px 12px", background: "#f9fafb", borderRadius: 6, fontSize: 13, color: "#374151" }}>
-          Puntaje &gt; <strong>{altaThreshold.toFixed(2)}</strong> → <span style={{ color: "#dc2626", fontWeight: 600 }}>Alta</span>
-          {"  |  "}Puntaje &gt; <strong>{mediaThreshold.toFixed(2)}</strong> → <span style={{ color: "#d97706", fontWeight: 600 }}>Media</span>
-          {"  |  "}De lo contrario → <span style={{ color: "#6b7280", fontWeight: 600 }}>Baja</span>
+        <div style={{ marginTop: 12, padding: "8px 12px", background: "var(--bg-subtle)", borderRadius: 6, fontSize: 13, color: "var(--text-strong)" }}>
+          Puntaje &gt; <strong>{altaThreshold.toFixed(2)}</strong> → <span style={{ color: "var(--danger-text)", fontWeight: 600 }}>Alta</span>
+          {"  |  "}Puntaje &gt; <strong>{mediaThreshold.toFixed(2)}</strong> → <span style={{ color: "var(--warn-text)", fontWeight: 600 }}>Media</span>
+          {"  |  "}De lo contrario → <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Baja</span>
         </div>
       </div>
 
@@ -307,7 +307,7 @@ export function MLConfig() {
           {saving ? "Regenerando modelo..." : "Regenerar modelo"}
         </button>
         {saving && (
-          <p style={{ marginTop: 8, fontSize: 13, color: "#6b7280" }}>
+          <p style={{ marginTop: 8, fontSize: 13, color: "var(--text-secondary)" }}>
             Entrenando el modelo RandomForest — esto puede tardar unos segundos.
           </p>
         )}
@@ -317,11 +317,11 @@ export function MLConfig() {
       <div style={cardStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Historial de configuraciones</h2>
         {(history ?? []).length === 0 ? (
-          <p style={{ color: "#6b7280", fontSize: 14 }}>Todavía no hay historial de configuraciones.</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Todavía no hay historial de configuraciones.</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ background: "#f9fafb" }}>
+              <tr style={{ background: "var(--bg-subtle)" }}>
                 <th style={thStyle}>ID</th>
                 <th style={thStyle}>Fecha</th>
                 <th style={thStyle}>Creada por</th>
@@ -333,17 +333,17 @@ export function MLConfig() {
             </thead>
             <tbody>
               {(history ?? []).map((cfg) => (
-                <tr key={cfg.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                <tr key={cfg.id} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={tdStyle}>#{cfg.id}</td>
                   <td style={tdStyle}>{formatDate(cfg.created_at)}</td>
                   <td style={tdStyle}>{cfg.created_by}</td>
-                  <td style={{ ...tdStyle, maxWidth: 160, color: "#6b7280" }}>
+                  <td style={{ ...tdStyle, maxWidth: 160, color: "var(--text-secondary)" }}>
                     {cfg.notes || "—"}
                   </td>
                   <td style={tdStyle}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                       {FACTOR_ORDER.map((k) => (
-                        <span key={k} style={{ background: "#f3f4f6", borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
+                        <span key={k} style={{ background: "var(--bg-muted)", borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
                           {FACTOR_LABELS[k].label.split(" ")[0]}: <strong>{cfg.factors[k]?.toFixed(1)}</strong>
                         </span>
                       ))}
@@ -351,11 +351,11 @@ export function MLConfig() {
                   </td>
                   <td style={tdStyle}>
                     {cfg.is_active ? (
-                      <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
+                      <span style={{ background: "var(--ok-bg)", color: "var(--ok-text)", borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
                         Activa
                       </span>
                     ) : (
-                      <span style={{ background: "#f3f4f6", color: "#6b7280", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>
+                      <span style={{ background: "var(--bg-muted)", color: "var(--text-secondary)", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>
                         Inactiva
                       </span>
                     )}
@@ -367,12 +367,12 @@ export function MLConfig() {
                         disabled={activating === cfg.id}
                         style={{
                           background: "transparent",
-                          border: "1px solid #d1d5db",
+                          border: "1px solid var(--border-strong)",
                           borderRadius: 4,
                           padding: "3px 10px",
                           fontSize: 12,
                           cursor: activating === cfg.id ? "not-allowed" : "pointer",
-                          color: "#374151",
+                          color: "var(--text-strong)",
                         }}
                       >
                         {activating === cfg.id ? "Activando..." : "Activar"}
@@ -393,9 +393,9 @@ const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "8px 10px",
   fontWeight: 600,
-  color: "#374151",
+  color: "var(--text-strong)",
   fontSize: 12,
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom: "1px solid var(--border)",
 };
 
 const tdStyle: React.CSSProperties = {

@@ -162,7 +162,7 @@ export function KpiDetail() {
                         <td className="px-5 py-3 text-slate-700 font-medium">{branchName}</td>
                         <td className="px-5 py-3 text-slate-900 font-semibold">{count}</td>
                         <td className="px-5 py-3 text-right">
-                          <span className="text-xs text-[#2563eb] font-semibold">Ver envíos →</span>
+                          <span className="text-xs text-blue-600 font-semibold">Ver envíos →</span>
                         </td>
                       </tr>
                     );

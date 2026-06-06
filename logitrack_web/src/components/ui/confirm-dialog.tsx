@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
+import { Button } from "./button";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -67,7 +68,7 @@ export function ConfirmDialog({
     >
       <div
         style={{
-          background: "#fff",
+          background: "var(--bg-card)",
           borderRadius: "12px",
           padding: "24px",
           maxWidth: "420px",
@@ -100,14 +101,14 @@ export function ConfirmDialog({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: variant === "danger" ? "#fef3c7" : "#eff6ff",
+              background: variant === "danger" ? "var(--warn-bg)" : "var(--brand-tint)",
             }}
           >
             <AlertTriangle
               style={{
                 width: "24px",
                 height: "24px",
-                color: variant === "danger" ? "#d97706" : "#3b82f6",
+                color: variant === "danger" ? "var(--warn)" : "var(--brand)",
               }}
             />
           </div>
@@ -119,7 +120,7 @@ export function ConfirmDialog({
                 style={{
                   fontSize: "18px",
                   fontWeight: "700",
-                  color: "#1e293b",
+                  color: "var(--text-primary)",
                   margin: 0,
                   lineHeight: 1.3,
                 }}
@@ -138,7 +139,7 @@ export function ConfirmDialog({
                   alignItems: "center",
                   justifyContent: "center",
                   borderRadius: "6px",
-                  color: "#64748b",
+                  color: "var(--text-secondary)",
                   transition: "background 0.2s",
                 }}
                 aria-label="Cerrar"
@@ -150,7 +151,7 @@ export function ConfirmDialog({
             <p
               style={{
                 fontSize: "14px",
-                color: "#475569",
+                color: "var(--text-secondary)",
                 marginTop: "8px",
                 lineHeight: 1.5,
                 margin: "8px 0 0 0",
@@ -160,7 +161,7 @@ export function ConfirmDialog({
             </p>
             {requireComment && (
               <div style={{ marginTop: 12 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 6 }}>
                   Comentario obligatorio
                 </label>
                 <textarea
@@ -171,13 +172,13 @@ export function ConfirmDialog({
                   style={{
                     width: "100%",
                     borderRadius: 8,
-                    border: "1px solid #e2e8f0",
+                    border: "1px solid var(--border)",
                     padding: 8,
                     fontSize: 13,
                     resize: "vertical",
                   }}
                 />
-                <div style={{ marginTop: 6, fontSize: 12, color: canConfirm ? "#64748b" : "#b45309" }}>
+                <div style={{ marginTop: 6, fontSize: 12, color: canConfirm ? "var(--text-secondary)" : "var(--warn-text)" }}>
                   Mínimo 15 caracteres. Llevás {trimmedNotes.length}/15.
                 </div>
               </div>
@@ -193,39 +194,21 @@ export function ConfirmDialog({
             justifyContent: "flex-end",
           }}
         >
-          <button
+          <Button
+            size="lg"
+            variant="outline"
             onClick={onCancel}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "1px solid #e2e8f0",
-              background: "#fff",
-              color: "#475569",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "background 0.2s",
-            }}
           >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
+            variant={variant === "danger" ? "destructive" : "default"}
             onClick={() => onConfirm(requireComment ? trimmedNotes : undefined)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "none",
-              background: variant === "danger" ? "#dc2626" : "#1e3a5f",
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "background 0.2s",
-            }}
             disabled={!canConfirm}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

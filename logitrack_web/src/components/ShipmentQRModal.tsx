@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
-import './ShipmentQRModal.css';
+import { Package, Smartphone, Printer, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   isOpen: boolean;
@@ -18,7 +20,7 @@ const ShipmentQRModal: React.FC<Props> = ({
   onClose,
   trackingId,
   qrCodeBase64,
-  title = "📦 Código QR del Envío",
+  title = "Código QR del Envío",
   subtitle,
   showTrackingLabel = true,
   showActions = true,
@@ -62,12 +64,9 @@ const ShipmentQRModal: React.FC<Props> = ({
     container.appendChild(printRef.current!.cloneNode(true));
     doc.body.appendChild(container);
 
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.onafterprint = () => printWindow.close();
-    };
     printWindow.focus();
     printWindow.print();
+    printWindow.onafterprint = () => printWindow.close();
   };
 
   const handleDownload = () => {
@@ -77,81 +76,87 @@ const ShipmentQRModal: React.FC<Props> = ({
     link.click();
   };
 
-  if (!isOpen) return null;
-
   if (variant === "payment") {
     return (
-      <div className="qr-modal-overlay" onClick={onClose}>
-        <div className="qr-payment-card" onClick={(e) => e.stopPropagation()}>
-          <button className="qr-payment-close" onClick={onClose} aria-label="Cerrar">✕</button>
-          <div className="qr-payment-header">
-            <div className="qr-payment-icon">📱</div>
-            <h2 className="qr-payment-title">{title ?? "QR de cobro"}</h2>
-            {subtitle && <p className="qr-payment-subtitle">{subtitle}</p>}
+      <Dialog open={isOpen} onClose={onClose}>
+        <DialogContent className="max-w-[400px] text-center">
+          <div className="flex flex-col items-center gap-4 p-2">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--brand-tint)] flex items-center justify-center">
+              <Smartphone className="w-6 h-6 text-[var(--brand)]" />
+            </div>
+            <div>
+              <DialogTitle className="text-center">{title ?? "QR de cobro"}</DialogTitle>
+              {subtitle && (
+                <p className="text-[13px] text-[var(--text-secondary)] mt-1">{subtitle}</p>
+              )}
+            </div>
+            <div className="rounded-xl border border-[var(--border)] p-4 bg-white">
+              <img
+                src={`data:image/png;base64,${qrCodeBase64}`}
+                alt="QR de pago"
+                className="w-56 h-56"
+              />
+            </div>
+            <Button variant="outline" onClick={onClose} className="w-full">Cerrar</Button>
           </div>
-          <div className="qr-payment-image-wrap">
-            <img
-              src={`data:image/png;base64,${qrCodeBase64}`}
-              alt="QR de pago"
-              className="qr-payment-image"
-            />
-          </div>
-          <button className="qr-payment-btn-close" onClick={onClose}>
-            Cerrar
-          </button>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <div className="qr-modal-overlay" onClick={onClose}>
-      <div className="qr-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="qr-modal-header">
-          <h2>{title}</h2>
-          <button className="qr-modal-close" onClick={onClose} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
+    <Dialog open={isOpen} onClose={onClose}>
+      <DialogContent className="max-w-[440px]">
+        <DialogHeader onClose={onClose}>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+
         {subtitle && (
-          <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 12px", textAlign: "center" }}>
+          <p className="px-6 text-[13px] text-[var(--text-secondary)] text-center mb-3">
             {subtitle}
           </p>
         )}
 
-        <div ref={printRef} className="qr-printable-area">
-          <div className="qr-code-container">
-            <img
-              src={`data:image/png;base64,${qrCodeBase64}`}
-              alt={`QR Code ${trackingId}`}
-              className="qr-image"
-            />
+        <div ref={printRef} className="px-6">
+          <div className="flex flex-col items-center gap-4">
+            <div className="rounded-xl border border-[var(--border)] p-4 bg-white">
+              <img
+                src={`data:image/png;base64,${qrCodeBase64}`}
+                alt={`QR Code ${trackingId}`}
+                className="w-64 h-64"
+              />
+            </div>
             {showTrackingLabel && (
-              <div className="qr-tracking-text">
-                <strong>Tracking ID:</strong>
-                <div className="tracking-number">{trackingId}</div>
+              <div className="text-center">
+                <p className="text-xs text-[var(--text-muted)]">Tracking ID</p>
+                <p className="text-lg font-mono font-bold text-[var(--text-primary)] tracking-wider">
+                  {trackingId}
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="qr-modal-actions">
+        <DialogFooter className="flex-wrap justify-center">
           {showActions && (
             <>
-              <button className="btn-primary" onClick={handlePrint}>
-                🖨️ Imprimir
-              </button>
-              <button className="btn-secondary" onClick={handleDownload}>
-                💾 Descargar PNG
-              </button>
+              <Button onClick={handlePrint} className="gap-1.5">
+                <Printer className="w-4 h-4" /> Imprimir
+              </Button>
+              <Button variant="outline" onClick={handleDownload} className="gap-1.5">
+                <Download className="w-4 h-4" /> Descargar PNG
+              </Button>
             </>
           )}
-          <button className="btn-outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose}>
             Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

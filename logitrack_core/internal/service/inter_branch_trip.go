@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/model"
@@ -47,11 +48,13 @@ type CreateInterBranchTripCmd struct {
 	VehicleID           string
 	LicensePlate        string
 	OriginBranchID      string
-	DestinationBranchID *string         // nil for last_mile trips; para inter-sucursal = última parada
-	ShipmentIDs         []string        // todos los envíos (todas las paradas)
+	DestinationBranchID *string          // nil for last_mile trips; para inter-sucursal = última parada
+	ShipmentIDs         []string         // todos los envíos (todas las paradas)
 	TotalWeightKg       float64
 	CreatedBy           string
 	Stops               []model.TripStop // 1..3 stops para inter-sucursal; vacío para last_mile
+	ScheduledDepartureAt *time.Time      // calculado al aplicar el plan
+	EstimatedArrivalAt   *time.Time      // calculado al aplicar el plan
 }
 
 func (s *InterBranchTripService) Create(cmd CreateInterBranchTripCmd) (model.InterBranchTrip, error) {
@@ -60,20 +63,22 @@ func (s *InterBranchTripService) Create(cmd CreateInterBranchTripCmd) (model.Int
 		kind = model.TripKindInterBranch
 	}
 	trip := model.InterBranchTrip{
-		ID:                  model.GenerateTripID(),
-		Kind:                kind,
-		DriverID:            cmd.DriverID,
-		VehicleID:           cmd.VehicleID,
-		LicensePlate:        cmd.LicensePlate,
-		OriginBranchID:      cmd.OriginBranchID,
-		DestinationBranchID: cmd.DestinationBranchID,
-		ShipmentIDs:         cmd.ShipmentIDs,
-		Status:              model.TripStatusPending,
-		TotalWeightKg:       cmd.TotalWeightKg,
-		Stops:               cmd.Stops,
-		CurrentStopIndex:    0,
-		CreatedBy:           cmd.CreatedBy,
-		CreatedAt:           clock.Now(),
+		ID:                   model.GenerateTripID(),
+		Kind:                 kind,
+		DriverID:             cmd.DriverID,
+		VehicleID:            cmd.VehicleID,
+		LicensePlate:         cmd.LicensePlate,
+		OriginBranchID:       cmd.OriginBranchID,
+		DestinationBranchID:  cmd.DestinationBranchID,
+		ShipmentIDs:          cmd.ShipmentIDs,
+		Status:               model.TripStatusPending,
+		TotalWeightKg:        cmd.TotalWeightKg,
+		Stops:                cmd.Stops,
+		CurrentStopIndex:     0,
+		CreatedBy:            cmd.CreatedBy,
+		CreatedAt:            clock.Now(),
+		ScheduledDepartureAt: cmd.ScheduledDepartureAt,
+		EstimatedArrivalAt:   cmd.EstimatedArrivalAt,
 	}
 	if err := s.repo.Create(trip); err != nil {
 		return model.InterBranchTrip{}, err
@@ -175,7 +180,7 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 	// Notificar a operadores/supervisores de las sucursales involucradas.
 	if s.notifSvc != nil {
 		driver, err := s.authRepo.GetUserByID(driverID)
-		driverUsername := driverID
+		driverUsername := s.usernameFor(driverID)
 		if err == nil {
 			driverUsername = driver.Username
 		}
@@ -241,7 +246,7 @@ func (s *InterBranchTripService) resumeTrip(trip model.InterBranchTrip, driverID
 		}
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 			Status:    model.StatusInTransit,
-			ChangedBy: driverID,
+			ChangedBy: s.usernameFor(driverID),
 			Notes:     "Viaje intersucursal retomado. Vehículo: " + vehicle.LicensePlate,
 		})
 	}
@@ -307,7 +312,7 @@ func (s *InterBranchTripService) CloseByVehicleQR(qrToken, operatorUserID, opera
 		}
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 			Status:    model.StatusAtHub,
-			ChangedBy: operatorUserID,
+			ChangedBy: s.usernameFor(operatorUserID),
 			Location:  locationName,
 			Notes:     "Parada " + fmt.Sprintf("%d/%d", trip.CurrentStopIndex+1, len(trip.Stops)) + " del viaje. Vehículo: " + vehicle.LicensePlate,
 		})
@@ -323,7 +328,7 @@ func (s *InterBranchTripService) CloseByVehicleQR(qrToken, operatorUserID, opera
 		_ = s.vehicleRepo.AddShipment(vehicle.ID, tid)
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 			Status:    model.StatusLoaded,
-			ChangedBy: operatorUserID,
+			ChangedBy: s.usernameFor(operatorUserID),
 			Location:  locationName,
 			Notes:     pickupNote,
 		})
@@ -395,7 +400,7 @@ func (s *InterBranchTripService) Start(tripID, driverID string) (model.InterBran
 		for _, tid := range trip.ShipmentIDs {
 			_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusOutForDelivery,
-				ChangedBy: driverID,
+				ChangedBy: s.usernameFor(driverID),
 				DriverID:  driverID,
 				Location:  locationName,
 				Notes:     "Viaje de última milla iniciado. Vehículo: " + vehicle.LicensePlate,
@@ -423,7 +428,7 @@ func (s *InterBranchTripService) Start(tripID, driverID string) (model.InterBran
 		for _, tid := range trip.ShipmentIDs {
 			_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusInTransit,
-				ChangedBy: driverID,
+				ChangedBy: s.usernameFor(driverID),
 				Location:  locationName,
 				Notes:     "Viaje iniciado por chofer. Vehículo: " + vehicle.LicensePlate,
 			})
@@ -493,7 +498,7 @@ func (s *InterBranchTripService) FinishByScan(tripID, operatorUserID, operatorBr
 			}
 			_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusAtHub,
-				ChangedBy: operatorUserID,
+				ChangedBy: s.usernameFor(operatorUserID),
 				Location:  locationName,
 				Notes:     fmt.Sprintf("Parada %d/%d del viaje. Vehículo: %s", trip.CurrentStopIndex+1, len(trip.Stops), vehicle.LicensePlate),
 			})
@@ -508,7 +513,7 @@ func (s *InterBranchTripService) FinishByScan(tripID, operatorUserID, operatorBr
 			_ = s.vehicleRepo.AddShipment(vehicle.ID, tid)
 			_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusLoaded,
-				ChangedBy: operatorUserID,
+				ChangedBy: s.usernameFor(operatorUserID),
 				Location:  locationName,
 				Notes:     pickupNote,
 			})
@@ -574,7 +579,7 @@ func (s *InterBranchTripService) finishTrip(trip model.InterBranchTrip, vehicle 
 			}
 			_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
 				Status:    model.StatusAtHub,
-				ChangedBy: operatorUserID,
+				ChangedBy: s.usernameFor(operatorUserID),
 				Location:  locationName,
 				Notes:     "Viaje recibido en sucursal. Vehículo: " + vehicle.LicensePlate,
 			})
@@ -692,6 +697,41 @@ func (s *InterBranchTripService) ListAllActive() []model.InterBranchTrip {
 	return all
 }
 
+// ListCalendar devuelve todos los trips cuya fecha de salida planificada (o creación)
+// cae dentro del rango [from, to). Si branchID != nil filtra por sucursal (origen/destino/parada).
+func (s *InterBranchTripService) ListCalendar(branchID *string, from, to time.Time) []model.InterBranchTrip {
+	all := s.repo.ListByDateRange(from, to)
+	if branchID == nil {
+		return all
+	}
+	branch := *branchID
+	seen := map[string]bool{}
+	result := make([]model.InterBranchTrip, 0, len(all))
+	for _, t := range all {
+		if seen[t.ID] {
+			continue
+		}
+		if t.OriginBranchID == branch {
+			seen[t.ID] = true
+			result = append(result, t)
+			continue
+		}
+		if t.DestinationBranchID != nil && *t.DestinationBranchID == branch {
+			seen[t.ID] = true
+			result = append(result, t)
+			continue
+		}
+		for _, st := range t.Stops {
+			if st.BranchID == branch {
+				seen[t.ID] = true
+				result = append(result, t)
+				break
+			}
+		}
+	}
+	return result
+}
+
 // GetTripByID devuelve un viaje por ID para que el operador pueda ver los detalles
 // antes de confirmar descarga/carga. Valida que la sucursal del operador participe.
 func (s *InterBranchTripService) GetTripByID(tripID, operatorBranchID string) (model.InterBranchTrip, error) {
@@ -764,14 +804,14 @@ func (s *InterBranchTripService) ConfirmUnload(
 			continue
 		}
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-			Status: model.StatusAtHub, ChangedBy: operatorUserID,
+			Status: model.StatusAtHub, ChangedBy: s.usernameFor(operatorUserID),
 			Location: locationName, Notes: note,
 		})
 		_ = s.vehicleRepo.RemoveShipment(vehicle.ID, tid)
 	}
 	for _, tid := range missing {
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-			Status: model.StatusLost, ChangedBy: operatorUserID,
+			Status: model.StatusLost, ChangedBy: s.usernameFor(operatorUserID),
 			Location: locationName,
 			Notes:    fmt.Sprintf("No llegó en parada %d/%d. Vehículo: %s", stopIdx+1, len(trip.Stops), vehicle.LicensePlate),
 		})
@@ -830,7 +870,7 @@ func (s *InterBranchTripService) ConfirmLoad(
 		_ = s.shipmentSvc.ReleaseShipmentFromTrip(tid)
 		_ = s.vehicleRepo.AddShipment(vehicle.ID, tid)
 		_, _ = s.shipmentSvc.UpdateStatus(tid, model.UpdateStatusRequest{
-			Status: model.StatusLoaded, ChangedBy: operatorUserID,
+			Status: model.StatusLoaded, ChangedBy: s.usernameFor(operatorUserID),
 			Location: locationName, Notes: pickupNote,
 		})
 	}
@@ -858,4 +898,17 @@ func (s *InterBranchTripService) ConfirmLoad(
 
 	updated, _ := s.repo.GetByID(trip.ID)
 	return updated, nil
+}
+
+// usernameFor resuelve el username de un usuario dado su ID.
+// Si la lookup falla, retorna el ID como fallback para no perder la trazabilidad.
+func (s *InterBranchTripService) usernameFor(userID string) string {
+	if userID == "" {
+		return "sistema"
+	}
+	u, err := s.authRepo.GetUserByID(userID)
+	if err != nil {
+		return userID
+	}
+	return u.Username
 }

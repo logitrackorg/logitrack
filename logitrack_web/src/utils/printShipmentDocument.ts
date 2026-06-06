@@ -211,7 +211,7 @@ export function printShipmentDocument(
       border-top: 1px solid #e5e7eb;
       padding-top: 8px;
       font-size: 10px;
-      color: #9ca3af;
+      color: var(--text-muted);
       display: flex;
       justify-content: space-between;
     }

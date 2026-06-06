@@ -10,8 +10,8 @@ import (
 
 // fakeShipmentRepo mínimo para testear runStaleReplan.
 type fakeShipmentRepo struct {
-	shipments      []model.Shipment
-	recordedPaths  []repository.PathPlannedCmd
+	shipments     []model.Shipment
+	recordedPaths []repository.PathPlannedCmd
 }
 
 func (f *fakeShipmentRepo) Create(cmd repository.CreateShipmentCmd) (model.Shipment, error) {
@@ -51,7 +51,7 @@ func (f *fakeShipmentRepo) RecordPathPlanned(cmd repository.PathPlannedCmd) erro
 	f.recordedPaths = append(f.recordedPaths, cmd)
 	return nil
 }
-func (f *fakeShipmentRepo) SetPalletID(trackingID, palletID string) error { return nil }
+func (f *fakeShipmentRepo) SetPalletID(trackingID, palletID string) error  { return nil }
 func (f *fakeShipmentRepo) ReserveForTrip(trackingID, tripID string) error { return nil }
 func (f *fakeShipmentRepo) ReleaseFromTrip(trackingID string) error        { return nil }
 func (f *fakeShipmentRepo) GetByTrackingID(id string) (model.Shipment, error) {
@@ -73,9 +73,21 @@ func (f *fakeShipmentRepo) Stats(f2 model.ShipmentFilter) (model.Stats, error) {
 	return model.Stats{}, nil
 }
 func (f *fakeShipmentRepo) SetSLANotified(trackingID string, notifiedAt *time.Time) error {
+	for i := range f.shipments {
+		if f.shipments[i].TrackingID == trackingID {
+			f.shipments[i].SLANotifiedAt = notifiedAt
+			break
+		}
+	}
 	return nil
 }
 func (f *fakeShipmentRepo) SetSLAExpiredNotified(trackingID string, notifiedAt *time.Time) error {
+	for i := range f.shipments {
+		if f.shipments[i].TrackingID == trackingID {
+			f.shipments[i].SLAExpiredNotifiedAt = notifiedAt
+			break
+		}
+	}
 	return nil
 }
 func (f *fakeShipmentRepo) AvgTimePerStatus(dateFrom, dateTo *time.Time) (model.AvgTimePerStatus, error) {

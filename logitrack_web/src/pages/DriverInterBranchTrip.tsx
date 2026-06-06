@@ -82,8 +82,13 @@ export function DriverInterBranchTrip() {
   const [starting, setStarting] = useState(false);
   const [unavailablePickups, setUnavailablePickups] = useState<Set<string>>(new Set());
 
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
   // Gate de fatiga en ruta: true = mostrar KssCheckIn bloqueando la pantalla.
   const [midTripCheckin, setMidTripCheckin] = useState(false);
+  // true si el driver aún no reportó sueño para el día logístico actual.
+  const [requiresSleepData, setRequiresSleepData] = useState(true);
   // Evita disparar múltiples consultas al gate cuando el vehículo está detenido.
   const stopGateCheckedRef = useRef(false);
   // Índices de checkpoints ya procesados en esta jornada (no repetir la alerta).
@@ -92,6 +97,8 @@ export function DriverInterBranchTrip() {
   const prevStopIndexRef = useRef<number | null>(null);
   // Ref estable al trip actual — usado en handleCheckinDone sin necesitar deps.
   const tripRef = useRef<typeof trip>(null);
+  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
+  const pendingAckRef = useRef<string | null>(null);
 
   // QR modal state
   const [qrOpen, setQrOpen] = useState(false);
@@ -105,10 +112,26 @@ export function DriverInterBranchTrip() {
   const [completedExpanded, setCompletedExpanded] = useState(false);
 
   // Mapa
-  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRefInternal = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<unknown>(null);
+  const [mapDivMounted, setMapDivMounted] = useState(false);
+  const mapRef = useCallback((node: HTMLDivElement | null) => {
+    mapRefInternal.current = node;
+    setMapDivMounted(node !== null);
+  }, []);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Abre el gate de fatiga y consulta si el driver ya registró sueño hoy.
+  const openCheckinGate = useCallback(async () => {
+    try {
+      const status = await driverApi.getTodayCheckin().catch(() => ({ ok: false as const, requires_sleep_data: true }));
+      setRequiresSleepData(status.requires_sleep_data ?? true);
+    } catch {
+      setRequiresSleepData(true);
+    }
+    setMidTripCheckin(true);
+  }, []);
 
   // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
   // Los routePoints se derivan del trip y las branches. Mientras no haya datos
@@ -236,9 +259,9 @@ export function DriverInterBranchTrip() {
     stopGateCheckedRef.current = true;
     driverApi
       .getTestEligibility({ stopped_minutes: Math.floor(stoppedTimeMs / 60_000) })
-      .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+      .then((elig) => { if (elig.require_test) openCheckinGate(); })
       .catch(() => { /* error de red — no bloquear al chofer */ });
-  }, [stoppedTimeMs, trip, midTripCheckin]);
+  }, [stoppedTimeMs, trip, midTripCheckin, openCheckinGate]);
 
   // Check-in obligatorio al salir de cada parada intermedia.
   // Trigger: cuando current_stop_index avanza en tiempo real (el operador
@@ -273,7 +296,7 @@ export function DriverInterBranchTrip() {
       // curIdx > stored → mostrar el check-in pendiente.
       const stored = parseInt(localStorage.getItem(`trip_checkin_${trip.id}`) ?? "0", 10);
       if (curIdx > stored) {
-        setMidTripCheckin(true);
+        openCheckinGate();
       }
       prevStopIndexRef.current = curIdx;
       return;
@@ -282,7 +305,7 @@ export function DriverInterBranchTrip() {
     if (curIdx > prevStopIndexRef.current) {
       // El índice subió en tiempo real → nueva parada confirmada por QR.
       // Mostrar check-in antes de que el chofer salga hacia la siguiente.
-      setMidTripCheckin(true);
+      openCheckinGate();
     }
 
     // Actualizar SIEMPRE el ref, incluso si setMidTripCheckin fue llamado.
@@ -301,16 +324,16 @@ export function DriverInterBranchTrip() {
         checkpointPassedRef.current.add(idx); // marcar como visitado
         driverApi
           .getTestEligibility({ checkpoint: true })
-          .then((elig) => { if (elig.require_test) setMidTripCheckin(true); })
+          .then((elig) => { if (elig.require_test) openCheckinGate(); })
           .catch(() => {});
         break; // procesar un checkpoint por tick
       }
     }
-  }, [position, trip, midTripCheckin, checkpoints]);
+  }, [position, trip, midTripCheckin, checkpoints, openCheckinGate]);
 
   // Mapa Leaflet
   useEffect(() => {
-    if (!trip || !mapRef.current || !branches.length) return;
+    if (!trip || !mapRefInternal.current || !branches.length) return;
     const origin = branches.find((b) => b.id === trip.origin_branch_id);
     if (!origin?.latitude) return;
 
@@ -344,7 +367,7 @@ export function DriverInterBranchTrip() {
         (mapInstanceRef.current as { remove(): void }).remove();
         mapInstanceRef.current = null;
       }
-      const map = L.map(mapRef.current!, { zoomControl: false, scrollWheelZoom: false });
+      const map = L.map(mapRefInternal.current!, { zoomControl: false, scrollWheelZoom: false });
       mapInstanceRef.current = map;
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OSM" }).addTo(map);
 
@@ -430,7 +453,32 @@ export function DriverInterBranchTrip() {
     return () => {
       if (mapInstanceRef.current) { (mapInstanceRef.current as { remove(): void }).remove(); mapInstanceRef.current = null; }
     };
-  }, [trip, branches]);
+  }, [trip, branches, mapDivMounted]);
+
+  // Polling de bloqueo por fatiga — cada 5 s mientras el viaje está en_transito (LOGITRACK-499).
+  useEffect(() => {
+    if (!trip || trip.status !== "en_transito") return;
+    const poll = async () => {
+      try {
+        const data = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = data.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && data.recently_unblocked && data.unblocked_by) {
+          const ackKey = data.unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(data.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [trip]);
 
   const openQR = async () => {
     if (!trip) return;
@@ -471,6 +519,7 @@ export function DriverInterBranchTrip() {
   // sesión y vuelve a entrar, el sistema sepa hasta qué parada ya hizo el test.
   const handleCheckinDone = useCallback(() => {
     setMidTripCheckin(false);
+    setRequiresSleepData(false); // sueño ya registrado, no pedir de nuevo hoy
     const t = tripRef.current;
     if (t) {
       const curIdx = t.current_stop_index ?? 0;
@@ -478,12 +527,17 @@ export function DriverInterBranchTrip() {
     }
   }, []);
 
+  // Bloqueo por alerta de fatiga: overlay fixed encima del contenido para no
+  // desmontar el mapa ni otros elementos del DOM (LOGITRACK-499).
+  // Se renderiza al final del JSX como portal superpuesto.
+
   // Gate de fatiga: cubre la pantalla completa antes de que el chofer inicie
   // el viaje o cuando lleva más de 6 minutos detenido en ruta.
   if (midTripCheckin && user) {
     return (
       <KssCheckIn
         driverId={user.id}
+        requiresSleepData={requiresSleepData}
         onDone={handleCheckinDone}
       />
     );
@@ -629,7 +683,7 @@ export function DriverInterBranchTrip() {
 
         {/* ── MAPA ── */}
         {!!origin?.latitude && (
-          <Card className="overflow-hidden p-0">
+          <Card className="overflow-hidden p-0 isolate">
             <div ref={mapRef} className="h-44 w-full" />
           </Card>
         )}
@@ -774,6 +828,43 @@ export function DriverInterBranchTrip() {
           onClose={() => { setQrOpen(false); if (pollingRef.current) clearInterval(pollingRef.current); }}
         />
       )}
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
+      {fatigueBlocked && (
+        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <span className="text-6xl">⚠️</span>
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Alerta de fatiga detectada
+          </h2>
+          <p className="text-slate-400 text-base leading-relaxed m-0">
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
+
+      {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
+      {!fatigueBlocked && fatigueUnblockedBy && (
+        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <span className="text-6xl">✅</span>
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Ruta autorizada
+          </h2>
+          <p className="text-green-300 text-base leading-relaxed m-0">
+            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
+            que continúes la ruta.
+          </p>
+          <button
+            onClick={() => {
+              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
+              setFatigueUnblockedBy(null);
+            }}
+            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
+          >
+            Continuar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -824,16 +915,16 @@ function StepperBar({
           const isPending = !isOriginPt && stopIdx > currentStopIdx;
           const isLast = idx === allPoints.length - 1;
 
-          let dotBg = "#64748b";
+          let dotCls = "bg-slate-400";
           let dotContent = <span className="text-[9px] font-bold text-white">{idx}</span>;
           if (isOriginPt) {
-            dotBg = "#1e3a5f";
+            dotCls = "bg-[#1e3a5f]";
             dotContent = <Truck className="w-3 h-3 text-white" />;
           } else if (isCompleted) {
-            dotBg = "#059669";
+            dotCls = "bg-emerald-500";
             dotContent = <span className="text-[9px] font-bold text-white">✓</span>;
           } else if (isCurrent) {
-            dotBg = "#0284c7";
+            dotCls = "bg-sky-500";
             dotContent = <MapPin className="w-3 h-3 text-white" />;
           }
 
@@ -841,8 +932,7 @@ function StepperBar({
             <div key={pt.id + idx} className="flex items-start flex-1 min-w-0">
               <div className="flex flex-col items-center min-w-[48px]">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isCurrent ? "ring-4 ring-sky-200" : ""}`}
-                  style={{ background: dotBg }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${dotCls} ${isCurrent ? "ring-4 ring-sky-200" : ""}`}
                 >
                   {dotContent}
                 </div>
@@ -852,8 +942,7 @@ function StepperBar({
               </div>
               {!isLast && (
                 <div
-                  className="flex-1 h-0.5 mt-[13px] mx-1"
-                  style={{ background: isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "#059669" : "#e2e8f0" }}
+                  className={`flex-1 h-0.5 mt-[13px] mx-1 ${isCompleted || (isCurrent && stopIdx < currentStopIdx) ? "bg-emerald-500" : "bg-slate-200"}`}
                 />
               )}
             </div>
@@ -1041,8 +1130,7 @@ function QRModal({
   return (
     /* Backdrop — z-[9999] para quedar por encima de Leaflet (z ~400) y del nav */
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: "rgba(15,27,52,0.72)" }}
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-[#0f1b34]/70"
       onClick={onClose}
     >
       {/* Card — click dentro no cierra */}

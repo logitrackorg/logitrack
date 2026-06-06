@@ -195,7 +195,10 @@ type RescheduleDeliveryCmd struct {
 	NewDeliveryDate time.Time
 	ChangedBy       string
 	Timestamp       time.Time
+	MaxReschedules    int  	
+	MaxRescheduleDays int  
 }
+
 
 // CancelByRecipientCmd cancela el envío por solicitud del destinatario
 type CancelByRecipientCmd struct {

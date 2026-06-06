@@ -102,6 +102,27 @@ export interface FatigueHistoryResponse {
   red_min: number;
 }
 
+export type HistoryRequestStatus = "pending" | "approved" | "rejected";
+
+export interface HistoryAccessRequest {
+  driver_id: string;
+  status: HistoryRequestStatus;
+  request_date: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  review_note?: string;
+  full_name?: string;
+  username?: string;
+}
+
+export interface ActiveFatigueAlert {
+  driver_id: string;
+  full_name: string;
+  username: string;
+  score: number;
+  alerted_at: string;
+}
+
 export const supervisorFatigueApi = {
   getDashboard: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};
@@ -115,4 +136,32 @@ export const supervisorFatigueApi = {
       .get<FatigueHistoryResponse>("/supervisor/fatigue-history", { params })
       .then((r) => r.data);
   },
+  getActiveAlerts: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api
+      .get<{ alerts: ActiveFatigueAlert[]; total: number }>("/supervisor/fatigue-alerts", { params })
+      .then((r) => r.data);
+  },
+  dismissAlert: (driverID: string) =>
+    api.post<{ ok: boolean }>(`/supervisor/fatigue-alerts/${driverID}/dismiss`).then((r) => r.data),
+  recallDriver: (driverID: string) =>
+    api.post<{ ok: boolean; recalled: boolean }>(`/supervisor/fatigue-alerts/${driverID}/recall`).then((r) => r.data),
+  listHistoryRequests: (status?: HistoryRequestStatus) => {
+    const params = status ? { status } : {};
+    return api
+      .get<{ requests: HistoryAccessRequest[]; total: number }>("/supervisor/history-requests", { params })
+      .then((r) => r.data);
+  },
+  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", note?: string) =>
+    api
+      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, note })
+      .then((r) => r.data),
+  getBlockedDrivers: (branchId?: string) => {
+    const params = branchId ? { branch_id: branchId } : {};
+    return api
+      .get<{ blocked_driver_ids: string[] }>("/supervisor/fatigue/blocked-drivers", { params })
+      .then((r) => r.data);
+  },
+  unblockDriver: (driverID: string) =>
+    api.post<{ ok: boolean }>(`/supervisor/fatigue/${driverID}/unblock`).then((r) => r.data),
 };

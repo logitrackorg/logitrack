@@ -20,6 +20,7 @@ export interface UserUpdatePayload {
   branch_id?: string;
   status?: UserStatus;
   address?: UserAddress;
+  driver_type?: "ultima_milla" | "intersucursal" | null;
 }
 
 export interface UserCreatePayload {
@@ -31,6 +32,7 @@ export interface UserCreatePayload {
   last_name: string;
   email: string;
   address: UserAddress;
+  driver_type?: "ultima_milla" | "intersucursal";
 }
 
 export const adminApi = {

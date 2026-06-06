@@ -12,6 +12,8 @@ import { Card } from "../components/ui/card";
 const ROLES: Role[] = ["operator", "supervisor", "driver", "manager", "admin"];
 const ROLES_WITH_BRANCH: Role[] = ["operator", "supervisor", "driver"];
 
+type DriverType = "ultima_milla" | "intersucursal";
+
 const roleLabel: Record<Role, string> = {
   operator: "Operador",
   supervisor: "Supervisor",
@@ -19,6 +21,18 @@ const roleLabel: Record<Role, string> = {
   manager: "Gerente",
   admin: "Admin",
 };
+
+const driverTypeLabel: Record<DriverType, string> = {
+  ultima_milla: "Última milla",
+  intersucursal: "Intersucursal",
+};
+
+function userDisplayLabel(u: User): string {
+  if (u.role === "driver" && u.driver_type) {
+    return `Chofer · ${driverTypeLabel[u.driver_type as DriverType] ?? u.driver_type}`;
+  }
+  return roleLabel[u.role] ?? u.role;
+}
 
 const roleBadgeColor: Record<Role, string> = {
   operator: "#3b82f6",
@@ -53,6 +67,7 @@ interface CreateState {
   email: string;
   role: Role;
   branch_id: string;
+  driver_type: DriverType | "";
   address: UserAddress;
 }
 
@@ -60,7 +75,7 @@ const emptyAddress = (): UserAddress => ({ street: "", city: "", province: "", p
 
 const emptyCreate = (): CreateState => ({
   username: "", password: "", first_name: "", last_name: "", email: "",
-  role: "operator", branch_id: "", address: emptyAddress(),
+  role: "operator", branch_id: "", driver_type: "", address: emptyAddress(),
 });
 
 const reEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,6 +104,7 @@ export function AdminUsers() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editDriverType, setEditDriverType] = useState<DriverType | "">("");
   const [editState, setEditState] = useState<EditState>({
     first_name: "", last_name: "", email: "",
     role: "operator", branch_id: "", status: "activo", address: emptyAddress(),
@@ -101,6 +117,7 @@ export function AdminUsers() {
   const [createError, setCreateError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "">("");
+  const [driverTypeFilter, setDriverTypeFilter] = useState<DriverType | "">("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "">("");
 
   const load = async () => {
@@ -118,6 +135,7 @@ export function AdminUsers() {
 
   const openEdit = (u: User) => {
     setEditingUser(u);
+    setEditDriverType((u.driver_type as DriverType) ?? "");
     setEditState({
       first_name: u.first_name ?? "",
       last_name: u.last_name ?? "",
@@ -137,6 +155,10 @@ export function AdminUsers() {
       setSaveError("La sucursal es obligatoria para este rol.");
       return;
     }
+    if (editState.role === "driver" && !editDriverType) {
+      setSaveError("El tipo de chofer es obligatorio.");
+      return;
+    }
     const validErr = validatePersonalFields(editState);
     if (validErr) { setSaveError(validErr); return; }
 
@@ -151,6 +173,7 @@ export function AdminUsers() {
       if (editState.role !== editingUser.role) payload.role = editState.role;
       if (editState.branch_id !== (editingUser.branch_id ?? "")) payload.branch_id = editState.branch_id;
       if (editState.status !== (editingUser.status ?? "activo")) payload.status = editState.status;
+      if (editState.role === "driver") payload.driver_type = editDriverType || null;
 
       const updated = await adminApi.updateUser(editingUser.id, payload);
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
@@ -163,6 +186,10 @@ export function AdminUsers() {
   const handleCreate = async () => {
     if (ROLES_WITH_BRANCH.includes(createForm.role) && !createForm.branch_id) {
       setCreateError("La sucursal es obligatoria para este rol.");
+      return;
+    }
+    if (createForm.role === "driver" && !createForm.driver_type) {
+      setCreateError("El tipo de chofer es obligatorio.");
       return;
     }
     if (!createForm.username.trim()) { setCreateError("El nombre de usuario es obligatorio."); return; }
@@ -183,6 +210,7 @@ export function AdminUsers() {
         address: createForm.address,
       };
       if (ROLES_WITH_BRANCH.includes(createForm.role)) payload.branch_id = createForm.branch_id;
+      if (createForm.role === "driver" && createForm.driver_type) payload.driver_type = createForm.driver_type;
       const newUser = await adminApi.createUser(payload);
       setUsers(prev => [...prev, newUser]);
       setShowCreate(false);
@@ -196,6 +224,7 @@ export function AdminUsers() {
 
   const filtered = users.filter(u => {
     if (roleFilter && u.role !== roleFilter) return false;
+    if (driverTypeFilter && (u.role !== "driver" || u.driver_type !== driverTypeFilter)) return false;
     if (statusFilter && (u.status ?? "activo") !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -238,6 +267,17 @@ export function AdminUsers() {
           <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
         </select>
+        {roleFilter === "driver" && (
+          <select
+            value={driverTypeFilter}
+            onChange={e => setDriverTypeFilter(e.target.value as DriverType | "")}
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+          >
+            <option value="">Todos los choferes</option>
+            <option value="ultima_milla">Última milla</option>
+            <option value="intersucursal">Intersucursal</option>
+          </select>
+        )}
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as UserStatus | "")}
@@ -247,9 +287,9 @@ export function AdminUsers() {
           <option value="activo">Activo</option>
           <option value="inactivo">Inactivo</option>
         </select>
-        {(search || roleFilter || statusFilter) && (
+        {(search || roleFilter || driverTypeFilter || statusFilter) && (
           <button
-            onClick={() => { setSearch(""); setRoleFilter(""); setStatusFilter(""); }}
+            onClick={() => { setSearch(""); setRoleFilter(""); setDriverTypeFilter(""); setStatusFilter(""); }}
             className="text-xs text-slate-500 hover:text-slate-700 underline cursor-pointer"
           >
             Limpiar
@@ -269,9 +309,9 @@ export function AdminUsers() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 700 }}>
             <thead>
-              <tr style={{ background: "#f9fafb", textAlign: "left" }}>
+              <tr style={{ background: "var(--bg-subtle)", textAlign: "left" }}>
                 {["ID", "Nombre", "Usuario", "Rol", "Sucursal", "Estado", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", borderBottom: "2px solid #e5e7eb", fontWeight: 600, color: "#374151", fontSize: 13 }}>{h}</th>
+                  <th key={h} style={{ padding: "10px 14px", borderBottom: "2px solid var(--border)", fontWeight: 600, color: "var(--text-strong)", fontSize: 13 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -279,33 +319,33 @@ export function AdminUsers() {
               {filtered.map(u => {
                 const isInactive = (u.status ?? "activo") === "inactivo";
                 return (
-                  <tr key={u.id} style={{ borderBottom: "1px solid #e5e7eb", opacity: isInactive ? 0.65 : 1 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
+                  <tr key={u.id} style={{ borderBottom: "1px solid var(--border)", opacity: isInactive ? 0.65 : 1 }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-subtle)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <td style={{ padding: "10px 14px", color: "#9ca3af", fontSize: 12 }}>{u.id}</td>
+                    <td style={{ padding: "10px 14px", color: "var(--text-muted)", fontSize: 12 }}>{u.id}</td>
                     <td style={{ padding: "10px 14px" }}>
-                      <div style={{ fontWeight: 600, color: "#111827" }}>
-                        {u.first_name || u.last_name ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() : <span style={{ color: "#9ca3af", fontStyle: "italic" }}>—</span>}
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        {u.first_name || u.last_name ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
                       </div>
-                      {u.email && <div style={{ fontSize: 12, color: "#6b7280" }}>{u.email}</div>}
+                      {u.email && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{u.email}</div>}
                     </td>
-                    <td style={{ padding: "10px 14px", color: "#374151" }}>{u.username}</td>
+                    <td style={{ padding: "10px 14px", color: "var(--text-strong)" }}>{u.username}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 9999, fontSize: 12, fontWeight: 600, background: `${roleBadgeColor[u.role]}18`, color: roleBadgeColor[u.role] }}>
-                        {roleLabel[u.role]}
+                        {userDisplayLabel(u)}
                       </span>
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       {u.branch_id
-                        ? <span style={{ background: "#f0f9ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 8px", fontSize: 12, color: "#1e3a5f" }}>{branchName(u.branch_id)}</span>
-                        : <span style={{ color: "#9ca3af", fontStyle: "italic" }}>—</span>}
+                        ? <span style={{ background: "var(--brand-tint)", border: "1px solid var(--brand-tint-border)", borderRadius: 6, padding: "2px 8px", fontSize: 12, color: "var(--text-heading)" }}>{branchName(u.branch_id)}</span>
+                        : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <StatusBadge status={u.status ?? "activo"} />
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "right" }}>
                       <button onClick={() => openEdit(u)}
-                        style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 13, color: "#374151", fontWeight: 500 }}>
+                        style={{ background: "none", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 13, color: "var(--text-strong)", fontWeight: 500 }}>
                         Editar
                       </button>
                     </td>
@@ -320,16 +360,16 @@ export function AdminUsers() {
       {/* Edit modal */}
       {editingUser && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={closeEdit}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 28, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>Editar usuario</h2>
-              <button onClick={closeEdit} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "var(--text-heading)" }}>Editar usuario</h2>
+              <button onClick={closeEdit} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
 
-            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 14px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 13, color: "#6b7280" }}>Usuario:</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#1e3a5f", fontFamily: "monospace" }}>{editingUser.username}</span>
-              <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>ID #{editingUser.id}</span>
+            <div style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 14px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Usuario:</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-heading)", fontFamily: "monospace" }}>{editingUser.username}</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>ID #{editingUser.id}</span>
             </div>
 
             <SectionTitle>Datos de acceso</SectionTitle>
@@ -339,12 +379,16 @@ export function AdminUsers() {
                   Rol *
                   <select value={editState.role}
                     disabled={editingUser?.id === currentUser?.id}
-                    onChange={e => setEditState(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
+                    onChange={e => {
+                      const newRole = e.target.value as Role;
+                      if (newRole !== "driver") setEditDriverType("");
+                      setEditState(s => ({ ...s, role: newRole, branch_id: ROLES_WITH_BRANCH.includes(newRole) ? s.branch_id : "" }));
+                    }}
                     style={{ ...inputStyle, ...(editingUser?.id === currentUser?.id ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}>
                     {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                   </select>
                   {editingUser?.id === currentUser?.id && (
-                    <span style={{ fontSize: 11, color: "#6b7280", marginTop: 4, display: "block" }}>No podés modificar tu propio rol.</span>
+                    <span style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4, display: "block" }}>No podés modificar tu propio rol.</span>
                   )}
                 </label>
                 <label style={labelStyle}>
@@ -361,6 +405,16 @@ export function AdminUsers() {
                   <select value={editState.branch_id} onChange={e => setEditState(s => ({ ...s, branch_id: e.target.value }))} style={inputStyle}>
                     <option value="">— Seleccionar sucursal —</option>
                     {sortedBranches.map(b => <option key={b.id} value={b.id}>{b.name} — {b.address.city}</option>)}
+                  </select>
+                </label>
+              )}
+              {editState.role === "driver" && (
+                <label style={labelStyle}>
+                  Tipo de chofer *
+                  <select value={editDriverType} onChange={e => setEditDriverType(e.target.value as DriverType | "")} style={inputStyle}>
+                    <option value="">— Seleccionar tipo —</option>
+                    <option value="ultima_milla">Última milla</option>
+                    <option value="intersucursal">Intersucursal</option>
                   </select>
                 </label>
               )}
@@ -413,15 +467,15 @@ export function AdminUsers() {
             </div>
 
             {editingUser.updated_by && (
-              <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px" }}>
                 Última modificación por <strong>{editingUser.updated_by}</strong>
                 {editingUser.updated_at ? ` el ${fmtDateTime(editingUser.updated_at)}` : ""}
               </p>
             )}
 
-            {saveError && <p style={{ margin: "0 0 12px", fontSize: 13, color: "#dc2626" }}>{saveError}</p>}
+            {saveError && <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--danger-text)" }}>{saveError}</p>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={closeEdit} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
+              <button onClick={closeEdit} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleSave} disabled={saving}
                 style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
                 {saving ? "Guardando…" : "Guardar cambios"}
@@ -434,10 +488,10 @@ export function AdminUsers() {
       {/* Create modal */}
       {showCreate && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowCreate(false)}>
-          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 28, width: 520, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "#1e3a5f" }}>Nuevo usuario</h2>
-              <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#6b7280" }}>✕</button>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", color: "var(--text-heading)" }}>Nuevo usuario</h2>
+              <button onClick={() => setShowCreate(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
             </div>
 
             <SectionTitle>Datos de acceso</SectionTitle>
@@ -451,17 +505,17 @@ export function AdminUsers() {
                 <input type="password" value={createForm.password} onChange={e => setCreateForm(s => ({ ...s, password: e.target.value }))} placeholder="••••••••" style={inputStyle} />
               </label>
               {createForm.password.length > 0 && (() => {
-                const ok6 = createForm.password.length >= 6;
+                const ok6 = createForm.password.length >= 8;
                 const okNum = /\d/.test(createForm.password);
                 const item = (met: boolean, text: string) => (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "#16a34a" : "#dc2626" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: met ? "var(--ok-text)" : "var(--danger-text)" }}>
                     <span style={{ fontWeight: 700 }}>{met ? "✓" : "✗"}</span>
                     {text}
                   </div>
                 );
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb" }}>
-                    {item(ok6, "Al menos 6 caracteres")}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, padding: "8px 10px", background: "var(--bg-subtle)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                    {item(ok6, "Al menos 8 caracteres")}
                     {item(okNum, "Al menos un número")}
                   </div>
                 );
@@ -470,7 +524,10 @@ export function AdminUsers() {
                 <label style={labelStyle}>
                   Rol *
                   <select value={createForm.role}
-                    onChange={e => setCreateForm(s => ({ ...s, role: e.target.value as Role, branch_id: ROLES_WITH_BRANCH.includes(e.target.value as Role) ? s.branch_id : "" }))}
+                    onChange={e => {
+                      const newRole = e.target.value as Role;
+                      setCreateForm(s => ({ ...s, role: newRole, branch_id: ROLES_WITH_BRANCH.includes(newRole) ? s.branch_id : "", driver_type: newRole === "driver" ? s.driver_type : "" }));
+                    }}
                     style={inputStyle}>
                     {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
                   </select>
@@ -485,6 +542,16 @@ export function AdminUsers() {
                   </label>
                 )}
               </div>
+              {createForm.role === "driver" && (
+                <label style={labelStyle}>
+                  Tipo de chofer *
+                  <select value={createForm.driver_type} onChange={e => setCreateForm(s => ({ ...s, driver_type: e.target.value as DriverType | "" }))} style={inputStyle}>
+                    <option value="">— Seleccionar tipo —</option>
+                    <option value="ultima_milla">Última milla</option>
+                    <option value="intersucursal">Intersucursal</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             <SectionTitle>Datos personales</SectionTitle>
@@ -533,9 +600,9 @@ export function AdminUsers() {
               </label>
             </div>
 
-            {createError && <p style={{ margin: "0 0 12px", fontSize: 13, color: "#dc2626" }}>{createError}</p>}
+            {createError && <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--danger-text)" }}>{createError}</p>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowCreate(false)} style={{ background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleCreate} disabled={creating}
                 style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: creating ? "not-allowed" : "pointer", fontWeight: 600, opacity: creating ? 0.7 : 1 }}>
                 {creating ? "Creando…" : "Crear usuario"}
@@ -555,10 +622,10 @@ function StatusBadge({ status }: { status: UserStatus }) {
       display: "inline-flex", alignItems: "center", gap: 5,
       padding: "2px 10px", borderRadius: 9999, fontSize: 12, fontWeight: 600,
       background: isActive ? "#d1fae518" : "#fee2e218",
-      color: isActive ? "#065f46" : "#991b1b",
-      border: `1px solid ${isActive ? "#6ee7b7" : "#fca5a5"}`,
+      color: isActive ? "var(--ok-text)" : "var(--danger-text)",
+      border: `1px solid ${isActive ? "var(--ok-border)" : "var(--danger-border)"}`,
     }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "#10b981" : "#ef4444", display: "inline-block" }} />
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: isActive ? "var(--ok)" : "var(--danger-c)", display: "inline-block" }} />
       {isActive ? "Activo" : "Inactivo"}
     </span>
   );
@@ -566,11 +633,11 @@ function StatusBadge({ status }: { status: UserStatus }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10, borderBottom: "1px solid #f3f4f6", paddingBottom: 6 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10, borderBottom: "1px solid var(--bg-muted)", paddingBottom: 6 }}>
       {children}
     </div>
   );
 }
 
-const labelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5, fontSize: 13, fontWeight: 600, color: "#374151" };
-const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, background: "#fff" };
+const labelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 5, fontSize: 13, fontWeight: 600, color: "var(--text-strong)" };
+const inputStyle: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-strong)", fontSize: 14, background: "var(--bg-card)" };

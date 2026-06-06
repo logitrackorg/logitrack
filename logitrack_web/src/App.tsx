@@ -1,6 +1,10 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
+import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { TwoFAGuard } from "./components/TwoFAGuard";
+import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./components/Sidebar";
@@ -13,6 +17,8 @@ import { KpiDetail } from "./pages/KpiDetail";
 import { ShipmentList } from "./pages/ShipmentList";
 import { ShipmentDetail } from "./pages/ShipmentDetail";
 import { Claims } from "./pages/Claims";
+import { SlaAuditLogs } from "./pages/SlaAuditLogs";
+import { SlaSettings } from "./pages/SlaSettings";
 import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
@@ -20,6 +26,9 @@ import { DriverRoute } from "./pages/DriverRoute";
 import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
+import { VehicleStatus } from "./pages/VehicleStatus";
+import { AvailableVehicles } from "./pages/AvailableVehicles";
+import { VehicleAssignment } from "./pages/VehicleAssignment";
 import { BranchList } from "./pages/BranchList";
 import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
@@ -40,6 +49,9 @@ import { Repartos } from "./pages/Repartos";
 import OperatorTripReception from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
+import TripsCalendar from "./pages/TripsCalendar";
+import { TwoFAVerify } from "./pages/TwoFAVerify";
+import { TwoFASetup } from "./pages/TwoFASetup";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -64,16 +76,21 @@ function DriverNav() {
       )}
 
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
+        <ThemeToggle compact />
         {isMobile ? (
-          <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          <NavLink to="/profile" style={{ textDecoration: "none" }}>
+            <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          </NavLink>
         ) : (
-          <span style={{ fontSize: 13, color: "#94a3b8" }}>
-            <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
-            {" · "}
-            <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
-              {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+          <NavLink to="/profile" style={{ textDecoration: "none" }}>
+            <span style={{ fontSize: 13, color: "#94a3b8", cursor: "pointer" }}>
+              <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
+              {" · "}
+              <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
+                {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
+              </span>
             </span>
-          </span>
+          </NavLink>
         )}
         <button onClick={logout}
           style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
@@ -138,6 +155,11 @@ function AppRoutes() {
                 <DriverShipmentDetail />
               </ProtectedRoute>
             } />
+            <Route path="/profile" element={
+              <ProtectedRoute roles={["driver"]}>
+                <UserProfile />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<Navigate to={defaultPath} replace />} />
           </Routes>
         </main>
@@ -158,18 +180,19 @@ function AppRoutes() {
   }
 
   return (
+    <SupervisorFatigueGuard>
     <AppShell>
       <Routes>
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute roles={["supervisor", "manager"]}>
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
             <Dashboard />
           </ProtectedRoute>
         } />
 
         <Route path="/kpi-detail" element={
-          <ProtectedRoute roles={["supervisor", "manager"]}>
+          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
             <KpiDetail />
           </ProtectedRoute>
         } />
@@ -177,6 +200,18 @@ function AppRoutes() {
         <Route path="/" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
             <ShipmentList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/sla-audit" element={
+          <ProtectedRoute roles={["supervisor", "manager"]}>
+            <SlaAuditLogs />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/sla-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <SlaSettings />
           </ProtectedRoute>
         } />
 
@@ -195,6 +230,12 @@ function AppRoutes() {
         <Route path="/shipments/:trackingId" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
             <ShipmentDetail />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/calendar" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+            <TripsCalendar />
           </ProtectedRoute>
         } />
 
@@ -219,6 +260,22 @@ function AppRoutes() {
         <Route path="/vehicles" element={
           <ProtectedRoute roles={["operator", "supervisor", "manager", "admin"]}>
             <VehicleList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/vehicles/:plate/status" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleStatus />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/:plate/assign" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <VehicleAssignment />
+          </ProtectedRoute>
+        } />
+        <Route path="/vehicles/available" element={
+          <ProtectedRoute roles={["supervisor", "admin"]}>
+            <AvailableVehicles />
           </ProtectedRoute>
         } />
 
@@ -247,13 +304,13 @@ function AppRoutes() {
         } />
 
         <Route path="/repartos" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["operator", "supervisor"]}>
             <Repartos />
           </ProtectedRoute>
         } />
 
         <Route path="/inter-sucursal" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["operator", "supervisor"]}>
             <InterSucursal />
           </ProtectedRoute>
         } />
@@ -337,7 +394,7 @@ function AppRoutes() {
         } />
 
         <Route path="/auto-reports" element={
-          <ProtectedRoute roles={["manager", "admin"]}>
+          <ProtectedRoute roles={["manager"]}>
             <AutoReports />
           </ProtectedRoute>
         } />
@@ -346,19 +403,27 @@ function AppRoutes() {
       </Routes>
       <ToastContainer />
     </AppShell>
+    </SupervisorFatigueGuard>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/track" element={<PublicTracking />} />
-          <Route path="*" element={<AppRoutes />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <TwoFAGuard>
+            <Routes>
+              <Route path="/track" element={<PublicTracking />} />
+              {/* Rutas de 2FA: accesibles sin sesión establecida */}
+              <Route path="/2fa/verify" element={<TwoFAVerify />} />
+              <Route path="/2fa/setup-required" element={<TwoFASetup required />} />
+              <Route path="*" element={<AppRoutes />} />
+            </Routes>
+          </TwoFAGuard>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

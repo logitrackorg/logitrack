@@ -130,10 +130,14 @@ func LoadVehicles(repo repository.VehicleRepository) {
 		},
 		// ── Mendoza — 2 furgonetas inter-sucursal, 2 autos última milla ───────
 		{
+			// ME100IS tiene capacidad reducida (900 kg) para que gane el backhaul
+			// frente a los vehículos de Posadas (1500 kg): score ME100IS =
+			// (700+660)/(2×900) = 75.6 % vs Posadas (660+700)/(2×1500) = 45.3 %.
+			// El vehículo más pequeño se aprovecha mejor en el round-trip.
 			LicensePlate:     "ME100IS",
 			Type:             model.VehicleTypeVan,
 			Mode:             model.VehicleModeInterBranch,
-			CapacityKg:       1500,
+			CapacityKg:       900,
 			Status:           model.VehicleStatusAvailable,
 			AssignedBranch:   strPtr("mendoza"),
 			CurrentLatitude:  fPtr(-32.8908),
@@ -246,6 +250,17 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 	//     Córdoba (Córdoba está más cerca de Mendoza que CABA).
 	//   • Excluido del ruteo: 1 retiro_sucursal at_hub @ caba.
 	// Más algunos envíos completados / cancelados / fuera de CABA para dashboard.
+	//
+	// Escenario de backhauling Mendoza ↔ Posadas:
+	//   • OUTBOUND (Mendoza → Posadas): 5 envíos at_origin_hub en Mendoza, aceite de oliva
+	//     y vinos en conserva, 140 kg c/u = 700 kg total → consolida (700/1500 = 47% > 40%).
+	//   • BACKHAUL (Posadas → Mendoza): 4 envíos at_hub en Posadas, yerba mate y productos
+	//     regionales de Misiones con destino final Mendoza, 165 kg c/u = 660 kg total → también
+	//     consolida (660/1500 = 44% > 40%). El motor detecta que la misma furgoneta puede
+	//     volver cargada → arma el round-trip Mendoza → Posadas → Mendoza.
+	//
+	// Para ver el escenario: login como op_mendoza, ir a /inter-sucursal, "Generar plan".
+	// El despacho a Posadas debe mostrar el badge "↩ Backhaul" y el modal indica el retorno.
 	seeds := []shipmentSeed{
 		// ─────────────────────────────────────────────────────────────────────
 		// 1) Última milla en CABA — at_hub @ caba, final = caba
@@ -787,6 +802,180 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			priorityConfidence: 0.70,
 			events: []eventSeed{
 				{from: "", to: model.StatusAtOriginHub, changedBy: "op_cordoba", location: "cordoba", notes: "Envío registrado en Córdoba", hoursAgo: 5},
+			},
+		},
+
+		// ─────────────────────────────────────────────────────────────────────
+		// Escenario de backhauling Mendoza ↔ Posadas
+		//
+		// OUTBOUND: 5 envíos at_origin_hub en Mendoza → Posadas.
+		// Aceite de oliva y vinos en conserva (productos regionales de Cuyo).
+		// Peso: 140 kg cada uno = 700 kg total → consolida (47% de la van de 1500 kg).
+		// ─────────────────────────────────────────────────────────────────────
+		{
+			trackingID:         "LT-MZPS0001",
+			sender:             model.Customer{DNI: "27441122", Name: "Bodega Los Andes SRL", Phone: "542614881234", Email: "despachos@bodegalosandes.com", Address: model.Address{Street: "Ruta 7 Km 1095", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.9044), Longitude: fPtr(-68.8458)}},
+			recipient:          model.Customer{DNI: "28991100", Name: "Distribuidora El Litoral", Phone: "543752334455", Email: "compras@ellitoral.com.ar", Address: model.Address{Street: "Av. Mitre 2200", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3718), Longitude: fPtr(-55.8963)}},
+			weightKg:           140,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "mendoza",
+			finalBranchID:      "posadas",
+			priority:           "media",
+			priorityScore:      0.51,
+			priorityConfidence: 0.82,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_mendoza", location: "mendoza", notes: "Aceite de oliva extra virgen — carga al Litoral", hoursAgo: 18},
+			},
+		},
+		{
+			trackingID:         "LT-MZPS0002",
+			sender:             model.Customer{DNI: "27441122", Name: "Bodega Los Andes SRL", Phone: "542614881234", Email: "despachos@bodegalosandes.com", Address: model.Address{Street: "Ruta 7 Km 1095", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.9044), Longitude: fPtr(-68.8458)}},
+			recipient:          model.Customer{DNI: "30112233", Name: "Supermercado Norte SA", Phone: "543752556677", Address: model.Address{Street: "San Martín 980", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3632), Longitude: fPtr(-55.8812)}},
+			weightKg:           140,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "mendoza",
+			finalBranchID:      "posadas",
+			priority:           "media",
+			priorityScore:      0.49,
+			priorityConfidence: 0.80,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_mendoza", location: "mendoza", notes: "Vino en conserva — lote primavera", hoursAgo: 20},
+			},
+		},
+		{
+			trackingID:         "LT-MZPS0003",
+			sender:             model.Customer{DNI: "29556677", Name: "Aceites Cuyo SA", Phone: "542614772288", Address: model.Address{Street: "Av. España 1400", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8968), Longitude: fPtr(-68.8381)}},
+			recipient:          model.Customer{DNI: "31445500", Name: "Hotel Posadas Internacional", Phone: "543752221133", Email: "cocina@hpi.com.ar", Address: model.Address{Street: "Bolívar 2100", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3589), Longitude: fPtr(-55.8794)}},
+			weightKg:           140,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "mendoza",
+			finalBranchID:      "posadas",
+			priority:           "baja",
+			priorityScore:      0.38,
+			priorityConfidence: 0.77,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_mendoza", location: "mendoza", notes: "Aceite oliva y pasas de uva — gastronomía", hoursAgo: 22},
+			},
+		},
+		{
+			trackingID:         "LT-MZPS0004",
+			sender:             model.Customer{DNI: "26334455", Name: "Conservas del Sol SRL", Phone: "542614993344", Address: model.Address{Street: "Carril Rodríguez Peña 800", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.9112), Longitude: fPtr(-68.8203)}},
+			recipient:          model.Customer{DNI: "32667788", Name: "Restaurante Río Paraná", Phone: "543752887700", Address: model.Address{Street: "Av. Costanera 1500", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3648), Longitude: fPtr(-55.8990)}},
+			weightKg:           140,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "mendoza",
+			finalBranchID:      "posadas",
+			priority:           "baja",
+			priorityScore:      0.35,
+			priorityConfidence: 0.75,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_mendoza", location: "mendoza", notes: "Conservas de tomate y pimentón — gastronomía noreste", hoursAgo: 24},
+			},
+		},
+		{
+			trackingID:         "LT-MZPS0005",
+			sender:             model.Customer{DNI: "26334455", Name: "Conservas del Sol SRL", Phone: "542614993344", Address: model.Address{Street: "Carril Rodríguez Peña 800", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.9112), Longitude: fPtr(-68.8203)}},
+			recipient:          model.Customer{DNI: "33112244", Name: "Club Náutico Posadas", Phone: "543752009900", Address: model.Address{Street: "Av. Roque González 900", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3792), Longitude: fPtr(-55.9044)}},
+			weightKg:           140,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "mendoza",
+			finalBranchID:      "posadas",
+			priority:           "baja",
+			priorityScore:      0.33,
+			priorityConfidence: 0.74,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_mendoza", location: "mendoza", notes: "Conservas y aceitunas rellenas — provisión mensual", hoursAgo: 16},
+			},
+		},
+
+		// ─────────────────────────────────────────────────────────────────────
+		// BACKHAUL: 4 envíos at_hub en Posadas → Mendoza.
+		// Yerba mate y productos regionales de Misiones con destino final Mendoza.
+		// Peso: 165 kg cada uno = 660 kg total → consolida (44% de 1500 kg).
+		// Estos ya "llegaron" a Posadas desde un origen externo y esperan despacho.
+		// Al generar el plan, addBackhaulReturns los detecta como carga de retorno
+		// para el vehículo que viene desde Mendoza, armando el round-trip.
+		// ─────────────────────────────────────────────────────────────────────
+		{
+			trackingID:         "LT-PSMZ0001",
+			sender:             model.Customer{DNI: "25889900", Name: "Yerbatería Las Misiones", Phone: "543752441100", Email: "ventas@yerbatasmisiones.com.ar", Address: model.Address{Street: "Av. Roque González 1800", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3792), Longitude: fPtr(-55.9044)}},
+			recipient:          model.Customer{DNI: "20334455", Name: "Distribuidora Cuyo SRL", Phone: "542614556600", Email: "pedidos@distribuidoracuyo.com", Address: model.Address{Street: "Av. Las Tipas 800", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8272)}},
+			weightKg:           165,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "posadas",
+			finalBranchID:      "mendoza",
+			priority:           "media",
+			priorityScore:      0.52,
+			priorityConfidence: 0.83,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_posadas", location: "posadas", notes: "Yerba mate a granel — lote Otoño", hoursAgo: 30},
+				{from: model.StatusAtOriginHub, to: model.StatusAtHub, changedBy: "op_posadas", location: "posadas", notes: "En sucursal Posadas — esperando despacho a Mendoza", hoursAgo: 6},
+			},
+		},
+		{
+			trackingID:         "LT-PSMZ0002",
+			sender:             model.Customer{DNI: "25889900", Name: "Yerbatería Las Misiones", Phone: "543752441100", Email: "ventas@yerbatasmisiones.com.ar", Address: model.Address{Street: "Av. Roque González 1800", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3792), Longitude: fPtr(-55.9044)}},
+			recipient:          model.Customer{DNI: "22445566", Name: "Supermercado Andino SA", Phone: "542614112233", Address: model.Address{Street: "Av. San Martín 3400", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8968), Longitude: fPtr(-68.8381)}},
+			weightKg:           165,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "posadas",
+			finalBranchID:      "mendoza",
+			priority:           "media",
+			priorityScore:      0.48,
+			priorityConfidence: 0.80,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_posadas", location: "posadas", notes: "Té taragüi y hierbas aromáticas", hoursAgo: 28},
+				{from: model.StatusAtOriginHub, to: model.StatusAtHub, changedBy: "op_posadas", location: "posadas", notes: "En sucursal Posadas — aguardando retorno a Mendoza", hoursAgo: 5},
+			},
+		},
+		{
+			trackingID:         "LT-PSMZ0003",
+			sender:             model.Customer{DNI: "27003344", Name: "Artesanías Guaraní SRL", Phone: "543752990055", Address: model.Address{Street: "Colón 1200", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3672), Longitude: fPtr(-55.8948)}},
+			recipient:          model.Customer{DNI: "30776600", Name: "Tienda Regional Cuyo", Phone: "542614887722", Email: "productos@tiendaregionalcuyo.com", Address: model.Address{Street: "Belgrano 1100", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8858), Longitude: fPtr(-68.8308)}},
+			weightKg:           165,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "posadas",
+			finalBranchID:      "mendoza",
+			priority:           "baja",
+			priorityScore:      0.41,
+			priorityConfidence: 0.78,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_posadas", location: "posadas", notes: "Artesanías regionales y madera tallada de Misiones", hoursAgo: 32},
+				{from: model.StatusAtOriginHub, to: model.StatusAtHub, changedBy: "op_posadas", location: "posadas", notes: "En sucursal Posadas — retorno a Mendoza en próximo despacho", hoursAgo: 8},
+			},
+		},
+		{
+			trackingID:         "LT-PSMZ0004",
+			sender:             model.Customer{DNI: "24558899", Name: "Productora Misionera SA", Phone: "543752771188", Email: "exporta@productoramisiones.com", Address: model.Address{Street: "Av. Uruguay 560", City: "Posadas", Province: "Misiones", PostalCode: "N3300", Latitude: fPtr(-27.3632), Longitude: fPtr(-55.8812)}},
+			recipient:          model.Customer{DNI: "31667733", Name: "Importadora Regional SRL", Phone: "542614334488", Address: model.Address{Street: "Av. España 600", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500", Latitude: fPtr(-32.8938), Longitude: fPtr(-68.8423)}},
+			weightKg:           165,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "posadas",
+			finalBranchID:      "mendoza",
+			priority:           "baja",
+			priorityScore:      0.39,
+			priorityConfidence: 0.76,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "op_posadas", location: "posadas", notes: "Semillas y granos regionales — temporada", hoursAgo: 26},
+				{from: model.StatusAtOriginHub, to: model.StatusAtHub, changedBy: "op_posadas", location: "posadas", notes: "En sucursal Posadas — listo para despacho inter-sucursal", hoursAgo: 4},
 			},
 		},
 	}

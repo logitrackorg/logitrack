@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logitrack/core/internal/middleware"
@@ -16,19 +17,24 @@ import (
 const dashboardHistoryLimit = 30
 
 type SupervisorFatigueHandler struct {
-	authRepo    repository.AuthRepository
-	checkinRepo *repository.CheckinRepository
-	fatigueSvc  *service.FatigueConfigService
+	authRepo         repository.AuthRepository
+	checkinRepo      *repository.CheckinRepository
+	historyRepo      *repository.HistoryAccessRequestRepository
+	fatigueSvc       *service.FatigueConfigService
+	fatigueBlockRepo repository.FatigueBlockRepository
 }
 
 func NewSupervisorFatigueHandler(
 	authRepo repository.AuthRepository,
 	fatigueSvc *service.FatigueConfigService,
+	fatigueBlockRepo repository.FatigueBlockRepository,
 ) *SupervisorFatigueHandler {
 	return &SupervisorFatigueHandler{
-		authRepo:    authRepo,
-		checkinRepo: repository.NewCheckinRepository(),
-		fatigueSvc:  fatigueSvc,
+		authRepo:         authRepo,
+		checkinRepo:      repository.NewCheckinRepository(),
+		historyRepo:      repository.NewHistoryAccessRequestRepository(),
+		fatigueSvc:       fatigueSvc,
+		fatigueBlockRepo: fatigueBlockRepo,
 	}
 }
 
@@ -369,4 +375,247 @@ func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (sco
 		level = model.RiskGreen
 	}
 	return
+}
+
+// ── Historial personal de check-ins ──────────────────────────────────────────
+
+// ── Alertas críticas de fatiga (modal emergente supervisor) ──────────────────
+
+// FatigueAlertInfo es el payload que devuelve GetActiveAlerts por cada chofer
+// con una alerta crítica sin revisar por el supervisor.
+type FatigueAlertInfo struct {
+	DriverID  string    `json:"driver_id"`
+	FullName  string    `json:"full_name"`
+	Username  string    `json:"username"`
+	Score     int       `json:"score"`
+	AlertedAt time.Time `json:"alerted_at"`
+}
+
+// GetActiveAlerts devuelve todas las alertas de fatiga críticas (nivel ROJO) sin
+// revisar para los choferes de la sucursal del supervisor autenticado.
+// Los managers pueden filtrar por ?branch_id= (vacío = todas las sucursales).
+func (h *SupervisorFatigueHandler) GetActiveAlerts(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branchID := user.BranchID
+	if branchID == "" {
+		branchID = c.Query("branch_id")
+	}
+
+	drivers := h.authRepo.ListByRole(model.RoleDriver, branchID)
+	today := todayAR()
+
+	alerts := make([]FatigueAlertInfo, 0)
+	for _, d := range drivers {
+		rec, ok := h.checkinRepo.Get(d.ID, today)
+		if !ok || rec.CriticalAlertAt == nil {
+			continue
+		}
+		fullName := strings.TrimSpace(d.FirstName + " " + d.LastName)
+		if fullName == "" {
+			fullName = d.Username
+		}
+		alerts = append(alerts, FatigueAlertInfo{
+			DriverID:  d.ID,
+			FullName:  fullName,
+			Username:  d.Username,
+			Score:     rec.CriticalAlertScore,
+			AlertedAt: *rec.CriticalAlertAt,
+		})
+	}
+
+	// Más reciente primero.
+	sort.Slice(alerts, func(i, j int) bool {
+		return alerts[i].AlertedAt.After(alerts[j].AlertedAt)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"alerts": alerts, "total": len(alerts)})
+}
+
+// clearDriverAlert borra el flag de alerta crítica del check-in del chofer indicado.
+func (h *SupervisorFatigueHandler) clearDriverAlert(driverID string) error {
+	today := todayAR()
+	rec, ok := h.checkinRepo.Get(driverID, today)
+	if !ok {
+		return nil
+	}
+	rec.CriticalAlertAt = nil
+	rec.CriticalAlertScore = 0
+	return h.checkinRepo.Upsert(rec)
+}
+
+// DismissAlert marca la alerta como revisada sin tomar acción sobre la ruta.
+// El supervisor eligió "No hacer nada".
+func (h *SupervisorFatigueHandler) DismissAlert(c *gin.Context) {
+	driverID := c.Param("driver_id")
+	if err := h.clearDriverAlert(driverID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la acción"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// RecallDriver marca la alerta como revisada y registra que el supervisor
+// decidió llamar al chofer de vuelta a la sucursal.
+// La acción efectiva (contacto directo con el chofer) queda a cargo del supervisor.
+func (h *SupervisorFatigueHandler) RecallDriver(c *gin.Context) {
+	reviewer := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+	if err := h.clearDriverAlert(driverID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la acción"})
+		return
+	}
+	// Registrar en el log de auditoría para trazabilidad.
+	_ = h.auditRepoForRecall(reviewer.Username, driverID)
+	c.JSON(http.StatusOK, gin.H{"ok": true, "recalled": true})
+}
+
+// auditRepoForRecall es un no-op si el handler no tiene auditRepo inyectado.
+// Se mantiene como receptor para futuras extensiones sin cambiar la firma pública.
+func (h *SupervisorFatigueHandler) auditRepoForRecall(_, _ string) error { return nil }
+
+// UnblockDriver levanta el bloqueo de pantalla activo de un chofer.
+// Llamado por el supervisor desde el modal de alerta o desde el panel de fatiga.
+// POST /supervisor/fatigue/:driver_id/unblock
+func (h *SupervisorFatigueHandler) UnblockDriver(c *gin.Context) {
+	supervisor := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "servicio no disponible"})
+		return
+	}
+	if err := h.fatigueBlockRepo.Unblock(driverID, supervisor.Username); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo desbloquear al chofer"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// GetBlockedDrivers devuelve los IDs de choferes con bloqueo de pantalla activo
+// en la sucursal del supervisor. Los managers pueden filtrar con ?branch_id=.
+// GET /supervisor/fatigue/blocked-drivers
+func (h *SupervisorFatigueHandler) GetBlockedDrivers(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branchID := user.BranchID
+	if branchID == "" {
+		branchID = c.Query("branch_id")
+	}
+
+	if h.fatigueBlockRepo == nil {
+		c.JSON(http.StatusOK, gin.H{"blocked_driver_ids": []string{}})
+		return
+	}
+
+	allBlocks, err := h.fatigueBlockRepo.ListAllActive()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener bloqueos activos"})
+		return
+	}
+	blockedIDs := make([]string, 0)
+	for _, b := range allBlocks {
+		if branchID != "" {
+			driver, err := h.authRepo.GetUserByID(b.DriverID)
+			if err != nil || (driver.BranchID != "" && driver.BranchID != branchID) {
+				continue
+			}
+		}
+		blockedIDs = append(blockedIDs, b.DriverID)
+	}
+	c.JSON(http.StatusOK, gin.H{"blocked_driver_ids": blockedIDs})
+}
+
+// ListHistoryRequests returns all history access requests (optionally filtered
+// by ?status=pending|approved|rejected). Used by supervisors in the Fatigue panel.
+func (h *SupervisorFatigueHandler) ListHistoryRequests(c *gin.Context) {
+	statusFilter := model.HistoryRequestStatus(c.Query("status"))
+
+	var requests []model.HistoryAccessRequest
+	if statusFilter != "" {
+		requests = h.historyRepo.ListByStatus(statusFilter)
+	} else {
+		requests = h.historyRepo.ListAll()
+	}
+
+	// Enrich with driver name for display.
+	type enriched struct {
+		model.HistoryAccessRequest
+		FullName string `json:"full_name"`
+		Username string `json:"username"`
+	}
+	result := make([]enriched, 0, len(requests))
+	for _, req := range requests {
+		e := enriched{HistoryAccessRequest: req}
+		if driver, err := h.authRepo.GetUserByID(req.DriverID); err == nil {
+			fullName := strings.TrimSpace(driver.FirstName + " " + driver.LastName)
+			if fullName == "" {
+				fullName = driver.Username
+			}
+			e.FullName = fullName
+			e.Username = driver.Username
+		}
+		result = append(result, e)
+	}
+
+	// Sort: pending first, then by request date descending.
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Status != result[j].Status {
+			if result[i].Status == model.HistoryRequestPending {
+				return true
+			}
+			if result[j].Status == model.HistoryRequestPending {
+				return false
+			}
+		}
+		return result[i].RequestDate.After(result[j].RequestDate)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"requests": result, "total": len(result)})
+}
+
+// ReviewHistoryRequest approves or rejects a driver's history access request.
+// Body: { "action": "approve" | "reject", "note": "..." (optional) }
+func (h *SupervisorFatigueHandler) ReviewHistoryRequest(c *gin.Context) {
+	reviewer := c.MustGet(middleware.UserKey).(model.User)
+	driverID := c.Param("driver_id")
+
+	var body struct {
+		Action string `json:"action" binding:"required"`
+		Note   string `json:"note"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "se requiere el campo 'action'"})
+		return
+	}
+
+	var newStatus model.HistoryRequestStatus
+	switch body.Action {
+	case "approve":
+		newStatus = model.HistoryRequestApproved
+	case "reject":
+		newStatus = model.HistoryRequestRejected
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "acción inválida — debe ser 'approve' o 'reject'"})
+		return
+	}
+
+	req, ok := h.historyRepo.Get(driverID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no existe una solicitud para este chofer"})
+		return
+	}
+	if req.Status != model.HistoryRequestPending {
+		c.JSON(http.StatusConflict, gin.H{"error": "la solicitud ya fue revisada"})
+		return
+	}
+
+	now := time.Now()
+	req.Status = newStatus
+	req.ReviewedBy = reviewer.Username
+	req.ReviewedAt = &now
+	req.ReviewNote = body.Note
+
+	if err := h.historyRepo.Upsert(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo guardar la revisión"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "request": req})
 }

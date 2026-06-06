@@ -28,6 +28,23 @@ type ClaimService struct {
 	claimEventRepo repository.ClaimEventRepository
 	shipmentRepo   repository.ShipmentRepository
 	eventStore     repository.EventStore
+	claimEmailSvc  ClaimEmailSender
+	claimWASvc     ClaimWASender
+}
+
+// ClaimEmailSender sends customer-facing claim notifications by email.
+type ClaimEmailSender interface {
+	SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment)
+	SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, resolutionNotes string)
+}
+
+// ClaimWASender sends customer-facing claim notifications via WhatsApp
+// (with email as fallback when WhatsApp is unavailable).
+type ClaimWASender interface {
+	SendClaimCreatedWhatsApp(claim model.Claim, shipment model.Shipment)
+	SendClaimInfoRequestedWhatsApp(claim model.Claim, shipment model.Shipment, supervisorNotes string)
+	SendClaimResolvedWhatsApp(claim model.Claim, shipment model.Shipment, resolutionNotes string)
 }
 
 func NewClaimService(
@@ -42,6 +59,16 @@ func NewClaimService(
 		shipmentRepo:   shipmentRepo,
 		eventStore:     eventStore,
 	}
+}
+
+// SetClaimEmailService wires the customer-facing claim email sender.
+func (s *ClaimService) SetClaimEmailService(svc ClaimEmailSender) {
+	s.claimEmailSvc = svc
+}
+
+// SetClaimWAService wires the WhatsApp (+ email fallback) sender for claim notifications.
+func (s *ClaimService) SetClaimWAService(svc ClaimWASender) {
+	s.claimWASvc = svc
 }
 
 func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
@@ -116,6 +143,7 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		Status:             model.ClaimStatusOpen,
 		Description:        description,
 		CreatedBy:          createdBy,
+		ClaimantDNI:        claimantDNI,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 		AssignedCategory:   "",
@@ -168,6 +196,35 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 	}); err != nil {
 		rollbackClaim()
 		return model.Claim{}, err
+	}
+	// If the shipment's SLA is already expired, move the claim directly to InReview
+	// before sending the notification so the email reflects the actual state.
+	if isSLAExpired(shipment, now) {
+		updatedAt := now
+		if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, updatedAt); err != nil {
+			return model.Claim{}, err
+		}
+		if err := s.appendClaimEvent(model.DomainEvent{
+			ID:         uuid.NewString(),
+			TrackingID: claim.ID,
+			EventType:  model.EventClaimInReview,
+			Payload: model.ClaimInReviewPayload{
+				FromStatus: model.ClaimStatusOpen,
+				ToStatus:   model.ClaimStatusInReview,
+			},
+			ChangedBy: createdBy,
+			Timestamp: updatedAt,
+		}); err != nil {
+			return model.Claim{}, err
+		}
+		claim.Status = model.ClaimStatusInReview
+		claim.UpdatedAt = updatedAt
+	}
+
+	if s.claimWASvc != nil {
+		go s.claimWASvc.SendClaimCreatedWhatsApp(claim, shipment)
+	} else if s.claimEmailSvc != nil {
+		go s.claimEmailSvc.SendClaimCreatedNotification(claim, shipment)
 	}
 
 	return claim, nil
@@ -391,6 +448,17 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	claim.ResolutionType = resolution
 	claim.Status = status
 	claim.UpdatedAt = updatedAt
+
+	if s.claimWASvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimWASvc.SendClaimResolvedWhatsApp(claim, shipment, notes)
+		}
+	} else if s.claimEmailSvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimEmailSvc.SendClaimResolvedNotification(claim, shipment, notes)
+		}
+	}
+
 	return claim, nil
 }
 
@@ -430,6 +498,17 @@ func (s *ClaimService) RequestCustomerInfo(id string, changedBy, branchID, notes
 
 	claim.Status = model.ClaimStatusPendingCustomer
 	claim.UpdatedAt = updatedAt
+
+	if s.claimWASvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimWASvc.SendClaimInfoRequestedWhatsApp(claim, shipment, notes)
+		}
+	} else if s.claimEmailSvc != nil {
+		if shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			go s.claimEmailSvc.SendClaimInfoRequestedNotification(claim, shipment, notes)
+		}
+	}
+
 	return claim, nil
 }
 
@@ -535,9 +614,121 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true
+	case model.EventClaimCustomerResponded:
+		payload := de.Payload.(model.ClaimCustomerRespondedPayload)
+		base.Notes = payload.Response
+		base.EvidenceFileName = payload.EvidenceFileName
+		base.EvidenceFilePath = payload.EvidenceFilePath
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		return base, true
 	default:
 		return model.ClaimEvent{}, false
 	}
+}
+
+// GetPendingCustomerClaim devuelve el reclamo activo en pending_customer para el
+// tracking ID dado, junto con las notas del supervisor de ese evento.
+func (s *ClaimService) GetPendingCustomerClaim(trackingID string) (*model.Claim, string, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingID(strings.TrimSpace(trackingID))
+	if err != nil {
+		return nil, "", err
+	}
+	if claim.Status != model.ClaimStatusPendingCustomer {
+		return nil, "", nil
+	}
+	// Buscar notas del supervisor en el último evento claim_pending_customer
+	supervisorNotes := ""
+	events, err := s.claimEventRepo.LoadStream(claim.ID)
+	if err == nil {
+		for i := len(events) - 1; i >= 0; i-- {
+			if events[i].EventType == model.EventClaimPendingCustomer {
+				if p, ok := events[i].Payload.(model.ClaimPendingCustomerPayload); ok {
+					supervisorNotes = p.Notes
+				}
+				break
+			}
+		}
+	}
+	return &claim, supervisorNotes, nil
+}
+
+// RespondToClaimInfoRequest procesa la respuesta del cliente al reclamo en pending_customer.
+// Valida que el DNI coincida con el reclamante, guarda la evidencia opcional y transiciona a in_review.
+func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseText string, evidence *ClaimEvidenceUpload) (model.Claim, error) {
+	claim, err := s.claimRepo.GetByID(claimID)
+	if err != nil {
+		return model.Claim{}, fmt.Errorf("reclamo no encontrado")
+	}
+	if claim.Status != model.ClaimStatusPendingCustomer {
+		return model.Claim{}, fmt.Errorf("el reclamo no está esperando respuesta del cliente")
+	}
+	if strings.TrimSpace(claim.ClaimantDNI) != strings.TrimSpace(claimantDNI) {
+		return model.Claim{}, fmt.Errorf("el DNI no coincide con el reclamante")
+	}
+	responseText = strings.TrimSpace(responseText)
+	if len(responseText) < 1 || len(responseText) > 400 {
+		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 1 y 400 caracteres")
+	}
+
+	now := clock.Now().UTC()
+	var evidenceFileName, evidenceFilePath string
+	if evidence != nil && len(evidence.Data) > 0 {
+		evidenceDir := filepath.Join("uploads", "claims")
+		if err := os.MkdirAll(evidenceDir, 0o755); err != nil {
+			return model.Claim{}, err
+		}
+		safeName := sanitizeEvidenceFileName(evidence.FileName)
+		if ext := strings.ToLower(filepath.Ext(safeName)); ext == "" {
+			safeName += evidenceFileExtension(evidence.MimeType)
+		}
+		evidenceFileName = safeName
+		evidenceFilePath = filepath.Join(evidenceDir, fmt.Sprintf("%s_resp_%s", claimID, safeName))
+		if err := os.WriteFile(evidenceFilePath, evidence.Data, 0o644); err != nil {
+			return model.Claim{}, err
+		}
+	}
+
+	fromStatus := claim.Status
+	// Evento: cliente respondió
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimCustomerResponded,
+		Payload: model.ClaimCustomerRespondedPayload{
+			Response:         responseText,
+			FromStatus:       fromStatus,
+			ToStatus:         model.ClaimStatusInReview,
+			EvidenceFileName: evidenceFileName,
+			EvidenceFilePath: evidenceFilePath,
+		},
+		ChangedBy: "chatbot-customer:" + claimantDNI,
+		Timestamp: now,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+
+	// Transicionar a in_review
+	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, now); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimInReview,
+		Payload: model.ClaimInReviewPayload{
+			FromStatus: fromStatus,
+			ToStatus:   model.ClaimStatusInReview,
+		},
+		ChangedBy: "chatbot-customer:" + claimantDNI,
+		Timestamp: now,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+
+	claim.Status = model.ClaimStatusInReview
+	claim.UpdatedAt = now
+	return claim, nil
 }
 
 func (s *ClaimService) ValidateClaimant(shipment *model.Shipment, fullName, dni string) bool {

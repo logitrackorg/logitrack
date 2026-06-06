@@ -167,6 +167,7 @@ func RunMigrations(db *sql.DB) error {
 			status            TEXT         NOT NULL,
 			description       TEXT         NOT NULL,
 			created_by        VARCHAR(100) NOT NULL,
+			claimant_dni      VARCHAR(20),
 			created_at        TIMESTAMPTZ  NOT NULL,
 			updated_at        TIMESTAMPTZ  NOT NULL,
 			assigned_category TEXT,
@@ -258,11 +259,13 @@ func RunMigrations(db *sql.DB) error {
 			phone      TEXT NOT NULL DEFAULT '',
 			email      TEXT NOT NULL DEFAULT '',
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_by TEXT NOT NULL DEFAULT ''
+			updated_by TEXT NOT NULL DEFAULT '',
+			track_url  TEXT NOT NULL DEFAULT ''
 		);
-		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by)
-		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system')
+		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
+		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
 		ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS track_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,
@@ -424,6 +427,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_file_path   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
 
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
@@ -525,6 +529,104 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
+
+		-- Parametrización de reprogramaciones vía chatbot
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
+		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedule_days INTEGER NOT NULL DEFAULT 3;
+		UPDATE system_config SET max_reschedule_days = 3 WHERE id = 1 AND (max_reschedule_days IS NULL OR max_reschedule_days = 0);
+
+		-- Calendario de viajes: tiempos planificados en inter_branch_trips
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS scheduled_departure_at TIMESTAMPTZ;
+		ALTER TABLE inter_branch_trips ADD COLUMN IF NOT EXISTS estimated_arrival_at   TIMESTAMPTZ;
+		CREATE INDEX IF NOT EXISTS idx_ibt_scheduled_departure ON inter_branch_trips(scheduled_departure_at) WHERE scheduled_departure_at IS NOT NULL;
+
+		-- Hora de despacho inter-sucursal (configurable por admin)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_dispatch_hour INTEGER NOT NULL DEFAULT 8;
+		-- Velocidad de ruta inter-sucursal (fallback cuando la arista no tiene avg_transit_hours)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_avg_speed_kmh NUMERIC(6,2) NOT NULL DEFAULT 60.0;
+		-- Dwell (descarga + carga) en parada intermedia inter-sucursal — independiente de service_time_minutes
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS inter_branch_stop_minutes INTEGER NOT NULL DEFAULT 240;
+		-- Horizonte de planificación multi-día (hoy + N-1 pronósticos)
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS planning_horizon_days INTEGER NOT NULL DEFAULT 3;
+		-- Backhauling y balanceo de flota
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS backhaul_enabled BOOLEAN NOT NULL DEFAULT true;
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS keep_one_vehicle_per_branch BOOLEAN NOT NULL DEFAULT true;
+
+		-- Plan multi-día: offset y flag de pronóstico en routing_plans
+		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS horizon_offset INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE routing_plans ADD COLUMN IF NOT EXISTS is_forecast BOOLEAN NOT NULL DEFAULT false;
+		-- Recuperación de contraseña vía OTP (LOGITRACK-397)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id         TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL,
+			token_hash TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			used_at    TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_prt_user_id ON password_reset_tokens(user_id);
+
+		-- Autenticación de Doble Factor (2FA)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_secret TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_enrolled_at TIMESTAMPTZ;
+
+		-- Tokens temporales con scope limitado para flujo 2FA
+		CREATE TABLE IF NOT EXISTS two_fa_pending_sessions (
+			token         TEXT PRIMARY KEY,
+			user_id       TEXT NOT NULL,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			expires_at    TIMESTAMPTZ NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+		CREATE INDEX IF NOT EXISTS idx_2fa_pending_user ON two_fa_pending_sessions(user_id);
+		CREATE INDEX IF NOT EXISTS idx_2fa_pending_expires ON two_fa_pending_sessions(expires_at);
+
+		-- Registro de códigos OTP usados (prevención de replay attacks)
+		CREATE TABLE IF NOT EXISTS two_fa_used_codes (
+			user_id    TEXT NOT NULL,
+			code       TEXT NOT NULL,
+			used_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, code)
+		);
+		-- Auto-limpieza: códigos más antiguos de 2 minutos son irrelevantes
+		CREATE INDEX IF NOT EXISTS idx_2fa_used_codes_cleanup ON two_fa_used_codes(used_at);
+
+		-- Auditoría específica de eventos 2FA
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+
+		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
+		CREATE TABLE IF NOT EXISTS fatigue_blocks (
+			id           TEXT PRIMARY KEY,
+			driver_id    TEXT NOT NULL,
+			trip_id      TEXT,
+			blocked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			unblocked_at TIMESTAMPTZ,
+			unblocked_by TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_fatigue_blocks_driver ON fatigue_blocks(driver_id) WHERE unblocked_at IS NULL;
+
+		-- data/migrations/XXXX_add_2fa_cooldown_config.sql
+
+		ALTER TABLE system_config 
+		ADD COLUMN IF NOT EXISTS two_fa_cooldown_minutes INTEGER NOT NULL DEFAULT 1;
+
+		-- Constraint: rango 1-10 minutos
+		DO $$ 
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint 
+				WHERE conname = 'check_2fa_cooldown_range'
+			) THEN
+				ALTER TABLE system_config 
+				ADD CONSTRAINT check_2fa_cooldown_range 
+				CHECK (two_fa_cooldown_minutes >= 1 AND two_fa_cooldown_minutes <= 10);
+			END IF;
+		END $$;
 	`)
 	return err
 }

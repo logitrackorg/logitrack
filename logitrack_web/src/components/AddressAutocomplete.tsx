@@ -95,9 +95,10 @@ interface Props {
   placeholder?: string;
   style?: React.CSSProperties;
   required?: boolean;
+  className?: string;
 }
 
-export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelect, placeholder, style, required }: Props) {
+export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelect, placeholder, style, required, className }: Props) {
   const value = valueProp ?? "";
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -161,6 +162,7 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <input
+        className={className}
         style={style}
         value={value}
         required={required}
@@ -172,7 +174,7 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
       {loading && (
         <span style={{
           position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-          fontSize: 11, color: "#9ca3af", pointerEvents: "none",
+          fontSize: 11, color: "var(--text-muted)", pointerEvents: "none",
         }}>
           buscando...
         </span>
@@ -180,7 +182,7 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
       {open && suggestions.length > 0 && (
         <ul style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-          background: "#fff", border: "1px solid #d1d5db", borderRadius: 8,
+          background: "var(--bg-card)", border: "1px solid var(--border-strong)", borderRadius: 8,
           margin: 0, padding: 0, listStyle: "none",
           boxShadow: "0 4px 12px rgba(0,0,0,0.12)", maxHeight: 220, overflowY: "auto",
         }}>
@@ -188,9 +190,9 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
             <li
               key={r.place_id}
               onMouseDown={(e) => { e.preventDefault(); handleSelect(r); }}
-              style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f9ff")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+              style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
             >
               {formatLabel(r)}
             </li>
@@ -198,7 +200,7 @@ export function AddressAutocomplete({ value: valueProp, onChange, onAddressSelec
         </ul>
       )}
       {notFound && !loading && (
-        <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>
+        <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)" }}>
           No se encontró la dirección. Podés completar los campos manualmente.
         </p>
       )}

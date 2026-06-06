@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -28,6 +29,47 @@ func newClaimSetup() (*ClaimService, testSetup) {
 		eventStore,
 	)
 	return claimSvc, ts
+}
+
+type fakeClaimEmailSender struct {
+	createdCalls       chan claimEmailCall
+	infoRequestedCalls chan claimInfoRequestedCall
+	resolvedCalls      chan claimResolvedEmailCall
+}
+
+type claimEmailCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+}
+
+type claimInfoRequestedCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+	notes    string
+}
+
+type claimResolvedEmailCall struct {
+	claim    model.Claim
+	shipment model.Shipment
+	notes    string
+}
+
+func (f *fakeClaimEmailSender) SendClaimCreatedNotification(claim model.Claim, shipment model.Shipment) {
+	if f.createdCalls != nil {
+		f.createdCalls <- claimEmailCall{claim: claim, shipment: shipment}
+	}
+}
+
+func (f *fakeClaimEmailSender) SendClaimInfoRequestedNotification(claim model.Claim, shipment model.Shipment, notes string) {
+	if f.infoRequestedCalls != nil {
+		f.infoRequestedCalls <- claimInfoRequestedCall{claim: claim, shipment: shipment, notes: notes}
+	}
+}
+
+func (f *fakeClaimEmailSender) SendClaimResolvedNotification(claim model.Claim, shipment model.Shipment, notes string) {
+	if f.resolvedCalls != nil {
+		f.resolvedCalls <- claimResolvedEmailCall{claim: claim, shipment: shipment, notes: notes}
+	}
 }
 
 func TestCreatePublicClaim_UniqueSequentialIDs(t *testing.T) {
@@ -117,6 +159,39 @@ func TestCreatePublicClaim_PersistsClaimEvents(t *testing.T) {
 	}
 }
 
+func TestCreatePublicClaim_SendsCustomerEmail(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimEmailSender{createdCalls: make(chan claimEmailCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDelay,
+		Description: "Demora en la entrega del paquete",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, nil)
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+
+	select {
+	case got := <-fakeEmail.createdCalls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.claim.Status != model.ClaimStatusOpen {
+			t.Fatalf("expected initial open status, got %s", got.claim.Status)
+		}
+		if got.shipment.TrackingID != ship.TrackingID {
+			t.Fatalf("expected shipment %s, got %s", ship.TrackingID, got.shipment.TrackingID)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("expected claim-created email call")
+	}
+}
+
 func TestCreatePublicClaim_WithEvidenceStoresMetadata(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
@@ -202,6 +277,8 @@ func TestCreatePublicClaim_WithImageEvidenceInfersExtension(t *testing.T) {
 func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	claimSvc, ts := newClaimSetup()
 	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimEmailSender{resolvedCalls: make(chan claimResolvedEmailCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
 
 	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
 		TrackingID:  ship.TrackingID,
@@ -214,9 +291,25 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 		t.Fatalf("create claim: %v", err)
 	}
 
-	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "", "Reclamo revisado y rechazado por falta de evidencia")
+	resolutionNotes := "Reclamo revisado y rechazado por falta de evidencia"
+	_, err = claimSvc.Resolve(claim.ID, model.ClaimResolutionImprocedente, "sup_caba", "", resolutionNotes)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
+	}
+
+	select {
+	case got := <-fakeEmail.resolvedCalls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.claim.Status != model.ClaimStatusResolvedImprocedente {
+			t.Fatalf("expected resolved_improcedente, got %s", got.claim.Status)
+		}
+		if got.notes != resolutionNotes {
+			t.Fatalf("expected notes %q, got %q", resolutionNotes, got.notes)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected resolved email to be sent")
 	}
 
 	events, err := claimSvc.GetEvents(claim.ID, "")
@@ -231,6 +324,48 @@ func TestResolveClaim_AppendsResolvedEvent(t *testing.T) {
 	}
 	if events[1].Notes != "Reclamo revisado y rechazado por falta de evidencia" {
 		t.Errorf("expected notes to be stored, got %q", events[1].Notes)
+	}
+}
+
+func TestRequestCustomerInfo_SendsInfoRequestedEmail(t *testing.T) {
+	claimSvc, ts := newClaimSetup()
+	ship := mustCreate(t, ts)
+	fakeEmail := &fakeClaimEmailSender{infoRequestedCalls: make(chan claimInfoRequestedCall, 1)}
+	claimSvc.SetClaimEmailService(fakeEmail)
+
+	claim, err := claimSvc.CreatePublicClaim(model.CreatePublicClaimRequest{
+		TrackingID:  ship.TrackingID,
+		ClaimType:   model.ClaimTypeDelay,
+		Description: "Demora en la entrega del paquete",
+		CreatedBy:   "Alice Sender",
+		DNI:         "12345678",
+	}, nil)
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	if claim.ClaimantDNI != "12345678" {
+		t.Fatalf("expected claimant DNI persisted, got %q", claim.ClaimantDNI)
+	}
+
+	notes := "Necesitamos fotos del paquete y del embalaje para continuar"
+	updated, err := claimSvc.RequestCustomerInfo(claim.ID, "sup_caba", "", notes)
+	if err != nil {
+		t.Fatalf("request customer info: %v", err)
+	}
+	if updated.Status != model.ClaimStatusPendingCustomer {
+		t.Fatalf("expected pending_customer, got %s", updated.Status)
+	}
+
+	select {
+	case got := <-fakeEmail.infoRequestedCalls:
+		if got.claim.ID != claim.ID {
+			t.Fatalf("expected claim %s, got %s", claim.ID, got.claim.ID)
+		}
+		if got.notes != notes {
+			t.Fatalf("expected notes %q, got %q", notes, got.notes)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected info-requested email to be sent")
 	}
 }
 

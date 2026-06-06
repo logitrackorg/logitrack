@@ -106,6 +106,29 @@
       }
     ]
   },
+  "12|2026-05-28": {
+    "driver_id": "12",
+    "date": "2026-05-28",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-05-28T23:55:20.340511-03:00",
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 24281,
+        "misfires": 5,
+        "recorded_at": "2026-05-28T23:55:20.340511-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00003",
+        "action": "entregado",
+        "reaction_time_ms": 27923,
+        "misfires": 5,
+        "recorded_at": "2026-05-28T23:55:23.976012-03:00"
+      }
+    ]
+  },
   "15|2026-05-23": {
     "driver_id": "15",
     "date": "2026-05-23",

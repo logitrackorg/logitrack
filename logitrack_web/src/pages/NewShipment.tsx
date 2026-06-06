@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check } from "lucide-react";
+import { ArrowLeft, PackagePlus, AlertTriangle, FileText, X, AlertCircle, MapPin, Tag, User, UserCheck, Box, Loader2, Check, Info, CreditCard } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod, type Shipment } from "../api/shipments";
 import { paymentApi, type Payment } from "../api/payments";
 import { branchApi, type Branch, type BranchCapacity } from "../api/branches";
@@ -476,7 +476,7 @@ export function NewShipment() {
         </button>
       )}
 
-      <form onSubmit={handleSubmit} className="grid gap-5">
+      <form onSubmit={handleSubmit} className="grid gap-5 new-shipment-form">
 
         {/* Remitente */}
         <Section title="Remitente" icon={<User className="w-4 h-4" />}
@@ -493,15 +493,15 @@ export function NewShipment() {
               </div>
             </Field>
             <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: senderNameError ? "#ef4444" : undefined }} required value={form.sender.name}
+              <input style={{ ...input, borderColor: senderNameError ? "var(--danger-c)" : undefined }} required value={form.sender.name}
                 onChange={(e) => handleSenderName(e.target.value)} placeholder="ej: Carlos Mendez" />
-              {senderNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{senderNameError}</span>}
+              {senderNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{senderNameError}</span>}
             </Field>
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", overflow: "hidden" }}>
-                <span style={{ padding: "10px 10px", color: "#64748b", fontSize: 14, borderRight: "1px solid #e2e8f0", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-card)", overflow: "hidden" }}>
+                <span style={{ padding: "10px 10px", color: "var(--text-secondary)", fontSize: 14, borderRight: "1px solid var(--border)", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
                 <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
                   value={phoneLocalPart(form.sender.phone)}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setSender("phone", d ? "+549" + d : ""); }}
@@ -557,15 +557,15 @@ export function NewShipment() {
               </div>
             </Field>
             <Field label="Nombre completo *">
-              <input style={{ ...input, borderColor: recipientNameError ? "#ef4444" : undefined }} required value={form.recipient.name}
+              <input style={{ ...input, borderColor: recipientNameError ? "var(--danger-c)" : undefined }} required value={form.recipient.name}
                 onChange={(e) => handleRecipientName(e.target.value)} placeholder="ej: Laura Gomez" />
-              {recipientNameError && <span style={{ color: "#ef4444", fontSize: 12 }}>{recipientNameError}</span>}
+              {recipientNameError && <span style={{ color: "var(--danger-c)", fontSize: 12 }}>{recipientNameError}</span>}
             </Field>
           </Row2>
           <Row2>
             <Field label="Teléfono *">
-              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", overflow: "hidden" }}>
-                <span style={{ padding: "10px 10px", color: "#64748b", fontSize: 14, borderRight: "1px solid #e2e8f0", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-card)", overflow: "hidden" }}>
+                <span style={{ padding: "10px 10px", color: "var(--text-secondary)", fontSize: 14, borderRight: "1px solid var(--border)", whiteSpace: "nowrap", userSelect: "none" }}>+54 9</span>
                 <input style={{ ...input, border: "none", borderRadius: 0, flex: 1, width: "auto" }} required
                   value={phoneLocalPart(form.recipient.phone)}
                   onChange={(e) => { const d = e.target.value.replace(/\D/g, ""); setRecipient("phone", d ? "+549" + d : ""); }}
@@ -612,14 +612,14 @@ export function NewShipment() {
               marginTop: 8,
               padding: "10px 14px",
               borderRadius: 8,
-              border: "1px solid #e0f2fe",
-              background: "#f0f9ff",
+              border: "1px solid var(--info-border)",
+              background: "var(--info-bg)",
               display: "flex",
               gap: 10,
               alignItems: "flex-start",
             }}>
-              <span style={{ fontSize: 15, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
-              <p style={{ fontSize: 12, color: "#0369a1", margin: 0, lineHeight: 1.5 }}>
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <p style={{ fontSize: 12, color: "var(--info-text)", margin: 0, lineHeight: 1.5 }}>
                 Los datos personales del destinatario se conservarán según la política de retención de borradores vigente y serán tratados conforme a la{" "}
                 <strong>Ley 25.326 de Protección de Datos Personales</strong>.{" "}
                 Si el borrador no se confirma, los datos serán eliminados automáticamente pasado el período de vigencia.
@@ -920,16 +920,16 @@ function PaymentModal({
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
     }}>
       <div style={{
-        background: "#fff", borderRadius: 16, padding: 32, maxWidth: 420, width: "100%",
+        background: "var(--bg-card)", borderRadius: 16, padding: 32, maxWidth: 420, width: "100%",
         margin: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
       }}>
         <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💳</div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1e3a5f", margin: 0 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}><CreditCard className="w-8 h-8" /></div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-heading)", margin: 0 }}>
             Pago pendiente
           </h2>
-          <p style={{ fontSize: 13, color: "#64748b", marginTop: 6 }}>
-            Monto a cobrar: <strong style={{ color: "#1e3a5f" }}>
+          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>
+            Monto a cobrar: <strong style={{ color: "var(--text-heading)" }}>
               {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(payment.amount)}
             </strong>
           </p>
@@ -947,12 +947,12 @@ function PaymentModal({
               onError={setPaymentError}
             />
             {paymentError && (
-              <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
+              <p style={{ fontSize: 12, color: "var(--danger-text)", textAlign: "center", marginTop: 10, marginBottom: 0 }}>
                 {paymentError}
               </p>
             )}
             {polling && payment.init_point && (
-              <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", marginTop: 14, marginBottom: 0 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 14, marginBottom: 0 }}>
                 Esperando confirmación de pago…
               </p>
             )}
@@ -961,20 +961,20 @@ function PaymentModal({
 
         {status === "approved" && (
           <div style={{
-            textAlign: "center", background: "#ecfdf5", borderRadius: 10,
-            padding: 16, marginTop: 16, marginBottom: 0, color: "#16a34a", fontWeight: 600,
+            textAlign: "center", background: "var(--ok-bg)", borderRadius: 10,
+            padding: 16, marginTop: 16, marginBottom: 0, color: "var(--ok-text)", fontWeight: 600,
           }}>
             ✓ Pago confirmado — redirigiendo…
           </div>
         )}
 
-        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #e2e8f0" }}>
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
           <button
             onClick={onBackToDraft}
             style={{
               width: "100%", padding: "10px 0",
-              border: "1px solid #e2e8f0", borderRadius: 10,
-              background: "#fff", color: "#64748b",
+              border: "1px solid var(--border)", borderRadius: 10,
+              background: "var(--bg-card)", color: "var(--text-secondary)",
               fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
           >
@@ -1023,7 +1023,7 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
               <BreakdownRow label="Entrega a domicilio" value={formatCurrencyARS(quote.breakdown.last_mile_surcharge)} />
             )}
             {quote.breakdown.risky_zone_surcharge > 0 && (
-              <BreakdownRow label="⚠️ Recargo zona peligrosa" value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
+              <BreakdownRow label={<><AlertTriangle className="w-3.5 h-3.5" /> Recargo zona peligrosa</>} value={formatCurrencyARS(quote.breakdown.risky_zone_surcharge)} />
             )}
             {quote.breakdown.shipment_multiplier !== 1 && (
               <BreakdownRow
@@ -1044,10 +1044,10 @@ function PricingCard({ quote, loading }: { quote: QuoteResponse | null; loading:
   );
 }
 
-function BreakdownRow({ label, value }: { label: string; value: string }) {
+function BreakdownRow({ label, value }: { label: React.ReactNode; value: string }) {
   return (
     <div className="flex justify-between items-center">
-      <span className="text-white/75">{label}</span>
+      <span className="text-white/75 flex items-center gap-1">{label}</span>
       <span className="font-semibold tabular-nums">{value}</span>
     </div>
   );
@@ -1055,19 +1055,22 @@ function BreakdownRow({ label, value }: { label: string; value: string }) {
 
 function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Customer; onApply: () => void; onDismiss: () => void }) {
   return (
-    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-center justify-between gap-3 shadow-lg">
-      <div className="text-sm text-blue-900 leading-relaxed min-w-0 flex-1">
+    <div
+      className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 rounded-lg px-3 py-2.5 flex flex-col gap-2 shadow-lg"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--brand-tint-border)" }}
+    >
+      <div className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
         <span className="font-bold">{customer.name}</span>
-        <span className="mx-1.5 text-slate-400">·</span>
+        <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
         <span>{customer.phone}</span>
         {customer.address.city && (
           <>
-            <span className="mx-1.5 text-slate-400">·</span>
+            <span className="mx-1.5" style={{ color: "var(--text-muted)" }}>·</span>
             <span>{customer.address.city}, {customer.address.province}</span>
           </>
         )}
       </div>
-      <div className="flex gap-1.5 shrink-0">
+      <div className="flex gap-1.5">
         <button
           type="button"
           onClick={onApply}
@@ -1078,10 +1081,10 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Descartar"
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 cursor-pointer"
+          className="h-7 px-3 rounded-md text-xs font-semibold cursor-pointer"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
         >
-          <X className="w-3.5 h-3.5" />
+          Ignorar
         </button>
       </div>
     </div>
@@ -1125,11 +1128,11 @@ function Field({ label, children, error }: { label: string; children: React.Reac
 const input: React.CSSProperties = {
   padding: "10px 12px",
   borderRadius: 8,
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--border)",
   fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
-  background: "#fff",
-  outline: "none",
+  background: "var(--bg-card)",
+  outline: "none", // focus ring provided via .new-shipment-form CSS rule
   transition: "border-color 0.15s, box-shadow 0.15s",
 };

@@ -19,6 +19,10 @@ export interface SystemConfig {
   pickup_deadline_days: number;
   /** When true, WhatsApp is skipped and all customer notifications go via email only. */
   force_email_notifications: boolean;
+  /** Maximum number of times a customer can reschedule delivery via chatbot. Range: 0-10 (default 2). */
+  max_reschedules: number;
+  max_reschedule_days: number;
+  two_fa_cooldown_minutes: number;
 }
 
 export const systemConfigApi = {
@@ -27,4 +31,7 @@ export const systemConfigApi = {
 
   update: (cfg: SystemConfig): Promise<SystemConfig> =>
     client.patch<SystemConfig>("/system/config", cfg).then((r) => r.data),
+
+  getPublicConfig: (): Promise<{ two_fa_cooldown_minutes: number }> =>
+    client.get<{ two_fa_cooldown_minutes: number }>("/public/config").then((r) => r.data),
 };

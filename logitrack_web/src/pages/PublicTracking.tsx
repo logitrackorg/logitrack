@@ -134,41 +134,150 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
   return { icon: "•", title: to, subtitle: cityLine };
 }
 
-// Phase stepper — 4 macro-stages every shipment goes through. Maps the 17
-// internal statuses to "pending" / "active" / "done" / "failed" buckets.
-type PhaseState = "pending" | "active" | "done" | "failed";
+// Phase stepper — 5 macro-stages for ultima_milla/branch_pickup, 4 for return.
+type PhaseState = "pending" | "active" | "done" | "failed" | "warn";
+
 interface Phase {
   key: string;
   label: string;
 }
-const PHASES: Phase[] = [
+
+interface PhaseInfo {
+  phases: Phase[];
+  states: Array<{ state: PhaseState; pct: number }>;
+  failedPhaseLabel?: string;
+}
+
+const TERMINAL_FAILED: ShipmentStatus[] = ["cancelled", "lost", "destroyed", "rechazado", "no_entregado"];
+const WARN_STATUSES: ShipmentStatus[] = ["delivery_failed", "redelivery_scheduled"];
+
+const PHASES_ULTIMA_MILLA: Phase[] = [
   { key: "registered", label: "Registrado" },
-  { key: "transit",    label: "En tránsito" },
+  { key: "transit",    label: "En camino" },
+  { key: "at_dest",    label: "En sucursal destino" },
   { key: "delivery",   label: "En reparto" },
   { key: "delivered",  label: "Entregado" },
 ];
 
-function phaseStates(status: ShipmentStatus): PhaseState[] {
-  // Returns one PhaseState per PHASES entry, in the same order.
-  const failed: ShipmentStatus[] = ["cancelled", "lost", "destroyed", "no_entregado", "rechazado"];
-  if (failed.includes(status)) {
-    // Show the journey as far as it got, but mark the final phase as failed.
-    return ["done", "done", "done", "failed"];
+const PHASES_BRANCH_PICKUP: Phase[] = [
+  { key: "registered", label: "Registrado" },
+  { key: "transit",    label: "En camino" },
+  { key: "at_branch",  label: "En sucursal" },
+  { key: "ready",      label: "Listo para retirar" },
+  { key: "retrieved",  label: "Retirado" },
+];
+
+const PHASES_RETURN: Phase[] = [
+  { key: "registered",     label: "Registrado" },
+  { key: "return_started", label: "Retorno iniciado" },
+  { key: "return_transit", label: "En camino de regreso" },
+  { key: "returned",       label: "Devuelto al remitente" },
+];
+
+function lastActiveStatusBeforeTerminal(
+  events: PublicShipmentEvent[],
+  terminalStatus: ShipmentStatus
+): ShipmentStatus | null {
+  const terminalEvent = [...events]
+    .reverse()
+    .find(e => e.to_status === terminalStatus && e.from_status != null);
+  return terminalEvent?.from_status ?? null;
+}
+
+function getActivePhaseInfo(
+  status: ShipmentStatus,
+  shipment: PublicShipment
+): { phase: number; pct: number } {
+  const isFinalHub =
+    status === "at_hub" &&
+    shipment.current_location != null &&
+    shipment.final_branch_id != null &&
+    shipment.current_location === shipment.final_branch_id;
+  const isBranchPickup = shipment.delivery_method === "retiro_sucursal";
+  const isReturning = !!shipment.is_returning;
+
+  if (isReturning) {
+    switch (status) {
+      case "pending_payment":   return { phase: 0, pct: 40 };
+      case "at_origin_hub":     return { phase: 0, pct: 80 };
+      case "ready_for_return":  return { phase: 1, pct: 80 };
+      case "loaded":            return { phase: 2, pct: 20 };
+      case "in_transit":        return { phase: 2, pct: 60 };
+      case "at_hub":            return { phase: 2, pct: 90 };
+      case "returned":          return { phase: 3, pct: 100 };
+      default:                  return { phase: 0, pct: 40 };
+    }
   }
-  if (status === "returned") {
-    return ["done", "done", "done", "done"]; // a return is also a successful resolution
+
+  switch (status) {
+    case "pending_payment":      return { phase: 0, pct: 40 };
+    case "at_origin_hub":        return { phase: 0, pct: 80 };
+    case "loaded":               return { phase: 1, pct: 20 };
+    case "in_transit":           return { phase: 1, pct: 60 };
+    case "at_hub":
+      return isFinalHub ? { phase: 2, pct: 100 } : { phase: 1, pct: 90 };
+    case "ready_for_pickup":
+      return isBranchPickup ? { phase: 2, pct: 100 } : { phase: 3, pct: 90 };
+    case "ready_for_return":     return { phase: 2, pct: 60 };
+    case "out_for_delivery":     return { phase: 3, pct: 40 };
+    case "delivery_failed":      return { phase: 3, pct: 60 };
+    case "redelivery_scheduled": return { phase: 3, pct: 80 };
+    case "delivered":            return { phase: 4, pct: 100 };
+    case "returned":             return { phase: 4, pct: 100 };
+    default:                     return { phase: 0, pct: 40 };
   }
-  if (status === "delivered") {
-    return ["done", "done", "done", "done"];
+}
+
+function computePhaseInfo(
+  shipment: PublicShipment,
+  events: PublicShipmentEvent[]
+): PhaseInfo {
+  const isReturning = !!shipment.is_returning;
+  const isBranchPickup = shipment.delivery_method === "retiro_sucursal";
+
+  const phases = isReturning
+    ? PHASES_RETURN
+    : isBranchPickup
+    ? PHASES_BRANCH_PICKUP
+    : PHASES_ULTIMA_MILLA;
+
+  const { status } = shipment;
+
+  if (status === "delivered" || status === "returned") {
+    return {
+      phases,
+      states: phases.map(() => ({ state: "done" as PhaseState, pct: 100 })),
+    };
   }
-  if (status === "out_for_delivery" || status === "delivery_failed" || status === "redelivery_scheduled" || status === "ready_for_pickup") {
-    return ["done", "done", "active", "pending"];
+
+  if (TERMINAL_FAILED.includes(status)) {
+    const fromStatus = lastActiveStatusBeforeTerminal(events, status);
+    const { phase: failedPhase } = fromStatus
+      ? getActivePhaseInfo(fromStatus, shipment)
+      : { phase: 0 };
+    const failedPhaseLabel = status === "rechazado" ? "Rechazado en entrega" : undefined;
+    return {
+      phases,
+      states: phases.map((_, i): { state: PhaseState; pct: number } => {
+        if (i < failedPhase) return { state: "done", pct: 100 };
+        if (i === failedPhase) return { state: "failed", pct: 100 };
+        return { state: "pending", pct: 0 };
+      }),
+      failedPhaseLabel,
+    };
   }
-  if (status === "in_transit" || status === "at_hub" || status === "loaded" || status === "ready_for_return") {
-    return ["done", "active", "pending", "pending"];
-  }
-  // at_origin_hub, draft (drafts are filtered server-side, but be safe)
-  return ["active", "pending", "pending", "pending"];
+
+  const { phase: activePhase, pct } = getActivePhaseInfo(status, shipment);
+  const isWarn = WARN_STATUSES.includes(status);
+
+  return {
+    phases,
+    states: phases.map((_, i): { state: PhaseState; pct: number } => {
+      if (i < activePhase) return { state: "done", pct: 100 };
+      if (i === activePhase) return { state: isWarn ? "warn" : "active", pct };
+      return { state: "pending", pct: 0 };
+    }),
+  };
 }
 
 interface StatusHero {
@@ -382,7 +491,7 @@ export function PublicTracking() {
   const lastUpdate = events.length > 0 ? events[0].timestamp : shipment?.updated_at;
 
   const hero = shipment ? statusHero(shipment) : null;
-  const phases = shipment ? phaseStates(shipment.status) : null;
+  const phaseInfo = shipment ? computePhaseInfo(shipment, events) : null;
   const eta = shipment ? etaSummary(shipment.estimated_delivery_at, shipment.status) : undefined;
 
   return (
@@ -456,7 +565,7 @@ export function PublicTracking() {
           </div>
         )}
 
-        {shipment && hero && phases && (
+        {shipment && hero && phaseInfo && (
           <>
             <section
               className="pt-status-hero"
@@ -486,12 +595,23 @@ export function PublicTracking() {
                 <div>
                   <p className="pt-banner-title">
                     {shipment.delivery_attempts === 1 ? "1 intento de entrega" : `${shipment.delivery_attempts} intentos de entrega`}
+                    {shipment.max_delivery_attempts != null && shipment.delivery_attempts != null && (
+                      <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.8 }}>
+                        — {(() => {
+                            const left = Math.max(0, shipment.max_delivery_attempts - shipment.delivery_attempts);
+                            if (left === 0) return "disponible para retiro en sucursal";
+                            return `${left} ${left === 1 ? "intento restante" : "intentos restantes"}`;
+                          })()}
+                      </span>
+                    )}
                   </p>
                   <p className="pt-banner-body">
                     {shipment.status === "redelivery_scheduled"
                       ? "Vamos a hacer un nuevo intento de entrega."
                       : shipment.status === "ready_for_pickup"
                       ? "Tu envío te espera para retiro en sucursal."
+                      : shipment.max_delivery_attempts != null && shipment.delivery_attempts != null && shipment.delivery_attempts >= shipment.max_delivery_attempts
+                      ? null
                       : "Coordinaremos los próximos pasos según el estado actual."}
                   </p>
                 </div>
@@ -501,12 +621,22 @@ export function PublicTracking() {
             <section className="pt-stepper" aria-label="Progreso del envío">
               <h2 className="pt-stepper-title">Progreso</h2>
               <ol className="pt-steps">
-                {PHASES.map((p, i) => {
-                  const state = phases[i];
+                {phaseInfo.phases.map((p, i) => {
+                  const { state, pct } = phaseInfo.states[i];
+                  const label =
+                    state === "failed" && phaseInfo.failedPhaseLabel != null
+                      ? phaseInfo.failedPhaseLabel
+                      : p.label;
                   return (
-                    <li key={p.key} className="pt-step" data-state={state} aria-current={state === "active" ? "step" : undefined}>
+                    <li
+                      key={p.key}
+                      className="pt-step"
+                      data-state={state}
+                      aria-current={state === "active" || state === "warn" ? "step" : undefined}
+                      style={{ "--fill": `${pct}%` } as React.CSSProperties}
+                    >
                       <div className="pt-step-bar" aria-hidden="true" />
-                      <span className="pt-step-label">{p.label}</span>
+                      <span className="pt-step-label">{label}</span>
                     </li>
                   );
                 })}

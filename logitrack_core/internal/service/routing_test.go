@@ -48,6 +48,8 @@ func (r *fakeAuthRepo) CreateUser(_ repository.UserCreate) (model.User, error) {
 	return model.User{}, nil
 }
 func (r *fakeAuthRepo) ChangePassword(_ context.Context, _, _, _ string) error { return nil }
+func (r *fakeAuthRepo) FindUserByUsername(_ string) (model.User, bool)         { return model.User{}, false }
+func (r *fakeAuthRepo) UpdatePassword(_, _ string) error                       { return nil }
 
 type routingTestSetup struct {
 	routingSvc   *RoutingService

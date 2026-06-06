@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 	"log"
 	"os"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/logitrack/core/internal/mercadopago"
 	"github.com/logitrack/core/internal/messaging"
 	"github.com/logitrack/core/internal/middleware"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/ors"
 	"github.com/logitrack/core/internal/osrm"
@@ -63,6 +65,7 @@ func main() {
 
 	// Other repositories
 	authRepo := repository.NewPostgresAuthRepository(database)
+	twoFARepo := repository.NewTwoFARepository(database)
 	branchRepo := repository.NewPostgresBranchRepository(database)
 	vehicleRepo := repository.NewPostgresVehicleRepository(database)
 	routeRepo := repository.NewPostgresRouteRepository(database)
@@ -166,7 +169,8 @@ func main() {
 	fatigueConfigSvc := service.NewFatigueConfigService(fatigueConfigRepo)
 	auditLogRepo := repository.NewAuditLogRepository()
 	fatigueConfigHandler := handler.NewFatigueConfigHandler(fatigueConfigSvc, auditLogRepo)
-	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc)
+	fatigueBlockRepo := repository.NewPostgresFatigueBlockRepository(database)
+	supervisorFatigueHandler := handler.NewSupervisorFatigueHandler(authRepo, fatigueConfigSvc, fatigueBlockRepo)
 
 	commentSvc := service.NewCommentService(commentRepo, shipmentRepo)
 	incidentSvc := service.NewIncidentService(incidentRepo, shipmentRepo, eventStore, shipmentProj)
@@ -206,6 +210,7 @@ func main() {
 	}, orgSvc)
 	if emailSvc != nil {
 		shipmentSvc.SetEmailService(emailSvc)
+		claimSvc.SetClaimEmailService(emailSvc)
 		log.Printf("[email] servicio SMTP habilitado — host: %s:%d", os.Getenv("SMTP_HOST"), smtpPort)
 	} else {
 		log.Println("[email] SMTP_HOST no configurado — emails deshabilitados")
@@ -219,39 +224,45 @@ func main() {
 		os.Getenv("TRACK_BASE_URL"),
 		emailSvc,
 		routingCfgSvc,
+		orgSvc,
 	)
 	messagingSvc.SetPickupEmailFallback(emailSvc)            // email fallback para ready_for_pickup
 	messagingSvc.SetDeliveryConfirmedEmailFallback(emailSvc) // email fallback para entrega confirmada
 	messagingSvc.SetRejectedEmailFallback(emailSvc)          // email fallback para rechazo (LOGITRACK-429)
-	messagingSvc.SetDeliveryFailedEmailService(emailSvc)     // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
-	messagingSvc.SetSystemConfigGetter(sysConfigSvc)         // permite forzar email desde config de admin
+	messagingSvc.SetDeliveryFailedEmailService(emailSvc)      // email siempre (+ WhatsApp si tiene tel) para entrega fallida (LOGITRACK-437)
+	messagingSvc.SetSLAExpiredEmailFallback(emailSvc)          // email fallback cuando WhatsApp no disponible para SLA vencido (LOGITRACK-124)
+	messagingSvc.SetClaimEmailFallback(emailSvc)               // email fallback cuando WhatsApp no disponible para reclamos (LOGITRACK-123/125/486)
+	messagingSvc.SetSystemConfigGetter(sysConfigSvc)           // permite forzar email desde config de admin
+	claimSvc.SetClaimWAService(messagingSvc)                   // WhatsApp al reclamante, email como fallback (LOGITRACK-123/125/486)
 	shipmentSvc.SetWhatsAppConfirmationService(messagingSvc) // confirmación al registrar envío (LOGITRACK-406)
 	shipmentSvc.SetMessagingService(messagingSvc)
-	shipmentSvc.SetReadyForPickupEmailService(messagingSvc)  // WhatsApp primero, email fallback
-	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)    // WhatsApp primero, email fallback (CA-01/CA-02)
-	shipmentSvc.SetRejectedService(messagingSvc)             // WhatsApp primero, email fallback (LOGITRACK-429)
-	shipmentSvc.SetDeliveryFailedService(messagingSvc)       // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
+	shipmentSvc.SetReadyForPickupEmailService(messagingSvc) // WhatsApp primero, email fallback
+	shipmentSvc.SetDeliveryConfirmedService(messagingSvc)   // WhatsApp primero, email fallback (CA-01/CA-02)
+	shipmentSvc.SetRejectedService(messagingSvc)            // WhatsApp primero, email fallback (LOGITRACK-429)
+	shipmentSvc.SetDeliveryFailedService(messagingSvc)      // email siempre + WhatsApp si tiene tel (LOGITRACK-437)
 	if os.Getenv("TWILIO_ACCOUNT_SID") != "" {
 		log.Printf("[messaging] WhatsApp habilitado — from: %s", os.Getenv("TWILIO_WHATSAPP_FROM"))
 	} else {
 		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
 	}
+	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
 	claimHandler := handler.NewClaimHandler(claimSvc)
-	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo)
+	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo, twoFARepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
 	vehicleHandler := handler.NewVehicleHandler(vehicleRepo, shipmentSvc, branchRepo)
 	vehicleHandler.SetBranchZoneService(branchZoneSvc)
-	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc)
+	notifSvc.SetFatigueBlockRepo(fatigueBlockRepo)
+	driverHandler := handler.NewDriverHandler(routeSvc, branchRepo, fatigueConfigSvc, auditLogRepo, notifSvc, fatigueBlockRepo)
 	userSvc := service.NewUserService(authRepo, branchRepo)
 	userHandler := handler.NewUserHandler(authRepo, userSvc)
 	adminHandler := handler.NewAdminHandler(authRepo)
@@ -259,6 +270,7 @@ func main() {
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
+	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
 	// schedules; el scheduler in-process dispara la generación y guarda el snapshot.
@@ -284,6 +296,7 @@ func main() {
 	interBranchTripSvc := service.NewInterBranchTripService(interBranchTripRepo, vehicleRepo, branchRepo, authRepo, shipmentSvc)
 	interBranchTripSvc.SetRouteService(routeSvc)
 	interBranchTripSvc.SetNotificationService(notifSvc)
+	notifSvc.SetInterBranchTripService(interBranchTripSvc)
 	interBranchTripHandler := handler.NewInterBranchTripHandler(interBranchTripSvc)
 	vehicleHandler.SetTripService(interBranchTripSvc)
 
@@ -292,9 +305,48 @@ func main() {
 	routingSvc.SetInterBranchTripService(interBranchTripSvc)
 	routingSvc.SetZoneService(zoneSvc)
 	routingSvc.SetBranchZoneService(branchZoneSvc)
+	routingSvc.SetSLAExpiredEmailService(emailSvc)
+	routingSvc.SetSLAExpiredWAService(messagingSvc) // WhatsApp al cliente en SLA vencido, email como fallback (LOGITRACK-124)
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
+
+	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
+	priorityLogRepo := repository.NewPriorityLogRepository()
+	priorityLogHandler := handler.NewPriorityLogHandler(priorityLogRepo, shipmentRepo, branchRepo)
+	slaSettingsRepo := repository.NewSLASettingsRepository()
+	// Migración de arranque: fuerza la lista EnabledStates a la lista canónica
+	// derivada de las constantes de estado del modelo, sobreescribiendo cualquier
+	// configuración obsoleta en disco (p. ej. una escrita antes de agregar at_hub).
+	if changed, err := slaSettingsRepo.SyncEnabledStates(); err != nil {
+		log.Printf("[SLA] no se pudo sincronizar EnabledStates: %v", err)
+	} else if changed {
+		log.Printf("[SLA] EnabledStates sincronizado a la lista canónica: %v", model.MonitoredStatusCodes())
+	} else {
+		log.Printf("[SLA] EnabledStates ya estaba sincronizado")
+	}
+	slaAnomalySvc := service.NewSLAAnomalyService(database, priorityLogRepo, slaSettingsRepo)
+	// Both handlers need the service to expose runtime state (LastCalculatedAt,
+	// CurrentAverages), so they are created after the service.
+	slaSettingsHandler := handler.NewSLASettingsHandler(slaSettingsRepo, slaAnomalySvc)
+
+	fleetModelPath := os.Getenv("FLEET_ML_MODEL_PATH")
+	if fleetModelPath == "" {
+		fleetModelPath = "fleet_model.json"
+	}
+	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
+
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
+	// Attach to the clock callback so every admin clock tick triggers a check.
+	// The service runs in its own goroutine and is mutex-guarded against overlap.
+	_ = slaAnomalySvc // referenced via closure below
+	origSLARiskChecker := slaRiskChecker
+	slaRiskChecker = func() {
+		if origSLARiskChecker != nil {
+			origSLARiskChecker()
+		}
+		slaAnomalySvc.RunCheck()
+	}
 
 	// LOGITRACK-409: volumen mínimo de despacho — checker + dedup persistida en DB.
 	dispatchVolumeRepo := repository.NewPostgresDispatchVolumeRepository(database)
@@ -322,6 +374,21 @@ func main() {
 	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
 	routingSvc.SetBranchGraphService(branchGraphSvc)
 	shipmentSvc.SetBranchGraphService(branchGraphSvc)
+
+	// Shared metrics repo
+	metricsRepo := repository.NewPostgresRoutingMetricsRepository(database)
+
+	// BranchGraph handler (repo+svc already exist above)
+	branchGraphHandler := handler.NewBranchGraphHandler(branchGraphSvc)
+
+	// Forecast + RollingPlan
+	forecastSvc := service.NewForecastService(metricsRepo, branchRepo)
+	rollingPlanSvc := service.NewRollingPlanService(forecastSvc, routingPlanRepo, vehicleRepo)
+	routingForecastHandler := handler.NewRoutingForecastHandler(forecastSvc, rollingPlanSvc)
+
+	// Metrics
+	routingMetricsSvc := service.NewRoutingMetricsService(metricsRepo)
+	routingMetricsHandler := handler.NewRoutingMetricsHandler(routingMetricsSvc)
 
 	routingHandler := handler.NewRoutingHandler(routingSvc)
 
@@ -362,13 +429,39 @@ func main() {
 
 	api := r.Group("/api/v1")
 
+	// Password reset via OTP (LOGITRACK-397) — sin autenticación
+	passwordResetRepo := repository.NewPostgresPasswordResetRepository(database)
+	passwordResetSvc := service.NewPasswordResetService(
+		authRepo,
+		passwordResetRepo,
+		emailSvc,
+		os.Getenv("TWILIO_ACCOUNT_SID"),
+		os.Getenv("TWILIO_AUTH_TOKEN"),
+		os.Getenv("TWILIO_WHATSAPP_FROM"),
+		accessLogRepo,
+	)
+	passwordResetHandler := handler.NewPasswordResetHandler(passwordResetSvc)
+
 	// Public routes
 	authHandler.RegisterRoutes(api)
+	twoFAHandler.RegisterRoutes(api, middleware.Auth(authRepo)) 
+	passwordResetHandler.RegisterRoutes(api)
 	api.POST("/webhooks/mercadopago", paymentHandler.Webhook)
 
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.Auth(authRepo))
+
+	// Tarea periódica: limpiar códigos OTP expirados (cada 5 minutos)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_ = twoFARepo.CleanupExpiredCodes(ctx)
+			cancel()
+		}
+	}()
 
 	protected.GET("/auth/me", authHandler.Me)
 
@@ -445,6 +538,7 @@ func main() {
 	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
+	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
@@ -476,8 +570,19 @@ func main() {
 	protected.GET("/stats/volume-by-delivery-method", canViewStats, statsExtendedHandler.VolumeByDeliveryMethod)
 	protected.GET("/stats/return-metrics", canViewStats, statsExtendedHandler.ReturnMetrics)
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
+	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
+	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
+	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
 	protected.GET("/supervisor/fatigue-history", canViewStats, supervisorFatigueHandler.GetHistory)
+	protected.GET("/supervisor/fatigue-alerts", canViewStats, supervisorFatigueHandler.GetActiveAlerts)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/dismiss", canViewStats, supervisorFatigueHandler.DismissAlert)
+	protected.POST("/supervisor/fatigue-alerts/:driver_id/recall", canViewStats, supervisorFatigueHandler.RecallDriver)
+	protected.GET("/supervisor/fatigue/blocked-drivers", canViewStats, supervisorFatigueHandler.GetBlockedDrivers)
+	protected.POST("/supervisor/fatigue/:driver_id/unblock", canViewStats, supervisorFatigueHandler.UnblockDriver)
+	protected.GET("/supervisor/history-requests", canViewStats, supervisorFatigueHandler.ListHistoryRequests)
+	protected.PATCH("/supervisor/history-requests/:driver_id", canViewStats, supervisorFatigueHandler.ReviewHistoryRequest)
 
 	// Reportes automáticos — manager + admin. Operadores y choferes reciben 403 (CA-03).
 	managerAdmin := middleware.RequireRoles(model.RoleManager, model.RoleAdmin)
@@ -490,6 +595,11 @@ func main() {
 	protected.GET("/auto-reports/generated/:id", managerAdmin, autoReportHandler.GetGenerated)
 	protected.GET("/auto-reports/generated/:id/csv", managerAdmin, autoReportHandler.DownloadCSV)
 
+	// RoutingForecast — manager + admin
+	protected.GET("/admin/routing/forecast", managerAdmin, routingForecastHandler.GetForecast)
+	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
+	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
+
 	// Driver route — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
@@ -497,13 +607,17 @@ func main() {
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
 	protected.POST("/driver/checkin", driverOnly, driverHandler.SubmitCheckin)
 	protected.POST("/driver/checkin/skip", driverOnly, driverHandler.SkipCheckin)
+	protected.POST("/driver/route/mark-started", driverOnly, driverHandler.MarkRouteStarted)
 	protected.POST("/driver/pvt-test", driverOnly, driverHandler.SubmitPVT)                 // US6: PVT mini-game
 	protected.POST("/driver/touch-events", driverOnly, driverHandler.SubmitTouchEvent)      // US4: tactile events
 	protected.GET("/driver/test-eligibility", driverOnly, driverHandler.GetTestEligibility) // US4+: re-test gate
 	protected.POST("/driver/reset-misfires", driverOnly, driverHandler.ResetMisfires)       // US4+: reset per-package misfire counter
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
+	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
+	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499
 
 	// Inter-branch trips — driver self-service + operator/supervisor receive
 	protected.GET("/driver/inter-branch-trip", driverOnly, interBranchTripHandler.GetMyTrip)
@@ -516,6 +630,7 @@ func main() {
 	protected.POST("/inter-branch-trips/:id/assign-driver", shipmentWrite, interBranchTripHandler.AssignDriver)
 	protected.POST("/inter-branch-trips/:id/cancel", middleware.RequireRoles(model.RoleSupervisor), interBranchTripHandler.Cancel)
 	protected.GET("/inter-branch-trips", shipmentRead, interBranchTripHandler.ListByBranch)
+	protected.GET("/inter-branch-trips/calendar", shipmentRead, interBranchTripHandler.Calendar)
 	// QR-based vehicle claim (driver) and close (operator/supervisor)
 	protected.POST("/trips/claim-by-qr", driverOnly, interBranchTripHandler.ClaimByVehicleQR)
 	protected.POST("/trips/close-by-qr", shipmentWrite, interBranchTripHandler.CloseByVehicleQR)
@@ -582,6 +697,12 @@ func main() {
 	protected.GET("/branches/:id/zones", authenticated, branchZoneHandler.ListZones)
 	protected.POST("/shipments/:tracking_id/move-zone", shipmentWrite, branchZoneHandler.MoveZone)
 
+	// BranchGraph — admin only
+	protected.GET("/admin/branches/graph", adminOnly, branchGraphHandler.GetGraph)
+	protected.POST("/admin/branches/graph/derive", adminOnly, branchGraphHandler.Derive)
+	protected.POST("/admin/branches/graph", adminOnly, branchGraphHandler.CreateEdge)
+	protected.PATCH("/admin/branches/graph/:from/:to", adminOnly, branchGraphHandler.SetEnabled)
+
 	// Inspection (supervisor-only) — approve from Revision or classify lost/destroyed
 	supervisorOnly := middleware.RequireRoles(model.RoleSupervisor)
 	protected.POST("/shipments/:tracking_id/approve-revision", supervisorOnly, inspectionHandler.ApproveFromRevision)
@@ -591,10 +712,18 @@ func main() {
 	protected.GET("/routing/config", adminOnly, routingCfgHandler.Get)
 	protected.PATCH("/routing/config", adminOnly, routingCfgHandler.Update)
 	protected.GET("/routing/plan/today", shipmentRead, routingHandler.GetTodayPlan)
+	protected.GET("/routing/plan/horizon", shipmentRead, routingHandler.GetHorizonPlans)
 	protected.POST("/routing/regenerate", shipmentWrite, routingHandler.Regenerate)          // operator+supervisor: su sucursal
 	protected.POST("/routing/regenerate/global", adminOnly, routingHandler.RegenerateGlobal) // admin: toda la red
 	protected.POST("/routing/apply", shipmentWrite, routingHandler.Apply)
 	protected.POST("/routing/last-mile/recompute", shipmentWrite, routingHandler.RecomputeLastMile)
+
+	// RoutingMetrics — admin only
+	protected.GET("/admin/routing/metrics/plan", adminOnly, routingMetricsHandler.GetPlanMetrics)
+	protected.GET("/admin/routing/metrics/apply", adminOnly, routingMetricsHandler.GetApplyMetrics)
+	protected.GET("/admin/routing/metrics/hops", adminOnly, routingMetricsHandler.GetHopMetrics)
+	protected.GET("/admin/routing/metrics/od-volume", adminOnly, routingMetricsHandler.GetODVolume)
+	protected.GET("/admin/routing/metrics/summary", adminOnly, routingMetricsHandler.GetSummary)
 
 	// ML config — admin only
 	protected.GET("/admin/users", adminOnly, adminHandler.ListUsers)
@@ -617,6 +746,7 @@ func main() {
 	publicAPI.GET("/claims/:id", claimHandler.GetPublicClaim)
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
+	publicAPI.GET("/config", sysConfigHandler.GetPublicConfig)
 	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {

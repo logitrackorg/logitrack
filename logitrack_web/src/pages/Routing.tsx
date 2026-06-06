@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { branchApi, branchLabelById, type Branch } from "../api/branches";
 
@@ -196,6 +197,8 @@ export function Routing({ mode }: RoutingProps = {}) {
 
   const [plan, setPlan] = useState<RoutingPlan | null>(null);
   const [globalPlan, setGlobalPlan] = useState<GlobalRoutingPlan | null>(null);
+  const [horizonPlans, setHorizonPlans] = useState<GlobalRoutingPlan[]>([]);
+  const [horizonDayIndex, setHorizonDayIndex] = useState(0); // 0=hoy, 1=mañana, 2=pasado
   const [originalPlan, setOriginalPlan] = useState<RoutingPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -251,6 +254,8 @@ export function Routing({ mode }: RoutingProps = {}) {
   const loadTodayPlan = async () => {
     setLoading(true);
     setError("");
+    // Cargar el horizonte completo en paralelo (para los tabs de días).
+    routingApi.getHorizonPlans().then(setHorizonPlans).catch(() => {});
     try {
       const globalPlanRaw = await routingApi.getTodayPlan();
       setGlobalPlan(globalPlanRaw);
@@ -285,6 +290,34 @@ export function Routing({ mode }: RoutingProps = {}) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // isForecast: true cuando se está viendo un día de pronóstico (no aplicable).
+  const isForecast = horizonDayIndex > 0;
+
+  // loadHorizonDay carga el plan del día seleccionado desde el horizonte ya cargado.
+  const loadHorizonDay = async (dayIdx: number) => {
+    const hp = horizonPlans[dayIdx];
+    if (!hp) return;
+    setHorizonDayIndex(dayIdx);
+    if (dayIdx === 0) {
+      // Día 0: recargar el plan vivo (con overrides de runtime).
+      await loadTodayPlan();
+      return;
+    }
+    // Días de pronóstico: mostrar read-only sin overrides.
+    let effectiveBranchId = branchId;
+    if (isNetworkRole && !effectiveBranchId && hp.branch_plans.length > 0) {
+      effectiveBranchId = hp.branch_plans[0].branch_id;
+    }
+    const branchPlan = hp.branch_plans.find((bp) => bp.branch_id === effectiveBranchId)
+      ?? hp.branch_plans[0];
+    if (!branchPlan) {
+      setPlan(null);
+      setOriginalPlan(null);
+      return;
+    }
+    await applyBranchPlan(branchPlan.plan);
   };
 
   // applyBranchPlan normaliza y establece un RoutingPlan como estado editable.
@@ -382,29 +415,6 @@ export function Routing({ mode }: RoutingProps = {}) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
         "No se pudo aplicar el plan.";
-      setError(msg);
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  // handleApplyItem aplica solo un vehículo o chofer específico y recarga el plan inline.
-  // Siempre envía el plan actual del módulo para que el backend aplique exactamente
-  // los envíos visibles en pantalla, sin tomar envíos extra del plan persistido.
-  const handleApplyItem = async (opts: { vehicleId?: string; driverId?: string }) => {
-    if (!branchId || !plan) return;
-    setApplying(true);
-    setError("");
-    try {
-      await routingApi.apply(branchId, { ...opts, plan });
-      await loadTodayPlan();
-      const label = opts.vehicleId ? "Despacho aplicado." : "Ruta aplicada.";
-      setSuccess(label);
-      setTimeout(() => setSuccess(""), 2500);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        "No se pudo aplicar el ítem.";
       setError(msg);
     } finally {
       setApplying(false);
@@ -714,36 +724,69 @@ export function Routing({ mode }: RoutingProps = {}) {
         actions={
           <div className="flex gap-2">
             {isDirty && (
-              <button
-                onClick={handleDiscard}
-                disabled={applying}
-                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
-              >
+              <Button variant="outline" onClick={handleDiscard} disabled={applying}>
                 Descartar cambios
-              </button>
+              </Button>
             )}
-            {canRegenerate && (
-              <button
-                onClick={handleRegenerate}
-                disabled={loading || applying}
-                className="h-10 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors flex items-center gap-2"
-              >
+            {canRegenerate && !isForecast && (
+              <Button variant="outline" onClick={handleRegenerate} disabled={loading || applying}>
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                 Regenerar plan
-              </button>
+              </Button>
             )}
-            {canApply && (
-              <button
-                onClick={handleApply}
-                disabled={applying || loading || !plan}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-              >
+            {canApply && !isForecast && (
+              <Button size="lg" onClick={handleApply} disabled={applying || loading || !plan}>
                 {applying ? "Aplicando…" : "Aplicar plan"}
-              </button>
+              </Button>
             )}
           </div>
         }
       />
+
+      {/* Selector de día del horizonte */}
+      {horizonPlans.length > 1 && (
+        <div className="flex items-center gap-1 mb-4">
+          {horizonPlans.map((hp, idx) => {
+            // Parseo manual YYYY-MM-DD para evitar NaN en algunos browsers/locales
+            // cuando se usa `new Date(str + "T12:00:00")`.
+            const [, m, d] = (hp.plan_date ?? "").split("-").map(Number);
+            const dayLabel = idx === 0
+              ? "Hoy"
+              : Number.isFinite(d)
+              ? `${idx === 1 ? "Mañana " : ""}${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`
+              : hp.plan_date;
+            const isSelected = horizonDayIndex === idx;
+            return (
+              <button
+                key={hp.plan_date}
+                onClick={() => void loadHorizonDay(idx)}
+                className={`h-9 px-4 rounded-lg text-sm font-semibold transition-colors cursor-pointer border ${
+                  isSelected
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {dayLabel}
+                {hp.is_forecast && (
+                  <span className="ml-1.5 text-[10px] opacity-70">pronóstico</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Banner de pronóstico (días +1/+2) */}
+      {isForecast && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+          <span className="text-base">📅</span>
+          <div>
+            <span className="font-semibold">Pronóstico — no aplicable.</span>
+            {" "}Este plan simula la disponibilidad de flota y envíos para el día {horizonPlans[horizonDayIndex]?.plan_date}.
+            Los despachos se generan según los vehículos que se esperan libres ese día. Regenerado automáticamente a las 08:00.
+          </div>
+        </div>
+      )}
 
       {/* Selector de sucursal para manager/admin */}
       {isNetworkRole && globalPlan && globalPlan.branch_plans.length > 0 && (
@@ -758,7 +801,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 const bp = globalPlan.branch_plans.find((b) => b.branch_id === newBranch);
                 if (bp) void applyBranchPlan(bp.plan);
               }}
-              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               {globalPlan.branch_plans.map((bp) => (
                 <option key={bp.branch_id} value={bp.branch_id}>
@@ -803,14 +846,10 @@ export function Routing({ mode }: RoutingProps = {}) {
               ? " Podés generarlo ahora tocando el botón de abajo."
               : " Contactá a un manager o admin para generarlo manualmente."}
           </p>
-          {canRegenerate && (
-            <button
-              onClick={handleRegenerate}
-              disabled={!branchId}
-              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
-            >
+          {canRegenerate && !isForecast && (
+            <Button size="lg" onClick={handleRegenerate} disabled={!branchId}>
               Generar plan ahora
-            </button>
+            </Button>
           )}
         </Card>
       )}
@@ -990,6 +1029,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                     {(pendingInterBranch.length > 0 || plan.vehicle_loads.length > 0) && (
                       <InterBranchSection
                         assignments={pendingInterBranch}
+                        originBranchId={branchId}
                         excludedVehicleIds={inProgressVehicleIds}
                         vehicleLoads={plan.vehicle_loads.filter((v) => v.mode === "inter_sucursal")}
                         branches={branches}
@@ -1093,17 +1133,44 @@ export function Routing({ mode }: RoutingProps = {}) {
             shipments={shipments}
             applying={applying}
             onClose={() => setReviewingDispatchVehicleId(null)}
-            onConfirm={(editedStops) => {
-              // Aplicar las paradas editadas al plan local antes de despachar
-              setPlan((prev) => {
-                if (!prev) return prev;
-                const next = clonePlan(prev);
-                const d = next.inter_branch.find((x) => x.vehicle_id === reviewingDispatchVehicleId);
-                if (d) d.additional_stops = editedStops.length > 0 ? editedStops : undefined;
-                return next;
-              });
+            onConfirm={(editedStops, departureMin) => {
+              const vehicleId = reviewingDispatchVehicleId;
               setReviewingDispatchVehicleId(null);
-              void handleApplyItem({ vehicleId: reviewingDispatchVehicleId });
+              if (!plan || !branchId) return;
+              // Construir el plan editado con paradas + salida modificada. Cambiar la
+              // salida desplaza todos los arribos por el mismo delta (los tramos no cambian).
+              const editedPlan = clonePlan(plan);
+              const d = editedPlan.inter_branch.find((x) => x.vehicle_id === vehicleId);
+              if (d) {
+                // Ancla del plan para desplazar los arribos (los tramos no cambian).
+                const origDep = d.estimated_departure_min ?? 8 * 60;
+                const dlt = departureMin - origDep;
+                const shiftMin = (m?: number) => (m && m > 0 ? m + dlt : m);
+                d.additional_stops = editedStops.length > 0
+                  ? editedStops.map((s) => ({ ...s, estimated_arrival_min: shiftMin(s.estimated_arrival_min) }))
+                  : undefined;
+                // La salida siempre se setea (default = ahora + 30 min, anclada al apply).
+                d.estimated_departure_min = departureMin;
+                d.primary_estimated_arrival_min = shiftMin(d.primary_estimated_arrival_min);
+                d.estimated_arrival_min = shiftMin(d.estimated_arrival_min);
+              }
+              setPlan(editedPlan);
+              setApplying(true);
+              setError("");
+              void (async () => {
+                try {
+                  await routingApi.apply(branchId, { vehicleId, plan: editedPlan });
+                  await loadTodayPlan();
+                  setSuccess("Despacho aplicado.");
+                  setTimeout(() => setSuccess(""), 2500);
+                } catch (err: unknown) {
+                  const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+                    ?? "No se pudo aplicar el despacho.";
+                  setError(msg);
+                } finally {
+                  setApplying(false);
+                }
+              })();
             }}
           />
         );
@@ -1139,7 +1206,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                   <select
                     value={addStopBranchId}
                     onChange={(e) => setAddStopBranchId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                    className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="">— Elegí una sucursal —</option>
                     {candidateBranches.map((b) => (
@@ -1190,19 +1257,12 @@ export function Routing({ mode }: RoutingProps = {}) {
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
-                <button
-                  onClick={closeAddStop}
-                  className="h-9 px-3 rounded-md text-sm text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
+                <Button variant="ghost" onClick={closeAddStop}>
                   Cancelar
-                </button>
-                <button
-                  onClick={saveAddStop}
-                  disabled={!addStopBranchId || addStopShipments.size === 0}
-                  className="h-9 px-4 rounded-md text-sm font-semibold bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white cursor-pointer"
-                >
+                </Button>
+                <Button onClick={saveAddStop} disabled={!addStopBranchId || addStopShipments.size === 0}>
                   Agregar parada
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1237,7 +1297,7 @@ function TabButton({
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 -mb-px border-b-2 text-sm font-semibold transition-colors cursor-pointer ${
         active
-          ? "border-[#1e3a5f] text-[#1e3a5f]"
+          ? "border-blue-600 text-blue-600"
           : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
       }`}
     >
@@ -1246,7 +1306,7 @@ function TabButton({
       {badge > 0 && (
         <span
           className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold tabular-nums ${
-            active ? "bg-[#1e3a5f] text-white" : "bg-slate-200 text-slate-700"
+            active ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"
           }`}
         >
           {badge}
@@ -1680,13 +1740,9 @@ function DriverRouteCard({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {hasPendingShipments(assignment) && onEditStops && (
-            <button
-              onClick={onEditStops}
-              disabled={applying}
-              className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
-            >
+            <Button size="sm" onClick={onEditStops} disabled={applying}>
               Aplicar
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -1793,6 +1849,7 @@ function ExistingShipmentRow({
 
 function InterBranchSection({
   assignments,
+  originBranchId,
   excludedVehicleIds,
   vehicleLoads,
   branches,
@@ -1812,6 +1869,7 @@ function InterBranchSection({
   applying,
 }: {
   assignments: InterBranchAssignment[];
+  originBranchId: string;
   excludedVehicleIds: string[];
   vehicleLoads: VehicleLoad[];
   branches: Branch[];
@@ -1895,7 +1953,7 @@ function InterBranchSection({
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                  {a.license_plate} → {branchLabelById(a.destination_branch, branches)}
+                  {a.license_plate} · {branchLabelById(originBranchId, branches)} → {branchLabelById(a.destination_branch, branches)}
                   {a.additional_stops?.map((st, idx) => (
                     <span key={idx} className="inline-flex items-center gap-1 text-[11px] text-slate-500 group/stop">
                       <span className="text-slate-300">›</span>
@@ -1935,6 +1993,11 @@ function InterBranchSection({
                       Multi-hop · {1 + (a.additional_stops?.length ?? 0)} paradas
                     </span>
                   )}
+                  {a.backhaul && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold" title={`Retorno: ${a.backhaul.shipments.length} envíos · ${a.backhaul.total_weight_kg.toFixed(1)} kg (${a.backhaul.fill_rate_pct.toFixed(0)}% cap.)`}>
+                      ↩ Backhaul · {a.backhaul.shipments.length} env.
+                    </span>
+                  )}
                   {a.in_transit && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
                       🚚 En viaje
@@ -1961,13 +2024,9 @@ function InterBranchSection({
                     {DISPATCH_RULE_LABELS[a.rule]}
                   </span>
                   {!a.in_transit && hasPendingShipments(a) && onApplyVehicle && (
-                    <button
-                      onClick={() => onApplyVehicle(a.vehicle_id)}
-                      disabled={applying}
-                      className="text-xs px-2 py-0.5 rounded-md bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white font-semibold transition-colors cursor-pointer"
-                    >
-                      Aplicar
-                    </button>
+                  <Button size="sm" onClick={() => onApplyVehicle(a.vehicle_id)} disabled={applying}>
+                    Aplicar
+                  </Button>
                   )}
                 </div>
               </div>
@@ -2140,12 +2199,9 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
               </div>
             </>
           )}
-          <button
-            onClick={onClose}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold transition-colors cursor-pointer"
-          >
+          <Button size="lg" onClick={onClose}>
             Cerrar
-          </button>
+          </Button>
         </div>
       </div>
     </div>

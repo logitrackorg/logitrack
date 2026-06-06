@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -40,13 +41,21 @@ func (s *UserService) GetProfile(ctx context.Context, userID string) (model.User
 		return model.UserProfileResponse{}, fmt.Errorf("error al obtener el usuario: %w", err)
 	}
 
+	fullName := strings.TrimSpace(user.FirstName + " " + user.LastName)
+	if fullName == "" {
+		fullName = user.Username
+	}
+
 	profile := model.UserProfileResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		FullName: user.FirstName + " " + user.LastName,
-		Email:    user.Email,
-		Role:     user.Role,
-		BranchID: user.BranchID,
+		ID:         user.ID,
+		Username:   user.Username,
+		FullName:   fullName,
+		Email:      user.Email,
+		Role:       user.Role,
+		Status:     user.Status,
+		BranchID:   user.BranchID,
+		DriverType: user.DriverType,
+		Address:    user.Address,
 	}
 
 	if user.BranchID != "" {
