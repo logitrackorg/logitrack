@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  fileUploadDisabled?: boolean;
   placeholder?: string;
   showFileUpload?: boolean;
   onFileSelect?: (file: File) => void;
@@ -11,12 +12,16 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   disabled = false,
+  fileUploadDisabled,
   placeholder = 'Escribe tu mensaje...',
   showFileUpload = false,
   onFileSelect,
 }) => {
   const [input, setInput] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Si fileUploadDisabled no se pasa, hereda el valor de disabled
+  const attachDisabled = fileUploadDisabled !== undefined ? fileUploadDisabled : disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +55,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             type="button"
             className="chat-attach-btn"
             onClick={() => fileRef.current?.click()}
-            disabled={disabled}
+            disabled={attachDisabled}
             title="Adjuntar archivo"
           >
             📎

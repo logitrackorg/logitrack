@@ -401,7 +401,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			TrackingID: de.TrackingID,
 			EventType:  model.EventClaimCreated,
 			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, payload.ClaimType),
+			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, claimTypeLabel(payload.ClaimType)),
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -771,4 +771,25 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 
 	r.projection.Apply(event)
 	return r.projection.Get(cmd.TrackingID)
+}
+
+func claimTypeLabel(ct model.ClaimType) string {
+	switch ct {
+	case model.ClaimTypeDamage:
+		return "Daño en mercadería"
+	case model.ClaimTypeMissing:
+		return "Faltante"
+	case model.ClaimTypeDelay:
+		return "Demora"
+	case model.ClaimTypeNotDelivered:
+		return "No entregado"
+	case model.ClaimTypeBadTreatment:
+		return "Maltrato"
+	case model.ClaimTypeWrongData:
+		return "Datos incorrectos"
+	case model.ClaimTypeOther:
+		return "Otro"
+	default:
+		return string(ct)
+	}
 }

@@ -617,9 +617,8 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 	case model.EventClaimCustomerResponded:
 		payload := de.Payload.(model.ClaimCustomerRespondedPayload)
 		base.Notes = payload.Response
-		if payload.EvidenceFileName != "" {
-			base.Notes += " [adjunto: " + payload.EvidenceFileName + "]"
-		}
+		base.EvidenceFileName = payload.EvidenceFileName
+		base.EvidenceFilePath = payload.EvidenceFilePath
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true
@@ -673,7 +672,7 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 	}
 
 	now := clock.Now().UTC()
-	var evidenceFileName string
+	var evidenceFileName, evidenceFilePath string
 	if evidence != nil && len(evidence.Data) > 0 {
 		evidenceDir := filepath.Join("uploads", "claims")
 		if err := os.MkdirAll(evidenceDir, 0o755); err != nil {
@@ -684,8 +683,8 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 			safeName += evidenceFileExtension(evidence.MimeType)
 		}
 		evidenceFileName = safeName
-		destPath := filepath.Join(evidenceDir, fmt.Sprintf("%s_resp_%s", claimID, safeName))
-		if err := os.WriteFile(destPath, evidence.Data, 0o644); err != nil {
+		evidenceFilePath = filepath.Join(evidenceDir, fmt.Sprintf("%s_resp_%s", claimID, safeName))
+		if err := os.WriteFile(evidenceFilePath, evidence.Data, 0o644); err != nil {
 			return model.Claim{}, err
 		}
 	}
@@ -701,6 +700,7 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 			FromStatus:       fromStatus,
 			ToStatus:         model.ClaimStatusInReview,
 			EvidenceFileName: evidenceFileName,
+			EvidenceFilePath: evidenceFilePath,
 		},
 		ChangedBy: "chatbot-customer:" + claimantDNI,
 		Timestamp: now,

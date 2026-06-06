@@ -25,6 +25,8 @@ type ClaimEvent struct {
 	ResolutionType   ClaimResolutionType `json:"resolution_type,omitempty"`
 	FromStatus       ClaimStatus         `json:"from_status,omitempty"`
 	ToStatus         ClaimStatus         `json:"to_status,omitempty"`
+	EvidenceFileName string              `json:"evidence_file_name,omitempty"`
+	EvidenceFilePath string              `json:"evidence_file_path,omitempty"`
 }
 
 type ClaimCreatedPayload struct {
@@ -62,4 +64,5 @@ type ClaimCustomerRespondedPayload struct {
 	FromStatus       ClaimStatus `json:"from_status"`
 	ToStatus         ClaimStatus `json:"to_status"`
 	EvidenceFileName string      `json:"evidence_file_name,omitempty"`
+	EvidenceFilePath string      `json:"evidence_file_path,omitempty"`
 }

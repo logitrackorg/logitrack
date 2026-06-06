@@ -752,6 +752,7 @@ export const ChatbotWidget: React.FC = () => {
           <ChatInput
             onSend={handleUserInput}
             disabled={loading || state === 'authenticated' || state === 'claim_evidence'}
+            fileUploadDisabled={false}
             placeholder={
               state === 'authenticated'
                 ? 'Seleccioná una opción...'

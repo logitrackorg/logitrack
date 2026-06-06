@@ -73,7 +73,8 @@ export type ClaimEventType =
   | "claim_category_updated"
   | "claim_resolved"
   | "claim_pending_customer"
-  | "claim_in_review";
+  | "claim_in_review"
+  | "claim_customer_responded";
 
 export interface ClaimEvent {
   id: string;
@@ -87,6 +88,8 @@ export interface ClaimEvent {
   resolution_type?: ClaimResolutionType;
   from_status?: ClaimStatus;
   to_status?: ClaimStatus;
+  evidence_file_name?: string;
+  evidence_file_path?: string;
 }
 
 export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
@@ -95,6 +98,7 @@ export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
   claim_resolved: "Reclamo resuelto",
   claim_pending_customer: "Solicitud de información al cliente",
   claim_in_review: "Reclamo en revisión",
+  claim_customer_responded: "Respuesta del cliente",
 };
 
 export const claimsApi = {

@@ -39,6 +39,18 @@ const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   resolved_improcedente: "Resuelto: improcedente",
 };
 
+function formatChangedBy(changedBy: string): string {
+  if (changedBy.startsWith("chatbot-customer:")) {
+    const dni = changedBy.replace("chatbot-customer:", "");
+    return `Cliente (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-sender:")) {
+    const dni = changedBy.replace("chatbot-sender:", "");
+    return `Remitente (DNI ${dni}) vía chatbot`;
+  }
+  return changedBy;
+}
+
 const CATEGORY_OPTIONS: { value: ClaimCategory; label: string }[] = [
   { value: "operaciones", label: "Operaciones" },
   { value: "comercial", label: "Comercial" },
@@ -611,8 +623,33 @@ export function Claims() {
                                   <span className="text-slate-400 whitespace-nowrap">{fmtDateTime(ev.timestamp)}</span>
                                 </div>
                                 {ev.notes && <div className="text-slate-500">{ev.notes}</div>}
+                                {ev.event_type === "claim_customer_responded" && ev.evidence_file_name && (
+                                  <a
+                                    href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1'}/claims/${ev.claim_id}/response-evidence/download`}
+                                    download={ev.evidence_file_name}
+                                    className="inline-flex items-center gap-1 mt-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      const token = localStorage.getItem("token");
+                                      fetch((e.currentTarget as HTMLAnchorElement).href, {
+                                        headers: { Authorization: `Bearer ${token}` },
+                                      })
+                                        .then((r) => r.blob())
+                                        .then((blob) => {
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement("a");
+                                          a.href = url;
+                                          a.download = ev.evidence_file_name!;
+                                          a.click();
+                                          URL.revokeObjectURL(url);
+                                        });
+                                    }}
+                                  >
+                                    📎 {ev.evidence_file_name}
+                                  </a>
+                                )}
                                 <div className="text-slate-500 text-xs mt-1">
-                                  por <strong>{ev.changed_by}</strong>
+                                  por <strong>{formatChangedBy(ev.changed_by)}</strong>
                                   {ev.from_status && ev.to_status && (
                                     <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>
                                   )}
