@@ -6,6 +6,7 @@ import type {
   PickupResponse,
   RescheduleResponse,
   CancelResponse,
+  ClaimRespondResponse,
 } from '../types/chatbot';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1';
@@ -91,6 +92,26 @@ export const chatbotService = {
       tracking_id: trackingId,
       sender_dni: senderDni,
       reason: reason || 'Cancelado por el remitente',
+    });
+    return response.data;
+  },
+
+  // US-4: Responder a reclamo pending_customer
+  respondToClaim: async (
+    claimId: string,
+    claimantDni: string,
+    responseText: string,
+    evidenceFile?: File
+  ): Promise<ClaimRespondResponse> => {
+    const form = new FormData();
+    form.append('claim_id', claimId);
+    form.append('claimant_dni', claimantDni);
+    form.append('response_text', responseText);
+    if (evidenceFile) {
+      form.append('evidence', evidenceFile);
+    }
+    const response = await chatbotAPI.post<ClaimRespondResponse>('/claim/respond', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
