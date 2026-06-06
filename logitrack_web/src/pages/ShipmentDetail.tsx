@@ -772,7 +772,7 @@ export function ShipmentDetail() {
             </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════
           ALERT BANNERS

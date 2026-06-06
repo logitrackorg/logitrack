@@ -308,4 +308,5 @@ export function ShipmentTableHeader({ canBulk, showSelectAll, allSelected, onSel
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { ShipmentRow, thClass, tdClass };

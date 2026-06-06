@@ -469,7 +469,7 @@ export function Login() {
                     </span>
                   ) : "Enviar código"}
                 </Button>
-              </div>
+              </form>
 
               <button
                 type="button"
