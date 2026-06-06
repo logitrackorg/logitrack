@@ -87,9 +87,17 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
 
           {[...events].reverse().map((ev) => (
             <div key={ev.id} className="relative mb-3">
-              <div className="absolute -left-6 top-1 w-3.5 h-3.5 rounded-full bg-blue-700 border-2 border-[var(--bg-card)] shadow-[0_0_0_2px_var(--border)]" />
+              <div className={`absolute -left-6 top-1 w-3.5 h-3.5 rounded-full border-2 border-[var(--bg-card)] ${
+                ev.event_type === "claim_created"
+                  ? "bg-red-600 shadow-[0_0_0_3px_#fecaca]"
+                  : "bg-blue-700 shadow-[0_0_0_2px_var(--border)]"
+              }`} />
 
-              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-2.5 text-[13px]">
+              <div className={`rounded-lg p-2.5 text-[13px] border ${
+                ev.event_type === "claim_created"
+                  ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
+                  : "bg-[var(--bg-card)] border-[var(--border)]"
+              }`}>
                 {ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date ? (
                   <>
                     <div className="flex justify-between mb-0.5">
@@ -116,7 +124,10 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                 ) : (
                   <>
                     <div className="flex justify-between mb-0.5">
-                      <span className="font-semibold">{formatShipmentEventLabel(ev)}</span>
+                      <span className={`font-semibold flex items-center gap-1.5 ${ev.event_type === "claim_created" ? "text-red-600" : ""}`}>
+                        {ev.event_type === "claim_created" && <span>⚠️</span>}
+                        {formatShipmentEventLabel(ev)}
+                      </span>
                       <span className="text-[var(--text-muted)]">{fmtDateTime(ev.timestamp)}</span>
                     </div>
                     <div className="text-[var(--text-secondary)] flex gap-4 flex-wrap">
@@ -154,14 +165,14 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                         if (m) {
                           const claimId = m[0];
                           return (
-                            <p className="mt-1.5 mb-0">
+                            <div className="mt-2">
                               <Link
                                 to={`/claims/${claimId}`}
-                                className="text-[var(--text-heading)] font-bold"
+                                className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-md no-underline hover:bg-red-700 transition-colors"
                               >
-                                Ver reclamo {claimId}
+                                📋 Ver reclamo {claimId}
                               </Link>
-                            </p>
+                            </div>
                           );
                         }
                         return null;
