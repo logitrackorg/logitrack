@@ -455,3 +455,43 @@ func (h *ClaimHandler) DownloadClaimEvidence(c *gin.Context) {
 	}
 	c.FileAttachment(claim.EvidenceFilePath, filepath.Base(claim.EvidenceFileName))
 }
+
+// DownloadClaimResponseEvidence devuelve la evidencia adjuntada por el cliente al responder un reclamo.
+func (h *ClaimHandler) DownloadClaimResponseEvidence(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claimID := c.Param("id")
+
+	if _, err := h.svc.GetByIDForBranch(claimID, user.BranchID); err != nil {
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "reclamo no encontrado"})
+		return
+	}
+
+	events, err := h.svc.GetEvents(claimID, user.BranchID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo obtener el historial"})
+		return
+	}
+
+	var evidenceFileName, evidenceFilePath string
+	for i := len(events) - 1; i >= 0; i-- {
+		ev := events[i]
+		if ev.EventType == string(model.EventClaimCustomerResponded) && ev.EvidenceFilePath != "" {
+			evidenceFileName = ev.EvidenceFileName
+			evidenceFilePath = ev.EvidenceFilePath
+			break
+		}
+	}
+	if evidenceFilePath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "el reclamo no tiene evidencia de respuesta adjunta"})
+		return
+	}
+	if _, err := os.Stat(evidenceFilePath); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "la evidencia no está disponible en el servidor"})
+		return
+	}
+	c.FileAttachment(evidenceFilePath, filepath.Base(evidenceFileName))
+}
