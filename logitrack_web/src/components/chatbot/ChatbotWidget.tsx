@@ -321,7 +321,8 @@ export const ChatbotWidget: React.FC = () => {
         addBotMessage('La descripción no puede superar los 400 caracteres.');
         return;
       }
-      setClaimDescription(input.trim());
+      const desc = input.trim();
+      setClaimDescription(desc);
 
       // ¿requiere evidencia?
       const needsEvidence = claimType === 'damage' && damageSubtypes.includes('product_damaged');
@@ -339,7 +340,8 @@ export const ChatbotWidget: React.FC = () => {
           [{ label: '⏭ Continuar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const }]
         );
       } else {
-        await handleSubmitClaim(null);
+        // Pasar desc directamente para evitar race condition con setClaimDescription
+        await handleSubmitClaim(null, desc);
       }
     }
   };
@@ -454,15 +456,17 @@ export const ChatbotWidget: React.FC = () => {
     }
   };
 
-  const handleSubmitClaim = async (evidence: File | null) => {
+  const handleSubmitClaim = async (evidence: File | null, descriptionOverride?: string) => {
     if (!claimType || !trackingId) return;
     const name = userType === 'sender'
       ? (shipment?.sender.name ?? '')
       : (recipientName || shipment?.recipient.name || '');
     const dni = userType === 'sender' ? senderDni : recipientDni;
+    // Usar el override si se pasó (evita race condition con setClaimDescription)
+    const desc = descriptionOverride ?? claimDescription;
     try {
       const res = await chatbotService.fileClaim(
-        trackingId, dni, name, claimType, damageSubtypes, claimDescription, evidence ?? undefined
+        trackingId, dni, name, claimType, damageSubtypes, desc, evidence ?? undefined
       );
       addBotMessage(
         `✅ ${res.message}\n\nGuardá el número de reclamo: **${res.claim_id}**`,
