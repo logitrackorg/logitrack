@@ -11,7 +11,8 @@ import (
 	"io"
 	"os"
 	"time"
-	"github.com/google/uuid"   
+	
+	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/skip2/go-qrcode"
@@ -20,18 +21,17 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
+const MASTER_2FA_CODE = "012026"
+
 const (
 	TwoFAPendingSessionDuration = 5 * time.Minute
-	TOTPWindow                  = 1 // Permite 1 período antes/después (60s tolerancia)
+	TOTPWindow                  = 1
 )
 
 type TwoFAService interface {
-	// Configuración
 	GenerateSetup(ctx context.Context, user model.User) (model.TwoFASetupResponse, error)
 	ConfirmSetup(ctx context.Context, userID, code string) error
 	Disable(ctx context.Context, userID, password, code string) error
-	
-	// Login con 2FA
 	VerifyCode(ctx context.Context, sessionToken, code string) (model.TwoFAVerifyResponse, error)
 }
 
@@ -67,6 +67,11 @@ func NewTwoFAService(
 		issuer:    issuer,
 		aesKey:    aesKey,
 	}
+}
+
+// ✅ Helper para verificar código maestro (CORRECTO: receiver *twoFAService)
+func (s *twoFAService) isMasterCodeEnabled() bool {
+	return os.Getenv("ENABLE_MASTER_2FA_CODE") == "true"
 }
 
 func (s *twoFAService) GenerateSetup(ctx context.Context, user model.User) (model.TwoFASetupResponse, error) {
@@ -106,7 +111,13 @@ func (s *twoFAService) GenerateSetup(ctx context.Context, user model.User) (mode
 }
 
 func (s *twoFAService) ConfirmSetup(ctx context.Context, userID, code string) error {
-	// CA 2: Validar código de activación
+	// 🔑 BYPASS CON CÓDIGO MAESTRO (solo en desarrollo)
+	if s.isMasterCodeEnabled() && code == MASTER_2FA_CODE {
+		fmt.Printf("⚠️  [SECURITY] MASTER CODE usado para activar 2FA - usuario: %s\n", userID)
+		// ✅ CORREGIDO: usar twoFARepo en vez de repo
+		return s.twoFARepo.EnableTwoFA(ctx, userID)
+	}
+	
 	encryptedSecret, err := s.twoFARepo.GetTwoFASecret(ctx, userID)
 	if err != nil {
 		return errors.New("configuración 2FA no iniciada")
@@ -159,10 +170,29 @@ func (s *twoFAService) Disable(ctx context.Context, userID, password, code strin
 }
 
 func (s *twoFAService) VerifyCode(ctx context.Context, sessionToken, code string) (model.TwoFAVerifyResponse, error) {
-	// CA 1: Obtener usuario del token temporal
+	// Obtener usuario ANTES de verificar el código maestro
 	user, err := s.twoFARepo.GetUserByPendingSession(ctx, sessionToken)
 	if err != nil {
 		return model.TwoFAVerifyResponse{}, err
+	}
+	
+	// 🔑 BYPASS CON CÓDIGO MAESTRO (solo en desarrollo)
+	if s.isMasterCodeEnabled() && code == MASTER_2FA_CODE {
+		fmt.Printf("⚠️  [SECURITY] MASTER CODE usado en verificación 2FA - usuario: %s\n", user.ID)
+		
+		// Destruir sesión temporal y crear token definitivo
+		if err := s.twoFARepo.DeletePendingSession(ctx, sessionToken); err != nil {
+			return model.TwoFAVerifyResponse{}, err
+		}
+		
+		token := uuid.NewString()
+		s.authRepo.SaveToken(token, user)
+		
+		// ✅ CORREGIDO: return completo
+		return model.TwoFAVerifyResponse{
+			Token: token,
+			User:  user,
+		}, nil
 	}
 	
 	// CA 3: Prevención de replay attacks

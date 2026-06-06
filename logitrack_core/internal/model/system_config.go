@@ -25,6 +25,7 @@ type SystemConfig struct {
 	// Default: 2. Range: 0-10 (CA02 validation).
 	MaxReschedules int `json:"max_reschedules"`
 	MaxRescheduleDays  int `json:"max_reschedule_days"`
+	TwoFACooldownMinutes int `json:"two_fa_cooldown_minutes" db:"two_fa_cooldown_minutes"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -36,5 +37,6 @@ func DefaultSystemConfig() SystemConfig {
 		ForceEmailNotifications: false,
 		MaxReschedules:          2, 
 		MaxRescheduleDays:       3,
+		TwoFACooldownMinutes: 1,
 	}
 }

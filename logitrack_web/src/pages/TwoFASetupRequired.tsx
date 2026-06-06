@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { twoFAApi } from '../api/two-fa';
+import { systemConfigApi } from '../api/systemConfig';
 import { useAuth } from '../context/AuthContext';
 import type { TwoFASetupResponse } from '../types/two-fa';
 
@@ -16,9 +17,53 @@ export const TwoFASetupRequired: React.FC = () => {
   const [attempts, setAttempts] = useState(0);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [cooldownMinutes, setCooldownMinutes] = useState(1); // Desde backend
 
   const navigate = useNavigate();
   const { setSession, logout } = useAuth();
+
+  // 🔄 CARGAR COOLDOWN DESDE BACKEND
+  useEffect(() => {
+    let cancelled = false;
+    
+    const loadCooldownConfig = async () => {
+      try {
+        const config = await systemConfigApi.getPublicConfig();
+        if (!cancelled) {
+          setCooldownMinutes(config.two_fa_cooldown_minutes);
+          console.log('⚙️ Cooldown configurado:', config.two_fa_cooldown_minutes, 'minutos');
+        }
+      } catch  {
+        console.error('Error cargando config de cooldown, usando 1 min por defecto');
+        if (!cancelled) setCooldownMinutes(1);
+      }
+    };
+    
+    loadCooldownConfig();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 💾 RESTAURAR BLOQUEO TRAS RECARGA
+  useEffect(() => {
+    const storedCooldown = sessionStorage.getItem('2fa_cooldown_until');
+    const storedAttempts = sessionStorage.getItem('2fa_attempts');
+    
+    if (storedCooldown) {
+      const cooldownTime = parseInt(storedCooldown, 10);
+      if (Date.now() < cooldownTime) {
+        console.log('⚠️ Cooldown activo restaurado desde sessionStorage');
+        setCooldownUntil(cooldownTime);
+        setAttempts(parseInt(storedAttempts || '3', 10));
+      } else {
+        // Cooldown expirado, limpiar
+        sessionStorage.removeItem('2fa_cooldown_until');
+        sessionStorage.removeItem('2fa_attempts');
+      }
+    }
+  }, []);
 
   // 🔒 VALIDACIÓN DE ACCESO
   useEffect(() => {
@@ -81,6 +126,10 @@ export const TwoFASetupRequired: React.FC = () => {
         setCooldownUntil(null);
         setCooldownSeconds(0);
         setAttempts(0);
+        
+        // 🧹 LIMPIAR SESSIONSTORAGE
+        sessionStorage.removeItem('2fa_cooldown_until');
+        sessionStorage.removeItem('2fa_attempts');
       } else {
         setCooldownSeconds(remaining);
       }
@@ -103,13 +152,23 @@ export const TwoFASetupRequired: React.FC = () => {
   }, [step]);
 
   const handleInitSetup = async () => {
+    // Verificar si hay un cooldown activo
+    const storedCooldown = sessionStorage.getItem('2fa_cooldown_until');
+    if (storedCooldown) {
+      const cooldownTime = parseInt(storedCooldown, 10);
+      if (Date.now() < cooldownTime) {
+        const remainingSeconds = Math.ceil((cooldownTime - Date.now()) / 1000);
+        setError(`Tienes un bloqueo activo. Espera ${remainingSeconds} segundos antes de reintentar.`);
+        return;
+      }
+    }
+
     setLoading(true);
     setError('');
     
     try {
       console.log('🔵 Generando QR...');
       
-      // Usar el token temporal para la API
       const tempToken = sessionStorage.getItem("temp_token");
       if (!tempToken) {
         throw new Error('Token no disponible');
@@ -120,9 +179,13 @@ export const TwoFASetupRequired: React.FC = () => {
       setSetupData(data);
       setStep('scan');
       
-      // Reset intentos al generar nuevo QR
-      setAttempts(0);
-      setCooldownUntil(null);
+      // Reset intentos solo si NO hay cooldown activo
+      if (!cooldownUntil) {
+        setAttempts(0);
+        setCooldownUntil(null);
+        sessionStorage.removeItem('2fa_cooldown_until');
+        sessionStorage.removeItem('2fa_attempts');
+      }
       
     } catch (err: unknown) {
       console.error('❌ Error generando QR:', err);
@@ -191,11 +254,18 @@ export const TwoFASetupRequired: React.FC = () => {
       setAttempts(newAttempts);
 
       if (newAttempts >= 3) {
-        // Activar cooldown de 60 segundos
-        const cooldownTime = Date.now() + 60000;
+        // Usar el cooldown configurado (en milisegundos)
+        const cooldownMs = cooldownMinutes * 60 * 1000;
+        const cooldownTime = Date.now() + cooldownMs;
+        
         setCooldownUntil(cooldownTime);
-        setCooldownSeconds(60);
-        setError(`Código incorrecto. Has fallado ${newAttempts} veces. Espera 60 segundos antes de reintentar.`);
+        setCooldownSeconds(cooldownMinutes * 60);
+        
+        // 💾 GUARDAR EN SESSIONSTORAGE PARA PERSISTIR TRAS RECARGA
+        sessionStorage.setItem('2fa_cooldown_until', cooldownTime.toString());
+        sessionStorage.setItem('2fa_attempts', newAttempts.toString());
+        
+        setError(`Código incorrecto. Has fallado ${newAttempts} veces. Espera ${cooldownMinutes} ${cooldownMinutes === 1 ? 'minuto' : 'minutos'} antes de reintentar.`);
         setCode('');
       } else {
         setError(`Código incorrecto. Intento ${newAttempts} de 3.`);

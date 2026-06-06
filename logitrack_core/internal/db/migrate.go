@@ -609,6 +609,24 @@ func RunMigrations(db *sql.DB) error {
 			unblocked_by TEXT
 		);
 		CREATE INDEX IF NOT EXISTS idx_fatigue_blocks_driver ON fatigue_blocks(driver_id) WHERE unblocked_at IS NULL;
+
+		-- data/migrations/XXXX_add_2fa_cooldown_config.sql
+
+		ALTER TABLE system_config 
+		ADD COLUMN IF NOT EXISTS two_fa_cooldown_minutes INTEGER NOT NULL DEFAULT 1;
+
+		-- Constraint: rango 1-10 minutos
+		DO $$ 
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint 
+				WHERE conname = 'check_2fa_cooldown_range'
+			) THEN
+				ALTER TABLE system_config 
+				ADD CONSTRAINT check_2fa_cooldown_range 
+				CHECK (two_fa_cooldown_minutes >= 1 AND two_fa_cooldown_minutes <= 10);
+			END IF;
+		END $$;
 	`)
 	return err
 }
