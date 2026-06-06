@@ -1,13 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { twoFAApi } from '../api/two-fa';
+import { useAuth } from '../context/AuthContext';
+import type { User } from '../api/auth';
 import type { TwoFASetupResponse } from '../types/two-fa';
 
-export const TwoFASetup: React.FC = () => {
+interface Props {
+  /** Cuando es true, el 2FA es obligatorio para la cuenta (primer login).
+   *  Tras confirmar, establece la sesión permanente y navega al home por rol. */
+  required?: boolean;
+}
+
+export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
+  const navigate = useNavigate();
+  const { setSession } = useAuth();
   const [step, setStep] = useState<'init' | 'scan' | 'confirm' | 'success'>('init');
   const [setupData, setSetupData] = useState<TwoFASetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // En flujo obligatorio, si no hay sesión temporal redirige a login
+  useEffect(() => {
+    if (!required) return;
+    if (!sessionStorage.getItem("pending_2fa_setup")) {
+      navigate('/login', { replace: true });
+    }
+  }, [required, navigate]);
 
   const handleInitSetup = async () => {
     setLoading(true);
@@ -36,7 +55,31 @@ export const TwoFASetup: React.FC = () => {
     setError('');
     try {
       await twoFAApi.confirm({ code });
-      setStep('success');
+
+      if (required) {
+        // Flujo obligatorio: establecer sesión permanente y navegar al home por rol
+        const tempToken = sessionStorage.getItem("temp_token");
+        const tempUserStr = sessionStorage.getItem("temp_user");
+        if (tempToken && tempUserStr) {
+          const tempUser: User = JSON.parse(tempUserStr);
+          setSession(tempToken, { ...tempUser, two_fa_enabled: true });
+          sessionStorage.removeItem("pending_2fa_setup");
+          sessionStorage.removeItem("temp_token");
+          sessionStorage.removeItem("temp_user");
+
+          if (tempUser.role === "admin") {
+            navigate("/admin/users", { replace: true });
+          } else if (tempUser.role === "manager" || tempUser.role === "supervisor") {
+            navigate("/dashboard", { replace: true });
+          } else {
+            navigate("/", { replace: true });
+          }
+        } else {
+          navigate("/login", { replace: true });
+        }
+      } else {
+        setStep('success');
+      }
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })
         ?.response?.data?.error || 'Error de verificación';

@@ -50,6 +50,8 @@ import OperatorTripReception from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
 import TripsCalendar from "./pages/TripsCalendar";
+import { TwoFAVerify } from "./pages/TwoFAVerify";
+import { TwoFASetup } from "./pages/TwoFASetup";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -413,6 +415,9 @@ export default function App() {
           <TwoFAGuard>
             <Routes>
               <Route path="/track" element={<PublicTracking />} />
+              {/* Rutas de 2FA: accesibles sin sesión establecida */}
+              <Route path="/2fa/verify" element={<TwoFAVerify />} />
+              <Route path="/2fa/setup-required" element={<TwoFASetup required />} />
               <Route path="*" element={<AppRoutes />} />
             </Routes>
           </TwoFAGuard>

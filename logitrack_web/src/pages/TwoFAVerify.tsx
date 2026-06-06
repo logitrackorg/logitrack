@@ -34,9 +34,21 @@ export const TwoFAVerify: React.FC = () => {
         session_token: sessionToken,
         code,
       });
-      // CA 1: Validación exitosa - guardar token definitivo
       setSession(response.token, response.user);
-      navigate('/dashboard');
+
+      const { role, driver_type } = response.user;
+      if (role === "driver") {
+        navigate(driver_type === "intersucursal" ? "/driver/scan" : "/driver/route", { replace: true });
+      } else if (role === "admin") {
+        navigate("/admin/users", { replace: true });
+      } else if (role === "manager" || role === "supervisor") {
+        navigate("/dashboard", { replace: true });
+      } else if (role === "operator") {
+        navigate("/", { replace: true });
+      } else {
+        console.error("Rol no reconocido o ruta no definida:", role);
+        navigate("/", { replace: true });
+      }
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })
         ?.response?.data?.error || 'Error de verificación';
