@@ -3176,6 +3176,10 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 		s.tryProjectedDispatch(&bp.Plan, bp.BranchID, cfg, clock.Now().UTC())
 	}
 
+	// Recalcular insights sobre el plan con overrides runtime ya aplicados.
+	// Los insights no se persisten en DB, por lo que hay que recomputarlos al leer.
+	s.analyzeNetwork(plan)
+
 	return plan, nil
 }
 

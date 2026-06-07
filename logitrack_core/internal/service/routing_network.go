@@ -1,6 +1,7 @@
 package service
 
 import (
+	"log"
 	"sort"
 	"strings"
 
@@ -224,33 +225,65 @@ func (s *RoutingService) detectConsolidationOpportunities(plan *model.GlobalRout
 func (s *RoutingService) computeNetworkMetrics(plan *model.GlobalRoutingPlan) model.NetworkMetrics {
 	m := model.NetworkMetrics{}
 
-	// Primer pase: recopilar todos los vehículos usados en cualquier despacho inter-sucursal.
-	usedVehicles := map[string]bool{}
-	for _, bp := range plan.BranchPlans {
-		for _, ib := range bp.Plan.InterBranch {
-			if !ib.Projected { // despachos proyectados no cuentan como "dispatched"
-				usedVehicles[ib.VehicleID] = true
-			}
-		}
-	}
-
-	totalUtil := 0.0
-	utilCount := 0
+	dispatchedVehicles := map[string]bool{}
+	allActiveVehicles := map[string]bool{}
 	branchesWithUnservedDemand := map[string]bool{}
+
+	ibUtilTotal := 0.0
+	ibUtilCount := 0
+	ibTotal := 0
+	ibSLAForced := 0
+
+	lmUtilTotal := 0.0
+	lmUtilCount := 0
 
 	for _, bp := range plan.BranchPlans {
 		for _, ib := range bp.Plan.InterBranch {
 			if ib.Projected {
 				continue
 			}
+			dispatchedVehicles[ib.VehicleID] = true
+			allActiveVehicles[ib.VehicleID] = true
 			m.TotalShipmentsAssigned += len(ib.Shipments)
+			ibTotal++
+			if ib.Rule == model.DispatchRuleSLA {
+				ibSLAForced++
+			}
 			if ib.CapacityKg > 0 {
-				totalUtil += ((ib.TotalWeightKg + ib.ExistingWeightKg) / ib.CapacityKg) * 100
-				utilCount++
+				// TotalWeightKg acumula todas las etapas del viaje multi-hop.
+				// Para el fill-rate solo se usa el peso del despacho primario
+				// (lo que cargó el vehículo al salir del origen).
+				primaryKg := ib.TotalWeightKg
+				for _, st := range ib.AdditionalStops {
+					primaryKg -= st.TotalWeightKg
+				}
+				if primaryKg < 0 {
+					primaryKg = 0
+				}
+				util := (primaryKg + ib.ExistingWeightKg) / ib.CapacityKg
+				if util > 1.0 {
+					util = 1.0
+				}
+				ibUtilTotal += util
+				ibUtilCount++
 			}
 		}
 		for _, lm := range bp.Plan.LastMile {
+			if lm.InTransit {
+				continue
+			}
+			allActiveVehicles[lm.VehicleID] = true
 			m.TotalShipmentsAssigned += len(lm.Shipments)
+			if lm.CapacityKg > 0 {
+				log.Printf("[metrics] LM branch=%s vehicle=%s shipments=%d total=%.2f existing=%.2f cap=%.1f",
+					bp.BranchID, lm.VehicleID, len(lm.Shipments), lm.TotalWeightKg, lm.ExistingWeightKg, lm.CapacityKg)
+				util := (lm.TotalWeightKg + lm.ExistingWeightKg) / lm.CapacityKg
+				if util > 1.0 {
+					util = 1.0
+				}
+				lmUtilTotal += util
+				lmUtilCount++
+			}
 		}
 		m.TotalShipmentsUnassigned += len(bp.Plan.Unassigned)
 
@@ -261,19 +294,32 @@ func (s *RoutingService) computeNetworkMetrics(plan *model.GlobalRoutingPlan) mo
 			}
 		}
 
-		// Idle vehicles = en el pool pero sin uso en ningún despacho de la red.
 		for _, vl := range bp.Plan.VehicleLoads {
-			if !usedVehicles[vl.VehicleID] {
+			if !allActiveVehicles[vl.VehicleID] {
 				m.IdleVehiclesCount++
 			}
 		}
 	}
 
-	m.TotalVehiclesDispatched = len(usedVehicles)
-	if utilCount > 0 {
-		m.AvgVehicleUtilizationPct = roundKg(totalUtil / float64(utilCount))
-	}
+	m.TotalVehiclesDispatched = len(dispatchedVehicles)
 	m.BranchesWithUnservedDemand = len(branchesWithUnservedDemand)
+
+	if ibUtilCount > 0 {
+		m.AvgInterBranchUtilizationPct = roundKg((ibUtilTotal / float64(ibUtilCount)) * 100)
+	}
+	if lmUtilCount > 0 {
+		m.AvgLastMileUtilizationPct = roundKg((lmUtilTotal / float64(lmUtilCount)) * 100)
+	}
+	if ibTotal > 0 {
+		m.SLAForcedPct = roundKg((float64(ibSLAForced) / float64(ibTotal)) * 100)
+	}
+
+	// Compatibilidad: promedio combinado de ambos tipos.
+	allUtil := ibUtilTotal + lmUtilTotal
+	allCount := ibUtilCount + lmUtilCount
+	if allCount > 0 {
+		m.AvgVehicleUtilizationPct = roundKg((allUtil / float64(allCount)) * 100)
+	}
 
 	return m
 }

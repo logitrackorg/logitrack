@@ -644,6 +644,54 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
+
+		-- Métricas de calidad del ruteo
+		CREATE TABLE IF NOT EXISTS routing_plan_metrics (
+			id                   TEXT PRIMARY KEY,
+			branch_id            TEXT NOT NULL,
+			generated_at         TIMESTAMPTZ NOT NULL,
+			generation_time_ms   INTEGER NOT NULL DEFAULT 0,
+			last_mile_count      INTEGER NOT NULL DEFAULT 0,
+			inter_branch_count   INTEGER NOT NULL DEFAULT 0,
+			unassigned_count     INTEGER NOT NULL DEFAULT 0,
+			vrp_used             BOOLEAN NOT NULL DEFAULT FALSE,
+			window_coverage_pct  DOUBLE PRECISION NOT NULL DEFAULT 0,
+			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS routing_apply_metrics (
+			id                   TEXT PRIMARY KEY,
+			branch_id            TEXT NOT NULL,
+			applied_at           TIMESTAMPTZ NOT NULL,
+			applied_by           TEXT NOT NULL DEFAULT '',
+			applied_count        INTEGER NOT NULL DEFAULT 0,
+			failed_count         INTEGER NOT NULL DEFAULT 0,
+			drift_count          INTEGER NOT NULL DEFAULT 0,
+			manual_override_count INTEGER NOT NULL DEFAULT 0,
+			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS shipment_hop_metrics (
+			id             TEXT PRIMARY KEY,
+			tracking_id    TEXT NOT NULL,
+			from_branch_id TEXT NOT NULL,
+			to_branch_id   TEXT NOT NULL,
+			departed_at    TIMESTAMPTZ,
+			arrived_at     TIMESTAMPTZ,
+			transit_hours  DOUBLE PRECISION NOT NULL DEFAULT 0,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS od_pair_daily_volume (
+			id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			origin_branch_id     TEXT NOT NULL,
+			destination_branch_id TEXT NOT NULL,
+			date                 DATE NOT NULL,
+			shipment_count       INTEGER NOT NULL DEFAULT 0,
+			total_weight_kg      DOUBLE PRECISION NOT NULL DEFAULT 0,
+			updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (origin_branch_id, destination_branch_id, date)
+		);
 	`)
 	return err
 }

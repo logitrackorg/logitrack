@@ -241,8 +241,12 @@ export interface NetworkMetrics {
   total_shipments_unassigned: number;
   total_vehicles_dispatched: number;
   idle_vehicles_count: number;
-  avg_vehicle_utilization_pct: number;
   branches_with_unserved_demand: number;
+  avg_inter_branch_utilization_pct: number;
+  avg_last_mile_utilization_pct: number;
+  sla_forced_pct: number;
+  /** @deprecated usar avg_inter_branch_utilization_pct / avg_last_mile_utilization_pct */
+  avg_vehicle_utilization_pct: number;
 }
 
 export interface NetworkInsights {
