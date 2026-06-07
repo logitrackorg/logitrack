@@ -1,7 +1,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm@11
-COPY package.json pnpm-lock.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN pnpm rebuild esbuild
