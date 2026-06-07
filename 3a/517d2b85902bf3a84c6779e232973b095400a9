@@ -1,0 +1,177 @@
+logitrack_core/cmd/server/main.go
+  s_388980d924652f::t_0ed5c70045de15 87
+logitrack_core/internal/service/routing_projection.go
+  s_388980d924652f::t_e0d862055b2230 556-561
+logitrack_core/.env.example
+  s_676a4cdb5912c8::t_9390bded08acd0 37-38
+logitrack_core/internal/model/routing.go
+  s_dd3e656e6911af::t_bfb6bf3188cc27 212-218
+  s_388980d924652f::t_ae51202e05d45d 272
+  s_388980d924652f::t_df7b3ff9a55621 174-177
+  s_388980d924652f::t_1b7f9a11886fb5 12-14
+  s_388980d924652f::t_2b2965d3bbe74c 256
+logitrack_core/internal/db/migrate.go
+  s_388980d924652f::t_9aa05ae2b6904e 619,622,625-626,630-632
+logitrack_core/internal/service/routing_network.go
+  s_388980d924652f::t_5b3ae939a838ed 227-236,243-245,264
+logitrack_core/internal/seed/branch_graph_seed.go
+  s_388980d924652f::t_607f22b8b7e42d 19-20
+CLAUDE.md
+  s_dd3e656e6911af::t_a4aafe72a93bac 89
+logitrack_core/internal/model/routing_config.go
+  s_388980d924652f::t_c5212da8621783 97-99
+  s_388980d924652f::t_876d1b5c4e502e 43-44
+logitrack_core/internal/repository/routing_config.go
+  s_388980d924652f::t_3c34363859350b 35-36,49
+  s_388980d924652f::t_c3240dbc99a486 79-80,92
+logitrack_core/internal/service/routing_config.go
+  s_388980d924652f::t_5cf007c3989367 123-125
+logitrack_core/internal/repository/postgres_auth.go
+  s_dd3e656e6911af::t_6fc41368cd1981 67
+logitrack_web/src/api/routing.ts
+  s_388980d924652f::t_136bf47480c087 56
+  s_dd3e656e6911af::t_a7fb94675882b6 171
+  s_388980d924652f::t_b8a3fba389ff25 33
+  s_388980d924652f::t_2e0b961a736f33 176
+  s_388980d924652f::t_1388106e587293 59
+  s_388980d924652f::t_66b92a934d01a1 136-138
+  s_388980d924652f::t_6dee9cf739756a 357
+logitrack_web/src/App.tsx
+  s_388980d924652f::t_ee7a59a14271ea 55
+  s_6331ad48b94228::t_cb2d6670074384 190
+  s_388980d924652f::t_51add18c612ad9 333-338
+logitrack_core/internal/service/routing.go
+  s_388980d924652f::t_9937f55fe13339 5240-5246
+  s_388980d924652f::t_60cd0496ba1ed4 1179-1189
+  s_388980d924652f::t_16d8cc331537b3 5180-5216,5219-5220,5225-5233,5235-5238,5247,5250-5265,5283-5284,5286-5294,5296,5299,5301-5309,5311-5333,5337-5347
+  s_dd3e656e6911af::t_d0694fc285816e 5268-5279,5282
+  s_dd3e656e6911af::t_a32d5b4f18e745 1045,1050,1053-1059
+  s_388980d924652f::t_da57746a3db1fa 3344-3345
+  s_388980d924652f::t_6f52e9932a3d0e 3248-3250
+  s_dd3e656e6911af::t_60cd0bacd6bfbd 1111-1117,1127-1133
+  s_388980d924652f::t_abdd6586bf7d88 3510-3511,3513-3514
+  s_388980d924652f::t_b24adf83836d1f 4025-4032,4034
+  s_388980d924652f::t_c48a938a2f0fd4 3425-3427,3434
+  s_388980d924652f::t_a9a8b218f26e7b 3172-3175
+  s_dd3e656e6911af::t_330aae41ddb64e 1046-1047
+  s_388980d924652f::t_049643c05b2df9 3362-3365
+  s_388980d924652f::t_5f4684b7e4d43c 3090-3095
+  s_388980d924652f::t_b787ae21f06736 3151-3153
+  s_388980d924652f::t_4820d9f8c3cf12 3035-3038
+  s_388980d924652f::t_d4d0bdd1f021e3 5234
+  s_388980d924652f::t_c7dfb96842c054 1325-1331
+  s_388980d924652f::t_6bb7493ac21892 3522,3540-3541
+  s_dd3e656e6911af::t_43cd42a895a231 3159-3160,3162-3168
+logitrack_web/src/pages/Routing.tsx
+  s_388980d924652f::t_0c2832d87c1e4f 870-871
+  s_388980d924652f::t_28153347d88d04 2234-2256,2258-2274,2276-2305
+  s_dd3e656e6911af::t_096e87afe1e955 2275
+  s_388980d924652f::t_e16c8cf02cae7c 253
+  s_3b81f8b8d5d5e3::t_cffa5788f76a11 1132-1140
+  s_388980d924652f::t_6c15f9a2c6c654 1056-1064
+  s_388980d924652f::t_8d823b88c97704 28
+  s_dd3e656e6911af::t_76778069f0ade4 2540-2544
+  s_dd3e656e6911af::t_9d3a1da071b76a 2257
+  s_388980d924652f::t_a7255eb170da95 349
+  s_388980d924652f::t_88ccb391c39c19 1131
+  s_388980d924652f::t_965aedd7b33882 1086
+logitrack_core/internal/seed/seed.go
+  s_388980d924652f::t_2462398bacc60d 1192
+  s_388980d924652f::t_05302dcefbfc3a 217-261
+  s_388980d924652f::t_013367972c9ba0 1028,1030-1035,1037-1041,1045-1046,1051-1052,1057,1062-1063,1068-1069,1074,1079-1080,1085-1086,1091
+  s_388980d924652f::t_a33cf3145c9ae9 1182-1183,1185-1187,1189-1191,1193,1195-1205
+  s_388980d924652f::t_e73a61ec8eeba6 1026-1027,1029,1036,1042-1044,1047-1050,1053-1056,1058-1061,1064-1067,1070-1073,1075-1078,1081-1084,1087-1090,1092-1093
+  s_388980d924652f::t_55b0d20b0f2537 1184,1194,1206-1208
+  s_388980d924652f::t_d844afb51f710a 1188
+logitrack_web/src/pages/Login.tsx
+  s_dd3e656e6911af::t_49a5321ba9a954 24
+logitrack_web/src/components/calendar/tripEvents.ts
+  s_388980d924652f::t_f24b6d8248fef3 117
+  s_388980d924652f::t_c14f3f67a91290 97
+logitrack_web/src/components/EditDriverStopsModal.tsx
+  s_388980d924652f::t_3e6c407d042a68 468-477
+  s_3b81f8b8d5d5e3::t_dba86f3d720018 365
+  s_388980d924652f::t_c348bde59ee727 333
+  s_3b81f8b8d5d5e3::t_7c4fd9ef9bbc9a 385
+  s_3b81f8b8d5d5e3::t_c7be3ce7021ec2 344
+  s_3b81f8b8d5d5e3::t_56cc9182992b4f 334
+  s_3b81f8b8d5d5e3::t_a78dc479546058 291-292
+  s_3b81f8b8d5d5e3::t_36a9c8ed9fc9dc 544-564
+  s_388980d924652f::t_551af51d3e6e25 565-569,579-581
+  s_3b81f8b8d5d5e3::t_bdec7f567d9abd 397-409
+  s_3b81f8b8d5d5e3::t_fb0b71f269f1e5 642-643,648-652
+  s_388980d924652f::t_90c915635d5c46 646-647
+  s_3b81f8b8d5d5e3::t_80223568466baf 362,371
+  s_388980d924652f::t_e3cdcb832c87d1 289-290
+logitrack_core/internal/seed/branch_seed.go
+  s_388980d924652f::t_a9a77cba9ebe7b 21-23
+logitrack_web/src/pages/reports/ChoferesTab.tsx
+  s_dd3e656e6911af::t_ac40c145d524ab 42
+docs/specs/US-planificacion-avanzada.md
+  s_3b8cb612e4a9a4::t_99e3764bec9038 1-303
+logitrack_web/src/components/Sidebar.tsx
+  s_388980d924652f::t_ac6a1a2cc95955 24
+  s_6331ad48b94228::t_f3db3b4109d147 61
+  s_388980d924652f::t_837a07ee088648 67
+logitrack_core/internal/service/routing_phase2_test.go
+  s_388980d924652f::t_475b51862e08a1 198
+logitrack_web/src/pages/RoutingConfig.tsx
+  s_388980d924652f::t_805af491f0ddd5 313-314
+  s_388980d924652f::t_250ae95564ddcd 407-424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3a517d2b85902bf3a84c6779e232973b095400a9",
+  "prompts": {},
+  "sessions": {
+    "s_388980d924652f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6463f986-c484-487d-896a-a0237254a781",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_3b81f8b8d5d5e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f085a60b-aa87-4702-9fcc-35d617e54561",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_3b8cb612e4a9a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e91eb592-b092-40ab-adf8-dbde320d94c2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_6331ad48b94228": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2f24d54-068e-430d-91ec-600f2554e381",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_676a4cdb5912c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c44df93d-f2e2-4833-bdc4-4cd634eee906",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_dd3e656e6911af": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ca7bee6-31ce-40c2-80ea-4797973c39fc",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
