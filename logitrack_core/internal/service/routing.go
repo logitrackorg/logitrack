@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"time"
 
@@ -5335,6 +5336,153 @@ func (s *RoutingService) tryProjectedDispatch(plan *model.RoutingPlan, branchID 
 	}
 }
 
+// GetActiveRouteETA deriva un ETA dinámico "relativo a ahora" para un envío
+// out_for_delivery, en lugar del ETA comercial estático calculado al crearlo.
+//
+// Algoritmo de sobreescritura (estrictamente en horas relativas desde la
+// hora actual — así el banner "dentro de las próximas N horas" y la fecha
+// de la grilla SIEMPRE coinciden):
+//
+//  1. minutosRestantes := tiempo restante real extraído del viaje/ruta activa
+//  2. horasASumar      := math.Ceil(minutosRestantes / 60)
+//  3. límite de seguridad: if horasASumar < 1 { horasASumar = 1 }
+//  4. nuevaFechaEstimada := ahora.Add(horasASumar * time.Hour)
+//
+// El envío no conoce su viaje directamente (Shipment no tiene TripID), así
+// que la búsqueda intenta dos estrategias en orden, de la más precisa a la
+// más resiliente:
+//
+//  1. lookupETAFromPersistedPlan: cruce directo contra el plan VRP persistido
+//     de hoy (datos de arribo de OrderedStops — preciso, pero solo existe
+//     cuando el despacho se generó/aplicó vía el motor de ruteo).
+//  2. lookupETAFromActiveRoutes (reverse lookup): cuando el plan no tiene
+//     datos VRP para este envío (despacho manual, plan regenerado después de
+//     iniciar el viaje, etc.), se itera sobre los viajes en curso de TODOS
+//     los choferes (Route.Status == en_curso), se ubica la parada de este
+//     envío dentro de las paradas pendientes, y se estima el tiempo restante
+//     a partir de la configuración de ruteo (service_time_minutes × paradas
+//     pendientes hasta llegar a la suya, inclusive).
+//
+// Devuelve (nuevaFechaEstimada, horasASumar). (nil, nil) cuando ninguna
+// estrategia logra ubicar el envío en un viaje activo — el caller debe
+// conservar el EstimatedDeliveryAt comercial original.
+func (s *RoutingService) GetActiveRouteETA(trackingID string) (*time.Time, *int) {
+	now := clock.Now().In(clock.LocalTZ)
+
+	if eta, hours := s.lookupETAFromPersistedPlan(trackingID, now); eta != nil {
+		return eta, hours
+	}
+	if eta, hours := s.lookupETAFromActiveRoutes(trackingID, now); eta != nil {
+		return eta, hours
+	}
+
+	log.Printf("[PublicTracking] ETA dinámico: shipment=%s NO encontrado en ningún viaje activo (ni plan VRP ni reverse lookup de rutas en_curso) — se usará ETA comercial estático", trackingID)
+	return nil, nil
+}
+
+// lookupETAFromPersistedPlan cruza el envío contra el plan de ruteo VRP
+// persistido del día (OrderedStops, con horarios de arribo precisos).
+// Devuelve (nil, nil) si no hay plan para hoy o el envío no aparece en
+// ninguna asignación de última milla.
+func (s *RoutingService) lookupETAFromPersistedPlan(trackingID string, now time.Time) (*time.Time, *int) {
+	today := now.Format("2006-01-02")
+	plan, err := s.planRepo.GetByDate(today)
+	if err != nil || plan == nil {
+		log.Printf("[PublicTracking] ETA dinámico (plan VRP): sin plan persistido para la fecha %s (shipment=%s, err=%v)", today, trackingID, err)
+		return nil, nil
+	}
+
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, clock.LocalTZ)
+
+	for _, bp := range plan.BranchPlans {
+		for _, lma := range bp.Plan.LastMile {
+			for _, stop := range lma.OrderedStops {
+				// Comparación exacta de TrackingID — éste es el cruce
+				// Shipment↔LastMileAssignment que alimenta el algoritmo.
+				if stop.TrackingID != trackingID || stop.Unsequenced {
+					continue
+				}
+				arrivalMin := lma.SuggestedDepartureMin + stop.ArrivalMin
+				stopETA := midnight.Add(time.Duration(arrivalMin) * time.Minute)
+				minutosRestantes := stopETA.Sub(now).Minutes()
+				nuevaFechaEstimada, horasASumar := deriveOverwriteETA(now, minutosRestantes)
+
+				driverID := "(sin asignar)"
+				if lma.DriverID != nil {
+					driverID = *lma.DriverID
+				}
+				log.Printf("[PublicTracking] ETA dinámico (plan VRP): MATCH shipment=%s sucursal=%s vehiculo=%s chofer=%s | horaActual=%s minutosRestantesRuta=%.1f horasASumar=%d → nuevaFechaEstimada=%s",
+					trackingID, bp.BranchID, lma.VehicleID, driverID, now.Format(time.RFC3339), minutosRestantes, *horasASumar, nuevaFechaEstimada.Format(time.RFC3339))
+				return nuevaFechaEstimada, horasASumar
+			}
+		}
+	}
+	log.Printf("[PublicTracking] ETA dinámico (plan VRP): shipment=%s NO encontrado en OrderedStops del plan %s — se intenta reverse lookup sobre viajes activos", trackingID, plan.PlanDate)
+	return nil, nil
+}
+
+// lookupETAFromActiveRoutes es la búsqueda inversa (Trip Iteration): como el
+// envío no referencia su viaje, se recorren los viajes en curso de todos los
+// choferes (Route.Status == en_curso para la fecha de hoy) y, dentro de cada
+// uno, sus paradas pendientes (envíos out_for_delivery aún no resueltos), en
+// busca del TrackingID solicitado.
+//
+// Al no contar con horarios VRP por parada en este camino (Route no persiste
+// arribos por stop), el tiempo restante se estima como
+// service_time_minutes × cantidad de paradas pendientes hasta la propia
+// (inclusive) — un piso conservador que respeta el orden real de entrega del
+// chofer sin inventar datos de distancia/tránsito que no existen para rutas
+// despachadas fuera del motor VRP.
+func (s *RoutingService) lookupETAFromActiveRoutes(trackingID string, now time.Time) (*time.Time, *int) {
+	serviceTimeMin := s.cfgSvc.Get().ServiceTimeMinutes
+
+	for _, driver := range s.authRepo.ListByRole(model.RoleDriver, "") {
+		route, shipments, err := s.routeSvc.GetTodayRoute(driver.ID)
+		if err != nil || route.Status != model.RouteStatusActive || !route.HasShipment(trackingID) {
+			continue
+		}
+
+		// Cuenta las paradas pendientes (out_for_delivery, en orden de ruta)
+		// hasta llegar a la del envío buscado, inclusive.
+		pendingStopsAhead := 0
+		found := false
+		for _, sh := range shipments {
+			if sh.Status != model.StatusOutForDelivery {
+				continue
+			}
+			pendingStopsAhead++
+			if sh.TrackingID == trackingID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+
+		minutosRestantes := float64(pendingStopsAhead * serviceTimeMin)
+		nuevaFechaEstimada, horasASumar := deriveOverwriteETA(now, minutosRestantes)
+
+		log.Printf("[PublicTracking] ETA dinámico (reverse lookup): MATCH shipment=%s ruta=%s chofer=%s | paradasPendientesHastaLaSuya=%d serviceTimeMin=%d minutosRestantesEstimados=%.1f horasASumar=%d → nuevaFechaEstimada=%s",
+			trackingID, route.ID, driver.ID, pendingStopsAhead, serviceTimeMin, minutosRestantes, *horasASumar, nuevaFechaEstimada.Format(time.RFC3339))
+		return nuevaFechaEstimada, horasASumar
+	}
+
+	log.Printf("[PublicTracking] ETA dinámico (reverse lookup): shipment=%s NO encontrado en ningún viaje en_curso", trackingID)
+	return nil, nil
+}
+
+// deriveOverwriteETA aplica la fórmula de sobreescritura sobre minutos
+// restantes ya extraídos (de cualquiera de las dos estrategias de búsqueda):
+// redondeo hacia arriba a horas + piso de seguridad de 1 hora, y la nueva
+// fecha estimada como ahora + esas horas.
+func deriveOverwriteETA(now time.Time, minutosRestantes float64) (*time.Time, *int) {
+	horasASumar := int(math.Ceil(minutosRestantes / 60))
+	if horasASumar < 1 {
+		horasASumar = 1
+	}
+	nuevaFechaEstimada := now.Add(time.Duration(horasASumar) * time.Hour)
+	return &nuevaFechaEstimada, &horasASumar
 // sortUnassignedByPriority ordena envíos varados: alta > media > baja, luego WeightKg ASC.
 func sortUnassignedByPriority(items []model.UnassignedShipment) {
 	priOrder := map[string]int{"alta": 0, "media": 1, "baja": 2}

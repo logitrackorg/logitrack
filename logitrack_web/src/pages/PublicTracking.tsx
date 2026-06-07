@@ -212,7 +212,16 @@ function getActivePhaseInfo(
   switch (status) {
     case "pending_payment":      return { phase: 0, pct: 40 };
     case "at_origin_hub":        return { phase: 0, pct: 80 };
-    case "loaded":               return { phase: 1, pct: 20 };
+    case "loaded": {
+      // Si está cargado en la sucursal final para última milla, la barra
+      // permanece en fase 2 (En sucursal destino). Para carga inter-sucursal
+      // (origen o hub intermedio) va a fase 1 (En camino).
+      const isLoadedAtFinalHub =
+        shipment.current_location != null &&
+        shipment.final_branch_id != null &&
+        shipment.current_location === shipment.final_branch_id;
+      return isLoadedAtFinalHub ? { phase: 2, pct: 100 } : { phase: 1, pct: 20 };
+    }
     case "in_transit":           return { phase: 1, pct: 60 };
     case "at_hub":
       return isFinalHub ? { phase: 2, pct: 100 } : { phase: 1, pct: 90 };
@@ -313,7 +322,40 @@ function statusHero(s: PublicShipment): StatusHero {
     case "rechazado":
       return { tone: "danger", icon: "🚷", title: STATUS_BLURBS[s.status], subtitle: "Coordiná con el remitente los próximos pasos." };
     case "out_for_delivery":
-      return { tone: "info", icon: "🛵", title: "Tu envío está en camino", subtitle: "Hoy puede llegar a tu domicilio." };
+      return {
+        tone: "info",
+        icon: "🛵",
+        title: "Tu envío está en camino",
+        // relative_hours viene calculado por el backend (Go) a partir de la
+        // ruta activa del chofer — ya redondeado hacia arriba y con piso de
+        // seguridad de 1 hora. Se renderiza directamente, sin cálculos en el
+        // frontend, para que coincida exactamente con estimated_delivery_at
+        // (el backend sobreescribe ambos a partir del mismo valor).
+        subtitle:
+          (s.relative_hours != null
+            ? formatEtaHoursMessage(s.relative_hours)
+            : etaHoursMessage(s.estimated_delivery_at)
+          ) ?? "Tu envío está en camino a tu domicilio.",
+      };
+    case "in_transit":
+      return {
+        tone: "info",
+        icon: "🚀",
+        title: "Tu envío está en tránsito",
+        subtitle: etaHoursMessage(s.estimated_delivery_at) ?? STATUS_BLURBS["in_transit"],
+      };
+    case "loaded": {
+      const isLoadedAtFinalHub =
+        s.current_location != null &&
+        s.final_branch_id != null &&
+        s.current_location === s.final_branch_id;
+      return {
+        tone: "info",
+        icon: "📦",
+        title: isLoadedAtFinalHub ? "Próximo a salir" : "Tu envío está en camino",
+        subtitle: STATUS_BLURBS["loaded"],
+      };
+    }
     case "ready_for_pickup":
       return { tone: "info", icon: "📬", title: "Listo para retirar", subtitle: "Te esperamos en la sucursal con tu DNI." };
     default:
@@ -341,10 +383,42 @@ function deliveryMethodLabel(m: PublicShipment["delivery_method"]): string | und
 
 function etaSummary(iso: string | null, status: ShipmentStatus): { line: string; rel?: string } | undefined {
   if (!iso) return undefined;
-  if (status === "delivered" || status === "returned" || status === "cancelled" || status === "lost" || status === "destroyed") {
-    return undefined;
-  }
+  // Ocultar en estados terminales y en estados tempranos donde el ETA es sólo
+  // una estimación de creación (el motor de ruteo aún no ha confirmado la entrega).
+  const HIDE_STATUSES: ShipmentStatus[] = [
+    "delivered", "returned", "cancelled", "lost", "destroyed",
+    "draft", "at_origin_hub",
+  ];
+  if ((HIDE_STATUSES as string[]).includes(status)) return undefined;
   return { line: fmtDateTime(iso), rel: fmtRelative(iso) };
+}
+
+/**
+ * Formatea el mensaje de ETA relativo a partir de una cantidad de horas YA
+ * redondeada (preferentemente provista por el backend vía relative_hours,
+ * calculada en Go como ceil(minutosRestantes/60) con piso de seguridad de 1).
+ * Nunca debe recibir minutos — esta función solo formatea, no redondea.
+ */
+function formatEtaHoursMessage(hours: number): string {
+  return hours === 1
+    ? "Tu envío llegará dentro de la próxima 1 hora."
+    : `Tu envío llegará dentro de las próximas ${hours} horas.`;
+}
+
+/**
+ * Calcula las horas restantes hasta el ETA y devuelve el mensaje seguro para el
+ * cliente. Redondea hacia arriba (Math.ceil) para dar una ventana holgada y nunca
+ * revelar la hora exacta ni el número de minutos. Fallback para cuando el backend
+ * no provee un conteo de horas ya calculado (p. ej. estimated_delivery_at en in_transit).
+ * Devuelve undefined si el ETA es nulo, ya pasó, o el envío está en estado
+ * que no corresponde mostrarlo.
+ */
+function etaHoursMessage(iso: string | null): string | undefined {
+  if (!iso) return undefined;
+  const diffMs = new Date(iso).getTime() - Date.now();
+  if (diffMs <= 0) return undefined;
+  const hours = Math.ceil(diffMs / (1000 * 60 * 60));
+  return formatEtaHoursMessage(hours);
 }
 
 export function PublicTracking() {
@@ -488,10 +562,14 @@ export function PublicTracking() {
   };
 
   const chronological = useMemo(() => [...events].reverse(), [events]);
-  const lastUpdate = events.length > 0 ? events[0].timestamp : shipment?.updated_at;
+  // Fix #1: events viene oldest-first del backend; chronological[0] es el evento más reciente.
+  const lastUpdate = chronological.length > 0 ? chronological[0].timestamp : shipment?.updated_at;
 
   const hero = shipment ? statusHero(shipment) : null;
   const phaseInfo = shipment ? computePhaseInfo(shipment, events) : null;
+  // El backend (Go) ya sobreescribe estimated_delivery_at con la fecha
+  // dinámica (ahora + relative_hours) cuando el envío está en reparto —
+  // la grilla solo renderiza lo que llega, sin cálculos de fecha en el frontend.
   const eta = shipment ? etaSummary(shipment.estimated_delivery_at, shipment.status) : undefined;
 
   return (
