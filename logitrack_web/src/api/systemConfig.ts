@@ -17,10 +17,8 @@ export interface SystemConfig {
   draft_purge_days: number;
   /** Days a shipment can be held at ready_for_pickup before return. 0 = no limit (default). */
   pickup_deadline_days: number;
-  /** When true, email notifications are sent to customers. Default: true. */
-  email_notifications_enabled: boolean;
-  /** When true, WhatsApp notifications are sent to customers. Default: true. */
-  whatsapp_notifications_enabled: boolean;
+  /** When true, WhatsApp is skipped and all customer notifications go via email only. */
+  force_email_notifications: boolean;
   /** Maximum number of times a customer can reschedule delivery via chatbot. Range: 0-10 (default 2). */
   max_reschedules: number;
   max_reschedule_days: number;

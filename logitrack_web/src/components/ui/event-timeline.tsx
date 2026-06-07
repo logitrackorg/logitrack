@@ -3,7 +3,7 @@ import { MapPin, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDateTime, fmtDate } from "@/utils/date";
 import type { ShipmentEvent, ShipmentStatus } from "@/api/shipments";
-import { CLAIM_EVENT_LABELS, CLAIM_TYPE_LABELS, type ClaimEventType, type ClaimType } from "@/api/claims";
+import { CLAIM_EVENT_LABELS, type ClaimEventType } from "@/api/claims";
 import type { Branch } from "@/api/branches";
 
 const STATUS_LABELS: Record<ShipmentStatus, string> = {
@@ -52,12 +52,6 @@ const formatShipmentEventLabel = (ev: ShipmentEvent) => {
 const resolveBranch = (loc: string, branches: Branch[]): Branch | undefined => {
   return branches.find((b) => b.address.city === loc) ?? branches.find((b) => b.id === loc);
 };
-
-const translateClaimNotes = (notes: string): string =>
-  notes.replace(/\(([a-z_]+)\)/g, (_, type) => {
-    const label = CLAIM_TYPE_LABELS[type as ClaimType];
-    return label ? `(${label})` : `(${type})`;
-  });
 
 const formatChangedBy = (changedBy: string): string => {
   if (changedBy?.startsWith("chatbot-recipient")) return "chatbot-Destinatario";
@@ -163,9 +157,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                       )}
                     </div>
                     {ev.notes && (
-                      <p className="mt-1 mb-0 text-[var(--text-secondary)]">
-                        {ev.event_type === "claim_created" ? translateClaimNotes(ev.notes) : ev.notes}
-                      </p>
+                      <p className="mt-1 mb-0 text-[var(--text-secondary)]">{ev.notes}</p>
                     )}
                     {ev.event_type === "claim_created" && ev.notes && (
                       (() => {

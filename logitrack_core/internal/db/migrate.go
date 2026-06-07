@@ -530,10 +530,6 @@ func RunMigrations(db *sql.DB) error {
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
 
-		-- Canales de notificación independientes (reemplaza force_email_notifications)
-		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS whatsapp_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-
 		-- Parametrización de reprogramaciones vía chatbot
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
 		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;

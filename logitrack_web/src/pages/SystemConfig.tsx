@@ -143,8 +143,7 @@ export function SystemConfig() {
       draft.draft_retention_days !== config.draft_retention_days ||
       draft.draft_purge_days !== config.draft_purge_days ||
       draft.pickup_deadline_days !== config.pickup_deadline_days ||
-      draft.email_notifications_enabled !== config.email_notifications_enabled ||
-      draft.whatsapp_notifications_enabled !== config.whatsapp_notifications_enabled ||
+      draft.force_email_notifications !== config.force_email_notifications ||
       draft.max_reschedules !== config.max_reschedules ||
       draft.max_reschedule_days !== config.max_reschedule_days ||
       draft.two_fa_cooldown_minutes !== config.two_fa_cooldown_minutes
@@ -397,59 +396,41 @@ export function SystemConfig() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-slate-500" />
-                <CardTitle>Canales de notificaciones al cliente</CardTitle>
+                <CardTitle>Canal de notificaciones al cliente</CardTitle>
               </div>
               <CardDescription>
-                Controlá de forma independiente qué canales se usan para notificar a los clientes. Si ambos están activos, se envían por los dos canales en paralelo.
+                Cuando está activo, <strong>WhatsApp (Twilio) se saltea completamente</strong> y todas las notificaciones al cliente se envían solo por email. Útil para probar plantillas de email o cuando Twilio presenta problemas.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Email */}
+            <CardContent>
               <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
                 <div className="relative">
                   <input
                     type="checkbox"
                     className="sr-only"
-                    checked={draft.email_notifications_enabled}
+                    checked={draft.force_email_notifications}
                     onChange={(e) =>
-                      setDraft((d) => d ? { ...d, email_notifications_enabled: e.target.checked } : d)
+                      setDraft((d) => d ? { ...d, force_email_notifications: e.target.checked } : d)
                     }
                   />
                   <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.force_email_notifications ? "bg-amber-500" : "bg-slate-200"
+                      }`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.force_email_notifications ? "translate-x-5" : "translate-x-0"
+                      }`}
                     style={{ background: "#fff" }}
                   />
                 </div>
-                <span className="text-sm font-semibold text-slate-700">Notificaciones por email</span>
+                <span className="text-sm font-semibold text-slate-700">
+                  Forzar notificaciones por email (omitir WhatsApp)
+                </span>
               </label>
-              {/* WhatsApp */}
-              <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={draft.whatsapp_notifications_enabled}
-                    onChange={(e) =>
-                      setDraft((d) => d ? { ...d, whatsapp_notifications_enabled: e.target.checked } : d)
-                    }
-                  />
-                  <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
-                  />
-                  <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-slate-700">Notificaciones por WhatsApp</span>
-              </label>
-              {!draft.email_notifications_enabled && !draft.whatsapp_notifications_enabled && (
-                <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
+              {draft.force_email_notifications && (
+                <div className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  Ambos canales deshabilitados — no se enviarán notificaciones al cliente.
+                  WhatsApp deshabilitado — todas las notificaciones se enviarán únicamente por email.
                 </div>
               )}
             </CardContent>

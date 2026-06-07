@@ -45,7 +45,6 @@ services:
       DB_NAME: logitrack
       DB_SSLMODE: disable
       TWO_FA_ENCRYPTION_KEY: BbJ+igirB0m/RIkfEEDrtEtzPXKzJZzn9KnR1W3UpJA=
-      ENABLE_MASTER_2FA_CODE: "true"
       FRONTEND_URL: http://localhost:5173
       # SMTP y TRACK_BASE_URL se cargan desde logitrack_core/.env vía env_file.
     ports:
