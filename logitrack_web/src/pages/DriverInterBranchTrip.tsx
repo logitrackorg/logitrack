@@ -591,7 +591,7 @@ export function DriverInterBranchTrip() {
 
   const statusMap: Record<string, { label: string; cls: string }> = {
     pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800" },
-    en_transito: { label: "En ruta", cls: "bg-blue-100 text-blue-800" },
+    en_transito: { label: "En ruta", cls: "bg-[var(--brand-100)] text-[var(--brand-800)]" },
     completado: { label: "Completado", cls: "bg-emerald-100 text-emerald-800" },
     cancelado: { label: "Cancelado", cls: "bg-slate-100 text-slate-600" },
   };

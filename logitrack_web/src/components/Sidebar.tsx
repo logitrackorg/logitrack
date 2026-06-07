@@ -31,6 +31,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   SIDEBAR_HOVER_DELAY_MS as HOVER_DELAY_MS,
@@ -112,6 +113,9 @@ const ROLE_LABELS: Record<string, string> = {
 
 export function Sidebar() {
   const { user, logout, hasRole } = useAuth();
+  const { config } = useOrganizationTheme();
+  const logoUrl = config?.logo_url?.trim();
+  const orgName = config?.name?.trim() || "LogiTrack";
   const isMobile = useIsMobile();
 
   // Pinned (persisted) — true = always expanded, false = rail mode
@@ -202,12 +206,20 @@ export function Sidebar() {
           }`}
         >
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
-              LT
-            </div>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={orgName}
+                className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+                {orgName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
             {expanded && (
               <span className="font-extrabold text-[15px] tracking-[0.5px] text-slate-200 whitespace-nowrap">
-                LogiTrack
+                {orgName}
               </span>
             )}
           </div>
@@ -274,12 +286,12 @@ export function Sidebar() {
             to="/profile"
             onClick={isMobile ? closeMobile : undefined}
             className={
-              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-blue-950 text-slate-300 transition-colors duration-150 hover:bg-[var(--sidebar-bg)] ${
+              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-black/20 text-slate-300 transition-colors duration-150 hover:bg-black/30 ${
                 expanded ? "justify-start" : "justify-center"
               }`
             }
           >
-            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[var(--brand-400,#60a5fa)] to-[var(--brand-600,#2563eb)] flex items-center justify-center text-white font-bold text-xs shrink-0">
               {user.username.slice(0, 2).toUpperCase()}
             </div>
             {expanded && (
@@ -334,7 +346,7 @@ function SidebarLink({
           ? "py-2.5 px-5 justify-start"
           : "py-2.5 px-0 justify-center";
         if (isActive) {
-          return `${base} ${pad} no-underline text-slate-200 font-semibold bg-[var(--sidebar-bg)] border-l-[3px] border-blue-400`;
+          return `${base} ${pad} no-underline text-slate-200 font-semibold bg-[var(--sidebar-bg)] border-l-[3px] border-[var(--brand-400)]`;
         }
         return `${base} ${pad} no-underline text-slate-400 font-medium hover:bg-[var(--sidebar-hover)] hover:text-slate-200`;
       }}

@@ -4,6 +4,7 @@ import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
+import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -424,6 +425,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
+      <OrganizationThemeProvider>
       <AuthProvider>
         <BrowserRouter>
           <TwoFAGuard>
@@ -437,6 +439,7 @@ export default function App() {
           </TwoFAGuard>
         </BrowserRouter>
       </AuthProvider>
+      </OrganizationThemeProvider>
     </ThemeProvider>
   );
 }

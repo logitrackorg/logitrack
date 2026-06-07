@@ -928,7 +928,7 @@ function DeliverSheet({
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
             >
               Activar ubicación
             </button>
@@ -1033,7 +1033,7 @@ function FailedSheet({
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
             >
               Activar ubicación
             </button>
@@ -1141,7 +1141,7 @@ function RejectedSheet({
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-blue-600 underline cursor-pointer"
+              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
             >
               Activar ubicación
             </button>
