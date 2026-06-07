@@ -120,5 +120,8 @@ func validateRoutingConfig(cfg model.RoutingConfig) error {
 	if cfg.PlanningHorizonDays < 1 || cfg.PlanningHorizonDays > 7 {
 		return fmt.Errorf("planning_horizon_days debe estar entre 1 y 7")
 	}
+	if cfg.FleetProjectionHorizonHours < 0 || cfg.FleetProjectionHorizonHours > 168 {
+		return fmt.Errorf("fleet_projection_horizon_hours debe estar entre 0 y 168")
+	}
 	return nil
 }

@@ -52,6 +52,7 @@ import { InterBranchTripsList } from "./pages/InterBranchTripsList";
 import TripsCalendar from "./pages/TripsCalendar";
 import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
+import { NetworkHub } from "./pages/NetworkHub";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -186,7 +187,7 @@ function AppRoutes() {
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+          <ProtectedRoute roles={["supervisor", "manager"]}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -328,6 +329,12 @@ function AppRoutes() {
         <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
         <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
         <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
+
+        <Route path="/red" element={
+          <ProtectedRoute roles={["manager", "admin"]}>
+            <NetworkHub />
+          </ProtectedRoute>
+        } />
 
         {/* Legacy redirects */}
         <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />

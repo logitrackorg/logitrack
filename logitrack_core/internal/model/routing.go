@@ -9,6 +9,9 @@ const (
 	DispatchRuleSLA           DispatchRule = "sla_forced"
 	DispatchRuleConsolidation DispatchRule = "consolidation"
 	DispatchRuleManual        DispatchRule = "manual"
+	// DispatchRuleProjected marca un despacho armado sobre un vehículo que todavía
+	// no llegó a la sucursal. No es aplicable hasta que el vehículo arribe.
+	DispatchRuleProjected DispatchRule = "projected"
 )
 
 // RouteMode controla el criterio que usa el scheduler de última milla al elegir
@@ -168,6 +171,10 @@ type InterBranchAssignment struct {
 	// InTransit es runtime-only (no se persiste): indica que el vehículo ya está
 	// en viaje. La card se muestra como informativa, sin drag-and-drop ni apply.
 	InTransit bool `json:"in_transit,omitempty"`
+	// Projected es runtime-only: el vehículo todavía no llegó a la sucursal.
+	// La card es informativa (no aplicable) hasta que el vehículo arribe.
+	Projected          bool       `json:"projected,omitempty"`
+	ProjectedArrivalAt *time.Time `json:"projected_arrival_at,omitempty"`
 	// Backhaul is a WIP feature: return-trip shipments on the same vehicle.
 	Backhaul *BackhaulPlan `json:"backhaul,omitempty"`
 	// Multi-hop: paradas adicionales después de la primera. Máximo 2 (total 3 stops).
@@ -202,11 +209,13 @@ const MaxTripStops = 3
 
 // UnassignedShipment es un envío que el algoritmo no pudo rutear, con motivo.
 type UnassignedShipment struct {
-	TrackingID  string  `json:"tracking_id"`
-	Destination string  `json:"destination"` // final_branch_id, o "(última milla)" si aplica
-	Reason      string  `json:"reason"`      // código snake_case (sin_choferes_disponibles, etc.)
-	WeightKg    float64 `json:"weight_kg"`
-	Priority    string  `json:"priority"`
+	TrackingID     string  `json:"tracking_id"`
+	Destination    string  `json:"destination"` // final_branch_id, o "(última milla)" si aplica
+	Reason         string  `json:"reason"`      // código snake_case (sin_choferes_disponibles, etc.)
+	WeightKg       float64 `json:"weight_kg"`
+	Priority       string  `json:"priority"`
+	SLAForced      bool    `json:"sla_forced,omitempty"`
+	PriorityScore  float64 `json:"priority_score,omitempty"`
 }
 
 // VehicleLoad reporta la carga ya asignada a un vehículo del pool. Se exporta
@@ -244,6 +253,7 @@ type IncomingVehicle struct {
 // Se transporta cliente-side y se manda completo a ApplyPlan.
 type RoutingPlan struct {
 	BranchID         string                  `json:"branch_id"`
+	PlanDate         string                  `json:"plan_date,omitempty"` // YYYY-MM-DD; poblado al serializar el BranchPlan
 	GeneratedAt      time.Time               `json:"generated_at"`
 	LastMile         []LastMileAssignment    `json:"last_mile"`
 	InterBranch      []InterBranchAssignment `json:"inter_branch"`
@@ -259,6 +269,7 @@ type RecomputeLastMileRequest struct {
 	VehicleID   string    `json:"vehicle_id" binding:"required"`
 	ShipmentIDs []string  `json:"shipment_ids" binding:"required"`
 	Mode        RouteMode `json:"mode" binding:"required"`
+	PlanDate    string    `json:"plan_date,omitempty"` // YYYY-MM-DD; si se omite, usa hoy
 }
 
 // ApplyPlanRequest es el body del POST /routing/apply.

@@ -224,14 +224,25 @@ func (s *RoutingService) detectConsolidationOpportunities(plan *model.GlobalRout
 func (s *RoutingService) computeNetworkMetrics(plan *model.GlobalRoutingPlan) model.NetworkMetrics {
 	m := model.NetworkMetrics{}
 
+	// Primer pase: recopilar todos los vehículos usados en cualquier despacho inter-sucursal.
+	usedVehicles := map[string]bool{}
+	for _, bp := range plan.BranchPlans {
+		for _, ib := range bp.Plan.InterBranch {
+			if !ib.Projected { // despachos proyectados no cuentan como "dispatched"
+				usedVehicles[ib.VehicleID] = true
+			}
+		}
+	}
+
 	totalUtil := 0.0
 	utilCount := 0
-	usedVehicles := map[string]bool{}
 	branchesWithUnservedDemand := map[string]bool{}
 
 	for _, bp := range plan.BranchPlans {
 		for _, ib := range bp.Plan.InterBranch {
-			usedVehicles[ib.VehicleID] = true
+			if ib.Projected {
+				continue
+			}
 			m.TotalShipmentsAssigned += len(ib.Shipments)
 			if ib.CapacityKg > 0 {
 				totalUtil += ((ib.TotalWeightKg + ib.ExistingWeightKg) / ib.CapacityKg) * 100
@@ -250,7 +261,7 @@ func (s *RoutingService) computeNetworkMetrics(plan *model.GlobalRoutingPlan) mo
 			}
 		}
 
-		// Idle vehicles = en el pool pero sin uso
+		// Idle vehicles = en el pool pero sin uso en ningún despacho de la red.
 		for _, vl := range bp.Plan.VehicleLoads {
 			if !usedVehicles[vl.VehicleID] {
 				m.IdleVehiclesCount++

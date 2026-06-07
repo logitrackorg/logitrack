@@ -32,7 +32,8 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 		       min_fill_last_mile_rate, min_fill_inter_branch_rate,
 		       inter_branch_dispatch_hour, inter_branch_avg_speed_kmh,
 		       inter_branch_stop_minutes, planning_horizon_days,
-		       backhaul_enabled, keep_one_vehicle_per_branch
+		       backhaul_enabled, keep_one_vehicle_per_branch,
+		       fleet_projection_horizon_hours
 		FROM routing_config WHERE id = 1`).
 		Scan(
 			&cfg.SLAForceHorizonHours, &cfg.PriorityForceThreshold,
@@ -45,6 +46,7 @@ func (r *postgresRoutingConfigRepository) Get() model.RoutingConfig {
 			&cfg.InterBranchDispatchHour, &cfg.InterBranchAvgSpeedKmh,
 			&cfg.InterBranchStopMinutes, &cfg.PlanningHorizonDays,
 			&cfg.BackhaulEnabled, &cfg.KeepOneVehiclePerBranch,
+			&cfg.FleetProjectionHorizonHours,
 		)
 	if err != nil {
 		return model.DefaultRoutingConfig()
@@ -74,7 +76,8 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 			inter_branch_stop_minutes      = $16,
 			planning_horizon_days          = $17,
 			backhaul_enabled               = $18,
-			keep_one_vehicle_per_branch    = $19
+			keep_one_vehicle_per_branch    = $19,
+			fleet_projection_horizon_hours = $20
 		WHERE id = 1`,
 		cfg.SLAForceHorizonHours, cfg.PriorityForceThreshold,
 		cfg.MinFillRate, cfg.EnforceTimeWindows,
@@ -86,6 +89,7 @@ func (r *postgresRoutingConfigRepository) Update(cfg model.RoutingConfig) error 
 		cfg.InterBranchDispatchHour, cfg.InterBranchAvgSpeedKmh,
 		cfg.InterBranchStopMinutes, cfg.PlanningHorizonDays,
 		cfg.BackhaulEnabled, cfg.KeepOneVehiclePerBranch,
+		cfg.FleetProjectionHorizonHours,
 	)
 	return err
 }

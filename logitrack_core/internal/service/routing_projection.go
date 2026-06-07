@@ -553,6 +553,12 @@ func (s *RoutingService) GenerateMultiDayPlan(ctx context.Context) ([]*model.Glo
 			s.scheduleInterBranchAssignments(bp.Plan.InterBranch, bp.BranchID, cfg)
 		}
 
+		// Análisis de red: vehículos ociosos vs demanda insatisfecha, consolidación,
+		// métricas globales. Solo en D=0 (plan aplicable); los pronósticos no lo necesitan.
+		if day == 0 {
+			s.analyzeNetwork(plan)
+		}
+
 		plans = append(plans, plan)
 
 		// Aplicar efectos al estado para el día siguiente.

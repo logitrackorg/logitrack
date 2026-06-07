@@ -25,6 +25,7 @@ import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
 import { EditDriverStopsModal } from "../components/EditDriverStopsModal";
 import { ReviewInterBranchModal } from "../components/ReviewInterBranchModal";
+import { fmtDateTime } from "../utils/date";
 
 type Source =
   | { kind: "driver"; id: string }
@@ -249,6 +250,7 @@ export function Routing({ mode }: RoutingProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
+
   // loadTodayPlan obtiene el plan del día desde el servidor (generado por cron o regenerate).
   // Extrae el BranchPlan de la sucursal del usuario y lo establece como plan editable.
   const loadTodayPlan = async () => {
@@ -344,7 +346,7 @@ export function Routing({ mode }: RoutingProps = {}) {
     });
     newPlan.unassigned.forEach((u) => allTids.add(u.tracking_id));
     newPlan.vehicle_loads.forEach((l) => l.existing_shipments?.forEach((t) => allTids.add(t)));
-    newPlan.incoming_vehicles?.forEach((v) => v.shipments.forEach((t) => allTids.add(t)));
+    newPlan.incoming_vehicles?.forEach((v) => (v.shipments ?? []).forEach((t) => allTids.add(t)));
     const shipMap = new Map<string, Shipment>();
     const all = await shipmentApi.list({ branch_id: branchId || newPlan.branch_id });
     all.forEach((s) => {
@@ -865,7 +867,8 @@ export function Routing({ mode }: RoutingProps = {}) {
           {(() => {
             const pendingLastMile = plan.last_mile.filter((a) => !a.in_transit);
             const inProgressLastMile = plan.last_mile.filter((a) => a.in_transit);
-            const pendingInterBranch = plan.inter_branch.filter((a) => !a.in_transit);
+            const pendingInterBranch = plan.inter_branch.filter((a) => !a.in_transit && !a.projected);
+            const projectedInterBranch = plan.inter_branch.filter((a) => a.projected);
             const inProgressInterBranch = plan.inter_branch.filter((a) => a.in_transit);
             const inProgressLastMileIds = inProgressLastMile.map((a) => a.vehicle_id);
             const inProgressVehicleIds = inProgressInterBranch.map((a) => a.vehicle_id);
@@ -1050,6 +1053,15 @@ export function Routing({ mode }: RoutingProps = {}) {
                       />
                     )}
 
+                    {projectedInterBranch.length > 0 && (
+                      <ProjectedDispatchSection
+                        interBranch={projectedInterBranch}
+                        branches={branches}
+                        shipments={shipments}
+                        onView={openInfo}
+                      />
+                    )}
+
                     {inProgressInterBranch.length > 0 && (
                       <OutgoingInProgressSection
                         lastMile={[]}
@@ -1071,6 +1083,7 @@ export function Routing({ mode }: RoutingProps = {}) {
 
                     {interBranchUnassigned.length === 0 &&
                       pendingInterBranch.length === 0 &&
+                      projectedInterBranch.length === 0 &&
                       inProgressInterBranch.length === 0 &&
                       plan.vehicle_loads.length === 0 &&
                       (plan.incoming_vehicles?.length ?? 0) === 0 && (
@@ -1115,6 +1128,16 @@ export function Routing({ mode }: RoutingProps = {}) {
             shipmentMap={shipments}
             branchCoords={branchCoords}
             config={plan.config_snapshot}
+            planDate={plan.plan_date}
+            availableDates={horizonPlans.map((hp, idx) => {
+              const [, m, d] = (hp.plan_date ?? "").split("-").map(Number);
+              const label = idx === 0
+                ? "Hoy"
+                : Number.isFinite(d)
+                  ? `${idx === 1 ? "Mañana " : ""}${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`
+                  : hp.plan_date ?? "";
+              return { date: hp.plan_date ?? "", label };
+            })}
             onClose={() => setEditingStopsVehicleId(null)}
             onApply={(orderedTids, routeMode) => handleApplyWithReorder(editingStopsVehicleId, orderedTids, routeMode)}
           />
@@ -2208,6 +2231,78 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
   );
 }
 
+// ProjectedDispatchSection muestra despachos planificados sobre vehículos que
+// todavía están en tránsito hacia esta sucursal. Son informativos y no aplicables
+// hasta que el vehículo arribe y quede disponible.
+function ProjectedDispatchSection({
+  interBranch,
+  branches,
+  shipments,
+  onView,
+}: {
+  interBranch: InterBranchAssignment[];
+  branches: Branch[];
+  shipments: Map<string, Shipment>;
+  onView?: (trackingId: string) => void;
+}) {
+  if (interBranch.length === 0) return null;
+  return (
+    <Card className="mb-5 border-amber-200">
+      <CardHeader className="bg-amber-50 rounded-t-xl">
+        <CardTitle className="text-amber-900 flex items-center gap-2">
+          <Clock className="w-5 h-5" />
+          Despachos proyectados ({interBranch.length})
+        </CardTitle>
+        <CardDescription>
+          Envíos en espera que se cargarán cuando el vehículo arribe a esta sucursal.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4">
+        {interBranch.map((a) => {
+          return (
+            <div key={a.vehicle_id + "-" + a.destination_branch} className="rounded-lg border border-amber-200 p-3 bg-amber-50/30">
+              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                  <Truck className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{a.license_plate}</span>
+                  <span className="text-slate-500 font-normal">→</span>
+                  <span>{branchLabelById(a.destination_branch, branches)}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                    ⏳ Proyectado
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                  {a.shipments.length} envíos · {a.total_weight_kg.toFixed(1)} kg
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                {a.shipments.map((tid) => {
+                  const sh = shipments.get(tid);
+                  const clickable = !!onView && !!sh;
+                  return (
+                    <div
+                      key={tid}
+                      onClick={clickable ? () => onView!(tid) : undefined}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onView!(tid); } } : undefined}
+                      className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                    >
+                      <span className="font-mono text-slate-700">{tid}</span>
+                      {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                      {sh?.priority && <PriorityBadge priority={sh.priority} />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 // OutgoingInProgressSection muestra choferes que ya iniciaron ruta y vehículos
 // que ya están en viaje DESDE esta sucursal. Es solo informativo: no hay
 // drag-and-drop ni botones de apply porque ya están en movimiento.
@@ -2442,8 +2537,11 @@ function IncomingVehiclesSection({
                     🚚 En viaje
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums shrink-0">
-                  {v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg ({utilPct}%)
+                <div className="text-xs text-slate-500 tabular-nums shrink-0 flex flex-col items-end gap-0.5">
+                  <span>{v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg ({utilPct}%)</span>
+                  {v.estimated_arrival_at && (
+                    <span className="text-sky-700 font-medium">Arribo estimado: {fmtDateTime(v.estimated_arrival_at)}</span>
+                  )}
                 </div>
               </div>
               <div className="grid gap-1.5">

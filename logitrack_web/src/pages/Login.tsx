@@ -21,6 +21,7 @@ const TEST_USERS = [
   { u: "op_mendoza", p: "op_mendoza123", r: "Operador", branch: "Mendoza" },
   { u: "sup_mendoza", p: "sup_mendoza123", r: "Supervisor", branch: "Mendoza" },
   { u: "op_posadas", p: "op_posadas123", r: "Operador", branch: "Posadas" },
+  { u: "sup_santa_cruz", p: "sup_santacruz123", r: "Supervisor", branch: "Santa Cruz" },
   { u: "gerente", p: "gerente123", r: "Gerente", branch: "" },
   { u: "admin", p: "admin123", r: "Admin", branch: "" },
   { u: "chofer_caba", p: "chofer_caba123", r: "Chofer Última milla", branch: "CABA" },
