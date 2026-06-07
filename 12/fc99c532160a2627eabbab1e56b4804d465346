@@ -1,0 +1,62 @@
+logitrack_core/internal/handler/organization.go
+  s_82bdaa383146b2::t_5ba9d3d588261e 83-92
+  s_82bdaa383146b2::t_8d9c1e86688456 33-54
+  s_82bdaa383146b2::t_f61f736b10f4c9 56-65
+logitrack_web/src/pages/Login.tsx
+  s_82bdaa383146b2::t_491b6e6dc47082 254-264,266
+  s_82bdaa383146b2::t_b112580bdc5b2d 319-326
+  s_82bdaa383146b2::t_de2523a5a4de8d 4
+  s_82bdaa383146b2::t_b90f018f59293e 79-81
+logitrack_web/src/api/organizationApi.ts
+  s_82bdaa383146b2::t_c4c28feb94e3c0 29-43,46-47
+logitrack_web/src/App.tsx
+  s_82bdaa383146b2::t_5fd10683aed18b 442
+  s_82bdaa383146b2::t_4e1285939884b1 7
+  s_82bdaa383146b2::t_bfd77f174de74a 428
+logitrack_core/internal/model/organization.go
+  s_82bdaa383146b2::t_03aea39b6e0606 6-18
+logitrack_core/internal/db/migrate.go
+  s_82bdaa383146b2::t_72b656334e5d50 255-267,273-276
+logitrack_core/internal/service/organization.go
+  s_82bdaa383146b2::t_6a25a6edb98299 5,11-12
+  s_82bdaa383146b2::t_b532a35d2d62d5 30-42
+logitrack_web/src/context/OrganizationThemeContext.tsx
+  s_82bdaa383146b2::t_cdde03a2dba58f 138-153,170,172,174-180
+  s_82bdaa383146b2::t_1803ca9f9da981 200,206
+  s_82bdaa383146b2::t_742718d02abfc3 106-110
+  s_82bdaa383146b2::t_fda1a4bdfbeefb 186
+  s_82bdaa383146b2::t_3e601239cc1136 9
+  s_82bdaa383146b2::t_ae9f504815e1ca 119
+logitrack_web/src/pages/DriverRoute.tsx
+  s_82bdaa383146b2::t_5f2a5fcb10f5cb 931,1036,1144
+logitrack_web/src/pages/DriverInterBranchTrip.tsx
+  s_82bdaa383146b2::t_2544f7ed40b795 594
+logitrack_core/internal/repository/postgres_organization.go
+  s_82bdaa383146b2::t_38bc37b26094b3 39-40,42-56,59-61
+  s_82bdaa383146b2::t_d73d79cc5d2553 19-21,25-27
+logitrack_web/src/components/Sidebar.tsx
+  s_82bdaa383146b2::t_5b7f6a935a36d5 349
+  s_82bdaa383146b2::t_6d074b80149e86 294
+  s_82bdaa383146b2::t_83288813ff15d8 289
+  s_82bdaa383146b2::t_7c6acc2a5a884d 34
+  s_82bdaa383146b2::t_5b53a2b3b3efe6 209-219,222
+  s_82bdaa383146b2::t_3d45fc7cde6899 116-118
+logitrack_core/cmd/server/main.go
+  s_82bdaa383146b2::t_aca3e541f3790c 762
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "12fc99c532160a2627eabbab1e56b4804d465346",
+  "prompts": {},
+  "sessions": {
+    "s_82bdaa383146b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c183f99-8791-435d-9684-cb198370b3f0",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
