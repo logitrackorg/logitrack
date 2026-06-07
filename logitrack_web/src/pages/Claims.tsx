@@ -4,12 +4,12 @@ import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, RefreshCw } fro
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
+  CLAIM_TYPE_LABELS,
   type Claim,
   type ClaimCategory,
   type ClaimEvent,
   type ClaimResolutionType,
   type ClaimStatus,
-  type ClaimType,
 } from "../api/claims";
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
@@ -17,16 +17,6 @@ import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, type Branch } from "../api/branches";
-
-const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
-  damage: "Daño/Faltante",
-  missing: "Daño/Faltante",
-  delay: "Retraso",
-  not_delivered: "No recibido",
-  bad_treatment: "Maltrato",
-  wrong_data: "Datos incorrectos",
-  other: "Otro",
-};
 
 const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   open: "Abierto",
