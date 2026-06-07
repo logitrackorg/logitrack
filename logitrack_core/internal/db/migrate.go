@@ -630,6 +630,20 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Despacho proyectado: ventana en horas para usar vehículos en tránsito
 		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS fleet_projection_horizon_hours INTEGER NOT NULL DEFAULT 24;
+
+		-- Métodos de pago habilitados (feature flags para el panel de cobro)
+		CREATE TABLE IF NOT EXISTS payment_config (
+			id           INTEGER PRIMARY KEY DEFAULT 1,
+			mp_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
+			mock_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+			mp_alias     TEXT NOT NULL DEFAULT '',
+			mp_cvu       TEXT NOT NULL DEFAULT ''
+		);
+		INSERT INTO payment_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_alias          TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
 	`)
 	return err
 }

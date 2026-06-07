@@ -16,13 +16,18 @@ import (
 )
 
 type PaymentHandler struct {
-	svc      *service.PaymentService
-	mp       *mercadopago.Client
-	shipSvc  *service.ShipmentService
+	svc        *service.PaymentService
+	mp         *mercadopago.Client
+	shipSvc    *service.ShipmentService
+	configSvc  *service.PaymentConfigService
 }
 
 func NewPaymentHandler(svc *service.PaymentService, mp *mercadopago.Client, shipSvc *service.ShipmentService) *PaymentHandler {
 	return &PaymentHandler{svc: svc, mp: mp, shipSvc: shipSvc}
+}
+
+func (h *PaymentHandler) SetPaymentConfigService(svc *service.PaymentConfigService) {
+	h.configSvc = svc
 }
 
 // RequestPayment godoc
@@ -123,6 +128,27 @@ func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 	c.JSON(http.StatusOK, shipment)
 }
 
+// ConfirmTransferPayment godoc
+// @Summary      Confirmar pago por transferencia bancaria
+// @Description  Registra el pago como confirmado mediante transferencia bancaria. Modo simulado — a futuro validará el CBU/CVU contra el sistema bancario.
+// @Tags         payments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        tracking_id  path      string  true  "Tracking ID en pending_payment"
+// @Success      200          {object}  model.Shipment
+// @Failure      400          {object}  map[string]string
+// @Router       /shipments/{tracking_id}/transfer-payment [post]
+func (h *PaymentHandler) ConfirmTransferPayment(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	trackingID := c.Param("tracking_id")
+	shipment, err := h.svc.ConfirmMockPayment(trackingID, user.Username)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, shipment)
+}
+
 // GeneratePaymentQR godoc
 // @Summary      QR de pago
 // @Description  Genera un código QR que apunta al init_point de Mercado Pago del pago pendiente.
@@ -136,12 +162,26 @@ func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 func (h *PaymentHandler) GeneratePaymentQR(c *gin.Context) {
 	trackingID := c.Param("tracking_id")
 	payment, err := h.svc.GetByTrackingID(trackingID)
-	if err != nil || payment.InitPoint == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Pago no encontrado o sin link de pago"})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Pago no encontrado"})
 		return
 	}
 
-	qrPNG, err := qrcode.Encode(payment.InitPoint, qrcode.Medium, 256)
+	// Prefer alias/CVU from config to generate a transfer QR; fall back to MP init_point.
+	qrContent := payment.InitPoint
+	if h.configSvc != nil {
+		cfg := h.configSvc.Get()
+		if cfg.MPAlias != "" || cfg.MPCVU != "" {
+			qrContent = buildTransferQRContent(cfg.MPAlias, cfg.MPCVU, "", "", "")
+		}
+	}
+
+	if qrContent == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sin destino de pago configurado"})
+		return
+	}
+
+	qrPNG, err := qrcode.Encode(qrContent, qrcode.Medium, 256)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al generar código QR"})
 		return
@@ -151,6 +191,16 @@ func (h *PaymentHandler) GeneratePaymentQR(c *gin.Context) {
 		"qr_code_base64": base64.StdEncoding.EncodeToString(qrPNG),
 		"init_point":     payment.InitPoint,
 	})
+}
+
+// buildTransferQRContent returns the alias or CVU as plain text.
+// Most Argentine banking apps (MP, Naranja X, Ualá) can scan an alias QR
+// and navigate directly to the transfer screen. Amount must be entered manually.
+func buildTransferQRContent(alias, cvu string, _, _, _ string) string {
+	if alias != "" {
+		return alias
+	}
+	return cvu
 }
 
 // webhookBody is the minimal structure of an MP webhook notification.

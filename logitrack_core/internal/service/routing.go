@@ -5483,6 +5483,8 @@ func deriveOverwriteETA(now time.Time, minutosRestantes float64) (*time.Time, *i
 	}
 	nuevaFechaEstimada := now.Add(time.Duration(horasASumar) * time.Hour)
 	return &nuevaFechaEstimada, &horasASumar
+}
+
 // sortUnassignedByPriority ordena envíos varados: alta > media > baja, luego WeightKg ASC.
 func sortUnassignedByPriority(items []model.UnassignedShipment) {
 	priOrder := map[string]int{"alta": 0, "media": 1, "baja": 2}

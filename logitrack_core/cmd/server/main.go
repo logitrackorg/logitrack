@@ -137,17 +137,12 @@ func main() {
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
 
-	// Mercado Pago — nil cuando no está configurado (dev sin MP)
+	// Mercado Pago — siempre non-nil; IsConfigured() depende de credenciales (DB > env vars)
 	mpClient := mercadopago.NewClient(
 		os.Getenv("MP_ACCESS_TOKEN"),
 		os.Getenv("MP_WEBHOOK_SECRET"),
 		getenv("MP_NOTIFICATION_URL", ""),
 	)
-	if mpClient != nil {
-		log.Println("[mercadopago] cliente configurado — webhooks activos")
-	} else {
-		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
-	}
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	// También se dispara el chequeo de SLA en riesgo/vencido para que las
@@ -186,6 +181,17 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
 	paymentScheduler := service.NewPaymentScheduler(paymentSvc)
 	paymentScheduler.Start()
+
+	paymentConfigRepo := repository.NewPostgresPaymentConfigRepository(database)
+	paymentConfigSvc := service.NewPaymentConfigService(paymentConfigRepo)
+	paymentConfigHandler := handler.NewPaymentConfigHandler(paymentConfigSvc)
+	paymentHandler.SetPaymentConfigService(paymentConfigSvc)
+	mpClient.SetCredentialProvider(paymentConfigSvc.GetMPCredentials)
+	if mpClient.IsConfigured() {
+		log.Println("[mercadopago] cliente configurado — webhooks activos")
+	} else {
+		log.Println("[mercadopago] sin credenciales MP — modo simulación activo")
+	}
 
 	notifRepo := repository.NewPostgresNotificationRepository(database)
 	notifSvc := service.NewNotificationService(notifRepo)
@@ -526,6 +532,10 @@ func main() {
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
 	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
 	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
+	protected.POST("/shipments/:tracking_id/transfer-payment", shipmentWrite, paymentHandler.ConfirmTransferPayment)
+	protected.GET("/payment/config", authenticated, paymentConfigHandler.Get)
+	protected.PATCH("/payment/config", adminOnly, paymentConfigHandler.Update)
+	protected.PATCH("/payment/config/credentials", adminOnly, paymentConfigHandler.UpdateCredentials)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)

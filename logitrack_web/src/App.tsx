@@ -34,6 +34,7 @@ import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { PricingConfig } from "./pages/PricingConfig";
 import { RoutingConfig } from "./pages/RoutingConfig";
+import { PaymentConfig } from "./pages/PaymentConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
@@ -301,6 +302,12 @@ function AppRoutes() {
         <Route path="/pricing-config" element={
           <ProtectedRoute roles={["admin"]}>
             <PricingConfig />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/payment-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <PaymentConfig />
           </ProtectedRoute>
         } />
 

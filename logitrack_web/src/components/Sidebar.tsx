@@ -28,6 +28,7 @@ import {
   LogOut,
   X,
   Calendar,
+  CreditCard,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -95,6 +96,7 @@ const SECTIONS: NavSection[] = [
       { to: "/ml-config", label: "ML", icon: Brain, roles: ["admin"] },
       { to: "/fatigue-config", label: "Fatiga", icon: Activity, roles: ["admin"] },
       { to: "/pricing-config", label: "Tarifario", icon: DollarSign, roles: ["admin"] },
+      { to: "/payment-config", label: "Pagos", icon: CreditCard, roles: ["admin"] },
       { to: "/system-config", label: "Sistema", icon: Settings, roles: ["admin"] },
     ],
   },

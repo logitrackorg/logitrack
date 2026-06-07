@@ -11,29 +11,61 @@ import (
 
 const baseURL = "https://api.mercadopago.com"
 
+// CredentialProvider is called at request time to resolve MP credentials.
+// Returns accessToken and webhookSecret. Empty accessToken means not configured.
+type CredentialProvider func() (accessToken, webhookSecret string)
+
 type Client struct {
-	accessToken   string
-	webhookSecret string
-	notificationURL string
-	http          *http.Client
+	staticAccessToken   string
+	staticWebhookSecret string
+	notificationURL     string
+	http                *http.Client
+	provider            CredentialProvider
 }
 
-// NewClient returns nil when accessToken is empty so callers can detect unconfigured state.
+// NewClient always returns a non-nil Client. Static credentials come from env vars;
+// call SetCredentialProvider to layer DB-based credentials on top.
 func NewClient(accessToken, webhookSecret, notificationURL string) *Client {
-	if accessToken == "" {
-		return nil
-	}
 	return &Client{
-		accessToken:     accessToken,
-		webhookSecret:   webhookSecret,
-		notificationURL: notificationURL,
-		http:            &http.Client{Timeout: 15 * time.Second},
+		staticAccessToken:   accessToken,
+		staticWebhookSecret: webhookSecret,
+		notificationURL:     notificationURL,
+		http:                &http.Client{Timeout: 15 * time.Second},
 	}
+}
+
+// SetCredentialProvider registers a function that returns live credentials.
+// DB credentials take precedence over static env-var credentials when non-empty.
+func (c *Client) SetCredentialProvider(fn CredentialProvider) {
+	c.provider = fn
+}
+
+// IsConfigured reports whether an access token is available from any source.
+func (c *Client) IsConfigured() bool {
+	at, _ := c.credentials()
+	return at != ""
 }
 
 func (c *Client) NotificationURL() string { return c.notificationURL }
 
+// credentials resolves the access token and webhook secret to use for this request.
+// DB credentials (via provider) take precedence; env vars are the fallback.
+func (c *Client) credentials() (accessToken, webhookSecret string) {
+	if c.provider != nil {
+		at, ws := c.provider()
+		if at != "" {
+			return at, ws
+		}
+	}
+	return c.staticAccessToken, c.staticWebhookSecret
+}
+
 func (c *Client) do(method, path string, body interface{}, out interface{}) error {
+	accessToken, _ := c.credentials()
+	if accessToken == "" {
+		return fmt.Errorf("mercadopago: sin credenciales configuradas")
+	}
+
 	var buf io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -46,7 +78,7 @@ func (c *Client) do(method, path string, body interface{}, out interface{}) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
