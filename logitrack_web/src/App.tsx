@@ -217,13 +217,13 @@ function AppRoutes() {
         } />
 
         <Route path="/claims" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />
 
         <Route path="/claims/:id" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />

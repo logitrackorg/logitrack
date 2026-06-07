@@ -65,7 +65,7 @@ const SECTIONS: NavSection[] = [
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/calendar", label: "Calendario", icon: Calendar, roles: ["operator", "supervisor", "manager"] },
       { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
-      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
+      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["admin", "operator", "supervisor", "manager"] },
       { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
     ],
   },

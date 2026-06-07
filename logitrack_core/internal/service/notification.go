@@ -772,3 +772,36 @@ func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, b
 		}
 	}
 }
+
+// NotifyClaimCustomerResponded notifica a supervisores y operadores que el cliente
+// respondió al reclamo pending_customer vía chatbot (US-4).
+func (s *NotificationService) NotifyClaimCustomerResponded(claim model.Claim, branchID string) {
+	title := "Cliente respondió al reclamo"
+	body := fmt.Sprintf("El cliente respondió al reclamo %s. Está listo para ser revisado.", claim.ID)
+	now := clock.Now().UTC()
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleSupervisor,
+		model.RoleOperator,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyClaimCustomerResponded error: %v", err)
+		return
+	}
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationClaimCustomerResponded,
+			Title:      title,
+			Body:       body,
+			ResourceID: claim.ID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyClaimCustomerResponded Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(u.ID)
+		}
+	}
+}

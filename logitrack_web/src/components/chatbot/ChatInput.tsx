@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
+  fileUploadDisabled?: boolean;
   placeholder?: string;
+  showFileUpload?: boolean;
+  onFileSelect?: (file: File) => void;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({ 
-  onSend, 
+export const ChatInput: React.FC<ChatInputProps> = ({
+  onSend,
   disabled = false,
-  placeholder = 'Escribe tu mensaje...' 
+  fileUploadDisabled,
+  placeholder = 'Escribe tu mensaje...',
+  showFileUpload = false,
+  onFileSelect,
 }) => {
   const [input, setInput] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachDisabled = fileUploadDisabled ?? disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +29,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileSelect) {
+      onFileSelect(file);
+    }
+    // reset so the same file can be re-selected
+    e.target.value = '';
+  };
+
   return (
     <form className="chat-input" onSubmit={handleSubmit}>
+      {showFileUpload && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+            disabled={attachDisabled}
+          />
+          <button
+            type="button"
+            className="attach-btn"
+            disabled={attachDisabled}
+            title="Adjuntar archivo"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            📎
+          </button>
+        </>
+      )}
       <input
         type="text"
         value={input}

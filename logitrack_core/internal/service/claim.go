@@ -105,6 +105,7 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
 	}
 
+
 	claimID, err := s.claimRepo.NextID()
 	if err != nil {
 		return model.Claim{}, err
@@ -297,6 +298,19 @@ func (s *ClaimService) GetLatestByTrackingID(trackingID string) (model.Claim, er
 		return model.Claim{}, repository.ErrClaimNotFound
 	}
 	return s.claimRepo.GetLatestByTrackingID(trackingID)
+}
+
+// GetLatestActiveClaimByTrackingID devuelve el reclamo más reciente no resuelto para un envío.
+// Retorna ErrClaimNotFound si no existe o si el único reclamo ya está resuelto.
+func (s *ClaimService) GetLatestActiveClaimByTrackingID(trackingID string) (model.Claim, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingID(strings.TrimSpace(trackingID))
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if strings.HasPrefix(string(claim.Status), "resolved_") {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return claim, nil
 }
 
 func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error) {
@@ -614,9 +628,92 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
 		return base, true
+	case model.EventClaimCustomerResponded:
+		payload := de.Payload.(model.ClaimCustomerRespondedPayload)
+		base.Notes = payload.Response
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		base.EvidenceFileName = payload.EvidenceFileName
+		base.EvidenceFilePath = payload.EvidenceFilePath
+		return base, true
 	default:
 		return model.ClaimEvent{}, false
 	}
+}
+
+// RespondToClaimInfoRequest procesa la respuesta del cliente a un reclamo pending_customer (US-4)
+func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseText string, evidence *ClaimEvidenceUpload) (model.Claim, error) {
+	claim, err := s.claimRepo.GetByID(claimID)
+	if err != nil {
+		return model.Claim{}, fmt.Errorf("reclamo no encontrado")
+	}
+	if claim.Status != model.ClaimStatusPendingCustomer {
+		return model.Claim{}, fmt.Errorf("el reclamo no está esperando respuesta del cliente")
+	}
+	if strings.TrimSpace(claim.ClaimantDNI) != strings.TrimSpace(claimantDNI) {
+		return model.Claim{}, fmt.Errorf("el DNI no coincide con el reclamante")
+	}
+	responseText = strings.TrimSpace(responseText)
+	if len(responseText) < 1 || len(responseText) > 400 {
+		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 1 y 400 caracteres")
+	}
+
+	now := clock.Now().UTC()
+	var evidenceFileName, evidenceFilePath string
+	if evidence != nil && len(evidence.Data) > 0 {
+		evidenceDir := filepath.Join("uploads", "claims")
+		if err := os.MkdirAll(evidenceDir, 0o755); err != nil {
+			return model.Claim{}, err
+		}
+		safeName := sanitizeEvidenceFileName(evidence.FileName)
+		if ext := strings.ToLower(filepath.Ext(safeName)); ext == "" {
+			safeName += evidenceFileExtension(evidence.MimeType)
+		}
+		evidenceFileName = safeName
+		evidenceFilePath = filepath.Join(evidenceDir, fmt.Sprintf("%s_resp_%s", claimID, safeName))
+		if err := os.WriteFile(evidenceFilePath, evidence.Data, 0o644); err != nil {
+			return model.Claim{}, err
+		}
+	}
+
+	fromStatus := claim.Status
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimCustomerResponded,
+		Payload: model.ClaimCustomerRespondedPayload{
+			Response:         responseText,
+			FromStatus:       fromStatus,
+			ToStatus:         model.ClaimStatusInReview,
+			EvidenceFileName: evidenceFileName,
+			EvidenceFilePath: evidenceFilePath,
+		},
+		ChangedBy: "chatbot-customer:" + claimantDNI,
+		Timestamp: now,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+
+	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, now); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimInReview,
+		Payload: model.ClaimInReviewPayload{
+			FromStatus: fromStatus,
+			ToStatus:   model.ClaimStatusInReview,
+		},
+		ChangedBy: "chatbot-customer:" + claimantDNI,
+		Timestamp: now,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+
+	claim.Status = model.ClaimStatusInReview
+	claim.UpdatedAt = now
+	return claim, nil
 }
 
 func (s *ClaimService) ValidateClaimant(shipment *model.Shipment, fullName, dni string) bool {
