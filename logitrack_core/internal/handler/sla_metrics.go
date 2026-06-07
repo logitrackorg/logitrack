@@ -166,25 +166,27 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		}
 	}
 
-	// ── 4. Current per-status averages — filtered to states with active shipments
-	// Build a set of status codes that actually have ≥ 1 active shipment so that
-	// ghost states (states in the Collector cache but empty in the DB) are not
-	// sent to the frontend and produce phantom bars in the chart.
-	activeStatusSet := make(map[string]bool, len(actives))
-	for _, r := range actives {
-		activeStatusSet[r.status] = true
-	}
+	// ── 4. Current per-status averages — one row per monitored status, always
+	// Iterate the canonical monitored-status list (not the Collector cache map)
+	// so every state the SLA engine tracks gets its own row, regardless of
+	// whether the Collector has historical data for it yet or whether any
+	// shipment is currently sitting in that state. States without enough
+	// historical transitions come back as AvgHours=0 / HasData=false so the
+	// frontend can render an explanatory tooltip instead of hiding the row.
 	currentAvgMap := h.svc.GetCurrentAverages()
-	currentAverages := make([]model.SLAStateAverage, 0, len(currentAvgMap))
-	for code, avgH := range currentAvgMap {
-		if !activeStatusSet[code] {
-			continue // skip states with no active shipments
-		}
+	monitoredCodes := model.MonitoredStatusCodes()
+	currentAverages := make([]model.SLAStateAverage, 0, len(monitoredCodes))
+	for _, code := range monitoredCodes {
+		avgH, hasData := currentAvgMap[code]
 		label := slaStatusLabel[code]
 		if label == "" {
 			label = code
 		}
-		currentAverages = append(currentAverages, model.SLAStateAverage{Status: label, AvgHours: math.Round(avgH*10) / 10})
+		currentAverages = append(currentAverages, model.SLAStateAverage{
+			Status:   label,
+			AvgHours: math.Round(avgH*10) / 10,
+			HasData:  hasData,
+		})
 	}
 	sort.Slice(currentAverages, func(i, j int) bool {
 		return currentAverages[i].AvgHours > currentAverages[j].AvgHours

@@ -97,7 +97,8 @@ type SLAMetrics struct {
 // SLAStateAverage holds the average dwell time for a single shipment status.
 type SLAStateAverage struct {
 	Status   string  `json:"status"`    // Spanish display name
-	AvgHours float64 `json:"avg_hours"` // hours; 0 = no data
+	AvgHours float64 `json:"avg_hours"` // hours; meaningless when HasData is false
+	HasData  bool    `json:"has_data"`  // false = not enough historical transitions yet to compute an average
 }
 
 // SLABottleneck aggregates delayed shipments by their current status.

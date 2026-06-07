@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
-  ChevronDown, ChevronUp, UserPlus, UserMinus,
+  ChevronDown, ChevronUp, UserPlus, UserMinus, Info,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -118,10 +118,10 @@ export default function SlaTab() {
           name: "Tendencia 7 días",
           data: metrics.delay_trend.map((d) => ({ Fecha: d.date, Escalados: d.count })),
         },
-        ...(metrics.current_averages?.some((a) => a.avg_hours > 0)
+        ...(metrics.current_averages?.some((a) => a.has_data)
           ? [{
               name: "Prom. por estado",
-              data: metrics.current_averages.map((a) => ({
+              data: metrics.current_averages.filter((a) => a.has_data).map((a) => ({
                 Estado:           a.status,
                 "Horas promedio": a.avg_hours.toFixed(1),
               })),
@@ -272,8 +272,11 @@ export default function SlaTab() {
 
       {/* ── Current averages ─────────────────────────────────────────────────── */}
       {(() => {
-        const avgs    = metrics.current_averages ?? [];
-        const hasData = avgs.some((a) => a.avg_hours > 0);
+        // Mostramos una fila por cada estado monitoreado por el motor de SLA
+        // (el backend ya envía la lista completa, dinámica — sin hardcodear
+        // estados acá). Los que todavía no tienen suficiente historial llegan
+        // con has_data: false y muestran un globo explicativo en vez de "0h".
+        const averages = metrics.current_averages ?? [];
         return (
           <Card>
             <CardHeader className="pb-2">
@@ -285,23 +288,33 @@ export default function SlaTab() {
               </p>
             </CardHeader>
             <CardContent>
-              {!hasData ? (
+              {averages.length === 0 ? (
                 <div className="flex items-center justify-center h-[220px] text-slate-400 text-sm text-center px-6">
                   Los promedios aún no han sido calculados en este ciclo
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={avgs} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
-                    <XAxis type="number" tick={{ fontSize: 11 }} unit=" h" allowDecimals={false} />
-                    <YAxis type="category" dataKey="status" width={145} tick={{ fontSize: 10 }}
-                      tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v} />
-                    <Tooltip
-                      formatter={(val) => [`${Number(val).toFixed(1)} h`, "Promedio"]}
-                      contentStyle={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                    />
-                    <Bar dataKey="avg_hours" radius={[0, 4, 4, 0]} maxBarSize={28} fill={COLOR_LINE} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {averages.map((a) => (
+                    <div
+                      key={a.status}
+                      className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/60"
+                    >
+                      <span className="text-xs font-semibold text-slate-600 leading-snug inline-flex items-center gap-1">
+                        {a.status}
+                        {!a.has_data && (
+                          <InfoTooltip text="Todavía no hay suficientes transiciones históricas registradas para este estado — el promedio se calculará automáticamente a medida que los envíos completen su recorrido." />
+                        )}
+                      </span>
+                      {a.has_data ? (
+                        <span className="text-lg font-black tabular-nums shrink-0" style={{ color: COLOR_LINE }}>
+                          {a.avg_hours.toFixed(1)}<span className="text-xs font-bold ml-0.5">h</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400 shrink-0">Sin datos</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -385,6 +398,27 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+// ── Info tooltip ──────────────────────────────────────────────────────────────
+// Tooltip simple basado en Tailwind (group/group-hover), sin dependencias extra.
+// Fondo oscuro fijo + texto claro para mantener buen contraste tanto en modo
+// claro como oscuro, con z-index alto para no quedar tapado por cards/charts.
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group/tooltip align-middle">
+      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-300 transition-colors cursor-help" />
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 bottom-full z-50 mb-2 w-56 -translate-x-1/2 scale-95
+                   rounded-lg bg-slate-900 px-2.5 py-2 text-[11px] leading-snug text-slate-100 shadow-lg ring-1 ring-black/10
+                   opacity-0 transition-all duration-150 group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 // ── Column sub-components (sin estado — solo contenido) ──────────────────────
 
 function HeuristicColumn({
@@ -419,7 +453,11 @@ function HeuristicColumn({
         <MetricPill label="Demora"           value={`${operationalMetrics.delay_rate_pct.toFixed(1)}%`} />
         <MetricPill label="Choferes activos" value={String(operationalMetrics.active_drivers)} />
         <MetricPill label="Inactivos"        value={String(operationalMetrics.idle_drivers)} />
-        <MetricPill label="Huérfanos"        value={String(operationalMetrics.orphan_shipments)} />
+        <MetricPill
+          label="Huérfanos"
+          value={String(operationalMetrics.orphan_shipments)}
+          tooltip="Envíos en última milla (estado 'En reparto') que no figuran en ninguna ruta activa de chofer para hoy. Es una alerta de integridad de datos: en operación normal debería ser siempre 0."
+        />
         {operationalMetrics.active_drivers_load > 0 && (
           <MetricPill label="Carga prom." value={`${operationalMetrics.active_drivers_load.toFixed(1)} pkg`} />
         )}
@@ -576,8 +614,9 @@ function FleetComparisonPanel({
             )}
             {votes ? (
               <div className="space-y-2.5">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Distribución de votos
+                <p className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Distribución de votos (estado mas probable)
+                  <InfoTooltip text="El modelo de IA evalúa múltiples escenarios históricos simultáneamente mediante 'árboles de decisión'. Cada árbol emite un voto basado en patrones pasados. El estado con el mayor porcentaje de votos determina la predicción final." />
                 </p>
                 {FLEET_STATUS_ORDER.map((st) => {
                   const pct = votes[st] ?? 0;
@@ -653,10 +692,10 @@ function statusAccentColor(status: FleetStatus): string {
   }
 }
 
-function MetricPill({ label, value }: { label: string; value: string }) {
+function MetricPill({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
-    <span className="text-[10px] text-slate-500">
-      {label}: <span className="font-bold text-slate-700">{value}</span>
+    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+      {label}{tooltip && <InfoTooltip text={tooltip} />}: <span className="font-bold text-slate-700">{value}</span>
     </span>
   );
 }

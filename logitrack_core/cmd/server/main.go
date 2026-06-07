@@ -345,9 +345,13 @@ func main() {
 	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
 
 	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
-	// Attach to the clock callback so every admin clock tick triggers a check.
+	// Heartbeat autónomo: corre el Collector/Executor cada minuto en tiempo real,
+	// independiente de /admin/clock (que es solo una herramienta de testing).
+	slaAnomalySvc.Start()
+
+	// Attach to the clock callback so every admin clock tick also triggers a
+	// check immediately (útil para time-travel testing sin esperar al heartbeat).
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
-	_ = slaAnomalySvc // referenced via closure below
 	origSLARiskChecker := slaRiskChecker
 	slaRiskChecker = func() {
 		if origSLARiskChecker != nil {

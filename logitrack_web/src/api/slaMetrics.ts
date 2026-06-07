@@ -23,6 +23,8 @@ export interface SLADayCount {
 export interface SLAStateAverage {
   status: string;
   avg_hours: number;
+  /** false = todavía no hay suficientes transiciones históricas para calcular este promedio */
+  has_data: boolean;
 }
 
 export type FleetStatus =
