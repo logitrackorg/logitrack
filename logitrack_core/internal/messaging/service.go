@@ -125,7 +125,7 @@ func (s *Service) SetRejectedEmailFallback(svc RejectedEmailFallback) {
 }
 
 // SetSystemConfigGetter wires the system config reader so the service can check
-// the force_email_notifications flag at send time.
+// the email/whatsapp notification flags at send time.
 func (s *Service) SetSystemConfigGetter(g SystemConfigGetter) { s.sysConfig = g }
 
 // SetDeliveryFailedEmailService wires the email service for delivery-failed notifications.
@@ -149,23 +149,19 @@ func (s *Service) SendOutForDeliveryNotification(shipment model.Shipment) {
 	}
 
 	recipient := shipment.Recipient
-	sentViaWhatsApp := false
 
-	if !s.forceEmail() && recipient.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && recipient.Phone != "" && s.whatsappConfigured() {
 		msg := buildWhatsAppMessage(shipment.TrackingID, twText, trackURL)
 		if err := s.sendWhatsApp(recipient.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp falló para %s (%s): %v — usando email como fallback (CA-03)", shipment.TrackingID, recipient.Phone, err)
+			log.Printf("[messaging] WhatsApp falló para %s (%s): %v", shipment.TrackingID, recipient.Phone, err)
 		} else {
-			sentViaWhatsApp = true
 			log.Printf("[messaging] WhatsApp enviado a %s para %s", recipient.Phone, shipment.TrackingID)
 		}
-	} else if s.forceEmail() {
-		log.Printf("[messaging] force_email_notifications activo — saltando WhatsApp para %s", shipment.TrackingID)
 	}
 
-	if !sentViaWhatsApp {
+	if s.emailEnabled() {
 		if recipient.Email == "" {
-			log.Printf("[messaging] destinatario de %s sin teléfono ni email — notificación de última milla omitida", shipment.TrackingID)
+			log.Printf("[messaging] destinatario de %s sin email — notificación de última milla por email omitida", shipment.TrackingID)
 			return
 		}
 		if s.emailSvc == nil {
@@ -189,21 +185,19 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 	}
 
 	recipient := shipment.Recipient
-	sentViaWhatsApp := false
 
-	if !s.forceEmail() && recipient.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && recipient.Phone != "" && s.whatsappConfigured() {
 		msg := buildPickupWhatsAppMessage(shipment.TrackingID, branch, deadlineDate, trackURL)
 		if err := s.sendWhatsApp(recipient.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp pickup falló para %s (%s): %v — usando email como fallback", shipment.TrackingID, recipient.Phone, err)
+			log.Printf("[messaging] WhatsApp pickup falló para %s (%s): %v", shipment.TrackingID, recipient.Phone, err)
 		} else {
-			sentViaWhatsApp = true
 			log.Printf("[messaging] WhatsApp pickup enviado a %s para %s", recipient.Phone, shipment.TrackingID)
 		}
 	}
 
-	if !sentViaWhatsApp {
+	if s.emailEnabled() {
 		if s.pickupEmailSvc == nil {
-			log.Printf("[messaging] destinatario de %s sin teléfono y sin email configurado — notificación de retiro omitida", shipment.TrackingID)
+			log.Printf("[messaging] email de retiro no configurado para %s — email omitido", shipment.TrackingID)
 			return
 		}
 		s.pickupEmailSvc.SendReadyForPickupNotification(shipment, branch, deadlineDate)
@@ -218,22 +212,20 @@ func (s *Service) SendReadyForPickupNotification(shipment model.Shipment, branch
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendDeliveryConfirmedNotification(shipment model.Shipment) {
 	sender := shipment.Sender
-	sentViaWhatsApp := false
 
-	if !s.forceEmail() && sender.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && sender.Phone != "" && s.whatsappConfigured() {
 		msg := buildDeliveryConfirmedWhatsAppMessage(shipment, s.trackBaseURL())
 		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp entrega confirmada falló para %s (%s): %v — usando email como fallback",
+			log.Printf("[messaging] WhatsApp entrega confirmada falló para %s (%s): %v",
 				shipment.TrackingID, sender.Phone, err)
 		} else {
-			sentViaWhatsApp = true
 			log.Printf("[messaging] WhatsApp entrega confirmada enviado a %s para %s", sender.Phone, shipment.TrackingID)
 		}
 	}
 
-	if !sentViaWhatsApp {
+	if s.emailEnabled() {
 		if s.deliveryEmailSvc == nil {
-			log.Printf("[messaging] sin canal disponible para notificar entrega de %s al remitente — omitido", shipment.TrackingID)
+			log.Printf("[messaging] email de entrega confirmada no configurado para %s — email omitido", shipment.TrackingID)
 			return
 		}
 		s.deliveryEmailSvc.SendDeliveryConfirmedNotification(shipment)
@@ -244,13 +236,22 @@ func (s *Service) whatsappConfigured() bool {
 	return s.twilioSID != "" && s.twilioToken != "" && s.twilioFrom != ""
 }
 
-// forceEmail returns true when the admin has enabled force_email_notifications,
-// which causes all send methods to skip WhatsApp and go directly to email.
-func (s *Service) forceEmail() bool {
+// emailEnabled returns true when email notifications are enabled in system config.
+// Defaults to true when sysConfig is not wired.
+func (s *Service) emailEnabled() bool {
 	if s.sysConfig == nil {
-		return false
+		return true
 	}
-	return s.sysConfig.Get().ForceEmailNotifications
+	return s.sysConfig.Get().EmailNotificationsEnabled
+}
+
+// whatsappEnabled returns true when WhatsApp notifications are enabled in system config.
+// Defaults to true when sysConfig is not wired.
+func (s *Service) whatsappEnabled() bool {
+	if s.sysConfig == nil {
+		return true
+	}
+	return s.sysConfig.Get().WhatsAppNotificationsEnabled
 }
 
 func (s *Service) sendWhatsApp(phone, message string) error {
@@ -376,22 +377,20 @@ func buildDeliveryConfirmedWhatsAppMessage(shipment model.Shipment, trackBaseURL
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendRejectedNotification(shipment model.Shipment, notes string) {
 	sender := shipment.Sender
-	sentViaWhatsApp := false
 
-	if !s.forceEmail() && sender.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && sender.Phone != "" && s.whatsappConfigured() {
 		msg := buildRejectedWhatsAppMessage(shipment, notes, s.trackBaseURL())
 		if err := s.sendWhatsApp(sender.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp rechazo falló para %s (%s): %v — usando email como fallback",
+			log.Printf("[messaging] WhatsApp rechazo falló para %s (%s): %v",
 				shipment.TrackingID, sender.Phone, err)
 		} else {
-			sentViaWhatsApp = true
 			log.Printf("[messaging] WhatsApp rechazo enviado a %s para %s", sender.Phone, shipment.TrackingID)
 		}
 	}
 
-	if !sentViaWhatsApp {
+	if s.emailEnabled() {
 		if s.rejectedEmailSvc == nil {
-			log.Printf("[messaging] sin canal disponible para notificar rechazo de %s al remitente — omitido", shipment.TrackingID)
+			log.Printf("[messaging] email de rechazo no configurado para %s — email omitido", shipment.TrackingID)
 			return
 		}
 		s.rejectedEmailSvc.SendRejectedNotification(shipment, notes)
@@ -452,8 +451,8 @@ func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemp
 		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
-	// CA-02: WhatsApp si el destinatario tiene teléfono (independiente del email), salvo force_email.
-	if !s.forceEmail() && shipment.Recipient.Phone != "" && s.whatsappConfigured() {
+	// CA-02: WhatsApp si el destinatario tiene teléfono (independiente del email).
+	if s.whatsappEnabled() && shipment.Recipient.Phone != "" && s.whatsappConfigured() {
 		msg := buildDeliveryFailedWhatsAppMessage(shipment, attemptsUsed, maxAttempts, branch, trackURL)
 		if err := s.sendWhatsApp(shipment.Recipient.Phone, msg); err != nil {
 			log.Printf("[messaging] WhatsApp entrega fallida falló para %s (%s): %v",
@@ -464,11 +463,13 @@ func (s *Service) SendDeliveryFailedNotification(shipment model.Shipment, attemp
 		}
 	}
 
-	// CA-02: email siempre (no es fallback — se envía aunque WhatsApp haya funcionado).
-	if s.deliveryFailedEmailSvc != nil {
-		s.deliveryFailedEmailSvc.SendDeliveryFailedNotification(shipment, attemptsUsed, maxAttempts, branch)
-	} else {
-		log.Printf("[messaging] email entrega fallida no configurado para %s — email omitido", shipment.TrackingID)
+	// CA-02: email independiente (no es fallback).
+	if s.emailEnabled() {
+		if s.deliveryFailedEmailSvc != nil {
+			s.deliveryFailedEmailSvc.SendDeliveryFailedNotification(shipment, attemptsUsed, maxAttempts, branch)
+		} else {
+			log.Printf("[messaging] email entrega fallida no configurado para %s — email omitido", shipment.TrackingID)
+		}
 	}
 }
 
@@ -537,20 +538,21 @@ func (s *Service) SendClaimCreatedWhatsApp(claim model.Claim, shipment model.Shi
 		return
 	}
 	trackURL := s.claimTrackURL(claim.ID)
-	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && customer.Phone != "" && s.whatsappConfigured() {
 		msg := buildClaimCreatedWhatsAppMessage(claim, shipment, trackURL)
 		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp reclamo creado falló para %s (%s): %v — usando email como fallback",
+			log.Printf("[messaging] WhatsApp reclamo creado falló para %s (%s): %v",
 				claim.ID, customer.Phone, err)
 		} else {
 			log.Printf("[messaging] WhatsApp reclamo creado enviado a %s para %s", customer.Phone, claim.ID)
-			return
 		}
 	}
-	if s.claimEmailFallback != nil {
-		s.claimEmailFallback.SendClaimCreatedNotification(claim, shipment)
-	} else {
-		log.Printf("[messaging] sin canal disponible para notificar reclamo creado %s — omitido", claim.ID)
+	if s.emailEnabled() {
+		if s.claimEmailFallback != nil {
+			s.claimEmailFallback.SendClaimCreatedNotification(claim, shipment)
+		} else {
+			log.Printf("[messaging] email de reclamo creado no configurado para %s — email omitido", claim.ID)
+		}
 	}
 }
 
@@ -564,20 +566,21 @@ func (s *Service) SendClaimInfoRequestedWhatsApp(claim model.Claim, shipment mod
 		return
 	}
 	trackURL := s.claimTrackURL(claim.ID)
-	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && customer.Phone != "" && s.whatsappConfigured() {
 		msg := buildClaimInfoRequestedWhatsAppMessage(claim, supervisorNotes, trackURL)
 		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp solicitud info reclamo falló para %s (%s): %v — usando email como fallback",
+			log.Printf("[messaging] WhatsApp solicitud info reclamo falló para %s (%s): %v",
 				claim.ID, customer.Phone, err)
 		} else {
 			log.Printf("[messaging] WhatsApp solicitud info reclamo enviado a %s para %s", customer.Phone, claim.ID)
-			return
 		}
 	}
-	if s.claimEmailFallback != nil {
-		s.claimEmailFallback.SendClaimInfoRequestedNotification(claim, shipment, supervisorNotes)
-	} else {
-		log.Printf("[messaging] sin canal disponible para notificar solicitud de info reclamo %s — omitido", claim.ID)
+	if s.emailEnabled() {
+		if s.claimEmailFallback != nil {
+			s.claimEmailFallback.SendClaimInfoRequestedNotification(claim, shipment, supervisorNotes)
+		} else {
+			log.Printf("[messaging] email de solicitud info reclamo no configurado para %s — email omitido", claim.ID)
+		}
 	}
 }
 
@@ -591,20 +594,21 @@ func (s *Service) SendClaimResolvedWhatsApp(claim model.Claim, shipment model.Sh
 		return
 	}
 	trackURL := s.claimTrackURL(claim.ID)
-	if !s.forceEmail() && customer.Phone != "" && s.whatsappConfigured() {
+	if s.whatsappEnabled() && customer.Phone != "" && s.whatsappConfigured() {
 		msg := buildClaimResolvedWhatsAppMessage(claim, resolutionNotes, trackURL)
 		if err := s.sendWhatsApp(customer.Phone, msg); err != nil {
-			log.Printf("[messaging] WhatsApp reclamo resuelto falló para %s (%s): %v — usando email como fallback",
+			log.Printf("[messaging] WhatsApp reclamo resuelto falló para %s (%s): %v",
 				claim.ID, customer.Phone, err)
 		} else {
 			log.Printf("[messaging] WhatsApp reclamo resuelto enviado a %s para %s", customer.Phone, claim.ID)
-			return
 		}
 	}
-	if s.claimEmailFallback != nil {
-		s.claimEmailFallback.SendClaimResolvedNotification(claim, shipment, resolutionNotes)
-	} else {
-		log.Printf("[messaging] sin canal disponible para notificar reclamo resuelto %s — omitido", claim.ID)
+	if s.emailEnabled() {
+		if s.claimEmailFallback != nil {
+			s.claimEmailFallback.SendClaimResolvedNotification(claim, shipment, resolutionNotes)
+		} else {
+			log.Printf("[messaging] email de reclamo resuelto no configurado para %s — email omitido", claim.ID)
+		}
 	}
 }
 
@@ -730,9 +734,7 @@ func (s *Service) SendSLAExpiredWhatsApp(shipment model.Shipment) {
 		trackURL = base + "/track?id=" + shipment.TrackingID
 	}
 
-	sentAny := false
-
-	if !s.forceEmail() && s.whatsappConfigured() {
+	if s.whatsappEnabled() && s.whatsappConfigured() {
 		msg := buildSLAExpiredWhatsAppMessage(shipment, trackURL)
 
 		// Notificar al destinatario.
@@ -741,7 +743,6 @@ func (s *Service) SendSLAExpiredWhatsApp(shipment model.Shipment) {
 				log.Printf("[messaging] WhatsApp SLA vencido falló para destinatario de %s (%s): %v",
 					shipment.TrackingID, shipment.Recipient.Phone, err)
 			} else {
-				sentAny = true
 				log.Printf("[messaging] WhatsApp SLA vencido enviado a destinatario %s para %s",
 					shipment.Recipient.Phone, shipment.TrackingID)
 			}
@@ -755,7 +756,6 @@ func (s *Service) SendSLAExpiredWhatsApp(shipment model.Shipment) {
 				log.Printf("[messaging] WhatsApp SLA vencido falló para remitente de %s (%s): %v",
 					shipment.TrackingID, shipment.Sender.Phone, err)
 			} else {
-				sentAny = true
 				log.Printf("[messaging] WhatsApp SLA vencido enviado a remitente %s para %s",
 					shipment.Sender.Phone, shipment.TrackingID)
 			}
@@ -764,8 +764,8 @@ func (s *Service) SendSLAExpiredWhatsApp(shipment model.Shipment) {
 		}
 	}
 
-	// Fallback a email si no se pudo enviar por WhatsApp.
-	if !sentAny && s.slaExpiredEmailSvc != nil {
+	// Email independiente (no es fallback — se envía aunque WhatsApp haya funcionado).
+	if s.emailEnabled() && s.slaExpiredEmailSvc != nil {
 		s.slaExpiredEmailSvc.SendSLAExpiredNotification(shipment)
 	}
 }
@@ -791,7 +791,7 @@ func buildSLAExpiredWhatsAppMessage(shipment model.Shipment, trackURL string) st
 // skipped without affecting the other party or the shipment (CA-02).
 // Intended to be called as a goroutine (fire-and-forget).
 func (s *Service) SendShipmentConfirmationNotification(shipment model.Shipment) {
-	if !s.whatsappConfigured() || s.forceEmail() {
+	if !s.whatsappEnabled() || !s.whatsappConfigured() {
 		return
 	}
 	trackURL := ""
