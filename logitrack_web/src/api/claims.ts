@@ -92,6 +92,16 @@ export interface ClaimEvent {
   evidence_file_path?: string;
 }
 
+export const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
+  damage:        "Daño",
+  missing:       "Extravío",
+  delay:         "Demora",
+  not_delivered: "No entregado",
+  bad_treatment: "Maltrato",
+  wrong_data:    "Datos incorrectos",
+  other:         "Otro",
+};
+
 export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
   claim_created: "Reclamo registrado",
   claim_category_updated: "Derivado a área",

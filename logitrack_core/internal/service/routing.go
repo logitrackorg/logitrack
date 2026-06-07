@@ -1758,11 +1758,11 @@ func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.Rout
 					continue
 				}
 				shCopy := sh
-				// WhatsApp al remitente/destinatario (con fallback a email) — LOGITRACK-124
+				// Notificaciones al cliente: ambos canales se disparan de forma independiente — LOGITRACK-124
 				if s.slaExpiredWASvc != nil {
 					go s.slaExpiredWASvc.SendSLAExpiredWhatsApp(shCopy)
-				} else if s.slaExpiredEmailSvc != nil {
-					// fallback directo a email si no hay servicio de WA configurado
+				}
+				if s.slaExpiredEmailSvc != nil {
 					go s.slaExpiredEmailSvc.SendSLAExpiredNotification(shCopy)
 				}
 				// Notificación interna a operadores/supervisores — LOGITRACK-404
