@@ -84,6 +84,7 @@ func main() {
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
+	seed.LoadProjectedDispatchScenario(vehicleRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
@@ -252,7 +253,7 @@ func main() {
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -476,8 +477,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
-	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
-	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -539,6 +540,7 @@ func main() {
 	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
+	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)

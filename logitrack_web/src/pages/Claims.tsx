@@ -55,6 +55,18 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
   { value: "improcedente", label: "Improcedente" },
 ];
 
+function formatChangedBy(changedBy: string): string {
+  if (changedBy.startsWith("chatbot-customer:")) {
+    const dni = changedBy.replace("chatbot-customer:", "");
+    return `Cliente (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-sender:")) {
+    const dni = changedBy.replace("chatbot-sender:", "");
+    return `Remitente (DNI ${dni}) vía chatbot`;
+  }
+  return changedBy;
+}
+
 function statusBadgeClass(status: ClaimStatus): string {
   switch (status) {
     case "open":
@@ -611,8 +623,30 @@ export function Claims() {
                                   <span className="text-slate-400 whitespace-nowrap">{fmtDateTime(ev.timestamp)}</span>
                                 </div>
                                 {ev.notes && <div className="text-slate-500">{ev.notes}</div>}
+                                {ev.event_type === "claim_customer_responded" && ev.evidence_file_name && (
+                                  <div className="mt-1">
+                                    <button
+                                      className="text-blue-600 underline text-xs"
+                                      onClick={async () => {
+                                        try {
+                                          const blob = await claimsApi.downloadResponseEvidence(claim.id);
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement("a");
+                                          a.href = url;
+                                          a.download = ev.evidence_file_name!;
+                                          a.click();
+                                          URL.revokeObjectURL(url);
+                                        } catch {
+                                          alert("No se pudo descargar el archivo.");
+                                        }
+                                      }}
+                                    >
+                                      📎 Descargar adjunto: {ev.evidence_file_name}
+                                    </button>
+                                  </div>
+                                )}
                                 <div className="text-slate-500 text-xs mt-1">
-                                  por <strong>{ev.changed_by}</strong>
+                                  por <strong>{formatChangedBy(ev.changed_by)}</strong>
                                   {ev.from_status && ev.to_status && (
                                     <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>
                                   )}

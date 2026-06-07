@@ -286,6 +286,10 @@ export interface EditDriverStopsModalProps {
   shipmentMap: Map<string, Shipment>;
   branchCoords: { lat: number; lng: number } | null;
   config: RoutingConfig;
+  /** Fecha del plan en formato YYYY-MM-DD. Si es futura, se muestra junto a la hora de salida. */
+  planDate?: string;
+  /** Fechas disponibles del horizonte para cambiar el contexto de optimización. */
+  availableDates?: { date: string; label: string }[];
   onClose: () => void;
   /** Recibe los tracking IDs en el orden elegido por el operador y el modo de ruta activo. */
   onApply: (orderedTids: string[], mode: RouteMode) => Promise<void>;
@@ -326,6 +330,8 @@ export function EditDriverStopsModal({
   shipmentMap,
   branchCoords,
   config,
+  planDate,
+  availableDates,
   onClose,
   onApply,
 }: EditDriverStopsModalProps) {
@@ -335,6 +341,7 @@ export function EditDriverStopsModal({
     depMinToString(assignment.suggested_departure_min, config.morning_window_start_hour),
   );
   const [mode, setMode] = useState<RouteMode>(assignment.route_mode ?? "ventanas");
+  const [selectedDate, setSelectedDate] = useState<string>(planDate ?? "");
   const [recomputing, setRecomputing] = useState(false);
   const [manuallyReordered, setManuallyReordered] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -352,14 +359,16 @@ export function EditDriverStopsModal({
   }, []);
 
   const recomputeForMode = useCallback(
-    async (targetMode: RouteMode, shipmentIds: string[]) => {
+    async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
       setRecomputing(true);
       setError("");
+      const dateToUse = overrideDate ?? (selectedDate || planDate);
       try {
         const updated = await routingApi.recomputeLastMile({
           vehicle_id: assignment.vehicle_id,
           shipment_ids: shipmentIds,
           mode: targetMode,
+          ...(dateToUse ? { plan_date: dateToUse } : {}),
         });
         if (updated.ordered_stops && updated.ordered_stops.length > 0) {
           setStops(updated.ordered_stops.map((s) => s.tracking_id));
@@ -373,15 +382,8 @@ export function EditDriverStopsModal({
         setRecomputing(false);
       }
     },
-    [assignment.vehicle_id, config.morning_window_start_hour],
+    [assignment.vehicle_id, config.morning_window_start_hour, planDate, selectedDate],
   );
-
-  // Al abrir el modal, recomputar para el modo actual con morningStart como
-  // base → el operador ve el horario óptimo sin necesidad de cambiar de modo.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    void recomputeForMode(mode, originalOrder);
-  }, []); // intencional: solo al montar
 
   const handleModeChange = useCallback(
     (newMode: RouteMode) => {
@@ -391,6 +393,19 @@ export function EditDriverStopsModal({
     },
     [mode, stops, recomputeForMode],
   );
+
+  const handleDateChange = useCallback(
+    (newDate: string) => {
+      if (newDate === selectedDate) return;
+      setSelectedDate(newDate);
+      void recomputeForMode(mode, stops, newDate);
+    },
+    [selectedDate, mode, stops, recomputeForMode],
+  );
+
+  // Apply está habilitado solo cuando se edita el plan del día base (hoy).
+  // Los planes de pronóstico no se pueden aplicar desde el backend.
+  const canApplyDate = !planDate || selectedDate === planDate;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -449,6 +464,16 @@ export function EditDriverStopsModal({
   const driverLabel = assignment.driver_name
     ? `${assignment.driver_name} · ${assignment.license_plate}`
     : assignment.license_plate;
+
+  // Etiqueta de fecha cuando el plan es de un día futuro.
+  const planDateLabel = (() => {
+    if (!planDate) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    if (planDate === today) return null;
+    const [y, m, d] = planDate.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  })();
 
   const violations = eta.stops.filter((s) => s.outsideWindow).length;
   const totalKm = eta.totalDistanceKm.toFixed(1);
@@ -516,6 +541,32 @@ export function EditDriverStopsModal({
 
             {/* KPIs + hora de salida */}
             <div className="shrink-0 px-4 py-3 border-t border-slate-100 space-y-2.5">
+              {/* Selector de día del horizonte */}
+              {availableDates && availableDates.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {availableDates.map(({ date, label }) => (
+                    <button
+                      key={date}
+                      disabled={recomputing}
+                      onClick={() => handleDateChange(date)}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
+                        selectedDate === date
+                          ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                          : "bg-white text-slate-600 border-slate-300 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+                      }`}
+                    >
+                      <CalendarClock className="w-3 h-3" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {planDateLabel && selectedDate === planDate && (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+                  Programado para {planDateLabel}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-sm text-slate-600">
                 <Clock className="w-4 h-4 shrink-0 text-slate-400" />
                 <span className="shrink-0 text-slate-500">Salida</span>
@@ -525,6 +576,9 @@ export function EditDriverStopsModal({
                   onChange={(e) => setDeparture(e.target.value)}
                   className="border border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
                 />
+                {planDateLabel && (
+                  <span className="text-xs text-slate-400">del {planDate?.slice(8, 10)}/{planDate?.slice(5, 7)}</span>
+                )}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
                 <span>{totalKm} km</span>
@@ -585,10 +639,17 @@ export function EditDriverStopsModal({
             </button>
             <button
               onClick={handleApply}
-              disabled={applying}
+              disabled={applying || !canApplyDate}
+              title={!canApplyDate ? "Los planes de pronóstico no se pueden aplicar. Volvé a este día cuando corresponda." : undefined}
               className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
             >
-              {applying ? "Aplicando…" : "Aplicar"}
+              {applying
+                ? "Aplicando…"
+                : !canApplyDate
+                  ? `Solo visualización (${selectedDate.slice(8, 10)}/${selectedDate.slice(5, 7)})`
+                  : planDateLabel
+                    ? `Programar para el ${planDate?.slice(8, 10)}/${planDate?.slice(5, 7)}`
+                    : "Aplicar"}
             </button>
           </div>
         </div>

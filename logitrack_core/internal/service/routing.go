@@ -1043,16 +1043,21 @@ func (s *RoutingService) dispatchInterBranch(
 		return nil, unassigned
 	}
 
-	// Si no hay vehículos en pool del branch, todos al unassigned con motivo claro
+	// Si no hay vehículos en pool del branch, todos al unassigned con motivo claro.
+	// Propagamos SLAForced y PriorityScore para que tryProjectedDispatch pueda
+	// evaluar viabilidad contra la capacidad del vehículo entrante.
 	if len(pool) == 0 {
 		for dest, group := range groups {
+			forced := anyForced(group, cfg, now)
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_disponibles",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_disponibles",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 		}
@@ -1104,11 +1109,13 @@ func (s *RoutingService) dispatchInterBranch(
 		if len(poolForDest) == 0 {
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_para_destino",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_para_destino",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 			continue
@@ -1118,11 +1125,13 @@ func (s *RoutingService) dispatchInterBranch(
 		if chosen == nil {
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_para_destino",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_para_destino",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 			continue
@@ -1168,7 +1177,17 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 	// Inicializamos como empty (no nil) para que el JSON siempre serialice
 	// como `[]` y no como `null` — el frontend asume array.
 	items := make([]model.ApplyResultItem, 0)
-	planDate := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+	local := clock.Now().In(clock.LocalTZ)
+	var planDate model.DateOnly
+	if plan.PlanDate != "" {
+		if t, err := time.ParseInLocation("2006-01-02", plan.PlanDate, clock.LocalTZ); err == nil {
+			planDate = model.NewDateOnly(t)
+		} else {
+			planDate = model.NewDateOnly(local)
+		}
+	} else {
+		planDate = model.NewDateOnly(local)
+	}
 	cfg := s.cfgSvc.Get()
 
 	// === Última milla ===
@@ -1304,6 +1323,13 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 	// === Inter-sucursal ===
 	for _, asgmt := range plan.InterBranch {
 		target := "vehicle:" + asgmt.LicensePlate
+		// Despachos proyectados: el vehículo aún no llegó — no se pueden aplicar.
+		if asgmt.Projected {
+			for _, tid := range asgmt.Shipments {
+				items = append(items, failedItem(tid, target, "despacho_proyectado_vehiculo_en_transito"))
+			}
+			continue
+		}
 		v, ok := s.vehicleRepo.GetByID(asgmt.VehicleID)
 		if !ok {
 			for _, tid := range asgmt.Shipments {
@@ -3007,7 +3033,10 @@ func (s *RoutingService) GetHorizonPlans(userRole model.Role, userBranch string)
 			}
 			continue
 		}
-		// Pronóstico: aplicar filtro de sucursal sin overrides runtime.
+		// Pronóstico: propagar plan_date a cada BranchPlan.Plan y aplicar filtro.
+		for i := range p.BranchPlans {
+			p.BranchPlans[i].Plan.PlanDate = p.PlanDate
+		}
 		if userRole == model.RoleOperator || userRole == model.RoleSupervisor {
 			if userBranch != "" {
 				filtered := filterBranchPlan(p, userBranch)
@@ -3057,6 +3086,12 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 			}
 		}
 		plan.BranchPlans = filtered
+	}
+
+	// Propagar plan_date a cada BranchPlan.Plan para que el frontend pueda
+	// incluirla en el apply request y el backend use la fecha correcta.
+	for i := range plan.BranchPlans {
+		plan.BranchPlans[i].Plan.PlanDate = plan.PlanDate
 	}
 
 	// Marcar cards de chofer/vehículo en marcha como informativas (runtime-only).
@@ -3114,22 +3149,31 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 				origin = *v.AssignedBranch
 			}
 			weight := 0.0
-			tids := append([]string(nil), v.AssignedShipments...)
+			// Usar slice no-nil para que serialice como [] y no como null en JSON.
+			tids := make([]string, 0, len(v.AssignedShipments))
+			tids = append(tids, v.AssignedShipments...)
 			for _, tid := range tids {
 				if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
 					weight += sh.WeightKg
 				}
 			}
+			cfg := s.cfgSvc.Get()
+			eta := s.incomingVehicleETA(v.ID, origin, bp.BranchID, cfg, clock.Now().UTC())
 			incoming = append(incoming, model.IncomingVehicle{
-				VehicleID:     v.ID,
-				LicensePlate:  v.LicensePlate,
-				OriginBranch:  origin,
-				Shipments:     tids,
-				TotalWeightKg: weight,
-				CapacityKg:    v.CapacityKg,
+				VehicleID:          v.ID,
+				LicensePlate:       v.LicensePlate,
+				OriginBranch:       origin,
+				Shipments:          tids,
+				TotalWeightKg:      weight,
+				CapacityKg:         v.CapacityKg,
+				EstimatedArrivalAt: eta,
 			})
 		}
 		bp.Plan.IncomingVehicles = incoming
+
+		// Despacho proyectado: rescatar envíos varados usando vehículos en tránsito.
+		cfg := s.cfgSvc.Get()
+		s.tryProjectedDispatch(&bp.Plan, bp.BranchID, cfg, clock.Now().UTC())
 	}
 
 	return plan, nil
@@ -3202,7 +3246,9 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 	}
 
 	// Generar el plan fresco para esta sucursal con contexto del plan global existente.
-	branchPlan, err := s.generatePlan(ctx, s.liveContext(branchID, false, global))
+	// forGlobal=true: activa el multi-hop sin restricción de fill-rate por tramo
+	// (enforceMinSegmentUtilization poda los tramos subutilizados en el pase global).
+	branchPlan, err := s.generatePlan(ctx, s.liveContext(branchID, true, global))
 	if err != nil {
 		return nil, fmt.Errorf("error generando plan para sucursal %s: %w", branchID, err)
 	}
@@ -3296,7 +3342,8 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 			origin = *v.AssignedBranch
 		}
 		weight := 0.0
-		tids := append([]string(nil), v.AssignedShipments...)
+		tids := make([]string, 0, len(v.AssignedShipments))
+		tids = append(tids, v.AssignedShipments...)
 		for _, tid := range tids {
 			if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
 				weight += sh.WeightKg
@@ -3312,6 +3359,10 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 		})
 	}
 	branchPlan.IncomingVehicles = incoming
+
+	// Despacho proyectado: rescatar envíos varados usando vehículos en tránsito.
+	regenCfg := s.cfgSvc.Get()
+	s.tryProjectedDispatch(&branchPlan, branchID, regenCfg, clock.Now().UTC())
 
 	filtered := &model.GlobalRoutingPlan{
 		ID:          global.ID,
@@ -3372,13 +3423,16 @@ func (s *RoutingService) SaveEditedPlanForBranch(branchID string, edited *model.
 	}
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
+	if edited.PlanDate != "" {
+		planDate = edited.PlanDate
+	}
 
 	global, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
 		return err
 	}
 	if global == nil {
-		return fmt.Errorf("no hay plan generado para hoy")
+		return fmt.Errorf("no hay plan generado para el %s", planDate)
 	}
 
 	bpIdx := -1
@@ -3454,17 +3508,19 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 	}
 
 	local := clock.Now().In(clock.LocalTZ)
+	// Si se envía un plan con fecha explícita, usar esa fecha para persistir timestamps.
+	// Esto permite pre-aplicar el plan de mañana hoy (ej. operador a las 22hs).
 	planDate := local.Format("2006-01-02")
+	if edited != nil && edited.PlanDate != "" {
+		planDate = edited.PlanDate
+	}
 
 	global, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
 		return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo leer el plan: %w", err)
 	}
 	if global == nil {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para hoy")
-	}
-	if global.IsForecast {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no_se_puede_aplicar_pronostico: el plan del %s es un pronóstico y no puede aplicarse", global.PlanDate)
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para el %s", planDate)
 	}
 
 	// Encontrar el BranchPlan de la sucursal.
@@ -3482,7 +3538,8 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 	bp := &global.BranchPlans[bpIdx]
 	now := clock.Now().UTC()
 	items := make([]model.ApplyResultItem, 0)
-	applyPlanDate := model.NewDateOnly(local)
+	parsedPlanDate, _ := time.ParseInLocation("2006-01-02", planDate, clock.LocalTZ)
+	applyPlanDate := model.NewDateOnly(parsedPlanDate)
 	applyPlanCfg := s.cfgSvc.Get()
 
 	// --- Inter-sucursal ---
@@ -3966,8 +4023,16 @@ func (s *RoutingService) RecomputeLastMileAssignment(ctx context.Context, branch
 	}
 
 	cfg := s.cfgSvc.Get()
+	// Usar la fecha del plan para calcular el horario correcto.
+	// Permite pre-calcular rutas de días futuros con ventanas horarias correctas.
+	schedNow := clock.Now().UTC()
+	if req.PlanDate != "" {
+		if t, err := time.ParseInLocation("2006-01-02", req.PlanDate, clock.LocalTZ); err == nil {
+			schedNow = t.UTC()
+		}
+	}
 	assignments := []model.LastMileAssignment{a}
-	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, clock.Now().UTC(), mode)
+	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, schedNow, mode)
 
 	return assignments[0], nil
 }
@@ -5113,57 +5178,160 @@ func (s *RoutingService) matchBackhauls(plan *model.RoutingPlan, branchID string
 	}
 }
 
-// tryProjectedDispatch is a WIP feature: uses incoming vehicles to rescue unassigned shipments.
-func (s *RoutingService) tryProjectedDispatch(
-	plan *model.RoutingPlan,
-	branchID string,
-	interBranchQ map[string][]model.Shipment,
-	existingLoad map[string]float64,
-	cfg model.RoutingConfig,
-	now time.Time,
-) {
-	if cfg.FleetProjectionHorizonHours <= 0 {
+// incomingVehicleETA devuelve la ETA estimada de un vehículo en tránsito hacia branchID.
+// Prioriza el EstimatedArrivalAt del viaje activo; si no existe, estima con distancia/velocidad.
+func (s *RoutingService) incomingVehicleETA(vehicleID, originBranch, destBranch string, cfg model.RoutingConfig, now time.Time) *time.Time {
+	// 1) Viaje activo con ETA ya calculada
+	if s.interBranchTripSvc != nil {
+		if trip, ok := s.interBranchTripSvc.repo.GetActiveByVehicle(vehicleID); ok {
+			if trip.EstimatedArrivalAt != nil {
+				return trip.EstimatedArrivalAt
+			}
+			// El trip existe pero sin ETA: verificar paradas
+			for _, stop := range trip.Stops {
+				if stop.BranchID == destBranch && stop.EstimatedArrivalAt != nil {
+					return stop.EstimatedArrivalAt
+				}
+			}
+		}
+	}
+	// 2) Fallback: estimar por distancia origen→destino
+	distKm := s.branchDistance(originBranch, destBranch)
+	if distKm <= 0 {
+		return nil
+	}
+	speed := cfg.InterBranchAvgSpeedKmh
+	if speed <= 0 {
+		speed = 60
+	}
+	hours := (distKm * 1.3) / speed
+	eta := now.Add(time.Duration(hours * float64(time.Hour)))
+	return &eta
+}
+
+// tryProjectedDispatch usa vehículos en tránsito hacia la sucursal para rescatar
+// envíos varados por motivos sin_vehiculos_*. Solo actúa cuando FleetProjectionHorizonHours > 0
+// y la ETA del vehículo entrante cae dentro de ese horizonte.
+// Debe llamarse DESPUÉS de poblar plan.IncomingVehicles.
+func (s *RoutingService) tryProjectedDispatch(plan *model.RoutingPlan, branchID string, cfg model.RoutingConfig, now time.Time) {
+	if cfg.FleetProjectionHorizonHours <= 0 || len(plan.IncomingVehicles) == 0 {
 		return
 	}
+	horizon := now.Add(time.Duration(cfg.FleetProjectionHorizonHours) * time.Hour)
+
 	rescuableReasons := map[string]bool{
 		"sin_vehiculos_disponibles":  true,
 		"sin_vehiculos_para_destino": true,
 	}
+
+	// Agrupar envíos varados por destino (re-leer desde el plan actual)
+	varadosByDest := map[string][]model.UnassignedShipment{}
+	for _, u := range plan.Unassigned {
+		if rescuableReasons[u.Reason] {
+			varadosByDest[u.Destination] = append(varadosByDest[u.Destination], u)
+		}
+	}
+	if len(varadosByDest) == 0 {
+		log.Printf("[projected-dispatch] no rescuable unassigned items")
+		return
+	}
+
+	usedVehicles := map[string]bool{}
 	for _, incoming := range plan.IncomingVehicles {
-		if incoming.EstimatedArrivalAt == nil {
+		// Usar ETA ya calculada si está disponible (ej. tests o trips con ETA known).
+		var eta *time.Time
+		if incoming.EstimatedArrivalAt != nil {
+			eta = incoming.EstimatedArrivalAt
+		} else {
+			eta = s.incomingVehicleETA(incoming.VehicleID, incoming.OriginBranch, branchID, cfg, now)
+		}
+		if eta == nil || eta.After(horizon) {
 			continue
 		}
-		for i := len(plan.Unassigned) - 1; i >= 0; i-- {
-			u := plan.Unassigned[i]
-			if !rescuableReasons[u.Reason] {
+		// Capacidad libre: total - ya cargado en el vehículo
+		freeKg := incoming.CapacityKg - incoming.TotalWeightKg
+		if freeKg <= 0 || usedVehicles[incoming.VehicleID] {
+			continue
+		}
+
+		// Iterar destinos en orden determinístico
+		dests := make([]string, 0, len(varadosByDest))
+		for d := range varadosByDest {
+			dests = append(dests, d)
+		}
+		sort.Strings(dests)
+
+		for _, dest := range dests {
+			group := varadosByDest[dest]
+			if len(group) == 0 {
 				continue
 			}
-			dest := u.Destination
-			shipmentsForDest := interBranchQ[dest]
-			if len(shipmentsForDest) == 0 {
+
+			// Verificar viabilidad: el grupo debe cumplir las mismas condiciones que
+			// dispatchInterBranch habría exigido si hubiera habido vehículos disponibles.
+			groupWeight := 0.0
+			groupForced := false
+			for _, u := range group {
+				groupWeight += u.WeightKg
+				if u.SLAForced || u.PriorityScore >= cfg.PriorityForceThreshold {
+					groupForced = true
+				}
+			}
+			if !groupForced && groupWeight < cfg.MinFillRate*freeKg {
 				continue
 			}
-			var total float64
+
+			// Bin-pack por peso disponible, ordenando por prioridad
+			sortUnassignedByPriority(group)
 			var ids []string
-			for _, sh := range shipmentsForDest {
-				total += sh.WeightKg
-				ids = append(ids, sh.TrackingID)
+			var totalKg float64
+			var rescuedIdx []int
+			for i, u := range group {
+				if totalKg+u.WeightKg > freeKg {
+					continue
+				}
+				ids = append(ids, u.TrackingID)
+				totalKg += u.WeightKg
+				rescuedIdx = append(rescuedIdx, i)
 			}
-			if total > incoming.CapacityKg {
+			if len(ids) == 0 {
 				continue
 			}
+
 			plan.InterBranch = append(plan.InterBranch, model.InterBranchAssignment{
-				VehicleID:         incoming.VehicleID,
-				LicensePlate:      incoming.LicensePlate,
-				DestinationBranch: dest,
-				Rule:              model.DispatchRuleSLA,
-				Shipments:         ids,
-				TotalWeightKg:     total,
-				CapacityKg:        incoming.CapacityKg,
+				VehicleID:          incoming.VehicleID,
+				LicensePlate:       incoming.LicensePlate,
+				DestinationBranch:  dest,
+				Rule:               model.DispatchRuleProjected,
+				Shipments:          ids,
+				TotalWeightKg:      roundKg(totalKg),
+				CapacityKg:         incoming.CapacityKg,
+				Projected:          true,
+				ProjectedArrivalAt: eta,
 			})
-			// Remove rescued shipments from unassigned
-			plan.Unassigned = append(plan.Unassigned[:i], plan.Unassigned[i+1:]...)
-			break
+			usedVehicles[incoming.VehicleID] = true
+			freeKg -= totalKg
+
+			// Quitar rescatados de varadosByDest y de plan.Unassigned
+			rescuedSet := map[string]bool{}
+			for _, id := range ids {
+				rescuedSet[id] = true
+			}
+			remaining := group[:0]
+			for _, u := range group {
+				if !rescuedSet[u.TrackingID] {
+					remaining = append(remaining, u)
+				}
+			}
+			varadosByDest[dest] = remaining
+
+			filtered := plan.Unassigned[:0]
+			for _, u := range plan.Unassigned {
+				if !rescuedSet[u.TrackingID] {
+					filtered = append(filtered, u)
+				}
+			}
+			plan.Unassigned = filtered
 		}
 	}
 }
@@ -5315,4 +5483,14 @@ func deriveOverwriteETA(now time.Time, minutosRestantes float64) (*time.Time, *i
 	}
 	nuevaFechaEstimada := now.Add(time.Duration(horasASumar) * time.Hour)
 	return &nuevaFechaEstimada, &horasASumar
+// sortUnassignedByPriority ordena envíos varados: alta > media > baja, luego WeightKg ASC.
+func sortUnassignedByPriority(items []model.UnassignedShipment) {
+	priOrder := map[string]int{"alta": 0, "media": 1, "baja": 2}
+	sort.SliceStable(items, func(i, j int) bool {
+		pi, pj := priOrder[items[i].Priority], priOrder[items[j].Priority]
+		if pi != pj {
+			return pi < pj
+		}
+		return items[i].WeightKg < items[j].WeightKg
+	})
 }

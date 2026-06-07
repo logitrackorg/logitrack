@@ -16,11 +16,8 @@ import (
 // Idempotente: si ya existen aristas, no hace nada (preserva ajustes del admin).
 // El auto-derive nocturno refinará observed_count y avg_transit_hours con datos reales.
 func LoadBranchGraph(repo repository.BranchGraphRepository, branchRepo repository.BranchRepository) {
-	existing, err := repo.ListEdges()
-	if err == nil && len(existing) > 0 {
-		return
-	}
-
+	// Sin early-return: UpsertEdge es idempotente (ON CONFLICT UPDATE),
+	// así que nuevas sucursales reciben sus aristas en cada arranque.
 	branches := branchRepo.ListActive()
 	if len(branches) < 2 {
 		return

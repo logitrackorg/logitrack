@@ -18,6 +18,9 @@ func LoadBranches(repo repository.BranchRepository) {
 		{ID: "posadas", Name: "POSA-01", Address: model.Address{Street: "Av. Mitre 1500", City: "Posadas", Province: "Misiones", PostalCode: "N3300"}, Province: "Misiones", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 9:00–18:00 / Sáb 9:00–13:00", Latitude: fPtr(-27.3671), Longitude: fPtr(-55.8965)},
 		// Out of service
 		{ID: "bariloche", Name: "BARI-01", Address: model.Address{Street: "Av. Bustillo 1200", City: "San Carlos de Bariloche", Province: "Río Negro", PostalCode: "R8400"}, Province: "Río Negro", Status: model.BranchStatusOutOfService, MaxCapacity: 200, Hours: "Lun–Vie 9:00–18:00", Latitude: fPtr(-41.1335), Longitude: fPtr(-71.3103)},
+		// Escenario despacho proyectado — aisladas del resto de los escenarios
+		{ID: "bahia_blanca", Name: "BAHB-01", Address: model.Address{Street: "Av. Colón 80", City: "Bahía Blanca", Province: "Buenos Aires", PostalCode: "B8000"}, Province: "Buenos Aires", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–19:00 / Sáb 9:00–13:00", Latitude: fPtr(-38.7183), Longitude: fPtr(-62.2661)},
+		{ID: "santa_cruz", Name: "SCRU-01", Address: model.Address{Street: "Av. Costanera 450", City: "Caleta Olivia", Province: "Santa Cruz", PostalCode: "Z9011"}, Province: "Santa Cruz", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 9:00–18:00", Latitude: fPtr(-46.4378), Longitude: fPtr(-67.5215)},
 	}
 	for _, b := range branches {
 		b.CreatedAt = time.Now()
