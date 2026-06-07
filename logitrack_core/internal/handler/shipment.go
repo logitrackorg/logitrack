@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -49,6 +50,13 @@ type ShipmentHandler struct {
 	commentSvc *service.CommentService
 	branchSvc  *service.BranchService
 	claimSvc   *service.ClaimService
+	routingSvc *service.RoutingService
+}
+
+// SetRoutingService wires the routing service for real-time ETA lookups on the
+// public tracking endpoint. Called after both handlers are constructed.
+func (h *ShipmentHandler) SetRoutingService(svc *service.RoutingService) {
+	h.routingSvc = svc
 }
 
 func NewShipmentHandler(
@@ -478,13 +486,46 @@ func (h *ShipmentHandler) GetEvents(c *gin.Context) {
 // @Failure      404          {object}  map[string]string
 // @Router       /public/track/{tracking_id} [get]
 func (h *ShipmentHandler) GetPublicByTrackingID(c *gin.Context) {
-	shipment, err := h.svc.GetByTrackingID(c.Param("tracking_id"))
+	trackingID := c.Param("tracking_id")
+	shipment, err := h.svc.GetByTrackingID(trackingID)
 	if err != nil || shipment.Status == model.StatusDraft {
 		c.JSON(http.StatusNotFound, gin.H{"error": "envío no encontrado"})
 		return
 	}
 	view := shipment.ToPublicView()
 	view.MaxDeliveryAttempts = h.svc.MaxDeliveryAttempts()
+
+	// DEBUG ETA — rastreo agresivo temporal para detectar por qué el bloque de
+	// sobreescritura del ETA dinámico no se ejecuta. NOTA: el modelo Shipment
+	// no tiene un campo `TripID`; el campo real más cercano a "viaje asociado"
+	// es `ReservedForTripID *string` (reserva para pickup multi-hop), así que
+	// se loguea ese en su lugar.
+	log.Printf("DEBUG ETA - Estado actual crudo: '%s'", shipment.Status)
+	log.Printf("DEBUG ETA - ReservedForTripID asociado: '%v'", shipment.ReservedForTripID)
+
+	// Auditoría: comparación explícita del estado real contra el esperado para
+	// decidir si corresponde cruzar con la ruta activa del chofer (en lugar de
+	// servir el ETA comercial estático calculado al crear el envío).
+	log.Printf("[PublicTracking] tracking=%s status_real=%q status_esperado=%q routingSvc_disponible=%t",
+		trackingID, shipment.Status, model.StatusOutForDelivery, h.routingSvc != nil)
+
+	if shipment.Status == model.StatusOutForDelivery && h.routingSvc != nil {
+		if nuevaFechaEstimada, horasASumar := h.routingSvc.GetActiveRouteETA(trackingID); nuevaFechaEstimada != nil {
+			view.RelativeHours = horasASumar
+			// REEMPLAZA el EstimatedDeliveryAt original por la fecha calculada
+			// como (ahora + horasASumar horas) — así el banner ("dentro de las
+			// próximas N horas") y la fecha mostrada en la grilla "Entrega
+			// estimada" siempre coinciden exactamente, sin cálculos en el frontend.
+			view.EstimatedDeliveryAt = nuevaFechaEstimada
+		} else {
+			log.Printf("DEBUG ETA - El cálculo se omitió: GetActiveRouteETA no devolvió una fecha (estado='%s' coincide con '%s', pero no se encontró cruce con el plan/ruta activa).",
+				shipment.Status, model.StatusOutForDelivery)
+		}
+	} else {
+		log.Printf("DEBUG ETA - El cálculo se omitió porque el estado '%s' no coincide con '%s' o routingSvc no está disponible (routingSvc_disponible=%t).",
+			shipment.Status, model.StatusOutForDelivery, h.routingSvc != nil)
+	}
+
 	c.JSON(http.StatusOK, view)
 }
 
