@@ -8,6 +8,7 @@ import type {
   ChatOption,
   ClaimType,
   DamageSubtype,
+  ActiveClaimInfo,
 } from '../../types/chatbot';
 import './chatbot.css';
 
@@ -39,7 +40,7 @@ export const ChatbotWidget: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(true);
   // US4: estado del flujo de respuesta a reclamo pendiente
-  const [activeClaim, setActiveClaim] = useState<{ claim_id: string; status: string } | null>(null);
+  const [activeClaim, setActiveClaim] = useState<ActiveClaimInfo | null>(null);
   const [claimResponseText, setClaimResponseText] = useState<string>('');
   const [pendingClaimId, setPendingClaimId] = useState<string>('');
   const [pendingEvidenceFile, setPendingEvidenceFile] = useState<File | null>(null);
@@ -119,8 +120,9 @@ export const ChatbotWidget: React.FC = () => {
       // Si hay reclamo activo, informar y actuar según el estado
       if (response.active_claim) {
         const { claim_id, status } = response.active_claim;
+        const canRespond = response.available_actions.includes('respond_claim');
 
-        if (status === 'pending_customer') {
+        if (status === 'pending_customer' && canRespond) {
           // Reclamo esperando respuesta del cliente — flujo proactivo (US-4)
           addBotMessage(
             `¡Hola, ${response.recipient_name}! ✅\n\n` +
@@ -137,6 +139,7 @@ export const ChatbotWidget: React.FC = () => {
           const statusLabel: Record<string, string> = {
             open: 'Abierto',
             in_review: 'En revisión',
+            pending_customer: 'En revisión',
             derived: 'Derivado',
           };
           const label = statusLabel[status] ?? status;
@@ -144,7 +147,7 @@ export const ChatbotWidget: React.FC = () => {
             `¡Hola, ${response.recipient_name}! ✅\n\n` +
             `Encontré tu envío: ${trackingId}\n` +
             `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
-            `📋 Ya tenés un reclamo abierto: **${claim_id}** (${label}).\n` +
+            `📋 Ya hay un reclamo abierto: **${claim_id}** (${label}).\n` +
             `No podés abrir otro hasta que se resuelva el actual.`,
             menuOptions.length > 0 ? menuOptions : [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
           );
@@ -193,15 +196,49 @@ export const ChatbotWidget: React.FC = () => {
       setShipment(response.shipment);
       setSenderDni(dni);
       setTrackingId(trackingId);
+      setActiveClaim(response.active_claim ?? null);
       setState('authenticated');
       setSessionActive(true);
       resetSessionTimer();
 
-      const senderActions = response.available_actions ?? [];
-      const menuOptions = senderActions.map((a: string) => {
-        if (a === 'cancel') return { label: '❌ Cancelar envío', value: 'cancel', action: 'cancel' as const };
-        return null;
-      }).filter(Boolean) as ChatOption[];
+      const menuOptions = buildMenuOptions(response.available_actions ?? []);
+
+      // Si hay reclamo activo, informar y actuar según el estado
+      if (response.active_claim) {
+        const { claim_id, status } = response.active_claim;
+        const canRespond = response.available_actions.includes('respond_claim');
+
+        if (status === 'pending_customer' && canRespond) {
+          addBotMessage(
+            `¡Hola, ${response.sender_name}! ✅\n\n` +
+            `Encontré tu envío: ${trackingId}\n` +
+            `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+            `📋 Tu reclamo **${claim_id}** está esperando tu respuesta.\n` +
+            `¿Querés responderlo ahora?`,
+            [
+              { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
+              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+            ]
+          );
+        } else {
+          const statusLabel: Record<string, string> = {
+            open: 'Abierto',
+            in_review: 'En revisión',
+            pending_customer: 'En revisión',
+            derived: 'Derivado',
+          };
+          const label = statusLabel[status] ?? status;
+          addBotMessage(
+            `¡Hola, ${response.sender_name}! ✅\n\n` +
+            `Encontré tu envío: ${trackingId}\n` +
+            `Estado actual: ${getStatusText(response.shipment.status)}\n\n` +
+            `📋 Ya hay un reclamo abierto: **${claim_id}** (${label}).\n` +
+            `No podés abrir otro hasta que se resuelva el actual.`,
+            menuOptions.length > 0 ? menuOptions : [{ label: '🏠 Volver al inicio', value: 'menu', action: 'restart' as const }]
+          );
+        }
+        return;
+      }
 
       if (menuOptions.length > 0) {
         addBotMessage(
@@ -297,7 +334,10 @@ export const ChatbotWidget: React.FC = () => {
 
     // US4: texto de respuesta al reclamo pendiente
     if (state === 'claim_response') {
-      if (input.trim().length === 0) return;
+      if (input.trim().length < 15) {
+        addBotMessage('⚠️ La respuesta debe tener al menos 15 caracteres.');
+        return;
+      }
       if (input.trim().length > 400) {
         addBotMessage('⚠️ La respuesta no puede superar los 400 caracteres. Por favor resumila un poco.');
         return;
@@ -531,11 +571,16 @@ export const ChatbotWidget: React.FC = () => {
           break;
 
         // US4: responder reclamo pendiente_customer
-        case 'respond_claim':
+        case 'respond_claim': {
           setPendingClaimId(activeClaim?.claim_id ?? '');
           setState('claim_response');
-          addBotMessage('✏️ Escribí tu respuesta al equipo de LogiTrack (máximo 400 caracteres):');
+          const notes = activeClaim?.supervisor_notes;
+          const prompt = notes
+            ? `📋 **El equipo necesita más información:**\n> ${notes}\n\nPor favor escribí tu respuesta (máximo 400 caracteres):`
+            : '✏️ Escribí tu respuesta al equipo de LogiTrack (máximo 400 caracteres):';
+          addBotMessage(prompt);
           break;
+        }
 
         case 'skip_claim_response_evidence':
           await handleSubmitClaimResponse(null);
@@ -743,16 +788,22 @@ export const ChatbotWidget: React.FC = () => {
       sessionTimeoutRef.current = null;
     }
     if (shipment) {
-      // Remitente: solo mostrar opciones del remitente
+      // Remitente: reconstruir acciones disponibles desde estado local
       if (userType === 'sender') {
-        const canCancel = !isTerminalStatus(shipment.status);
-        if (canCancel) {
-          setState('authenticated');
-          addBotMessage('¿En qué puedo ayudarte?', [
-            { label: '❌ Cancelar envío', value: 'cancel', action: 'cancel' },
-          ]);
+        const senderActions: string[] = [];
+        if (!isTerminalStatus(shipment.status)) {
+          senderActions.push('cancel');
+        }
+        if (activeClaim?.status === 'pending_customer') {
+          senderActions.push('respond_claim');
+        } else if (!activeClaim && !isTerminalStatus(shipment.status)) {
+          senderActions.push('file_claim');
+        }
+        const menuOptions = buildMenuOptions(senderActions);
+        setState('authenticated');
+        if (menuOptions.length > 0) {
+          addBotMessage('¿En qué puedo ayudarte?', menuOptions);
         } else {
-          setState('authenticated');
           addBotMessage(getNoActionsMessage(shipment.status), [
             { label: '🏠 Volver al inicio', value: 'menu', action: 'restart' },
           ]);

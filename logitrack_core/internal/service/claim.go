@@ -654,8 +654,8 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 		return model.Claim{}, fmt.Errorf("el DNI no coincide con el reclamante")
 	}
 	responseText = strings.TrimSpace(responseText)
-	if len(responseText) < 1 || len(responseText) > 400 {
-		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 1 y 400 caracteres")
+	if len(responseText) < 15 || len(responseText) > 400 {
+		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 15 y 400 caracteres")
 	}
 
 	now := clock.Now().UTC()
@@ -717,11 +717,20 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 }
 
 func (s *ClaimService) ValidateClaimant(shipment *model.Shipment, fullName, dni string) bool {
+	dniTrimmed := strings.TrimSpace(dni)
+	// Para reclamos originados en el chatbot el usuario ya fue autenticado; validar solo por DNI.
+	if strings.HasPrefix(fullName, "chatbot-sender:") || strings.HasPrefix(fullName, "chatbot-customer:") {
+		if dniTrimmed == "" {
+			return false
+		}
+		return strings.TrimSpace(shipment.Sender.DNI) == dniTrimmed ||
+			strings.TrimSpace(shipment.Recipient.DNI) == dniTrimmed
+	}
 	normalizedName := normalizeName(fullName)
-	if normalizedName == "" || strings.TrimSpace(dni) == "" {
+	if normalizedName == "" || dniTrimmed == "" {
 		return false
 	}
-	return matchesCustomer(shipment.Sender, normalizedName, dni) || matchesCustomer(shipment.Recipient, normalizedName, dni)
+	return matchesCustomer(shipment.Sender, normalizedName, dniTrimmed) || matchesCustomer(shipment.Recipient, normalizedName, dniTrimmed)
 }
 
 func matchesCustomer(customer model.Customer, normalizedName, dni string) bool {

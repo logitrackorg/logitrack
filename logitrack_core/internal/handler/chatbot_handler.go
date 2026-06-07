@@ -66,8 +66,24 @@ func NewChatbotHandler(
 
 // ActiveClaimInfo es la info de un reclamo activo detectada en el auth del chatbot
 type ActiveClaimInfo struct {
-	ClaimID string `json:"claim_id"`
-	Status  string `json:"status"`
+	ClaimID         string `json:"claim_id"`
+	Status          string `json:"status"`
+	SupervisorNotes string `json:"supervisor_notes,omitempty"`
+}
+
+// getSupervisorNotes devuelve las notas del último evento claim_pending_customer del reclamo.
+func (h *ChatbotHandler) getSupervisorNotes(claimID string) string {
+	events, err := h.claimSvc.GetEvents(claimID, "")
+	if err != nil {
+		return ""
+	}
+	var notes string
+	for _, ev := range events {
+		if ev.EventType == model.EventClaimPendingCustomer && ev.Notes != "" {
+			notes = ev.Notes
+		}
+	}
+	return notes
 }
 
 // RegisterRoutes registra las rutas públicas del chatbot (sin autenticación)
@@ -146,8 +162,9 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 				ClaimID: claim.ID,
 				Status:  string(claim.Status),
 			}
-			// Si el reclamo está esperando respuesta del cliente, habilitar esa acción
-			if claim.Status == model.ClaimStatusPendingCustomer {
+			// respond_claim solo si el reclamo lo abrió este destinatario
+			if claim.Status == model.ClaimStatusPendingCustomer && claim.ClaimantDNI == req.RecipientDNI {
+				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
 				actions = append(actions, "respond_claim")
 			}
 		} else {
@@ -564,10 +581,11 @@ type SenderAuthRequest struct {
 
 // SenderAuthResponse contiene los datos del envío tras autenticar al remitente
 type SenderAuthResponse struct {
-	Success          bool           `json:"success"`
-	SenderName       string         `json:"sender_name"`
-	Shipment         model.Shipment `json:"shipment"`
-	AvailableActions []string       `json:"available_actions"`
+	Success          bool             `json:"success"`
+	SenderName       string           `json:"sender_name"`
+	Shipment         model.Shipment   `json:"shipment"`
+	AvailableActions []string         `json:"available_actions"`
+	ActiveClaim      *ActiveClaimInfo `json:"active_claim,omitempty"`
 }
 
 // SenderCancelRequest es el payload para que el remitente cancele el envío
@@ -599,11 +617,33 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 		actions = append(actions, "cancel")
 	}
 
+	// Detectar reclamo activo (misma lógica que para destinatarios)
+	var activeClaim *ActiveClaimInfo
+	if h.claimSvc != nil {
+		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingID(shipment.TrackingID); err == nil {
+			activeClaim = &ActiveClaimInfo{
+				ClaimID: claim.ID,
+				Status:  string(claim.Status),
+			}
+			// respond_claim solo si el reclamo lo abrió este remitente
+			if claim.Status == model.ClaimStatusPendingCustomer && claim.ClaimantDNI == req.SenderDNI {
+				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
+				actions = append(actions, "respond_claim")
+			}
+		} else {
+			s := string(shipment.Status)
+			if s != "draft" && s != "cancelled" && s != "returned" {
+				actions = append(actions, "file_claim")
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, SenderAuthResponse{
 		Success:          true,
 		SenderName:       shipment.Sender.Name,
 		Shipment:         shipment,
 		AvailableActions: actions,
+		ActiveClaim:      activeClaim,
 	})
 }
 
@@ -819,10 +859,19 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 		}
 	}
 
+	// Determinar si el reclamante es remitente o destinatario para formatear created_by
+	createdBy := "chatbot-customer:" + claimantDNI
+	if s, err := h.shipmentRepo.GetByTrackingID(trackingID); err == nil {
+		if strings.TrimSpace(s.Sender.DNI) == strings.TrimSpace(claimantDNI) {
+			createdBy = "chatbot-sender:" + claimantDNI
+		}
+	}
+	_ = claimantName // nombre usado solo en contexto de autenticación previa
+
 	req := model.CreatePublicClaimRequest{
 		TrackingID:  trackingID,
 		DNI:         claimantDNI,
-		CreatedBy:   claimantName,
+		CreatedBy:   createdBy,
 		ClaimType:   model.ClaimType(claimType),
 		Description: description,
 	}
