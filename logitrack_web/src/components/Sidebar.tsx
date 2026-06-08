@@ -293,7 +293,7 @@ export function Sidebar() {
               onClick={() => setPinned((v) => !v)}
               title={pinned ? "Contraer menú" : "Fijar menú expandido"}
               className={`bg-transparent border-0 text-white/50 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-white/10 hover:text-white/80 ${
-                expanded ? "justify-start" : "justify-center"
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`}
             >
               {pinned ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
@@ -307,7 +307,7 @@ export function Sidebar() {
             onClick={isMobile ? closeMobile : undefined}
             className={
               `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-white/10 text-white/80 transition-colors duration-150 hover:bg-white/15 ${
-                expanded ? "justify-start" : "justify-center"
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`
             }
           >
@@ -331,7 +331,7 @@ export function Sidebar() {
             onClick={logout}
             title="Cerrar sesión"
 className={`bg-transparent border border-white/10 text-white/40 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-white/5 hover:text-red-300 ${
-                expanded ? "justify-start" : "justify-center"
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`}
           >
             <LogOut size={16} />
