@@ -69,7 +69,7 @@ export function Topbar() {
   return (
       <header
         className={cn(
-          "sticky top-0 z-50 h-14",
+          "sticky top-0 z-[110] h-14",
           "bg-[var(--topbar-bg)]",
           "backdrop-saturate-[1.8] backdrop-blur-lg",
           "border-b border-[var(--border)]",
