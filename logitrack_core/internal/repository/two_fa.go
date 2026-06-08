@@ -39,6 +39,11 @@ type TwoFARepository interface {
 	IncrementSetupFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error
 	GetSetupLockStatus(ctx context.Context, userID string) (attempts int, lockedUntil *time.Time, err error)
 	ResetSetupFailedAttempts(ctx context.Context, userID string) error
+
+	// Lockout por intentos fallidos de login (verify — por usuario, persiste entre sesiones)
+	IncrementLoginFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error
+	GetLoginLockStatus(ctx context.Context, userID string) (attempts int, lockedUntil *time.Time, err error)
+	ResetLoginFailedAttempts(ctx context.Context, userID string) error
 }
 
 type twoFARepository struct {
@@ -253,6 +258,42 @@ func (r *twoFARepository) GetSetupLockStatus(ctx context.Context, userID string)
 func (r *twoFARepository) ResetSetupFailedAttempts(ctx context.Context, userID string) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE users SET two_fa_setup_failed_attempts = 0, two_fa_setup_locked_until = NULL WHERE id = $1`,
+		userID,
+	)
+	return err
+}
+
+func (r *twoFARepository) IncrementLoginFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users
+		 SET two_fa_login_failed_attempts = two_fa_login_failed_attempts + 1,
+		     two_fa_login_locked_until    = $2
+		 WHERE id = $1`,
+		userID, lockUntil,
+	)
+	return err
+}
+
+func (r *twoFARepository) GetLoginLockStatus(ctx context.Context, userID string) (int, *time.Time, error) {
+	var attempts int
+	var lockedUntil sql.NullTime
+	err := r.db.QueryRowContext(ctx,
+		`SELECT two_fa_login_failed_attempts, two_fa_login_locked_until FROM users WHERE id = $1`,
+		userID,
+	).Scan(&attempts, &lockedUntil)
+	if err != nil {
+		return 0, nil, err
+	}
+	if lockedUntil.Valid {
+		t := lockedUntil.Time
+		return attempts, &t, nil
+	}
+	return attempts, nil, nil
+}
+
+func (r *twoFARepository) ResetLoginFailedAttempts(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET two_fa_login_failed_attempts = 0, two_fa_login_locked_until = NULL WHERE id = $1`,
 		userID,
 	)
 	return err
