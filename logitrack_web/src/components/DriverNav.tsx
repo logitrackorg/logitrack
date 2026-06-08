@@ -11,7 +11,7 @@ interface DriverNavProps {
   subtitle?: string;
 }
 
-export function DriverNav({ title, subtitle }: DriverNavProps) {
+export function DriverNav({ title: _title, subtitle: _subtitle }: DriverNavProps) {
   const { user, logout } = useAuth();
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
