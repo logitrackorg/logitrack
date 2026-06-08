@@ -652,11 +652,11 @@ export function DriverInterBranchTrip() {
                 <h1 className="text-base font-bold text-[var(--text-primary)] leading-tight">
                   Viaje · <span className="font-mono tracking-tight">{trip.license_plate}</span>
                 </h1>
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${st.cls}`}>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${st.cls}`}>
                   {st.label}
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-[11px] text-[var(--text-secondary)] mt-0.5">
+              <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] mt-0.5">
                 <span className="flex items-center gap-1">
                   <Package className="w-3 h-3" />
                   {totalShipments} envío{totalShipments !== 1 ? "s" : ""}
@@ -665,7 +665,7 @@ export function DriverInterBranchTrip() {
                   <Weight className="w-3 h-3" />
                   {trip.total_weight_kg.toFixed(0)} kg
                 </span>
-                <span className="font-mono text-[10px] text-[var(--text-muted)] truncate">{trip.id}</span>
+                <span className="font-mono text-xs text-[var(--text-muted)] truncate">{trip.id}</span>
               </div>
             </div>
           </div>
@@ -740,7 +740,7 @@ export function DriverInterBranchTrip() {
                           <p className="text-xs text-[var(--text-secondary)]">{b?.address.city}</p>
                         </div>
                         {s.completed_at && (
-                          <p className="text-[11px] text-[var(--text-muted)] shrink-0">
+                          <p className="text-xs text-[var(--text-muted)] shrink-0">
                             {new Date(s.completed_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         )}
@@ -791,7 +791,7 @@ export function DriverInterBranchTrip() {
                     {(s.pickup_shipment_ids?.length ?? 0) > 0 && (
                       <div className="flex items-center gap-1.5 mt-2 ml-11">
                         <ArrowUp className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                        <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
                           Cargás {s.pickup_shipment_ids?.length} envío{s.pickup_shipment_ids!.length !== 1 ? "s" : ""}
                         </p>
                       </div>
@@ -863,7 +863,7 @@ export function DriverInterBranchTrip() {
 
       {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
       {fatigueBlocked && (
-        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
+        <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
           <AlertTriangle size={64} className="text-red-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
@@ -877,7 +877,7 @@ export function DriverInterBranchTrip() {
 
       {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
       {!fatigueBlocked && fatigueUnblockedBy && (
-        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
+        <div className="fixed inset-0 z-[9999] bg-emerald-950 flex flex-col items-center justify-center p-8 text-center gap-6">
           <CheckCircle2 size={64} className="text-emerald-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Ruta autorizada
@@ -937,7 +937,7 @@ function StepperBar({
 
   return (
     <Card className="!p-4 border-[var(--border)]" variant="muted">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Progreso</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Progreso</p>
       <div className="flex items-start gap-0 overflow-x-auto pb-1">
         {allPoints.map((pt, idx) => {
           const isOriginPt = pt.isOrigin;
@@ -949,7 +949,7 @@ function StepperBar({
           const isLast = idx === allPoints.length - 1;
 
           let dotCls = "bg-[var(--text-muted)]";
-          let dotContent = <span className="text-[10px] font-bold text-white">{idx}</span>;
+          let dotContent = <span className="text-xs font-bold text-white">{idx}</span>;
           if (isOriginPt) {
             dotCls = "bg-[var(--sidebar-bg)]";
             dotContent = <Truck className="w-3.5 h-3.5 text-white" />;
@@ -972,7 +972,7 @@ function StepperBar({
                   {dotContent}
                 </div>
                 <p
-                  className={`text-[10px] font-semibold mt-1.5 text-center leading-tight ${
+                  className={`text-xs font-semibold mt-1.5 text-center leading-tight ${
                     isPending
                       ? "text-[var(--text-muted)]"
                       : isCompleted
@@ -1082,7 +1082,7 @@ function HeroNextStop({
           <span className="text-[var(--text-secondary)] text-xs">{(stop.total_weight_kg + pickupsInTransitWeightKg).toFixed(1)} kg</span>
         </div>
         {pickupsInTransit.length > 0 && (
-          <p className="text-[11px] text-sky-700 dark:text-sky-400 ml-6">
+          <p className="text-xs text-sky-700 dark:text-sky-400 ml-6">
             Incluye {pickupsInTransit.length} envío{pickupsInTransit.length !== 1 ? "s" : ""} cargados en parada anterior
           </p>
         )}
@@ -1126,7 +1126,7 @@ function HeroNextStop({
             {pickupsInTransit.length > 0 && (
               <>
                 <div className="px-4 py-2 bg-sky-50 dark:bg-sky-950/30">
-                  <p className="text-[10px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
+                  <p className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
                     Bajan — Cargados en parada anterior
                   </p>
                 </div>
@@ -1140,7 +1140,7 @@ function HeroNextStop({
             {hasPickup && (
               <>
                 <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30">
-                  <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
                     Para cargar
                   </p>
                 </div>
@@ -1185,7 +1185,7 @@ function QRModal({
   return (
     /* Backdrop — z-[9999] para quedar por encima de Leaflet (z ~400) y del nav */
     <div
-      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-[#0f1b34]/70"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/70"
       onClick={onClose}
     >
       {/* Card — click dentro no cierra */}
@@ -1238,7 +1238,7 @@ function QRModal({
                     <p className="text-sm text-[var(--text-muted)] text-center px-4">No se pudo cargar el QR.</p>
                   </div>
                 )}
-                <p className="text-[11px] font-mono text-[var(--text-muted)]">{trip.id}</p>
+                <p className="text-xs font-mono text-[var(--text-muted)]">{trip.id}</p>
               </div>
 
               {/* Indicador de espera */}
@@ -1252,7 +1252,7 @@ function QRModal({
                 const allBajan = [...currentStop.shipment_ids, ...pickupsInTransit];
                 return (
                   <div className="w-full">
-                    <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                    <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                       ↓ Bajan {allBajan.length} envío{allBajan.length !== 1 ? "s" : ""}
                     </p>
                     <div className="rounded-lg border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden max-h-36 overflow-y-auto">
@@ -1264,7 +1264,7 @@ function QRModal({
                       {pickupsInTransit.length > 0 && (
                         <>
                           <div className="px-3 py-1 bg-sky-50 dark:bg-sky-950/30">
-                            <p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
+                            <p className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
                               Cargados en parada anterior
                             </p>
                           </div>

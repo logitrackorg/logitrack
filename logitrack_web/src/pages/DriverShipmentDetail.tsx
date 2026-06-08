@@ -123,8 +123,8 @@ export function DriverShipmentDetail() {
     if (!r) return;
     if (r.id === "otro" && !rejectedNotes.trim()) return;
     const note = r.id === "otro"
-      ? `${r.emoji} ${rejectedNotes.trim()}`
-      : `${r.emoji} ${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
+      ? rejectedNotes.trim()
+      : `${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
     setSubmitting(true);
     setActionError("");
     try {
@@ -608,7 +608,7 @@ function RejectedSheet({
                   : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)] hover:bg-[var(--bg-hover)]"
               }`}
             >
-              {r.emoji} {r.label}
+              <r.icon className="w-5 h-5" /> {r.label}
             </button>
           );
         })}

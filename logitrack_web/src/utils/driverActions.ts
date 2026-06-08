@@ -1,4 +1,6 @@
 import type { Shipment, TimeWindow } from "../api/shipments";
+import { UserX, Ban, PackageX, Clock, ClipboardX, Pencil } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export const TIME_WINDOW_LABEL: Record<string, string> = {
   morning: "Mañana",
@@ -133,11 +135,11 @@ export const FAILED_REASONS: { id: string; label: string }[] = [
 ];
 
 // Motivos predefinidos cuando el destinatario rechaza activamente el envío.
-export const REJECTED_REASONS: { id: string; label: string; emoji: string }[] = [
-  { id: "no_lo_pedi", label: "No lo pedí", emoji: "🤷" },
-  { id: "no_lo_quiero", label: "No lo quiero", emoji: "🚫" },
-  { id: "producto_danado", label: "Producto dañado", emoji: "📦" },
-  { id: "llego_tarde", label: "Llegó demasiado tarde", emoji: "⏰" },
-  { id: "no_coincide_pedido", label: "No coincide con el pedido", emoji: "📋" },
-  { id: "otro", label: "Otro", emoji: "✏️" },
+export const REJECTED_REASONS: { id: string; label: string; icon: LucideIcon }[] = [
+  { id: "no_lo_pedi", label: "No lo pedí", icon: UserX },
+  { id: "no_lo_quiero", label: "No lo quiero", icon: Ban },
+  { id: "producto_danado", label: "Producto dañado", icon: PackageX },
+  { id: "llego_tarde", label: "Llegó demasiado tarde", icon: Clock },
+  { id: "no_coincide_pedido", label: "No coincide con el pedido", icon: ClipboardX },
+  { id: "otro", label: "Otro", icon: Pencil },
 ];

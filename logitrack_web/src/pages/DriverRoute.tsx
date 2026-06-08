@@ -477,7 +477,7 @@ export function DriverRoute() {
               </div>
             )}
 
-            {!simActive && simulationMode === "real" && (
+            {import.meta.env.DEV && !simActive && simulationMode === "real" && (
               <button
                 onClick={() => { setSimActive(true); setViewMode('map'); }}
                 title="Activar simulación GPS"
@@ -1339,7 +1339,7 @@ function RejectedSheet({
                   : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50"
               }`}
             >
-              <span className="text-lg leading-none">{r.emoji}</span>
+              <r.icon className="w-5 h-5" />
               <span className="text-xs leading-tight text-center">{r.label}</span>
             </button>
           );
