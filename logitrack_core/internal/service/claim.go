@@ -313,6 +313,20 @@ func (s *ClaimService) GetLatestActiveClaimByTrackingID(trackingID string) (mode
 	return claim, nil
 }
 
+// GetLatestActiveClaimByTrackingIDAndDNI devuelve el reclamo activo más reciente
+// para un envío cuyo reclamante coincide con el DNI dado.
+// Retorna ErrClaimNotFound si no existe tal reclamo o ya está resuelto.
+func (s *ClaimService) GetLatestActiveClaimByTrackingIDAndDNI(trackingID, dni string) (model.Claim, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingIDAndDNI(strings.TrimSpace(trackingID), strings.TrimSpace(dni))
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if strings.HasPrefix(string(claim.Status), "resolved_") {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return claim, nil
+}
+
 func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error) {
 	claim, err := s.GetByID(id)
 	if err != nil {

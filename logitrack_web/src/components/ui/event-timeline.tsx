@@ -60,8 +60,16 @@ const translateClaimNotes = (notes: string): string =>
   });
 
 const formatChangedBy = (changedBy: string): string => {
-  if (changedBy?.startsWith("chatbot-recipient")) return "chatbot-Destinatario";
-  if (changedBy === "system" || !changedBy) return "sistema";
+  if (!changedBy || changedBy === "system") return "sistema";
+  if (changedBy.startsWith("chatbot-customer:")) {
+    const dni = changedBy.replace("chatbot-customer:", "");
+    return `Destinatario (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-sender:")) {
+    const dni = changedBy.replace("chatbot-sender:", "");
+    return `Remitente (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-recipient")) return "Destinatario vía chatbot";
   return changedBy;
 };
 

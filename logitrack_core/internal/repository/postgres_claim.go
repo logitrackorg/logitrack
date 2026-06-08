@@ -83,6 +83,18 @@ func (r *postgresClaimRepository) GetLatestByTrackingID(trackingID string) (mode
 	return r.scanClaimRow(row)
 }
 
+func (r *postgresClaimRepository) GetLatestByTrackingIDAndDNI(trackingID, dni string) (model.Claim, error) {
+	row := r.db.QueryRow(
+		`SELECT `+claimSelectColumns+`
+		 FROM shipment_claims
+		 WHERE tracking_id = $1 AND claimant_dni = $2
+		 ORDER BY updated_at DESC
+		 LIMIT 1`,
+		trackingID, dni,
+	)
+	return r.scanClaimRow(row)
+}
+
 func (r *postgresClaimRepository) ListAll() ([]model.Claim, error) {
 	rows, err := r.db.Query(
 		`SELECT ` + claimSelectColumns + ` FROM shipment_claims ORDER BY created_at DESC`,

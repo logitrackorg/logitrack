@@ -154,22 +154,20 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 	// Determinar acciones disponibles
 	actions := h.getAvailableActions(shipment)
 
-	// Detectar reclamo activo para este envío
+	// Detectar reclamo activo de este destinatario para este envío
 	var activeClaim *ActiveClaimInfo
 	if h.claimSvc != nil {
-		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingID(shipment.TrackingID); err == nil {
+		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(shipment.TrackingID, req.RecipientDNI); err == nil {
 			activeClaim = &ActiveClaimInfo{
 				ClaimID: claim.ID,
 				Status:  string(claim.Status),
 			}
-			// respond_claim solo si el reclamo lo abrió este destinatario
-			if claim.Status == model.ClaimStatusPendingCustomer && claim.ClaimantDNI == req.RecipientDNI {
+			if claim.Status == model.ClaimStatusPendingCustomer {
 				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
 				actions = append(actions, "respond_claim")
 			}
 		} else {
-			// Sin reclamo activo: ofrecer la acción de crear uno
-			// (solo si el envío no está en draft o cancelado)
+			// Sin reclamo activo propio: ofrecer la acción de crear uno
 			s := string(shipment.Status)
 			if s != "draft" && s != "cancelled" && s != "returned" {
 				actions = append(actions, "file_claim")
@@ -617,16 +615,15 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 		actions = append(actions, "cancel")
 	}
 
-	// Detectar reclamo activo (misma lógica que para destinatarios)
+	// Detectar reclamo activo de este remitente para este envío
 	var activeClaim *ActiveClaimInfo
 	if h.claimSvc != nil {
-		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingID(shipment.TrackingID); err == nil {
+		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(shipment.TrackingID, req.SenderDNI); err == nil {
 			activeClaim = &ActiveClaimInfo{
 				ClaimID: claim.ID,
 				Status:  string(claim.Status),
 			}
-			// respond_claim solo si el reclamo lo abrió este remitente
-			if claim.Status == model.ClaimStatusPendingCustomer && claim.ClaimantDNI == req.SenderDNI {
+			if claim.Status == model.ClaimStatusPendingCustomer {
 				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
 				actions = append(actions, "respond_claim")
 			}
@@ -834,8 +831,9 @@ func (h *ChatbotHandler) FileClaim(c *gin.Context) {
 		return
 	}
 
-	// Verificar si ya hay un reclamo activo (devuelve error amigable al cliente)
-	if existing, err := h.claimSvc.GetLatestActiveClaimByTrackingID(trackingID); err == nil {
+	// Verificar si este mismo reclamante ya tiene un reclamo activo para este envío.
+	// Un reclamo de otra parte (ej: remitente vs destinatario) no bloquea.
+	if existing, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(trackingID, claimantDNI); err == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"error":    fmt.Sprintf("Ya tenés un reclamo abierto (%s) en estado '%s'. No podés abrir otro hasta que se resuelva.", existing.ID, existing.Status),
 			"claim_id": existing.ID,
