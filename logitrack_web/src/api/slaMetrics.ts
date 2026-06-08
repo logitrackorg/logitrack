@@ -12,7 +12,10 @@ api.interceptors.request.use((config) => {
 
 export interface SLABottleneck {
   status: string;
-  count: number;
+  /** "SLA Comprometido": superó el 100% del promedio base pero no el 150% de tolerancia. Aún recuperable. */
+  at_risk_count: number;
+  /** "Demorado": superó el 150% de tolerancia — el SLA ya se rompió. */
+  delayed_count: number;
 }
 
 export interface SLADayCount {
@@ -69,6 +72,9 @@ export interface BranchFleetDiagnosis {
 export interface SLAMetrics {
   sla_health_rate: number;
   active_total: number;
+  /** "SLA Comprometido": dwell > 100% del promedio base, ≤ 150% de tolerancia. No penaliza sla_health_rate. */
+  at_risk_total: number;
+  /** "Demorado": dwell > 150% de tolerancia — SLA roto. Único contador que penaliza sla_health_rate. */
   delayed_total: number;
   bottlenecks: SLABottleneck[];
   delay_trend: SLADayCount[];
@@ -78,6 +84,10 @@ export interface SLAMetrics {
 }
 
 export const slaMetricsApi = {
-  get: () =>
-    api.get<SLAMetrics>("/stats/sla-metrics").then((r) => r.data),
+  /** `branch_id`: narrows the SLA snapshot KPIs (health rate, comprometidos,
+   *  demorados, bottlenecks) to one branch — mirrors the dashboard's global
+   *  branch filter. Omit / empty for all branches. Does NOT affect
+   *  `fleet_diagnoses` (that stays per-branch regardless). */
+  get: (params?: { branch_id?: string }) =>
+    api.get<SLAMetrics>("/stats/sla-metrics", { params }).then((r) => r.data),
 };

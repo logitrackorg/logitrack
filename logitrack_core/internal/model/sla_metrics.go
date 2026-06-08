@@ -57,11 +57,19 @@ type SLAMetrics struct {
 	// ActiveTotal is the total number of shipments in active (non-terminal) states.
 	ActiveTotal int `json:"active_total"`
 
-	// DelayedTotal is the number of active shipments currently flagged as delayed.
+	// AtRiskTotal is the number of active shipments "SLA Comprometido": dwell time
+	// exceeded the baseline average (SLAAtRiskThresholdHours, 100 %) but not yet the
+	// tolerance threshold (SLADelayThresholdHours, 150 %). Still recoverable — does
+	// NOT count against SlaHealthRate.
+	AtRiskTotal int `json:"at_risk_total"`
+
+	// DelayedTotal is the number of active shipments "Demorado": dwell time exceeded
+	// the tolerance threshold (SLADelayThresholdHours, 150 % — SLA broken). The only
+	// counter that penalizes SlaHealthRate.
 	DelayedTotal int `json:"delayed_total"`
 
-	// Bottlenecks lists, per status, how many shipments are currently delayed.
-	// Sorted by Count descending.
+	// Bottlenecks lists, per status, how many shipments are at-risk vs. delayed.
+	// Sorted by DelayedCount descending, then AtRiskCount descending.
 	Bottlenecks []SLABottleneck `json:"bottlenecks"`
 
 	// DelayTrend contains one entry per calendar day over the last 7 days.
@@ -86,10 +94,17 @@ type SLAStateAverage struct {
 	HasData  bool    `json:"has_data"`  // false = not enough historical transitions yet to compute an average
 }
 
-// SLABottleneck aggregates delayed shipments by their current status.
+// SLABottleneck aggregates at-risk and delayed shipments by their current status.
 type SLABottleneck struct {
 	Status string `json:"status"` // Spanish display name
-	Count  int    `json:"count"`
+
+	// AtRiskCount: dwell exceeded SLAAtRiskThresholdHours (100 %) but not
+	// SLADelayThresholdHours (150 %) — "SLA Comprometido", still recoverable.
+	AtRiskCount int `json:"at_risk_count"`
+
+	// DelayedCount: dwell exceeded SLADelayThresholdHours (150 %) — "Demorado",
+	// SLA broken.
+	DelayedCount int `json:"delayed_count"`
 }
 
 // SLADayCount holds the number of SLA escalation events for one calendar day.

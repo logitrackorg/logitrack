@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
@@ -40,9 +41,6 @@ var slaStatusLabel = map[string]string{
 	"redelivery_scheduled": "Reentrega agendada",
 	"ready_for_return":     "Listo para devolución",
 }
-
-// delayThresholdHours must match the SLA engine and the frontend badge.
-const delayThresholdHours = 36.0
 
 // activeRow is one active shipment's status/dwell-time/destination-branch,
 // shared between the global SLA aggregation and the per-branch fleet analysis.
@@ -87,6 +85,13 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	}
 	defer rows.Close()
 
+	// branchFilter narrows the SLA snapshot KPIs (health rate, comprometidos,
+	// demorados, bottlenecks) to a single branch — mirrors the dashboard's
+	// global branch filter. Empty = all branches (no filtering). It does NOT
+	// affect activeByBranch / fleet_diagnoses: those stay per-branch regardless,
+	// since the "Diagnóstico de flota" selector is independent by design.
+	branchFilter := c.Query("branch_id")
+
 	var actives []activeRow
 	activeByBranch := map[string][]activeRow{}
 	for rows.Next() {
@@ -94,26 +99,41 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		if err := rows.Scan(&r.status, &r.updatedAt, &r.receivingBranchID); err != nil {
 			continue
 		}
-		actives = append(actives, r)
 		activeByBranch[r.receivingBranchID] = append(activeByBranch[r.receivingBranchID], r)
+		if branchFilter == "" || r.receivingBranchID == branchFilter {
+			actives = append(actives, r)
+		}
 	}
 
 	// ── 2. Compute health rate and bottlenecks ────────────────────────────────
+	// Two-tier classification (matches Shipment.ComputeIsAtRisk/ComputeIsDelayed):
+	//   - "SLA Comprometido" (at risk): dwell > 100 % of baseline (SLAAtRiskThresholdHours)
+	//     but ≤ 150 % tolerance (SLADelayThresholdHours). Still recoverable.
+	//   - "Demorado" (delayed): dwell > 150 % tolerance — SLA broken.
+	// Only "Demorado" counts against SlaHealthRate; "Comprometido" is a warning,
+	// not yet a broken commitment.
 	activeTotal := len(actives)
-	bottleneckMap := map[string]int{}
+	atRiskMap := map[string]int{}
+	delayedMap := map[string]int{}
 
 	for _, r := range actives {
 		if !slaMonitoredStatuses[r.status] {
 			continue
 		}
 		dwellH := now.Sub(r.updatedAt).Hours()
-		if dwellH > delayThresholdHours {
-			bottleneckMap[r.status]++
+		switch {
+		case dwellH > model.SLADelayThresholdHours:
+			delayedMap[r.status]++
+		case dwellH > model.SLAAtRiskThresholdHours:
+			atRiskMap[r.status]++
 		}
 	}
 
-	delayedTotal := 0
-	for _, cnt := range bottleneckMap {
+	atRiskTotal, delayedTotal := 0, 0
+	for _, cnt := range atRiskMap {
+		atRiskTotal += cnt
+	}
+	for _, cnt := range delayedMap {
 		delayedTotal += cnt
 	}
 
@@ -122,16 +142,30 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		slaHealthRate = math.Round(float64(activeTotal-delayedTotal)/float64(activeTotal)*1000) / 10
 	}
 
-	bottlenecks := make([]model.SLABottleneck, 0, len(bottleneckMap))
-	for code, cnt := range bottleneckMap {
+	statusCodes := map[string]bool{}
+	for code := range atRiskMap {
+		statusCodes[code] = true
+	}
+	for code := range delayedMap {
+		statusCodes[code] = true
+	}
+	bottlenecks := make([]model.SLABottleneck, 0, len(statusCodes))
+	for code := range statusCodes {
 		label := slaStatusLabel[code]
 		if label == "" {
 			label = code
 		}
-		bottlenecks = append(bottlenecks, model.SLABottleneck{Status: label, Count: cnt})
+		bottlenecks = append(bottlenecks, model.SLABottleneck{
+			Status:       label,
+			AtRiskCount:  atRiskMap[code],
+			DelayedCount: delayedMap[code],
+		})
 	}
 	sort.Slice(bottlenecks, func(i, j int) bool {
-		return bottlenecks[i].Count > bottlenecks[j].Count
+		if bottlenecks[i].DelayedCount != bottlenecks[j].DelayedCount {
+			return bottlenecks[i].DelayedCount > bottlenecks[j].DelayedCount
+		}
+		return bottlenecks[i].AtRiskCount > bottlenecks[j].AtRiskCount
 	})
 
 	// ── 3. Delay trend from priority_logs.json (last 7 calendar days) ─────────
@@ -156,9 +190,42 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 			}
 		}
 		cutoff := maxTs.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+
+		// Log entries carry no branch info (only tracking_id) — when narrowing
+		// to one branch, resolve each candidate entry's shipment to its
+		// receiving branch via a single batched lookup.
+		var trackingBranch map[string]string
+		if branchFilter != "" {
+			var trackingIDs []string
+			for _, entry := range logs {
+				if !entry.Timestamp.Before(cutoff) {
+					trackingIDs = append(trackingIDs, entry.TrackingID)
+				}
+			}
+			trackingBranch = map[string]string{}
+			if len(trackingIDs) > 0 {
+				branchRows, err := h.db.Query(
+					`SELECT tracking_id, receiving_branch_id FROM shipments WHERE tracking_id = ANY($1)`,
+					pq.Array(trackingIDs),
+				)
+				if err == nil {
+					for branchRows.Next() {
+						var tid, bid string
+						if branchRows.Scan(&tid, &bid) == nil {
+							trackingBranch[tid] = bid
+						}
+					}
+					branchRows.Close()
+				}
+			}
+		}
+
 		dayCounts := map[string]int{}
 		for _, entry := range logs {
 			if entry.Timestamp.Before(cutoff) {
+				continue
+			}
+			if branchFilter != "" && trackingBranch[entry.TrackingID] != branchFilter {
 				continue
 			}
 			day := entry.Timestamp.Format("2006-01-02")
@@ -205,6 +272,7 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, model.SLAMetrics{
 		SlaHealthRate:   slaHealthRate,
 		ActiveTotal:     activeTotal,
+		AtRiskTotal:     atRiskTotal,
 		DelayedTotal:    delayedTotal,
 		Bottlenecks:     bottlenecks,
 		DelayTrend:      trend,
@@ -242,7 +310,7 @@ func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch m
 			if !slaMonitoredStatuses[r.status] {
 				continue
 			}
-			if now.Sub(r.updatedAt).Hours() > delayThresholdHours {
+			if now.Sub(r.updatedAt).Hours() > model.SLADelayThresholdHours {
 				delayed++
 			}
 		}

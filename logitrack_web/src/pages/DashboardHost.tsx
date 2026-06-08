@@ -235,7 +235,7 @@ export function DashboardHost() {
             {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
-            {activeTab === "sla" && <SlaTab />}
+            {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
           </Suspense>
         </div>
       </div>
