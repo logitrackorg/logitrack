@@ -856,7 +856,7 @@ export function DriverInterBranchTrip() {
           </button>
         </div>
       )}
-    </div>
+    </DriverShell>
   );
 }
 
@@ -1266,10 +1266,10 @@ function NoTripView() {
       >
         <QrCode className="w-5 h-5" />
         Escanear vehículo
-      </Button>
-    </div>
-  );
-}
+        </Button>
+      </div>
+    );
+  }
 
 function TripSkeleton() {
   return (
@@ -1338,6 +1338,6 @@ function TripSkeleton() {
           <Skeleton className="h-14 w-full rounded-2xl" />
         </div>
       </div>
-    </DriverShell>
+    </div>
   );
 }
