@@ -1,0 +1,19 @@
+logitrack_core/internal/messaging/service.go
+  s_8289caf66ba6be::t_c7ccbb40195722 844-847
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "64ece2c6aa73122632d986196a3b4265d4b6c83f",
+  "prompts": {},
+  "sessions": {
+    "s_8289caf66ba6be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df186bd2-168b-4742-a29b-ad0f03f3a544",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
