@@ -183,7 +183,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_delivery_attempts}
                   </span>
                   <button
@@ -208,7 +208,7 @@ export function SystemConfig() {
                         d ? { ...d, max_delivery_attempts: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -246,7 +246,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.draft_retention_days}
                   </span>
                   <button
@@ -271,7 +271,7 @@ export function SystemConfig() {
                         d ? { ...d, draft_retention_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 <p className="text-xs text-slate-400">
@@ -297,7 +297,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.draft_purge_days}
                   </span>
                   <button
@@ -322,7 +322,7 @@ export function SystemConfig() {
                         d ? { ...d, draft_purge_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 <p className="text-xs text-slate-400">
@@ -358,7 +358,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.pickup_deadline_days === 0 ? "∞" : draft.pickup_deadline_days}
                   </span>
                   <button
@@ -383,7 +383,7 @@ export function SystemConfig() {
                         d ? { ...d, pickup_deadline_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
                 {draft.pickup_deadline_days === 0 && (
@@ -416,11 +416,10 @@ export function SystemConfig() {
                     }
                   />
                   <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por email</span>
@@ -437,11 +436,10 @@ export function SystemConfig() {
                     }
                   />
                   <div
-                    className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[#1e3a5f]" : "bg-slate-200"}`}
+                    className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por WhatsApp</span>
@@ -484,7 +482,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_reschedules}
                   </span>
                   <button
@@ -509,7 +507,7 @@ export function SystemConfig() {
                         d ? { ...d, max_reschedules: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -558,7 +556,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[40px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.max_reschedule_days}
                   </span>
                   <button
@@ -583,7 +581,7 @@ export function SystemConfig() {
                         d ? { ...d, max_reschedule_days: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -625,7 +623,7 @@ export function SystemConfig() {
                   >
                     <Minus className="w-4 h-4 text-slate-700" />
                   </button>
-                  <span className="min-w-[60px] text-center text-2xl font-extrabold text-[#1e3a5f] tabular-nums">
+                  <span className="min-w-[60px] text-center text-2xl font-extrabold text-[var(--sidebar-bg)] tabular-nums">
                     {draft.two_fa_cooldown_minutes} min
                   </span>
                   <button
@@ -650,7 +648,7 @@ export function SystemConfig() {
                         d ? { ...d, two_fa_cooldown_minutes: Number(e.target.value) } : d
                       )
                     }
-                    className="w-32 accent-[#1e3a5f]"
+                    className="w-32 accent-[var(--sidebar-bg)]"
                   />
                 </div>
               </div>
@@ -686,7 +684,7 @@ export function SystemConfig() {
               <button
                 onClick={handleSave}
                 disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -707,7 +705,7 @@ export function SystemConfig() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-[#1e3a5f]" />
+            <Clock className="w-5 h-5 text-[var(--sidebar-bg)]" />
             Reloj del sistema (testing)
           </CardTitle>
           <CardDescription>
@@ -729,7 +727,7 @@ export function SystemConfig() {
               Hora del sistema
             </div>
             <div
-              className={`text-3xl font-extrabold tabular-nums ${clockState?.is_active ? "text-rose-700" : "text-[#1e3a5f]"
+              className={`text-3xl font-extrabold tabular-nums ${clockState?.is_active ? "text-rose-700" : "text-[var(--sidebar-bg)]"
                 }`}
             >
               {displayedSystemNow ? fmtDateTimeSeconds(displayedSystemNow) : "—"}
@@ -751,13 +749,13 @@ export function SystemConfig() {
                 value={overrideInput}
                 onChange={(e) => setOverrideInput(e.target.value)}
                 disabled={clockSaving}
-                className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all tabular-nums"
+                className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all tabular-nums"
               />
             </div>
             <button
               onClick={handleSetOverride}
               disabled={clockSaving || !overrideInput}
-              className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+              className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
             >
               {clockSaving ? "Aplicando…" : "Aplicar override"}
             </button>

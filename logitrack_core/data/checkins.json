@@ -129,6 +129,423 @@
       }
     ]
   },
+  "12|2026-06-07": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:37:26.7108-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "no_entregado",
+        "reaction_time_ms": 5599,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:46.932713-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 8950,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:50.279242-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 12780,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:54.110167-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 2160,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:35:58.463927-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 5429,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:36:01.730219-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 11766,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:36:08.06713-03:00"
+      },
+      {
+        "tracking_id": "LT-4AA3DC31",
+        "action": "entregado",
+        "reaction_time_ms": 2906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:37:33.626938-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 8199,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:37:38.918174-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1463,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:38:07.691765-03:00"
+      }
+    ]
+  },
+  "12|2026-06-07|1780881354": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:15:54.116163-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      }
+    ]
+  },
+  "12|2026-06-07|1780881523": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:18:43.320892-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      }
+    ]
+  },
+  "12|2026-06-07|1780882117": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:28:37.30997-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "no_entregado",
+        "reaction_time_ms": 5599,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:46.932713-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 8950,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:50.279242-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 12780,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:54.110167-03:00"
+      }
+    ]
+  },
+  "12|2026-06-07|1780882212": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:30:12.708699-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "no_entregado",
+        "reaction_time_ms": 5599,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:46.932713-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 8950,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:50.279242-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 12780,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:54.110167-03:00"
+      }
+    ]
+  },
+  "12|2026-06-07|1780882552": {
+    "driver_id": "12",
+    "date": "2026-06-07",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-07T22:35:52.292217-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 1549,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:11:56.929168-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 5023,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:03.176102-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 13604,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:11.752234-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 28883,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:16:27.033953-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 906,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:17:07.552491-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "no_entregado",
+        "reaction_time_ms": 5599,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:46.932713-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "entregado",
+        "reaction_time_ms": 8950,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:50.279242-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 12780,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:28:54.110167-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00005",
+        "action": "no_entregado",
+        "reaction_time_ms": 2160,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:35:58.463927-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00006",
+        "action": "entregado",
+        "reaction_time_ms": 5429,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:36:01.730219-03:00"
+      },
+      {
+        "tracking_id": "LT-LM00004",
+        "action": "entregado",
+        "reaction_time_ms": 11766,
+        "misfires": 0,
+        "recorded_at": "2026-06-07T22:36:08.06713-03:00"
+      }
+    ]
+  },
   "15|2026-05-23": {
     "driver_id": "15",
     "date": "2026-05-23",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, SkipForward, Volume2 } from "lucide-react";
 import { driverApi } from "../api/driver";
+import { Button } from "@/components/ui/button";
 
 const MIN_AUDIO_BYTES = 2500;
 
@@ -214,13 +215,15 @@ export function VoiceCheckIn({ onDone }: Props) {
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
       {/* Skip button */}
       <div className="flex justify-end px-4 pt-4">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+          className="gap-1.5 font-semibold text-xs"
         >
           <SkipForward className="w-3.5 h-3.5" />
           Saltar test
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
@@ -251,31 +254,32 @@ export function VoiceCheckIn({ onDone }: Props) {
           {/* Recording controls */}
           <div className="mb-6">
             {state === "idle" || state === "recorded" ? (
-              <button
+              <Button
                 onClick={startRecording}
-                className="w-full h-14 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
+                className="w-full h-14 rounded-xl font-bold text-base gap-2"
               >
                 <Mic className="w-5 h-5" />
                 {state === "recorded" ? "Grabar de nuevo" : "Iniciar grabación"}
-              </button>
+              </Button>
             ) : state === "recording" ? (
-              <button
+              <Button
+                variant="destructive"
                 onClick={stopRecording}
-                className="w-full h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 animate-pulse"
+                className="w-full h-14 rounded-xl font-bold text-base gap-2 animate-pulse"
               >
                 <MicOff className="w-5 h-5" />
                 Detener ({seconds}s)
-              </button>
+              </Button>
             ) : null}
 
             {state === "recorded" && hasChunks && !errorMsg && (
-              <button
+              <Button
                 onClick={handleUpload}
-                className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
+                className="mt-3 w-full h-12 rounded-xl font-bold text-base gap-2"
               >
                 <Send className="w-4 h-4" />
                 Enviar audio
-              </button>
+              </Button>
             )}
 
             {state === "uploading" && (

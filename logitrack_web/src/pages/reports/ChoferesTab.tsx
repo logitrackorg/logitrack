@@ -20,7 +20,7 @@ function successBadge(rate: number | null): { bg: string; text: string; label: s
   return { bg: "bg-rose-100", text: "text-rose-700", label: `${rate.toFixed(1)}%` };
 }
 
-export default function ChoferesTab({ dateFrom, dateTo, branchId }: ChoferesTabProps) {
+export function ChoferesTab({ dateFrom, dateTo, branchId }: ChoferesTabProps) {
   const [drivers, setDrivers] = useState<DriverPerformanceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

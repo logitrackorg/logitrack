@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, RefreshCw } from "lucide-react";
+import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, Paperclip, RefreshCw } from "lucide-react";
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
@@ -46,9 +46,10 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
 ];
 
 function formatChangedBy(changedBy: string): string {
+  if (!changedBy || changedBy === "system") return "sistema";
   if (changedBy.startsWith("chatbot-customer:")) {
     const dni = changedBy.replace("chatbot-customer:", "");
-    return `Cliente (DNI ${dni}) vía chatbot`;
+    return `Destinatario (DNI ${dni}) vía chatbot`;
   }
   if (changedBy.startsWith("chatbot-sender:")) {
     const dni = changedBy.replace("chatbot-sender:", "");
@@ -64,7 +65,7 @@ function statusBadgeClass(status: ClaimStatus): string {
     case "in_review":
       return "bg-blue-600 text-white";
     case "pending_customer":
-      return "bg-amber-500 text-slate-900";
+      return "bg-amber-500 dark:text-gray-100 text-slate-900";
     case "derived":
       return "bg-slate-500 text-white";
     default:
@@ -294,7 +295,7 @@ export function Claims() {
         actions={
           <button
             onClick={loadClaims}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
             Actualizar
@@ -303,22 +304,22 @@ export function Claims() {
       />
 
       {isManager && (
-        <Card className="p-5 mb-4 border-slate-200 shadow-sm bg-gradient-to-br from-white via-white to-slate-50/80">
+        <Card className="p-5 mb-4 dark:border-gray-700 border-slate-200 shadow-sm bg-gradient-to-br from-white via-white to-slate-50/80">
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1e3a5f]">Panel gerencial</p>
-                <h3 className="mt-1 text-base font-semibold text-slate-900">Métricas de reclamos</h3>
-                <p className="mt-1 text-sm text-slate-500">Resumen dinámico sobre el conjunto filtrado.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sidebar-bg)]">Panel gerencial</p>
+                <h3 className="mt-1 text-base font-semibold dark:text-gray-100 text-slate-900">Métricas de reclamos</h3>
+                <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">Resumen dinámico sobre el conjunto filtrado.</p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-600">Sucursal</label>
+                  <label className="text-xs font-semibold dark:text-gray-400 text-slate-600">Sucursal</label>
                   <select
                     value={selectedBranch}
                     onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[180px] rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white px-3 text-sm dark:text-gray-100 text-slate-900 shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   >
                     <option value="">Todas</option>
                     {branches.map((b) => (
@@ -328,11 +329,11 @@ export function Claims() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-600">Estado</label>
+                  <label className="text-xs font-semibold dark:text-gray-400 text-slate-600">Estado</label>
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[180px] rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white px-3 text-sm dark:text-gray-100 text-slate-900 shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   >
                     <option value="">Todos</option>
                     {Object.keys(CLAIM_STATUS_LABELS).map((s) => (
@@ -342,81 +343,81 @@ export function Claims() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-600">ID reclamo</label>
+                  <label className="text-xs font-semibold dark:text-gray-400 text-slate-600">ID reclamo</label>
                   <input
                     value={selectedClaimId}
                     onChange={(e) => setSelectedClaimId(e.target.value)}
                     placeholder="Buscar por ID"
-                    className="h-10 min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[200px] rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white px-3 text-sm dark:text-gray-100 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   />
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total de reclamos</p>
-                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.total}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider dark:text-gray-400 text-slate-500">Total de reclamos</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight dark:text-gray-100 text-slate-900">{visibleMetrics.total}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)]">
                     <BarChart3 className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Registros que entran en el filtro actual.</p>
+                <p className="mt-2 text-xs dark:text-gray-400 text-slate-500">Registros que entran en el filtro actual.</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Reclamos abiertos</p>
-                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.open}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider dark:text-gray-400 text-slate-500">Reclamos abiertos</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight dark:text-gray-100 text-slate-900">{visibleMetrics.open}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
                     <Clock3 className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Casos que siguen activos.</p>
+                <p className="mt-2 text-xs dark:text-gray-400 text-slate-500">Casos que siguen activos.</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Reclamos cerrados</p>
-                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.closed}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider dark:text-gray-400 text-slate-500">Reclamos cerrados</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight dark:text-gray-100 text-slate-900">{visibleMetrics.closed}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                     <BadgeCheck className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Casos resueltos o finalizados.</p>
+                <p className="mt-2 text-xs dark:text-gray-400 text-slate-500">Casos resueltos o finalizados.</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pendientes de revisión</p>
-                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.pending_review}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider dark:text-gray-400 text-slate-500">Pendientes de revisión</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight dark:text-gray-100 text-slate-900">{visibleMetrics.pending_review}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
                     <ClipboardList className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">En estado pendiente del cliente.</p>
+                <p className="mt-2 text-xs dark:text-gray-400 text-slate-500">En estado pendiente del cliente.</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resueltos este mes</p>
-                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.resolved_this_month}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider dark:text-gray-400 text-slate-500">Resueltos este mes</p>
+                    <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight dark:text-gray-100 text-slate-900">{visibleMetrics.resolved_this_month}</p>
                   </div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
                     <RefreshCw className="h-5 w-5" />
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Tasa de resolución: {visibleResolutionRate}%</p>
+                <p className="mt-2 text-xs dark:text-gray-400 text-slate-500">Tasa de resolución: {visibleResolutionRate}%</p>
               </div>
             </div>
           </div>
@@ -431,17 +432,17 @@ export function Claims() {
 
       {loading ? (
         <Card className="p-10 text-center">
-          <p className="text-sm text-slate-500">Cargando…</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">Cargando…</p>
         </Card>
       ) : visibleClaims.length === 0 ? (
         <Card className="p-12 text-center">
-          <p className="text-base font-semibold text-slate-700">No hay reclamos registrados</p>
-          <p className="mt-1 text-sm text-slate-500">Los reclamos aparecerán cuando un cliente los genere desde tracking.</p>
+          <p className="text-base font-semibold dark:text-gray-300 text-slate-700">No hay reclamos registrados</p>
+          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">Los reclamos aparecerán cuando un cliente los genere desde tracking.</p>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
           {visibleClaims.map((claim) => (
-            <Card key={claim.id} className="overflow-hidden rounded-2xl border-slate-200 bg-white shadow-sm">
+            <Card key={claim.id} className="overflow-hidden rounded-2xl dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white shadow-sm">
               <details
                 open={openClaimId === claim.id || undefined}
                 onToggle={(e) => {
@@ -451,17 +452,17 @@ export function Claims() {
                 }}
               >
                 <summary
-                  className="cursor-pointer list-none px-5 py-[18px] border-b border-slate-200 bg-gradient-to-b from-white to-slate-50"
+                  className="cursor-pointer list-none px-5 py-[18px] border-b dark:border-gray-700 border-slate-200 bg-gradient-to-b from-white to-slate-50"
                 >
                   <div className="flex flex-wrap gap-3 items-center justify-between">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-xs font-extrabold tracking-wide uppercase text-slate-900 bg-[#1e3a5f]/[0.08] px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-extrabold tracking-wide uppercase dark:text-gray-100 text-slate-900 bg-[var(--sidebar-bg)]/[0.08] px-2 py-0.5 rounded-full">
                           {claim.id}
                         </span>
-                        <span className="text-xs text-slate-400">Envío {claim.tracking_id}</span>
+                        <span className="text-xs dark:text-gray-500 text-slate-400">Envío {claim.tracking_id}</span>
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs dark:text-gray-400 text-slate-500">
                         {CLAIM_TYPE_LABELS[claim.claim_type]}
                       </div>
                     </div>
@@ -474,7 +475,7 @@ export function Claims() {
                 </summary>
 
                 <div className="px-5 py-[18px] grid gap-4">
-                  <div className="grid gap-2 text-xs text-slate-700 leading-relaxed">
+                  <div className="grid gap-2 text-xs dark:text-gray-300 text-slate-700 leading-relaxed">
                     <div><strong>Creado por:</strong> {claim.created_by}</div>
                     <div><strong>Descripción:</strong> {claim.description}</div>
                     <div><strong>Creado:</strong> {fmtDateTime(claim.created_at)}</div>
@@ -485,18 +486,18 @@ export function Claims() {
                   </div>
 
                   {claim.evidence_file_name && (
-                    <div className="flex flex-wrap gap-3 items-center justify-between border border-slate-200 rounded-2xl px-4 py-3.5 bg-slate-50">
+                    <div className="flex flex-wrap gap-3 items-center justify-between border dark:border-gray-700 border-slate-200 rounded-2xl px-4 py-3.5 dark:bg-gray-800/50 bg-slate-50">
                       <div className="min-w-0">
-                        <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Evidencia adjunta</div>
-                        <div className="text-sm font-bold text-slate-900 break-words">{claim.evidence_file_name}</div>
+                        <div className="text-xs font-extrabold dark:text-gray-400 text-slate-500 uppercase tracking-wide">Evidencia adjunta</div>
+                        <div className="text-sm font-bold dark:text-gray-100 text-slate-900 break-words">{claim.evidence_file_name}</div>
                         {claim.evidence_upload_date && (
-                          <div className="text-xs text-slate-500">Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
+                          <div className="text-xs dark:text-gray-400 text-slate-500">Subida el {fmtDateTime(claim.evidence_upload_date)}</div>
                         )}
                       </div>
                       <button
                         type="button"
                         onClick={() => handleDownloadEvidence(claim.id, claim.evidence_file_name ?? "evidencia")}
-                        className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] inline-flex items-center gap-2"
+                        className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] inline-flex items-center gap-2"
                       >
                         <Download className="w-4 h-4" />
                         Descargar evidencia
@@ -505,13 +506,13 @@ export function Claims() {
                   )}
 
                   {!isManager && (
-                    <div className="grid gap-3 border-t border-slate-200 pt-4">
+                    <div className="grid gap-3 border-t dark:border-gray-700 border-slate-200 pt-4">
                       <div className="flex flex-wrap gap-2.5 items-end">
-                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
+                        <label className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
                         <select
                           value={categoryDraft[claim.id] ?? ""}
                           onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
-                          className="min-w-[240px] border border-slate-200 rounded-xl px-3 py-2.5 text-xs bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                          className="min-w-[240px] border dark:border-gray-700 border-slate-200 rounded-xl px-3 py-2.5 text-xs dark:bg-gray-800 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
                         >
                           <option value="">Seleccionar área</option>
                           {CATEGORY_OPTIONS.map((cat) => (
@@ -522,21 +523,21 @@ export function Claims() {
                           type="button"
                           onClick={() => handleUpdateCategory(claim.id)}
                           disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                          className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
+                          className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
                         >
                           Aplicar
                         </button>
                       </div>
 
                       <div className="flex flex-wrap gap-2.5 items-center">
-                        <span className="text-xs text-slate-500 font-bold uppercase tracking-wide">Resolver</span>
+                        <span className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Resolver</span>
                         {RESOLUTION_OPTIONS.map((opt) => (
                           <button
                             key={opt.value}
                             type="button"
                             onClick={() => handleResolve(claim.id, opt.value)}
                             disabled={busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                            className="bg-amber-50 text-slate-900 border border-amber-200 rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-60"
+                            className="bg-amber-50 dark:text-gray-100 text-slate-900 border border-amber-200 rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-60"
                           >
                             {opt.label}
                           </button>
@@ -589,30 +590,30 @@ export function Claims() {
                     </div>
                   )}
 
-                  <div className="border-t border-slate-200 pt-4">
+                  <div className="border-t dark:border-gray-700 border-slate-200 pt-4">
                     <details>
-                      <summary className="cursor-pointer text-xs font-extrabold text-slate-500 mb-2 uppercase tracking-wide">
+                      <summary className="cursor-pointer text-xs font-extrabold dark:text-gray-400 text-slate-500 mb-2 uppercase tracking-wide">
                         Historial del reclamo
                       </summary>
                       <div className="mt-2">
                         {eventsLoadingId === claim.id ? (
-                          <p className="m-0 text-xs text-slate-400">Cargando historial…</p>
+                          <p className="m-0 text-xs dark:text-gray-500 text-slate-400">Cargando historial…</p>
                         ) : (eventsByClaim[claim.id]?.length ?? 0) === 0 ? (
-                          <p className="m-0 text-xs text-slate-400">Sin eventos registrados.</p>
+                          <p className="m-0 text-xs dark:text-gray-500 text-slate-400">Sin eventos registrados.</p>
                         ) : (
                           <div className="flex flex-col gap-2">
                             {[...(eventsByClaim[claim.id] ?? [])].reverse().map((ev) => (
                               <div
                                 key={ev.id}
-                                className="border border-slate-200 rounded-lg px-2.5 py-2 text-xs bg-slate-50"
+                                className="border dark:border-gray-700 border-slate-200 rounded-lg px-2.5 py-2 text-xs dark:bg-gray-800/50 bg-slate-50"
                               >
                                 <div className="flex justify-between gap-2 mb-1">
-                                  <span className="font-semibold text-slate-900">
+                                  <span className="font-semibold dark:text-gray-100 text-slate-900">
                                     {CLAIM_EVENT_LABELS[ev.event_type] ?? ev.event_type}
                                   </span>
-                                  <span className="text-slate-400 whitespace-nowrap">{fmtDateTime(ev.timestamp)}</span>
+                                  <span className="dark:text-gray-500 text-slate-400 whitespace-nowrap">{fmtDateTime(ev.timestamp)}</span>
                                 </div>
-                                {ev.notes && <div className="text-slate-500">{ev.notes}</div>}
+                                {ev.notes && <div className="dark:text-gray-400 text-slate-500">{ev.notes}</div>}
                                 {ev.event_type === "claim_customer_responded" && ev.evidence_file_name && (
                                   <div className="mt-1">
                                     <button
@@ -631,11 +632,11 @@ export function Claims() {
                                         }
                                       }}
                                     >
-                                      📎 Descargar adjunto: {ev.evidence_file_name}
+                                      <Paperclip size={14} className="inline mr-1" /> Descargar adjunto: {ev.evidence_file_name}
                                     </button>
                                   </div>
                                 )}
-                                <div className="text-slate-500 text-xs mt-1">
+                                <div className="dark:text-gray-400 text-slate-500 text-xs mt-1">
                                   por <strong>{formatChangedBy(ev.changed_by)}</strong>
                                   {ev.from_status && ev.to_status && (
                                     <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>

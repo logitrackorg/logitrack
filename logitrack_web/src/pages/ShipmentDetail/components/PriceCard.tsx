@@ -39,7 +39,7 @@ export function PriceCard({ price, breakdown }: PriceCardProps) {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="w-full bg-white/10 hover:bg-white/[0.18] border border-white/15 text-white rounded-lg px-3 py-2 cursor-pointer text-xs font-semibold flex items-center justify-between transition-colors"
+            className="w-full bg-white/10 dark:hover:bg-gray-700 hover:bg-white/[0.18] border border-white/15 text-white rounded-lg px-3 py-2 cursor-pointer text-xs font-semibold flex items-center justify-between transition-colors"
           >
             <span>{open ? "Ocultar desglose" : "Ver desglose"}</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />

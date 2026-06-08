@@ -4,7 +4,7 @@ import { ReportExport } from "./ReportExport";
 import { SelectMenu } from "./ui/SelectMenu";
 
 const inputClass =
-  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all duration-200 cursor-pointer";
+  "h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all duration-200 cursor-pointer";
 
 interface ReportFiltersProps {
   dateFrom: string;
@@ -71,7 +71,7 @@ export function ReportFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {isSupervisor ? (
-        <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f] shadow-sm">
+        <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[var(--sidebar-bg)] shadow-sm">
           <MapPin className="w-3.5 h-3.5" />
           {branchLabel}
         </span>

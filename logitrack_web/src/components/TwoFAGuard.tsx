@@ -6,6 +6,7 @@ const ALLOWED_PATHS = [
   '/login',
   '/2fa/verify',
   '/2fa/setup-required',
+  '/2fa/setup',
   '/profile/2fa/setup',
   '/track'
 ];

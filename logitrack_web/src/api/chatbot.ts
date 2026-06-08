@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   ChatbotAuthRequest,
   ChatbotAuthResponse,
+  SenderChatbotAuthResponse,
   RescheduleOptionsResponse,
   PickupResponse,
   RescheduleResponse,
@@ -77,8 +78,8 @@ export const chatbotService = {
   },
 
   // LOGITRACK-457: Autenticación del remitente
-  authenticateSender: async (trackingId: string, senderDni: string) => {
-    const response = await chatbotAPI.post('/sender/auth', {
+  authenticateSender: async (trackingId: string, senderDni: string): Promise<SenderChatbotAuthResponse> => {
+    const response = await chatbotAPI.post<SenderChatbotAuthResponse>('/sender/auth', {
       tracking_id: trackingId,
       sender_dni: senderDni,
     });
@@ -140,4 +141,5 @@ export const chatbotService = {
     });
     return response.data;
   },
+
 };

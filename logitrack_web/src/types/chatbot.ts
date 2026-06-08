@@ -8,6 +8,15 @@ export interface ChatbotAuthRequest {
 export interface ActiveClaimInfo {
   claim_id: string;
   status: string;
+  supervisor_notes?: string;
+}
+
+export interface SenderChatbotAuthResponse {
+  success: boolean;
+  sender_name: string;
+  shipment: Shipment;
+  available_actions: string[];
+  active_claim?: ActiveClaimInfo;
 }
 
 export interface FileClaimResponse {

@@ -252,20 +252,28 @@ func RunMigrations(db *sql.DB) error {
 		);
 
 		CREATE TABLE IF NOT EXISTS organization_config (
-			id         INTEGER PRIMARY KEY DEFAULT 1,
-			name       TEXT NOT NULL DEFAULT '',
-			cuit       TEXT NOT NULL DEFAULT '',
-			address    TEXT NOT NULL DEFAULT '',
-			phone      TEXT NOT NULL DEFAULT '',
-			email      TEXT NOT NULL DEFAULT '',
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_by TEXT NOT NULL DEFAULT '',
-			track_url  TEXT NOT NULL DEFAULT ''
+			id            INTEGER PRIMARY KEY DEFAULT 1,
+			name          TEXT NOT NULL DEFAULT '',
+			cuit          TEXT NOT NULL DEFAULT '',
+			address       TEXT NOT NULL DEFAULT '',
+			phone         TEXT NOT NULL DEFAULT '',
+			email         TEXT NOT NULL DEFAULT '',
+			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_by    TEXT NOT NULL DEFAULT '',
+			track_url     TEXT NOT NULL DEFAULT '',
+			primary_color TEXT NOT NULL DEFAULT '',
+			accent_color  TEXT NOT NULL DEFAULT '',
+			sidebar_color TEXT NOT NULL DEFAULT '',
+			logo_url      TEXT NOT NULL DEFAULT ''
 		);
 		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
 		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
 		ON CONFLICT (id) DO NOTHING;
 		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS track_url TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS primary_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS sidebar_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,
@@ -616,8 +624,16 @@ func RunMigrations(db *sql.DB) error {
 
 		-- data/migrations/XXXX_add_2fa_cooldown_config.sql
 
-		ALTER TABLE system_config 
+		ALTER TABLE system_config
 		ADD COLUMN IF NOT EXISTS two_fa_cooldown_minutes INTEGER NOT NULL DEFAULT 1;
+
+		-- Lockout por intentos fallidos de 2FA (login)
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+		-- Lockout por intentos fallidos de 2FA (setup)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_locked_until TIMESTAMPTZ;
 
 		-- Constraint: rango 1-10 minutos
 		DO $$
@@ -675,6 +691,10 @@ func RunMigrations(db *sql.DB) error {
 			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS keyword_attempts      INT  NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS contingency_delivery  BOOLEAN NOT NULL DEFAULT FALSE;
+
 		CREATE TABLE IF NOT EXISTS shipment_hop_metrics (
 			id             TEXT PRIMARY KEY,
 			tracking_id    TEXT NOT NULL,
@@ -696,6 +716,9 @@ func RunMigrations(db *sql.DB) error {
 			updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (origin_branch_id, destination_branch_id, date)
 		);
+
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
 	`)
 	return err
 }

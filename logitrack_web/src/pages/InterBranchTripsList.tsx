@@ -135,7 +135,7 @@ export function InterBranchTripsList() {
         <button
           onClick={() => void load()}
           disabled={loading}
-          className="h-9 px-3 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-sm flex items-center gap-2 cursor-pointer"
+          className="h-9 px-3 rounded-lg border dark:border-gray-700 border-slate-200 dark:hover:bg-gray-700 hover:bg-slate-50 disabled:opacity-50 text-sm flex items-center gap-2 cursor-pointer"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Actualizar
@@ -146,19 +146,19 @@ export function InterBranchTripsList() {
       {isNetworkRole && (
         <Card className="mb-4 p-3">
           <div className="flex items-center gap-3">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <label className="text-sm font-medium text-slate-700">Sucursal:</label>
+            <Filter className="w-4 h-4 dark:text-gray-400 text-slate-500" />
+            <label className="text-sm font-medium dark:text-gray-300 text-slate-700">Sucursal:</label>
             <select
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
-              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="h-9 px-3 rounded-md border dark:border-gray-600 border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
             >
               <option value="">— Toda la red —</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
-            <span className="ml-auto text-xs text-slate-500 tabular-nums">{trips.length} viajes</span>
+            <span className="ml-auto text-xs dark:text-gray-400 text-slate-500 tabular-nums">{trips.length} viajes</span>
           </div>
         </Card>
       )}
@@ -171,7 +171,7 @@ export function InterBranchTripsList() {
       )}
 
       {/* Sub-pestañas */}
-      <div className="flex gap-1 border-b border-slate-200 mb-4">
+      <div className="flex gap-1 border-b dark:border-gray-700 border-slate-200 mb-4">
         {(["inter_branch", "last_mile"] as const).map((t) => {
           const count = t === "inter_branch" ? interBranchTrips.length : lastMileTrips.length;
           const label = t === "inter_branch" ? "Inter-sucursal" : "Última milla";
@@ -181,13 +181,13 @@ export function InterBranchTripsList() {
               onClick={() => setTab(t)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 tab === t
-                  ? "border-[#1e3a5f] text-[#1e3a5f]"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
+                  ? "border-[var(--sidebar-bg)] text-[var(--sidebar-bg)]"
+                  : "border-transparent dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
               }`}
             >
               {label}
               <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                tab === t ? "bg-[#1e3a5f] text-white" : "bg-slate-100 text-slate-500"
+                tab === t ? "bg-[var(--sidebar-bg)] text-white" : "dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-500"
               }`}>
                 {loading ? "…" : count}
               </span>
@@ -198,14 +198,14 @@ export function InterBranchTripsList() {
 
       {loading && trips.length === 0 && (
         <Card className="p-10 text-center">
-          <p className="text-sm text-slate-500">Cargando…</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">Cargando…</p>
         </Card>
       )}
 
       {!loading && visibleTrips.length === 0 && (
         <Card className="p-10 text-center">
           <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-500">
+          <p className="text-sm dark:text-gray-400 text-slate-500">
             No hay viajes de {tab === "inter_branch" ? "inter-sucursal" : "última milla"} activos.
           </p>
         </Card>
@@ -230,12 +230,12 @@ export function InterBranchTripsList() {
           onClick={closeReceiveModal}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+            className="dark:bg-gray-800 bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-slate-900">Recibir viaje intersucursal</h2>
-              <button onClick={closeReceiveModal} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <h2 className="text-lg font-bold dark:text-gray-100 text-slate-900">Recibir viaje intersucursal</h2>
+              <button onClick={closeReceiveModal} className="dark:text-gray-500 text-slate-400 dark:hover:text-gray-300 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -250,13 +250,13 @@ export function InterBranchTripsList() {
             {/* Viewport de cámara */}
             <div
               id="operator-trip-qr-reader"
-              className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[260px]" : "hidden"}`}
+              className={`w-full rounded-xl overflow-hidden border dark:border-gray-700 border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[260px]" : "hidden"}`}
             />
 
             {!scanning ? (
               <button
                 onClick={() => void startScanner()}
-                className="w-full h-11 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer mb-4"
+                className="w-full h-11 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer mb-4"
               >
                 <QrCode className="w-4 h-4" />
                 Escanear QR del viaje
@@ -264,13 +264,13 @@ export function InterBranchTripsList() {
             ) : (
               <button
                 onClick={stopScanner}
-                className="w-full h-11 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm transition-colors cursor-pointer mb-4"
+                className="w-full h-11 rounded-xl border dark:border-gray-600 border-slate-300 dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 font-semibold text-sm transition-colors cursor-pointer mb-4"
               >
                 Cancelar cámara
               </button>
             )}
 
-            <p className="text-xs text-slate-500 text-center mb-2">
+            <p className="text-xs dark:text-gray-400 text-slate-500 text-center mb-2">
               ¿No podés escanear? Ingresá el ID manualmente:
             </p>
             <div className="flex gap-2">
@@ -280,7 +280,7 @@ export function InterBranchTripsList() {
                 onChange={(e) => setManualTripId(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === "Enter" && manualTripId.trim()) goToReception(manualTripId); }}
                 placeholder="TRIP-XXXXXXXX"
-                className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                className="flex-1 h-10 px-3 rounded-lg border dark:border-gray-600 border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
               />
               <button
                 onClick={() => goToReception(manualTripId)}
@@ -328,7 +328,7 @@ function TripCard({
     ? { label: "Pendiente", cls: "bg-amber-100 text-amber-800" }
     : trip.status === "en_transito"
       ? { label: "En tránsito", cls: "bg-sky-100 text-sky-800" }
-      : { label: trip.status, cls: "bg-slate-100 text-slate-600" };
+      : { label: trip.status, cls: "dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-600" };
 
   return (
     <Card className="overflow-hidden">
@@ -336,9 +336,9 @@ function TripCard({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <Truck className="w-4 h-4 text-slate-500 shrink-0" />
+            <Truck className="w-4 h-4 dark:text-gray-400 text-slate-500 shrink-0" />
             <span className="font-mono font-semibold text-sm">{trip.license_plate}</span>
-            <span className="text-xs text-slate-400 font-mono">{trip.id}</span>
+            <span className="text-xs dark:text-gray-500 text-slate-400 font-mono">{trip.id}</span>
             {trip.kind === "last_mile" ? (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
                 Última milla
@@ -363,14 +363,14 @@ function TripCard({
           {/* Origen */}
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-center shrink-0">
-              <div className="w-3 h-3 rounded-full bg-[#1e3a5f] ring-2 ring-[#1e3a5f]/10" />
-              {stops.length > 0 && <div className="w-0.5 h-7 bg-slate-200 my-1" />}
+              <div className="w-3 h-3 rounded-full bg-[var(--sidebar-bg)] ring-2 ring-[var(--sidebar-bg)]/10" />
+              {stops.length > 0 && <div className="w-0.5 h-7 dark:bg-gray-700 bg-slate-200 my-1" />}
             </div>
             <div className="flex-1 pb-2 text-xs">
-              <span className="text-slate-500">Salida: </span>
-              <span className="font-semibold text-slate-900">{branchLabelById(trip.origin_branch_id, branches)}</span>
+              <span className="dark:text-gray-400 text-slate-500">Salida: </span>
+              <span className="font-semibold dark:text-gray-100 text-slate-900">{branchLabelById(trip.origin_branch_id, branches)}</span>
               {trip.started_at && (
-                <span className="text-slate-400 ml-2">· {fmtDateTime(trip.started_at)}</span>
+                <span className="dark:text-gray-500 text-slate-400 ml-2">· {fmtDateTime(trip.started_at)}</span>
               )}
             </div>
           </div>
@@ -391,12 +391,12 @@ function TripCard({
               <div key={idx} className="flex items-start gap-3">
                 <div className="flex flex-col items-center shrink-0">
                   <div className={`w-3 h-3 rounded-full ring-2 ${dotClass}`} />
-                  {!isLast && <div className="w-0.5 h-7 bg-slate-200 my-1" />}
+                  {!isLast && <div className="w-0.5 h-7 dark:bg-gray-700 bg-slate-200 my-1" />}
                 </div>
                 <div className={`flex-1 pb-2 text-xs rounded-md ${isMine ? "bg-amber-50/60 border border-amber-200 px-2 py-1.5 -ml-2" : ""}`}>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-slate-500">{isLast ? "Destino:" : `Parada ${idx + 1}:`}</span>
-                    <span className="font-semibold text-slate-900">{branchLabelById(stop.branch_id, branches)}</span>
+                    <span className="dark:text-gray-400 text-slate-500">{isLast ? "Destino:" : `Parada ${idx + 1}:`}</span>
+                    <span className="font-semibold dark:text-gray-100 text-slate-900">{branchLabelById(stop.branch_id, branches)}</span>
                     {isMine && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-bold">
                         Tu sucursal
@@ -409,11 +409,11 @@ function TripCard({
                     )}
                     {isCurrent && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-medium">
-                        📍 Acá
+                        <MapPin size={12} className="inline mr-0.5" /> Acá
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-500 tabular-nums">
+                  <div className="mt-1 text-[11px] dark:text-gray-400 text-slate-500 tabular-nums">
                     {stop.shipment_ids.length > 0 && (
                       <span>↓ Bajan {stop.shipment_ids.length} envío{stop.shipment_ids.length === 1 ? "" : "s"} · {stop.total_weight_kg.toFixed(1)} kg</span>
                     )}
@@ -428,7 +428,7 @@ function TripCard({
         </div>
 
         {/* Carga total */}
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+        <div className="mt-3 pt-3 border-t dark:border-gray-700 border-slate-100 flex items-center gap-4 text-xs dark:text-gray-400 text-slate-500 flex-wrap">
           <span className="inline-flex items-center gap-1">
             <Package className="w-3 h-3" />
             {trip.shipment_ids.length} envíos totales
@@ -441,8 +441,8 @@ function TripCard({
             const driver = driverMap[trip.driver_id];
             const label  = driver ? (driver.full_name || driver.username) : "–";
             return (
-              <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                <Truck className="w-3 h-3 text-slate-400" />
+              <span className="flex items-center gap-1 text-[11px] dark:text-gray-400 text-slate-500 font-medium">
+                <Truck className="w-3 h-3 dark:text-gray-500 text-slate-400" />
                 {label}
               </span>
             );
@@ -450,7 +450,7 @@ function TripCard({
           <button
             type="button"
             onClick={() => navigate(`/?view=trip&trip_id=${encodeURIComponent(trip.id)}`)}
-            className="ml-auto text-[11px] font-semibold text-[#1e3a5f] hover:underline cursor-pointer"
+            className="ml-auto text-[11px] font-semibold text-[var(--sidebar-bg)] hover:underline cursor-pointer"
           >
             Ver envíos agrupados →
           </button>

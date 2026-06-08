@@ -23,7 +23,7 @@ interface ExitoTabProps {
   branchId: string;
 }
 
-export default function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) {
+export function ExitoTab({ dateFrom, dateTo, branchId }: ExitoTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [data, setData] = useState<SuccessRateByBranchItem[]>([]);

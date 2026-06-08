@@ -48,7 +48,7 @@ const RISK_COLORS = {
   salteado: "#94a3b8",
 };
 
-export default function FatigaTab({ branchId }: FatigaTabProps) {
+export function FatigaTab({ branchId }: FatigaTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<FatigueHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);

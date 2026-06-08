@@ -5,7 +5,7 @@ applications:
         preBuild:
           commands:
             - npm install -g pnpm@9
-            - pnpm install --frozen-lockfile
+            - pnpm install --no-frozen-lockfile --registry https://registry.npmmirror.com
         build:
           commands:
             - pnpm run build

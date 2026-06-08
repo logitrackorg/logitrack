@@ -37,6 +37,7 @@ import { useAuth } from "../context/AuthContext";
 import { branchApi, branchLabelById, type Branch, type BranchCapacity } from "../api/branches";
 import { DetailPageSkeleton } from "../components/ui/skeleton";
 import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { AlertBanner } from "../components/ui/alert-banner";
 import { EventTimeline } from "../components/ui/event-timeline";
@@ -949,18 +950,26 @@ export function ShipmentDetail() {
               )}
 
               {/* Route timeline */}
-              <RouteTimeline
-                events={events}
-                origin={shipment.sender.address.city}
-                receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id}
-                finalBranchId={shipment.final_branch_id}
-                destination={shipment.recipient.address.city}
-                branches={branches}
-              />
+              <Card className="mb-4 cursor-default">
+                <CardContent className="pt-5">
+                  <RouteTimeline
+                    events={events}
+                    origin={shipment.sender.address.city}
+                    receivingBranchId={shipment.origin_branch_id ?? shipment.receiving_branch_id}
+                    finalBranchId={shipment.final_branch_id}
+                    destination={shipment.recipient.address.city}
+                    branches={branches}
+                  />
+                </CardContent>
+              </Card>
 
               {/* Event history */}
               {shipment.status !== "draft" && (
-                <EventTimeline events={events} branches={branches} showHeading className="mb-4" />
+                <Card className="mb-4 cursor-default">
+                  <CardContent className="pt-5">
+                    <EventTimeline events={events} branches={branches} showHeading />
+                  </CardContent>
+                </Card>
               )}
             </div>
 

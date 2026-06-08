@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock } from "lucide-react";
+import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock, Calendar } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
 import { Button } from "../components/ui/button";
@@ -25,7 +25,7 @@ import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
 import { EditDriverStopsModal } from "../components/EditDriverStopsModal";
 import { ReviewInterBranchModal } from "../components/ReviewInterBranchModal";
-import { fmtDateTime } from "../utils/date";
+import { fmtDateTime, fmtMinutesAsTime } from "../utils/date";
 
 type Source =
   | { kind: "driver"; id: string }
@@ -765,7 +765,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 className={`h-9 px-4 rounded-lg text-sm font-semibold transition-colors cursor-pointer border ${
                   isSelected
                     ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    : "dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200 dark:hover:bg-gray-700 hover:bg-slate-50"
                 }`}
               >
                 {dayLabel}
@@ -781,7 +781,7 @@ export function Routing({ mode }: RoutingProps = {}) {
       {/* Banner de pronóstico (días +1/+2) */}
       {isForecast && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
-          <span className="text-base">📅</span>
+          <Calendar size={16} className="text-amber-500 shrink-0" />
           <div>
             <span className="font-semibold">Pronóstico — no aplicable.</span>
             {" "}Este plan simula la disponibilidad de flota y envíos para el día {horizonPlans[horizonDayIndex]?.plan_date}.
@@ -794,7 +794,7 @@ export function Routing({ mode }: RoutingProps = {}) {
       {isNetworkRole && globalPlan && globalPlan.branch_plans.length > 0 && (
         <Card className="mb-4 p-3">
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-slate-700">Sucursal:</label>
+            <label className="text-sm font-medium dark:text-gray-300 text-slate-700">Sucursal:</label>
             <select
               value={selectedBranchId}
               onChange={(e) => {
@@ -803,7 +803,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 const bp = globalPlan.branch_plans.find((b) => b.branch_id === newBranch);
                 if (bp) void applyBranchPlan(bp.plan);
               }}
-              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="h-9 px-3 rounded-md border dark:border-gray-600 border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
             >
               {globalPlan.branch_plans.map((bp) => (
                 <option key={bp.branch_id} value={bp.branch_id}>
@@ -811,7 +811,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                 </option>
               ))}
             </select>
-            <span className="ml-auto text-xs text-slate-500">
+            <span className="ml-auto text-xs dark:text-gray-400 text-slate-500">
               Como manager/admin podés ver el plan de cualquier sucursal.
             </span>
           </div>
@@ -842,7 +842,7 @@ export function Routing({ mode }: RoutingProps = {}) {
       {!plan && !loading && (
         <Card className="p-10 text-center">
           <RouteIcon className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-600 mb-4">
+          <p className="text-sm dark:text-gray-400 text-slate-600 mb-4">
             El plan del día aún no fue generado. Se genera automáticamente a las <strong>08:00</strong>.
             {canRegenerate
               ? " Podés generarlo ahora tocando el botón de abajo."
@@ -858,7 +858,7 @@ export function Routing({ mode }: RoutingProps = {}) {
 
       {loading && !plan && (
         <Card className="p-10 text-center">
-          <p className="text-sm text-slate-500">Calculando plan…</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">Calculando plan…</p>
         </Card>
       )}
 
@@ -922,7 +922,7 @@ export function Routing({ mode }: RoutingProps = {}) {
               <>
                 {/* Tabs: solo se muestran cuando NO hay mode forzado por la prop. */}
                 {!mode && (
-                  <div className="flex gap-1 border-b border-slate-200 mb-5">
+                  <div className="flex gap-1 border-b dark:border-gray-700 border-slate-200 mb-5">
                     <TabButton
                       label="Última milla"
                       icon={<UserIcon className="w-4 h-4" />}
@@ -1000,7 +1000,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                       pendingLastMile.length === 0 &&
                       inProgressLastMile.length === 0 && (
                         <Card className="p-10 text-center">
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm dark:text-gray-400 text-slate-500">
                             No hay envíos de última milla para rutear desde esta sucursal en este momento.
                           </p>
                         </Card>
@@ -1088,7 +1088,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                       plan.vehicle_loads.length === 0 &&
                       (plan.incoming_vehicles?.length ?? 0) === 0 && (
                         <Card className="p-10 text-center">
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm dark:text-gray-400 text-slate-500">
                             No hay envíos inter-sucursal para rutear desde esta sucursal en este momento.
                           </p>
                         </Card>
@@ -1156,7 +1156,7 @@ export function Routing({ mode }: RoutingProps = {}) {
             shipments={shipments}
             applying={applying}
             onClose={() => setReviewingDispatchVehicleId(null)}
-            onConfirm={(editedStops, departureMin) => {
+            onConfirm={(editedStops, departureMin, scheduledDate) => {
               const vehicleId = reviewingDispatchVehicleId;
               setReviewingDispatchVehicleId(null);
               if (!plan || !branchId) return;
@@ -1176,6 +1176,8 @@ export function Routing({ mode }: RoutingProps = {}) {
                 d.estimated_departure_min = departureMin;
                 d.primary_estimated_arrival_min = shiftMin(d.primary_estimated_arrival_min);
                 d.estimated_arrival_min = shiftMin(d.estimated_arrival_min);
+                // Fecha de salida elegida por el operador.
+                d.scheduled_date = scheduledDate;
               }
               setPlan(editedPlan);
               setApplying(true);
@@ -1214,22 +1216,22 @@ export function Routing({ mode }: RoutingProps = {}) {
             onClick={closeAddStop}
           >
             <div
-              className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto"
+              className="dark:bg-gray-800 bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-slate-900">Agregar parada</h3>
-                <button onClick={closeAddStop} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <div className="px-5 py-4 border-b dark:border-gray-700 border-slate-200 flex items-center justify-between">
+                <h3 className="text-base font-semibold dark:text-gray-100 text-slate-900">Agregar parada</h3>
+                <button onClick={closeAddStop} className="dark:text-gray-500 text-slate-400 dark:hover:text-gray-300 hover:text-slate-600 cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="px-5 py-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Sucursal de destino</label>
+                  <label className="block text-xs font-medium dark:text-gray-400 text-slate-600 mb-1">Sucursal de destino</label>
                   <select
                     value={addStopBranchId}
                     onChange={(e) => setAddStopBranchId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    className="w-full h-10 px-3 rounded-md border dark:border-gray-600 border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="">— Elegí una sucursal —</option>
                     {candidateBranches.map((b) => (
@@ -1242,13 +1244,13 @@ export function Routing({ mode }: RoutingProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                  <label className="block text-xs font-medium dark:text-gray-400 text-slate-600 mb-1">
                     Envíos que se entregan en esta parada
                   </label>
-                  <p className="text-[11px] text-slate-500 mb-2">
+                  <p className="text-[11px] dark:text-gray-400 text-slate-500 mb-2">
                     Tildá los envíos que deben bajar en la nueva parada. El resto sigue en la parada primaria u otras existentes.
                   </p>
-                  <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-md">
+                  <div className="max-h-64 overflow-y-auto border dark:border-gray-700 border-slate-200 rounded-md">
                     {dispatch.shipments.map((tid) => {
                       const sh = shipments.get(tid);
                       const isApplied = appliedSet.has(tid);
@@ -1257,7 +1259,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                       return (
                         <label
                           key={tid}
-                          className={`flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-xs ${isApplied ? "opacity-50" : "hover:bg-slate-50 cursor-pointer"}`}
+                          className={`flex items-center gap-2 px-3 py-2 border-b dark:border-gray-700 border-slate-100 last:border-0 text-xs ${isApplied ? "opacity-50" : "dark:hover:bg-gray-700 hover:bg-slate-50 cursor-pointer"}`}
                         >
                           <input
                             type="checkbox"
@@ -1269,9 +1271,9 @@ export function Routing({ mode }: RoutingProps = {}) {
                               setAddStopShipments(next);
                             }}
                           />
-                          <span className="font-mono text-slate-700">{tid}</span>
-                          <span className="text-slate-500">→ {destLabel}</span>
-                          {sh && <span className="ml-auto text-slate-400 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                          <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                          <span className="dark:text-gray-400 text-slate-500">→ {destLabel}</span>
+                          {sh && <span className="ml-auto dark:text-gray-500 text-slate-400 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                           {isApplied && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">aplicado</span>}
                         </label>
                       );
@@ -1279,7 +1281,7 @@ export function Routing({ mode }: RoutingProps = {}) {
                   </div>
                 </div>
               </div>
-              <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+              <div className="px-5 py-3 border-t dark:border-gray-700 border-slate-200 flex items-center justify-end gap-2">
                 <Button variant="ghost" onClick={closeAddStop}>
                   Cancelar
                 </Button>
@@ -1321,7 +1323,7 @@ function TabButton({
       className={`flex items-center gap-2 px-4 py-2.5 -mb-px border-b-2 text-sm font-semibold transition-colors cursor-pointer ${
         active
           ? "border-blue-600 text-blue-600"
-          : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+          : "border-transparent dark:text-gray-400 text-slate-500 hover:text-slate-800 hover:border-slate-300"
       }`}
     >
       {icon}
@@ -1329,7 +1331,7 @@ function TabButton({
       {badge > 0 && (
         <span
           className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold tabular-nums ${
-            active ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"
+            active ? "bg-blue-600 text-white" : "dark:bg-gray-700 bg-slate-200 dark:text-gray-300 text-slate-700"
           }`}
         >
           {badge}
@@ -1343,10 +1345,10 @@ function SummaryChip({ label, value, tone = "neutral" }: { label: string; value:
   const palette =
     tone === "warning"
       ? "bg-amber-50 border-amber-200 text-amber-800"
-      : "bg-white border-slate-200 text-slate-800";
+      : "dark:bg-gray-800 bg-white dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-800";
   return (
     <div className={`rounded-lg border px-4 py-3 ${palette}`}>
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide dark:text-gray-400 text-slate-500">{label}</div>
       <div className="text-2xl font-bold tabular-nums">{value}</div>
     </div>
   );
@@ -1392,13 +1394,13 @@ function ShipmentChip({
             }
           : undefined
       }
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 ${draggable ? "cursor-grab active:cursor-grabbing" : clickable ? "cursor-pointer" : ""}`}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 ${draggable ? "cursor-grab active:cursor-grabbing" : clickable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-        <span className="font-mono text-xs text-slate-700 shrink-0">{trackingId}</span>
+        <span className="font-mono text-xs dark:text-gray-300 text-slate-700 shrink-0">{trackingId}</span>
         {shipment && (
           <>
-            <span className="text-xs text-slate-500 tabular-nums shrink-0">{shipment.weight_kg.toFixed(1)} kg</span>
+            <span className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0">{shipment.weight_kg.toFixed(1)} kg</span>
             {shipment.priority && <PriorityBadge priority={shipment.priority} />}
             {shipment.is_fragile && <span className="text-xs px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
             {shipment.shipment_type === "express" && (
@@ -1421,7 +1423,7 @@ function ShipmentChip({
             onRemove(trackingId);
           }}
           title="Quitar del despacho"
-          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md dark:text-gray-500 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -1497,7 +1499,7 @@ function UnassignedSection({
       <CardContent className="grid gap-4 pt-3">
         {groupedByReason.map(([reason, items]) => (
           <div key={reason}>
-            <div className="text-xs font-semibold text-slate-700 mb-2">{reasonLabel(reason)}</div>
+            <div className="text-xs font-semibold dark:text-gray-300 text-slate-700 mb-2">{reasonLabel(reason)}</div>
             <div className="grid gap-2">
               {items.map((u) => (
                 <ShipmentChip
@@ -1510,7 +1512,7 @@ function UnassignedSection({
                   tooltip={`Motivo: ${reasonLabel(u.reason)}`}
                   extra={
                     showDestination && u.destination ? (
-                      <span className="text-xs text-slate-500 truncate">
+                      <span className="text-xs dark:text-gray-400 text-slate-500 truncate">
                         → {branchLabelById(u.destination, branches)}
                       </span>
                     ) : undefined
@@ -1584,7 +1586,7 @@ function LastMileSection({
     <Card className="mb-5">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Truck className="w-4 h-4 text-slate-700" />
+          <Truck className="w-4 h-4 dark:text-gray-300 text-slate-700" />
           <CardTitle>Última milla</CardTitle>
         </div>
         <CardDescription>Envíos asignados a vehículos de última milla. El chofer escanea el QR del vehículo para reclamar el viaje e iniciarlo.</CardDescription>
@@ -1646,8 +1648,8 @@ function PoolDropCard({
   const cls = dragActive
     ? canAccept
       ? "rounded-lg border-2 border-dashed border-emerald-400 ring-2 ring-emerald-100 p-3 bg-emerald-50/40"
-      : "rounded-lg border border-dashed border-slate-300 p-3 bg-white opacity-60"
-    : "rounded-lg border border-dashed border-slate-300 p-3 bg-white";
+      : "rounded-lg border border-dashed dark:border-gray-600 border-slate-300 p-3 dark:bg-gray-800 bg-white opacity-60"
+    : "rounded-lg border border-dashed dark:border-gray-600 border-slate-300 p-3 dark:bg-gray-800 bg-white";
   return (
     <div
       className={cls}
@@ -1664,13 +1666,13 @@ function PoolDropCard({
         onDropHere?.();
       }}
     >
-      <div className="text-sm font-semibold text-slate-900">{label}</div>
-      <div className="text-xs text-slate-500">{sublabel}</div>
+      <div className="text-sm font-semibold dark:text-gray-100 text-slate-900">{label}</div>
+      <div className="text-xs dark:text-gray-400 text-slate-500">{sublabel}</div>
       {dragActive && canAccept && (
         <div className="mt-1 text-[11px] text-emerald-700">Soltá acá para asignar</div>
       )}
       {dragActive && !canAccept && rejectionReason && (
-        <div className="mt-1 text-[11px] text-slate-500">{rejectionReason}</div>
+        <div className="mt-1 text-[11px] dark:text-gray-400 text-slate-500">{rejectionReason}</div>
       )}
     </div>
   );
@@ -1713,8 +1715,8 @@ function DriverRouteCard({
   const cardClass = dragActive
     ? canAccept
       ? "rounded-lg border-2 border-emerald-400 ring-2 ring-emerald-200 p-3 bg-emerald-50/40"
-      : "rounded-lg border border-slate-200 p-3 bg-slate-50/50 opacity-60"
-    : "rounded-lg border border-slate-200 p-3 bg-slate-50/50";
+      : "rounded-lg border dark:border-gray-700 border-slate-200 p-3 dark:bg-gray-800/50 bg-slate-50/50 opacity-60"
+    : "rounded-lg border dark:border-gray-700 border-slate-200 p-3 dark:bg-gray-800/50 bg-slate-50/50";
 
   return (
     <div
@@ -1732,22 +1734,22 @@ function DriverRouteCard({
       }}
     >
       <div className="flex items-center justify-between mb-1">
-        <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+        <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
           <span>{driverName}</span>
           {assignment.suggested_departure_min != null && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium flex items-center gap-1">
+            <span className="text-[11px] px-2 py-0.5 rounded-full dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-600 font-medium flex items-center gap-1">
               <Clock className="w-3 h-3" />
               Salida sugerida: {String(Math.floor(assignment.suggested_departure_min / 60)).padStart(2, "0")}:{String(assignment.suggested_departure_min % 60).padStart(2, "0")}
             </span>
           )}
           {assignment.in_transit && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-              🚚 En viaje
+              <Truck size={12} className="inline mr-0.5" /> En viaje
             </span>
           )}
           {!assignment.in_transit && assignment.applied && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-              ✓ Aplicado
+              <CheckCircle2 size={12} className="inline mr-0.5" /> Aplicado
             </span>
           )}
           {!assignment.in_transit && !assignment.applied && (assignment.applied_shipments?.length ?? 0) > 0 && (
@@ -1769,10 +1771,10 @@ function DriverRouteCard({
           )}
         </div>
       </div>
-      <div className="text-xs text-slate-500 tabular-nums mb-2">
+      <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums mb-2">
         {totalCount} envíos · {totalWeight.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
         {a.existing_weight_kg > 0 && (
-          <span className="ml-1 text-[11px] text-slate-400">
+          <span className="ml-1 text-[11px] dark:text-gray-500 text-slate-400">
             (incluye {a.existing_weight_kg.toFixed(1)} kg ya cargados)
           </span>
         )}
@@ -1795,8 +1797,8 @@ function DriverRouteCard({
       )}
 
       {a.existing_shipments && a.existing_shipments.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-200">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+        <div className="mt-3 pt-3 border-t dark:border-gray-700 border-slate-200">
+          <div className="text-[11px] font-semibold uppercase tracking-wide dark:text-gray-400 text-slate-500 mb-2">
             Ya cargados en el vehículo
           </div>
           <div className="grid gap-2">
@@ -1849,13 +1851,13 @@ function ExistingShipmentRow({
             }
           : undefined
       }
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50/70 ${clickable ? "cursor-pointer hover:bg-slate-100" : ""}`}
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50/70 ${clickable ? "cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-100" : ""}`}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-        <span className="font-mono text-xs text-slate-700 shrink-0">{trackingId}</span>
+        <span className="font-mono text-xs dark:text-gray-300 text-slate-700 shrink-0">{trackingId}</span>
         {shipment && (
           <>
-            <span className="text-xs text-slate-500 tabular-nums shrink-0">{shipment.weight_kg.toFixed(1)} kg</span>
+            <span className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0">{shipment.weight_kg.toFixed(1)} kg</span>
             {shipment.priority && <PriorityBadge priority={shipment.priority} />}
             {shipment.is_fragile && <span className="text-xs px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
             {shipment.shipment_type === "express" && (
@@ -1921,7 +1923,7 @@ function InterBranchSection({
     <Card className="mb-5">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Truck className="w-4 h-4 text-slate-700" />
+          <Truck className="w-4 h-4 dark:text-gray-300 text-slate-700" />
           <CardTitle>Despachos a otras sucursales</CardTitle>
         </div>
         <CardDescription>
@@ -1955,8 +1957,8 @@ function InterBranchSection({
           const cardClass = dragActive
             ? canAccept
               ? "rounded-lg border-2 border-emerald-400 ring-2 ring-emerald-200 p-3 bg-emerald-50/40"
-              : "rounded-lg border border-slate-200 p-3 bg-slate-50/50 opacity-60"
-            : "rounded-lg border border-slate-200 p-3 bg-slate-50/50";
+              : "rounded-lg border dark:border-gray-700 border-slate-200 p-3 dark:bg-gray-800/50 bg-slate-50/50 opacity-60"
+            : "rounded-lg border dark:border-gray-700 border-slate-200 p-3 dark:bg-gray-800/50 bg-slate-50/50";
           return (
             <div
               key={a.vehicle_id}
@@ -1975,12 +1977,12 @@ function InterBranchSection({
               }}
             >
               <div className="flex items-center justify-between mb-1">
-                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                   {a.license_plate} · {branchLabelById(originBranchId, branches)} → {branchLabelById(a.destination_branch, branches)}
                   {a.additional_stops?.map((st, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-1 text-[11px] text-slate-500 group/stop">
+                    <span key={idx} className="inline-flex items-center gap-1 text-[11px] dark:text-gray-400 text-slate-500 group/stop">
                       <span className="text-slate-300">›</span>
-                      <span className="font-medium text-slate-700">{branchLabelById(st.branch_id, branches)}</span>
+                      <span className="font-medium dark:text-gray-300 text-slate-700">{branchLabelById(st.branch_id, branches)}</span>
                       {(st.pickup_shipments?.length ?? 0) > 0 && (
                         <span
                           className="inline-flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold"
@@ -1993,7 +1995,7 @@ function InterBranchSection({
                         <button
                           type="button"
                           onClick={() => onRemoveStop(a.vehicle_id, idx)}
-                          className="opacity-0 group-hover/stop:opacity-100 w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          className="opacity-0 group-hover/stop:opacity-100 w-4 h-4 flex items-center justify-center rounded dark:text-gray-500 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                           title="Quitar parada (los envíos vuelven a la parada anterior)"
                         >
                           <X className="w-3 h-3" />
@@ -2005,7 +2007,7 @@ function InterBranchSection({
                     <button
                       type="button"
                       onClick={() => onAddStop(a.vehicle_id)}
-                      className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border border-dashed border-slate-300 text-slate-500 hover:border-violet-400 hover:text-violet-700 hover:bg-violet-50 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border border-dashed dark:border-gray-600 border-slate-300 dark:text-gray-400 text-slate-500 hover:border-violet-400 hover:text-violet-700 hover:bg-violet-50 transition-colors cursor-pointer"
                       title="Agregar parada intermedia (máx. 3)"
                     >
                       + Parada
@@ -2023,12 +2025,12 @@ function InterBranchSection({
                   )}
                   {a.in_transit && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                      🚚 En viaje
+                      <Truck size={12} className="inline mr-0.5" /> En viaje
                     </span>
                   )}
                   {!a.in_transit && a.applied && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                      ✓ Aplicado
+                      <CheckCircle2 size={12} className="inline mr-0.5" /> Aplicado
                     </span>
                   )}
                   {!a.in_transit && !a.applied && (a.applied_shipments?.length ?? 0) > 0 && (
@@ -2053,20 +2055,36 @@ function InterBranchSection({
                   )}
                 </div>
               </div>
-              <div className="text-xs text-slate-500 tabular-nums mb-2">
+              <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums mb-2">
                 {originShipmentCount} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
                 {(bajanCount > 0 || pickupSet.size > 0) && (
-                  <span className="ml-1 text-[11px] text-slate-400">
+                  <span className="ml-1 text-[11px] dark:text-gray-500 text-slate-400">
                     en ruta:{bajanCount > 0 && ` bajan ${bajanCount} (−${bajanWeight.toFixed(1)} kg)`}{bajanCount > 0 && pickupSet.size > 0 && " ·"}{pickupSet.size > 0 && ` suben ${pickupSet.size} (+${pickupWeight.toFixed(1)} kg)`}
                     {" "}({netDiff >= 0 ? `+${netDiff.toFixed(1)}` : `−${Math.abs(netDiff).toFixed(1)}`} kg neto)
                   </span>
                 )}
                 {a.existing_weight_kg > 0 && (
-                  <span className="ml-1 text-[11px] text-slate-400">
+                  <span className="ml-1 text-[11px] dark:text-gray-500 text-slate-400">
                     (incluye {a.existing_weight_kg.toFixed(1)} kg ya cargados)
                   </span>
                 )}
               </div>
+              {(a.estimated_departure_min != null || a.scheduled_date) && !a.in_transit && (
+                <div className="flex items-center gap-1.5 text-[11px] dark:text-gray-400 text-slate-500 mb-2">
+                  <Clock className="w-3 h-3 dark:text-gray-500 text-slate-400 shrink-0" />
+                  {a.scheduled_date && a.scheduled_date !== new Date().toISOString().slice(0, 10) && (
+                    <span className="font-medium text-violet-700">
+                      {a.scheduled_date.split("-").reverse().join("/")}
+                    </span>
+                  )}
+                  {a.estimated_departure_min != null && (
+                    <span>Salida: <span className="tabular-nums font-semibold dark:text-gray-300 text-slate-700">{fmtMinutesAsTime(a.estimated_departure_min)}</span></span>
+                  )}
+                  {a.estimated_arrival_min != null && a.estimated_arrival_min > 0 && (
+                    <span className="dark:text-gray-500 text-slate-400">· Llegada: <span className="tabular-nums">{fmtMinutesAsTime(a.estimated_arrival_min)}</span></span>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2">
                 {(() => {
                   const appliedSet = new Set(a.applied_shipments ?? []);
@@ -2144,8 +2162,8 @@ function InterBranchSection({
                 })()}
               </div>
               {a.existing_shipments && a.existing_shipments.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-200">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                <div className="mt-3 pt-3 border-t dark:border-gray-700 border-slate-200">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide dark:text-gray-400 text-slate-500 mb-2">
                     Ya cargado en el vehículo
                   </div>
                   <div className="grid gap-2">
@@ -2191,10 +2209,10 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
   const failed = items.filter((i) => i.status !== "applied");
   return (
     <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div className="text-sm font-semibold text-slate-900">Resultado del plan</div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer">
+      <div className="dark:bg-gray-800 bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b dark:border-gray-700 border-slate-200 flex items-center justify-between">
+          <div className="text-sm font-semibold dark:text-gray-100 text-slate-900">Resultado del plan</div>
+          <button onClick={onClose} className="dark:text-gray-500 text-slate-400 dark:hover:text-gray-200 hover:text-slate-700 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -2211,10 +2229,10 @@ function ApplyResultModal({ result, onClose }: { result: ApplyPlanResponse; onCl
               </div>
               <div className="grid gap-1.5 max-h-64 overflow-y-auto">
                 {failed.map((it, i) => (
-                  <div key={`${it.tracking_id}-${i}`} className="px-3 py-2 rounded-lg border border-slate-200 text-sm">
+                  <div key={`${it.tracking_id}-${i}`} className="px-3 py-2 rounded-lg border dark:border-gray-700 border-slate-200 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-slate-700">{it.tracking_id}</span>
-                      <span className="text-xs text-slate-500">{it.target}</span>
+                      <span className="font-mono text-xs dark:text-gray-300 text-slate-700">{it.tracking_id}</span>
+                      <span className="text-xs dark:text-gray-400 text-slate-500">{it.target}</span>
                     </div>
                     {it.error && <div className="text-xs text-rose-700 mt-1">{reasonLabel(it.error)}</div>}
                   </div>
@@ -2262,16 +2280,16 @@ function ProjectedDispatchSection({
           return (
             <div key={a.vehicle_id + "-" + a.destination_branch} className="rounded-lg border border-amber-200 p-3 bg-amber-50/30">
               <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                  <Truck className="w-3.5 h-3.5 text-slate-500" />
+                <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                  <Truck className="w-3.5 h-3.5 dark:text-gray-400 text-slate-500" />
                   <span>{a.license_plate}</span>
-                  <span className="text-slate-500 font-normal">→</span>
+                  <span className="dark:text-gray-400 text-slate-500 font-normal">→</span>
                   <span>{branchLabelById(a.destination_branch, branches)}</span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
                     ⏳ Proyectado
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0">
                   {a.shipments.length} envíos · {a.total_weight_kg.toFixed(1)} kg
                 </div>
               </div>
@@ -2286,10 +2304,10 @@ function ProjectedDispatchSection({
                       role={clickable ? "button" : undefined}
                       tabIndex={clickable ? 0 : undefined}
                       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onView!(tid); } } : undefined}
-                      className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                      className={`flex items-center gap-2 px-2 py-1 rounded border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-xs ${clickable ? "cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50" : ""}`}
                     >
-                      <span className="font-mono text-slate-700">{tid}</span>
-                      {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                      <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                      {sh && <span className="dark:text-gray-400 text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                       {sh?.priority && <PriorityBadge priority={sh.priority} />}
                     </div>
                   );
@@ -2335,7 +2353,7 @@ function OutgoingInProgressSection({
       <CardContent className="grid gap-4 pt-4">
         {lastMile.length > 0 && (
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide dark:text-gray-400 text-slate-500 mb-2">
               Vehículos de última milla en viaje
             </div>
             <div className="grid gap-3">
@@ -2349,14 +2367,14 @@ function OutgoingInProgressSection({
                 return (
                   <div key={a.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                        <Truck className="w-3.5 h-3.5 text-slate-500" />
+                      <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                        <Truck className="w-3.5 h-3.5 dark:text-gray-400 text-slate-500" />
                         <span>{a.license_plate}</span>
                         <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                          🚚 En viaje
+                          <Truck size={12} className="inline mr-0.5" /> En viaje
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                      <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0">
                         {totalCount} envíos · {totalWeight.toFixed(1)} kg
                       </div>
                     </div>
@@ -2380,10 +2398,10 @@ function OutgoingInProgressSection({
                                   }
                                 : undefined
                             }
-                            className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                            className={`flex items-center gap-2 px-2 py-1 rounded border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-xs ${clickable ? "cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50" : ""}`}
                           >
-                            <span className="font-mono text-slate-700">{tid}</span>
-                            {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                            <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                            {sh && <span className="dark:text-gray-400 text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                             {sh?.priority && <PriorityBadge priority={sh.priority} />}
                             {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
                             {sh?.shipment_type === "express" && (
@@ -2400,11 +2418,11 @@ function OutgoingInProgressSection({
           </div>
         )}
         {lastMile.length > 0 && interBranch.length > 0 && (
-          <div className="border-t border-slate-100" />
+          <div className="border-t dark:border-gray-700 border-slate-100" />
         )}
         {interBranch.length > 0 && (
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide dark:text-gray-400 text-slate-500 mb-2">
               Vehículos en viaje
             </div>
             <div className="grid gap-3">
@@ -2435,18 +2453,18 @@ function OutgoingInProgressSection({
                 return (
                   <div key={a.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                      <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                         <span>{a.license_plate}</span>
-                        <span className="text-slate-500 font-normal">→</span>
+                        <span className="dark:text-gray-400 text-slate-500 font-normal">→</span>
                         <span>{branchLabelById(a.destination_branch, branches)}</span>
                         <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                          🚚 En viaje
+                          <Truck size={12} className="inline mr-0.5" /> En viaje
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 tabular-nums shrink-0">
+                      <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0">
                         {originShipmentCountG} envíos · {totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)
                         {(bajanCountG > 0 || pickupSetG.size > 0) && (
-                          <span className="ml-1 text-[11px] text-slate-400">
+                          <span className="ml-1 text-[11px] dark:text-gray-500 text-slate-400">
                             en ruta:{bajanCountG > 0 && ` bajan ${bajanCountG} (−${bajanWeightG.toFixed(1)} kg)`}{bajanCountG > 0 && pickupSetG.size > 0 && " ·"}{pickupSetG.size > 0 && ` suben ${pickupSetG.size} (+${pickupWeightG.toFixed(1)} kg)`}
                             {" "}({netDiffG >= 0 ? `+${netDiffG.toFixed(1)}` : `−${Math.abs(netDiffG).toFixed(1)}`} kg neto)
                           </span>
@@ -2473,10 +2491,10 @@ function OutgoingInProgressSection({
                                   }
                                 : undefined
                             }
-                            className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                            className={`flex items-center gap-2 px-2 py-1 rounded border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-xs ${clickable ? "cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50" : ""}`}
                           >
-                            <span className="font-mono text-slate-700">{tid}</span>
-                            {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                            <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                            {sh && <span className="dark:text-gray-400 text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                             {sh?.priority && <PriorityBadge priority={sh.priority} />}
                             {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
                             {sh?.shipment_type === "express" && (
@@ -2529,15 +2547,15 @@ function IncomingVehiclesSection({
           return (
             <div key={v.vehicle_id} className="rounded-lg border border-sky-200 p-3 bg-sky-50/40">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
+                <div className="font-semibold dark:text-gray-100 text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                   <span>{v.license_plate}</span>
-                  <span className="text-slate-500 font-normal">desde</span>
+                  <span className="dark:text-gray-400 text-slate-500 font-normal">desde</span>
                   <span>{branchLabelById(v.origin_branch, branches)}</span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                    🚚 En viaje
+                    <Truck size={12} className="inline mr-0.5" /> En viaje
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 tabular-nums shrink-0 flex flex-col items-end gap-0.5">
+                <div className="text-xs dark:text-gray-400 text-slate-500 tabular-nums shrink-0 flex flex-col items-end gap-0.5">
                   <span>{v.shipments.length} envíos · {v.total_weight_kg.toFixed(1)} / {v.capacity_kg} kg ({utilPct}%)</span>
                   {v.estimated_arrival_at && (
                     <span className="text-sky-700 font-medium">Arribo estimado: {fmtDateTime(v.estimated_arrival_at)}</span>
@@ -2564,10 +2582,10 @@ function IncomingVehiclesSection({
                             }
                           : undefined
                       }
-                      className={`flex items-center gap-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs ${clickable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                      className={`flex items-center gap-2 px-2 py-1 rounded border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-xs ${clickable ? "cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50" : ""}`}
                     >
-                      <span className="font-mono text-slate-700">{tid}</span>
-                      {sh && <span className="text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                      <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                      {sh && <span className="dark:text-gray-400 text-slate-500 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                       {sh?.priority && <PriorityBadge priority={sh.priority} />}
                       {sh?.is_fragile && <span className="text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">Frágil</span>}
                       {sh?.shipment_type === "express" && (

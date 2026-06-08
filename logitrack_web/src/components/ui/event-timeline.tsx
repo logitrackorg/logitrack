@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, AlertTriangle, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDateTime, fmtDate } from "@/utils/date";
 import type { ShipmentEvent, ShipmentStatus } from "@/api/shipments";
@@ -60,8 +60,16 @@ const translateClaimNotes = (notes: string): string =>
   });
 
 const formatChangedBy = (changedBy: string): string => {
-  if (changedBy?.startsWith("chatbot-recipient")) return "chatbot-Destinatario";
-  if (changedBy === "system" || !changedBy) return "sistema";
+  if (!changedBy || changedBy === "system") return "sistema";
+  if (changedBy.startsWith("chatbot-customer:")) {
+    const dni = changedBy.replace("chatbot-customer:", "");
+    return `Destinatario (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-sender:")) {
+    const dni = changedBy.replace("chatbot-sender:", "");
+    return `Remitente (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-recipient")) return "Destinatario vía chatbot";
   return changedBy;
 };
 
@@ -131,7 +139,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                   <>
                     <div className="flex justify-between mb-0.5">
                       <span className={`font-semibold flex items-center gap-1.5 ${ev.event_type === "claim_created" ? "text-red-600" : ""}`}>
-                        {ev.event_type === "claim_created" && <span>⚠️</span>}
+                        {ev.event_type === "claim_created" && <AlertTriangle size={14} className="text-red-500 shrink-0" />}
                         {formatShipmentEventLabel(ev)}
                       </span>
                       <span className="text-[var(--text-muted)]">{fmtDateTime(ev.timestamp)}</span>
@@ -178,7 +186,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                                 to={`/claims/${claimId}`}
                                 className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-md no-underline hover:bg-red-700 transition-colors"
                               >
-                                📋 Ver reclamo {claimId}
+                                <ClipboardList size={14} className="mr-1 inline" /> Ver reclamo {claimId}
                               </Link>
                             </div>
                           );

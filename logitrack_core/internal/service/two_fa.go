@@ -35,16 +35,20 @@ type TwoFAService interface {
 	VerifyCode(ctx context.Context, sessionToken, code string) (model.TwoFAVerifyResponse, error)
 }
 
+const maxFailedAttempts = 3
+
 type twoFAService struct {
-	twoFARepo repository.TwoFARepository
-	authRepo  repository.AuthRepository
-	issuer    string
-	aesKey    []byte
+	twoFARepo  repository.TwoFARepository
+	authRepo   repository.AuthRepository
+	configRepo repository.SystemConfigRepository
+	issuer     string
+	aesKey     []byte
 }
 
 func NewTwoFAService(
 	twoFARepo repository.TwoFARepository,
 	authRepo repository.AuthRepository,
+	configRepo repository.SystemConfigRepository,
 ) TwoFAService {
 	issuer := os.Getenv("APP_NAME")
 	if issuer == "" {
@@ -62,16 +66,68 @@ func NewTwoFAService(
 	}
 	
 	return &twoFAService{
-		twoFARepo: twoFARepo,
-		authRepo:  authRepo,
-		issuer:    issuer,
-		aesKey:    aesKey,
+		twoFARepo:  twoFARepo,
+		authRepo:   authRepo,
+		configRepo: configRepo,
+		issuer:     issuer,
+		aesKey:     aesKey,
 	}
 }
 
-// ✅ Helper para verificar código maestro (CORRECTO: receiver *twoFAService)
 func (s *twoFAService) isMasterCodeEnabled() bool {
 	return os.Getenv("ENABLE_MASTER_2FA_CODE") == "true"
+}
+
+// checkLoginLock verifica si el usuario está bloqueado para el login 2FA.
+// El bloqueo es por usuario (persiste aunque se cree una nueva sesión pendiente).
+func (s *twoFAService) checkLoginLock(ctx context.Context, userID string) error {
+	_, lockedUntil, err := s.twoFARepo.GetLoginLockStatus(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	if lockedUntil != nil && time.Now().Before(*lockedUntil) {
+		remaining := time.Until(*lockedUntil).Round(time.Second)
+		return fmt.Errorf("demasiados intentos fallidos. Esperá %s antes de reintentar", remaining)
+	}
+	return nil
+}
+
+// recordLoginFailure incrementa el contador de intentos fallidos de login
+// y aplica bloqueo por usuario si se alcanzó el máximo.
+func (s *twoFAService) recordLoginFailure(ctx context.Context, userID string) {
+	attempts, _, _ := s.twoFARepo.GetLoginLockStatus(ctx, userID)
+	var newLock *time.Time
+	if attempts+1 >= maxFailedAttempts {
+		cooldown := time.Duration(s.configRepo.Get().TwoFACooldownMinutes) * time.Minute
+		t := time.Now().Add(cooldown)
+		newLock = &t
+	}
+	_ = s.twoFARepo.IncrementLoginFailedAttempts(ctx, userID, newLock)
+}
+
+// checkSetupLock verifica si el usuario está bloqueado para el setup de 2FA.
+func (s *twoFAService) checkSetupLock(ctx context.Context, userID string) error {
+	_, lockedUntil, err := s.twoFARepo.GetSetupLockStatus(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	if lockedUntil != nil && time.Now().Before(*lockedUntil) {
+		remaining := time.Until(*lockedUntil).Round(time.Second)
+		return fmt.Errorf("demasiados intentos fallidos. Esperá %s antes de reintentar", remaining)
+	}
+	return nil
+}
+
+// recordSetupFailure incrementa el contador de intentos fallidos del setup.
+func (s *twoFAService) recordSetupFailure(ctx context.Context, userID string) {
+	attempts, _, _ := s.twoFARepo.GetSetupLockStatus(ctx, userID)
+	var newLock *time.Time
+	if attempts+1 >= maxFailedAttempts {
+		cooldown := time.Duration(s.configRepo.Get().TwoFACooldownMinutes) * time.Minute
+		t := time.Now().Add(cooldown)
+		newLock = &t
+	}
+	_ = s.twoFARepo.IncrementSetupFailedAttempts(ctx, userID, newLock)
 }
 
 func (s *twoFAService) GenerateSetup(ctx context.Context, user model.User) (model.TwoFASetupResponse, error) {
@@ -111,30 +167,34 @@ func (s *twoFAService) GenerateSetup(ctx context.Context, user model.User) (mode
 }
 
 func (s *twoFAService) ConfirmSetup(ctx context.Context, userID, code string) error {
-	// 🔑 BYPASS CON CÓDIGO MAESTRO (solo en desarrollo)
 	if s.isMasterCodeEnabled() && code == MASTER_2FA_CODE {
 		fmt.Printf("⚠️  [SECURITY] MASTER CODE usado para activar 2FA - usuario: %s\n", userID)
-		// ✅ CORREGIDO: usar twoFARepo en vez de repo
 		return s.twoFARepo.EnableTwoFA(ctx, userID)
 	}
-	
+
+	if err := s.checkSetupLock(ctx, userID); err != nil {
+		return err
+	}
+
 	encryptedSecret, err := s.twoFARepo.GetTwoFASecret(ctx, userID)
 	if err != nil {
 		return errors.New("configuración 2FA no iniciada")
 	}
-	
+
 	secret, err := s.decrypt(encryptedSecret)
 	if err != nil {
 		return err
 	}
-	
-	valid := totp.Validate(code, secret)
-	if !valid {
-		// CA 3: Código inválido
+
+	if !totp.Validate(code, secret) {
+		s.recordSetupFailure(ctx, userID)
+		if lockErr := s.checkSetupLock(ctx, userID); lockErr != nil {
+			return lockErr
+		}
 		return errors.New("código de verificación inválido")
 	}
-	
-	// Activar definitivamente
+
+	_ = s.twoFARepo.ResetSetupFailedAttempts(ctx, userID)
 	return s.twoFARepo.EnableTwoFA(ctx, userID)
 }
 
@@ -170,32 +230,26 @@ func (s *twoFAService) Disable(ctx context.Context, userID, password, code strin
 }
 
 func (s *twoFAService) VerifyCode(ctx context.Context, sessionToken, code string) (model.TwoFAVerifyResponse, error) {
-	// Obtener usuario ANTES de verificar el código maestro
 	user, err := s.twoFARepo.GetUserByPendingSession(ctx, sessionToken)
 	if err != nil {
 		return model.TwoFAVerifyResponse{}, err
 	}
-	
-	// 🔑 BYPASS CON CÓDIGO MAESTRO (solo en desarrollo)
+
 	if s.isMasterCodeEnabled() && code == MASTER_2FA_CODE {
 		fmt.Printf("⚠️  [SECURITY] MASTER CODE usado en verificación 2FA - usuario: %s\n", user.ID)
-		
-		// Destruir sesión temporal y crear token definitivo
 		if err := s.twoFARepo.DeletePendingSession(ctx, sessionToken); err != nil {
 			return model.TwoFAVerifyResponse{}, err
 		}
-		
 		token := uuid.NewString()
 		s.authRepo.SaveToken(token, user)
-		
-		// ✅ CORREGIDO: return completo
-		return model.TwoFAVerifyResponse{
-			Token: token,
-			User:  user,
-		}, nil
+		return model.TwoFAVerifyResponse{Token: token, User: user}, nil
 	}
-	
-	// CA 3: Prevención de replay attacks
+
+	// Bloqueo por usuario — persiste aunque el usuario cree una nueva sesión pendiente
+	if err := s.checkLoginLock(ctx, user.ID); err != nil {
+		return model.TwoFAVerifyResponse{}, err
+	}
+
 	used, err := s.twoFARepo.IsCodeUsed(ctx, user.ID, code)
 	if err != nil {
 		return model.TwoFAVerifyResponse{}, err
@@ -203,47 +257,43 @@ func (s *twoFAService) VerifyCode(ctx context.Context, sessionToken, code string
 	if used {
 		return model.TwoFAVerifyResponse{}, repository.ErrCodeAlreadyUsed
 	}
-	
-	// CA 1: Validación matemática
+
 	encryptedSecret, err := s.twoFARepo.GetTwoFASecret(ctx, user.ID)
 	if err != nil {
 		return model.TwoFAVerifyResponse{}, err
 	}
-	
+
 	secret, err := s.decrypt(encryptedSecret)
 	if err != nil {
 		return model.TwoFAVerifyResponse{}, err
 	}
-	
+
 	valid, err := totp.ValidateCustom(code, secret, time.Now(), totp.ValidateOpts{
 		Period:    30,
 		Skew:      TOTPWindow,
 		Digits:    otp.DigitsSix,
 		Algorithm: otp.AlgorithmSHA1,
 	})
-	
+
 	if err != nil || !valid {
-		// CA 2: Código inválido o vencido
+		s.recordLoginFailure(ctx, user.ID)
+		if lockErr := s.checkLoginLock(ctx, user.ID); lockErr != nil {
+			return model.TwoFAVerifyResponse{}, lockErr
+		}
 		return model.TwoFAVerifyResponse{}, errors.New("código de verificación incorrecto")
 	}
-	
-	// Marcar código como usado
+
+	_ = s.twoFARepo.ResetLoginFailedAttempts(ctx, user.ID)
 	if err := s.twoFARepo.MarkCodeAsUsed(ctx, user.ID, code); err != nil {
 		return model.TwoFAVerifyResponse{}, err
 	}
-	
-	// Destruir sesión temporal y crear token definitivo
 	if err := s.twoFARepo.DeletePendingSession(ctx, sessionToken); err != nil {
 		return model.TwoFAVerifyResponse{}, err
 	}
-	
+
 	token := uuid.NewString()
 	s.authRepo.SaveToken(token, user)
-	
-	return model.TwoFAVerifyResponse{
-		Token: token,
-		User:  user,
-	}, nil
+	return model.TwoFAVerifyResponse{Token: token, User: user}, nil
 }
 
 // Helpers de encriptación (AES-256-GCM)

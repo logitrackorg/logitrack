@@ -93,7 +93,7 @@ export function ZoneManagement() {
       });
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:160px">
-          <p style="font-weight:700;font-size:14px;margin:0 0 4px">⚠️ ${z.name}</p>
+          <p style="font-weight:700;font-size:14px;margin:0 0 4px"><AlertTriangle size={14} className="inline text-amber-500" /> ${z.name}</p>
           ${z.description ? `<p style="font-size:12px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
           ${!z.active ? '<span style="font-size:11px;color:var(--text-muted);margin-top:4px;display:inline-block">Pausada</span>' : ""}
         </div>
@@ -159,8 +159,8 @@ export function ZoneManagement() {
       const canCloseHere = isFirst && verts.length >= 3;
       const marker = L.circleMarker(v, {
         radius: canCloseHere ? 8 : 5,
-        color: canCloseHere ? "#10b981" : "#1e3a5f",
-        fillColor: canCloseHere ? "#10b981" : "#1e3a5f",
+        color: canCloseHere ? "#10b981" : "var(--sidebar-bg)",
+        fillColor: canCloseHere ? "#10b981" : "var(--sidebar-bg)",
         fillOpacity: 1,
         weight: 2,
       });
@@ -174,10 +174,10 @@ export function ZoneManagement() {
       marker.addTo(layer!);
     });
     if (verts.length >= 2) {
-      L.polyline(verts, { color: "#1e3a5f", weight: 2, dashArray: "6, 4" }).addTo(layer!);
+      L.polyline(verts, { color: "var(--sidebar-bg)", weight: 2, dashArray: "6, 4" }).addTo(layer!);
     }
     if (verts.length >= 3) {
-      L.polygon(verts, { color: "#1e3a5f", fillColor: "#1e3a5f", fillOpacity: 0.1, weight: 1.5, dashArray: "6, 4" }).addTo(layer!);
+      L.polygon(verts, { color: "var(--sidebar-bg)", fillColor: "var(--sidebar-bg)", fillOpacity: 0.1, weight: 1.5, dashArray: "6, 4" }).addTo(layer!);
     }
   };
   useLayoutEffect(() => { redrawDraftRef.current = redrawDraft; });
@@ -314,7 +314,7 @@ export function ZoneManagement() {
           {!isDrawing ? (
             <button
               onClick={startDrawingNew}
-              className="mt-3 w-full inline-flex items-center justify-center gap-2 h-9 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold cursor-pointer transition-colors"
+              className="mt-3 w-full inline-flex items-center justify-center gap-2 h-9 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold cursor-pointer transition-colors"
             >
               <Plus className="w-4 h-4" />
               Dibujar nueva zona
@@ -392,7 +392,7 @@ export function ZoneManagement() {
               <Card
                 key={zone.id}
                 onClick={() => selectZone(zone.id)}
-                className={`p-3 cursor-pointer transition-all ${isSelected ? "ring-2 ring-[#1e3a5f]" : "hover:bg-slate-50"} ${!zone.active ? "opacity-60" : ""}`}
+                className={`p-3 cursor-pointer transition-all ${isSelected ? "ring-2 ring-[var(--sidebar-bg)]" : "hover:bg-slate-50"} ${!zone.active ? "opacity-60" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -443,7 +443,7 @@ export function ZoneManagement() {
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
         {isDrawing && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-[#1e3a5f]/95 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-[var(--sidebar-bg)]/95 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
             {drawingMode === "edit" ? "🖍 Re-dibujando " : "✏ Dibujando "}
             — click para agregar puntos
             {draftVertices.length >= 3 && <span className="ml-1 text-emerald-300">· tocá el primer punto para cerrar</span>}
@@ -459,7 +459,7 @@ export function ZoneManagement() {
               {editingZone ? "Editar zona peligrosa" : "Nueva zona peligrosa"}
             </h2>
             <p className="text-xs text-red-600 mb-4">
-              ⚠️ Las zonas peligrosas aplican recargo en envíos de última milla.
+              <AlertTriangle size={14} className="inline text-amber-500" /> Las zonas peligrosas aplican recargo en envíos de última milla.
             </p>
 
             <div className="space-y-4">
@@ -469,7 +469,7 @@ export function ZoneManagement() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="Ej: Villa Soldati - noche"
-                  className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f]"
+                  className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]/20 focus:border-[var(--sidebar-bg)]"
                 />
               </div>
 
@@ -480,7 +480,7 @@ export function ZoneManagement() {
                   onChange={(e) => setFormDesc(e.target.value)}
                   placeholder="Ej: Reportes de robos a repartidores en horario nocturno"
                   rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f]"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]/20 focus:border-[var(--sidebar-bg)]"
                 />
               </div>
 
@@ -515,7 +515,7 @@ export function ZoneManagement() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 h-10 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+                className="flex-1 h-10 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? "Guardando…" : editingZone ? "Guardar cambios" : "Crear zona"}
               </button>

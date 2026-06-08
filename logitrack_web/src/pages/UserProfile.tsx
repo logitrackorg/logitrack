@@ -127,7 +127,7 @@ export function UserProfile() {
     <div className="p-6 max-w-2xl mx-auto">
       <button
         onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 mb-4 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Volver
@@ -141,7 +141,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("profile")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "profile"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -152,7 +152,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("security")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "security"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -164,7 +164,7 @@ export function UserProfile() {
                 onClick={() => setActiveTab("historial")}
                 className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                   activeTab === "historial"
-                    ? "bg-[#1e3a5f] text-white font-bold"
+                    ? "bg-[var(--sidebar-bg)] text-white font-bold"
                     : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
                 }`}
               >
@@ -382,7 +382,7 @@ export function UserProfile() {
                         value={profile.branch_name || profile.branch_id}
                         readOnly
                         disabled
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-slate-50 text-slate-700"
+                        className="w-full px-3 py-2.5 border dark:border-gray-600 border-gray-300 rounded-md dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700"
                       />
                     </div>
                   )}
@@ -466,7 +466,7 @@ export function UserProfile() {
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                  className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {passwordLoading ? "Cambiando..." : "Guardar Cambios"}
                 </button>

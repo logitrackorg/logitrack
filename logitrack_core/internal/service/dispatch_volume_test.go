@@ -281,6 +281,9 @@ func (r *fakeDispatchShipmentRepo) AuthenticateSender(_ repository.AuthenticateS
 func (r *fakeDispatchShipmentRepo) CancelBySender(_ repository.CancelBySenderCmd) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }
+func (r *fakeDispatchShipmentRepo) RecordKeywordFailed(trackingID, changedBy string) error {
+	return nil
+}
 func (r *fakeDispatchShipmentRepo) GetByTrackingID(_ string) (model.Shipment, error) {
 	return model.Shipment{}, nil
 }

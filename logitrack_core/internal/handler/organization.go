@@ -30,13 +30,39 @@ func (h *OrganizationHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, cfg)
 }
 
+// GetPublic expone únicamente los campos de marca (nombre, colores, logo) sin
+// requerir autenticación, para aplicar el tema en la pantalla de login y en el
+// primer render. No incluye datos sensibles (CUIT, dirección, email, teléfono).
+func (h *OrganizationHandler) GetPublic(c *gin.Context) {
+	cfg, err := h.svc.Get()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo obtener la configuración de la organización"})
+		return
+	}
+	if cfg == nil {
+		c.JSON(http.StatusOK, gin.H{})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"name":          cfg.Name,
+		"primary_color": cfg.PrimaryColor,
+		"accent_color":  cfg.AccentColor,
+		"sidebar_color": cfg.SidebarColor,
+		"logo_url":      cfg.LogoURL,
+	})
+}
+
 type updateOrgRequest struct {
-	Name     string `json:"name"`
-	CUIT     string `json:"cuit"`
-	Address  string `json:"address"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
-	TrackURL string `json:"track_url"`
+	Name         string `json:"name"`
+	CUIT         string `json:"cuit"`
+	Address      string `json:"address"`
+	Phone        string `json:"phone"`
+	Email        string `json:"email"`
+	TrackURL     string `json:"track_url"`
+	PrimaryColor string `json:"primary_color"`
+	AccentColor  string `json:"accent_color"`
+	SidebarColor string `json:"sidebar_color"`
+	LogoURL      string `json:"logo_url"`
 }
 
 func (h *OrganizationHandler) Update(c *gin.Context) {
@@ -54,12 +80,16 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	}
 
 	cfg := model.OrganizationConfig{
-		Name:     req.Name,
-		CUIT:     req.CUIT,
-		Address:  req.Address,
-		Phone:    req.Phone,
-		Email:    req.Email,
-		TrackURL: req.TrackURL,
+		Name:         req.Name,
+		CUIT:         req.CUIT,
+		Address:      req.Address,
+		Phone:        req.Phone,
+		Email:        req.Email,
+		TrackURL:     req.TrackURL,
+		PrimaryColor: req.PrimaryColor,
+		AccentColor:  req.AccentColor,
+		SidebarColor: req.SidebarColor,
+		LogoURL:      req.LogoURL,
 	}
 
 	result, err := h.svc.Update(cfg, updatedBy)

@@ -252,9 +252,10 @@ func main() {
 	} else {
 		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
 	}
-	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
+	twoFAService := service.NewTwoFAService(twoFARepo, authRepo, sysConfigRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
+	shipmentSvc.SetRouteService(routeSvc)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -616,8 +617,11 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
-	// Driver route — driver only
+	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
+	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
+
+	// Driver route — driver only
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
@@ -764,6 +768,7 @@ func main() {
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	publicAPI.GET("/config", sysConfigHandler.GetPublicConfig)
+	publicAPI.GET("/organization", orgHandler.GetPublic)
 	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {
