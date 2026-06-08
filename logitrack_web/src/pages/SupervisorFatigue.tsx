@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  MapPin,
   RefreshCw,
   ShieldAlert,
   Users,
@@ -98,11 +99,24 @@ function HistoryRow({ record, isInterBranch }: { record: CheckinRecord; isInterB
 
   return (
     <tr className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
-      {/* Fecha y hora */}
+      {/* Fecha, hora y ubicación */}
       <td className="py-2 px-3 text-xs text-slate-600 tabular-nums font-medium whitespace-nowrap">
-        <span>{dateLabel}</span>
-        {timeLabel && (
-          <span className="ml-1 text-slate-400">{timeLabel}</span>
+        <div>
+          <span>{dateLabel}</span>
+          {timeLabel && (
+            <span className="ml-1 text-slate-400">{timeLabel}</span>
+          )}
+        </div>
+        {record.latitude != null && record.longitude != null && (
+          <a
+            href={`https://www.google.com/maps?q=${record.latitude},${record.longitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 hover:text-blue-700 hover:underline normal-case"
+          >
+            <MapPin className="w-3 h-3" />
+            Ver ubicación en mapa
+          </a>
         )}
       </td>
 
@@ -615,25 +629,31 @@ export function SupervisorFatigue() {
       )}
 
       {/* Solicitudes de historial personal */}
-      {historyRequests.length > 0 && (
-        <Card>
-          <CardHeader className="border-b border-slate-100 pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-500" />
-              Solicitudes de historial personal ({historyRequests.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full">
-              <thead className="bg-slate-50">
+      <Card>
+        <CardHeader className="border-b border-slate-100 pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-500" />
+            Solicitudes de historial personal ({historyRequests.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
+                <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
+                <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historyRequests.length === 0 ? (
                 <tr>
-                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
-                  <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
-                  <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
+                  <td colSpan={3} className="py-6 px-4 text-center text-sm text-slate-400 italic">
+                    No hay peticiones por ahora.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {historyRequests.map((req) => (
+              ) : (
+                historyRequests.map((req) => (
                   <tr key={req.driver_id} className="border-t border-slate-100">
                     <td className="py-3 px-4">
                       <p className="text-sm font-semibold text-slate-900">{req.full_name || req.driver_id}</p>
@@ -661,12 +681,12 @@ export function SupervisorFatigue() {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       <p className="text-[11px] text-slate-400 text-center">
         Actualización automática cada 60 segundos · Hacé clic en una fila para ver el historial

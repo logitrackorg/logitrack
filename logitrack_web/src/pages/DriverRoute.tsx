@@ -35,6 +35,7 @@ import {
   recipientView,
   timeWindowTone,
 } from "../utils/driverActions";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 type Tab = "pendientes" | "completados";
 
@@ -254,6 +255,22 @@ export function DriverRoute() {
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
+
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
+  // backend ya da por completo el check-in apenas se envía el paso KSS, así
+  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    driverApi.getTodayCheckin()
+      .then((checkin) => setRequiresSleepData(checkin.requires_sleep_data ?? true))
+      .catch(() => setRequiresSleepData(true))
+      .finally(() => {
+        pause();
+        setMidRouteCheckin(true);
+      });
+  }, [user, pause]);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));

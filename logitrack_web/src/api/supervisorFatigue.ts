@@ -47,6 +47,9 @@ export interface CheckinRecord {
   voice_metrics: VoiceMetricsSnapshot | null;
   pvt_metrics?: PVTMetricsData | null;
   touch_events?: TouchEventRecord[] | null;
+  /** Coordenadas capturadas al momento de la prueba — null si no se pudo obtener ubicación. */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface DriverFatigueStatus {

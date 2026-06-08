@@ -6,7 +6,7 @@ const SLA_MONITORED: ReadonlySet<string> = new Set([
   "at_origin_hub", "at_hub", "loaded", "in_transit",
   "out_for_delivery", "redelivery_scheduled", "ready_for_return",
 ]);
-const AT_RISK_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 h — SLA comprometido
+const AT_RISK_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 h — SLA en riesgo
 const DELAYED_THRESHOLD_MS = 36 * 60 * 60 * 1000; // 36 h — demorado
 
 function isAtRisk(s: Shipment): boolean {
@@ -42,7 +42,7 @@ const KPIS: KPI[] = [
   },
   {
     key: "sla_compromised",
-    label: "SLA Comprometido",
+    label: "SLA en riesgo",
     filterValue: "sla_compromised",
     // Prefer server-computed flag (is_at_risk) when available, fall back to dwell calc
     count: (list) => list.filter((s) => s.is_at_risk ?? isAtRisk(s)).length,

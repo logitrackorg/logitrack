@@ -317,8 +317,10 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
 	var body struct {
-		HorasSueno *int `json:"horas_sueno"`
-		KSSLevel   int  `json:"kss_level"`
+		HorasSueno *int     `json:"horas_sueno"`
+		KSSLevel   int      `json:"kss_level"`
+		Latitude   *float64 `json:"latitude"`
+		Longitude  *float64 `json:"longitude"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
@@ -326,6 +328,14 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	}
 	if body.KSSLevel < 1 || body.KSSLevel > 8 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
+		return
+	}
+	if body.Latitude != nil && (*body.Latitude < -90 || *body.Latitude > 90) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "latitude debe estar entre -90 y 90"})
+		return
+	}
+	if body.Longitude != nil && (*body.Longitude < -180 || *body.Longitude > 180) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "longitude debe estar entre -180 y 180"})
 		return
 	}
 
@@ -377,6 +387,8 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		HorasSueno:    horasSueno,
 		KSSLevel:      body.KSSLevel,
 		RecordedAt:    time.Now(),
+		Latitude:      body.Latitude,
+		Longitude:     body.Longitude,
 		VoiceMetrics:  existing.VoiceMetrics,
 		DriftScore:    existing.DriftScore,
 		BaselineVoice: existing.BaselineVoice,

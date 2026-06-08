@@ -41,7 +41,7 @@ function BarTooltip({ active, payload, label }: {
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-2 text-xs space-y-0.5">
       <p className="font-semibold text-[var(--text-primary)] mb-1">{label}</p>
-      <p className="font-bold" style={{ color: COLOR_WARN }}>{atRisk} comprometido{atRisk !== 1 ? "s" : ""} (en riesgo)</p>
+      <p className="font-bold" style={{ color: COLOR_WARN }}>{atRisk} en riesgo</p>
       <p className="font-bold" style={{ color: COLOR_BAD }}>{delayed} demorado{delayed !== 1 ? "s" : ""} (SLA roto)</p>
     </div>
   );
@@ -62,7 +62,7 @@ function LineTooltip({ active, payload, label }: {
 
 interface SlaTabProps {
   /** Sucursal del filtro global del Dashboard ("" = todas). Acota únicamente
-   *  las tarjetas/gráficos de SLA (tasa de cumplimiento, comprometidos,
+   *  las tarjetas/gráficos de SLA (tasa de cumplimiento, en riesgo,
    *  demorados, cuellos de botella) — el "Diagnóstico de flota" mantiene su
    *  propio selector de sucursal, independiente de este filtro. */
   branchId: string;
@@ -166,7 +166,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
           name: "Cuellos de botella",
           data: metrics.bottlenecks.map((b) => ({
             Estado: b.status,
-            "Cant. comprometidos (en riesgo)": b.at_risk_count,
+            "Cant. en riesgo": b.at_risk_count,
             "Cant. demorados (SLA roto)":      b.delayed_count,
           })),
         },
@@ -224,7 +224,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
   const hue       = healthColor(rate);
   const ShieldIcon = rate >= 90 ? ShieldCheck : ShieldAlert;
 
-  // Tasa de envíos en riesgo: % de los activos que están "comprometidos"
+  // Tasa de envíos en riesgo: % de los activos que están "en riesgo"
   // (superaron el 100% del promedio base pero no el 150% de tolerancia).
   // Solo informativa — no penaliza sla_health_rate (eso es exclusivo de "demorados").
   const riskRate = metrics.active_total > 0
@@ -310,7 +310,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
                 {metrics.delayed_total} demorado{metrics.delayed_total !== 1 ? "s" : ""} (SLA roto) de {metrics.active_total} activos
               </p>
               <p className="text-[10px] text-slate-400">
-                Penaliza solo a los demorados — los comprometidos aún no rompen el acuerdo
+                Penaliza solo a los demorados — los envíos en riesgo aún no rompen el acuerdo
               </p>
             </div>
             <div className="w-full h-2 rounded-full mt-1" style={{ background: `${hue}33` }}>
@@ -332,7 +332,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
                 {riskRate.toFixed(1)}<span className="text-2xl font-bold">%</span>
               </p>
               <p className="text-[11px] text-slate-400 mt-1">
-                {metrics.at_risk_total} comprometido{metrics.at_risk_total !== 1 ? "s" : ""} (en riesgo) de {metrics.active_total} activos
+                {metrics.at_risk_total} en riesgo de {metrics.active_total} activos
               </p>
               <p className="text-[10px] text-slate-400">
                 Aún recuperables — todavía no rompieron el acuerdo de SLA
@@ -347,12 +347,12 @@ export default function SlaTab({ branchId }: SlaTabProps) {
         <Card className="sm:col-span-1">
           <CardContent className="p-5 grid grid-cols-1 gap-4 h-full content-center">
             <KpiChip
-              label="Envíos comprometidos (en riesgo)"
+              label="Envíos en riesgo"
               value={metrics.at_risk_total}
               color={metrics.at_risk_total === 0 ? COLOR_OK : COLOR_WARN}
               icon={<ShieldAlert className="w-4 h-4" />}
               onViewDetail={metrics.at_risk_total > 0 ? () => {
-                setModalContent({ title: "Detalle de Comprometidos", data: metrics.at_risk_by_branch });
+                setModalContent({ title: "Detalle de Envíos en Riesgo", data: metrics.at_risk_by_branch });
                 setIsDetailsModalOpen(true);
               } : undefined}
             />
@@ -376,7 +376,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-slate-700">Envíos en Riesgo y Demorados por Estado</CardTitle>
-            <p className="text-[11px] text-slate-400">Comprometidos (en riesgo) vs. demorados (SLA roto) por estado actual</p>
+            <p className="text-[11px] text-slate-400">En riesgo vs. demorados (SLA roto) por estado actual</p>
           </CardHeader>
           <CardContent>
             {metrics.bottlenecks.length === 0 ? (

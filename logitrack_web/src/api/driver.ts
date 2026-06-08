@@ -63,6 +63,9 @@ export interface CheckInPayload {
   /** Omit when the driver already reported sleep for today's logical day. */
   horas_sueno?: number;
   kss_level: number;
+  /** Coordenadas capturadas con navigator.geolocation al iniciar la prueba. */
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface VoiceMetrics {
