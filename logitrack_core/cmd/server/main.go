@@ -344,7 +344,7 @@ func main() {
 	}
 	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
 
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc, branchRepo)
 	// Heartbeat autónomo: corre el Collector/Executor cada minuto en tiempo real,
 	// independiente de /admin/clock (que es solo una herramienta de testing).
 	slaAnomalySvc.Start()

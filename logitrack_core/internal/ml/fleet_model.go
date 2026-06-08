@@ -114,17 +114,19 @@ func TrainAndSaveFleetModel(modelPath string) error {
 	return nil
 }
 
-// PredictFleetState runs the Random Forest and returns:
+// PredictFleetState runs the Random Forest for a single branch and returns:
 //   - the winning FleetStatus
 //   - its vote fraction (confidence in [0,1])
 //   - a vote distribution map: label → vote share as integer percentage (0–100)
 //
-// Returns (FleetStatusStable, 0, nil) when the model is not loaded.
+// Parameters are that branch's five approved metrics — EnviosActivosTotales,
+// DemoraSLA, ChoferesInactivos, ChoferesActivos, Huerfanos — in
+// FleetFactorOrder order. Returns (FleetStatusStable, 0, nil) when the model
+// is not loaded.
 func (s *FleetMLService) PredictFleetState(
-	dayOfWeek, totalShipments int,
+	totalShipments int,
 	slaDelayPct float64,
-	orphanShipments, idleDrivers int,
-	activeDriversLoad float64,
+	idleDrivers, activeDrivers, orphanShipments int,
 ) (model.FleetStatus, float64, map[string]int) {
 	s.mu.RLock()
 	forest := s.forest
@@ -135,8 +137,7 @@ func (s *FleetMLService) PredictFleetState(
 	}
 
 	features := NormalizeFleetFeatures(
-		dayOfWeek, totalShipments, slaDelayPct,
-		orphanShipments, idleDrivers, activeDriversLoad,
+		totalShipments, slaDelayPct, idleDrivers, activeDrivers, orphanShipments,
 	)
 	votes := forest.Vote(features)
 

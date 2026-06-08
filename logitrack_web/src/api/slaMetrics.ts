@@ -34,19 +34,6 @@ export type FleetStatus =
   | "OCIOSO"
   | "ESTABLE";
 
-/** Operational metrics collected from DB. Status/message from heuristic (compat). */
-export interface FleetSuggestion {
-  status: FleetStatus;
-  message: string;
-  delay_rate_pct: number;
-  active_drivers: number;
-  idle_drivers: number;
-  orphan_shipments: number;
-  active_drivers_load: number;
-  drivers_needed?: number;
-  capacity_used_pct?: number;
-}
-
 /** Raw operational numbers shared by both classification engines. */
 export interface FleetRawMetrics {
   total_shipments: number;
@@ -54,7 +41,6 @@ export interface FleetRawMetrics {
   orphan_shipments: number;
   idle_drivers: number;
   active_drivers: number;
-  active_drivers_load: number;
   /** Recommended staffing delta. >0 = hire, <0 = deactivate, 0 = no action. */
   suggested_driver_delta: number;
 }
@@ -71,6 +57,15 @@ export interface FleetDiagnosis {
   vote_distribution?: Record<string, number>;
 }
 
+/** Heuristic + ML diagnosis for a single branch — both engines evaluate each
+ *  branch's operation independently. */
+export interface BranchFleetDiagnosis {
+  branch_id: string;
+  branch_name: string;
+  heuristic_diagnosis: FleetDiagnosis;
+  ml_prediction: FleetDiagnosis | null;
+}
+
 export interface SLAMetrics {
   sla_health_rate: number;
   active_total: number;
@@ -78,12 +73,8 @@ export interface SLAMetrics {
   bottlenecks: SLABottleneck[];
   delay_trend: SLADayCount[];
   current_averages: SLAStateAverage[];
-  /** Operational metrics + heuristic status (backward compat). */
-  fleet_suggestion: FleetSuggestion;
-  /** Pure deterministic heuristic result — always present. */
-  heuristic_diagnosis: FleetDiagnosis;
-  /** Random Forest result. Null when the model has not been loaded yet. */
-  ml_prediction: FleetDiagnosis | null;
+  /** One heuristic+ML diagnosis per active branch. */
+  fleet_diagnoses: BranchFleetDiagnosis[];
 }
 
 export const slaMetricsApi = {

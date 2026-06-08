@@ -1,16 +1,19 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
-  ChevronDown, ChevronUp, UserPlus, UserMinus, Info,
+  ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
 } from "lucide-react";
-import type { FleetStatus, FleetDiagnosis } from "../../api/slaMetrics";
+import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
   LineChart, Line, CartesianGrid,
 } from "recharts";
 import { slaMetricsApi, type SLAMetrics } from "../../api/slaMetrics";
+import { branchApi, type Branch } from "../../api/branches";
+import { useAuth } from "../../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { SelectMenu } from "../../components/ui/SelectMenu";
 import { Skeleton } from "../../utils/dashboard";
 import { ReportExport } from "../../components/ReportExport";
 import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
@@ -55,9 +58,15 @@ function LineTooltip({ active, payload, label }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SlaTab() {
+  const { user, hasRole } = useAuth();
   const [metrics, setMetrics] = useState<SLAMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
+
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+
+  const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
 
   const load = () => {
     setError(false);
@@ -68,6 +77,23 @@ export default function SlaTab() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
+
+  // Sucursal por defecto: la propia para supervisores, la primera del plan para managers/admins.
+  useEffect(() => {
+    if (selectedBranchId || !metrics?.fleet_diagnoses.length) return;
+    if (isSupervisor && user?.branch_id) {
+      setSelectedBranchId(user.branch_id);
+    } else {
+      setSelectedBranchId(metrics.fleet_diagnoses[0].branch_id);
+    }
+  }, [metrics, isSupervisor, user, selectedBranchId]);
+
+  const branchDiag: BranchFleetDiagnosis | null = useMemo(() => {
+    if (!metrics?.fleet_diagnoses.length) return null;
+    return metrics.fleet_diagnoses.find((d) => d.branch_id === selectedBranchId)
+        ?? metrics.fleet_diagnoses[0];
+  }, [metrics, selectedBranchId]);
 
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -76,24 +102,27 @@ export default function SlaTab() {
   }, []);
 
   const exportExcel = useCallback(() => {
-    if (!metrics) return;
+    if (!metrics || !branchDiag) return;
     const date = new Date().toISOString().slice(0, 10);
+    const heurM = branchDiag.heuristic_diagnosis.raw_metrics;
     exportToExcel(
       [
         {
           name: "Diagnóstico",
           data: [
             {
-              Modelo:  "Heurística",
-              Estado:  metrics.heuristic_diagnosis.status,
-              Mensaje: metrics.heuristic_diagnosis.message,
+              Sucursal: branchDiag.branch_name,
+              Modelo:   "Heurística",
+              Estado:   branchDiag.heuristic_diagnosis.status,
+              Mensaje:  branchDiag.heuristic_diagnosis.message,
             },
-            ...(metrics.ml_prediction
+            ...(branchDiag.ml_prediction
               ? [{
+                  Sucursal:        branchDiag.branch_name,
                   Modelo:          "Random Forest",
-                  Estado:          metrics.ml_prediction.status,
-                  Mensaje:         metrics.ml_prediction.message,
-                  "Confianza (%)": Math.round((metrics.ml_prediction.confidence ?? 0) * 100),
+                  Estado:          branchDiag.ml_prediction.status,
+                  Mensaje:         branchDiag.ml_prediction.message,
+                  "Confianza (%)": Math.round((branchDiag.ml_prediction.confidence ?? 0) * 100),
                 }]
               : []),
           ],
@@ -101,13 +130,18 @@ export default function SlaTab() {
         {
           name: "KPIs SLA",
           data: [{
+            Sucursal:                    branchDiag.branch_name,
             "Tasa cumplimiento SLA (%)": metrics.sla_health_rate.toFixed(1),
             "Envíos demorados":          metrics.delayed_total,
             "Envíos activos":            metrics.active_total,
-            "Tasa demora (%)":           metrics.fleet_suggestion.delay_rate_pct.toFixed(1),
-            "Choferes activos":          metrics.fleet_suggestion.active_drivers,
-            "Choferes inactivos":        metrics.fleet_suggestion.idle_drivers,
-            "Envíos huérfanos":          metrics.fleet_suggestion.orphan_shipments,
+            ...(heurM
+              ? {
+                  "Tasa demora sucursal (%)": heurM.sla_delay_pct.toFixed(1),
+                  "Choferes activos":         heurM.active_drivers,
+                  "Choferes inactivos":       heurM.idle_drivers,
+                  "Envíos huérfanos":         heurM.orphan_shipments,
+                }
+              : {}),
           }],
         },
         {
@@ -130,7 +164,22 @@ export default function SlaTab() {
       ],
       `metricas_sla_${date}.xlsx`,
     );
-  }, [metrics]);
+  }, [metrics, branchDiag]);
+
+  const branchesByProvince = branches.reduce<Record<string, Branch[]>>((acc, b) => {
+    const prov = b.address.province;
+    if (!acc[prov]) acc[prov] = [];
+    acc[prov].push(b);
+    return acc;
+  }, {});
+  const sortedProvinces = Object.keys(branchesByProvince).sort((a, b) => a.localeCompare(b));
+  for (const prov of sortedProvinces) {
+    branchesByProvince[prov].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const selectedBranchLabel = (() => {
+    const b = branches.find((br) => br.id === selectedBranchId);
+    return b ? b.name : "Tu sucursal";
+  })();
 
   if (loading) return <Skeleton className="h-96" />;
 
@@ -168,12 +217,44 @@ export default function SlaTab() {
       {/* ── Capturable content ───────────────────────────────────────────────── */}
       <div ref={contentRef} className="space-y-6">
 
-      {/* ── Comparison panel: heuristic vs ML ────────────────────────────────── */}
-      <FleetComparisonPanel
-        heuristic={metrics.heuristic_diagnosis}
-        ml={metrics.ml_prediction}
-        operationalMetrics={metrics.fleet_suggestion}
-      />
+      {/* ── Selector de sucursal: el diagnóstico de flota es por sucursal ─────── */}
+      {metrics.fleet_diagnoses.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">Diagnóstico de flota — Sucursal:</span>
+          {isSupervisor ? (
+            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f] shadow-sm">
+              <MapPin className="w-3.5 h-3.5" />
+              {selectedBranchLabel}
+            </span>
+          ) : (
+            <SelectMenu
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              placeholder="Seleccionar sucursal"
+              ariaLabel="Filtrar diagnóstico de flota por sucursal"
+              size="sm"
+              className="w-[230px]"
+              groups={sortedProvinces
+                .map((prov) => ({
+                  label: prov,
+                  options: branchesByProvince[prov]
+                    .filter((b) => metrics.fleet_diagnoses.some((d) => d.branch_id === b.id))
+                    .map((b) => ({ value: b.id, label: `${b.name} — ${b.address.city}` })),
+                }))
+                .filter((g) => g.options.length > 0)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── Comparison panel: heuristic vs ML (exclusivo de la sucursal elegida) ─ */}
+      {branchDiag && (
+        <FleetComparisonPanel
+          key={branchDiag.branch_id}
+          heuristic={branchDiag.heuristic_diagnosis}
+          ml={branchDiag.ml_prediction}
+        />
+      )}
 
       {/* ── KPI cards ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -421,14 +502,9 @@ function InfoTooltip({ text }: { text: string }) {
 
 // ── Column sub-components (sin estado — solo contenido) ──────────────────────
 
-function HeuristicColumn({
-  diag,
-  operationalMetrics,
-}: {
-  diag: FleetDiagnosis;
-  operationalMetrics: import("../../api/slaMetrics").FleetSuggestion;
-}) {
+function HeuristicColumn({ diag }: { diag: FleetDiagnosis }) {
   const theme = FLEET_THEME[diag.status] ?? FLEET_THEME["ESTABLE"];
+  const m = diag.raw_metrics;
   return (
     <>
       <div
@@ -449,19 +525,18 @@ function HeuristicColumn({
       <p className="text-sm font-semibold text-slate-800 leading-snug mb-3">
         {diag.message}
       </p>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-black/5">
-        <MetricPill label="Demora"           value={`${operationalMetrics.delay_rate_pct.toFixed(1)}%`} />
-        <MetricPill label="Choferes activos" value={String(operationalMetrics.active_drivers)} />
-        <MetricPill label="Inactivos"        value={String(operationalMetrics.idle_drivers)} />
-        <MetricPill
-          label="Huérfanos"
-          value={String(operationalMetrics.orphan_shipments)}
-          tooltip="Envíos en última milla (estado 'En reparto') que no figuran en ninguna ruta activa de chofer para hoy. Es una alerta de integridad de datos: en operación normal debería ser siempre 0."
-        />
-        {operationalMetrics.active_drivers_load > 0 && (
-          <MetricPill label="Carga prom." value={`${operationalMetrics.active_drivers_load.toFixed(1)} pkg`} />
-        )}
-      </div>
+      {m && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-black/5">
+          <MetricPill label="Demora"           value={`${m.sla_delay_pct.toFixed(1)}%`} />
+          <MetricPill label="Choferes activos" value={String(m.active_drivers)} />
+          <MetricPill label="Inactivos"        value={String(m.idle_drivers)} />
+          <MetricPill
+            label="Huérfanos"
+            value={String(m.orphan_shipments)}
+            tooltip="Envíos en última milla (estado 'En reparto') que no figuran en ninguna ruta activa de chofer para hoy. Es una alerta de integridad de datos: en operación normal debería ser siempre 0."
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -502,11 +577,9 @@ function MLColumn({ diag }: { diag: FleetDiagnosis }) {
 function FleetComparisonPanel({
   heuristic,
   ml,
-  operationalMetrics,
 }: {
   heuristic: FleetDiagnosis;
   ml: FleetDiagnosis | null;
-  operationalMetrics: import("../../api/slaMetrics").FleetSuggestion;
 }) {
   const [expanded, setExpanded] = useState(false);
   const agree    = ml !== null && ml.status === heuristic.status;
@@ -539,7 +612,7 @@ function FleetComparisonPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-700/10">
 
         <div className="p-5 relative overflow-hidden">
-          <HeuristicColumn diag={heuristic} operationalMetrics={operationalMetrics} />
+          <HeuristicColumn diag={heuristic} />
         </div>
 
         <div className="p-5 relative overflow-hidden">
@@ -586,7 +659,6 @@ function FleetComparisonPanel({
                   <AnalyticRow label="Demora SLA"         value={`${heurM.sla_delay_pct.toFixed(1)}%`} />
                   <AnalyticRow label="Huérfanos"          value={String(heurM.orphan_shipments)} />
                   <AnalyticRow label="Choferes inactivos" value={String(heurM.idle_drivers)} />
-                  <AnalyticRow label="Carga promedio"     value={`${heurM.active_drivers_load.toFixed(1)} pkg`} />
                 </div>
                 <DriverDeltaBadge delta={heurM.suggested_driver_delta} />
               </>
@@ -607,7 +679,6 @@ function FleetComparisonPanel({
                   <AnalyticRow label="Demora SLA"         value={`${mlM.sla_delay_pct.toFixed(1)}%`} />
                   <AnalyticRow label="Huérfanos"          value={String(mlM.orphan_shipments)} />
                   <AnalyticRow label="Choferes inactivos" value={String(mlM.idle_drivers)} />
-                  <AnalyticRow label="Carga promedio"     value={`${mlM.active_drivers_load.toFixed(1)} pkg`} />
                 </div>
                 <DriverDeltaBadge delta={mlM.suggested_driver_delta} />
               </>

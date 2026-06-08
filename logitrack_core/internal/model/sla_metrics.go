@@ -11,30 +11,14 @@ const (
 	FleetStatusStable      FleetStatus = "ESTABLE"
 )
 
-// FleetSuggestion holds the raw operational metrics collected from DB.
-// Status and Message are derived from the heuristic (for backward compat).
-type FleetSuggestion struct {
-	Status  FleetStatus `json:"status"`
-	Message string      `json:"message"`
-
-	DelayRatePct      float64 `json:"delay_rate_pct"`
-	ActiveDrivers     int     `json:"active_drivers"`
-	IdleDrivers       int     `json:"idle_drivers"`
-	OrphanShipments   int     `json:"orphan_shipments"`
-	ActiveDriversLoad float64 `json:"active_drivers_load"`
-	DriversNeeded     int     `json:"drivers_needed,omitempty"`
-	CapacityUsedPct   float64 `json:"capacity_used_pct,omitempty"`
-}
-
 // FleetRawMetrics holds the raw operational numbers used by both engines.
 // Attached to every FleetDiagnosis so the frontend can show an analytics panel.
 type FleetRawMetrics struct {
-	TotalShipments    int     `json:"total_shipments"`
-	SlaDelayPct       float64 `json:"sla_delay_pct"`
-	OrphanShipments   int     `json:"orphan_shipments"`
-	IdleDrivers       int     `json:"idle_drivers"`
-	ActiveDrivers     int     `json:"active_drivers"`
-	ActiveDriversLoad float64 `json:"active_drivers_load"`
+	TotalShipments  int     `json:"total_shipments"`
+	SlaDelayPct     float64 `json:"sla_delay_pct"`
+	OrphanShipments int     `json:"orphan_shipments"`
+	IdleDrivers     int     `json:"idle_drivers"`
+	ActiveDrivers   int     `json:"active_drivers"`
 
 	// SuggestedDriverDelta is the recommended change in driver count.
 	// Positive → hire/activate that many drivers.
@@ -48,11 +32,20 @@ type FleetRawMetrics struct {
 type FleetDiagnosis struct {
 	Status     FleetStatus      `json:"status"`
 	Message    string           `json:"message"`
-	Confidence float64          `json:"confidence,omitempty"`        // 0–1; set by ML only
-	RawMetrics *FleetRawMetrics `json:"raw_metrics,omitempty"`       // always set
+	Confidence float64          `json:"confidence,omitempty"`  // 0–1; set by ML only
+	RawMetrics *FleetRawMetrics `json:"raw_metrics,omitempty"` // always set
 	// VoteDistribution maps each FleetStatus label to its vote share (0–100).
 	// Set by the ML engine only.
 	VoteDistribution map[string]int `json:"vote_distribution,omitempty"`
+}
+
+// BranchFleetDiagnosis is the fleet diagnosis for a single branch — both
+// engines (heuristic and ML) evaluate each branch's operation independently.
+type BranchFleetDiagnosis struct {
+	BranchID   string          `json:"branch_id"`
+	BranchName string          `json:"branch_name"`
+	Heuristic  FleetDiagnosis  `json:"heuristic_diagnosis"`
+	ML         *FleetDiagnosis `json:"ml_prediction"`
 }
 
 // SLAMetrics is the response payload for GET /stats/sla-metrics.
@@ -81,17 +74,9 @@ type SLAMetrics struct {
 	// lifecycle. Sorted by AvgHours descending for chart readability.
 	CurrentAverages []SLAStateAverage `json:"current_averages"`
 
-	// FleetSuggestion contains the raw operational metrics (drivers, loads, etc.)
-	// and the heuristic classification for backward compatibility.
-	FleetSuggestion FleetSuggestion `json:"fleet_suggestion"`
-
-	// HeuristicDiagnosis is the result of the deterministic five-case heuristic.
-	// Always present.
-	HeuristicDiagnosis FleetDiagnosis `json:"heuristic_diagnosis"`
-
-	// MLPrediction is the result of the Random Forest.  Nil when the model has
-	// not been loaded (first startup before fleet_model.json exists).
-	MLPrediction *FleetDiagnosis `json:"ml_prediction,omitempty"`
+	// FleetDiagnoses holds one heuristic+ML diagnosis per active branch — the
+	// fleet engines evaluate each branch's operation independently.
+	FleetDiagnoses []BranchFleetDiagnosis `json:"fleet_diagnoses"`
 }
 
 // SLAStateAverage holds the average dwell time for a single shipment status.
