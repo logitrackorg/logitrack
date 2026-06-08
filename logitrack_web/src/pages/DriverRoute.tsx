@@ -19,6 +19,7 @@ import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
+import { Button } from "../components/ui/button";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
@@ -941,27 +942,28 @@ function ShipmentCard({
 
           {canAct && (
             <div className="flex flex-col gap-2 mt-3">
-              <button
+              <Button
                 onClick={handleDeliverClick}
-                className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
+                className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-base font-bold transition-all duration-150 gap-2 w-full"
               >
                 <CheckCircle2 className="w-5 h-5" />
                 Entregar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
                 onClick={handleFailedClick}
-                className="h-14 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 active:scale-95 text-rose-700 dark:text-rose-400 text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
+                className="h-14 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 active:scale-95 text-rose-700 dark:text-rose-400 text-base font-bold transition-all duration-150 gap-2 w-full"
               >
                 <XCircle className="w-5 h-5" />
                 No entregado
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleRejectedClick}
-                className="h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
+                className="h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold transition-all duration-150 gap-2 w-full"
               >
                 <Ban className="w-5 h-5" />
                 Rechazado por destinatario
-              </button>
+              </Button>
             </div>
           )}
 

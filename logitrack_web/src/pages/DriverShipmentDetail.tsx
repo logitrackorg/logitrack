@@ -18,6 +18,7 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { BottomSheet } from "../components/ui/bottom-sheet";
+import { Button } from "../components/ui/button";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import {
   FAILED_REASONS,
@@ -149,13 +150,14 @@ export function DriverShipmentDetail() {
   if (error || !shipment) {
     return (
       <div className="min-h-screen bg-[var(--bg-page)] px-4 py-3">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => navigate("/driver/route")}
-          className="flex items-center gap-2 h-12 w-full text-base font-semibold text-[var(--text-primary)] cursor-pointer mb-4"
+          className="flex items-center gap-2 h-12 w-full text-base font-semibold text-[var(--text-primary)] mb-4 justify-start"
         >
           <ArrowLeft className="w-5 h-5" />
           Mi ruta
-        </button>
+        </Button>
         <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)]">
           {error || "No encontrado."}
         </div>
@@ -347,31 +349,49 @@ export function DriverShipmentDetail() {
         <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-3 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="flex flex-col gap-2">
             {/* Deliver — primary, emerald */}
-            <button
+            <Button
               onClick={() => setDeliverOpen(true)}
-              className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 dark:active:bg-emerald-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+              className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 dark:active:bg-emerald-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
             >
               <CheckCircle2 className="w-5 h-5" />
               Entregar
-            </button>
+            </Button>
 
-            {/* Failed — red */}
-            <button
+            <Button
               onClick={() => setFailedOpen(true)}
-              className="w-full h-14 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:active:bg-red-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+              variant="destructive"
+              className="w-full h-14 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:active:bg-red-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
             >
               <XCircle className="w-5 h-5" />
               No entregado
-            </button>
+            </Button>
 
-            {/* Rejected — orange */}
-            <button
+            <Button
               onClick={() => setRejectedOpen(true)}
-              className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 dark:active:bg-orange-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+              className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 dark:active:bg-orange-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
             >
               <Ban className="w-5 h-5" />
               Rechazado por destinatario
-            </button>
+            </Button>
+
+            {/* Failed — red */}
+            <Button
+              variant="destructive"
+              onClick={() => setFailedOpen(true)}
+              className="w-full h-14 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:active:bg-red-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <XCircle className="w-5 h-5" />
+              No entregado
+            </Button>
+
+            {/* Rejected — orange */}
+            <Button
+              onClick={() => setRejectedOpen(true)}
+              className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 dark:active:bg-orange-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <Ban className="w-5 h-5" />
+              Rechazado por destinatario
+            </Button>
           </div>
         </div>
       )}
