@@ -1,0 +1,19 @@
+logitrack_web/pnpm-workspace.yaml
+  s_7e9c58b8da512f::t_b8db7c2fb50e4a 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d607089d4d1ec6d97a74ea54ba45587816959ed0",
+  "prompts": {},
+  "sessions": {
+    "s_7e9c58b8da512f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82a1d755-a6bd-4043-8feb-1ecf860eceeb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
