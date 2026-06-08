@@ -67,35 +67,35 @@ export function Topbar() {
   const registerSlot = useTopbarSlotRef();
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 h-14",
-        "bg-[var(--topbar-bg)]",
-        "backdrop-saturate-[1.8] backdrop-blur-lg",
-        "border-b border-[var(--border)]",
-        "flex items-center gap-4",
-        isMobile ? "pr-3 pl-[60px]" : "px-6",
-      )}
-    >
-      <div className="min-w-0">
-        <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[280px] leading-tight">
-          {title}
-        </h1>
-        {subtitle && !isMobile && (
-          <p className="text-[11px] text-[var(--text-muted)] m-0 truncate">{subtitle}</p>
+      <header
+        className={cn(
+          "sticky top-0 z-50 h-14",
+          "bg-[var(--topbar-bg)]",
+          "backdrop-saturate-[1.8] backdrop-blur-lg",
+          "border-b border-[var(--border)]",
+          "grid grid-cols-[1fr_auto_1fr] items-center gap-4",
+          isMobile ? "pr-3 pl-[60px]" : "px-6",
         )}
-      </div>
+      >
+        {/* Left: empty spacer for centering */}
+        <div />
 
-      {/* Slot para acciones de la página activa (portal target) */}
-      <div
-        ref={registerSlot}
-        className="flex-1 min-w-0 flex items-center justify-end gap-2"
-      />
+        {/* Center: title + subtitle */}
+        <div className="min-w-0 flex flex-col items-center">
+          <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[320px] leading-tight text-center">
+            {title}
+          </h1>
+          {subtitle && !isMobile && (
+            <p className="text-[11px] text-[var(--text-muted)] m-0 truncate">{subtitle}</p>
+          )}
+        </div>
 
-      <div className="flex items-center gap-3 shrink-0">
-        <ThemeToggle compact={isMobile} />
-        <NotificationBell />
-      </div>
-    </header>
+        {/* Right: actions slot + theme + bell */}
+        <div className="flex items-center gap-3 justify-end min-w-0">
+          <div ref={registerSlot} className="flex items-center gap-2" />
+          <ThemeToggle compact={isMobile} />
+          <NotificationBell />
+        </div>
+      </header>
   );
 }
