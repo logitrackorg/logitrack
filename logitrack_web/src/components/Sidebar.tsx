@@ -218,7 +218,7 @@ export function Sidebar() {
               </div>
             )}
             {expanded && (
-              <span className="font-extrabold text-[15px] tracking-[0.5px] text-slate-200 whitespace-nowrap">
+              <span className="font-extrabold text-[15px] tracking-[0.5px] text-white/90 truncate" title={orgName}>
                 {orgName}
               </span>
             )}
@@ -243,11 +243,11 @@ export function Sidebar() {
             >
               {/* Section titles only when pinned or mobile — not on hover to avoid shifting items */}
               {(pinned || isMobile) && expanded ? (
-                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-slate-500 whitespace-nowrap">
+                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-white/40 whitespace-nowrap">
                   {section.title}
                 </div>
               ) : idx > 0 ? (
-                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" />
+                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" title={section.title} />
               ) : null}
               {section.items.map((item) => (
                 <SidebarLink
@@ -272,7 +272,7 @@ export function Sidebar() {
             <button
               onClick={() => setPinned((v) => !v)}
               title={pinned ? "Contraer menú" : "Fijar menú expandido"}
-              className={`bg-transparent border-0 text-slate-500 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-slate-300 ${
+              className={`bg-transparent border-0 text-white/50 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-white/10 hover:text-white/80 ${
                 expanded ? "justify-start" : "justify-center"
               }`}
             >
@@ -286,7 +286,7 @@ export function Sidebar() {
             to="/profile"
             onClick={isMobile ? closeMobile : undefined}
             className={
-              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-black/20 text-slate-300 transition-colors duration-150 hover:bg-black/30 ${
+              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-white/10 text-white/80 transition-colors duration-150 hover:bg-white/15 ${
                 expanded ? "justify-start" : "justify-center"
               }`
             }
@@ -296,10 +296,10 @@ export function Sidebar() {
             </div>
             {expanded && (
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="text-[13px] font-semibold text-white/90 whitespace-nowrap overflow-hidden text-ellipsis">
                   {user.username}
                 </div>
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-white/50">
                   {ROLE_LABELS[user.role] ?? user.role}
                 </div>
               </div>
@@ -310,9 +310,9 @@ export function Sidebar() {
           <button
             onClick={logout}
             title="Cerrar sesión"
-            className={`bg-transparent border border-[var(--sidebar-bg)] text-slate-400 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-red-300 ${
-              expanded ? "justify-start" : "justify-center"
-            }`}
+className={`bg-transparent border border-white/10 text-white/40 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-white/5 hover:text-red-300 ${
+                expanded ? "justify-start" : "justify-center"
+              }`}
           >
             <LogOut size={16} />
             {expanded && <span>Cerrar sesión</span>}
@@ -346,9 +346,9 @@ function SidebarLink({
           ? "py-2.5 px-5 justify-start"
           : "py-2.5 px-0 justify-center";
         if (isActive) {
-          return `${base} ${pad} no-underline text-slate-200 font-semibold bg-[var(--sidebar-bg)] border-l-[3px] border-[var(--brand-400)]`;
+          return `${base} ${pad} no-underline text-white font-semibold bg-white/5 border-l-[3px] border-[var(--brand-400)]`;
         }
-        return `${base} ${pad} no-underline text-slate-400 font-medium hover:bg-[var(--sidebar-hover)] hover:text-slate-200`;
+        return `${base} ${pad} no-underline text-white/60 font-medium hover:bg-[var(--sidebar-hover)] hover:text-white`;
       }}
     >
       <Icon size={18} strokeWidth={2} />
