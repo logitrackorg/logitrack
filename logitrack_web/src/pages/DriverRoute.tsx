@@ -267,7 +267,7 @@ export function DriverRoute() {
   const handleRejected = async () => {
     if (!rejectedShipment || !rejectedReason) return;
     const reasonEntry = REJECTED_REASONS.find((r) => r.id === rejectedReason);
-    const reasonLabel = reasonEntry ? `${reasonEntry.emoji} ${reasonEntry.label}` : rejectedReason;
+    const reasonLabel = reasonEntry ? reasonEntry.label : rejectedReason;
     const note = [reasonLabel, rejectedNotes.trim()].filter(Boolean).join(" — ");
     setSubmitting(true);
     setActionError("");
