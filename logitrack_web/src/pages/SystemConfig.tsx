@@ -419,8 +419,7 @@ export function SystemConfig() {
                     className={`w-11 h-6 rounded-full transition-colors ${draft.email_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.email_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por email</span>
@@ -440,8 +439,7 @@ export function SystemConfig() {
                     className={`w-11 h-6 rounded-full transition-colors ${draft.whatsapp_notifications_enabled ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"}`}
                   />
                   <div
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
-                    style={{ background: "#fff" }}
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-transform bg-white ${draft.whatsapp_notifications_enabled ? "translate-x-5" : "translate-x-0"}`}
                   />
                 </div>
                 <span className="text-sm font-semibold text-slate-700">Notificaciones por WhatsApp</span>

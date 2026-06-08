@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import type { Zone } from "../../api/zones";
+import { Button } from "@/components/ui/button";
 
 interface ZoneAlertProps {
   zones: Zone[];
@@ -66,13 +67,15 @@ export function ZoneAlert({ zones, onDismissedChange }: ZoneAlertProps) {
         )}
 
         {/* Botón de cierre */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setIsDismissed(true)}
           aria-label="Cerrar aviso de zona peligrosa"
-          className="ml-2 shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors cursor-pointer"
+          className="ml-2 shrink-0 w-6 h-6 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-full"
         >
           <X className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
   );

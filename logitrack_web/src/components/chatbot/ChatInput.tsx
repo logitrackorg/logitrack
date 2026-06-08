@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { Paperclip, ArrowRight } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -56,7 +57,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             title="Adjuntar archivo"
             onClick={() => fileInputRef.current?.click()}
           >
-            📎
+            <Paperclip size={16} />
           </button>
         </>
       )}
@@ -73,7 +74,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         disabled={disabled || !input.trim()}
         className="bg-[var(--brand)] text-white border-none rounded-full w-8 h-8 flex items-center justify-center cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        ➤
+        <ArrowRight size={16} />
       </button>
     </form>
   );

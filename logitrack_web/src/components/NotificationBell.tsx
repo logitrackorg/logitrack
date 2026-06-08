@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin, UserCheck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
+import { Button } from "@/components/ui/button";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -411,12 +412,14 @@ export function NotificationBell() {
           )}
           {/* Botón exclusivo para las alertas de fatiga */}
           {isFatigue && (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={(e) => { e.stopPropagation(); navigate("/supervisor/fatigue"); setOpen(false); }}
-              className="mt-1.5 text-[11px] font-semibold text-red-400 bg-red-500/15 border border-red-500/30 rounded-[5px] px-2 py-0.5 cursor-pointer"
+              className="mt-1.5 text-[11px] text-red-400 bg-red-500/15 border-red-500/30 rounded-[5px] px-2 py-0.5"
             >
               Ver historial del chofer →
-            </button>
+            </Button>
           )}
         </div>
         {!n.read_at && <div className="w-[7px] h-[7px] rounded-full shrink-0 mt-1.5 bg-current" />}
@@ -514,29 +517,35 @@ export function NotificationBell() {
               {criticalAlert.body}
             </span>
           </div>
-          <button
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={() => { navigate("/supervisor/fatigue"); dismissCriticalAlert(); }}
-            className="shrink-0 bg-white/15 border border-white/30 text-white rounded-md px-3 py-1 text-xs font-bold cursor-pointer whitespace-nowrap"
+            className="shrink-0 bg-white/15 border-white/30 text-white px-3 py-1 text-xs font-bold whitespace-nowrap rounded-md"
           >
             Ver historial del chofer
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={dismissCriticalAlert}
             aria-label="Descartar alerta"
             title="Descartar"
-            className="shrink-0 bg-transparent border-none text-red-300 cursor-pointer flex p-1"
+            className="text-red-300"
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
       )}
 
     <div ref={panelRef} className="relative inline-flex items-center">
       {/* Bell button */}
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={handleToggle}
         title="Notificaciones"
-        className="bg-transparent border-none cursor-pointer p-1.5 rounded-md flex items-center relative text-slate-300"
+        className="relative text-slate-300"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
@@ -544,7 +553,7 @@ export function NotificationBell() {
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-      </button>
+      </Button>
 
       {/* Dropdown panel */}
       {open && (
@@ -554,13 +563,13 @@ export function NotificationBell() {
             <span className="text-[#e2e8f0] font-bold text-sm">Notificaciones</span>
             <div className="flex gap-2 items-center">
               {unreadCount > 0 && (
-                <button onClick={handleMarkAllRead} title="Marcar todas como leídas" className="bg-transparent border-none text-blue-400 cursor-pointer text-xs flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={handleMarkAllRead} title="Marcar todas como leídas" className="text-blue-400">
                   <CheckCheck size={14} /> Marcar todas
-                </button>
+                </Button>
               )}
-              <button onClick={() => setOpen(false)} aria-label="Cerrar panel" className="bg-transparent border-none text-slate-400 cursor-pointer flex">
+              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Cerrar panel" className="text-slate-400">
                 <X size={16} />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -579,9 +588,9 @@ export function NotificationBell() {
 
           {/* Footer */}
           <div className="px-4 py-2.5 border-t border-[var(--sidebar-bg)] text-center">
-            <button onClick={() => { navigate("/notifications"); setOpen(false); }} className="bg-transparent border-none text-blue-400 cursor-pointer text-[13px] font-medium">
+            <Button variant="ghost" onClick={() => { navigate("/notifications"); setOpen(false); }} className="text-blue-400 text-[13px] font-medium">
               Ver todas
-            </button>
+            </Button>
           </div>
         </div>
       )}

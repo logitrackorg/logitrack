@@ -1,6 +1,7 @@
 import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map, Ban } from "lucide-react";
 import { googleMapsSingleStop, googleMapsRoute } from "../../utils/googleMaps";
 import type { GeoPoint } from "../../utils/googleMaps";
+import { Button } from "@/components/ui/button";
 
 export interface NextStop {
   sequence: number;
@@ -90,14 +91,14 @@ export function NextStopCard({
         </a>
         {canAct && (
           <>
-            <button onClick={onDeliver} className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-lg py-2.5 px-4 text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2">
+            <Button variant="default" onClick={onDeliver} className="flex-1 bg-green-500 hover:bg-green-600 py-2.5 px-4">
               <CheckCircle2 className="w-4 h-4" />
               Entregar
-            </button>
-            <button onClick={onFailed} className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-lg py-2.5 px-4 text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2">
+            </Button>
+            <Button variant="destructive" onClick={onFailed} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 px-4">
               <XCircle className="w-4 h-4" />
               No entregado
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -105,10 +106,10 @@ export function NextStopCard({
       {/* Acción secundaria: rechazo activo del destinatario */}
       {canAct && (
         <div className="flex gap-2 mt-2">
-          <button onClick={onRejected} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg py-2 px-3 text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2">
+          <Button variant="secondary" onClick={onRejected} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-3 text-xs">
             <Ban className="w-4 h-4" />
             Rechazado por destinatario
-          </button>
+          </Button>
         </div>
       )}
 

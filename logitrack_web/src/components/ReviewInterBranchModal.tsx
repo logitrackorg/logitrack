@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { X, Plus, Trash2, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { InterBranchAssignment, AssignmentStop } from "../api/routing";
 import type { Branch } from "../api/branches";
 import { branchLabelById } from "../api/branches";
@@ -324,9 +325,9 @@ export function ReviewInterBranchModal({
               })}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Body: dos columnas */}
@@ -454,12 +455,14 @@ export function ReviewInterBranchModal({
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Paradas adicionales</span>
                   {canAddMore && (
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-dashed"
                       onClick={openAddStop}
-                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-dashed border-slate-300 text-slate-500 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)] transition-colors cursor-pointer"
                     >
                       <Plus className="w-3 h-3" /> Agregar
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {additionalStops.length === 0 ? (
@@ -472,13 +475,15 @@ export function ReviewInterBranchModal({
                           <p className="text-xs font-medium text-amber-900 truncate">{branchLabelById(st.branch_id, branches)}</p>
                           <p className="text-[11px] text-amber-700">{st.shipments.length} envíos · {st.total_weight_kg.toFixed(1)} kg</p>
                         </div>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           onClick={() => removeStop(i)}
-                          className="shrink-0 p-1 rounded text-amber-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="text-amber-400 hover:text-rose-600 hover:bg-rose-50"
                           title="Quitar parada"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -550,20 +555,20 @@ export function ReviewInterBranchModal({
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200 shrink-0">
-          <button
+          <Button
+            variant="outline"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer text-slate-600 disabled:opacity-40 transition-colors"
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
             onClick={() => onConfirm(additionalStops, departureMin, scheduledDate)}
             disabled={applying}
-            className="px-4 py-2 text-sm bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
           >
             {applying ? "Aplicando…" : "Aplicar"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -576,9 +581,9 @@ export function ReviewInterBranchModal({
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[75vh] overflow-y-auto">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-900">Agregar parada</h3>
-              <button onClick={closeAddStop} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <Button variant="ghost" size="icon" onClick={closeAddStop}>
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
@@ -650,19 +655,19 @@ export function ReviewInterBranchModal({
               })()}
             </div>
             <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
-              <button
+              <Button
+                variant="ghost"
                 onClick={closeAddStop}
-                className="h-9 px-3 rounded-md text-sm text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
                 onClick={saveAddStop}
                 disabled={!newStopBranchId || newStopShipments.size === 0}
-                className="h-9 px-4 rounded-md text-sm font-semibold bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white cursor-pointer"
               >
                 Agregar parada
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -59,22 +59,6 @@ const emptyCredentials = (): CredentialDraft => ({
   newSecret: "",
 });
 
-// ── Inputs style ──────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  height: 36,
-  padding: "0 10px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--bg-card)",
-  color: "var(--text-primary)",
-  fontSize: 13,
-  fontFamily: "monospace",
-  outline: "none",
-  minWidth: 0,
-};
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function PaymentConfig() {
@@ -194,19 +178,19 @@ export function PaymentConfig() {
 
   if (loading) {
     return (
-      <div style={{ padding: 32, color: "var(--text-secondary)", fontSize: 14 }}>
+      <div className="p-8 text-[var(--text-secondary)] text-sm">
         Cargando configuración…
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 16px", display: "flex", flexDirection: "column", gap: 24 }}>
+    <div className="max-w-[640px] mx-auto px-4 py-8 flex flex-col gap-6">
       <div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
+        <h1 className="m-0 text-[22px] font-bold text-[var(--text-primary)] tracking-[-0.02em]">
           Métodos de pago
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+        <p className="mt-1.5 text-[13px] text-[var(--text-secondary)] leading-[1.5]">
           Habilitá métodos de cobro y configurá las credenciales de Mercado Pago.
         </p>
       </div>
@@ -223,28 +207,21 @@ export function PaymentConfig() {
             Los métodos deshabilitados no aparecen en el panel de cobro para operadores.
           </CardDescription>
         </CardHeader>
-        <CardContent style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        <CardContent className="flex flex-col gap-0 p-0">
           {draft &&
             TOGGLES.map((t, i) => (
               <div
                 key={t.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 16,
-                  padding: "16px 0",
-                  borderTop: i > 0 ? "1px solid var(--border)" : "none",
-                }}
+                className={`flex items-center justify-between gap-4 py-4 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
                       {t.label}
                     </span>
                     {t.badge && <Badge label={t.badge} />}
                   </div>
-                  <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+                  <p className="mt-[3px] text-xs text-[var(--text-secondary)] leading-[1.45]">
                     {t.description}
                   </p>
                 </div>
@@ -263,22 +240,17 @@ export function PaymentConfig() {
               El dato que se codifica en el QR de cobro. El cliente escanea y transfiere el monto exacto del envío.
             </CardDescription>
           </CardHeader>
-          <CardContent style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "flex", gap: 8 }}>
+          <CardContent className="flex flex-col gap-3.5">
+            <div className="flex gap-2">
               {(["alias", "cbu"] as const).map((opt) => (
                 <button
                   key={opt}
                   onClick={() => setQrType(opt)}
-                  style={{
-                    padding: "6px 16px",
-                    borderRadius: 8,
-                    border: `1px solid ${qrType === opt ? "var(--info)" : "var(--border)"}`,
-                    background: qrType === opt ? "var(--info-bg)" : "var(--bg-card)",
-                    color: qrType === opt ? "var(--info)" : "var(--text-secondary)",
-                    fontWeight: qrType === opt ? 700 : 500,
-                    fontSize: 13,
-                    cursor: "pointer",
-                  }}
+                  className={`py-1.5 px-4 rounded-lg border text-[13px] font-medium cursor-pointer transition-colors ${
+                    qrType === opt
+                      ? "border-[var(--info)] bg-[var(--info-bg)] text-[var(--info)] font-bold"
+                      : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)]"
+                  }`}
                 >
                   {opt === "alias" ? "Alias" : "CBU/CVU"}
                 </button>
@@ -304,18 +276,18 @@ export function PaymentConfig() {
       )}
 
       {/* ── Save flags + alias ── */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+      <div className="flex gap-2.5 justify-end">
         <button
           onClick={() => draft && config && setDraft({ ...config })}
           disabled={!isDirty || saving}
-          style={secondaryBtnStyle(!isDirty || saving)}
+          className="py-[9px] px-[18px] rounded-[9px] border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] font-semibold text-[13px] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 hover:bg-slate-50 transition-colors"
         >
           Descartar
         </button>
         <button
           onClick={handleSave}
           disabled={!isDirty || saving}
-          style={primaryBtnStyle(!isDirty || saving)}
+          className="py-[9px] px-5 rounded-[9px] bg-[var(--info)] hover:brightness-110 text-white font-bold text-[13px] cursor-pointer disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--text-secondary)] transition-all"
         >
           {saving ? "Guardando…" : "Guardar cambios"}
         </button>
@@ -324,15 +296,15 @@ export function PaymentConfig() {
       {/* ── Credentials ── */}
       <Card>
         <CardHeader>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <KeyRound size={16} style={{ color: "var(--text-secondary)" }} />
+          <div className="flex items-center gap-2">
+            <KeyRound size={16} className="text-[var(--text-secondary)]" />
             <CardTitle>Credenciales de Mercado Pago</CardTitle>
           </div>
           <CardDescription>
             Para modificar una credencial debés ingresar primero su valor actual. Los valores se guardan cifrados (AES-256) en la base de datos.
           </CardDescription>
         </CardHeader>
-        <CardContent style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <CardContent className="flex flex-col gap-5">
           {credError && <FeedbackBar type="error" message={credError} />}
           {credSuccess && <FeedbackBar type="success" message="Credenciales actualizadas correctamente." />}
 
@@ -340,18 +312,18 @@ export function PaymentConfig() {
             const configKey = (f.newKey === "newToken" ? "mp_access_token" : "mp_webhook_secret") as keyof PaymentConfigType;
             const isSet = Boolean(config[configKey]);
             return (
-              <div key={f.newKey} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+              <div key={f.newKey} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-semibold text-[var(--text-primary)]">
                     {f.label}
                   </span>
                   {isSet && (
-                    <span style={{ fontSize: 11, color: "var(--ok)", fontWeight: 600 }}>
+                    <span className="text-[11px] text-[var(--ok)] font-semibold">
                       ● Configurado
                     </span>
                   )}
                 </div>
-                <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                <p className="m-0 text-xs text-[var(--text-secondary)] leading-[1.4]">
                   {f.hint}
                 </p>
                 {isSet && (
@@ -378,11 +350,11 @@ export function PaymentConfig() {
             );
           })}
 
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div className="flex justify-end">
             <button
               onClick={handleCredSave}
               disabled={!hasCredDirty || credSaving}
-              style={primaryBtnStyle(!hasCredDirty || credSaving)}
+              className="py-[9px] px-5 rounded-[9px] bg-[var(--info)] hover:brightness-110 text-white font-bold text-[13px] cursor-pointer disabled:cursor-not-allowed disabled:bg-[var(--border)] disabled:text-[var(--text-secondary)] transition-all"
             >
               {credSaving ? "Guardando…" : "Actualizar credenciales"}
             </button>
@@ -399,17 +371,11 @@ function FeedbackBar({ type, message }: { type: "error" | "success"; message: st
   const isErr = type === "error";
   return (
     <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "10px 14px",
-        background: isErr ? "var(--error-bg, #fef2f2)" : "var(--ok-bg)",
-        border: `1px solid ${isErr ? "var(--error-border, #fecaca)" : "var(--ok-border)"}`,
-        borderRadius: 10,
-        fontSize: 13,
-        color: isErr ? "var(--error, #dc2626)" : "var(--ok)",
-      }}
+      className={`flex items-center gap-2 py-2.5 px-3.5 rounded-[10px] text-[13px] ${
+        isErr
+          ? "bg-[var(--error-bg,#fef2f2)] border border-[var(--error-border,#fecaca)] text-[var(--error,#dc2626)]"
+          : "bg-[var(--ok-bg)] border border-[var(--ok-border)] text-[var(--ok)]"
+      }`}
     >
       {isErr ? <AlertCircle size={15} /> : <CheckCircle2 size={15} />}
       {message}
@@ -423,31 +389,14 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      style={{
-        flex: "0 0 auto",
-        position: "relative",
-        width: 44,
-        height: 24,
-        borderRadius: 12,
-        border: "none",
-        cursor: "pointer",
-        background: checked ? "var(--ok)" : "var(--border)",
-        transition: "background 150ms",
-        padding: 0,
-      }}
+      className={`relative w-11 h-6 rounded-xl border-none cursor-pointer transition-colors duration-150 p-0 shrink-0 ${
+        checked ? "bg-[var(--ok)]" : "bg-[var(--border)]"
+      }`}
     >
       <span
-        style={{
-          position: "absolute",
-          top: 2,
-          left: checked ? 22 : 2,
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          background: "#fff",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
-          transition: "left 150ms",
-        }}
+        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)] transition-transform duration-150 ${
+          checked ? "translate-x-[22px]" : "translate-x-0.5"
+        }`}
       />
     </button>
   );
@@ -456,17 +405,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 function Badge({ label }: { label: string }) {
   return (
     <span
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        padding: "2px 7px",
-        borderRadius: 20,
-        background: "var(--warn-bg)",
-        color: "var(--warn-text)",
-        border: "1px solid var(--warn-border)",
-        letterSpacing: "0.03em",
-        textTransform: "uppercase",
-      }}
+      className="text-[10px] font-bold py-0.5 px-[7px] rounded-[20px] bg-[var(--warn-bg)] text-[var(--warn-text)] border border-[var(--warn-border)] tracking-[0.03em] uppercase"
     >
       {label}
     </span>
@@ -485,8 +424,8 @@ function TextRow({
   onChange: (v: string) => void;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <span style={{ flex: "0 0 80px", fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}>
+    <div className="flex items-center gap-3">
+      <span className="w-20 shrink-0 text-[13px] text-[var(--text-secondary)] font-medium">
         {label}
       </span>
       <input
@@ -494,7 +433,7 @@ function TextRow({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        style={inputStyle}
+        className="flex-1 h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-[13px] font-mono outline-none min-w-0 focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
       />
     </div>
   );
@@ -517,65 +456,28 @@ function PasswordRow({
   onToggleShow: () => void;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ flex: "0 0 100px", fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }}>
+    <div className="flex items-center gap-2">
+      <span className="w-[100px] shrink-0 text-xs text-[var(--text-secondary)] font-medium">
         {label}
       </span>
-      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+      <div className="flex-1 flex items-center gap-1.5 min-w-0">
         <input
           type={show ? "text" : "password"}
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           autoComplete="off"
-          style={{ ...inputStyle, flex: 1 }}
+          className="flex-1 h-9 px-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-[13px] font-mono outline-none min-w-0 focus:outline-none focus:ring-1 focus:ring-[var(--brand)]"
         />
         <button
           type="button"
           onClick={onToggleShow}
           title={show ? "Ocultar" : "Mostrar"}
-          style={{
-            flex: "0 0 auto",
-            background: "none",
-            border: "1px solid var(--border)",
-            borderRadius: 7,
-            padding: "6px 8px",
-            cursor: "pointer",
-            color: "var(--text-secondary)",
-            display: "flex",
-            alignItems: "center",
-          }}
+          className="shrink-0 bg-transparent border border-[var(--border)] rounded-md p-1.5 cursor-pointer text-[var(--text-secondary)] flex items-center hover:bg-slate-50 transition-colors"
         >
           {show ? <EyeOff size={14} /> : <Eye size={14} />}
         </button>
       </div>
     </div>
   );
-}
-
-function primaryBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    padding: "9px 20px",
-    borderRadius: 9,
-    border: "none",
-    background: disabled ? "var(--border)" : "var(--info)",
-    color: disabled ? "var(--text-secondary)" : "#fff",
-    fontWeight: 700,
-    fontSize: 13,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
-function secondaryBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    padding: "9px 18px",
-    borderRadius: 9,
-    border: "1px solid var(--border)",
-    background: "var(--bg-card)",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    fontSize: 13,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.5 : 1,
-  };
 }

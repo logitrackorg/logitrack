@@ -409,7 +409,7 @@ function TripCard({
                     )}
                     {isCurrent && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-medium">
-                        📍 Acá
+                        <MapPin size={12} className="inline mr-0.5" /> Acá
                       </span>
                     )}
                   </div>

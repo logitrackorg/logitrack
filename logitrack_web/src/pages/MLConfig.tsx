@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { mlConfigApi, type MLConfig, type MLFactors } from "../api/mlConfig";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 
 const FACTOR_LABELS: Record<keyof MLFactors, { label: string; description: string }> = {
   shipment_type:    { label: "Tipo de envío",        description: "Express vs. estándar — los envíos express reciben mayor prioridad" },
@@ -112,68 +113,18 @@ export function MLConfig() {
     }
   }
 
-  const containerStyle: React.CSSProperties = {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "32px 24px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: "var(--text-primary)",
-  };
-
-  const cardStyle: React.CSSProperties = {
-    background: "var(--bg-card)",
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    padding: 24,
-    marginBottom: 24,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontWeight: 600,
-    fontSize: 13,
-    color: "var(--text-strong)",
-    marginBottom: 2,
-  };
-
-  const descStyle: React.CSSProperties = {
-    fontSize: 12,
-    color: "var(--text-secondary)",
-    marginBottom: 8,
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "6px 10px",
-    border: "1px solid var(--border-strong)",
-    borderRadius: 6,
-    fontSize: 14,
-    boxSizing: "border-box",
-  };
-
-  const btnPrimaryStyle: React.CSSProperties = {
-    background: saving ? "var(--text-muted)" : "var(--sidebar-bg)",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    padding: "10px 24px",
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: saving ? "not-allowed" : "pointer",
-  };
-
   if (loading) {
     return (
-      <div style={containerStyle}>
-        <p style={{ color: "var(--text-secondary)" }}>Cargando configuración…</p>
+      <div className="max-w-[900px] mx-auto px-6 py-8 text-[var(--text-primary)]">
+        <p className="text-[var(--text-secondary)]">Cargando configuración…</p>
       </div>
     );
   }
 
   return (
-    <div style={containerStyle}>
+    <div className="max-w-[900px] mx-auto px-6 py-8 text-[var(--text-primary)]">
       {activeConfig && activeConfig.id > 0 && (
-        <div style={{ marginBottom: 16, fontSize: 13, color: "var(--text-strong)" }}>
+        <div className="mb-4 text-[13px] text-[var(--text-strong)]">
           Configuración activa: <strong>#{activeConfig.id}</strong> — creada por{" "}
           <strong>{activeConfig.created_by}</strong> el{" "}
           {formatDate(activeConfig.created_at)}
@@ -182,223 +133,237 @@ export function MLConfig() {
       )}
 
       {error && (
-        <div style={{ background: "var(--danger-bg)", border: "1px solid var(--danger-border)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "var(--danger-text)", fontSize: 14 }}>
+        <div className="mb-4 px-3.5 py-2.5 rounded-md border text-sm bg-[var(--danger-bg)] border-[var(--danger-border)] text-[var(--danger-text)]">
           {error}
         </div>
       )}
       {success && (
-        <div style={{ background: "var(--ok-bg)", border: "1px solid var(--ok-border)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, color: "var(--ok-text)", fontSize: 14 }}>
+        <div className="mb-4 px-3.5 py-2.5 rounded-md border text-sm bg-[var(--ok-bg)] border-[var(--ok-border)] text-[var(--ok-text)]">
           {success}
         </div>
       )}
 
       {/* Factor weights */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Pesos de los factores (1,0 – 5,0)</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" }}>
-          {FACTOR_ORDER.map((key) => (
-            <div key={key}>
-              <label style={labelStyle}>{FACTOR_LABELS[key].label}</label>
-              <p style={descStyle}>{FACTOR_LABELS[key].description}</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <Card className="mb-6 cursor-default">
+        <CardHeader className="pb-2">
+          <CardTitle>Pesos de los factores (1,0 – 5,0)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            {FACTOR_ORDER.map((key) => (
+              <div key={key}>
+                <label className="block font-semibold text-[13px] text-[var(--text-strong)] mb-0.5">
+                  {FACTOR_LABELS[key].label}
+                </label>
+                <p className="text-xs text-[var(--text-secondary)] mb-2">
+                  {FACTOR_LABELS[key].description}
+                </p>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="range"
+                    min={1.0}
+                    max={5.0}
+                    step={0.1}
+                    value={factors[key]}
+                    onChange={(e) => setFactors({ ...factors, [key]: parseFloat(e.target.value) })}
+                    className="flex-1"
+                  />
+                  <input
+                    type="number"
+                    min={1.0}
+                    max={5.0}
+                    step={0.1}
+                    value={factors[key]}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (v >= 1 && v <= 5) setFactors({ ...factors, [key]: v });
+                    }}
+                    className="w-[70px] px-2.5 py-1.5 border border-[var(--border-strong)] rounded-md text-sm box-border bg-[var(--bg-card)] text-[var(--text-primary)]"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Thresholds */}
+      <Card className="mb-6 cursor-default">
+        <CardHeader className="pb-2">
+          <CardTitle>Umbrales de clasificación (0,0 – 1,0)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <label className="block font-semibold text-[13px] text-[var(--text-strong)] mb-0.5">
+                Umbral de prioridad alta (alta)
+              </label>
+              <p className="text-xs text-[var(--text-secondary)] mb-2">
+                Los puntajes por encima de este valor se clasifican como prioridad alta.
+              </p>
+              <div className="flex items-center gap-2.5">
                 <input
                   type="range"
-                  min={1.0}
-                  max={5.0}
-                  step={0.1}
-                  value={factors[key]}
-                  onChange={(e) => setFactors({ ...factors, [key]: parseFloat(e.target.value) })}
-                  style={{ flex: 1 }}
+                  min={0.0}
+                  max={1.0}
+                  step={0.05}
+                  value={altaThreshold}
+                  onChange={(e) => setAltaThreshold(parseFloat(e.target.value))}
+                  className="flex-1"
                 />
                 <input
                   type="number"
-                  min={1.0}
-                  max={5.0}
-                  step={0.1}
-                  value={factors[key]}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    if (v >= 1 && v <= 5) setFactors({ ...factors, [key]: v });
-                  }}
-                  style={{ ...inputStyle, width: 70 }}
+                  min={0.0}
+                  max={1.0}
+                  step={0.05}
+                  value={altaThreshold}
+                  onChange={(e) => setAltaThreshold(parseFloat(e.target.value))}
+                  className="w-[70px] px-2.5 py-1.5 border border-[var(--border-strong)] rounded-md text-sm box-border bg-[var(--bg-card)] text-[var(--text-primary)]"
                 />
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Thresholds */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Umbrales de clasificación (0,0 – 1,0)</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 24px" }}>
-          <div>
-            <label style={labelStyle}>Umbral de prioridad alta (alta)</label>
-            <p style={descStyle}>Los puntajes por encima de este valor se clasifican como prioridad alta.</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input
-                type="range"
-                min={0.0}
-                max={1.0}
-                step={0.05}
-                value={altaThreshold}
-                onChange={(e) => setAltaThreshold(parseFloat(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <input
-                type="number"
-                min={0.0}
-                max={1.0}
-                step={0.05}
-                value={altaThreshold}
-                onChange={(e) => setAltaThreshold(parseFloat(e.target.value))}
-                style={{ ...inputStyle, width: 70 }}
-              />
+            <div>
+              <label className="block font-semibold text-[13px] text-[var(--text-strong)] mb-0.5">
+                Umbral de prioridad media (media)
+              </label>
+              <p className="text-xs text-[var(--text-secondary)] mb-2">
+                Los puntajes por encima de este valor (y por debajo del alto) son prioridad media.
+              </p>
+              <div className="flex items-center gap-2.5">
+                <input
+                  type="range"
+                  min={0.0}
+                  max={1.0}
+                  step={0.05}
+                  value={mediaThreshold}
+                  onChange={(e) => setMediaThreshold(parseFloat(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="number"
+                  min={0.0}
+                  max={1.0}
+                  step={0.05}
+                  value={mediaThreshold}
+                  onChange={(e) => setMediaThreshold(parseFloat(e.target.value))}
+                  className="w-[70px] px-2.5 py-1.5 border border-[var(--border-strong)] rounded-md text-sm box-border bg-[var(--bg-card)] text-[var(--text-primary)]"
+                />
+              </div>
             </div>
           </div>
-          <div>
-            <label style={labelStyle}>Umbral de prioridad media (media)</label>
-            <p style={descStyle}>Los puntajes por encima de este valor (y por debajo del alto) son prioridad media.</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input
-                type="range"
-                min={0.0}
-                max={1.0}
-                step={0.05}
-                value={mediaThreshold}
-                onChange={(e) => setMediaThreshold(parseFloat(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <input
-                type="number"
-                min={0.0}
-                max={1.0}
-                step={0.05}
-                value={mediaThreshold}
-                onChange={(e) => setMediaThreshold(parseFloat(e.target.value))}
-                style={{ ...inputStyle, width: 70 }}
-              />
-            </div>
+          <div className="mt-3 px-3 py-2 rounded-md text-[13px] text-[var(--text-strong)] bg-[var(--bg-subtle)]">
+            Puntaje &gt; <strong>{altaThreshold.toFixed(2)}</strong> →{" "}
+            <span className="text-[var(--danger-text)] font-semibold">Alta</span>
+            {"  |  "}Puntaje &gt; <strong>{mediaThreshold.toFixed(2)}</strong> →{" "}
+            <span className="text-[var(--warn-text)] font-semibold">Media</span>
+            {"  |  "}De lo contrario →{" "}
+            <span className="text-[var(--text-secondary)] font-semibold">Baja</span>
           </div>
-        </div>
-        <div style={{ marginTop: 12, padding: "8px 12px", background: "var(--bg-subtle)", borderRadius: 6, fontSize: 13, color: "var(--text-strong)" }}>
-          Puntaje &gt; <strong>{altaThreshold.toFixed(2)}</strong> → <span style={{ color: "var(--danger-text)", fontWeight: 600 }}>Alta</span>
-          {"  |  "}Puntaje &gt; <strong>{mediaThreshold.toFixed(2)}</strong> → <span style={{ color: "var(--warn-text)", fontWeight: 600 }}>Media</span>
-          {"  |  "}De lo contrario → <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Baja</span>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Notes + submit */}
-      <div style={cardStyle}>
-        <label style={labelStyle}>Notas (opcional)</label>
-        <p style={descStyle}>Describí por qué cambiás la configuración — se guarda junto al historial.</p>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="ej. Se aumentó el peso de tipo de envío para priorizar los envíos express"
-          rows={3}
-          style={{ ...inputStyle, resize: "vertical", marginBottom: 16 }}
-        />
-        <button
-          onClick={handleRegenerate}
-          disabled={saving}
-          style={btnPrimaryStyle}
-        >
-          {saving ? "Regenerando modelo..." : "Regenerar modelo"}
-        </button>
-        {saving && (
-          <p style={{ marginTop: 8, fontSize: 13, color: "var(--text-secondary)" }}>
-            Entrenando el modelo RandomForest — esto puede tardar unos segundos.
+      <Card className="mb-6 cursor-default">
+        <CardHeader className="pb-2">
+          <CardTitle>Notas (opcional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-[var(--text-secondary)] mb-2">
+            Describí por qué cambiás la configuración — se guarda junto al historial.
           </p>
-        )}
-      </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="ej. Se aumentó el peso de tipo de envío para priorizar los envíos express"
+            rows={3}
+            className="w-full px-2.5 py-1.5 border border-[var(--border-strong)] rounded-md text-sm box-border resize-y mb-4 bg-[var(--bg-card)] text-[var(--text-primary)]"
+          />
+          <button
+            onClick={handleRegenerate}
+            disabled={saving}
+            className="rounded-md px-6 py-2.5 font-semibold text-sm text-white cursor-pointer transition-colors disabled:cursor-not-allowed"
+            style={{ background: saving ? "var(--text-muted)" : "var(--sidebar-bg)" }}
+          >
+            {saving ? "Regenerando modelo..." : "Regenerar modelo"}
+          </button>
+          {saving && (
+            <p className="mt-2 text-[13px] text-[var(--text-secondary)]">
+              Entrenando el modelo RandomForest — esto puede tardar unos segundos.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* History */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Historial de configuraciones</h2>
-        {(history ?? []).length === 0 ? (
-          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Todavía no hay historial de configuraciones.</p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "var(--bg-subtle)" }}>
-                <th style={thStyle}>ID</th>
-                <th style={thStyle}>Fecha</th>
-                <th style={thStyle}>Creada por</th>
-                <th style={thStyle}>Notas</th>
-                <th style={thStyle}>Factores</th>
-                <th style={thStyle}>Estado</th>
-                <th style={thStyle}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(history ?? []).map((cfg) => (
-                <tr key={cfg.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={tdStyle}>#{cfg.id}</td>
-                  <td style={tdStyle}>{formatDate(cfg.created_at)}</td>
-                  <td style={tdStyle}>{cfg.created_by}</td>
-                  <td style={{ ...tdStyle, maxWidth: 160, color: "var(--text-secondary)" }}>
-                    {cfg.notes || "—"}
-                  </td>
-                  <td style={tdStyle}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {FACTOR_ORDER.map((k) => (
-                        <span key={k} style={{ background: "var(--bg-muted)", borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>
-                          {FACTOR_LABELS[k].label.split(" ")[0]}: <strong>{cfg.factors[k]?.toFixed(1)}</strong>
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td style={tdStyle}>
-                    {cfg.is_active ? (
-                      <span style={{ background: "var(--ok-bg)", color: "var(--ok-text)", borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
-                        Activa
-                      </span>
-                    ) : (
-                      <span style={{ background: "var(--bg-muted)", color: "var(--text-secondary)", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>
-                        Inactiva
-                      </span>
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    {!cfg.is_active && (
-                      <button
-                        onClick={() => handleActivate(cfg.id)}
-                        disabled={activating === cfg.id}
-                        style={{
-                          background: "transparent",
-                          border: "1px solid var(--border-strong)",
-                          borderRadius: 4,
-                          padding: "3px 10px",
-                          fontSize: 12,
-                          cursor: activating === cfg.id ? "not-allowed" : "pointer",
-                          color: "var(--text-strong)",
-                        }}
-                      >
-                        {activating === cfg.id ? "Activando..." : "Activar"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <Card className="cursor-default">
+        <CardHeader className="pb-2">
+          <CardTitle>Historial de configuraciones</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(history ?? []).length === 0 ? (
+            <p className="text-sm text-[var(--text-secondary)]">Todavía no hay historial de configuraciones.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr className="bg-[var(--bg-subtle)]">
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">ID</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">Fecha</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">Creada por</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">Notas</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">Factores</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]">Estado</th>
+                    <th className="text-left px-2.5 py-2 font-semibold text-[12px] text-[var(--text-strong)] border-b border-[var(--border)]"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(history ?? []).map((cfg) => (
+                    <tr key={cfg.id} className="border-b border-[var(--border)]">
+                      <td className="px-2.5 py-2.5 align-top">#{cfg.id}</td>
+                      <td className="px-2.5 py-2.5 align-top">{formatDate(cfg.created_at)}</td>
+                      <td className="px-2.5 py-2.5 align-top">{cfg.created_by}</td>
+                      <td className="px-2.5 py-2.5 align-top max-w-[160px] text-[var(--text-secondary)]">
+                        {cfg.notes || "—"}
+                      </td>
+                      <td className="px-2.5 py-2.5 align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {FACTOR_ORDER.map((k) => (
+                            <span key={k} className="inline-block rounded px-1.5 py-px text-[11px] bg-[var(--bg-muted)]">
+                              {FACTOR_LABELS[k].label.split(" ")[0]}: <strong>{cfg.factors[k]?.toFixed(1)}</strong>
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2.5 align-top">
+                        {cfg.is_active ? (
+                          <span className="inline-block rounded px-2 py-0.5 font-semibold text-[11px] bg-[var(--ok-bg)] text-[var(--ok-text)]">
+                            Activa
+                          </span>
+                        ) : (
+                          <span className="inline-block rounded px-2 py-0.5 text-[11px] bg-[var(--bg-muted)] text-[var(--text-secondary)]">
+                            Inactiva
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 align-top">
+                        {!cfg.is_active && (
+                          <button
+                            onClick={() => handleActivate(cfg.id)}
+                            disabled={activating === cfg.id}
+                            className="rounded px-2.5 py-0.5 text-xs border border-[var(--border-strong)] text-[var(--text-strong)] bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            {activating === cfg.id ? "Activando..." : "Activar"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  fontWeight: 600,
-  color: "var(--text-strong)",
-  fontSize: 12,
-  borderBottom: "1px solid var(--border)",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 10px",
-  verticalAlign: "top",
-};

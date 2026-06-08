@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock } from "lucide-react";
+import { Route as RouteIcon, AlertCircle, CheckCircle2, RefreshCw, Truck, User as UserIcon, AlertTriangle, X, Clock, Calendar } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/ui/page-header";
 import { Button } from "../components/ui/button";
@@ -781,7 +781,7 @@ export function Routing({ mode }: RoutingProps = {}) {
       {/* Banner de pronóstico (días +1/+2) */}
       {isForecast && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">
-          <span className="text-base">📅</span>
+          <Calendar size={16} className="text-amber-500 shrink-0" />
           <div>
             <span className="font-semibold">Pronóstico — no aplicable.</span>
             {" "}Este plan simula la disponibilidad de flota y envíos para el día {horizonPlans[horizonDayIndex]?.plan_date}.
@@ -1744,12 +1744,12 @@ function DriverRouteCard({
           )}
           {assignment.in_transit && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-              🚚 En viaje
+              <Truck size={12} className="inline mr-0.5" /> En viaje
             </span>
           )}
           {!assignment.in_transit && assignment.applied && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-              ✓ Aplicado
+              <CheckCircle2 size={12} className="inline mr-0.5" /> Aplicado
             </span>
           )}
           {!assignment.in_transit && !assignment.applied && (assignment.applied_shipments?.length ?? 0) > 0 && (
@@ -2025,12 +2025,12 @@ function InterBranchSection({
                   )}
                   {a.in_transit && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                      🚚 En viaje
+                      <Truck size={12} className="inline mr-0.5" /> En viaje
                     </span>
                   )}
                   {!a.in_transit && a.applied && (
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                      ✓ Aplicado
+                      <CheckCircle2 size={12} className="inline mr-0.5" /> Aplicado
                     </span>
                   )}
                   {!a.in_transit && !a.applied && (a.applied_shipments?.length ?? 0) > 0 && (
@@ -2371,7 +2371,7 @@ function OutgoingInProgressSection({
                         <Truck className="w-3.5 h-3.5 text-slate-500" />
                         <span>{a.license_plate}</span>
                         <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                          🚚 En viaje
+                          <Truck size={12} className="inline mr-0.5" /> En viaje
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 tabular-nums shrink-0">
@@ -2458,7 +2458,7 @@ function OutgoingInProgressSection({
                         <span className="text-slate-500 font-normal">→</span>
                         <span>{branchLabelById(a.destination_branch, branches)}</span>
                         <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                          🚚 En viaje
+                          <Truck size={12} className="inline mr-0.5" /> En viaje
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 tabular-nums shrink-0">
@@ -2552,7 +2552,7 @@ function IncomingVehiclesSection({
                   <span className="text-slate-500 font-normal">desde</span>
                   <span>{branchLabelById(v.origin_branch, branches)}</span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                    🚚 En viaje
+                    <Truck size={12} className="inline mr-0.5" /> En viaje
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 tabular-nums shrink-0 flex flex-col items-end gap-0.5">

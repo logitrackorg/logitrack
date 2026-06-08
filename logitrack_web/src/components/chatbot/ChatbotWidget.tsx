@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { chatbotService } from '../../api/chatbot';
+import { Button } from '@/components/ui/button';
 import type {
   ChatMessage,
   Shipment,
@@ -920,13 +921,14 @@ export const ChatbotWidget: React.FC = () => {
   return (
     <>
       {/* Botón flotante */}
-      <button
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--brand)] text-white flex items-center justify-center text-2xl shadow-lg hover:shadow-xl cursor-pointer z-50 transition-all border-none max-sm:right-4 max-sm:bottom-4"
+      <Button
+        size="icon"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--brand)] text-white text-2xl shadow-lg hover:shadow-xl z-50 transition-all max-sm:right-4 max-sm:bottom-4"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir chat"
       >
         {isOpen ? '✕' : '💬'}
-      </button>
+      </Button>
 
       {/* Ventana del chat */}
       {isOpen && (
@@ -945,8 +947,10 @@ export const ChatbotWidget: React.FC = () => {
                 </span>
               </div>
             </div>
-            <button
-              className="bg-transparent border-none text-white cursor-pointer text-lg w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20 rounded-full"
               onClick={() => {
                 setIsOpen(false);
                 if (sessionTimeoutRef.current) {
@@ -956,7 +960,7 @@ export const ChatbotWidget: React.FC = () => {
               aria-label="Cerrar chat"
             >
               ✕
-            </button>
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">

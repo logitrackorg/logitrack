@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, RotateCcw, X, AlertTriangle, Clock, Loader2, ShieldAlert, DollarSign, CalendarClock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { LastMileAssignment, RoutingConfig, RouteMode, LatLng } from "../api/routing";
 import { routingApi } from "../api/routing";
 import type { Shipment } from "../api/shipments";
@@ -80,14 +81,16 @@ function SortableStop({
       } ${isDragging ? "shadow-lg" : ""}`}
     >
       {/* Drag handle */}
-      <button
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 mt-0.5 shrink-0 touch-none"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="cursor-grab active:cursor-grabbing mt-0.5 shrink-0 touch-none [&_svg]:text-slate-400 hover:[&_svg]:text-slate-600"
         {...attributes}
         {...listeners}
         tabIndex={-1}
       >
         <GripVertical className="w-4 h-4" />
-      </button>
+      </Button>
 
       {/* Sequence badge */}
       <div className="w-6 h-6 rounded-full bg-[var(--sidebar-bg)] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -503,16 +506,14 @@ export function EditDriverStopsModal({
             {/* Mode selector */}
             <div className="flex items-center gap-1.5 mt-2.5">
               {ROUTE_MODES.map(({ mode: m, label, tooltip, icon }) => (
-                <button
+                <Button
                   key={m}
                   title={tooltip}
                   disabled={recomputing}
+                  variant={mode === m ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full"
                   onClick={() => void handleModeChange(m)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
-                    mode === m
-                      ? "bg-[var(--sidebar-bg)] text-white border-[var(--sidebar-bg)]"
-                      : "bg-white text-slate-600 border-slate-300 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)]"
-                  }`}
                 >
                   {mode === m && recomputing ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -520,13 +521,13 @@ export function EditDriverStopsModal({
                     icon
                   )}
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer shrink-0">
+          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Body: dos columnas */}
@@ -545,19 +546,17 @@ export function EditDriverStopsModal({
               {availableDates && availableDates.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1">
                   {availableDates.map(({ date, label }) => (
-                    <button
+                    <Button
                       key={date}
                       disabled={recomputing}
+                      variant={selectedDate === date ? "default" : "outline"}
+                      size="sm"
+                      className="rounded-full"
                       onClick={() => handleDateChange(date)}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
-                        selectedDate === date
-                          ? "bg-[var(--sidebar-bg)] text-white border-[var(--sidebar-bg)]"
-                          : "bg-white text-slate-600 border-slate-300 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)]"
-                      }`}
                     >
                       <CalendarClock className="w-3 h-3" />
                       {label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
@@ -620,28 +619,28 @@ export function EditDriverStopsModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-slate-200 shrink-0 gap-3">
-          <button
+          <Button
+            variant="ghost"
             disabled={recomputing}
             onClick={() => void recomputeForMode(mode, originalOrder)}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer transition-colors disabled:opacity-40"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Restaurar óptimo
-          </button>
+          </Button>
           <div className="flex items-center gap-3">
             {error && <p className="text-xs text-red-600">{error}</p>}
-            <button
+            <Button
+              variant="outline"
               onClick={onClose}
               disabled={applying}
-              className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer text-slate-600 disabled:opacity-40 transition-colors"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="default"
               onClick={handleApply}
               disabled={applying || !canApplyDate}
               title={!canApplyDate ? "Los planes de pronóstico no se pueden aplicar. Volvé a este día cuando corresponda." : undefined}
-              className="px-4 py-2 text-sm bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
             >
               {applying
                 ? "Aplicando…"
@@ -650,7 +649,7 @@ export function EditDriverStopsModal({
                   : planDateLabel
                     ? `Programar para el ${planDate?.slice(8, 10)}/${planDate?.slice(5, 7)}`
                     : "Aplicar"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

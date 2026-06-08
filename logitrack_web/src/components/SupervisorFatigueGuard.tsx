@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Unlock } from "lucide-react";
 import { supervisorFatigueApi, type ActiveFatigueAlert } from "../api/supervisorFatigue";
 import { useAuth } from "../context/AuthContext";
 
@@ -136,7 +136,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
             {/* Confirmación de desbloqueo */}
             {unblocked ? (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-orange-800 text-[13px] font-semibold text-center">
-                🔓 Ruta desbloqueada. El chofer puede continuar.
+                <Unlock size={16} className="inline mr-1" /> Ruta desbloqueada. El chofer puede continuar.
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
@@ -147,7 +147,7 @@ export function SupervisorFatigueGuard({ children }: Props) {
                     unblocking ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
                   }`}
                 >
-                  🔓 {unblocking ? "Desbloqueando…" : "Desbloquear ruta"}
+                  <Unlock size={14} className="mr-1" /> {unblocking ? "Desbloqueando…" : "Desbloquear ruta"}
                 </button>
                 <button
                   onClick={() => void handleContinue()}

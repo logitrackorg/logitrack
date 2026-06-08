@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { paymentApi, type Payment, type PaymentConfig } from "../api/payments";
+import { Button } from "@/components/ui/button";
 import ShipmentQRModal from "./ShipmentQRModal";
 
 type Props = {
@@ -191,12 +192,7 @@ type MethodCardProps = {
 };
 
 function MethodCard({ icon, iconBg, title, description, disabled, action }: MethodCardProps) {
-  const variantStyles: Record<MethodCardProps["action"]["variant"], { bg: string; color: string; border: string }> = {
-    primary: { bg: "var(--bg-card)", color: "var(--info)", border: "var(--info)" },
-    success: { bg: "var(--ok-bg)", color: "var(--ok)", border: "var(--ok-border)" },
-    cash:    { bg: "var(--ok)", color: "#fff",    border: "var(--ok)" },
-  };
-  const v = variantStyles[action.variant];
+  const btnVariant = action.variant === "cash" ? "default" : "outline";
   return (
     <div
       style={{
@@ -233,24 +229,15 @@ function MethodCard({ icon, iconBg, title, description, disabled, action }: Meth
           {description}
         </div>
       </div>
-      <button
-        onClick={action.onClick}
+      <Button
+        variant={btnVariant}
+        size="sm"
         disabled={disabled}
-        style={{
-          flex: "0 0 auto",
-          background: v.bg,
-          color: v.color,
-          border: `1px solid ${v.border}`,
-          borderRadius: 8,
-          padding: "8px 14px",
-          fontWeight: 700,
-          fontSize: 13,
-          cursor: disabled ? "not-allowed" : "pointer",
-          whiteSpace: "nowrap",
-        }}
+        onClick={action.onClick}
+        className="shrink-0"
       >
         {action.label}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -335,43 +322,25 @@ function TransferCard({
               {dest}
             </div>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
             onClick={() => onCopyDest(dest)}
-            style={{
-              flex: "0 0 auto",
-              background: "var(--bg-card)",
-              color: copied ? "var(--ok)" : "var(--info)",
-              border: `1px solid ${copied ? "var(--ok)" : "var(--info)"}`,
-              borderRadius: 7,
-              padding: "6px 12px",
-              fontWeight: 700,
-              fontSize: 12,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
           >
             {copied ? "✓ Copiado" : "Copiar"}
-          </button>
+          </Button>
         </div>
       )}
 
-      <button
+      <Button
+        variant="outline"
+        className="w-full"
         onClick={onConfirm}
         disabled={confirming}
-        style={{
-          width: "100%",
-          padding: "9px 0",
-          borderRadius: 8,
-          border: "1px solid var(--info)",
-          background: "var(--bg-card)",
-          color: "var(--info)",
-          fontWeight: 700,
-          fontSize: 13,
-          cursor: confirming ? "not-allowed" : "pointer",
-        }}
       >
         {confirming ? "Procesando…" : "Confirmar transferencia"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -512,40 +481,21 @@ function TransferConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }:
         </div>
 
         <div style={{ padding: "20px 24px 24px", display: "flex", gap: 10 }}>
-          <button
+          <Button
+            variant="outline"
+            className="flex-1"
             onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "11px 0",
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "var(--bg-card)",
-              color: "var(--text-secondary)",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-            }}
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
+            className="flex-1"
             onClick={onConfirm}
             autoFocus
-            style={{
-              flex: 1,
-              padding: "11px 0",
-              borderRadius: 10,
-              border: "none",
-              background: "var(--info)",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: "pointer",
-              boxShadow: "0 6px 16px rgba(37, 99, 235, 0.25)",
-            }}
           >
             Confirmar transferencia
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -696,40 +646,21 @@ function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: Cas
         </div>
 
         <div style={{ padding: "20px 24px 24px", display: "flex", gap: 10 }}>
-          <button
+          <Button
+            variant="outline"
+            className="flex-1"
             onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "11px 0",
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "var(--bg-card)",
-              color: "var(--text-secondary)",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-            }}
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
+            className="flex-1"
             onClick={onConfirm}
             autoFocus
-            style={{
-              flex: 1,
-              padding: "11px 0",
-              borderRadius: 10,
-              border: "none",
-              background: "var(--ok)",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: "pointer",
-              boxShadow: "0 6px 16px rgba(22, 163, 74, 0.32)",
-            }}
           >
             Confirmar pago
-          </button>
+          </Button>
         </div>
       </div>
     </div>

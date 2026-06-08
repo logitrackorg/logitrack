@@ -306,12 +306,12 @@ export function AdminUsers() {
           <p className="text-sm text-slate-500">Cargando…</p>
         </Card>
       ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 700 }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm min-w-[700px]">
             <thead>
-              <tr style={{ background: "var(--bg-subtle)", textAlign: "left" }}>
+              <tr className="bg-[var(--bg-subtle)] text-left">
                 {["ID", "Nombre", "Usuario", "Rol", "Sucursal", "Estado", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", borderBottom: "2px solid var(--border)", fontWeight: 600, color: "var(--text-strong)", fontSize: 13 }}>{h}</th>
+                  <th key={h} className="px-[14px] py-[10px] border-b-2 border-[var(--border)] font-semibold text-[var(--text-strong)] text-[13px]">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -319,33 +319,31 @@ export function AdminUsers() {
               {filtered.map(u => {
                 const isInactive = (u.status ?? "activo") === "inactivo";
                 return (
-                  <tr key={u.id} style={{ borderBottom: "1px solid var(--border)", opacity: isInactive ? 0.65 : 1 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-subtle)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <td style={{ padding: "10px 14px", color: "var(--text-muted)", fontSize: 12 }}>{u.id}</td>
-                    <td style={{ padding: "10px 14px" }}>
-                      <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                        {u.first_name || u.last_name ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
+                  <tr key={u.id} className={`border-b border-[var(--border)] ${isInactive ? "opacity-65" : ""} hover:bg-[var(--bg-subtle)] transition-colors`}>
+                    <td className="px-[14px] py-[10px] text-[var(--text-muted)] text-xs">{u.id}</td>
+                    <td className="px-[14px] py-[10px]">
+                      <div className="font-semibold text-[var(--text-primary)]">
+                        {u.first_name || u.last_name ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() : <span className="text-[var(--text-muted)] italic">—</span>}
                       </div>
-                      {u.email && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{u.email}</div>}
+                      {u.email && <div className="text-xs text-[var(--text-secondary)]">{u.email}</div>}
                     </td>
-                    <td style={{ padding: "10px 14px", color: "var(--text-strong)" }}>{u.username}</td>
-                    <td style={{ padding: "10px 14px" }}>
-                      <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 9999, fontSize: 12, fontWeight: 600, background: `${roleBadgeColor[u.role]}18`, color: roleBadgeColor[u.role] }}>
+                    <td className="px-[14px] py-[10px] text-[var(--text-strong)]">{u.username}</td>
+                    <td className="px-[14px] py-[10px]">
+                      <span className="inline-block rounded-full text-xs font-semibold px-2.5 py-0.5" style={{ background: `${roleBadgeColor[u.role]}18`, color: roleBadgeColor[u.role] }}>
                         {userDisplayLabel(u)}
                       </span>
                     </td>
-                    <td style={{ padding: "10px 14px" }}>
+                    <td className="px-[14px] py-[10px]">
                       {u.branch_id
-                        ? <span style={{ background: "var(--brand-tint)", border: "1px solid var(--brand-tint-border)", borderRadius: 6, padding: "2px 8px", fontSize: 12, color: "var(--text-heading)" }}>{branchName(u.branch_id)}</span>
-                        : <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>—</span>}
+                        ? <span className="bg-[var(--brand-tint)] border border-[var(--brand-tint-border)] rounded-md px-2 py-0.5 text-xs text-[var(--text-heading)]">{branchName(u.branch_id)}</span>
+                        : <span className="text-[var(--text-muted)] italic">—</span>}
                     </td>
-                    <td style={{ padding: "10px 14px" }}>
+                    <td className="px-[14px] py-[10px]">
                       <StatusBadge status={u.status ?? "activo"} />
                     </td>
-                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
+                    <td className="px-[14px] py-[10px] text-right">
                       <button onClick={() => openEdit(u)}
-                        style={{ background: "none", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontSize: 13, color: "var(--text-strong)", fontWeight: 500 }}>
+                        className="bg-transparent border border-[var(--border-strong)] rounded-md px-3 py-1 cursor-pointer text-[13px] text-[var(--text-strong)] font-medium hover:bg-[var(--bg-muted)] transition-colors">
                         Editar
                       </button>
                     </td>
