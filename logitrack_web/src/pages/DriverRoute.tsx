@@ -13,6 +13,10 @@ import {
   Truck,
   XCircle,
 } from "lucide-react";
+import { DeliverSheet } from "../components/driver/DeliverSheet";
+import { FailedSheet } from "../components/driver/FailedSheet";
+import { RejectedSheet } from "../components/driver/RejectedSheet";
+import { DriverShell } from "../components/DriverShell";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
@@ -23,7 +27,6 @@ import { Button } from "../components/ui/button";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
-import { BottomSheet } from "../components/ui/bottom-sheet";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
@@ -37,7 +40,6 @@ import {
   recipientView,
   timeWindowTone,
 } from "../utils/driverActions";
-import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 type Tab = "pendientes" | "completados";
 
@@ -56,12 +58,6 @@ export function DriverRoute() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
-
-  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
-  const [fatigueBlocked, setFatigueBlocked] = useState(false);
-  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
-  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
-  const pendingAckRef = useRef<string | null>(null);
 
   // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
   const [midRouteCheckin, setMidRouteCheckin] = useState(false);
@@ -115,30 +111,6 @@ export function DriverRoute() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
-
-  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const status = await driverApi.getFatigueBlockStatus();
-        const nowBlocked = status.blocked ?? false;
-        setFatigueBlocked(nowBlocked);
-        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
-          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
-          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
-          pendingAckRef.current = ackKey;
-          if (ackKey !== storedAck) {
-            setFatigueUnblockedBy(status.unblocked_by);
-          }
-        }
-      } catch {
-        // Error de red → mantener estado actual (conservador)
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   const closeSheets = () => {
     setDeliverShipment(null);
@@ -319,22 +291,6 @@ export function DriverRoute() {
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
-  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
-  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
-  // backend ya da por completo el check-in apenas se envía el paso KSS, así
-  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
-  useEffect(() => {
-    if (!user) return;
-    if (!getPendingFatigueStep(user.id)) return;
-    driverApi.getTodayCheckin()
-      .then((checkin) => setRequiresSleepData(checkin.requires_sleep_data ?? true))
-      .catch(() => setRequiresSleepData(true))
-      .finally(() => {
-        pause();
-        setMidRouteCheckin(true);
-      });
-  }, [user, pause]);
-
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
 
@@ -435,99 +391,86 @@ export function DriverRoute() {
     : [];
 
   return (
-    <div className="pb-32">
-      {/* Header sticky con progreso y tabs */}
-      <header className="sticky top-0 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
-        <div className="px-4 max-w-2xl mx-auto pt-3 pb-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
-                <p className="text-xs dark:text-gray-400 text-slate-500 leading-tight">
-                  {today} · {done}/{total} completados
-                </p>
-              </div>
-            </div>
+     <DriverShell title="Mi ruta" subtitle={today}>
 
-            {/*  Toggle Lista/Mapa */}
-            {canAct && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] ${viewMode === 'list'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <Package className="w-4 h-4" />
-                  Lista
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] ${viewMode === 'map'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <MapPin className="w-4 h-4" />
-                  Mapa
-                </button>
-              </div>
-            )}
-
-            {!simActive && simulationMode === "real" && (
-              <button
-                onClick={() => { setSimActive(true); setViewMode('map'); }}
-                title="Activar simulación GPS"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
-              >
-                <Film size={20} />
-              </button>
-            )}
-
-            {/* Badge minimizado de zona peligrosa — visible solo cuando el cartel grande fue descartado */}
-            {isDangerDismissed && (
-              <span
-                title="Zona peligrosa activa"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs font-bold shrink-0 animate-pulse"
-              >
-                <AlertTriangle size={14} className="mr-0.5" /> Zona
-              </span>
-            )}
-            <RouteStatusPill status={routeStatus} />
+      {/* Toolbar: view toggle, simulator, danger badge, status pill */}
+      <div className="flex items-center justify-between gap-3 mb-4 px-4 max-w-2xl mx-auto pt-3">
+        {/* Toggle Lista/Mapa */}
+        {canAct && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={viewMode === 'list' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}
+            >
+              <Package className="w-4 h-4" />
+              Lista
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={viewMode === 'map' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}
+            >
+              <MapPin className="w-4 h-4" />
+              Mapa
+            </button>
           </div>
+        )}
 
-          <div className="mt-3">
-            <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
-              <div
-                ref={el => { if (el) el.style.width = `${progressPct}%`; }}
-                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
-              />
-            </div>
-          </div>
-
-          {canAct && viewMode === 'list' && (
-            <div className="mt-3 -mx-4 px-4 flex gap-1 border-b-0">
-              <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
-                Pendientes
-                <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
-                  {pending}
-                </span>
-              </TabButton>
-              <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
-                Completados
-                <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                  {done}
-                </span>
-              </TabButton>
-            </div>
+        <div className="flex items-center gap-2">
+          {!simActive && simulationMode === "real" && (
+            <button
+              onClick={() => { setSimActive(true); setViewMode('map'); }}
+              title="Activar simulación GPS"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
+            >
+              <Film size={20} />
+            </button>
           )}
-        </div>
-      </header>
 
+          {/* Badge minimizado de zona peligrosa */}
+          {isDangerDismissed && (
+            <span
+              title="Zona peligrosa activa"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs font-bold shrink-0 animate-pulse"
+            >
+              <AlertTriangle size={14} className="mr-0.5" /> Zona
+            </span>
+          )}
+          <RouteStatusPill status={routeStatus} />
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-4 px-4 max-w-2xl mx-auto">
+        <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
+          <div
+            ref={el => { if (el) el.style.width = `${progressPct}%`; }}
+            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
+          />
+        </div>
+      </div>
+
+      {/* Stats line */}
+      <p className="text-xs dark:text-gray-400 text-slate-500 mb-3 px-4 max-w-2xl mx-auto">
+        {done}/{total} completados
+      </p>
+
+      {/* Tabs */}
+      {canAct && viewMode === 'list' && (
+        <div className="-mx-4 px-4 flex gap-1 mb-4 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+          <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
+            Pendientes
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              {pending}
+            </span>
+          </TabButton>
+          <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
+            Completados
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+              {done}
+            </span>
+          </TabButton>
+        </div>
+      )}
       <div className="px-4 py-4 max-w-2xl mx-auto">
         {actionError && (
           <div className="flex items-start gap-3 mb-4 px-4 py-3.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-sm font-semibold text-rose-700 dark:text-rose-300">
@@ -693,44 +636,7 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
       />
-
-      {/* Overlay de bloqueo por fatiga — fixed encima de todo (LOGITRACK-499) */}
-      {fatigueBlocked && (
-        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <AlertTriangle size={64} className="text-red-500" />
-          <h2 className="text-white text-[22px] font-bold m-0">
-            Alerta de fatiga detectada
-          </h2>
-          <p className="text-slate-400 text-base leading-relaxed m-0">
-            Tu supervisor fue notificado.<br/>
-            Esperá su indicación antes de continuar.
-          </p>
-        </div>
-      )}
-
-      {/* Cartelito de autorización — visible cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
-      {!fatigueBlocked && fatigueUnblockedBy && (
-        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <CheckCircle2 size={64} className="text-emerald-500" />
-          <h2 className="text-white text-[22px] font-bold m-0">
-            Ruta autorizada
-          </h2>
-          <p className="text-green-300 text-base leading-relaxed m-0">
-            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
-            que continúes la ruta.
-          </p>
-          <button
-            onClick={() => {
-              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack_route", pendingAckRef.current);
-              setFatigueUnblockedBy(null);
-            }}
-            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
-          >
-            Continuar
-          </button>
-        </div>
-      )}
-    </div>
+    </DriverShell>
   );
 }
 
@@ -983,414 +889,6 @@ function ShipmentCard({
     </Card>
   );
 }
-
-function DeliverSheet({
-  open,
-  onClose,
-  shipment,
-  keyword,
-  onKeywordChange,
-  useContingency,
-  onUseContingency,
-  dni,
-  onDniChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-  error,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  keyword: string;
-  onKeywordChange: (s: string) => void;
-  useContingency: boolean;
-  onUseContingency: (v: boolean) => void;
-  dni: string;
-  onDniChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-  error: string;
-}) {
-  const keywordRef = useRef<HTMLInputElement>(null);
-  const dniRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => {
-        (useContingency ? dniRef : keywordRef).current?.focus();
-      }, 80);
-      return () => clearTimeout(t);
-    }
-  }, [open, useContingency]);
-
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const isLastMile = shipment.delivery_method === "ultima_milla";
-  const keywordAttempts = shipment.keyword_attempts ?? 0;
-  const locked = keywordAttempts >= 3;
-
-  const canConfirm = isLastMile
-    ? useContingency ? !!dni.trim() : (!locked && !!keyword.trim())
-    : !!dni.trim();
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Confirmar entrega"
-      description={`Entrega a ${name}`}
-    >
-      {isLastMile && !useContingency && (
-        <>
-          {locked && (
-            <div className="mb-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 px-4 py-3">
-              <p className="text-xs font-bold text-red-700 dark:text-red-400">Campo bloqueado — 3 intentos fallidos</p>
-              <p className="text-xs text-red-600 dark:text-red-400/80 mt-0.5">Usá la opción de entrega con DNI para continuar.</p>
-            </div>
-          )}
-          {!locked && keywordAttempts > 0 && (
-            <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-2.5">
-              <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
-                Intentos fallidos: {keywordAttempts}/3 — quedan {3 - keywordAttempts} intento(s)
-              </p>
-            </div>
-          )}
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            Palabra clave de seguridad
-          </label>
-          <input
-            ref={keywordRef}
-            value={keyword}
-            onChange={(e) => onKeywordChange(e.target.value)}
-            autoComplete="off"
-            placeholder="Dictada por el destinatario"
-            disabled={locked}
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
-            El cliente debe decirte su palabra clave al abrir la puerta.
-          </p>
-        </>
-      )}
-
-      {isLastMile && useContingency && (
-        <>
-          <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 px-4 py-3">
-            <p className="text-xs font-bold text-amber-800 dark:text-amber-400"><AlertTriangle size={14} className="inline text-amber-500 dark:text-amber-400" /> Entrega de contingencia</p>
-            <p className="text-xs text-amber-700 dark:text-amber-400/80 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
-          </div>
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            DNI del destinatario
-          </label>
-          <input
-            ref={dniRef}
-            value={dni}
-            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Ej: 30123456"
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
-          />
-        </>
-      )}
-
-      {!isLastMile && (
-        <>
-          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-            DNI del destinatario
-          </label>
-          <input
-            ref={dniRef}
-            value={dni}
-            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Ej: 30123456"
-            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
-          />
-          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
-            Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
-          </p>
-        </>
-      )}
-
-      {error && (
-        <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
-      )}
-
-      <div className="flex flex-col gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canConfirm || submitting || speedBlocked}
-          className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
-        >
-          {submitting ? "Guardando…" : "Confirmar entrega"}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
-        >
-          Cancelar
-        </button>
-      </div>
-
-      {isLastMile && locked && !useContingency && (
-        <button
-          onClick={() => onUseContingency(true)}
-          className="mt-3 w-full h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold cursor-pointer transition-all duration-150"
-        >
-          Entregar con DNI
-        </button>
-      )}
-      {isLastMile && useContingency && (
-        <button
-          onClick={() => onUseContingency(false)}
-          className="mt-3 w-full text-sm dark:text-gray-400 text-slate-500 underline cursor-pointer min-h-[44px] flex items-center justify-center"
-        >
-          Volver a intentar con palabra clave
-        </button>
-      )}
-
-      {speedBlocked && (
-        <div className="mt-3 text-center">
-          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
-          {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
-            >
-              Activar ubicación
-            </button>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
-function FailedSheet({
-  open,
-  onClose,
-  shipment,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-}) {
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Marcar como no entregado"
-      description={`No entrega a ${name}`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        ¿Qué pasó?
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {FAILED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-all duration-150 active:scale-95 ${
-                active
-                  ? "border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300"
-                  : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50"
-              }`}
-            >
-              {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y driver-input"
-      />
-
-      <div className="flex flex-col gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting || speedBlocked}
-          className="h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
-        >
-          {submitting ? "Guardando…" : "Confirmar"}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
-        >
-          Cancelar
-        </button>
-      </div>
-      {speedBlocked && (
-        <div className="mt-3 text-center">
-          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
-          {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
-            >
-              Activar ubicación
-            </button>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
-
-
-
-function RejectedSheet({
-  open,
-  onClose,
-  shipment,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-  speedBlocked,
-  blockMessage,
-  needsLocation,
-  onRequestLocation,
-}: {
-  open: boolean;
-  onClose: () => void;
-  shipment: Shipment | null;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-  speedBlocked: boolean;
-  blockMessage: string;
-  needsLocation: boolean;
-  onRequestLocation: () => void;
-}) {
-  if (!shipment) return null;
-  const { name } = recipientView(shipment);
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Rechazo por destinatario"
-      description={`${name} rechazó el envío`}
-    >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
-        Motivo del rechazo
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {REJECTED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-all duration-150 active:scale-95 flex flex-col items-center justify-center gap-0.5 px-2 ${
-                active
-                  ? "border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-300"
-                  : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50"
-              }`}
-            >
-              <r.icon className="w-5 h-5" />
-              <span className="text-xs leading-tight text-center">{r.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={2}
-        className="w-full px-4 py-3 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none driver-input"
-      />
-
-      <div className="flex flex-col gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!canSubmit || submitting || speedBlocked}
-          className="h-14 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
-        >
-          {submitting ? "Guardando…" : "Confirmar rechazo"}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
-        >
-          Cancelar
-        </button>
-      </div>
-      {speedBlocked && (
-        <div className="mt-3 text-center">
-          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
-          {needsLocation && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
-            >
-              Activar ubicación
-            </button>
-          )}
-        </div>
-      )}
-    </BottomSheet>
-  );
-}
-
 
 function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
   const navigate = useNavigate();
