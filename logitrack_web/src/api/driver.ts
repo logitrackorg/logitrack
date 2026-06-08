@@ -113,30 +113,39 @@ export interface PVTPayload {
   latencia_promedio_ms: number;
   aciertos: number;
   errores: number;
+  game_errors: number;
 }
 
 export interface PVTResult {
   latencia_promedio_ms: number;
   aciertos: number;
   errores: number;
+  game_errors?: number;
   recorded_at: string;
 }
 
 export type PersonalHistoryStatus = "pending" | "approved" | "rejected" | "sin_solicitud";
+
+// Solicitud de gobernanza de datos (acceso o eliminación de historial). Misma
+// forma para ambos tipos — se distinguen por el campo `type` en el backend.
+export interface HistoryGovernanceRequest {
+  driver_id: string;
+  status: PersonalHistoryStatus;
+  request_date: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  review_note?: string;
+}
 
 export interface PersonalHistoryResult {
   ok: boolean;
   request_status?: PersonalHistoryStatus;
   history?: import("./supervisorFatigue").CheckinRecord[];
   total?: number;
-  request?: {
-    driver_id: string;
-    status: PersonalHistoryStatus;
-    request_date: string;
-    reviewed_by?: string;
-    reviewed_at?: string;
-    review_note?: string;
-  };
+  request?: HistoryGovernanceRequest;
+  /** Solicitud de eliminación/revocación — solo puede crearse cuando `request`
+   *  (de acceso) está en estado "approved". Null/undefined si nunca se pidió. */
+  deletion_request?: HistoryGovernanceRequest | null;
 }
 
 export const driverApi = {
@@ -219,12 +228,19 @@ export const driverApi = {
   requestHistory: () =>
     api.post<{ ok: boolean; request: NonNullable<PersonalHistoryResult["request"]> }>("/driver/history-request")
       .then((r) => r.data),
+  /** Solicita la eliminación/revocación del historial compartido. Solo válida
+   *  cuando la solicitud de acceso del chofer está en estado "approved"
+   *  (el backend devuelve 409 en caso contrario). */
+  requestHistoryDeletion: () =>
+    api.post<{ ok: boolean; request: HistoryGovernanceRequest }>("/driver/history-deletion-request")
+      .then((r) => r.data),
   getPersonalHistory: (): Promise<PersonalHistoryResult> =>
     api.get("/driver/history")
       .then((r) => ({ ok: true as const, ...r.data }))
       .catch((err) => ({
         ok: false as const,
         request_status: (err?.response?.data?.request_status ?? "sin_solicitud") as PersonalHistoryStatus,
+        deletion_request: (err?.response?.data?.deletion_request ?? null) as HistoryGovernanceRequest | null,
       })),
   getFatigueBlockStatus: (): Promise<{ blocked: boolean; recently_unblocked?: boolean; unblocked_by?: string; unblocked_at?: string }> =>
     api.get("/driver/fatigue/block-status").then((r) => r.data),

@@ -66,6 +66,11 @@ export function PVTCheckIn({ onDone }: Props) {
   const latenciesRef = useRef<number[]>([]);
   const hitsRef = useRef(0);
   const errorsRef = useRef(0);
+  // game_errors: contador más amplio que `errorsRef` — suma los toques
+  // erróneos (clic sin estímulo / fuera de él) MÁS los estímulos perdidos
+  // (el círculo seguía visible cuando terminó el tiempo). Se envía al backend
+  // junto al resto de las métricas del minijuego.
+  const gameErrorsRef = useRef(0);
 
   // Handles de timers
   const gameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,6 +115,14 @@ export function PVTCheckIn({ onDone }: Props) {
     isPlayingRef.current = false;
     if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     if (stimulusTimerRef.current) clearTimeout(stimulusTimerRef.current);
+
+    // Estímulo perdido: el círculo seguía visible y sin responder cuando se
+    // acabó el tiempo — cuenta como error amplio (game_errors), no como toque
+    // erróneo (errorsRef), que es exclusivamente para clics sin estímulo.
+    if (circleVisible && stimulusTimeRef.current !== null) {
+      gameErrorsRef.current++;
+    }
+
     stimulusTimeRef.current = null;
     setCircleVisible(false);
 
@@ -127,6 +140,7 @@ export function PVTCheckIn({ onDone }: Props) {
     latenciesRef.current = [];
     hitsRef.current = 0;
     errorsRef.current = 0;
+    gameErrorsRef.current = 0;
     timeLeftRef.current = GAME_DURATION_S;
     stimulusTimeRef.current = null;
 
@@ -155,6 +169,7 @@ export function PVTCheckIn({ onDone }: Props) {
   const handleBoxPointerDown = () => {
     if (!isPlayingRef.current) return;
     errorsRef.current++;
+    gameErrorsRef.current++;
     setErrorCount(errorsRef.current);
   };
 
@@ -181,6 +196,7 @@ export function PVTCheckIn({ onDone }: Props) {
       latencia_promedio_ms: results.avgLatency,
       aciertos: results.hits,
       errores: results.errors,
+      game_errors: gameErrorsRef.current,
     };
     try {
       await driverApi.submitPVT(payload);

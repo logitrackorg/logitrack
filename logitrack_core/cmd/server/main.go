@@ -631,6 +631,7 @@ func main() {
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.POST("/driver/history-deletion-request", driverOnly, driverHandler.RequestHistoryDeletion)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499

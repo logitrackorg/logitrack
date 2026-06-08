@@ -24,6 +24,7 @@ export interface PVTMetricsData {
   latencia_promedio_ms: number;
   aciertos: number;
   errores: number;
+  game_errors?: number;
   recorded_at: string;
 }
 
@@ -107,8 +108,14 @@ export interface FatigueHistoryResponse {
 
 export type HistoryRequestStatus = "pending" | "approved" | "rejected";
 
+// "access"   → el chofer pide compartir su historial con supervisores.
+// "deletion" → el chofer pide revocar/eliminar el acceso ya otorgado.
+// Ausente (legado) se interpreta como "access".
+export type HistoryRequestType = "access" | "deletion";
+
 export interface HistoryAccessRequest {
   driver_id: string;
+  type?: HistoryRequestType;
   status: HistoryRequestStatus;
   request_date: string;
   reviewed_by?: string;
@@ -155,9 +162,9 @@ export const supervisorFatigueApi = {
       .get<{ requests: HistoryAccessRequest[]; total: number }>("/supervisor/history-requests", { params })
       .then((r) => r.data);
   },
-  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", note?: string) =>
+  reviewHistoryRequest: (driverID: string, action: "approve" | "reject", type: HistoryRequestType, note?: string) =>
     api
-      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, note })
+      .patch<{ ok: boolean; request: HistoryAccessRequest }>(`/supervisor/history-requests/${driverID}`, { action, type, note })
       .then((r) => r.data),
   getBlockedDrivers: (branchId?: string) => {
     const params = branchId ? { branch_id: branchId } : {};

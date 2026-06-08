@@ -189,6 +189,19 @@ export function VoiceCheckIn({ onDone }: Props) {
       }
     } catch (err: unknown) {
       const respData = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+
+      if (respData?.error === "SILENCE_DETECTED") {
+        // Silencio explícito detectado por el backend (energía/VAD/speech_rate
+        // por debajo del umbral) — mensaje específico y resetear el grabador
+        // para que el chofer vuelva a empezar desde cero.
+        setErrorMsg("No se detectó sonido. Por favor, habla con voz clara y fuerte.");
+        chunksRef.current = [];
+        setHasChunks(false);
+        hasVoiceRef.current = false;
+        setState("idle");
+        return;
+      }
+
       const isInvalidAudio = respData?.error === "INVALID_AUDIO";
       setErrorMsg(isInvalidAudio && respData?.message
         ? respData.message

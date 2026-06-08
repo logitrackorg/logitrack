@@ -82,5 +82,6 @@ type PVTResult struct {
 	LatenciaPromedioMs float64   `json:"latencia_promedio_ms"` // mean response latency
 	Aciertos           int       `json:"aciertos"`             // correct circle taps
 	Errores            int       `json:"errores"`              // false positives (taps with no stimulus)
+	GameErrors         int       `json:"game_errors,omitempty"` // erroneous clicks + missed stimuli (broader error count for the minigame)
 	RecordedAt         time.Time `json:"recorded_at"`
 }

@@ -16,6 +16,7 @@ import {
   type DriverFatigueStatus,
   type FatigueDashboardResponse,
   type HistoryAccessRequest,
+  type HistoryRequestType,
   type RiskLevel,
 } from "../api/supervisorFatigue";
 import { branchApi, type Branch } from "../api/branches";
@@ -331,7 +332,8 @@ export function SupervisorFatigue() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
-  const [historyRequests, setHistoryRequests] = useState<HistoryAccessRequest[]>([]);
+  const [accessRequests, setAccessRequests] = useState<HistoryAccessRequest[]>([]);
+  const [deletionRequests, setDeletionRequests] = useState<HistoryAccessRequest[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [blockedDriverIds, setBlockedDriverIds] = useState<string[]>([]);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
@@ -394,10 +396,13 @@ export function SupervisorFatigue() {
     return () => clearInterval(id);
   }, [selectedBranch]);
 
+  // Una sola llamada trae las solicitudes pendientes de ambos tipos; se
+  // separan client-side por `type` (legado/sin tipo se interpreta "access").
   const loadHistoryRequests = useCallback(async () => {
     try {
       const res = await supervisorFatigueApi.listHistoryRequests("pending");
-      setHistoryRequests(res.requests);
+      setAccessRequests(res.requests.filter((r) => r.type !== "deletion"));
+      setDeletionRequests(res.requests.filter((r) => r.type === "deletion"));
     } catch {
       // non-critical — silent failure
     }
@@ -405,10 +410,10 @@ export function SupervisorFatigue() {
 
   useEffect(() => { loadHistoryRequests(); }, [loadHistoryRequests]);
 
-  const handleReview = async (driverID: string, action: "approve" | "reject") => {
+  const handleReview = async (driverID: string, type: HistoryRequestType, action: "approve" | "reject") => {
     setReviewingId(driverID);
     try {
-      await supervisorFatigueApi.reviewHistoryRequest(driverID, action);
+      await supervisorFatigueApi.reviewHistoryRequest(driverID, action, type);
       await loadHistoryRequests();
     } catch {
       // ignore
@@ -628,70 +633,113 @@ export function SupervisorFatigue() {
         </Card>
       )}
 
-      {/* Solicitudes de historial personal */}
-      <Card>
-        <CardHeader className="border-b border-slate-100 pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-500" />
-            Solicitudes de historial personal ({historyRequests.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
-                <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
-                <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historyRequests.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-6 px-4 text-center text-sm text-slate-400 italic">
-                    No hay peticiones por ahora.
-                  </td>
-                </tr>
-              ) : (
-                historyRequests.map((req) => (
-                  <tr key={req.driver_id} className="border-t border-slate-100">
-                    <td className="py-3 px-4">
-                      <p className="text-sm font-semibold text-slate-900">{req.full_name || req.driver_id}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">{req.username}</p>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-slate-500 tabular-nums">
-                      {new Date(req.request_date).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          disabled={reviewingId === req.driver_id}
-                          onClick={() => handleReview(req.driver_id, "approve")}
-                          className="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
-                        >
-                          Aprobar
-                        </button>
-                        <button
-                          disabled={reviewingId === req.driver_id}
-                          onClick={() => handleReview(req.driver_id, "reject")}
-                          className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 cursor-pointer transition-colors"
-                        >
-                          Rechazar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      {/* Solicitudes de historial personal (acceso) — siempre visible */}
+      <HistoryRequestsPanel
+        icon={<ShieldAlert className="w-4 h-4 text-amber-500" />}
+        title={`Solicitudes de historial personal (${accessRequests.length})`}
+        requests={accessRequests}
+        type="access"
+        reviewingId={reviewingId}
+        onReview={handleReview}
+      />
+
+      {/* Solicitudes de eliminación de historial — justo debajo, siempre visible */}
+      <HistoryRequestsPanel
+        icon={<ShieldAlert className="w-4 h-4 text-orange-500" />}
+        title={`Solicitudes de eliminación de historial (${deletionRequests.length})`}
+        requests={deletionRequests}
+        type="deletion"
+        reviewingId={reviewingId}
+        onReview={handleReview}
+      />
 
       <p className="text-[11px] text-slate-400 text-center">
         Actualización automática cada 60 segundos · Hacé clic en una fila para ver el historial
       </p>
     </div>
+  );
+}
+
+// ── panel de solicitudes de gobernanza de historial ──────────────────────────
+//
+// Reutilizado para los dos paneles (acceso / eliminación). Ambos contenedores
+// deben permanecer SIEMPRE visibles — el estado vacío se renderiza dentro de
+// la tabla, nunca oculta la tarjeta completa.
+
+function HistoryRequestsPanel({
+  icon,
+  title,
+  requests,
+  type,
+  reviewingId,
+  onReview,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  requests: HistoryAccessRequest[];
+  type: HistoryRequestType;
+  reviewingId: string | null;
+  onReview: (driverID: string, type: HistoryRequestType, action: "approve" | "reject") => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="border-b border-slate-100 pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <table className="w-full">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Chofer</th>
+              <th className="py-2.5 px-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Solicitado</th>
+              <th className="py-2.5 px-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requests.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-6 px-4 text-center text-sm text-slate-400 italic">
+                  No hay peticiones por ahora.
+                </td>
+              </tr>
+            ) : (
+              requests.map((req) => (
+                <tr key={req.driver_id} className="border-t border-slate-100">
+                  <td className="py-3 px-4">
+                    <p className="text-sm font-semibold text-slate-900">{req.full_name || req.driver_id}</p>
+                    <p className="text-[11px] text-slate-400 font-mono">{req.username}</p>
+                  </td>
+                  <td className="py-3 px-4 text-xs text-slate-500 tabular-nums">
+                    {new Date(req.request_date).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        disabled={reviewingId === req.driver_id}
+                        onClick={() => onReview(req.driver_id, type, "approve")}
+                        className="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        disabled={reviewingId === req.driver_id}
+                        onClick={() => onReview(req.driver_id, type, "reject")}
+                        className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-rose-600 text-xs font-semibold hover:bg-rose-50 disabled:opacity-50 cursor-pointer transition-colors"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 
