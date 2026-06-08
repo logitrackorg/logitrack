@@ -436,16 +436,16 @@ export function DriverRoute() {
   return (
     <div className="pb-32">
       {/* Header sticky con progreso y tabs */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
+      <header className="sticky top-0 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
+        <div className="px-4 max-w-2xl mx-auto pt-3 pb-2">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-                <Truck className="w-4.5 h-4.5" />
+              <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
+                <Truck className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
-                <p className="text-[11px] dark:text-gray-400 text-slate-500 leading-tight">
+                <p className="text-xs dark:text-gray-400 text-slate-500 leading-tight">
                   {today} · {done}/{total} completados
                 </p>
               </div>
@@ -456,22 +456,22 @@ export function DriverRoute() {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] ${viewMode === 'list'
                     ? 'bg-[var(--sidebar-bg)] text-white'
                     : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
                     }`}
                 >
-                  <Package className="w-3.5 h-3.5" />
+                  <Package className="w-4 h-4" />
                   Lista
                 </button>
                 <button
                   onClick={() => setViewMode('map')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] ${viewMode === 'map'
                     ? 'bg-[var(--sidebar-bg)] text-white'
                     : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
                     }`}
                 >
-                  <MapPin className="w-3.5 h-3.5" />
+                  <MapPin className="w-4 h-4" />
                   Mapa
                 </button>
               </div>
@@ -481,9 +481,9 @@ export function DriverRoute() {
               <button
                 onClick={() => { setSimActive(true); setViewMode('map'); }}
                 title="Activar simulación GPS"
-                className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
               >
-                <Film size={16} />
+                <Film size={20} />
               </button>
             )}
 
@@ -491,16 +491,16 @@ export function DriverRoute() {
             {isDangerDismissed && (
               <span
                 title="Zona peligrosa activa"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs font-bold shrink-0 animate-pulse"
               >
-                <AlertTriangle size={12} className="mr-0.5" /> Zona
+                <AlertTriangle size={14} className="mr-0.5" /> Zona
               </span>
             )}
             <RouteStatusPill status={routeStatus} />
           </div>
 
           <div className="mt-3">
-            <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
+            <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
               <div
                 ref={el => { if (el) el.style.width = `${progressPct}%`; }}
                 className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
@@ -509,16 +509,16 @@ export function DriverRoute() {
           </div>
 
           {canAct && viewMode === 'list' && (
-            <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
+            <div className="mt-3 -mx-4 px-4 flex gap-1 border-b-0">
               <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
                 Pendientes
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
                   {pending}
                 </span>
               </TabButton>
               <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
                 Completados
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                   {done}
                 </span>
               </TabButton>
@@ -527,14 +527,14 @@ export function DriverRoute() {
         </div>
       </header>
 
-      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
+      <div className="px-4 py-4 max-w-2xl mx-auto">
         {actionError && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="flex items-start gap-3 mb-4 px-4 py-3.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-sm font-semibold text-rose-700 dark:text-rose-300">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <span className="flex-1">{actionError}</span>
             <button
               onClick={() => setActionError("")}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+              className="text-xs font-bold text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               Cerrar
             </button>
@@ -542,16 +542,16 @@ export function DriverRoute() {
         )}
 
         {routeStatus === "pendiente" && (
-          <Card className="mb-4 border-amber-200 bg-amber-50/60">
+          <Card className="mb-4 border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/8">
             <div className="p-4 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-bold text-amber-900">Ruta sin iniciar</p>
-                <p className="mt-0.5 text-xs text-amber-800 leading-relaxed">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-300">Ruta sin iniciar</p>
+                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-400 leading-relaxed">
                   Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
                 </p>
                 {data.route.suggested_start_time && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-100 border border-amber-300 text-xs font-semibold text-amber-900">
+                  <p className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-xs font-semibold text-amber-900 dark:text-amber-300">
                     <Clock className="w-3.5 h-3.5" />
                     Salida sugerida: {new Date(data.route.suggested_start_time).toLocaleTimeString("es-AR", {
                       hour: "2-digit",
@@ -588,17 +588,25 @@ export function DriverRoute() {
         ) : (
           <>
             {visibleList.length === 0 ? (
-              <Card className="p-8 text-center">
+              <div className="py-16 text-center">
                 {tab === "pendientes" ? (
                   <>
-                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                    <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">¡Todo listo por ahora!</p>
-                    <p className="mt-1 text-xs dark:text-gray-400 text-slate-500">No quedan entregas pendientes.</p>
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <p className="text-lg font-bold dark:text-gray-100 text-slate-900">¡Todo listo por ahora!</p>
+                    <p className="mt-1.5 text-sm dark:text-gray-400 text-slate-500">No quedan entregas pendientes en esta ruta.</p>
                   </>
                 ) : (
-                  <p className="text-sm dark:text-gray-400 text-slate-500">Aún no completaste ninguna entrega.</p>
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-gray-700/50 text-slate-400 dark:text-gray-500 flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <p className="text-lg font-bold dark:text-gray-100 text-slate-900">Sin entregas aún</p>
+                    <p className="mt-1.5 text-sm dark:text-gray-400 text-slate-500">Las entregas que completes aparecerán acá.</p>
+                  </>
                 )}
-              </Card>
+              </div>
             ) : (
               <div className="grid gap-3">
                 {visibleList.map((shipment, idx) => (
@@ -731,13 +739,13 @@ export function DriverRoute() {
 
 function RouteStatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800" },
-    en_curso: { label: "En curso", cls: "bg-emerald-100 text-emerald-800" },
-    finalizada: { label: "Finalizada", cls: "bg-indigo-100 text-indigo-800" },
+    pendiente: { label: "Pendiente", cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-400" },
+    en_curso: { label: "En curso", cls: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-400" },
+    finalizada: { label: "Finalizada", cls: "bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-400" },
   };
   const c = map[status] ?? map.pendiente;
   return (
-    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${c.cls}`}>
+    <span className={`text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap min-h-[44px] inline-flex items-center ${c.cls}`}>
       {c.label}
     </span>
   );
@@ -751,12 +759,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
+      className={`relative h-12 px-4 text-sm font-semibold cursor-pointer transition-colors active:scale-95 transition-all duration-150 ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
         }`}
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[var(--brand)]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[3px] rounded-full bg-[var(--brand)]" />
       )}
     </button>
   );
@@ -828,77 +836,84 @@ function ShipmentCard({
   const fragile = !!shipment.is_fragile;
   const attempts = shipment.delivery_attempts ?? 0;
 
+  const statusColor = isDelivered ? "bg-emerald-500" : isFailed ? "bg-rose-500" : isRejected ? "bg-amber-500" : "";
+
   return (
     <Card
       className={
         isCompleted
-          ? "p-0 dark:bg-gray-800/50 bg-slate-50/60 dark:bg-slate-800/30 dark:border-gray-700 border-slate-200"
-          : "p-0 hover:shadow-md transition-shadow"
+          ? "p-0 dark:bg-gray-800/40 bg-slate-50/60 dark:border-gray-700/50 border-slate-200 mb-3"
+          : "p-0 hover:shadow-md transition-shadow mb-3"
       }
     >
       <button
         type="button"
         onClick={onOpen}
-        className="w-full text-left px-4 pt-4 pb-3 cursor-pointer"
+        className="w-full text-left px-3 py-3 cursor-pointer min-h-[44px]"
       >
         <div className="flex items-start gap-3">
           {order !== undefined && (
-            <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sidebar-bg)] text-white text-sm font-bold flex items-center justify-center">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-[var(--sidebar-bg)] text-white text-base font-bold flex items-center justify-center">
               {String(order).padStart(2, "0")}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <p className={`text-base font-bold leading-snug ${isCompleted ? "dark:text-gray-400 text-slate-600" : "dark:text-gray-100 text-slate-900"}`}>
-                {name}
-              </p>
+              <div className="flex items-center gap-2 min-w-0">
+                {isCompleted && (
+                  <span className={`shrink-0 w-2.5 h-2.5 rounded-full ${statusColor}`} />
+                )}
+                <p className={`text-base font-bold leading-snug truncate ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-100 text-slate-900"}`}>
+                  {name}
+                </p>
+              </div>
               {isDelivered && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/15 px-2.5 py-1 rounded-full">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                   Entregado
                 </span>
               )}
               {isFailed && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                  <XCircle className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-rose-700 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/15 px-2.5 py-1 rounded-full">
+                  <XCircle className="w-3.5 h-3.5" />
                   Sin entregar
                 </span>
               )}
               {isRejected && (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                  <Ban className="w-3 h-3" />
+                <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/15 px-2.5 py-1 rounded-full">
+                  <Ban className="w-3.5 h-3.5" />
                   Rechazado
                 </span>
               )}
             </div>
-            <p className={`mt-1 text-sm leading-snug flex items-start gap-1.5 ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-300 text-slate-700"}`}>
-              <MapPin className="w-3.5 h-3.5 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
+            <p className={`mt-1 text-base leading-snug flex items-start gap-1.5 ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-200 text-slate-700"}`}>
+              <MapPin className="w-4 h-4 mt-1 dark:text-gray-500 text-slate-400 shrink-0" />
               <span className="break-words">{fullAddress}</span>
             </p>
           </div>
-          {!isCompleted && <ChevronRight className="w-4 h-4 text-slate-300 mt-1.5 shrink-0" />}
+          {!isCompleted && <ChevronRight className="w-5 h-5 text-slate-300 mt-1.5 shrink-0" />}
         </div>
 
         {!isCompleted && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {tw && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                <Clock className="w-3 h-3" />
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <Clock className="w-3.5 h-3.5" />
                 {TIME_WINDOW_LABEL[tw] ?? tw} {TIME_WINDOW_HOURS[tw] && `· ${TIME_WINDOW_HOURS[tw]}`}
               </span>
             )}
             {fragile && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-                <AlertTriangle className="w-3 h-3" />
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/30">
+                <AlertTriangle className="w-3.5 h-3.5" />
                 Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
-              <Package className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border dark:bg-gray-700/50 bg-slate-50 dark:text-gray-300 text-slate-600 dark:border-gray-600 border-slate-200">
+              <Package className="w-3.5 h-3.5" />
               {shipment.weight_kg} kg
             </span>
             {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/30">
                 Reintento {attempts + 1}
               </span>
             )}
@@ -906,15 +921,15 @@ function ShipmentCard({
         )}
 
         {!isCompleted && specialInstructions && (
-          <div className="mt-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-start gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="mt-3 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-sm text-amber-900 dark:text-amber-300 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <span className="leading-relaxed">{specialInstructions}</span>
           </div>
         )}
       </button>
 
       {!isCompleted && (
-        <div className="px-4 pb-4 border-t dark:border-gray-700 border-slate-100">
+        <div className="px-3 pb-4 border-t dark:border-gray-700 border-slate-100">
           <div className="mt-3" onClick={(e) => e.stopPropagation()}>
             <WhatsAppQuickButton
               phone={phone}
@@ -925,34 +940,32 @@ function ShipmentCard({
           </div>
 
           {canAct && (
-            <>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <button
-                  onClick={handleDeliverClick}
-                  className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Entregar
-                </button>
-                <button
-                  onClick={handleFailedClick}
-                  className="h-12 rounded-xl border-2 border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
-                >
-                  <XCircle className="w-4 h-4" />
-                  No entregado
-                </button>
-              </div>
+            <div className="flex flex-col gap-2 mt-3">
+              <button
+                onClick={handleDeliverClick}
+                className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                Entregar
+              </button>
+              <button
+                onClick={handleFailedClick}
+                className="h-14 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 active:scale-95 text-rose-700 dark:text-rose-400 text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
+              >
+                <XCircle className="w-5 h-5" />
+                No entregado
+              </button>
               <button
                 onClick={handleRejectedClick}
-                className="w-full mt-2 h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 text-sm font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1.5"
+                className="h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold cursor-pointer transition-all duration-150 inline-flex items-center justify-center gap-2 w-full"
               >
-                <Ban className="w-4 h-4" />
+                <Ban className="w-5 h-5" />
                 Rechazado por destinatario
               </button>
-            </>
+            </div>
           )}
 
-          <p className="mt-3 text-[10px] font-mono dark:text-gray-500 text-slate-400 text-center">{shipment.tracking_id}</p>
+          <p className="mt-3 text-[11px] font-mono dark:text-gray-500 text-slate-400 text-center">{shipment.tracking_id}</p>
         </div>
       )}
 
@@ -960,9 +973,9 @@ function ShipmentCard({
         <button
           type="button"
           onClick={onOpen}
-          className="w-full px-4 pb-3 -mt-1 text-left cursor-pointer"
+          className="w-full px-3 pb-3 -mt-1 text-left cursor-pointer min-h-[44px]"
         >
-          <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</p>
+          <p className="text-[11px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</p>
         </button>
       )}
     </Card>
@@ -1035,14 +1048,14 @@ function DeliverSheet({
       {isLastMile && !useContingency && (
         <>
           {locked && (
-            <div className="mb-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-              <p className="text-xs font-bold text-red-700">Campo bloqueado — 3 intentos fallidos</p>
-              <p className="text-[11px] text-red-600 mt-0.5">Usá la opción de entrega con DNI para continuar.</p>
+            <div className="mb-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 px-4 py-3">
+              <p className="text-xs font-bold text-red-700 dark:text-red-400">Campo bloqueado — 3 intentos fallidos</p>
+              <p className="text-xs text-red-600 dark:text-red-400/80 mt-0.5">Usá la opción de entrega con DNI para continuar.</p>
             </div>
           )}
           {!locked && keywordAttempts > 0 && (
-            <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">
-              <p className="text-[11px] text-amber-700 font-semibold">
+            <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-2.5">
+              <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
                 Intentos fallidos: {keywordAttempts}/3 — quedan {3 - keywordAttempts} intento(s)
               </p>
             </div>
@@ -1067,9 +1080,9 @@ function DeliverSheet({
 
       {isLastMile && useContingency && (
         <>
-          <div className="mb-3 rounded-xl bg-amber-50 border border-amber-300 px-4 py-3">
-            <p className="text-xs font-bold text-amber-800"><AlertTriangle size={14} className="inline text-amber-500" /> Entrega de contingencia</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
+          <div className="mb-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 px-4 py-3">
+            <p className="text-xs font-bold text-amber-800 dark:text-amber-400"><AlertTriangle size={14} className="inline text-amber-500 dark:text-amber-400" /> Entrega de contingencia</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400/80 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
           </div>
           <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
             DNI del destinatario
@@ -1110,26 +1123,26 @@ function DeliverSheet({
         <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
       )}
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!canConfirm || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
+        >
+          Cancelar
         </button>
       </div>
 
       {isLastMile && locked && !useContingency && (
         <button
           onClick={() => onUseContingency(true)}
-          className="mt-3 w-full h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-sm font-bold cursor-pointer transition-colors"
+          className="mt-3 w-full h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold cursor-pointer transition-all duration-150"
         >
           Entregar con DNI
         </button>
@@ -1137,19 +1150,19 @@ function DeliverSheet({
       {isLastMile && useContingency && (
         <button
           onClick={() => onUseContingency(false)}
-          className="mt-2 w-full text-[11px] dark:text-gray-400 text-slate-500 underline cursor-pointer"
+          className="mt-3 w-full text-sm dark:text-gray-400 text-slate-500 underline cursor-pointer min-h-[44px] flex items-center justify-center"
         >
           Volver a intentar con palabra clave
         </button>
       )}
 
       {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+        <div className="mt-3 text-center">
+          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
+              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
             >
               Activar ubicación
             </button>
@@ -1211,10 +1224,11 @@ function FailedSheet({
             <button
               key={r.id}
               onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${active
-                ? "border-rose-500 bg-rose-50 text-rose-800"
-                : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
-                }`}
+              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-all duration-150 active:scale-95 ${
+                active
+                  ? "border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300"
+                  : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50"
+              }`}
             >
               {r.label}
             </button>
@@ -1230,31 +1244,31 @@ function FailedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y driver-input"
+        className="w-full px-4 py-3 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y driver-input"
       />
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!canSubmit || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
         >
           {submitting ? "Guardando…" : "Confirmar"}
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
+        >
+          Cancelar
+        </button>
       </div>
       {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+        <div className="mt-3 text-center">
+          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
+              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
             >
               Activar ubicación
             </button>
@@ -1264,6 +1278,8 @@ function FailedSheet({
     </BottomSheet>
   );
 }
+
+
 
 
 function RejectedSheet({
@@ -1317,10 +1333,10 @@ function RejectedSheet({
             <button
               key={r.id}
               onClick={() => onReasonChange(r.id)}
-              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors flex flex-col items-center justify-center gap-0.5 px-2 ${
+              className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-all duration-150 active:scale-95 flex flex-col items-center justify-center gap-0.5 px-2 ${
                 active
-                  ? "border-amber-500 bg-amber-50 text-amber-900"
-                  : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
+                  ? "border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-300"
+                  : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50"
               }`}
             >
               <span className="text-lg leading-none">{r.emoji}</span>
@@ -1338,31 +1354,31 @@ function RejectedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={2}
-        className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none driver-input"
+        className="w-full px-4 py-3 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none driver-input"
       />
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           disabled={!canSubmit || submitting || speedBlocked}
-          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="h-14 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 disabled:bg-slate-200 dark:disabled:bg-gray-700 disabled:text-slate-400 dark:disabled:text-gray-500 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 w-full"
         >
           {submitting ? "Guardando…" : "Confirmar rechazo"}
         </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="h-14 rounded-xl border dark:border-gray-600 border-slate-200 bg-transparent dark:hover:bg-gray-700/50 hover:bg-slate-50 active:scale-95 dark:text-gray-300 text-slate-600 text-base font-bold cursor-pointer transition-all duration-150 w-full"
+        >
+          Cancelar
+        </button>
       </div>
       {speedBlocked && (
-        <div className="mt-2.5 text-center">
-          <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>
+        <div className="mt-3 text-center">
+          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">{blockMessage}</p>
           {needsLocation && (
             <button
               onClick={(e) => { e.stopPropagation(); onRequestLocation(); }}
-              className="mt-1.5 text-xs font-bold text-[var(--brand)] underline cursor-pointer"
+              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold cursor-pointer transition-all duration-150"
             >
               Activar ubicación
             </button>
@@ -1399,21 +1415,21 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
   const tripActive = qrLoading || tripId !== null;
 
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
+    <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
         <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <Truck className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
+          <h1 className="text-xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
           <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">{today}</p>
         </div>
       </div>
 
       <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-5 mb-5 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-7 h-7" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider opacity-90">Ruta finalizada</p>
@@ -1421,7 +1437,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
               {done} {done === 1 ? "entrega completada" : "entregas completadas"}
             </p>
             {failed > 0 && (
-              <p className="text-xs opacity-90 mt-0.5">
+              <p className="text-sm opacity-90 mt-0.5">
                 {failed} {failed === 1 ? "envío sin entregar" : "envíos sin entregar"}
               </p>
             )}
@@ -1431,17 +1447,17 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
       {/* QR de retorno — siempre que el viaje siga en_transito */}
       {tripActive && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 mb-5">
-          <p className="text-sm font-bold text-amber-900 mb-1">Mostrá este código al operador</p>
-          <p className="text-xs text-amber-700 mb-4">
+        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/8 p-5 mb-5">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">Mostrá este código al operador</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
             {failed > 0
               ? `Al regresar a la sucursal, el operador escanea este ID para registrar el estado final de los ${failed} ${failed === 1 ? "envío pendiente" : "envíos pendientes"} y liberar el vehículo.`
               : "Al regresar a la sucursal, el operador escanea este ID para liberar el vehículo."
             }
           </p>
           {qrLoading ? (
-            <div className="flex justify-center py-4">
-              <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-6">
+              <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             qrBase64 && (
@@ -1449,10 +1465,10 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
                 <img
                   src={`data:image/png;base64,${qrBase64}`}
                   alt="QR de retorno"
-                  className="w-48 h-48 rounded-xl border border-amber-200"
+                  className="w-48 h-48 rounded-xl border border-amber-200 dark:border-amber-500/40"
                 />
                 {tripId && (
-                  <p className="text-xs font-mono text-amber-800 bg-amber-100 px-3 py-1.5 rounded-lg">
+                  <p className="text-xs font-mono text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15 px-3 py-1.5 rounded-lg">
                     {tripId}
                   </p>
                 )}
@@ -1465,21 +1481,21 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
       {/* Sin viaje activo: el operador ya recibió, el chofer puede empezar otro reparto */}
       {!tripActive && (
         <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
-            <Truck className="w-6 h-6" />
+          <div className="w-16 h-16 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
+            <Truck className="w-8 h-8" />
           </div>
-          <p className="text-sm font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
-          <p className="text-xs dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
+          <p className="text-base font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
           <button
             onClick={() => navigate("/driver/scan")}
-            className="h-10 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
+            className="h-14 px-8 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] active:scale-95 text-white text-base font-bold cursor-pointer transition-all duration-150 w-full max-w-xs"
           >
             Escanear vehículo
           </button>
         </div>
       )}
 
-      <p className="text-xs font-bold dark:text-gray-400 text-slate-500 uppercase tracking-wider mb-2 px-1">
+      <p className="text-xs font-bold dark:text-gray-400 text-slate-500 uppercase tracking-wider mb-3 px-1">
         Resumen del día
       </p>
       <div className="grid gap-2">
@@ -1491,31 +1507,31 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
             <Card
               key={shipment.tracking_id}
               onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-              className="px-4 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors flex items-center gap-3"
+              className="px-3 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors flex items-center gap-3"
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                 delivered
-                  ? "bg-emerald-100 text-emerald-700"
+                  ? "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                   : rejected
-                  ? "bg-amber-100 text-amber-700"
-                  : "bg-rose-100 text-rose-700"
+                  ? "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                  : "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400"
               }`}>
                 {delivered ? (
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4.5 h-4.5" />
                 ) : rejected ? (
-                  <Ban className="w-4 h-4" />
+                  <Ban className="w-4.5 h-4.5" />
                 ) : (
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="w-4.5 h-4.5" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 truncate">{name}</p>
-                <code className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
+                <code className="text-[11px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
                 {rejected && (
-                  <p className="text-[10px] text-amber-600 font-medium">Rechazado por destinatario</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Rechazado por destinatario</p>
                 )}
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+              <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
             </Card>
           );
         })}
@@ -1526,7 +1542,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
 function RouteSkeleton() {
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+    <div className="px-4 py-4 max-w-2xl mx-auto">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
         <div className="w-10 h-10 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         <div className="flex-1">
@@ -1536,15 +1552,19 @@ function RouteSkeleton() {
       </div>
       <div className="grid gap-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4">
+          <div key={i} className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-3">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-              <div className="flex-1 space-y-2">
+              <div className="w-10 h-10 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2.5">
                 <div className="h-4 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-                <div className="h-3 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                <div className="h-4 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
                 <div className="flex gap-2 mt-3">
-                  <div className="h-6 w-16 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-                  <div className="h-6 w-20 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                  <div className="h-7 w-16 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                  <div className="h-7 w-20 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                </div>
+                <div className="mt-3 pt-3 border-t dark:border-gray-700 border-slate-100 grid gap-2">
+                  <div className="h-14 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse w-full" />
+                  <div className="h-14 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse w-full" />
                 </div>
               </div>
             </div>

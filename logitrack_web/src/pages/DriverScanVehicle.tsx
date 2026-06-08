@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, QrCode, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Truck, QrCode, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
-import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
+import { Button } from "@/components/ui/button";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
@@ -17,6 +17,13 @@ export function DriverScanVehicle() {
   const [loading, setLoading] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const qrRef = useRef<Html5Qrcode | null>(null);
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Gate de fatiga post-escaneo: se activa solo cuando el chofer ya completó
   // al menos una ruta hoy (segunda ruta en adelante). Para la primera ruta del
@@ -42,22 +49,13 @@ export function DriverScanVehicle() {
     }).catch(() => { /* sin trip — quedarse acá */ });
   }, [navigate]);
 
-  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
-  // camino (persistido en sessionStorage), forzar el gate de inmediato sin
-  // esperar un nuevo escaneo — el backend ya considera el check-in "completo"
-  // apenas se envía el paso KSS, así que no podemos confiar solo en su respuesta.
-  useEffect(() => {
-    if (!user) return;
-    if (!getPendingFatigueStep(user.id)) return;
-    driverApi.getCheckinGateStatus()
-      .then((status) => setRequiresSleepData(status.requires_sleep_data))
-      .catch(() => {})
-      .finally(() => setShowGate(true));
-  }, [user]);
-
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);
-    navigate("/driver/route", { replace: true });
+    setTimeout(() => {
+      if (mountedRef.current) {
+        navigate("/driver/route", { replace: true });
+      }
+    }, 1800);
   };
 
   // Realiza el claim del token (QR o patente) y navega a la pantalla
@@ -169,6 +167,19 @@ export function DriverScanVehicle() {
     };
   }, []);
 
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const trimmed = text.trim().toUpperCase();
+      if (trimmed) {
+        setManualToken(trimmed);
+        void handleToken(trimmed);
+      }
+    } catch {
+      // Clipboard API not available — user types manually
+    }
+  };
+
   // Gate de fatiga post-escaneo: se muestra solo para la segunda ruta en
   // adelante. requiresSleepData siempre es false aquí porque las horas de
   // sueño ya fueron registradas durante el primer check-in del día.
@@ -190,77 +201,137 @@ export function DriverScanVehicle() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-[var(--bg-page)] flex flex-col items-center justify-center px-4 py-6">
+      <div className="w-full max-w-sm flex flex-col items-center">
+
+        {/* ── Header ────────────────────────────────────────── */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-[var(--sidebar-bg)] flex items-center justify-center mb-3">
+          <div className="w-14 h-14 rounded-full bg-[var(--brand-800)] flex items-center justify-center mb-3 shadow-lg">
             <Truck className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Escanear vehículo</h1>
-          <p className="text-sm text-slate-500 mt-1 text-center">
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">Escanear vehículo</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1 text-center">
             Escaneá el código QR del vehículo para reclamar el viaje.
           </p>
         </div>
 
-        {error && (
-          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            {error}
+        {/* ── Loading ───────────────────────────────────────── */}
+        {loading && (
+          <div className="py-12 text-center animate-fade-in">
+            <Loader2 className="w-12 h-12 text-[var(--brand)] animate-spin mx-auto mb-4" />
+            <p className="text-lg font-bold text-[var(--text-primary)]">Escaneando…</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">
+              Reclamando vehículo…
+            </p>
           </div>
         )}
 
-        {success && (
-          <div className="mb-4 flex items-start gap-2 px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-sm text-emerald-700">
-            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-            {success}
+        {/* ── Success ───────────────────────────────────────── */}
+        {success && !loading && (
+          <div className="py-12 text-center animate-fade-in">
+            <CheckCircle2 className="w-16 h-16 text-[var(--ok)] mx-auto mb-4" />
+            <p className="text-lg font-bold text-[var(--text-primary)] leading-snug">
+              {success}
+            </p>
           </div>
         )}
 
-        {/* QR Scanner viewport */}
-        <div
-          id="driver-qr-reader"
-          className={`w-full rounded-xl overflow-hidden border border-slate-200 bg-black mb-4 ${scanning ? "block min-h-[280px]" : "hidden min-h-0"}`}
-        />
-
-        {!scanning ? (
-          <button
-            onClick={() => void startScanner()}
-            disabled={loading}
-            className="w-full h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-          >
-            <QrCode className="w-5 h-5" />
-            Activar cámara
-          </button>
-        ) : (
-          <button
-            onClick={stopScanner}
-            className="w-full h-12 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-sm transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-        )}
-
-        {/* Manual fallback */}
-        <div className="mt-6">
-          <p className="text-xs text-slate-500 text-center mb-2">¿No funciona la cámara? Ingresá la patente del vehículo:</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualToken}
-              onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-              placeholder="Ej.: AB100UM"
-              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
-              onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
-            />
-            <button
-              onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
-              disabled={!manualToken.trim() || loading}
-              className="h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
+        {/* ── Error ─────────────────────────────────────────── */}
+        {error && !loading && !success && (
+          <div className="w-full flex flex-col items-center gap-3 px-5 py-6 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] animate-fade-in">
+            <AlertCircle className="w-10 h-10 text-[var(--danger-c)]" />
+            <p className="text-sm text-[var(--danger-text)] text-center leading-relaxed">
+              {error}
+            </p>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setError("")}
+              className="mt-1 h-11 rounded-xl font-semibold text-sm"
             >
-              OK
-            </button>
+              Reintentar
+            </Button>
           </div>
-        </div>
+        )}
+
+        {/* ── Main scan UI — hidden during loading/success ──── */}
+        {!loading && !success && (
+          <>
+            {/* Camera viewfinder */}
+            <div
+              id="driver-qr-reader"
+              className={`w-full aspect-square max-w-sm min-h-64 rounded-xl overflow-hidden bg-black border border-[var(--border)] mb-4 shadow-lg ${scanning ? "block" : "hidden"}`}
+            />
+
+            {!scanning ? (
+              <Button
+                variant="accent"
+                onClick={() => void startScanner()}
+                disabled={loading}
+                className="w-full h-14 rounded-xl text-lg font-bold gap-2.5 shadow-md"
+              >
+                <QrCode className="w-5 h-5" />
+                Escanear QR
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={stopScanner}
+                className="w-full h-14 rounded-xl text-base font-semibold"
+              >
+                Cancelar escaneo
+              </Button>
+            )}
+
+            {/* ── Manual token input ─────────────────────────── */}
+            <div className="w-full mt-6">
+              <p className="text-xs text-[var(--text-muted)] text-center mb-3">
+                ¿No funciona la cámara? Ingresá la patente del vehículo:
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value.toUpperCase())}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text").trim().toUpperCase();
+                      if (pasted) {
+                        e.preventDefault();
+                        setManualToken(pasted);
+                        void handleToken(pasted);
+                      }
+                    }}
+                    placeholder="Ej.: AB100UM"
+                    className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)] transition-shadow"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim());
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handlePasteFromClipboard()}
+                    aria-label="Pegar desde portapapeles"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                </div>
+                <Button
+                  onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
+                  disabled={!manualToken.trim() || loading}
+                  variant="accent"
+                  className="h-12 px-5 rounded-xl font-bold text-sm"
+                >
+                  OK
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

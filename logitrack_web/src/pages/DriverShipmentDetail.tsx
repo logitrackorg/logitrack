@@ -9,12 +9,13 @@ import {
   Clock,
   MapPin,
   Package,
+  Phone,
+  Truck,
   User,
   XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
-import { Card } from "../components/ui/card";
 import { BottomSheet } from "../components/ui/bottom-sheet";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import {
@@ -146,17 +147,17 @@ export function DriverShipmentDetail() {
   if (loading) return <DetailSkeleton />;
   if (error || !shipment) {
     return (
-      <div className="p-6 max-w-lg mx-auto">
+      <div className="min-h-screen bg-[var(--bg-page)] px-4 py-3">
         <button
           onClick={() => navigate("/driver/route")}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--sidebar-bg)] mb-5 cursor-pointer"
+          className="flex items-center gap-2 h-12 w-full text-base font-semibold text-[var(--text-primary)] cursor-pointer mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5" />
           Mi ruta
         </button>
-        <Card className="p-8 text-center text-sm text-rose-600">
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)]">
           {error || "No encontrado."}
-        </Card>
+        </div>
       </div>
     );
   }
@@ -171,200 +172,203 @@ export function DriverShipmentDetail() {
   const isOutForDelivery = shipment.status === "out_for_delivery";
   const routeStarted = route?.status === "en_curso";
   const canAct = isOutForDelivery && routeStarted;
-  const isDelivered = shipment.status === "delivered";
-  const isFailed = shipment.status === "delivery_failed";
-  const isRejected = shipment.status === "rechazado";
 
   const packageType = cor.package_type ?? shipment.package_type;
   const weightKg = cor.weight_kg ?? String(shipment.weight_kg);
   const senderName = cor.sender_name ?? shipment.sender.name;
   const senderPhone = cor.sender_phone ?? shipment.sender.phone;
+  const deliveryMethod = shipment.delivery_method ?? "ultima_milla";
+  const statusOverride = shipmentStatusLabelOverride(shipment);
 
   return (
-    <div className="pb-32">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto py-3 flex items-center gap-3">
-          <button
-            onClick={() => navigate("/driver/route")}
-            className="-ml-1 w-9 h-9 rounded-full dark:hover:bg-gray-700 hover:bg-slate-100 flex items-center justify-center dark:text-gray-300 text-slate-700 cursor-pointer"
-            aria-label="Volver a mi ruta"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400 leading-tight">{shipment.tracking_id}</p>
-            <p className="text-sm font-bold dark:text-gray-100 text-slate-900 truncate leading-tight">Detalle del envío</p>
-          </div>
-          {isDelivered && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">
-              <CheckCircle2 className="w-3 h-3" />
-              Entregado
-            </span>
-          )}
-          {isFailed && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-full">
-              <XCircle className="w-3 h-3" />
-              Sin entregar
-            </span>
-          )}
-          {isRejected && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
-              <Ban className="w-3 h-3" />
-              Rechazado
-            </span>
-          )}
-          {isOutForDelivery && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded-full">
-              Para entregar
-            </span>
-          )}
-        </div>
-      </header>
+    <div className="min-h-screen bg-[var(--bg-page)] pb-[calc(theme(spacing.52)+env(safe-area-inset-bottom,0px))]">
+      {/* Back button — large h-12, prominent */}
+      <div className="sticky top-0 z-30 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
+        <button
+          onClick={() => navigate("/driver/route")}
+          className="flex items-center gap-2 h-12 w-full px-4 text-base font-semibold text-[var(--text-primary)] cursor-pointer active:bg-[var(--bg-hover)] transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Mi ruta
+        </button>
+      </div>
 
-      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
+      <div className="px-4 py-3 space-y-3">
+        {/* Action error banner */}
         {actionError && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 rounded-lg border border-rose-200 bg-rose-50 text-sm text-rose-700">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="flex-1">{actionError}</span>
             <button
               onClick={() => setActionError("")}
-              className="text-xs font-semibold text-rose-700 hover:text-rose-900 cursor-pointer"
+              className="text-xs font-semibold opacity-80 hover:opacity-100 cursor-pointer shrink-0"
             >
               Cerrar
             </button>
           </div>
         )}
 
-        {/* Hero: nombre + dirección */}
-        <Card className="p-5 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-2">
-            Destinatario
-          </p>
-          <h2 className="text-xl font-bold dark:text-gray-100 text-slate-900 leading-tight">{name}</h2>
-          <div className="mt-3 flex items-start gap-2 dark:text-gray-300 text-slate-700">
-            <MapPin className="w-4 h-4 dark:text-gray-500 text-slate-400 shrink-0 mt-1" />
-            <div className="flex-1">
-              <p className="text-base font-semibold leading-snug">{street}</p>
-              <p className="text-sm dark:text-gray-400 text-slate-500 leading-snug">
+        {/* Status badge — large, prominent, centered */}
+        <div className="flex justify-center py-1">
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold border bg-[var(--brand-tint)] text-[var(--brand)] border-[var(--brand-tint-border)]">
+            {statusOverride ?? (() => {
+              const cfg: Record<string, string> = {
+                out_for_delivery: "Última milla",
+                delivered: "Entregado",
+                delivery_failed: "Entrega fallida",
+                rechazado: "Rechazado",
+                at_hub: "En sucursal",
+              };
+              return cfg[shipment.status] ?? shipment.status;
+            })()}
+          </span>
+        </div>
+
+        {/* Recipient card */}
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 shadow-sm">
+          {/* Name */}
+          <h2 className="text-lg font-bold text-[var(--text-primary)] leading-tight">{name}</h2>
+
+          {/* Address */}
+          <div className="mt-2 flex items-start gap-2 text-[var(--text-strong)]">
+            <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold leading-snug">{street}</p>
+              <p className="text-xs text-[var(--text-secondary)] leading-snug mt-0.5">
                 {[city, province, postal].filter(Boolean).join(", ")}
               </p>
             </div>
           </div>
 
-          {/* chips */}
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          {/* Phone */}
+          <div className="mt-2 flex items-center gap-2 text-[var(--text-strong)]">
+            <Phone className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+            <span className="text-sm font-medium">{phone}</span>
+          </div>
+
+          {/* WhatsApp quick actions */}
+          <div className="mt-3">
+            <WhatsAppQuickButton
+              phone={phone}
+              recipientName={name}
+              trackingId={shipment.tracking_id}
+              compact
+            />
+          </div>
+
+          {/* Chips: time window, fragile, package, retry */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {tw && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+              <span
+                className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}
+              >
                 <Clock className="w-3 h-3" />
                 {TIME_WINDOW_LABEL[tw] ?? tw}
                 {TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
               </span>
             )}
             {fragile && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
                 <AlertTriangle className="w-3 h-3" />
                 Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
               <Package className="w-3 h-3" />
               {weightKg} kg · {PACKAGE_LABELS[packageType] ?? packageType}
             </span>
             {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
                 Reintento {attempts + 1}
               </span>
             )}
           </div>
+        </div>
 
-          {/* Quick actions */}
-          <div className="mt-4">
-            <WhatsAppQuickButton
-              phone={phone}
-              recipientName={name}
-              trackingId={shipment.tracking_id}
-            />
-          </div>
-
-          <p className="mt-3 text-sm dark:text-gray-300 text-slate-700 font-medium">{phone}</p>
-        </Card>
-
-        {/* Special instructions: prominente */}
+        {/* Special instructions */}
         {specialInstructions && (
-          <div className="mb-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+          <div className="rounded-xl border-2 border-[var(--warn-border)] bg-[var(--warn-bg)] p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">
                 Instrucciones especiales
               </p>
-              <p className="text-sm text-amber-900 leading-relaxed">{specialInstructions}</p>
+              <p className="text-sm text-[var(--warn-text)] leading-relaxed">{specialInstructions}</p>
             </div>
           </div>
         )}
 
-        {/* Paquete */}
-        <Card className="p-4 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-3">
-            Paquete
-          </p>
-          <div className="grid gap-2 text-sm">
-            <Row label="Tipo" value={PACKAGE_LABELS[packageType] ?? packageType} />
-            <Row label="Peso" value={`${weightKg} kg`} />
-            <Row
-              label="Entrega"
-              value={DELIVERY_METHOD_LABEL[shipment.delivery_method ?? "ultima_milla"] ?? "Última milla"}
-            />
-            {fragile && <Row label="Frágil" value="Sí" highlight />}
-          </div>
-        </Card>
-
-        {/* Remitente — colapsado por defecto, contenido secundario */}
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <User className="w-4 h-4 dark:text-gray-500 text-slate-400" />
-            <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500">
-              Remitente
-            </p>
-          </div>
-          <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">{senderName}</p>
-          {senderPhone && (
-            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">{senderPhone}</p>
-          )}
-        </Card>
-
+        {/* Route not started warning */}
         {!routeStarted && isOutForDelivery && (
-          <p className="mt-4 text-xs text-center dark:text-gray-400 text-slate-500 leading-relaxed">
+          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-3 text-xs text-center text-[var(--info-text)]">
             Iniciá tu ruta desde "Mi ruta" para habilitar las acciones de entrega.
-          </p>
+          </div>
         )}
+
+        {/* Package details — condensed, icons */}
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4">
+          <div className="grid gap-2.5">
+            <div className="flex items-center gap-3 py-1">
+              <Package className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+              <span className="text-sm text-[var(--text-primary)]">
+                {PACKAGE_LABELS[packageType] ?? packageType} · {weightKg} kg
+              </span>
+            </div>
+            <div className="flex items-center gap-3 py-1">
+              <Truck className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+              <span className="text-sm text-[var(--text-primary)]">
+                {DELIVERY_METHOD_LABEL[deliveryMethod] ?? "Última milla"}
+              </span>
+            </div>
+            {fragile && (
+              <div className="flex items-center gap-3 py-1">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">Frágil</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sender — condensed secondary info */}
+        <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3 flex items-center gap-3">
+          <User className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{senderName}</p>
+            {senderPhone && (
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">{senderPhone}</p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Sticky CTAs cuando se puede actuar */}
+      {/* Sticky delivery actions */}
       {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t dark:border-gray-700 border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="max-w-2xl mx-auto flex flex-col gap-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setFailedOpen(true)}
-                className="h-12 rounded-xl border-2 border-rose-300 dark:bg-gray-800 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
-              >
-                <XCircle className="w-4 h-4" />
-                No entregado
-              </button>
-              <button
-                onClick={() => setDeliverOpen(true)}
-                className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Entregar
-              </button>
-            </div>
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-3 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+          <div className="flex flex-col gap-2">
+            {/* Deliver — primary, emerald */}
+            <button
+              onClick={() => setDeliverOpen(true)}
+              className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 dark:active:bg-emerald-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              Entregar
+            </button>
+
+            {/* Failed — red */}
+            <button
+              onClick={() => setFailedOpen(true)}
+              className="w-full h-14 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:active:bg-red-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+            >
+              <XCircle className="w-5 h-5" />
+              No entregado
+            </button>
+
+            {/* Rejected — orange */}
             <button
               onClick={() => setRejectedOpen(true)}
-              className="h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
+              className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 dark:active:bg-orange-800 text-white text-lg font-bold cursor-pointer inline-flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
             >
-              <Ban className="w-4 h-4" />
+              <Ban className="w-5 h-5" />
               Rechazado por destinatario
             </button>
           </div>
@@ -406,15 +410,6 @@ export function DriverShipmentDetail() {
   );
 }
 
-function Row({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex gap-3 items-start">
-      <span className="dark:text-gray-400 text-slate-500 min-w-[90px]">{label}</span>
-      <span className={highlight ? "font-semibold text-amber-700" : "font-medium dark:text-gray-100 text-slate-900"}>{value}</span>
-    </div>
-  );
-}
-
 function DeliverSheet({
   open,
   onClose,
@@ -447,7 +442,7 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${recipientName}`}
     >
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
         DNI del destinatario
       </label>
       <input
@@ -457,25 +452,25 @@ function DeliverSheet({
         inputMode="numeric"
         autoComplete="off"
         placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
+        className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
       />
-      <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
+      <p className="mt-1.5 text-xs text-[var(--text-muted)]">
         Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
       </p>
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={onConfirm}
           disabled={!dni.trim() || submitting}
-          className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}
+        </button>
+        <button
+          onClick={onClose}
+          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+        >
+          Cancelar
         </button>
       </div>
     </BottomSheet>
@@ -513,7 +508,7 @@ function FailedSheet({
       title="Marcar como no entregado"
       description={`No entrega a ${recipientName}`}
     >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-2">
         ¿Qué pasó?
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -525,8 +520,8 @@ function FailedSheet({
               onClick={() => onReasonChange(r.id)}
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
                 active
-                  ? "border-rose-500 bg-rose-50 text-rose-800"
-                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
+                  ? "border-red-500 bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500"
+                  : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)] hover:bg-[var(--bg-hover)]"
               }`}
             >
               {r.label}
@@ -535,7 +530,7 @@ function FailedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -543,22 +538,22 @@ function FailedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
+        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-red-500/20 focus:border-red-500 resize-y"
       />
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={onConfirm}
           disabled={!canSubmit || submitting}
-          className="h-12 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="w-full h-14 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar"}
+        </button>
+        <button
+          onClick={onClose}
+          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+        >
+          Cancelar
         </button>
       </div>
     </BottomSheet>
@@ -596,7 +591,7 @@ function RejectedSheet({
       title="Rechazado por destinatario"
       description={`${recipientName} rechazó el envío`}
     >
-      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-2">
         Motivo del rechazo
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -608,8 +603,8 @@ function RejectedSheet({
               onClick={() => onReasonChange(r.id)}
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
                 active
-                  ? "border-amber-500 bg-amber-50 text-amber-800"
-                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
+                  ? "border-orange-500 bg-orange-50 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500"
+                  : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)] hover:bg-[var(--bg-hover)]"
               }`}
             >
               {r.emoji} {r.label}
@@ -618,7 +613,7 @@ function RejectedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -626,22 +621,22 @@ function RejectedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
+        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500 resize-y"
       />
 
-      <div className="grid grid-cols-2 gap-2 mt-5">
-        <button
-          onClick={onClose}
-          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
-        >
-          Cancelar
-        </button>
+      <div className="flex flex-col gap-2 mt-5">
         <button
           onClick={onConfirm}
           disabled={!canSubmit || submitting}
-          className="h-12 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar rechazo"}
+        </button>
+        <button
+          onClick={onClose}
+          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+        >
+          Cancelar
         </button>
       </div>
     </BottomSheet>
@@ -650,19 +645,43 @@ function RejectedSheet({
 
 function DetailSkeleton() {
   return (
-    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="h-6 w-24 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-5" />
-      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-5 mb-3">
-        <div className="h-3 w-20 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
-        <div className="h-6 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
-        <div className="h-4 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-        <div className="grid grid-cols-3 gap-2 mt-5">
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+    <div className="min-h-screen bg-[var(--bg-page)]">
+      <div className="sticky top-0 z-30 bg-[var(--bg-card)]/95 border-b border-[var(--border)]">
+        <div className="flex items-center gap-2 h-12 px-4">
+          <div className="w-5 h-5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-4 w-20 rounded bg-[var(--bg-muted)] animate-pulse" />
         </div>
       </div>
-      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 h-24 animate-pulse" />
+      <div className="px-4 py-3 space-y-3">
+        {/* Status badge */}
+        <div className="flex justify-center py-1">
+          <div className="h-7 w-28 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+        </div>
+        {/* Recipient card */}
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
+          <div className="h-6 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-4 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+            <div className="h-3 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          </div>
+          <div className="h-4 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-14 rounded-xl bg-[var(--bg-muted)] animate-pulse" />
+          <div className="flex gap-2">
+            <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+            <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+            <div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+          </div>
+        </div>
+        {/* Package card */}
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-2.5">
+          <div className="h-4 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-4 w-2/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+        </div>
+        {/* Sender card */}
+        <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3">
+          <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
+        </div>
+      </div>
     </div>
   );
 }

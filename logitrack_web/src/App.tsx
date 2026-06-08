@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
 import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -64,10 +66,10 @@ function DriverNav() {
 
   const isInterBranch = user.driver_type === "intersucursal";
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    cn("no-underline font-medium text-sm", isActive ? "text-blue-300" : "text-slate-300");
+    cn("no-underline font-semibold text-base py-2", isActive ? "text-blue-300" : "text-slate-300");
 
   return (
-    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-3 sm:px-6 gap-3 sm:gap-6 min-h-[52px]">
+    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-3 sm:px-6 gap-3 sm:gap-6 min-h-[56px] py-2">
       <span className="font-extrabold text-[15px] sm:text-[17px] tracking-[1px]">LogiTrack</span>
       {isInterBranch ? (
         <NavLink to="/driver/trip" className={linkClass}>Mi viaje</NavLink>
@@ -79,23 +81,28 @@ function DriverNav() {
         <ThemeToggle compact />
         {isMobile ? (
           <NavLink to="/profile" className="no-underline">
-            <span className="text-xs text-slate-200 font-semibold">{user.username}</span>
+            <span className="text-sm text-slate-200 font-semibold">{user.username}</span>
           </NavLink>
         ) : (
           <NavLink to="/profile" className="no-underline">
             <span className="text-[13px] text-slate-400 cursor-pointer">
               <strong className="text-slate-200 font-semibold">{user.username}</strong>
               {" · "}
-              <span className="text-slate-500 bg-[#0f2744] px-2 py-0.5 rounded-[10px] text-[11px]">
+              <span className="text-slate-500 bg-[#0f2744] px-2 py-0.5 rounded-[10px] text-xs">
                 {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
               </span>
             </span>
           </NavLink>
         )}
-        <button onClick={logout}
-          className="bg-transparent border border-slate-700 text-slate-400 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm cursor-pointer">
-          {isMobile ? "✕" : "Cerrar sesión"}
-        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={logout}
+          className="min-h-12 min-w-12 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md"
+          title="Cerrar sesión"
+        >
+          <X size={18} />
+        </Button>
       </div>
     </nav>
   );
