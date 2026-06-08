@@ -1532,16 +1532,23 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				if len(stops) > 0 {
 					finalDest = stops[len(stops)-1].BranchID
 				}
+				// Determinar la fecha del viaje: scheduled_date del operador o planDate.
+				tripDate := planDate
+				if asgmt.ScheduledDate != "" {
+					if parsed, err := time.ParseInLocation("2006-01-02", asgmt.ScheduledDate, clock.LocalTZ); err == nil {
+						tripDate = model.NewDateOnly(parsed)
+					}
+				}
 				// Propagar estimated_arrival_at a cada TripStop por branch ID
 				// (las paradas se arman condicionalmente; no usar índice posicional).
 				arrivalByBranch := interBranchArrivalByBranch(asgmt)
 				for idx := range stops {
 					if arrMin, ok := arrivalByBranch[stops[idx].BranchID]; ok {
-						t := dateAtMinute(planDate, arrMin)
+						t := dateAtMinute(tripDate, arrMin)
 						stops[idx].EstimatedArrivalAt = &t
 					}
 				}
-				schedDep, estArr := tripScheduleFor(planDate, asgmt.EstimatedDepartureMin, asgmt.EstimatedArrivalMin)
+				schedDep, estArr := tripScheduleFor(tripDate, asgmt.EstimatedDepartureMin, asgmt.EstimatedArrivalMin)
 				createdTrip, err := s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
 					Kind:                 model.TripKindInterBranch,
 					DriverID:             nil,

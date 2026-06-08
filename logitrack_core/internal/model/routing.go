@@ -189,6 +189,10 @@ type InterBranchAssignment struct {
 	EstimatedDepartureMin      int `json:"estimated_departure_min,omitempty"`
 	PrimaryEstimatedArrivalMin int `json:"primary_estimated_arrival_min,omitempty"`
 	EstimatedArrivalMin        int `json:"estimated_arrival_min,omitempty"` // última parada
+	// ScheduledDate es la fecha de salida elegida por el operador (YYYY-MM-DD).
+	// Cuando está seteada, el Apply usa esta fecha en lugar del planDate del día.
+	// Vacío = usar el planDate del plan.
+	ScheduledDate string `json:"scheduled_date,omitempty"`
 }
 
 // AssignmentStop representa una parada adicional dentro de un dispatch multi-hop.

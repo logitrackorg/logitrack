@@ -25,7 +25,7 @@ import { PriorityBadge } from "../components/PriorityBadge";
 import { ShipmentInfoModal } from "../components/ShipmentInfoModal";
 import { EditDriverStopsModal } from "../components/EditDriverStopsModal";
 import { ReviewInterBranchModal } from "../components/ReviewInterBranchModal";
-import { fmtDateTime } from "../utils/date";
+import { fmtDateTime, fmtMinutesAsTime } from "../utils/date";
 
 type Source =
   | { kind: "driver"; id: string }
@@ -1156,7 +1156,7 @@ export function Routing({ mode }: RoutingProps = {}) {
             shipments={shipments}
             applying={applying}
             onClose={() => setReviewingDispatchVehicleId(null)}
-            onConfirm={(editedStops, departureMin) => {
+            onConfirm={(editedStops, departureMin, scheduledDate) => {
               const vehicleId = reviewingDispatchVehicleId;
               setReviewingDispatchVehicleId(null);
               if (!plan || !branchId) return;
@@ -1176,6 +1176,8 @@ export function Routing({ mode }: RoutingProps = {}) {
                 d.estimated_departure_min = departureMin;
                 d.primary_estimated_arrival_min = shiftMin(d.primary_estimated_arrival_min);
                 d.estimated_arrival_min = shiftMin(d.estimated_arrival_min);
+                // Fecha de salida elegida por el operador.
+                d.scheduled_date = scheduledDate;
               }
               setPlan(editedPlan);
               setApplying(true);
@@ -2067,6 +2069,22 @@ function InterBranchSection({
                   </span>
                 )}
               </div>
+              {(a.estimated_departure_min != null || a.scheduled_date) && !a.in_transit && (
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-2">
+                  <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                  {a.scheduled_date && a.scheduled_date !== new Date().toISOString().slice(0, 10) && (
+                    <span className="font-medium text-violet-700">
+                      {a.scheduled_date.split("-").reverse().join("/")}
+                    </span>
+                  )}
+                  {a.estimated_departure_min != null && (
+                    <span>Salida: <span className="tabular-nums font-semibold text-slate-700">{fmtMinutesAsTime(a.estimated_departure_min)}</span></span>
+                  )}
+                  {a.estimated_arrival_min != null && a.estimated_arrival_min > 0 && (
+                    <span className="text-slate-400">· Llegada: <span className="tabular-nums">{fmtMinutesAsTime(a.estimated_arrival_min)}</span></span>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2">
                 {(() => {
                   const appliedSet = new Set(a.applied_shipments ?? []);

@@ -140,6 +140,8 @@ export interface InterBranchAssignment {
   estimated_departure_min?: number;       // minutos desde medianoche (hora local)
   primary_estimated_arrival_min?: number;
   estimated_arrival_min?: number;         // última parada
+  // Fecha de salida elegida por el operador (YYYY-MM-DD). Vacío = usa planDate.
+  scheduled_date?: string;
   // Backhaul: carga de retorno al origen (si el dispatch es un round-trip).
   backhaul?: { shipments: string[]; total_weight_kg: number; fill_rate_pct: number };
 }
