@@ -716,6 +716,9 @@ func RunMigrations(db *sql.DB) error {
 			updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE (origin_branch_id, destination_branch_id, date)
 		);
+
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
 	`)
 	return err
 }
