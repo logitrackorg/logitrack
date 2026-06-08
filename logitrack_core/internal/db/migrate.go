@@ -683,6 +683,10 @@ func RunMigrations(db *sql.DB) error {
 			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS keyword_attempts      INT  NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS contingency_delivery  BOOLEAN NOT NULL DEFAULT FALSE;
+
 		CREATE TABLE IF NOT EXISTS shipment_hop_metrics (
 			id             TEXT PRIMARY KEY,
 			tracking_id    TEXT NOT NULL,

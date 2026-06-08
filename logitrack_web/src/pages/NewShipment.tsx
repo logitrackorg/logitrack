@@ -14,7 +14,7 @@ import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } 
 import PaymentMethodsPanel from "../components/PaymentMethodsPanel";
 
 const PROVINCES = [
-  "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes",
+  "Buenos Aires", "Catamarca", "Chaco", "Chubut", "Ciudad de Buenos Aires", "Córdoba", "Corrientes",
   "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza",
   "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis",
   "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán",
@@ -75,24 +75,67 @@ function phoneLocalPart(stored: string): string {
   return stored.replace(/\D/g, "");
 }
 
+// Province centroid coords (lat, lng) — mirrors backend ml.ProvinceCoords.
+const PROVINCE_CENTROIDS: Record<string, [number, number]> = {
+  "Buenos Aires":           [-36.60, -60.50],
+  "Ciudad de Buenos Aires": [-34.60, -58.38],
+  "Catamarca":              [-28.47, -65.78],
+  "Chaco":                  [-26.39, -60.73],
+  "Chubut":                 [-43.30, -68.90],
+  "Córdoba":                [-31.40, -64.18],
+  "Corrientes":             [-28.66, -58.44],
+  "Entre Ríos":             [-32.00, -59.20],
+  "Formosa":                [-25.18, -59.73],
+  "Jujuy":                  [-23.32, -65.73],
+  "La Pampa":               [-36.62, -65.45],
+  "La Rioja":               [-29.41, -66.85],
+  "Mendoza":                [-33.88, -68.83],
+  "Misiones":               [-26.88, -54.58],
+  "Neuquén":                [-38.95, -68.06],
+  "Río Negro":              [-40.30, -67.30],
+  "Salta":                  [-24.78, -65.42],
+  "San Juan":               [-31.53, -68.52],
+  "San Luis":               [-33.30, -66.34],
+  "Santa Cruz":             [-48.80, -69.65],
+  "Santa Fe":               [-31.00, -61.00],
+  "Santiago del Estero":    [-27.78, -63.25],
+  "Tierra del Fuego":       [-53.80, -67.70],
+  "Tucumán":                [-26.82, -65.22],
+};
+
+function nearestBranch(lat: number, lng: number, active: Branch[]): Branch | null {
+  let best: Branch | null = null;
+  let minDist = Infinity;
+  for (const b of active) {
+    if (b.latitude != null && b.longitude != null) {
+      const d = haversineKm(lat, lng, b.latitude, b.longitude);
+      if (d < minDist) { minDist = d; best = b; }
+    }
+  }
+  return best;
+}
+
 function findFinalBranch(recipientAddress: { province?: string; latitude?: number; longitude?: number }, branches: Branch[]): Branch | null {
   const active = branches.filter(b => b.status === "activo");
   if (!active.length) return null;
+
+  // Prefer exact recipient coordinates (from AddressAutocomplete).
   if (recipientAddress.latitude != null && recipientAddress.longitude != null) {
-    let best: Branch | null = null;
-    let minDist = Infinity;
-    for (const b of active) {
-      if (b.latitude != null && b.longitude != null) {
-        const d = haversineKm(recipientAddress.latitude!, recipientAddress.longitude!, b.latitude, b.longitude);
-        if (d < minDist) { minDist = d; best = b; }
-      }
-    }
+    const best = nearestBranch(recipientAddress.latitude, recipientAddress.longitude, active);
     if (best) return best;
   }
+
+  // Fallback: nearest branch to the province centroid.
+  // Avoids the first-alphabetical-match problem when multiple branches share a province.
   if (recipientAddress.province) {
-    const match = active.find(b => b.province === recipientAddress.province);
-    if (match) return match;
+    const centroid = PROVINCE_CENTROIDS[recipientAddress.province];
+    if (centroid) {
+      const best = nearestBranch(centroid[0], centroid[1], active);
+      if (best) return best;
+    }
+    return active.find(b => b.province === recipientAddress.province) ?? null;
   }
+
   return null;
 }
 
@@ -326,6 +369,8 @@ export function NewShipment() {
           city: senderSuggestion.address.city || prev.sender.address.city,
           province: senderSuggestion.address.province || prev.sender.address.province,
           postal_code: senderSuggestion.address.postal_code ?? prev.sender.address.postal_code,
+          ...(senderSuggestion.address.latitude != null && { latitude: senderSuggestion.address.latitude }),
+          ...(senderSuggestion.address.longitude != null && { longitude: senderSuggestion.address.longitude }),
         },
       },
     }));
@@ -359,6 +404,8 @@ export function NewShipment() {
           city: recipientSuggestion.address.city || prev.recipient.address.city,
           province: recipientSuggestion.address.province || prev.recipient.address.province,
           postal_code: recipientSuggestion.address.postal_code ?? prev.recipient.address.postal_code,
+          ...(recipientSuggestion.address.latitude != null && { latitude: recipientSuggestion.address.latitude }),
+          ...(recipientSuggestion.address.longitude != null && { longitude: recipientSuggestion.address.longitude }),
         },
       },
     }));

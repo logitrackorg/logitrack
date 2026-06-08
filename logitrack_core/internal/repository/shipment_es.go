@@ -81,6 +81,7 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 			Price:               cmd.Price,
 			PriceBreakdown:      cmd.PriceBreakdown,
+			SecurityKeyword:     cmd.SecurityKeyword,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -107,6 +108,7 @@ func (r *eventSourcedShipmentRepository) UpdateStatus(cmd StatusUpdateCmd) (mode
 			Notes:               cmd.Notes,
 			DriverID:            cmd.DriverID,
 			RejectedByRecipient: cmd.RejectedByRecipient,
+			ContingencyDelivery: cmd.ContingencyDelivery,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -771,4 +773,19 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 
 	r.projection.Apply(event)
 	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) RecordKeywordFailed(trackingID, changedBy string) error {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: trackingID,
+		EventType:  model.EventDeliveryKeywordFailed,
+		ChangedBy:  changedBy,
+		Timestamp:  time.Now().UTC(),
+	}
+	if err := r.store.Append(event); err != nil {
+		return err
+	}
+	r.projection.Apply(event)
+	return nil
 }

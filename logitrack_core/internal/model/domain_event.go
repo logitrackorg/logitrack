@@ -35,6 +35,7 @@ const (
 	EventDeliveryRescheduled  = "delivery_rescheduled"
 	EventCancelledByRecipient = "cancelled_by_recipient"
 	EventCancelledBySender    = "cancelled_by_sender"
+	EventDeliveryKeywordFailed = "delivery_keyword_failed" // driver entered wrong keyword; increments keyword_attempts
 
 	// Branch zone events
 	EventShipmentZoned  = "shipment_zoned"   // automatic assignment to Entrada on arrival
@@ -67,6 +68,7 @@ type DraftConfirmedPayload struct {
 	EstimatedDeliveryAt *time.Time
 	Price               *float64
 	PriceBreakdown      *PriceBreakdown
+	SecurityKeyword     string // set when delivery_method == ultima_milla
 }
 
 type StatusChangedPayload struct {
@@ -76,6 +78,7 @@ type StatusChangedPayload struct {
 	Notes               string
 	DriverID            string
 	RejectedByRecipient bool // delivery_failed: recipient explicitly refused
+	ContingencyDelivery bool // delivered via DNI fallback after exhausting keyword attempts
 }
 
 type ShipmentCorrectedPayload struct {

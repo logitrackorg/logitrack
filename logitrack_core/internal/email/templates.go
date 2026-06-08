@@ -94,6 +94,18 @@ const recipientBodySrc = `
   </tr>
 </table>
 
+{{if .SecurityKeyword}}
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fffbeb;border:2px solid #f59e0b;border-radius:8px;margin-bottom:28px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128272; Tu palabra clave de seguridad</p>
+      <p style="margin:0 0 12px;font-size:28px;font-weight:700;color:#1e3a5f;letter-spacing:4px;font-family:monospace;">{{.SecurityKeyword}}</p>
+      <p style="margin:0;color:#78350f;font-size:13px;line-height:1.6;">Deberás decírsela al chofer al momento de la entrega. No la compartas con nadie más.</p>
+    </td>
+  </tr>
+</table>
+{{end}}
+
 {{if .TrackURL}}
 <div style="text-align:center;">
   <a href="{{.TrackURL}}"
@@ -623,6 +635,7 @@ func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig,
 		PackageDesc       string
 		EstimatedDelivery string
 		TrackURL          string
+		SecurityKeyword   string
 	}
 	data := recipientData{
 		RecipientName:     s.Recipient.Name,
@@ -631,6 +644,7 @@ func renderRecipientConfirmation(s model.Shipment, org model.OrganizationConfig,
 		PackageDesc:       formatPackageDesc(s),
 		EstimatedDelivery: formatEstimatedDelivery(s.EstimatedDeliveryAt),
 		TrackURL:          buildTrackURL(trackBaseURL, s.TrackingID),
+		SecurityKeyword:   s.SecurityKeyword,
 	}
 	var bodyBuf bytes.Buffer
 	if err := recipientTmpl.Execute(&bodyBuf, data); err != nil {

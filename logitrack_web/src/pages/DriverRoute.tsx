@@ -67,6 +67,8 @@ export function DriverRoute() {
   const [failedShipment, setFailedShipment] = useState<Shipment | null>(null);
   const [rejectedShipment, setRejectedShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState("");
+  const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
   const [rejectedReason, setRejectedReason] = useState<string>("");
@@ -110,6 +112,8 @@ export function DriverRoute() {
     setFailedShipment(null);
     setRejectedShipment(null);
     setRecipientDni("");
+    setDeliveryKeyword("");
+    setUseContingency(false);
     setFailedReason("");
     setFailedNotes("");
     setRejectedReason("");
@@ -154,21 +158,48 @@ export function DriverRoute() {
   };
 
   const handleDeliver = async () => {
-    if (!deliverShipment || !recipientDni.trim()) return;
+    if (!deliverShipment) return;
+    const isLastMile = deliverShipment.delivery_method === "ultima_milla";
+    if (isLastMile) {
+      const locked = (deliverShipment.keyword_attempts ?? 0) >= 3;
+      if (useContingency) {
+        if (!recipientDni.trim()) return;
+      } else {
+        if (locked || !deliveryKeyword.trim()) return;
+      }
+    } else {
+      if (!recipientDni.trim()) return;
+    }
     setSubmitting(true);
     setActionError("");
     try {
-      await shipmentApi.updateStatus(deliverShipment.tracking_id, {
-        status: "delivered",
-        location: "",
-        recipient_dni: recipientDni.trim(),
-        current_speed: effectiveSpeed,
-        speed_source: speedSource,
-      });
+      if (isLastMile) {
+        await shipmentApi.deliver(deliverShipment.tracking_id, {
+          keyword: useContingency ? undefined : deliveryKeyword.trim(),
+          recipient_dni: useContingency ? recipientDni.trim() : undefined,
+          contingency: useContingency,
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+        });
+      } else {
+        await shipmentApi.updateStatus(deliverShipment.tracking_id, {
+          status: "delivered",
+          location: "",
+          recipient_dni: recipientDni.trim(),
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+        });
+      }
       closeSheets();
       await checkReTestGate();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      // Refresh shipment to get updated keyword_attempts from backend
+      if (msg?.includes("intento") || msg?.includes("bloqueado")) {
+        setDeliveryKeyword("");
+        const updated = await shipmentApi.get(deliverShipment.tracking_id).catch(() => null);
+        if (updated) setDeliverShipment(updated);
+      }
       setActionError(msg ?? "No se pudo registrar la entrega.");
     } finally {
       setSubmitting(false);
@@ -559,8 +590,12 @@ export function DriverRoute() {
       {/* Bottom sheets */}
       <DeliverSheet
         open={!!deliverShipment}
-        onClose={() => { setDeliverShipment(null); setRecipientDni(""); }}
+        onClose={closeSheets}
         shipment={deliverShipment}
+        keyword={deliveryKeyword}
+        onKeywordChange={setDeliveryKeyword}
+        useContingency={useContingency}
+        onUseContingency={setUseContingency}
         dni={recipientDni}
         onDniChange={setRecipientDni}
         submitting={submitting}
@@ -569,6 +604,7 @@ export function DriverRoute() {
         blockMessage={blockMessage}
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
+        error={actionError}
       />
       <FailedSheet
         open={!!failedShipment}
@@ -852,6 +888,10 @@ function DeliverSheet({
   open,
   onClose,
   shipment,
+  keyword,
+  onKeywordChange,
+  useContingency,
+  onUseContingency,
   dni,
   onDniChange,
   submitting,
@@ -860,10 +900,15 @@ function DeliverSheet({
   blockMessage,
   needsLocation,
   onRequestLocation,
+  error,
 }: {
   open: boolean;
   onClose: () => void;
   shipment: Shipment | null;
+  keyword: string;
+  onKeywordChange: (s: string) => void;
+  useContingency: boolean;
+  onUseContingency: (v: boolean) => void;
   dni: string;
   onDniChange: (s: string) => void;
   submitting: boolean;
@@ -872,17 +917,28 @@ function DeliverSheet({
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  error: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const keywordRef = useRef<HTMLInputElement>(null);
+  const dniRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) {
-      const t = setTimeout(() => inputRef.current?.focus(), 80);
+      const t = setTimeout(() => {
+        (useContingency ? dniRef : keywordRef).current?.focus();
+      }, 80);
       return () => clearTimeout(t);
     }
-  }, [open]);
+  }, [open, useContingency]);
 
   if (!shipment) return null;
   const { name } = recipientView(shipment);
+  const isLastMile = shipment.delivery_method === "ultima_milla";
+  const keywordAttempts = shipment.keyword_attempts ?? 0;
+  const locked = keywordAttempts >= 3;
+
+  const canConfirm = isLastMile
+    ? useContingency ? !!dni.trim() : (!locked && !!keyword.trim())
+    : !!dni.trim();
 
   return (
     <BottomSheet
@@ -891,21 +947,83 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${name}`}
     >
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-        DNI del destinatario
-      </label>
-      <input
-        ref={inputRef}
-        value={dni}
-        onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-        inputMode="numeric"
-        autoComplete="off"
-        placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
-      />
-      <p className="mt-1.5 text-[11px] text-slate-500">
-        Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
-      </p>
+      {isLastMile && !useContingency && (
+        <>
+          {locked && (
+            <div className="mb-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+              <p className="text-xs font-bold text-red-700">Campo bloqueado — 3 intentos fallidos</p>
+              <p className="text-[11px] text-red-600 mt-0.5">Usá la opción de entrega con DNI para continuar.</p>
+            </div>
+          )}
+          {!locked && keywordAttempts > 0 && (
+            <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">
+              <p className="text-[11px] text-amber-700 font-semibold">
+                Intentos fallidos: {keywordAttempts}/3 — quedan {3 - keywordAttempts} intento(s)
+              </p>
+            </div>
+          )}
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            Palabra clave de seguridad
+          </label>
+          <input
+            ref={keywordRef}
+            value={keyword}
+            onChange={(e) => onKeywordChange(e.target.value)}
+            autoComplete="off"
+            placeholder="Dictada por el destinatario"
+            disabled={locked}
+            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            El cliente debe decirte su palabra clave al abrir la puerta.
+          </p>
+        </>
+      )}
+
+      {isLastMile && useContingency && (
+        <>
+          <div className="mb-3 rounded-xl bg-amber-50 border border-amber-300 px-4 py-3">
+            <p className="text-xs font-bold text-amber-800">⚠️ Entrega de contingencia</p>
+            <p className="text-[11px] text-amber-700 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
+          </div>
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            DNI del destinatario
+          </label>
+          <input
+            ref={dniRef}
+            value={dni}
+            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Ej: 30123456"
+            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
+          />
+        </>
+      )}
+
+      {!isLastMile && (
+        <>
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            DNI del destinatario
+          </label>
+          <input
+            ref={dniRef}
+            value={dni}
+            onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Ej: 30123456"
+            className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
+          />
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
+          </p>
+        </>
+      )}
+
+      {error && (
+        <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
@@ -916,12 +1034,30 @@ function DeliverSheet({
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onConfirm(); }}
-          disabled={!dni.trim() || submitting || speedBlocked}
+          disabled={!canConfirm || submitting || speedBlocked}
           className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}
         </button>
       </div>
+
+      {isLastMile && locked && !useContingency && (
+        <button
+          onClick={() => onUseContingency(true)}
+          className="mt-3 w-full h-11 rounded-xl border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-sm font-bold cursor-pointer transition-colors"
+        >
+          Entregar con DNI
+        </button>
+      )}
+      {isLastMile && useContingency && (
+        <button
+          onClick={() => onUseContingency(false)}
+          className="mt-2 w-full text-[11px] text-slate-500 underline cursor-pointer"
+        >
+          Volver a intentar con palabra clave
+        </button>
+      )}
+
       {speedBlocked && (
         <div className="mt-2.5 text-center">
           <p className="text-xs font-semibold text-amber-600">{blockMessage}</p>

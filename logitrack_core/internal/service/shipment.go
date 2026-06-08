@@ -177,6 +177,7 @@ type ShipmentService struct {
 	rejectedNotifSvc       RejectedNotifier
 	deliveryFailedNotifSvc DeliveryFailedNotifier
 	dispatchVolumeSvc      DispatchVolumeNotifier // LOGITRACK-409
+	routeSvc               *RouteService
 }
 
 func (s *ShipmentService) SetBranchGraphService(g *BranchGraphService)                   { s.graphSvc = g }
@@ -189,6 +190,7 @@ func (s *ShipmentService) SetDeliveryConfirmedService(svc DeliveryConfirmedNotif
 func (s *ShipmentService) SetRejectedService(svc RejectedNotifier)                       { s.rejectedNotifSvc = svc }
 func (s *ShipmentService) SetDeliveryFailedService(svc DeliveryFailedNotifier)            { s.deliveryFailedNotifSvc = svc }
 func (s *ShipmentService) SetDispatchVolumeService(svc DispatchVolumeNotifier)            { s.dispatchVolumeSvc = svc }
+func (s *ShipmentService) SetRouteService(svc *RouteService)                              { s.routeSvc = svc }
 
 // ReleaseShipmentFromTrip libera la reserva cross-branch del envío.
 func (s *ShipmentService) ReleaseShipmentFromTrip(trackingID string) error {
@@ -511,6 +513,9 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	}
 	setPriority(&shipment, prediction)
 	s.applyPrice(&shipment)
+	if deliveryMethod == model.DeliveryMethodLastMile {
+		shipment.SecurityKeyword = generateSecurityKeyword()
+	}
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
 		Shipment:  shipment,
 		ChangedBy: req.CreatedBy,
@@ -765,6 +770,9 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	now := clock.Now().UTC()
 
 	s.applyPrice(&draft)
+	if draft.DeliveryMethod == model.DeliveryMethodLastMile && draft.SecurityKeyword == "" {
+		draft.SecurityKeyword = generateSecurityKeyword()
+	}
 
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
 		DraftID:             draftID,
@@ -776,6 +784,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		EstimatedDeliveryAt: s.estimatedDelivery(now, draft.OriginBranchID, draft.FinalBranchID, string(draft.ShipmentType)),
 		Price:               draft.Price,
 		PriceBreakdown:      draft.PriceBreakdown,
+		SecurityKeyword:     draft.SecurityKeyword,
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -1748,4 +1757,99 @@ func returnETA(now time.Time, currentETA *time.Time) *time.Time {
 	}
 	t := base.AddDate(0, 0, model.ReturnETAExtraDays)
 	return &t
+}
+
+// maxKeywordAttempts is the fixed limit of failed keyword attempts before the field locks.
+const maxKeywordAttempts = 3
+
+// DeliverRequest carries the delivery confirmation data from the driver.
+type DeliverRequest struct {
+	Keyword      string // security keyword spoken by recipient
+	RecipientDNI string // only used when Contingency == true
+	Contingency  bool   // true = DNI fallback after keyword lock
+	DriverID     string // user.ID used for route validation
+	ChangedBy    string // user.Username used for audit trail
+	CurrentSpeed float64
+	SpeedSource  string
+}
+
+// DeliverShipment confirms last-mile delivery via security keyword (primary) or
+// DNI fallback (contingency after 3 failed keyword attempts).
+func (s *ShipmentService) DeliverShipment(trackingID string, req DeliverRequest) (model.Shipment, error) {
+	current, err := s.repo.GetByTrackingID(trackingID)
+	if err != nil {
+		return model.Shipment{}, err
+	}
+
+	if current.Status != model.StatusOutForDelivery {
+		return model.Shipment{}, fmt.Errorf("el envío no está en estado de reparto")
+	}
+	if current.DeliveryMethod != model.DeliveryMethodLastMile {
+		return model.Shipment{}, fmt.Errorf("la entrega por palabra clave solo aplica a envíos de última milla")
+	}
+
+	// Validate driver can update this shipment via route service.
+	if s.routeSvc != nil {
+		if err := s.routeSvc.ValidateDriverCanUpdateShipment(req.DriverID, trackingID, model.StatusDelivered); err != nil {
+			return model.Shipment{}, err
+		}
+	}
+
+	locked := current.KeywordAttempts >= maxKeywordAttempts
+
+	if req.Contingency {
+		// Contingency path: only allowed after field is locked.
+		if !locked {
+			return model.Shipment{}, fmt.Errorf("la contingencia por DNI solo está disponible tras %d intentos fallidos de palabra clave", maxKeywordAttempts)
+		}
+		expectedDNI := current.Recipient.DNI
+		if current.Corrections != nil && current.Corrections.RecipientDNI != nil {
+			expectedDNI = *current.Corrections.RecipientDNI
+		}
+		if strings.TrimSpace(req.RecipientDNI) == "" {
+			return model.Shipment{}, fmt.Errorf("el DNI del destinatario es obligatorio para la entrega de contingencia")
+		}
+		if expectedDNI != strings.TrimSpace(req.RecipientDNI) {
+			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del destinatario")
+		}
+		return s.finalizeDelivery(current, req.ChangedBy, true)
+	}
+
+	// Primary path: keyword validation.
+	if locked {
+		return model.Shipment{}, fmt.Errorf("campo bloqueado tras %d intentos fallidos — use la opción de entrega con DNI", maxKeywordAttempts)
+	}
+	if strings.TrimSpace(req.Keyword) == "" {
+		return model.Shipment{}, fmt.Errorf("la palabra clave es obligatoria")
+	}
+	if !keywordMatches(req.Keyword, current.SecurityKeyword) {
+		_ = s.repo.RecordKeywordFailed(trackingID, req.ChangedBy)
+		remaining := maxKeywordAttempts - (current.KeywordAttempts + 1)
+		if remaining <= 0 {
+			return model.Shipment{}, fmt.Errorf("palabra clave inválida — campo bloqueado, use la opción de entrega con DNI")
+		}
+		return model.Shipment{}, fmt.Errorf("palabra clave inválida — %d intento(s) restante(s)", remaining)
+	}
+
+	return s.finalizeDelivery(current, req.ChangedBy, false)
+}
+
+// finalizeDelivery executes the → delivered transition and fires delivery notifications.
+func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy string, contingency bool) (model.Shipment, error) {
+	now := clock.Now().UTC()
+	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
+		TrackingID:          current.TrackingID,
+		FromStatus:          current.Status,
+		ToStatus:            model.StatusDelivered,
+		ChangedBy:           changedBy,
+		Timestamp:           now,
+		ContingencyDelivery: contingency,
+	})
+	if err != nil {
+		return model.Shipment{}, err
+	}
+	if s.deliveryNotifSvc != nil {
+		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
+	}
+	return updated, nil
 }

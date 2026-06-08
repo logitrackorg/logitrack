@@ -121,6 +121,8 @@ func (f *fakeShipmentRepo) CancelBySender(cmd repository.CancelBySenderCmd) (mod
 	return model.Shipment{}, nil
 }
 
+func (f *fakeShipmentRepo) RecordKeywordFailed(trackingID, changedBy string) error { return nil }
+
 // newMinimalRoutingService arma un RoutingService con solo lo necesario para stale-replan.
 func newMinimalRoutingService(shipments []model.Shipment, edges []model.BranchEdge) *RoutingService {
 	graphSvc := NewBranchGraphService(

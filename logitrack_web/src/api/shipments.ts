@@ -118,6 +118,10 @@ export interface Shipment {
   /** Warning band: dwell > 24 h but ≤ 36 h ("SLA Comprometido").
    *  Absent (undefined) when false. Mutually exclusive with is_delayed. */
   is_at_risk?: boolean;
+  /** Failed keyword attempts by the driver (max 3). When >= 3 the field is locked. */
+  keyword_attempts?: number;
+  /** True when delivered via DNI contingency fallback after exhausting keyword attempts. */
+  contingency_delivery?: boolean;
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
@@ -273,6 +277,19 @@ export const shipmentApi = {
   updateStatus: (trackingId: string, payload: UpdateStatusPayload) =>
     api
       .patch<Shipment>(`/shipments/${trackingId}/status`, payload)
+      .then((r) => r.data),
+  deliver: (
+    trackingId: string,
+    payload: {
+      keyword?: string;
+      recipient_dni?: string;
+      contingency?: boolean;
+      current_speed?: number;
+      speed_source?: "simulation" | "real_gps";
+    }
+  ) =>
+    api
+      .post<Shipment>(`/shipments/${trackingId}/deliver`, payload)
       .then((r) => r.data),
   getEvents: (trackingId: string) =>
     api

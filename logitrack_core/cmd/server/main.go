@@ -255,6 +255,7 @@ func main() {
 	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
+	shipmentSvc.SetRouteService(routeSvc)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -612,8 +613,11 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
-	// Driver route — driver only
+	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
+	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
+
+	// Driver route — driver only
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)

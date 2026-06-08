@@ -40,6 +40,9 @@ type ShipmentRepository interface {
 	// Devuelve (true, nil) si fue el primer llamado para ese tracking ID; (false, nil) si ya estaba marcado.
 	SetConfirmationEmailSent(trackingID string) (bool, error)
 
+	// RecordKeywordFailed appends an EventDeliveryKeywordFailed and increments keyword_attempts.
+	RecordKeywordFailed(trackingID, changedBy string) error
+
 	// Chatbot operations
 	AuthenticateRecipient(cmd AuthenticateRecipientCmd) (model.Shipment, error)
 	AuthenticateSender(cmd AuthenticateSenderCmd) (model.Shipment, error)
@@ -85,6 +88,7 @@ type ConfirmDraftCmd struct {
 	EstimatedDeliveryAt *time.Time
 	Price               *float64
 	PriceBreakdown      *model.PriceBreakdown
+	SecurityKeyword     string
 }
 
 type StatusUpdateCmd struct {
@@ -96,6 +100,7 @@ type StatusUpdateCmd struct {
 	Notes               string
 	DriverID            string
 	RejectedByRecipient bool
+	ContingencyDelivery bool
 	Timestamp           time.Time
 }
 
