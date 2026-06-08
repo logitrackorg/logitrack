@@ -4,8 +4,8 @@ import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
-import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
-import { X } from "lucide-react";
+import { OrganizationThemeProvider, useOrganizationTheme } from "./context/OrganizationThemeContext";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -61,6 +61,9 @@ import { NetworkHub } from "./pages/NetworkHub";
 
 function DriverNav() {
   const { user, logout } = useAuth();
+  const { config: org } = useOrganizationTheme();
+  const orgName = org?.name?.trim() || "LogiTrack";
+  const logoUrl = org?.logo_url?.trim();
   const isMobile = useIsMobile();
   if (!user) return null;
 
@@ -69,15 +72,19 @@ function DriverNav() {
     cn("no-underline font-semibold text-base py-2", isActive ? "text-blue-300" : "text-slate-300");
 
   return (
-    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-3 sm:px-6 gap-3 sm:gap-6 min-h-[56px] py-2">
-      <span className="font-extrabold text-[15px] sm:text-[17px] tracking-[1px]">LogiTrack</span>
+    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-4 gap-3 min-h-[56px] py-2">
+      {logoUrl ? (
+        <img src={logoUrl} alt={orgName} className="h-7 w-auto rounded" />
+      ) : (
+        <span className="font-extrabold text-[15px] tracking-[1px]">{orgName}</span>
+      )}
       {isInterBranch ? (
         <NavLink to="/driver/trip" className={linkClass}>Mi viaje</NavLink>
       ) : (
         <NavLink to="/driver/route" className={linkClass}>Mi ruta</NavLink>
       )}
 
-      <div className="ml-auto flex items-center gap-2 sm:gap-3.5">
+      <div className="ml-auto flex items-center gap-2">
         <ThemeToggle compact />
         {isMobile ? (
           <NavLink to="/profile" className="no-underline">
@@ -98,10 +105,10 @@ function DriverNav() {
           variant="ghost"
           size="icon"
           onClick={logout}
-          className="min-h-12 min-w-12 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md"
+          className="min-h-11 min-w-11 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md"
           title="Cerrar sesión"
         >
-          <X size={18} />
+          <LogOut size={18} />
         </Button>
       </div>
     </nav>
