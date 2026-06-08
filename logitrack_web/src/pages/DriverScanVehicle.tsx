@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, QrCode, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Truck, QrCode, AlertCircle, CheckCircle2, Loader2, ClipboardPaste } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { DriverShell } from "@/components/DriverShell";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
@@ -201,18 +202,13 @@ export function DriverScanVehicle() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] flex flex-col items-center justify-center px-4 py-6">
-      <div className="w-full max-w-sm flex flex-col items-center">
+    <DriverShell title="Escanear vehículo" subtitle="Reclamar viaje asignado">
+      <div className="flex flex-col items-center justify-center px-4 py-6">
+        <div className="w-full max-w-sm flex flex-col items-center">
 
-        {/* ── Header ────────────────────────────────────────── */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-[var(--brand-800)] flex items-center justify-center mb-3 shadow-lg">
-            <Truck className="w-7 h-7 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">Escanear vehículo</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1 text-center">
-            Escaneá el código QR del vehículo para reclamar el viaje.
-          </p>
+        {/* ── Header icon ───────────────────────────────────── */}
+        <div className="w-14 h-14 rounded-full bg-[var(--brand-800)] flex items-center justify-center mb-6 shadow-lg">
+          <Truck className="w-7 h-7 text-white" />
         </div>
 
         {/* ── Loading ───────────────────────────────────────── */}
@@ -312,12 +308,9 @@ export function DriverScanVehicle() {
                     type="button"
                     onClick={() => void handlePasteFromClipboard()}
                     aria-label="Pegar desde portapapeles"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
+                    <ClipboardPaste size={18} />
                   </button>
                 </div>
                 <Button
@@ -334,5 +327,6 @@ export function DriverScanVehicle() {
         )}
       </div>
     </div>
+    </DriverShell>
   );
 }

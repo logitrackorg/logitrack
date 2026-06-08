@@ -24,42 +24,11 @@ import type { Branch } from "../api/branches";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
+import { DriverShell } from "../components/DriverShell";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { useGeolocation } from "../hooks/useGeolocation";
-import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
-
-// ---------------------------------------------------------------------------
-// Haversine
-// ---------------------------------------------------------------------------
-function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) *
-      Math.cos((b.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.asin(Math.sqrt(h));
-}
-
-function cityAbbrev(city: string): string {
-  const map: Record<string, string> = {
-    "Ciudad de Buenos Aires": "CABA",
-    "Buenos Aires": "CABA",
-    Córdoba: "CBA",
-    Mendoza: "MZA",
-    Rosario: "ROS",
-    Salta: "SAL",
-    Posadas: "POS",
-    Jujuy: "JUJ",
-    Bariloche: "BRC",
-    Tucumán: "TUC",
-  };
-  const key = Object.keys(map).find((k) => city.toLowerCase().includes(k.toLowerCase()));
-  return key ? map[key] : city.slice(0, 3).toUpperCase();
-}
+import { haversineKm, cityAbbrev } from "@/utils/geo";
 
 function mapsUrl(lat: number, lng: number, label: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodeURIComponent(label)}`;
@@ -137,16 +106,6 @@ export function DriverInterBranchTrip() {
     }
     setMidTripCheckin(true);
   }, []);
-
-  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
-  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
-  // backend ya da por completo el check-in apenas se envía el paso KSS, así
-  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
-  useEffect(() => {
-    if (!user) return;
-    if (!getPendingFatigueStep(user.id)) return;
-    void openCheckinGate();
-  }, [user, openCheckinGate]);
 
   // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
   // Los routePoints se derivan del trip y las branches. Mientras no haya datos
@@ -395,7 +354,7 @@ export function DriverInterBranchTrip() {
         });
 
       points.forEach((p, i) => {
-        let bg = "var(--sidebar-bg)", content = "🏭";
+        let bg = "var(--sidebar-bg)", content = "📍";
         if (i > 0) {
           if (p.completed) { bg = "#059669"; content = "✓"; }
           else if (p.current) { bg = "#0284c7"; content = "📍"; }
@@ -639,7 +598,7 @@ export function DriverInterBranchTrip() {
   }
 
   return (
-    <div className="pb-28 bg-[var(--bg-page)] min-h-screen">
+    <DriverShell title="Mi viaje" subtitle={`${trip.license_plate} · ${trip.shipment_ids.length} envíos`}>
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-10 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
         <div className="px-4 max-w-2xl mx-auto py-3">
@@ -817,7 +776,7 @@ export function DriverInterBranchTrip() {
           <div className="max-w-2xl mx-auto">
             <button
               onClick={openQR}
-              className="w-full h-14 rounded-2xl bg-[var(--sidebar-bg)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg shadow-[var(--sidebar-bg)]/20"
+              className="w-full h-14 rounded-2xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg shadow-[var(--brand)]/20"
             >
               <QrCode className="w-5 h-5" />
               Llegué — mostrar QR al operador
@@ -837,7 +796,7 @@ export function DriverInterBranchTrip() {
             <button
               onClick={handleStart}
               disabled={starting}
-              className="w-full h-14 rounded-2xl bg-[var(--sidebar-bg)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg"
+              className="w-full h-14 rounded-2xl bg-[var(--brand)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg"
             >
               <Play className="w-5 h-5" />
               {starting ? "Iniciando viaje…" : "Iniciar viaje"}
@@ -1041,7 +1000,7 @@ function HeroNextStop({
     <Card className="!p-5 border-2 border-[var(--sidebar-bg)]/10 dark:border-[var(--sidebar-bg)]/20 bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-subtle)]">
       {/* Chip de parada */}
       <div className="flex items-center justify-between mb-4">
-        <span className="text-xs font-bold px-3 py-1 rounded-full bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] uppercase tracking-wider">
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] uppercase tracking-wider">
           Parada {stopNumber} de {totalStops}
         </span>
         {distKm !== null && (
@@ -1067,7 +1026,7 @@ function HeroNextStop({
       {etaHours !== null && (
         <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--bg-muted)] dark:bg-slate-800 flex items-center gap-3">
           <span className="text-xs font-semibold text-[var(--text-secondary)]">ETA estimada</span>
-          <span className="ml-auto text-base font-bold text-[var(--sidebar-bg)]">~{formatDuration(etaHours)}</span>
+          <span className="ml-auto text-base font-bold text-[var(--brand)]">~{formatDuration(etaHours)}</span>
         </div>
       )}
 
@@ -1226,7 +1185,7 @@ function QRModal({
                 {qrLoading ? (
                   <div className="w-56 h-56 rounded-2xl bg-[var(--bg-muted)] animate-pulse" />
                 ) : qrData ? (
-                  <div className="p-3 bg-white rounded-2xl border-2 border-[var(--sidebar-bg)]/20 shadow-md">
+                  <div className="p-3 bg-[var(--bg-card)] rounded-2xl border-2 border-[var(--brand)]/20 shadow-md">
                     <img
                       src={`data:image/png;base64,${qrData.qr_code_base64}`}
                       alt="QR del viaje"
@@ -1379,6 +1338,6 @@ function TripSkeleton() {
           <Skeleton className="h-14 w-full rounded-2xl" />
         </div>
       </div>
-    </div>
+    </DriverShell>
   );
 }
