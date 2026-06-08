@@ -841,6 +841,10 @@ func buildConfirmationRecipientMsg(shipment model.Shipment, trackURL string) str
 	if shipment.EstimatedDeliveryAt != nil {
 		msg += fmt.Sprintf("📅 *Entrega estimada:* %s\n", formatShortDate(*shipment.EstimatedDeliveryAt))
 	}
+	if shipment.SecurityKeyword != "" {
+		msg += fmt.Sprintf("\n🔐 *Tu palabra clave de seguridad:* %s\n", shipment.SecurityKeyword)
+		msg += "Deberás decírsela al chofer al momento de la entrega. No la compartas con nadie más.\n"
+	}
 	if trackURL != "" {
 		msg += "\nSeguí tu envío en: " + trackURL
 	}
