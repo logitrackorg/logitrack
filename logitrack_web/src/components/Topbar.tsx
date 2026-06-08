@@ -63,7 +63,7 @@ export function Topbar() {
         isMobile ? "pr-3 pl-[60px]" : "px-6",
       )}
     >
-      <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 whitespace-nowrap overflow-hidden text-ellipsis shrink-0">
+      <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[280px]">
         {title}
       </h1>
 
