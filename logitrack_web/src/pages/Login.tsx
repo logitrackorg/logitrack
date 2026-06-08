@@ -131,7 +131,7 @@ export function Login() {
         const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
 
         if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
-          console.log('⚠️ Usuario sin 2FA detectado - debe activarlo');
+          console.log('<AlertTriangle size={14} className="inline text-amber-500" /> Usuario sin 2FA detectado - debe activarlo');
 
           // 🔑 CLAVE: Guardar token EN SESSIONSTORAGE con flag especial
           sessionStorage.setItem("pending_2fa_setup", "true");

@@ -655,7 +655,7 @@ export function PublicTracking() {
               </CardContent>
             </Card>
 
-            {/* ⚠️ Return banner */}
+            {/* <AlertTriangle size={14} className="inline text-amber-500" /> Return banner */}
             {shipment.is_returning && shipment.status !== "returned" && (
               <AlertBanner
                 variant="warning"
@@ -664,7 +664,7 @@ export function PublicTracking() {
               />
             )}
 
-            {/* ⚠️ Delivery attempts banner */}
+            {/* <AlertTriangle size={14} className="inline text-amber-500" /> Delivery attempts banner */}
             {(shipment.delivery_attempts ?? 0) > 0 &&
              shipment.status !== "delivered" &&
              shipment.status !== "returned" && (

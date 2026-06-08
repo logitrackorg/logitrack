@@ -93,7 +93,7 @@ export function ZoneManagement() {
       });
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:160px">
-          <p style="font-weight:700;font-size:14px;margin:0 0 4px">⚠️ ${z.name}</p>
+          <p style="font-weight:700;font-size:14px;margin:0 0 4px"><AlertTriangle size={14} className="inline text-amber-500" /> ${z.name}</p>
           ${z.description ? `<p style="font-size:12px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
           ${!z.active ? '<span style="font-size:11px;color:var(--text-muted);margin-top:4px;display:inline-block">Pausada</span>' : ""}
         </div>
@@ -459,7 +459,7 @@ export function ZoneManagement() {
               {editingZone ? "Editar zona peligrosa" : "Nueva zona peligrosa"}
             </h2>
             <p className="text-xs text-red-600 mb-4">
-              ⚠️ Las zonas peligrosas aplican recargo en envíos de última milla.
+              <AlertTriangle size={14} className="inline text-amber-500" /> Las zonas peligrosas aplican recargo en envíos de última milla.
             </p>
 
             <div className="space-y-4">
