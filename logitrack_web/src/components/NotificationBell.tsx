@@ -273,14 +273,21 @@ export function NotificationBell() {
     return () => clearInterval(id);
   }, []);
 
-  // Close panel on outside click.
+  // Close panel on outside click or Escape key.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const handleToggle = () => {
@@ -557,7 +564,7 @@ export function NotificationBell() {
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute top-[calc(100%+8px)] right-0 w-[380px] bg-[#0f2744] border border-[var(--sidebar-bg)] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
+        <div className="absolute top-[calc(100%+8px)] right-0 w-[380px] max-sm:w-[calc(100vw-32px)] max-sm:right-0 bg-[#0f2744] border border-[var(--sidebar-bg)] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--sidebar-bg)]">
             <span className="text-[#e2e8f0] font-bold text-sm">Notificaciones</span>
