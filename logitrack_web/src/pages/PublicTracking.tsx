@@ -489,7 +489,7 @@ export function PublicTracking() {
 
   // Priority may be present at runtime — let PriorityBadge handle availability
   const shipmentPriority =
-    shipment ? (shipment as Record<string, unknown>).priority as string | undefined : undefined;
+    shipment ? (shipment as unknown as Record<string, unknown>).priority as string | undefined : undefined;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
