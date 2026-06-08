@@ -55,9 +55,9 @@ import type { ReactNode } from "react";
 // ────────────────────────────────────────────────────────────────
 
 const EXAMPLE_TRACKING_IDS = [
-  "LT-A1B2C3D4",
-  "LT-X1Y2Z3W4",
-  "LT-M1N2O3P4",
+  "LT-LM00001",
+  "LT-PICKUP01",
+  "LT-CDB00001",
 ];
 
 const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
@@ -558,14 +558,10 @@ export function PublicTracking() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" aria-hidden="true" />
             <input
               id="pt-tracking-input"
-              className="w-full pl-10 pr-4 py-3.5 rounded-xl border-2 border-transparent text-base bg-white
-                         dark:bg-gray-800 dark:text-gray-100
-                         outline-none shadow-lg placeholder:normal-case placeholder:text-[var(--text-muted)]
-                         focus:border-white/60 focus:ring-4 focus:ring-white/20
-                         transition-all duration-200 uppercase max-sm:py-3 max-sm:text-sm"
+              className="w-full pl-10 pr-4 py-3.5 rounded-xl border-2 border-blue-200 dark:border-gray-600 text-base bg-white dark:bg-gray-800 dark:text-gray-100 outline-none shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all uppercase"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="ej. LT-A1B2C3D4"
+              placeholder="ej. LT-LM00001"
               inputMode="text"
               autoCapitalize="characters"
               autoComplete="off"
@@ -576,7 +572,7 @@ export function PublicTracking() {
           <Button
             type="submit"
             className="bg-white text-[var(--brand-strong)] rounded-xl px-6 py-3.5
-                       font-bold text-base whitespace-nowrap shadow-lg
+                       font-bold text-base whitespace-nowrap shadow-sm shadow-blue-500/20
                        hover:bg-white/90 max-sm:px-5 max-sm:py-3 max-sm:text-sm"
             disabled={loading}
             aria-busy={loading}
@@ -592,10 +588,7 @@ export function PublicTracking() {
             <button
               key={id}
               type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                         bg-white/10 border border-white/20 text-white text-xs font-mono font-semibold
-                         hover:bg-white/20 hover:border-white/30 transition-colors duration-150
-                         disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-xs font-mono font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors cursor-pointer disabled:opacity-40"
               onClick={() => handleExampleClick(id)}
               disabled={loading}
             >
@@ -617,24 +610,18 @@ export function PublicTracking() {
       >
         {/* ── Error state ── */}
         {error && (
-          <div
-            className="flex flex-col items-center gap-4 py-12 px-4 text-center
-                       bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)]"
-            role="alert"
-          >
-            <AlertCircle className="w-12 h-12 text-[var(--danger-c)]" />
-            <div>
-              <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">
-                No encontramos tu envío
-              </h3>
-              <p className="text-sm text-[var(--text-secondary)] max-w-sm">
-                {error}
-              </p>
+          <div className="space-y-4" role="alert">
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-700">No encontramos tu envío</p>
+                <p className="text-xs text-red-600 mt-0.5">{error}</p>
+              </div>
             </div>
             <Button
               variant="default"
               size="sm"
-              className="gap-2"
+              className="gap-2 rounded-xl shadow-sm shadow-blue-500/20"
               onClick={() => query.trim() && runSearch(query.trim())}
             >
               <RefreshCw className="w-4 h-4" />
@@ -646,12 +633,12 @@ export function PublicTracking() {
         {/* ── Loading skeleton ── */}
         {loading && !shipment && (
           <div className="space-y-4" aria-hidden="true">
-            <div className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6">
+            <div className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6">
               <div className="h-4 w-1/3 rounded-md bg-[var(--bg-muted)] animate-pulse mb-4" />
               <div className="h-3 w-2/3 rounded-md bg-[var(--bg-muted)] animate-pulse mb-3" />
               <div className="h-3 w-1/2 rounded-md bg-[var(--bg-muted)] animate-pulse" />
             </div>
-            <div className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6">
+            <div className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6">
               <div className="h-4 w-1/4 rounded-md bg-[var(--bg-muted)] animate-pulse mb-4" />
               <div className="h-3 w-full rounded-md bg-[var(--bg-muted)] animate-pulse mb-3" />
               <div className="h-3 w-3/4 rounded-md bg-[var(--bg-muted)] animate-pulse" />
@@ -680,7 +667,7 @@ export function PublicTracking() {
           <div className="space-y-5">
             {/* Status hero card */}
             <section
-              className={`rounded-2xl p-6 text-white flex items-center gap-5 shadow-lg
+              className={`rounded-xl p-6 text-white flex items-center gap-5 shadow-lg
                           bg-gradient-to-br ${toneGradient(hero.tone)}
                           animate-[fadeIn_0.4s_ease-out] motion-reduce:animate-none
                           max-sm:p-4 max-sm:gap-3`}
@@ -754,12 +741,12 @@ export function PublicTracking() {
             {/* Progress bar */}
             {!isFailed && (
               <section
-                className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6
+                className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6
                            animate-[fadeIn_0.4s_ease-out_0.2s_both] motion-reduce:animate-none
                            max-sm:p-4"
                 aria-label="Progreso del envío"
               >
-                <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-5">
+                <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-5">
                   Progreso
                 </h3>
                 <div className="flex items-center gap-1">
@@ -824,17 +811,17 @@ export function PublicTracking() {
 
             {/* Info cards grid */}
             <section
-              className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6
+              className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6
                          animate-[fadeIn_0.4s_ease-out_0.25s_both] motion-reduce:animate-none
                          max-sm:p-4"
               aria-label="Resumen del envío"
             >
               {/* Tracking ID */}
               <div className="mb-5">
-                <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-1">
+                <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1">
                   Número de seguimiento
                 </div>
-                <code className="text-xl font-extrabold text-[var(--text-heading)] font-mono tracking-wide max-sm:text-lg">
+                <code className="text-xl font-extrabold text-[var(--text-heading)] font-mono tracking-widest max-sm:text-lg">
                   {shipment.tracking_id}
                 </code>
               </div>
@@ -845,7 +832,7 @@ export function PublicTracking() {
                   <div className="flex items-start gap-3">
                     <Clock className="w-5 h-5 text-[var(--text-muted)] shrink-0 mt-0.5" />
                     <div>
-                      <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-0.5">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-0.5">
                         Entrega estimada
                       </div>
                       <div className="font-semibold text-[var(--text-primary)]">{eta.line}</div>
@@ -859,7 +846,7 @@ export function PublicTracking() {
                   <div className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                     <div>
-                      <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-0.5">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-0.5">
                         Entregado
                       </div>
                       <div className="font-semibold text-[var(--text-primary)]">
@@ -875,7 +862,7 @@ export function PublicTracking() {
                   <div className="flex items-start gap-3">
                     <RefreshCw className="w-5 h-5 text-[var(--text-muted)] shrink-0 mt-0.5" />
                     <div>
-                      <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-0.5">
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-0.5">
                         Última actualización
                       </div>
                       <div className="font-semibold text-[var(--text-primary)]">
@@ -890,7 +877,7 @@ export function PublicTracking() {
                 <div className="flex items-start gap-3">
                   <Weight className="w-5 h-5 text-[var(--text-muted)] shrink-0 mt-0.5" />
                   <div>
-                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-0.5">
+                    <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-0.5">
                       Tipo
                     </div>
                     <div className="font-semibold text-[var(--text-primary)]">
@@ -904,7 +891,7 @@ export function PublicTracking() {
               {/* Origin → Destination */}
               <div className="flex items-center gap-3 mt-5 pt-5 border-t border-[var(--border)]">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-1">
+                  <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1">
                     Origen
                   </div>
                   <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -914,7 +901,7 @@ export function PublicTracking() {
                 </div>
                 <ArrowRight className="shrink-0 text-[var(--text-muted)] w-5 h-5" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider mb-1">
+                  <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1">
                     Destino
                   </div>
                   <div className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -928,7 +915,7 @@ export function PublicTracking() {
             {/* Timeline */}
             {chronological.length > 0 && (
               <section
-                className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6
+                className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6
                            animate-[fadeIn_0.4s_ease-out_0.3s_both] motion-reduce:animate-none
                            max-sm:p-4"
                 aria-label="Historial del envío"
@@ -953,7 +940,7 @@ export function PublicTracking() {
                           className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center z-10
                                       border-2 transition-colors ${
                                         isCurrent
-                                          ? "bg-[var(--brand)] border-[var(--brand)] shadow-[0_0_0_4px_var(--brand-tint)]"
+                                          ? "bg-[var(--brand)] border-[var(--brand)] shadow-sm shadow-blue-500/20"
                                           : "bg-[var(--bg-muted)] border-[var(--border)]"
                                       }`}
                           aria-current={isCurrent ? "step" : undefined}
@@ -994,7 +981,7 @@ export function PublicTracking() {
 
             {/* Claim section */}
             <section
-              className="bg-[var(--bg-card)] rounded-2xl shadow-sm border border-[var(--border)] p-6
+              className="bg-[var(--bg-card)] rounded-xl shadow-sm border border-[var(--border)] p-6
                          animate-[fadeIn_0.4s_ease-out_0.35s_both] motion-reduce:animate-none
                          max-sm:p-4"
               aria-label="Reclamos"
@@ -1011,7 +998,7 @@ export function PublicTracking() {
                 </div>
                 <Button
                   variant="outline"
-                  className="gap-2 rounded-xl border-2 whitespace-nowrap max-sm:w-full max-sm:justify-center"
+                  className="gap-2 rounded-xl border-blue-200 text-blue-700 whitespace-nowrap max-sm:w-full max-sm:justify-center"
                   onClick={() => setClaimOpen((prev) => !prev)}
                   disabled={claimSubmitting || !!claimResult}
                 >
@@ -1023,18 +1010,17 @@ export function PublicTracking() {
               {/* Success state */}
               {claimResult && (
                 <div
-                  className="mt-4 flex items-center gap-3 p-4 rounded-xl
-                             bg-[var(--ok-bg)] border border-[var(--ok-border)] text-[var(--ok-text)]"
+                  className="mt-4 flex items-start gap-2.5 rounded-xl border border-green-200 bg-green-50 px-4 py-3"
                   role="status"
                 >
-                  <CheckCircle2 className="w-6 h-6 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-bold text-sm">Recibimos tu reclamo</p>
-                    <p className="text-xs mt-0.5">
+                    <p className="text-sm font-semibold text-green-700">Recibimos tu reclamo</p>
+                    <p className="text-xs text-green-600 mt-0.5">
                       Código: <strong>{claimResult.id}</strong> · Estado:{" "}
                       {CLAIM_STATUS_LABELS[claimResult.status]}
                     </p>
-                    <p className="text-xs mt-1 opacity-80">
+                    <p className="text-xs text-green-600 mt-0.5">
                       Te responderemos pronto.
                     </p>
                   </div>
@@ -1052,20 +1038,17 @@ export function PublicTracking() {
                     />
 
                     {claimError && (
-                      <div
-                        className="bg-[var(--danger-bg)] border border-[var(--danger-border)]
-                                   text-[var(--danger-text)] p-3 rounded-xl text-sm"
-                        role="alert"
-                      >
-                        {claimError}
+                      <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                        <p className="text-sm text-red-700">{claimError}</p>
                       </div>
                     )}
 
                     <div className="flex justify-end gap-3 max-sm:flex-col max-sm:items-stretch pt-2">
-                      <Button variant="outline" onClick={() => setClaimOpen(false)}>
+                      <Button variant="outline" className="rounded-xl border-blue-200 text-blue-700" onClick={() => setClaimOpen(false)}>
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={claimSubmitting}>
+                      <Button type="submit" disabled={claimSubmitting} className="rounded-xl shadow-sm shadow-blue-500/20">
                         {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
                       </Button>
                     </div>
