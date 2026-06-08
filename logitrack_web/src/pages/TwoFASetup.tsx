@@ -4,7 +4,8 @@ import { twoFAApi } from '../api/two-fa';
 import { useAuth } from '../context/AuthContext';
 import type { User } from '../api/auth';
 import type { TwoFASetupResponse } from '../types/two-fa';
-import { AlertCircle, Clock } from 'lucide-react';
+import { AlertCircle, Clock, Smartphone, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Button } from '../components/ui/button';
 
 const MAX_ATTEMPTS = 3;
 
@@ -153,8 +154,10 @@ export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
       {/* Paso 1: Iniciar */}
       {step === 'init' && (
         <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold mb-2">📱 ¿Qué necesitas?</h3>
+          <div className="rounded-xl border border-[var(--brand-tint-border)] bg-[var(--brand-tint)] dark:bg-[var(--brand)]/10 p-5">
+            <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-[var(--brand)]" /> ¿Qué necesitás?
+            </h3>
             <ul className="list-disc list-inside space-y-1 text-sm">
               <li>Tu teléfono corporativo</li>
               <li>Google Authenticator instalado</li>
@@ -162,13 +165,13 @@ export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
             </ul>
           </div>
 
-          <button
+          <Button
             onClick={handleInitSetup}
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="w-full h-11 rounded-xl"
           >
             {loading ? 'Iniciando...' : 'Activar Autenticación de Doble Factor'}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -188,22 +191,20 @@ export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
               />
             </div>
 
-            <div className="bg-gray-50 p-4 rounded border">
-              <p className="text-sm font-medium mb-2">
-                ⚠️ Clave de respaldo (anótala en lugar seguro):
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                Clave de respaldo (anotala en un lugar seguro):
               </p>
-              <code className="block bg-white p-2 rounded border text-sm break-all">
+              <code className="block bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 text-sm break-all font-mono text-gray-900 dark:text-gray-100">
                 {setupData.secret}
               </code>
             </div>
           </div>
 
-          <button
-            onClick={() => setStep('confirm')}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
-          >
-            Ya escaneé el código →
-          </button>
+          <Button onClick={() => setStep('confirm')} className="w-full h-11 rounded-xl font-semibold">
+            Ya escaneé el código
+          </Button>
         </div>
       )}
 
@@ -263,33 +264,28 @@ export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
               </div>
             )}
 
-            <button
-              onClick={handleConfirm}
-              disabled={loading || code.length !== 6 || isLocked}
-              className="w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
-            >
-              {loading ? 'Verificando...' : 'Confirmar Activación'}
-            </button>
+              <Button onClick={handleConfirm} disabled={loading || code.length !== 6 || isLocked} className="w-full h-11 rounded-xl font-semibold">
+                {loading ? 'Verificando...' : 'Confirmar Activación'}
+              </Button>
           </div>
         </div>
       )}
 
       {/* Paso 4: Éxito */}
       {step === 'success' && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <div className="text-5xl mb-4">✅</div>
+        <div className="rounded-xl border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 p-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center">
+            <ShieldCheck className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          </div>
           <h3 className="text-xl font-bold mb-2">
             ¡Autenticación de Doble Factor Activada!
           </h3>
           <p className="text-gray-700 mb-4">
             A partir de ahora, necesitarás tu código de 6 dígitos cada vez que inicies sesión.
           </p>
-          <button
-            onClick={() => window.location.href = '/profile'}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-          >
-            Volver a Mi Perfil
-          </button>
+          <Button onClick={() => window.location.href = '/profile'} variant="default" className="rounded-xl">
+            Ir a mi perfil
+          </Button>
         </div>
       )}
     </div>
