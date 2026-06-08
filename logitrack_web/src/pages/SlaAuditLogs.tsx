@@ -6,25 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 
-const PRIORITY_LABEL: Record<string, string> = {
-  baja:  "Baja",
-  media: "Media",
-  alta:  "Alta",
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  baja:  "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-  media: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  alta:  "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
-};
-
-function PriorityBadge({ level }: { level: string }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${PRIORITY_BADGE[level] ?? PRIORITY_BADGE.baja}`}>
-      {PRIORITY_LABEL[level] ?? level}
-    </span>
-  );
-}
+import { PriorityBadge } from "../components/PriorityBadge";
 
 export function SlaAuditLogs() {
   const { user } = useAuth();
@@ -272,9 +254,9 @@ export function SlaAuditLogs() {
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5">
-                            <PriorityBadge level={log.priority_from} />
+                            <PriorityBadge priority={log.priority_from as "alta" | "media" | "baja"} />
                             <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                            <PriorityBadge level={log.priority_to} />
+                            <PriorityBadge priority={log.priority_to as "alta" | "media" | "baja"} />
                           </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-600 max-w-xs">

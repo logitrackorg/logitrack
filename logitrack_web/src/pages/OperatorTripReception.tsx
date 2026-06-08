@@ -13,7 +13,7 @@ import type { Branch } from "../api/branches";
 import { Card } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
-export default function OperatorTripReception() {
+export function OperatorTripReception() {
   const { id: tripId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();

@@ -485,4 +485,4 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   );
 });
 
-export default ResumenTab;
+export { ResumenTab };

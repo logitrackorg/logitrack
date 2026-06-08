@@ -7,7 +7,7 @@ import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 
-export default function DriverScanVehicle() {
+export function DriverScanVehicle() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
