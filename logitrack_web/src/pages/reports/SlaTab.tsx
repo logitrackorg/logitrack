@@ -3,6 +3,7 @@ import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
+  Eye, X,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -76,6 +77,9 @@ export default function SlaTab({ branchId }: SlaTabProps) {
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState<{ title: string; data: Record<string, number> } | null>(null);
 
   const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
 
@@ -347,12 +351,21 @@ export default function SlaTab({ branchId }: SlaTabProps) {
               value={metrics.at_risk_total}
               color={metrics.at_risk_total === 0 ? COLOR_OK : COLOR_WARN}
               icon={<ShieldAlert className="w-4 h-4" />}
+              onViewDetail={metrics.at_risk_total > 0 ? () => {
+                setModalContent({ title: "Detalle de Comprometidos", data: metrics.at_risk_by_branch });
+                setIsDetailsModalOpen(true);
+              } : undefined}
             />
             <KpiChip
               label="Envíos demorados (SLA roto)"
               value={metrics.delayed_total}
               color={metrics.delayed_total === 0 ? COLOR_OK : COLOR_BAD}
               icon={<AlertCircle className="w-4 h-4" />}
+              subtitle="Demorados en este momento"
+              onViewDetail={metrics.delayed_total > 0 ? () => {
+                setModalContent({ title: "Detalle de Demorados", data: metrics.delayed_by_branch });
+                setIsDetailsModalOpen(true);
+              } : undefined}
             />
           </CardContent>
         </Card>
@@ -385,8 +398,8 @@ export default function SlaTab({ branchId }: SlaTabProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-slate-700">Tendencia de Demoras (últimos 7 días)</CardTitle>
-            <p className="text-[11px] text-slate-400">Escalados automáticos por día según el log de auditoría</p>
+            <CardTitle className="text-sm font-semibold text-slate-700">Historial de Repriorizaciones Automáticas</CardTitle>
+            <p className="text-[11px] text-slate-400">Acumulado diario de eventos disparados (incluye paquetes ya resueltos/despachados)</p>
           </CardHeader>
           <CardContent>
             {trendData.every((d) => d.count === 0) ? (
@@ -458,6 +471,12 @@ export default function SlaTab({ branchId }: SlaTabProps) {
         );
       })()}
       </div>{/* end contentRef */}
+
+      <BranchDetailsModal
+        open={isDetailsModalOpen}
+        content={modalContent}
+        onClose={() => setIsDetailsModalOpen(false)}
+      />
     </div>
   );
 }
@@ -837,23 +856,76 @@ function AnalyticRow({ label, value }: { label: string; value: string }) {
 }
 
 function KpiChip({
-  label, value, color, icon, small = false,
+  label, value, color, icon, small = false, subtitle, onViewDetail,
 }: {
   label: string;
   value: string | number;
   color: string;
   icon: React.ReactNode;
   small?: boolean;
+  subtitle?: string;
+  onViewDetail?: () => void;
 }) {
   return (
-    <div className="flex flex-col justify-between gap-3 p-5 rounded-xl border border-slate-100 bg-slate-50/60 h-full">
+    <div className="relative flex flex-col justify-between gap-3 p-5 rounded-xl border border-slate-100 bg-slate-50/60 h-full">
+      {onViewDetail && (
+        <button
+          type="button"
+          onClick={onViewDetail}
+          className="absolute top-4 right-4 flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+          title="Ver detalle por sucursal"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          Ver detalle
+        </button>
+      )}
       <div className="flex items-center gap-2" style={{ color }}>
         {icon}
         <p className="text-xs font-bold uppercase tracking-wider leading-snug">{label}</p>
       </div>
-      <p className={`font-black leading-none text-slate-800 ${small ? "text-xl break-words" : "text-5xl tabular-nums"}`}>
-        {value}
-      </p>
+      <div>
+        <p className={`font-black leading-none text-slate-800 ${small ? "text-xl break-words" : "text-5xl tabular-nums"}`}>
+          {value}
+        </p>
+        {subtitle && <p className="text-[11px] text-slate-400 mt-1.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function BranchDetailsModal({
+  open, content, onClose,
+}: {
+  open: boolean;
+  content: { title: string; data: Record<string, number> } | null;
+  onClose: () => void;
+}) {
+  if (!open || !content) return null;
+  const entries = Object.entries(content.data).sort((a, b) => b[1] - a[1]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800">{content.title}</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5">
+          {entries.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">No hay paquetes en este estado</p>
+          ) : (
+            <ul className="space-y-2">
+              {entries.map(([branchName, count]) => (
+                <li key={branchName} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600 font-medium">{branchName}</span>
+                  <span className="text-slate-800 font-bold tabular-nums">{count} paquetes</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

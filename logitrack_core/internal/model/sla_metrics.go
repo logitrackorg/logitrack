@@ -63,10 +63,20 @@ type SLAMetrics struct {
 	// NOT count against SlaHealthRate.
 	AtRiskTotal int `json:"at_risk_total"`
 
+	// AtRiskByBranch breaks AtRiskTotal down by receiving branch name. Always a
+	// non-nil map (empty when there are no at-risk shipments) so the frontend
+	// receives `{}` instead of `null`.
+	AtRiskByBranch map[string]int `json:"at_risk_by_branch"`
+
 	// DelayedTotal is the number of active shipments "Demorado": dwell time exceeded
 	// the tolerance threshold (SLADelayThresholdHours, 150 % — SLA broken). The only
 	// counter that penalizes SlaHealthRate.
 	DelayedTotal int `json:"delayed_total"`
+
+	// DelayedByBranch breaks DelayedTotal down by receiving branch name. Always a
+	// non-nil map (empty when there are no delayed shipments) so the frontend
+	// receives `{}` instead of `null`.
+	DelayedByBranch map[string]int `json:"delayed_by_branch"`
 
 	// Bottlenecks lists, per status, how many shipments are at-risk vs. delayed.
 	// Sorted by DelayedCount descending, then AtRiskCount descending.

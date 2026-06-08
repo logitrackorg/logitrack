@@ -74,8 +74,12 @@ export interface SLAMetrics {
   active_total: number;
   /** "SLA Comprometido": dwell > 100% del promedio base, ≤ 150% de tolerancia. No penaliza sla_health_rate. */
   at_risk_total: number;
+  /** Desglose de at_risk_total por nombre de sucursal receptora. */
+  at_risk_by_branch: Record<string, number>;
   /** "Demorado": dwell > 150% de tolerancia — SLA roto. Único contador que penaliza sla_health_rate. */
   delayed_total: number;
+  /** Desglose de delayed_total por nombre de sucursal receptora. */
+  delayed_by_branch: Record<string, number>;
   bottlenecks: SLABottleneck[];
   delay_trend: SLADayCount[];
   current_averages: SLAStateAverage[];

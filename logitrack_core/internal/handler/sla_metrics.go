@@ -92,6 +92,11 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	// since the "Diagnóstico de flota" selector is independent by design.
 	branchFilter := c.Query("branch_id")
 
+	branchNameByID := map[string]string{}
+	for _, b := range h.branchRepo.List() {
+		branchNameByID[b.ID] = b.Name
+	}
+
 	var actives []activeRow
 	activeByBranch := map[string][]activeRow{}
 	for rows.Next() {
@@ -115,17 +120,25 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	activeTotal := len(actives)
 	atRiskMap := map[string]int{}
 	delayedMap := map[string]int{}
+	atRiskByBranch := map[string]int{}
+	delayedByBranch := map[string]int{}
 
 	for _, r := range actives {
 		if !slaMonitoredStatuses[r.status] {
 			continue
 		}
 		dwellH := now.Sub(r.updatedAt).Hours()
+		branchName := branchNameByID[r.receivingBranchID]
+		if branchName == "" {
+			branchName = r.receivingBranchID
+		}
 		switch {
 		case dwellH > model.SLADelayThresholdHours:
 			delayedMap[r.status]++
+			delayedByBranch[branchName]++
 		case dwellH > model.SLAAtRiskThresholdHours:
 			atRiskMap[r.status]++
+			atRiskByBranch[branchName]++
 		}
 	}
 
@@ -273,7 +286,9 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		SlaHealthRate:   slaHealthRate,
 		ActiveTotal:     activeTotal,
 		AtRiskTotal:     atRiskTotal,
+		AtRiskByBranch:  atRiskByBranch,
 		DelayedTotal:    delayedTotal,
+		DelayedByBranch: delayedByBranch,
 		Bottlenecks:     bottlenecks,
 		DelayTrend:      trend,
 		CurrentAverages: currentAverages,
@@ -385,10 +400,10 @@ func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch m
 		}
 
 		// ── 1. Heuristic classification (always runs) ─────────────────────────
-		heurStatus := runHeuristic(delayRatePct, idleDrivers, orphanShipments, utilizationRatio)
+		heurStatus := runHeuristic(delayRatePct, idleDrivers, orphanShipments, activeDrivers, totalShipments, utilizationRatio)
 		heurDiag := model.FleetDiagnosis{
 			Status:     heurStatus,
-			Message:    fleetStatusMessage(heurStatus, idleDrivers, orphanShipments, utilizationRatio),
+			Message:    fleetStatusMessage(heurStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments, utilizationRatio),
 			RawMetrics: rawMetrics,
 		}
 
@@ -400,7 +415,7 @@ func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch m
 			)
 			mlPred = &model.FleetDiagnosis{
 				Status:           mlStatus,
-				Message:          fleetStatusMessage(mlStatus, idleDrivers, orphanShipments, utilizationRatio),
+				Message:          fleetStatusMessage(mlStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments, utilizationRatio),
 				Confidence:       math.Round(confidence*10000) / 10000,
 				RawMetrics:       rawMetrics,
 				VoteDistribution: voteDist,
@@ -422,7 +437,14 @@ func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch m
 // utilizationRatio (active shipments per active driver) is the fleet-wide
 // saturation signal that replaced "carga promedio" (avg load of busy drivers
 // only) — same thresholds, same five-case ordering, scoped to one branch.
-func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments int, utilizationRatio float64) model.FleetStatus {
+func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int, utilizationRatio float64) model.FleetStatus {
+	// Caso borde: sin choferes activos pero con envíos pendientes — la
+	// protección contra división por cero deja utilizationRatio en 0, lo que
+	// haría caer (incorrectamente) en ESTABLE/OCIOSO. Es el peor escenario
+	// posible: demanda real, dotación nula. Siempre CRÍTICO.
+	if activeDrivers == 0 && totalShipments > 0 {
+		return model.FleetStatusCritical
+	}
 	if delayRatePct > 10.0 && idleDrivers > 0 {
 		return model.FleetStatusWarning
 	}
@@ -439,13 +461,25 @@ func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments int, utiliz
 }
 
 // fleetStatusMessage returns the operator-facing message for a given fleet status.
-func fleetStatusMessage(status model.FleetStatus, idleDrivers, orphanShipments int, utilizationRatio float64) string {
+func fleetStatusMessage(status model.FleetStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments int, utilizationRatio float64) string {
 	switch status {
 	case model.FleetStatusWarning:
 		return "⚠️ Ineficiencia detectada: SLA comprometido, pero hay " +
 			itoa(idleDrivers) + " chofer(es) inactivo(s). " +
 			"Revise la asignación de rutas antes de sumar flota."
 	case model.FleetStatusCritical:
+		// Caso borde: sin choferes activos, el déficit no se mide en envíos
+		// huérfanos (esos requieren un chofer asignado para existir) sino en
+		// volumen total a cubrir desde cero.
+		if activeDrivers == 0 && totalShipments > 0 {
+			driversNeeded := int(math.Ceil(float64(totalShipments) / float64(maxPackagesPerDriver)))
+			verb := "Se requiere"
+			if driversNeeded != 1 {
+				verb = "Se requieren"
+			}
+			return "🚨 Sin dotación activa: la sucursal no tiene choferes disponibles. " +
+				verb + " " + itoa(driversNeeded) + " vehículo(s) para absorber la demanda."
+		}
 		driversNeeded := int(math.Ceil(float64(orphanShipments) / maxPackagesPerDriver))
 		return "🚨 Capacidad rebasada: Todos los choferes están ocupados. " +
 			"Se requieren " + itoa(driversNeeded) + " vehículo(s) extra para absorber " +
@@ -469,6 +503,12 @@ func fleetStatusMessage(status model.FleetStatus, idleDrivers, orphanShipments i
 //	< 0  temporarily deactivate abs(n)    (very low demand, more drivers than needed)
 //	  0  no staffing action required
 func calcDriverDelta(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int) int {
+	// AGREGAR: sin dotación activa pero con demanda real — el déficit no se mide
+	// en envíos huérfanos (esos requieren un chofer asignado para existir) sino
+	// en volumen total a cubrir desde cero.
+	if activeDrivers == 0 && totalShipments > 0 {
+		return int(math.Ceil(float64(totalShipments) / 30.0))
+	}
 	// AGREGAR: SLA crítico, todos los choferes ocupados y envíos sin cubrir.
 	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
 		return int(math.Ceil(float64(orphanShipments) / float64(maxPackagesPerDriver)))
