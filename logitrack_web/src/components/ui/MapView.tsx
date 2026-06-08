@@ -12,7 +12,6 @@ import {
   Play,
   RotateCcw,
   Crosshair,
-  Factory,
   Film,
   Zap,
   X,

@@ -37,7 +37,6 @@ import {
   Factory,
   Undo2,
   Flame,
-  Reply,
   Repeat,
   ReceiptText,
   MapPin,
