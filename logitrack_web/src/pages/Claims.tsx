@@ -46,9 +46,10 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
 ];
 
 function formatChangedBy(changedBy: string): string {
+  if (!changedBy || changedBy === "system") return "sistema";
   if (changedBy.startsWith("chatbot-customer:")) {
     const dni = changedBy.replace("chatbot-customer:", "");
-    return `Cliente (DNI ${dni}) vía chatbot`;
+    return `Destinatario (DNI ${dni}) vía chatbot`;
   }
   if (changedBy.startsWith("chatbot-sender:")) {
     const dni = changedBy.replace("chatbot-sender:", "");
