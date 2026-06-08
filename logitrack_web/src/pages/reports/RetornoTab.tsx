@@ -31,7 +31,7 @@ const TOOLTIP_STYLE = {
   background: "rgba(255,255,255,0.97)",
 };
 
-export default function RetornoTab({ dateFrom, dateTo, branchId }: RetornoTabProps) {
+export function RetornoTab({ dateFrom, dateTo, branchId }: RetornoTabProps) {
   const [data, setData] = useState<ReturnMetricsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

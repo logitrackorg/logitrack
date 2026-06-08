@@ -832,7 +832,7 @@ export function DriverInterBranchTrip() {
       {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
       {fatigueBlocked && (
         <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <span className="text-6xl">⚠️</span>
+          <AlertTriangle size={64} className="text-red-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
           </h2>
@@ -846,7 +846,7 @@ export function DriverInterBranchTrip() {
       {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
       {!fatigueBlocked && fatigueUnblockedBy && (
         <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <span className="text-6xl">✅</span>
+          <CheckCircle2 size={64} className="text-emerald-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Ruta autorizada
           </h2>

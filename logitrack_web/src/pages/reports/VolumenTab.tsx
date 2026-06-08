@@ -43,7 +43,7 @@ const WINDOW_BG: Record<string, string> = {
 
 const WINDOW_ORDER = ["morning", "afternoon", "flexible"];
 
-export default function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabProps) {
+export function VolumenTab({ dateFrom, dateTo, branchId }: VolumenTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [total, setTotal] = useState(0);

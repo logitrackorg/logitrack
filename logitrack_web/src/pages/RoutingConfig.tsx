@@ -363,18 +363,14 @@ export function RoutingConfig() {
                     }
                   />
                   <div
-                    className="w-10 h-6 rounded-full transition-colors"
-                    style={{
-                      background: draft?.enforce_time_windows
-                        ? "var(--brand)"
-                        : "var(--border-strong)",
-                    }}
+                    className={`w-10 h-6 rounded-full transition-colors ${
+                      draft?.enforce_time_windows ? "bg-[var(--brand)]" : "bg-[var(--border-strong)]"
+                    }`}
                   />
                   <div
-                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform ${
+                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform bg-white ${
                       draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
                     }`}
-                    style={{ background: "#fff" }}
                   />
                 </div>
                 <span className="text-sm text-slate-700">
@@ -392,11 +388,12 @@ export function RoutingConfig() {
               </p>
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
-                  className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.backhaul_enabled ? "var(--sidebar-bg)" : "#e5e7eb" }}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    draft?.backhaul_enabled ? "bg-[var(--sidebar-bg)]" : "bg-[#e5e7eb]"
+                  }`}
                   onClick={() => setDraft((d) => (d ? { ...d, backhaul_enabled: !d.backhaul_enabled } : d))}
                 >
-                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-0"}`} />
                 </div>
                 <span className="text-sm text-slate-700">
                   {draft?.backhaul_enabled ? "Activo" : "Inactivo"}
@@ -431,11 +428,12 @@ export function RoutingConfig() {
               </p>
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
-                  className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.keep_one_vehicle_per_branch ? "var(--sidebar-bg)" : "#e5e7eb" }}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    draft?.keep_one_vehicle_per_branch ? "bg-[var(--sidebar-bg)]" : "bg-[#e5e7eb]"
+                  }`}
                   onClick={() => setDraft((d) => (d ? { ...d, keep_one_vehicle_per_branch: !d.keep_one_vehicle_per_branch } : d))}
                 >
-                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-0"}`} />
                 </div>
                 <span className="text-sm text-slate-700">
                   {draft?.keep_one_vehicle_per_branch ? "Activo" : "Inactivo"}

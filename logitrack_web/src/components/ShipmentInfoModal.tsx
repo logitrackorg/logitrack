@@ -79,17 +79,17 @@ export function ShipmentInfoModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="dark:bg-gray-800 bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
+        <div className="px-5 py-4 border-b dark:border-gray-700 border-slate-200 sticky top-0 dark:bg-gray-800 bg-white z-10">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-sm font-semibold text-slate-900">{shipment.tracking_id}</span>
+              <span className="font-mono text-sm font-semibold dark:text-gray-100 text-slate-900">{shipment.tracking_id}</span>
               <StatusBadge status={shipment.status} label={statusLabel} />
               {shipment.priority && <PriorityBadge priority={shipment.priority} />}
             </div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-1 text-xs dark:text-gray-400 text-slate-500">
               Información del envío · solo lectura
             </div>
           </div>
@@ -176,10 +176,10 @@ export function ShipmentInfoModal({
           </Section>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-200 sticky bottom-0 bg-white">
+        <div className="px-5 py-3 border-t dark:border-gray-700 border-slate-200 sticky bottom-0 dark:bg-gray-800 bg-white">
           <button
             onClick={onClose}
-            className="w-full h-10 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-slate-700 cursor-pointer transition-colors"
+            className="w-full h-10 rounded-lg dark:bg-gray-700/50 bg-slate-100 hover:bg-slate-200 text-sm font-semibold dark:text-gray-300 text-slate-700 cursor-pointer transition-colors"
           >
             Cerrar
           </button>
@@ -193,10 +193,10 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-slate-700">{icon}</span>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">{title}</h3>
+        <span className="dark:text-gray-300 text-slate-700">{icon}</span>
+        <h3 className="text-xs font-semibold uppercase tracking-wide dark:text-gray-300 text-slate-700">{title}</h3>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50/50">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 px-3 py-2.5 rounded-lg border dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50/50">
         {children}
       </div>
     </div>
@@ -206,8 +206,8 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
 function KV({ label, value, fullRow = false }: { label: string; value: string; fullRow?: boolean }) {
   return (
     <div className={fullRow ? "sm:col-span-2" : ""}>
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-sm text-slate-900 break-words">{value || "—"}</div>
+      <div className="text-[11px] uppercase tracking-wide dark:text-gray-400 text-slate-500">{label}</div>
+      <div className="text-sm dark:text-gray-100 text-slate-900 break-words">{value || "—"}</div>
     </div>
   );
 }

@@ -54,7 +54,7 @@ function LineTooltip({ active, payload, label }: {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function SlaTab() {
+export function SlaTab() {
   const [metrics, setMetrics] = useState<SLAMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);

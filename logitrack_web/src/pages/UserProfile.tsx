@@ -101,7 +101,7 @@ export function UserProfile() {
     <div className="p-6 max-w-2xl mx-auto">
       <button
         onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 mb-4 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Volver
@@ -154,10 +154,10 @@ export function UserProfile() {
             <div>
               <h2 className="mb-4">Historial de Fatiga</h2>
               {historyLoading ? (
-                <p className="text-slate-500">Cargando historial...</p>
+                <p className="dark:text-gray-400 text-slate-500">Cargando historial...</p>
               ) : !historyResult || historyResult.request_status === "sin_solicitud" ? (
                 <div>
-                  <p className="mb-4 text-slate-600 text-sm">
+                  <p className="mb-4 dark:text-gray-400 text-slate-600 text-sm">
                     Tu historial de check-ins de fatiga es privado. Para consultarlo, solicitá acceso a tu supervisor.
                   </p>
                   <button
@@ -187,31 +187,31 @@ export function UserProfile() {
                 </div>
               ) : historyResult.ok && historyResult.history ? (
                 <div>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-xs dark:text-gray-400 text-slate-500 mb-3">
                     Acceso aprobado · {historyResult.total} registro{historyResult.total !== 1 ? "s" : ""}
                   </p>
                   {historyResult.history.length === 0 ? (
-                    <p className="text-slate-400 text-sm">Sin check-ins registrados aún.</p>
+                    <p className="dark:text-gray-500 text-slate-400 text-sm">Sin check-ins registrados aún.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full border-collapse text-xs">
                         <thead>
-                          <tr className="bg-slate-50">
-                            <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">Fecha</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">KSS</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Sueño</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Estado</th>
+                          <tr className="dark:bg-gray-800/50 bg-slate-50">
+                            <th className="px-3 py-2 text-left font-semibold dark:text-gray-400 text-slate-600 border-b dark:border-gray-700 border-slate-200">Fecha</th>
+                            <th className="px-3 py-2 text-center font-semibold dark:text-gray-400 text-slate-600 border-b dark:border-gray-700 border-slate-200">KSS</th>
+                            <th className="px-3 py-2 text-center font-semibold dark:text-gray-400 text-slate-600 border-b dark:border-gray-700 border-slate-200">Sueño</th>
+                            <th className="px-3 py-2 text-center font-semibold dark:text-gray-400 text-slate-600 border-b dark:border-gray-700 border-slate-200">Estado</th>
                           </tr>
                         </thead>
                         <tbody>
                           {historyResult.history.map((rec) => {
                             const [yy, mm, dd] = rec.date.split("-");
                             return (
-                              <tr key={rec.recorded_at || rec.date} className="border-b border-slate-100">
-                                <td className="px-3 py-2 text-slate-700">
+                              <tr key={rec.recorded_at || rec.date} className="border-b dark:border-gray-700 border-slate-100">
+                                <td className="px-3 py-2 dark:text-gray-300 text-slate-700">
                                   {dd}/{mm}/{yy}
                                   {rec.recorded_at && (
-                                    <span className="ml-1.5 text-slate-400 text-[11px]">
+                                    <span className="ml-1.5 dark:text-gray-500 text-slate-400 text-[11px]">
                                       {new Date(rec.recorded_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
                                     </span>
                                   )}
@@ -227,7 +227,7 @@ export function UserProfile() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-center text-slate-700">
+                                <td className="px-3 py-2 text-center dark:text-gray-300 text-slate-700">
                                   {rec.skipped ? "—" : `${rec.horas_sueno}h`}
                                 </td>
                                 <td className="px-3 py-2 text-center">
@@ -311,7 +311,7 @@ export function UserProfile() {
                         value={profile.branch_name || profile.branch_id}
                         readOnly
                         disabled
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-slate-50 text-slate-700"
+                        className="w-full px-3 py-2.5 border dark:border-gray-600 border-gray-300 rounded-md dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700"
                       />
                     </div>
                   )}

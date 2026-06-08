@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SkipForward, Target, Trophy, Zap } from "lucide-react";
 import { driverApi, type PVTPayload } from "../api/driver";
+import { Button } from "@/components/ui/button";
 
 // ── constantes ────────────────────────────────────────────────────────────────
 
@@ -202,13 +203,15 @@ export function PVTCheckIn({ onDone }: Props) {
       {phase === "instructions" && (
         <>
           <div className="flex justify-end px-4 pt-4">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onDone}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+              className="gap-1.5 font-semibold text-xs"
             >
               <SkipForward className="w-3.5 h-3.5" />
               Saltar prueba
-            </button>
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 pb-8">
@@ -237,13 +240,13 @@ export function PVTCheckIn({ onDone }: Props) {
                 </p>
               </div>
 
-              <button
+              <Button
                 onClick={startGame}
-                className="w-full h-12 rounded-xl bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-slate-900 font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 mb-3"
+                className="w-full h-12 rounded-xl font-bold text-base gap-2 mb-3"
               >
                 <Zap className="w-4 h-4" />
                 Iniciar prueba
-              </button>
+              </Button>
             </div>
           </div>
         </>
@@ -369,13 +372,13 @@ export function PVTCheckIn({ onDone }: Props) {
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleSendResults}
               disabled={sending}
-              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-base cursor-pointer disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-xl font-bold text-base gap-2"
             >
               {sending ? "Guardando…" : "Guardar y continuar →"}
-            </button>
+            </Button>
           </div>
         </div>
       )}

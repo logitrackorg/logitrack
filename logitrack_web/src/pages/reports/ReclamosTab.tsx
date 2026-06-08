@@ -55,7 +55,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
   );
 }
 
-export default function ReclamosTab({ dateFrom, dateTo, branchId }: ReclamosTabProps) {
+export function ReclamosTab({ dateFrom, dateTo, branchId }: ReclamosTabProps) {
   const [data, setData] = useState<IncidentsByBranchResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

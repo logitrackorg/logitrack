@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { InterBranchTrip } from "../../api/interBranchTrips";
 import { interBranchTripsApi } from "../../api/interBranchTrips";
 import { vehicleApi, type Vehicle } from "../../api/vehicles";
@@ -194,7 +195,7 @@ export default function VehicleTimelineView({
     <div style={{ display: "flex", flexDirection: "column", gap: 0, fontFamily: "inherit" }}>
       {/* Navegación de día */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0 12px" }}>
-        <button onClick={prevDay} style={navBtn}><ChevronLeft size={16} /></button>
+        <Button variant="ghost" size="icon" onClick={prevDay}><ChevronLeft size={16} /></Button>
         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-heading)", minWidth: 140, textAlign: "center" }}>
           {dayLabel}
           {today && (
@@ -203,8 +204,8 @@ export default function VehicleTimelineView({
             </span>
           )}
         </span>
-        <button onClick={nextDay} style={navBtn}><ChevronRight size={16} /></button>
-        <button onClick={goToday} style={{ ...navBtn, padding: "5px 12px", fontSize: 13, fontWeight: 600 }}>Hoy</button>
+        <Button variant="ghost" size="icon" onClick={nextDay}><ChevronRight size={16} /></Button>
+        <Button variant="outline" size="sm" onClick={goToday}>Hoy</Button>
         {loading && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Cargando…</span>}
       </div>
 
@@ -499,14 +500,3 @@ export default function VehicleTimelineView({
     </div>
   );
 }
-
-const navBtn: React.CSSProperties = {
-  background: "var(--bg-card)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  padding: "5px 9px",
-  cursor: "pointer",
-  color: "var(--text-primary)",
-  display: "flex",
-  alignItems: "center",
-};

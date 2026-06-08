@@ -368,13 +368,13 @@ export function FatigueConfig() {
             {!auditLoading && auditLogs && auditLogs.length > 0 && (
               <>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <table className="w-full border-collapse text-[13px]">
                     <thead>
-                      <tr style={{ background: "var(--bg-subtle)" }}>
-                        <th style={thStyle}>Fecha / hora</th>
-                        <th style={thStyle}>Usuario</th>
-                        <th style={thStyle}>Acción</th>
-                        <th style={thStyle}>Detalles</th>
+                      <tr className="bg-[var(--bg-subtle)]">
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Fecha / hora</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Usuario</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Acción</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Detalles</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -579,23 +579,6 @@ function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number })
 
 // ── Audit log sub-components ──────────────────────────────────────────────────
 
-const thStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  textAlign: "left",
-  fontWeight: 700,
-  fontSize: 11,
-  color: "var(--text-secondary)",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--border)",
-  verticalAlign: "top",
-};
-
 const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
   UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "var(--brand-tint)", color: "var(--brand)" },
   SUBMIT_CHECKIN:        { label: "Check-in",        bg: "var(--ok-bg)", color: "var(--ok-text)" },
@@ -628,17 +611,17 @@ function AuditRow({ log }: { log: AuditLog }) {
   }
 
   return (
-    <tr style={{ borderBottom: "1px solid var(--border)" }}>
-      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "var(--text-strong)" }}>
+    <tr className="border-b border-[var(--border)]">
+      <td className="px-3 py-2 align-top whitespace-nowrap text-[var(--text-strong)]">
         {formatAuditDate(log.created_at)}
       </td>
-      <td style={{ ...tdStyle, fontWeight: 600, color: "var(--text-primary)" }}>{log.created_by}</td>
-      <td style={tdStyle}>
-        <span style={{ background: badge.bg, color: badge.color, borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
+      <td className="px-3 py-2 align-top font-semibold text-[var(--text-primary)]">{log.created_by}</td>
+      <td className="px-3 py-2 align-top">
+        <span className="rounded font-semibold text-[11px] whitespace-nowrap px-2 py-0.5" style={{ background: badge.bg, color: badge.color }}>
           {badge.label}
         </span>
       </td>
-      <td style={{ ...tdStyle, color: "var(--text-secondary)", fontSize: 12 }}>{detailText}</td>
+      <td className="px-3 py-2 align-top text-xs text-[var(--text-secondary)]">{detailText}</td>
     </tr>
   );
 }

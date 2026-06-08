@@ -32,7 +32,7 @@ function hhmm(iso?: string) {
 }
 
 // ── componente principal ──────────────────────────────────────────────────────
-export default function TripsCalendar() {
+export function TripsCalendar() {
   const { user, hasRole } = useAuth();
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedTrip, setSelectedTrip] = useState<InterBranchTrip | null>(null);

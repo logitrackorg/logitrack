@@ -60,7 +60,7 @@ function NotifIcon({ type }: { type: string }) {
   if (type === "trip_driver_assigned")          return <UserCheck    size={18} className={cls} />;
   if (type === "chatbot_rejected_by_recipient") return <Bot          size={18} className={cls} />;
   if (type === "chatbot_cancelled_by_sender")   return <Bot          size={18} className={cls} />;
-  return <Bell size={18} className="text-slate-400" />;
+  return <Bell size={18} className="dark:text-gray-500 text-slate-400" />;
 }
 
 function parseSLAEta(body: string): Date | null {
@@ -87,7 +87,7 @@ function slaCountdown(eta: Date, clockOffsetMs = 0): string {
 }
 
 function notifRowBg(n: Notification): string {
-  if (n.read_at) return "bg-white";
+  if (n.read_at) return "dark:bg-gray-800 bg-white";
   if (n.type === "sla_risk" || n.type === "sla_expired") return "bg-red-50";
   if (n.type === "return_completed" || n.type === "return_arrival") return "bg-amber-50";
   if (n.type === "min_fill_reached") return "bg-violet-50";
@@ -207,7 +207,7 @@ export function NotificationsPage() {
     <div className="mx-auto max-w-[860px] px-4 py-8">
       {/* Page title */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="m-0 text-xl font-bold text-slate-900">
+        <h1 className="m-0 text-xl font-bold dark:text-gray-100 text-slate-900">
           Notificaciones
         </h1>
         <button
@@ -222,7 +222,7 @@ export function NotificationsPage() {
       {/* Filters */}
       <div className="flex gap-2.5 mb-5 flex-wrap items-end">
         <div className="flex-[1_1_200px] min-w-[160px]">
-          <label className="block text-xs text-slate-500 mb-1">
+          <label className="block text-xs dark:text-gray-400 text-slate-500 mb-1">
             Buscar
           </label>
           <input
@@ -231,29 +231,29 @@ export function NotificationsPage() {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Título o contenido..."
-            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
+            className="w-full px-2.5 py-1.5 rounded-md border dark:border-gray-700 border-slate-200 text-xs box-border"
           />
         </div>
         <div className="flex-[0_1_160px]">
-          <label className="block text-xs text-slate-500 mb-1">
+          <label className="block text-xs dark:text-gray-400 text-slate-500 mb-1">
             Desde
           </label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
+            className="w-full px-2.5 py-1.5 rounded-md border dark:border-gray-700 border-slate-200 text-xs box-border"
           />
         </div>
         <div className="flex-[0_1_160px]">
-          <label className="block text-xs text-slate-500 mb-1">
+          <label className="block text-xs dark:text-gray-400 text-slate-500 mb-1">
             Hasta
           </label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border border-slate-200 text-xs box-border"
+            className="w-full px-2.5 py-1.5 rounded-md border dark:border-gray-700 border-slate-200 text-xs box-border"
           />
         </div>
         <button
@@ -266,19 +266,19 @@ export function NotificationsPage() {
 
       {/* List */}
       {loading ? (
-        <div className="text-center text-slate-500 py-10">Cargando...</div>
+        <div className="text-center dark:text-gray-400 text-slate-500 py-10">Cargando...</div>
       ) : notifications.length === 0 ? (
-        <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-200">
+        <div className="text-center dark:text-gray-500 text-slate-400 py-12 dark:bg-gray-800 bg-white rounded-xl border border-dashed dark:border-gray-700 border-slate-200">
           <Bell size={36} className="text-slate-300 mb-3" />
           <div className="text-sm">No hay notificaciones</div>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+        <div className="border dark:border-gray-700 border-slate-200 rounded-xl overflow-hidden dark:bg-gray-800 bg-white">
           {notifications.map((n, idx) => (
             <div
               key={n.id}
               onClick={() => handleItemClick(n)}
-              className={`flex gap-3.5 items-start px-5 py-3.5 ${idx < notifications.length - 1 ? "border-b border-slate-100" : ""} ${notifRowBg(n)} border-l-[3px] ${notifRowBorder(n)} cursor-pointer transition-colors duration-150 hover:bg-blue-50`}
+              className={`flex gap-3.5 items-start px-5 py-3.5 ${idx < notifications.length - 1 ? "border-b dark:border-gray-700 border-slate-100" : ""} ${notifRowBg(n)} border-l-[3px] ${notifRowBorder(n)} cursor-pointer transition-colors duration-150 hover:bg-blue-50`}
             >
               <div className="mt-0.5 shrink-0">
                 <NotifIcon type={n.type} />
@@ -286,12 +286,12 @@ export function NotificationsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline gap-3 flex-wrap">
                   <span
-                    className={`text-sm ${n.read_at ? "font-normal" : "font-semibold"} text-slate-900`}
+                    className={`text-sm ${n.read_at ? "font-normal" : "font-semibold"} dark:text-gray-100 text-slate-900`}
                   >
                     {n.title}
                   </span>
                   <div className="flex gap-2.5 items-center shrink-0">
-                    <span className="text-slate-400 text-xs">
+                    <span className="dark:text-gray-500 text-slate-400 text-xs">
                       {relativeTime(n.created_at, clockOffsetMs)}
                     </span>
                     <span className="text-slate-300 text-xs">
@@ -299,7 +299,7 @@ export function NotificationsPage() {
                     </span>
                   </div>
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">
+                <div className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">
                   {n.type === "sla_risk" ? bodyWithoutEta(n.body) : n.body}
                 </div>
                 {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
@@ -345,17 +345,17 @@ export function NotificationsPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-5 flex-wrap gap-2">
-          <span className="text-xs text-slate-500">
+          <span className="text-xs dark:text-gray-400 text-slate-500">
             {total} resultado{total !== 1 ? "s" : ""} · Página {currentPage} de {totalPages}
           </span>
           <div className="flex gap-1.5">
             <button
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className={`px-3.5 py-1.5 rounded-md border border-slate-200 text-xs ${
+              className={`px-3.5 py-1.5 rounded-md border dark:border-gray-700 border-slate-200 text-xs ${
                 offset === 0
-                  ? "bg-slate-50 text-slate-400 cursor-not-allowed"
-                  : "bg-white text-slate-900 cursor-pointer"
+                  ? "dark:bg-gray-800/50 bg-slate-50 dark:text-gray-500 text-slate-400 cursor-not-allowed"
+                  : "dark:bg-gray-800 bg-white dark:text-gray-100 text-slate-900 cursor-pointer"
               }`}
             >
               ← Anterior
@@ -363,10 +363,10 @@ export function NotificationsPage() {
             <button
               disabled={offset + PAGE_SIZE >= total}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              className={`px-3.5 py-1.5 rounded-md border border-slate-200 text-xs ${
+              className={`px-3.5 py-1.5 rounded-md border dark:border-gray-700 border-slate-200 text-xs ${
                 offset + PAGE_SIZE >= total
-                  ? "bg-slate-50 text-slate-400 cursor-not-allowed"
-                  : "bg-white text-slate-900 cursor-pointer"
+                  ? "dark:bg-gray-800/50 bg-slate-50 dark:text-gray-500 text-slate-400 cursor-not-allowed"
+                  : "dark:bg-gray-800 bg-white dark:text-gray-100 text-slate-900 cursor-pointer"
               }`}
             >
               Siguiente →

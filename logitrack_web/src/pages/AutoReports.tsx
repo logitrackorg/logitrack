@@ -132,7 +132,7 @@ export function AutoReports() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen dark:bg-gray-800/50 bg-slate-50">
       <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-4">
         <PageHeader
           icon={<FileBarChart className="h-6 w-6" />}
@@ -140,7 +140,7 @@ export function AutoReports() {
           description="Configurá reportes periódicos que se generan y notifican automáticamente"
         />
 
-        <div className="flex gap-1 border-b border-slate-200">
+        <div className="flex gap-1 border-b dark:border-gray-700 border-slate-200">
           <TabBtn active={activeTab === "generados"} onClick={() => setTab("generados")}>
             Reportes generados
           </TabBtn>
@@ -197,7 +197,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       className={`h-10 px-4 text-sm border-b-2 transition-colors cursor-pointer ${
-        active ? "border-[var(--brand)] text-[var(--brand)] font-semibold" : "border-transparent text-slate-500 hover:text-slate-900"
+        active ? "border-[var(--brand)] text-[var(--brand)] font-semibold" : "border-transparent dark:text-gray-400 text-slate-500 dark:hover:text-gray-100 hover:text-slate-900"
       }`}
     >
       {children}
@@ -228,41 +228,41 @@ function ConfigTab({ schedules, branches, loading, onCreate, onEdit, onDelete, o
       </div>
 
       {loading ? (
-        <Card className="p-10 text-center text-slate-500 text-sm">Cargando…</Card>
+        <Card className="p-10 text-center dark:text-gray-400 text-slate-500 text-sm">Cargando…</Card>
       ) : schedules.length === 0 ? (
         <Card className="p-10 text-center">
           <FileBarChart className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm text-slate-500">No hay reportes automáticos configurados</p>
+          <p className="text-sm dark:text-gray-400 text-slate-500">No hay reportes automáticos configurados</p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left border-b border-slate-100">
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Nombre</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Frecuencia</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Hora</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Métricas</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Estado</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right">Acciones</th>
+                <tr className="dark:bg-gray-800/50 bg-slate-50 text-left border-b dark:border-gray-700 border-slate-100">
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Nombre</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Frecuencia</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Hora</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Sucursal</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Métricas</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Estado</th>
+                  <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {schedules.map((s) => (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
-                    <td className="px-4 py-3 text-slate-700">{describeFrequency(s)}</td>
-                    <td className="px-4 py-3 text-slate-700 tabular-nums">{s.time_of_day}</td>
-                    <td className="px-4 py-3 text-slate-700">
+                  <tr key={s.id} className="border-b dark:border-gray-700 border-slate-100 dark:hover:bg-gray-700 hover:bg-slate-50">
+                    <td className="px-4 py-3 font-medium dark:text-gray-100 text-slate-900">{s.name}</td>
+                    <td className="px-4 py-3 dark:text-gray-300 text-slate-700">{describeFrequency(s)}</td>
+                    <td className="px-4 py-3 dark:text-gray-300 text-slate-700 tabular-nums">{s.time_of_day}</td>
+                    <td className="px-4 py-3 dark:text-gray-300 text-slate-700">
                       {s.branch_id ? branches.find((b) => b.id === s.branch_id)?.name ?? s.branch_id : "Todas"}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 text-xs">{s.metrics.length} seleccionadas</td>
+                    <td className="px-4 py-3 dark:text-gray-400 text-slate-600 text-xs">{s.metrics.length} seleccionadas</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                          s.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+                          s.active ? "bg-emerald-50 text-emerald-700" : "dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-500"
                         }`}
                       >
                         {s.active ? "Activo" : "Pausado"}
@@ -273,21 +273,21 @@ function ConfigTab({ schedules, branches, loading, onCreate, onEdit, onDelete, o
                         <button
                           onClick={() => onRunNow(s.id)}
                           title="Generar ahora"
-                          className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer"
+                          className="p-1.5 dark:text-gray-400 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer"
                         >
                           <Play className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => onEdit(s)}
                           title="Editar"
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                          className="p-1.5 dark:text-gray-400 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => onDelete(s.id)}
                           title="Eliminar"
-                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                          className="p-1.5 dark:text-gray-400 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -324,12 +324,12 @@ interface GeneratedTabProps {
 }
 
 function GeneratedTab({ reports, branches, loading, onDownloadCSV, onDownloadPDF }: GeneratedTabProps) {
-  if (loading) return <Card className="p-10 text-center text-slate-500 text-sm">Cargando…</Card>;
+  if (loading) return <Card className="p-10 text-center dark:text-gray-400 text-slate-500 text-sm">Cargando…</Card>;
   if (reports.length === 0) {
     return (
       <Card className="p-10 text-center">
         <Download className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-slate-500">Todavía no hay reportes generados</p>
+        <p className="text-sm dark:text-gray-400 text-slate-500">Todavía no hay reportes generados</p>
       </Card>
     );
   }
@@ -338,35 +338,35 @@ function GeneratedTab({ reports, branches, loading, onDownloadCSV, onDownloadPDF
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-50 text-left border-b border-slate-100">
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Reporte</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Frecuencia</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Período</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Sucursal</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Generado</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">Datos</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider text-right">Descargar</th>
+            <tr className="dark:bg-gray-800/50 bg-slate-50 text-left border-b dark:border-gray-700 border-slate-100">
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Reporte</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Frecuencia</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Período</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Sucursal</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Generado</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider">Datos</th>
+              <th className="px-4 py-3 text-xs font-semibold dark:text-gray-400 text-slate-600 uppercase tracking-wider text-right">Descargar</th>
             </tr>
           </thead>
           <tbody>
             {reports.map((r) => (
-              <tr key={r.id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-900">{r.schedule_name}</td>
-                <td className="px-4 py-3 text-slate-700">{FREQUENCY_LABELS[r.frequency]}</td>
-                <td className="px-4 py-3 text-slate-600 text-xs tabular-nums">
+              <tr key={r.id} className="border-b dark:border-gray-700 border-slate-100 dark:hover:bg-gray-700 hover:bg-slate-50">
+                <td className="px-4 py-3 font-medium dark:text-gray-100 text-slate-900">{r.schedule_name}</td>
+                <td className="px-4 py-3 dark:text-gray-300 text-slate-700">{FREQUENCY_LABELS[r.frequency]}</td>
+                <td className="px-4 py-3 dark:text-gray-400 text-slate-600 text-xs tabular-nums">
                   {r.period_from.slice(0, 10)} → {r.period_to.slice(0, 10)}
                 </td>
-                <td className="px-4 py-3 text-slate-700">
+                <td className="px-4 py-3 dark:text-gray-300 text-slate-700">
                   {r.branch_id ? branches.find((b) => b.id === r.branch_id)?.name ?? r.branch_id : "Todas"}
                 </td>
-                <td className="px-4 py-3 text-slate-600 text-xs">{fmtDateTime(r.generated_at)}</td>
+                <td className="px-4 py-3 dark:text-gray-400 text-slate-600 text-xs">{fmtDateTime(r.generated_at)}</td>
                 <td className="px-4 py-3">
                   {r.has_data ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
                       Con datos
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-500">
                       Sin datos
                     </span>
                   )}
@@ -470,32 +470,32 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-5 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
+      <div className="dark:bg-gray-800 bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-5 border-b dark:border-gray-700 border-slate-200">
+          <h2 className="text-lg font-semibold dark:text-gray-100 text-slate-900">
             {existing ? "Editar reporte automático" : "Nuevo reporte automático"}
           </h2>
         </div>
 
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+            <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Nombre</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
+              className="w-full border dark:border-gray-600 border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
               placeholder="Reporte ejecutivo semanal"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Frecuencia</label>
+              <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Frecuencia</label>
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as ReportFrequency)}
-                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
+                className="w-full border dark:border-gray-600 border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
               >
                 <option value="daily">Diaria</option>
                 <option value="weekly">Semanal</option>
@@ -504,22 +504,22 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hora (24h)</label>
+              <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Hora (24h)</label>
               <input
                 type="time"
                 value={timeOfDay}
                 onChange={(e) => setTimeOfDay(e.target.value)}
-                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
+                className="w-full border dark:border-gray-600 border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
               />
             </div>
 
             {frequency === "weekly" && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Día de la semana</label>
+                <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Día de la semana</label>
                 <select
                   value={dayOfWeek}
                   onChange={(e) => setDayOfWeek(Number(e.target.value))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
+                  className="w-full border dark:border-gray-600 border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
                 >
                   {DAYS_OF_WEEK.map((d) => (
                     <option key={d.value} value={d.value}>
@@ -532,20 +532,20 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
 
             {frequency === "monthly" && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Día del mes (1–28)</label>
+                <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Día del mes (1–28)</label>
                 <input
                   type="number"
                   min={1}
                   max={28}
                   value={dayOfMonth}
                   onChange={(e) => setDayOfMonth(Math.min(28, Math.max(1, Number(e.target.value))))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
+                  className="w-full border dark:border-gray-600 border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Sucursal</label>
+              <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Sucursal</label>
               <SelectMenu
                 value={branchId}
                 onChange={setBranchId}
@@ -557,7 +557,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email destino (opcional)</label>
+              <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-1">Email destino (opcional)</label>
               <input
                 type="email"
                 value={email}
@@ -565,29 +565,29 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                 placeholder="gerencia@empresa.com"
                 className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
                   isValidEmail
-                    ? "border-slate-300 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
+                    ? "dark:border-gray-600 border-slate-300 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
                     : "border-red-400 focus:ring-red-500/50"
                 }`}
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs dark:text-gray-500 text-slate-400 mt-1">
                 Solo se guarda como referencia. Las notificaciones llegan in-app.
               </p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Métricas a incluir</label>
+            <label className="block text-sm font-medium dark:text-gray-300 text-slate-700 mb-2">Métricas a incluir</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ALL_METRICS.map((m) => (
                 <label
                   key={m}
-                  className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-md hover:bg-slate-50 cursor-pointer text-sm"
+                  className="flex items-center gap-2 px-3 py-2 border dark:border-gray-700 border-slate-200 rounded-md dark:hover:bg-gray-700 hover:bg-slate-50 cursor-pointer text-sm"
                 >
                   <input
                     type="checkbox"
                     checked={metrics.includes(m)}
                     onChange={() => toggleMetric(m)}
-                    className="rounded border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
+                    className="rounded dark:border-gray-600 border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
                   />
                   <span>{METRIC_LABELS[m]}</span>
                 </label>
@@ -600,17 +600,17 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
               type="checkbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="rounded border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
+              className="rounded dark:border-gray-600 border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
             />
             <span>Activo (el scheduler lo va a ejecutar)</span>
           </label>
         </div>
 
-        <div className="p-5 border-t border-slate-200 flex justify-end gap-2">
+        <div className="p-5 border-t dark:border-gray-700 border-slate-200 flex justify-end gap-2">
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-md cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-100 rounded-md cursor-pointer disabled:opacity-50"
           >
             Cancelar
           </button>

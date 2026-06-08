@@ -41,7 +41,7 @@ const TYPE_BG: Record<string, string> = {
 
 const TYPE_ORDER = ["express", "normal"];
 
-export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTabProps) {
+export function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [total, setTotal] = useState(0);
