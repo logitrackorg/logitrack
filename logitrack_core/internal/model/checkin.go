@@ -20,6 +20,12 @@ type DriverCheckin struct {
 	KSSLevel   int       `json:"kss_level"`   // 1–9
 	RecordedAt time.Time `json:"recorded_at"`
 
+	// Latitude/Longitude — coordenadas capturadas por el navegador
+	// (navigator.geolocation) al momento de iniciar la prueba. Nil cuando el
+	// chofer denegó la ubicación o no se pudo obtener un fix a tiempo.
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
+
 	// Skipped is true when the driver chose to bypass the fatigue gate.
 	// The gate is hidden for 3 hours after a skip (grace period).
 	Skipped bool `json:"skipped,omitempty"`
@@ -76,5 +82,6 @@ type PVTResult struct {
 	LatenciaPromedioMs float64   `json:"latencia_promedio_ms"` // mean response latency
 	Aciertos           int       `json:"aciertos"`             // correct circle taps
 	Errores            int       `json:"errores"`              // false positives (taps with no stimulus)
+	GameErrors         int       `json:"game_errors,omitempty"` // erroneous clicks + missed stimuli (broader error count for the minigame)
 	RecordedAt         time.Time `json:"recorded_at"`
 }

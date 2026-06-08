@@ -33,6 +33,12 @@ export function VoiceCheckIn({ onDone }: Props) {
   const mediaRef       = useRef<MediaRecorder | null>(null);
   const chunksRef      = useRef<Blob[]>([]);
   const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Lock síncrono contra invocaciones concurrentes de startRecording: el botón
+  // sigue mostrando "Iniciar grabación" (state aún "idle") mientras se espera
+  // la promesa de getUserMedia, así que un doble-tap dispararía dos streams/
+  // recorders en simultáneo, mezclando sus chunks en el mismo blob — produciendo
+  // un audio corrupto que el backend no puede puntuar (race condition reportada en QA).
+  const startingRef    = useRef(false);
 
   // Web Audio API — análisis de energía en tiempo real
   const audioCtxRef    = useRef<AudioContext | null>(null);
@@ -67,6 +73,12 @@ export function VoiceCheckIn({ onDone }: Props) {
   };
 
   const startRecording = async () => {
+    // Guard contra re-entradas: ignorar taps mientras getUserMedia sigue
+    // pendiente — "Grabando" recién se activa cuando la promesa resuelve, así
+    // que sin este lock un doble-tap inicia dos streams concurrentes.
+    if (startingRef.current) return;
+    startingRef.current = true;
+
     setErrorMsg("");
     setRetryMsg("");
     chunksRef.current = [];
@@ -120,6 +132,11 @@ export function VoiceCheckIn({ onDone }: Props) {
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
       setErrorMsg("No se pudo acceder al micrófono. Verificá los permisos.");
+    } finally {
+      // Liberar el lock recién acá: con state ya en "recording" (o el error ya
+      // mostrado), el botón "Iniciar grabación" deja de estar visible/habilitado,
+      // así que no hay ventana para una segunda invocación concurrente.
+      startingRef.current = false;
     }
   };
 
@@ -173,6 +190,19 @@ export function VoiceCheckIn({ onDone }: Props) {
       }
     } catch (err: unknown) {
       const respData = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+
+      if (respData?.error === "SILENCE_DETECTED") {
+        // Silencio explícito detectado por el backend (energía/VAD/speech_rate
+        // por debajo del umbral) — mensaje específico y resetear el grabador
+        // para que el chofer vuelva a empezar desde cero.
+        setErrorMsg("No se detectó sonido. Por favor, habla con voz clara y fuerte.");
+        chunksRef.current = [];
+        setHasChunks(false);
+        hasVoiceRef.current = false;
+        setState("idle");
+        return;
+      }
+
       const isInvalidAudio = respData?.error === "INVALID_AUDIO";
       setErrorMsg(isInvalidAudio && respData?.message
         ? respData.message
