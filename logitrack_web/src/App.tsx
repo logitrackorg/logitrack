@@ -429,8 +429,9 @@ export default function App() {
             <Routes>
               <Route path="/track" element={<PublicTracking />} />
               {/* Rutas de 2FA: accesibles sin sesión establecida */}
-              <Route path="/2fa/verify" element={<TwoFAVerify />} />
-              <Route path="/2fa/setup-required" element={<TwoFASetup required />} />
+<Route path="/2fa/verify" element={<TwoFAVerify />} />
+<Route path="/2fa/setup-required" element={<TwoFASetup required />} />
+<Route path="/2fa/setup" element={<TwoFASetup />} />
               <Route path="*" element={<AppRoutes />} />
             </Routes>
           </TwoFAGuard>

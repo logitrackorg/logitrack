@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { twoFAApi } from '../api/two-fa';
 import { systemConfigApi } from '../api/systemConfig';
@@ -15,20 +15,18 @@ function formatCooldown(seconds: number): string {
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
 }
 
-export const TwoFASetupRequired: React.FC = () => {
+export function TwoFASetupRequired() {
+  const navigate = useNavigate();
+  const { setSession, logout } = useAuth();
   const [step, setStep] = useState<'init' | 'scan' | 'confirm' | 'success'>('init');
   const [setupData, setSetupData] = useState<TwoFASetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const [attempts, setAttempts] = useState(0);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [cooldownMinutes, setCooldownMinutes] = useState(1);
-
-  const navigate = useNavigate();
-  const { setSession, logout } = useAuth();
 
   useEffect(() => {
     let cancelled = false;

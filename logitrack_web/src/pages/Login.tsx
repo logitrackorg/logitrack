@@ -124,18 +124,7 @@ export function Login() {
       console.log('🔵 Response completa:', response);
 
       // ══════════════════════════════════════════════
-      // CASO 1: Usuario CON 2FA ya activado
-      // ══════════════════════════════════════════════
-      if (response && response.requires_2fa) {
-        console.log('✅ Usuario tiene 2FA activo - redirigiendo a verificación');
-        navigate("/2fa/verify", {
-          state: { session_token: response.session_token }
-        });
-        return;
-      }
-
-      // ══════════════════════════════════════════════
-      // CASO 2: Usuario SIN 2FA (debe activarlo)
+      // CASO 1: Usuario SIN 2FA (debe activarlo) — chequear ANTES que requires_2fa
       // ══════════════════════════════════════════════
       if (response && response.user) {
         const user = response.user;
@@ -153,6 +142,17 @@ export function Login() {
           navigate("/2fa/setup-required");
           return;
         }
+      }
+
+      // ══════════════════════════════════════════════
+      // CASO 2: Usuario CON 2FA ya activado
+      // ══════════════════════════════════════════════
+      if (response && response.requires_2fa) {
+        console.log('✅ Usuario tiene 2FA activo - redirigiendo a verificación');
+        navigate("/2fa/verify", {
+          state: { session_token: response.session_token }
+        });
+        return;
       }
 
       // ══════════════════════════════════════════════
