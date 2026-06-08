@@ -1,0 +1,23 @@
+logitrack_core/internal/repository/postgres_auth.go
+  s_7e9c58b8da512f::t_50227867bcd739 201-202
+  s_7e9c58b8da512f::t_0ae68858e0757d 154,156,159
+logitrack_core/internal/repository/two_fa.go
+  s_7e9c58b8da512f::t_86f3c9492ea241 140-151,155
+  s_7e9c58b8da512f::t_3c0a0e1b0d3c53 117-118,121,129-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9331455c2ff9387b59bfe89ceba5cbbc1de8bf6c",
+  "prompts": {},
+  "sessions": {
+    "s_7e9c58b8da512f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82a1d755-a6bd-4043-8feb-1ecf860eceeb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
