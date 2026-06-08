@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { MessageCircle, X, Bot, Loader } from 'lucide-react';
 import { ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { chatbotService } from '../../api/chatbot';
 import { Button } from '@/components/ui/button';
+import { fmtDate } from '@/utils/date';
 import type {
   ChatMessage,
   Shipment,
@@ -26,7 +28,7 @@ type ChatState =
 
 type UserType = 'recipient' | 'sender' | null;
 
-export const ChatbotWidget: React.FC = () => {
+export function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [state, setState] = useState<ChatState>('initial');
@@ -906,15 +908,7 @@ export const ChatbotWidget: React.FC = () => {
     return statusMap[status] || status;
   };
 
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateStr: string): string => fmtDate(dateStr);
 
   const isSessionWarning = timeRemaining < 20 && sessionActive && state === 'authenticated';
 
@@ -927,7 +921,7 @@ export const ChatbotWidget: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir chat"
       >
-        {isOpen ? '✕' : '💬'}
+        {isOpen ? <X size={20} /> : <MessageCircle size={20} />}
       </Button>
 
       {/* Ventana del chat */}
@@ -935,15 +929,15 @@ export const ChatbotWidget: React.FC = () => {
         <div className="fixed bottom-24 right-6 w-[360px] max-h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-gray-200 max-sm:right-4 max-sm:bottom-20 max-sm:w-[calc(100vw-32px)] max-sm:max-h-[calc(100vh-120px)]">
           <div className="bg-[var(--brand)] text-white p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-xl">🤖</span>
+              <Bot size={18} />
               <div>
                 <h3 className="text-sm font-bold m-0">Asistente LogiTrack</h3>
-                <span className={`text-xs opacity-80 font-medium ${isSessionWarning ? 'animate-pulse !opacity-100' : ''}`}>
+                <span className={`text-xs opacity-80 font-medium flex items-center gap-1 ${isSessionWarning ? 'animate-pulse !opacity-100' : ''}`}>
                   {loading
-                    ? '⏳ Procesando...'
+                    ? <><Loader size={12} className="animate-spin" /> Procesando...</>
                     : sessionActive && state === 'authenticated'
-                      ? `🟢 Sesión activa (${timeRemaining}s)`
-                      : '🟢 En línea'}
+                      ? <><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Sesión activa ({timeRemaining}s)</>
+                      : <><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> En línea</>}
                 </span>
               </div>
             </div>
@@ -959,7 +953,7 @@ export const ChatbotWidget: React.FC = () => {
               }}
               aria-label="Cerrar chat"
             >
-              ✕
+              <X size={16} />
             </Button>
           </div>
 
