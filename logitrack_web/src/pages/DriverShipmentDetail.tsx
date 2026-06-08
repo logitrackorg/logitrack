@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -17,9 +17,14 @@ import {
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
-import { BottomSheet } from "../components/ui/bottom-sheet";
 import { Button } from "../components/ui/button";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
+import { DriverShell } from "../components/DriverShell";
+import { DeliverSheet } from "../components/driver/DeliverSheet";
+import { FailedSheet } from "../components/driver/FailedSheet";
+import { RejectedSheet } from "../components/driver/RejectedSheet";
+import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
+import { useGeolocation } from "../hooks/useGeolocation";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
@@ -51,12 +56,32 @@ export function DriverShipmentDetail() {
   const [failedOpen, setFailedOpen] = useState(false);
   const [rejectedOpen, setRejectedOpen] = useState(false);
   const [recipientDni, setRecipientDni] = useState("");
+  const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState("");
   const [failedNotes, setFailedNotes] = useState("");
   const [rejectedReason, setRejectedReason] = useState("");
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+
+  // ── Speed gate ──────────────────────────────────────────────────────────────
+  const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
+  const [simActive] = useState(false); // no simulation for detail page
+  const routePoints = useMemo(() => [], []); // no route tracking needed
+  const { mode: simulationMode } = useGeolocation(routePoints, simActive ? "simulate" : undefined);
+  const simulationActive = simulationMode === "simulate";
+  const simSpeedKmh = simulationActive ? 0 : 0;
+  const speedSource: "simulation" | "real_gps" = simulationActive ? "simulation" : "real_gps";
+  const effectiveSpeed = simulationActive ? simSpeedKmh : gpsSpeedKmh;
+  const movingTooFast = effectiveSpeed > 5;
+  const locationMissing = !simulationActive && !locationReady;
+  const deliveryBlocked = movingTooFast || locationMissing;
+  const blockMessage = movingTooFast
+    ? "Detenga el vehículo para entregar"
+    : locationMissing
+      ? "Ubicación requerida. Active el GPS y deténgase para entregar"
+      : "";
 
   const reload = (id: string) =>
     Promise.all([
@@ -74,19 +99,50 @@ export function DriverShipmentDetail() {
 
   const handleDeliver = async () => {
     if (!shipment || !recipientDni.trim()) return;
+    const isLastMile = shipment.delivery_method === "ultima_milla";
+    if (isLastMile) {
+      const locked = (shipment.keyword_attempts ?? 0) >= 3;
+      if (useContingency) {
+        if (!recipientDni.trim()) return;
+      } else {
+        if (locked || !deliveryKeyword.trim()) return;
+      }
+    } else {
+      if (!recipientDni.trim()) return;
+    }
     setSubmitting(true);
     setActionError("");
     try {
-      await shipmentApi.updateStatus(shipment.tracking_id, {
-        status: "delivered",
-        location: "",
-        recipient_dni: recipientDni.trim(),
-      });
+      if (isLastMile) {
+        await shipmentApi.deliver(shipment.tracking_id, {
+          keyword: useContingency ? undefined : deliveryKeyword.trim(),
+          recipient_dni: useContingency ? recipientDni.trim() : undefined,
+          contingency: useContingency,
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+        });
+      } else {
+        await shipmentApi.updateStatus(shipment.tracking_id, {
+          status: "delivered",
+          location: "",
+          recipient_dni: recipientDni.trim(),
+          current_speed: effectiveSpeed,
+          speed_source: speedSource,
+        });
+      }
       setDeliverOpen(false);
       setRecipientDni("");
+      setDeliveryKeyword("");
+      setUseContingency(false);
       await reload(shipment.tracking_id);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      // Refresh shipment to get updated keyword_attempts from backend
+      if (msg?.includes("intento") || msg?.includes("bloqueado")) {
+        setDeliveryKeyword("");
+        const updated = await shipmentApi.get(shipment.tracking_id).catch(() => null);
+        if (updated) setShipment(updated);
+      }
       setActionError(msg ?? "No se pudo registrar la entrega.");
     } finally {
       setSubmitting(false);
@@ -105,6 +161,8 @@ export function DriverShipmentDetail() {
         status: "delivery_failed",
         location: "",
         notes: note,
+        current_speed: effectiveSpeed,
+        speed_source: speedSource,
       });
       setFailedOpen(false);
       setFailedReason("");
@@ -133,6 +191,8 @@ export function DriverShipmentDetail() {
         status: "rechazado",
         location: "",
         notes: note,
+        current_speed: effectiveSpeed,
+        speed_source: speedSource,
       });
       setRejectedOpen(false);
       setRejectedReason("");
@@ -146,22 +206,56 @@ export function DriverShipmentDetail() {
     }
   };
 
-  if (loading) return <DetailSkeleton />;
+  if (loading) {
+    return (
+      <DriverShell title="Detalle de envío">
+        <div className="px-4 py-3 space-y-3">
+          <div className="flex justify-center py-1">
+            <div className="h-7 w-28 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+          </div>
+          <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
+            <div className="h-6 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-4 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+              <div className="h-3 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+            </div>
+            <div className="h-4 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
+            <div className="h-14 rounded-xl bg-[var(--bg-muted)] animate-pulse" />
+            <div className="flex gap-2">
+              <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+              <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+              <div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" />
+            </div>
+          </div>
+          <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-2.5">
+            <div className="h-4 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+            <div className="h-4 w-2/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          </div>
+          <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3">
+            <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
+          </div>
+        </div>
+      </DriverShell>
+    );
+  }
+
   if (error || !shipment) {
     return (
-      <div className="min-h-screen bg-[var(--bg-page)] px-4 py-3">
-        <Button
-          variant="ghost"
-          onClick={() => navigate("/driver/route")}
-          className="flex items-center gap-2 h-12 w-full text-base font-semibold text-[var(--text-primary)] mb-4 justify-start"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Mi ruta
-        </Button>
-        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)]">
-          {error || "No encontrado."}
+      <DriverShell title="Detalle de envío">
+        <div className="px-4 py-3">
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/driver/route")}
+            className="flex items-center gap-2 h-12 w-full text-base font-semibold text-[var(--text-primary)] mb-4 justify-start"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Mi ruta
+          </Button>
+          <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)]">
+            {error || "No encontrado."}
+          </div>
         </div>
-      </div>
+      </DriverShell>
     );
   }
 
@@ -184,7 +278,7 @@ export function DriverShipmentDetail() {
   const statusOverride = shipmentStatusLabelOverride(shipment);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] pb-[calc(theme(spacing.52)+env(safe-area-inset-bottom,0px))]">
+    <DriverShell title="Detalle de envío" subtitle={shipment.tracking_id}>
       {/* Back button — large h-12, prominent */}
       <div className="sticky top-0 z-30 bg-[var(--bg-card)]/95 backdrop-blur border-b border-[var(--border)]">
         <button
@@ -357,23 +451,6 @@ export function DriverShipmentDetail() {
               Entregar
             </Button>
 
-            <Button
-              onClick={() => setFailedOpen(true)}
-              variant="destructive"
-              className="w-full h-14 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:active:bg-red-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
-            >
-              <XCircle className="w-5 h-5" />
-              No entregado
-            </Button>
-
-            <Button
-              onClick={() => setRejectedOpen(true)}
-              className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700 dark:active:bg-orange-800 text-white text-lg font-bold gap-2 active:scale-95 transition-all shadow-sm"
-            >
-              <Ban className="w-5 h-5" />
-              Rechazado por destinatario
-            </Button>
-
             {/* Failed — red */}
             <Button
               variant="destructive"
@@ -398,315 +475,52 @@ export function DriverShipmentDetail() {
 
       <DeliverSheet
         open={deliverOpen}
-        onClose={() => { setDeliverOpen(false); setRecipientDni(""); }}
-        recipientName={name}
+        onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }}
+        shipment={shipment}
+        keyword={deliveryKeyword}
+        onKeywordChange={setDeliveryKeyword}
+        useContingency={useContingency}
+        onUseContingency={setUseContingency}
         dni={recipientDni}
         onDniChange={setRecipientDni}
         submitting={submitting}
         onConfirm={handleDeliver}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
+        error={actionError}
       />
       <FailedSheet
         open={failedOpen}
         onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }}
-        recipientName={name}
+        shipment={shipment}
         reason={failedReason}
         onReasonChange={setFailedReason}
         notes={failedNotes}
         onNotesChange={setFailedNotes}
         submitting={submitting}
         onConfirm={handleFailed}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
       />
       <RejectedSheet
         open={rejectedOpen}
         onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }}
-        recipientName={name}
+        shipment={shipment}
         reason={rejectedReason}
         onReasonChange={setRejectedReason}
         notes={rejectedNotes}
         onNotesChange={setRejectedNotes}
         submitting={submitting}
         onConfirm={handleRejected}
+        speedBlocked={deliveryBlocked}
+        blockMessage={blockMessage}
+        needsLocation={locationMissing}
+        onRequestLocation={requestLocation}
       />
-    </div>
-  );
-}
-
-function DeliverSheet({
-  open,
-  onClose,
-  recipientName,
-  dni,
-  onDniChange,
-  submitting,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  dni: string;
-  onDniChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (open) {
-      const t = setTimeout(() => inputRef.current?.focus(), 80);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Confirmar entrega"
-      description={`Entrega a ${recipientName}`}
-    >
-      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
-        DNI del destinatario
-      </label>
-      <input
-        ref={inputRef}
-        value={dni}
-        onChange={(e) => onDniChange(e.target.value.replace(/\D/g, ""))}
-        inputMode="numeric"
-        autoComplete="off"
-        placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
-      />
-      <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-        Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
-      </p>
-
-      <div className="flex flex-col gap-2 mt-5">
-        <Button
-          onClick={onConfirm}
-          disabled={!dni.trim() || submitting}
-          className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
-        >
-          {submitting ? "Guardando…" : "Confirmar entrega"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="w-full h-14 rounded-xl text-base font-semibold"
-        >
-          Cancelar
-        </Button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function FailedSheet({
-  open,
-  onClose,
-  recipientName,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-}) {
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Marcar como no entregado"
-      description={`No entrega a ${recipientName}`}
-    >
-      <p className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-2">
-        ¿Qué pasó?
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {FAILED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
-                active
-                  ? "border-red-500 bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500"
-                  : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)] hover:bg-[var(--bg-hover)]"
-              }`}
-            >
-              {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-red-500/20 focus:border-red-500 resize-y"
-      />
-
-      <div className="flex flex-col gap-2 mt-5">
-        <Button
-          variant="destructive"
-          onClick={onConfirm}
-          disabled={!canSubmit || submitting}
-          className="w-full h-14 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
-        >
-          {submitting ? "Guardando…" : "Confirmar"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="w-full h-14 rounded-xl text-base font-semibold"
-        >
-          Cancelar
-        </Button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function RejectedSheet({
-  open,
-  onClose,
-  recipientName,
-  reason,
-  onReasonChange,
-  notes,
-  onNotesChange,
-  submitting,
-  onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  recipientName: string;
-  reason: string;
-  onReasonChange: (s: string) => void;
-  notes: string;
-  onNotesChange: (s: string) => void;
-  submitting: boolean;
-  onConfirm: () => void;
-}) {
-  const requiresNotes = reason === "otro";
-  const canSubmit = !!reason && !(requiresNotes && !notes.trim());
-
-  return (
-    <BottomSheet
-      open={open}
-      onClose={onClose}
-      title="Rechazado por destinatario"
-      description={`${recipientName} rechazó el envío`}
-    >
-      <p className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-2">
-        Motivo del rechazo
-      </p>
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {REJECTED_REASONS.map((r) => {
-          const active = reason === r.id;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onReasonChange(r.id)}
-              className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
-                active
-                  ? "border-orange-500 bg-orange-50 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500"
-                  : "border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-strong)] hover:bg-[var(--bg-hover)]"
-              }`}
-            >
-              <r.icon className="w-5 h-5" /> {r.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="block text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider mb-1.5">
-        Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
-      </label>
-      <textarea
-        value={notes}
-        onChange={(e) => onNotesChange(e.target.value)}
-        placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional"}
-        rows={3}
-        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500 resize-y"
-      />
-
-      <div className="flex flex-col gap-2 mt-5">
-        <Button
-          onClick={onConfirm}
-          disabled={!canSubmit || submitting}
-          className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
-        >
-          {submitting ? "Guardando…" : "Confirmar rechazo"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="w-full h-14 rounded-xl text-base font-semibold"
-        >
-          Cancelar
-        </Button>
-      </div>
-    </BottomSheet>
-  );
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="min-h-screen bg-[var(--bg-page)]">
-      <div className="sticky top-0 z-30 bg-[var(--bg-card)]/95 border-b border-[var(--border)]">
-        <div className="flex items-center gap-2 h-12 px-4">
-          <div className="w-5 h-5 rounded bg-[var(--bg-muted)] animate-pulse" />
-          <div className="h-4 w-20 rounded bg-[var(--bg-muted)] animate-pulse" />
-        </div>
-      </div>
-      <div className="px-4 py-3 space-y-3">
-        {/* Status badge */}
-        <div className="flex justify-center py-1">
-          <div className="h-7 w-28 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-        </div>
-        {/* Recipient card */}
-        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
-          <div className="h-6 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-4 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-            <div className="h-3 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-          </div>
-          <div className="h-4 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
-          <div className="h-14 rounded-xl bg-[var(--bg-muted)] animate-pulse" />
-          <div className="flex gap-2">
-            <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-            <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-            <div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-          </div>
-        </div>
-        {/* Package card */}
-        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-2.5">
-          <div className="h-4 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-          <div className="h-4 w-2/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-        </div>
-        {/* Sender card */}
-        <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3">
-          <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
-        </div>
-      </div>
-    </div>
+    </DriverShell>
   );
 }
