@@ -478,7 +478,7 @@ export function DriverRoute() {
               </div>
             )}
 
-            {import.meta.env.DEV && !simActive && simulationMode === "real" && (
+            {!simActive && simulationMode === "real" && (
               <button
                 onClick={() => { setSimActive(true); setViewMode('map'); }}
                 title="Activar simulación GPS"
