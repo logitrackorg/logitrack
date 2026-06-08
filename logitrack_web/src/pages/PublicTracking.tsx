@@ -532,7 +532,7 @@ export function PublicTracking() {
           {/* Search form */}
           <form
             onSubmit={handleSearch}
-            className="flex gap-2 max-w-lg mx-auto max-sm:flex-col max-sm:gap-2"
+            className="flex flex-col items-center gap-3 max-w-lg mx-auto"
             role="search"
             aria-label="Buscar envío"
           >
