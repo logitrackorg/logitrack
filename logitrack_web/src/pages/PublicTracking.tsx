@@ -19,9 +19,10 @@ import {
   resolveClaimType,
   validatePublicClaimForm,
 } from "../utils/publicClaimForm";
-import { fmtDateTime, fmtRelative } from "../utils/date";
+import { fmtDateTime, fmtRelative, fmtDate } from "../utils/date";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
+import { Button } from "../components/ui/button";
 import {
   Search,
   Truck,
@@ -298,9 +299,7 @@ function describeEvent(
       : ev.current_location.type === "ORIGIN_BRANCH"
         ? "En sucursal origen"
         : "En tránsito";
-    const date = new Date(ev.rescheduled_date).toLocaleDateString("es-AR", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    });
+    const date = fmtDate(ev.rescheduled_date);
     return {
       icon: <MapPin className={icnEv} />,
       title: `${locText} - ${ev.current_location.status}`,
@@ -510,7 +509,7 @@ export function PublicTracking() {
   return (
     <div className="relative min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] font-sans pb-6">
       {/* ── Header ── */}
-      <header className="sticky top-0 z-30 bg-[var(--bg-card)] border-b border-[var(--border)] backdrop-blur-sm bg-opacity-[0.92]">
+      <header className="sticky top-0 z-30 bg-[var(--bg-card)]/[0.92] border-b border-[var(--border)] backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3 max-sm:px-3">
           {org?.logo_url ? (
             <img
@@ -574,18 +573,16 @@ export function PublicTracking() {
               aria-label="Número de seguimiento"
             />
           </div>
-          <button
+          <Button
             type="submit"
-            className="bg-white text-[var(--brand-strong)] border-none rounded-xl px-6 py-3.5
-                       cursor-pointer font-bold text-base whitespace-nowrap
-                       transition-all duration-200 shadow-lg
-                       hover:bg-white/90 disabled:opacity-60 disabled:cursor-not-allowed
-                       max-sm:px-5 max-sm:py-3 max-sm:text-sm"
+            className="bg-white text-[var(--brand-strong)] rounded-xl px-6 py-3.5
+                       font-bold text-base whitespace-nowrap shadow-lg
+                       hover:bg-white/90 max-sm:px-5 max-sm:py-3 max-sm:text-sm"
             disabled={loading}
             aria-busy={loading}
           >
             {loading ? "Buscando..." : "Rastrear"}
-          </button>
+          </Button>
         </form>
 
         {/* Example chips */}
@@ -634,16 +631,15 @@ export function PublicTracking() {
                 {error}
               </p>
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
-                         bg-[var(--brand)] text-white font-semibold text-sm
-                         hover:bg-[var(--brand-strong)] transition-colors duration-150"
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-2"
               onClick={() => query.trim() && runSearch(query.trim())}
             >
               <RefreshCw className="w-4 h-4" />
               Reintentar
-            </button>
+            </Button>
           </div>
         )}
 
@@ -1013,21 +1009,15 @@ export function PublicTracking() {
                     Podemos ayudarte con un reclamo y darte seguimiento.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl
-                             border-2 border-[var(--border)] font-semibold text-sm
-                             text-[var(--text-primary)] bg-transparent
-                             hover:border-[var(--brand)] hover:text-[var(--brand)]
-                             transition-all duration-200
-                             disabled:opacity-50 disabled:cursor-not-allowed
-                             whitespace-nowrap max-sm:w-full max-sm:justify-center"
+                <Button
+                  variant="outline"
+                  className="gap-2 rounded-xl border-2 whitespace-nowrap max-sm:w-full max-sm:justify-center"
                   onClick={() => setClaimOpen((prev) => !prev)}
                   disabled={claimSubmitting || !!claimResult}
                 >
                   <MessageSquare className="w-4 h-4" />
                   {claimOpen ? "Cerrar" : "¿Algún problema? Hacé tu reclamo"}
-                </button>
+                </Button>
               </div>
 
               {/* Success state */}
@@ -1072,25 +1062,12 @@ export function PublicTracking() {
                     )}
 
                     <div className="flex justify-end gap-3 max-sm:flex-col max-sm:items-stretch pt-2">
-                      <button
-                        type="button"
-                        className="px-4 py-2.5 rounded-xl border border-[var(--border)]
-                                   text-[var(--text-primary)] font-semibold text-sm
-                                   hover:bg-[var(--bg-muted)] transition-colors duration-150"
-                        onClick={() => setClaimOpen(false)}
-                      >
+                      <Button variant="outline" onClick={() => setClaimOpen(false)}>
                         Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2.5 rounded-xl font-bold text-sm
-                                   bg-[var(--brand)] text-white
-                                   hover:bg-[var(--brand-strong)] transition-colors duration-150
-                                   disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={claimSubmitting}
-                      >
+                      </Button>
+                      <Button type="submit" disabled={claimSubmitting}>
                         {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 </div>
