@@ -583,7 +583,10 @@ export function NotificationBell() {
           {/* List */}
           <div className="max-h-[420px] overflow-y-auto">
             {displayItems.length === 0 ? (
-              <div className="py-6 px-4 text-center text-[13px] text-[#64748b]">Sin notificaciones</div>
+              <div className="py-8 px-4 text-center">
+                <Bell size={24} className="mx-auto mb-2 text-slate-600" />
+                <p className="text-[13px] text-[#64748b]">Sin notificaciones</p>
+              </div>
             ) : (
               displayItems.map((item) =>
                 item.kind === "single"
