@@ -1,0 +1,33 @@
+logitrack_web/src/pages/Routing.tsx
+  s_da444957913825::t_78122669faca4a 28
+  s_da444957913825::t_8916ced9d89cbe 1159,1179-1180
+  s_da444957913825::t_6ff933852c2cfb 2072-2087
+logitrack_web/src/api/routing.ts
+  s_da444957913825::t_a6a0c278403211 143-144
+logitrack_core/internal/model/routing.go
+  s_da444957913825::t_646256e177ff89 192-195
+logitrack_core/internal/service/routing.go
+  s_da444957913825::t_c56a6e13024267 1535-1541,1547,1551
+logitrack_web/src/components/ReviewInterBranchModal.tsx
+  s_da444957913825::t_2b3d78d5fccdd8 159
+  s_da444957913825::t_a0e72316d0b403 207-209
+  s_da444957913825::t_39727aeba12eba 371,374,377-398
+  s_da444957913825::t_e6f362271f0c3a 561
+  s_da444957913825::t_8d863a399a277c 437-440
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "953e1a197cd8dd9a8c360387cce6fc7d34b9f660",
+  "prompts": {},
+  "sessions": {
+    "s_da444957913825": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b63d9cc1-004e-47d3-952f-b0ba9cf587ac",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
