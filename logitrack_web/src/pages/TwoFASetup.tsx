@@ -174,9 +174,7 @@ export function TwoFASetup({ required = false }: Props) {
           {step === 'init' && (
             <div className="space-y-5">
               <div className="rounded-xl border border-[var(--brand-tint-border)] bg-[var(--brand-tint)] dark:bg-[var(--brand)]/10 p-5">
-                <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-[var(--brand)]" /> ¿Qué necesitás?
-                </h3>
+            <h3 className="font-semibold text-sm text-gray-800 dark:text-gray-200 mb-3">¿Qué necesitás?</h3>
                 <ul className="space-y-2">
                   <li className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                     <Smartphone className="w-4 h-4 text-[var(--brand)] shrink-0" />
