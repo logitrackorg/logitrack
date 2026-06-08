@@ -34,7 +34,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (file && onFileSelect) {
       onFileSelect(file);
     }
-    // reset so the same file can be re-selected
     e.target.value = '';
   };
 
@@ -45,7 +44,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,.pdf"
+            accept="image/*,.pdf,.doc,.docx"
             style={{ display: 'none' }}
             onChange={handleFileChange}
             disabled={attachDisabled}

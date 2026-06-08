@@ -4,12 +4,12 @@ import "time"
 
 // Claim domain event types (persisted in claim_events).
 const (
-	EventClaimCreated         = "claim_created"
-	EventClaimCategoryUpdated = "claim_category_updated"
-	EventClaimResolved        = "claim_resolved"
-	EventClaimPendingCustomer    = "claim_pending_customer"
-	EventClaimInReview           = "claim_in_review"
-	EventClaimCustomerResponded  = "claim_customer_responded"
+	EventClaimCreated           = "claim_created"
+	EventClaimCategoryUpdated   = "claim_category_updated"
+	EventClaimResolved          = "claim_resolved"
+	EventClaimPendingCustomer   = "claim_pending_customer"
+	EventClaimInReview          = "claim_in_review"
+	EventClaimCustomerResponded = "claim_customer_responded"
 )
 
 // ClaimEvent is the API representation of a claim timeline entry.

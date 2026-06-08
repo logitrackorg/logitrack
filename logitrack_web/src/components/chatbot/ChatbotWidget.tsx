@@ -113,9 +113,9 @@ export const ChatbotWidget: React.FC = () => {
       setActiveClaim(response.active_claim ?? null);
       setState('authenticated');
       setSessionActive(true);
+      resetSessionTimer();
 
       const menuOptions = buildMenuOptions(response.available_actions);
-      resetSessionTimer();
 
       // Si hay reclamo activo, informar y actuar según el estado
       if (response.active_claim) {
@@ -277,6 +277,11 @@ export const ChatbotWidget: React.FC = () => {
 
   const buildMenuOptions = (availableActions: string[]): ChatOption[] => {
     const optionsMap: Record<string, ChatOption> = {
+      respond_claim: {
+        label: '📝 Responder reclamo pendiente',
+        value: 'respond_claim',
+        action: 'respond_claim',
+      },
       request_pickup: {
         label: '📦 Retirar por sucursal',
         value: 'pickup',
@@ -296,11 +301,6 @@ export const ChatbotWidget: React.FC = () => {
         label: '📋 Hacer un reclamo',
         value: 'file_claim',
         action: 'file_claim',
-      },
-      respond_claim: {
-        label: '💬 Responder reclamo pendiente',
-        value: 'respond_claim',
-        action: 'respond_claim',
       },
     };
 
@@ -364,7 +364,6 @@ export const ChatbotWidget: React.FC = () => {
       const desc = input.trim();
       setClaimDescription(desc);
 
-      // ¿requiere evidencia?
       const needsEvidence = claimType === 'damage' && damageSubtypes.includes('product_damaged');
       setEvidenceRequired(needsEvidence);
 
@@ -380,7 +379,6 @@ export const ChatbotWidget: React.FC = () => {
           [{ label: '⏭ Continuar sin adjunto', value: 'skip', action: 'skip_claim_evidence' as const }]
         );
       } else {
-        // Pasar desc directamente para evitar race condition con setClaimDescription
         await handleSubmitClaim(null, desc);
       }
     }
@@ -782,6 +780,7 @@ export const ChatbotWidget: React.FC = () => {
     ]);
   };
 
+
   const handleRestart = () => {
     if (sessionTimeoutRef.current) {
       clearTimeout(sessionTimeoutRef.current);
@@ -979,7 +978,7 @@ export const ChatbotWidget: React.FC = () => {
 
           <ChatInput
             onSend={handleUserInput}
-            disabled={loading || state === 'authenticated'}
+            disabled={loading || state === 'authenticated' || state === 'claim_evidence'}
             placeholder={
               state === 'authenticated'
                 ? 'Selecciona una opción...'
@@ -993,7 +992,6 @@ export const ChatbotWidget: React.FC = () => {
               addUserMessage(`📎 ${file.name}`);
 
               if (state === 'claim_response_evidence') {
-                // Flujo US-4: respuesta a reclamo pendiente
                 setPendingEvidenceFile(file);
                 addBotMessage(
                   `📎 Archivo seleccionado: **${file.name}**\n\n¿Confirmás que querés adjuntarlo a tu respuesta?`,
@@ -1003,7 +1001,6 @@ export const ChatbotWidget: React.FC = () => {
                   ]
                 );
               } else {
-                // Flujo US-5: nuevo reclamo
                 setClaimEvidenceFile(file);
                 const confirmOptions: ChatOption[] = [
                   { label: '✅ Confirmar y enviar reclamo', value: 'confirm', action: 'confirm_claim_submit' as const },

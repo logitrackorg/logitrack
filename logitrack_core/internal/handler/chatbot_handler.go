@@ -111,6 +111,12 @@ type AuthRequest struct {
 	RecipientDNI string `json:"recipient_dni" binding:"required"`
 }
 
+// PendingClaimInfo contiene el reclamo pendiente de respuesta del cliente
+type PendingClaimInfo struct {
+	ClaimID         string `json:"claim_id"`
+	SupervisorNotes string `json:"supervisor_notes"`
+}
+
 // AuthResponse contiene los datos del envío después de autenticar
 type AuthResponse struct {
 	Success          bool             `json:"success"`
@@ -686,6 +692,61 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 	return actions
 }*/
 
+// RespondToClaim procesa la respuesta del cliente a un reclamo pending_customer (US-4)
+func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
+	claimID := strings.TrimSpace(c.PostForm("claim_id"))
+	claimantDNI := strings.TrimSpace(c.PostForm("claimant_dni"))
+	responseText := strings.TrimSpace(c.PostForm("response_text"))
+
+	if claimID == "" || claimantDNI == "" || responseText == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "claim_id, claimant_dni y response_text son requeridos"})
+		return
+	}
+
+	var evidenceSvc *service.ClaimEvidenceUpload
+	if file, err := c.FormFile("evidence"); err == nil {
+		f, err := file.Open()
+		if err == nil {
+			defer f.Close()
+			data := make([]byte, file.Size)
+			if _, err := f.Read(data); err == nil {
+				evidenceSvc = &service.ClaimEvidenceUpload{
+					FileName: file.Filename,
+					MimeType: file.Header.Get("Content-Type"),
+					Data:     data,
+				}
+			}
+		}
+	}
+
+	if h.claimSvc == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "servicio no disponible"})
+		return
+	}
+
+	claim, err := h.claimSvc.RespondToClaimInfoRequest(claimID, claimantDNI, responseText, evidenceSvc)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Notificación interna al supervisor (usando la sucursal de origen del envío)
+	go func() {
+		branchID := ""
+		if shipment, err := h.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			branchID = shipment.OriginBranchID
+		}
+		h.notifSvc.NotifyClaimCustomerResponded(claim, branchID)
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"claim_id": claim.ID,
+		"status":   claim.Status,
+		"message":  "Tu respuesta fue enviada. El equipo la revisará y te avisaremos cuando haya novedades.",
+	})
+}
+
 // ✅ CÓDIGO NUEVO:
 func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	actions := []string{}
@@ -711,60 +772,6 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 
 	return actions
 }
-// RespondToClaim procesa la respuesta del cliente a un reclamo pending_customer (US-4)
-func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
-	claimID := strings.TrimSpace(c.PostForm("claim_id"))
-	claimantDNI := strings.TrimSpace(c.PostForm("claimant_dni"))
-	responseText := strings.TrimSpace(c.PostForm("response_text"))
-
-	if claimID == "" || claimantDNI == "" || responseText == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "claim_id, claimant_dni y response_text son requeridos"})
-		return
-	}
-
-	var evidenceUpload *service.ClaimEvidenceUpload
-	if file, err := c.FormFile("evidence"); err == nil {
-		f, err := file.Open()
-		if err == nil {
-			defer f.Close()
-			data := make([]byte, file.Size)
-			if _, err := f.Read(data); err == nil {
-				evidenceUpload = &service.ClaimEvidenceUpload{
-					FileName: file.Filename,
-					MimeType: file.Header.Get("Content-Type"),
-					Data:     data,
-				}
-			}
-		}
-	}
-
-	if h.claimSvc == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "servicio no disponible"})
-		return
-	}
-
-	claim, err := h.claimSvc.RespondToClaimInfoRequest(claimID, claimantDNI, responseText, evidenceUpload)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	go func() {
-		branchID := ""
-		if shipment, err := h.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
-			branchID = shipment.OriginBranchID
-		}
-		h.notifSvc.NotifyClaimCustomerResponded(claim, branchID)
-	}()
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
-		"claim_id": claim.ID,
-		"status":   string(claim.Status),
-		"message":  "Tu respuesta fue enviada. El equipo la revisará y te avisaremos cuando haya novedades.",
-	})
-}
-
 // FileClaimRequest es el payload para crear un reclamo desde el chatbot
 type FileClaimRequest struct {
 	TrackingID    string   `json:"tracking_id" binding:"required"`
