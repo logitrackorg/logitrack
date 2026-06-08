@@ -456,13 +456,11 @@ func (h *ClaimHandler) DownloadClaimEvidence(c *gin.Context) {
 	c.FileAttachment(claim.EvidenceFilePath, filepath.Base(claim.EvidenceFileName))
 }
 
-// DownloadClaimResponseEvidence devuelve el archivo adjunto enviado por el cliente
-// al responder un reclamo en estado pending_customer.
+// DownloadClaimResponseEvidence devuelve la evidencia adjuntada por el cliente al responder un reclamo.
 func (h *ClaimHandler) DownloadClaimResponseEvidence(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	claimID := c.Param("id")
 
-	// Verificar acceso al reclamo
 	if _, err := h.svc.GetByIDForBranch(claimID, user.BranchID); err != nil {
 		if err == service.ErrClaimForbidden {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -472,16 +470,16 @@ func (h *ClaimHandler) DownloadClaimResponseEvidence(c *gin.Context) {
 		return
 	}
 
-	// Buscar el evento claim_customer_responded con evidencia
 	events, err := h.svc.GetEvents(claimID, user.BranchID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo obtener el historial"})
 		return
 	}
+
 	var evidenceFileName, evidenceFilePath string
 	for i := len(events) - 1; i >= 0; i-- {
 		ev := events[i]
-		if ev.EventType == "claim_customer_responded" && ev.EvidenceFilePath != "" {
+		if ev.EventType == string(model.EventClaimCustomerResponded) && ev.EvidenceFilePath != "" {
 			evidenceFileName = ev.EvidenceFileName
 			evidenceFilePath = ev.EvidenceFilePath
 			break

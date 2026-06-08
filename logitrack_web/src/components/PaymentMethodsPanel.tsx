@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { paymentApi, type Payment } from "../api/payments";
+import { paymentApi, type Payment, type PaymentConfig } from "../api/payments";
 import ShipmentQRModal from "./ShipmentQRModal";
 
 type Props = {
@@ -21,12 +21,20 @@ export default function PaymentMethodsPanel({
   const [qrBase64, setQrBase64] = useState("");
   const [confirmingCash, setConfirmingCash] = useState(false);
   const [showCashConfirm, setShowCashConfirm] = useState(false);
+  const [confirmingTransfer, setConfirmingTransfer] = useState(false);
+  const [showTransferConfirm, setShowTransferConfirm] = useState(false);
+  const [copiedDest, setCopiedDest] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({ mp_enabled: true, mock_enabled: false, mp_alias: "", mp_cvu: "" });
+
+  useEffect(() => {
+    paymentApi.getConfig().then(setPaymentConfig).catch(() => {});
+  }, []);
 
   const reportError = (msg: string) => {
     onError?.(msg);
   };
 
-  const mpAvailable = Boolean(payment.init_point);
+  const mpAvailable = Boolean(payment.init_point) && paymentConfig.mp_enabled;
 
   const handleCopyLink = () => {
     if (!payment.init_point) return;
@@ -63,40 +71,64 @@ export default function PaymentMethodsPanel({
     }
   };
 
+  const handleCopyDest = (dest: string) => {
+    navigator.clipboard.writeText(dest).then(() => {
+      setCopiedDest(true);
+      setTimeout(() => setCopiedDest(false), 2000);
+    });
+  };
+
+  const handleConfirmTransfer = async () => {
+    setShowTransferConfirm(false);
+    setConfirmingTransfer(true);
+    try {
+      const result = await paymentApi.confirmTransferPayment(trackingId);
+      onCashConfirmed(result.tracking_id);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      reportError(msg ?? "No se pudo registrar la transferencia bancaria.");
+      setConfirmingTransfer(false);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <MethodCard
-        icon="🔗"
-        iconBg="var(--info-bg)"
-        title="Link de Mercado Pago"
-        description={
-          mpAvailable
-            ? "Compartí el link por WhatsApp, email o chat"
-            : "Mercado Pago no está disponible en este entorno"
-        }
-        disabled={!mpAvailable}
-        action={{
-          label: copied ? "✓ Copiado" : "Copiar link",
-          variant: copied ? "success" : "primary",
-          onClick: handleCopyLink,
-        }}
-      />
-      <MethodCard
-        icon="📱"
-        iconBg="var(--info-bg)"
-        title="QR de cobro"
-        description={
-          mpAvailable
-            ? "El cliente escanea desde su celular"
-            : "Mercado Pago no está disponible en este entorno"
-        }
-        disabled={!mpAvailable || loadingQR}
-        action={{
-          label: loadingQR ? "Generando…" : "Mostrar QR",
-          variant: "primary",
-          onClick: handleShowQR,
-        }}
-      />
+      {paymentConfig.mp_enabled && (
+        <>
+          <MethodCard
+            icon="🔗"
+            iconBg="var(--info-bg)"
+            title="Link de Mercado Pago"
+            description={
+              mpAvailable
+                ? "Compartí el link por WhatsApp, email o chat"
+                : "Mercado Pago no está disponible en este entorno"
+            }
+            disabled={!mpAvailable}
+            action={{
+              label: copied ? "✓ Copiado" : "Copiar link",
+              variant: copied ? "success" : "primary",
+              onClick: handleCopyLink,
+            }}
+          />
+          <MethodCard
+            icon="📱"
+            iconBg="var(--info-bg)"
+            title="QR de cobro"
+            description={
+              mpAvailable
+                ? "El cliente escanea desde su celular"
+                : "Mercado Pago no está disponible en este entorno"
+            }
+            disabled={!mpAvailable || loadingQR}
+            action={{
+              label: loadingQR ? "Generando…" : "Mostrar QR",
+              variant: "primary",
+              onClick: handleShowQR,
+            }}
+          />
+        </>
+      )}
       <MethodCard
         icon="💵"
         iconBg="var(--ok-bg)"
@@ -109,6 +141,15 @@ export default function PaymentMethodsPanel({
           onClick: () => setShowCashConfirm(true),
         }}
       />
+      {paymentConfig.mock_enabled && (
+        <TransferCard
+          dest={paymentConfig.mp_alias || paymentConfig.mp_cvu}
+          copied={copiedDest}
+          confirming={confirmingTransfer}
+          onCopyDest={handleCopyDest}
+          onConfirm={() => setShowTransferConfirm(true)}
+        />
+      )}
       <ShipmentQRModal
         isOpen={showQR}
         onClose={() => setShowQR(false)}
@@ -124,6 +165,13 @@ export default function PaymentMethodsPanel({
         currency={payment.currency}
         onCancel={() => setShowCashConfirm(false)}
         onConfirm={handleConfirmCash}
+      />
+      <TransferConfirmModal
+        isOpen={showTransferConfirm}
+        amount={payment.amount}
+        currency={payment.currency}
+        onCancel={() => setShowTransferConfirm(false)}
+        onConfirm={handleConfirmTransfer}
       />
     </div>
   );
@@ -214,6 +262,295 @@ type CashConfirmModalProps = {
   onCancel: () => void;
   onConfirm: () => void;
 };
+
+function TransferCard({
+  dest,
+  copied,
+  confirming,
+  onCopyDest,
+  onConfirm,
+}: {
+  dest: string;
+  copied: boolean;
+  confirming: boolean;
+  onCopyDest: (dest: string) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      style={{
+        padding: "12px 14px",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            flex: "0 0 auto",
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: "var(--info-bg)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 20,
+          }}
+        >
+          🏦
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)", lineHeight: 1.2 }}>
+            Transferencia bancaria
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+            Confirmá cuando verifiques la acreditación
+          </div>
+        </div>
+      </div>
+
+      {dest && (
+        <div
+          style={{
+            background: "var(--bg-page)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "8px 12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Alias / CBU destino
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", fontFamily: "monospace", marginTop: 2, wordBreak: "break-all" }}>
+              {dest}
+            </div>
+          </div>
+          <button
+            onClick={() => onCopyDest(dest)}
+            style={{
+              flex: "0 0 auto",
+              background: "var(--bg-card)",
+              color: copied ? "var(--ok)" : "var(--info)",
+              border: `1px solid ${copied ? "var(--ok)" : "var(--info)"}`,
+              borderRadius: 7,
+              padding: "6px 12px",
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {copied ? "✓ Copiado" : "Copiar"}
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={onConfirm}
+        disabled={confirming}
+        style={{
+          width: "100%",
+          padding: "9px 0",
+          borderRadius: 8,
+          border: "1px solid var(--info)",
+          background: "var(--bg-card)",
+          color: "var(--info)",
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: confirming ? "not-allowed" : "pointer",
+        }}
+      >
+        {confirming ? "Procesando…" : "Confirmar transferencia"}
+      </button>
+    </div>
+  );
+}
+
+type TransferConfirmModalProps = {
+  isOpen: boolean;
+  amount: number;
+  currency: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function TransferConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: TransferConfirmModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isOpen, onCancel]);
+
+  if (!isOpen) return null;
+
+  const formatted = new Intl.NumberFormat("es-AR", { style: "currency", currency: currency || "ARS" }).format(amount);
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1100,
+        padding: 16,
+        animation: "logitrack-cash-fade 160ms ease-out",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transfer-confirm-title"
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "var(--bg-card)",
+          borderRadius: 18,
+          boxShadow: "0 24px 70px rgba(15, 23, 42, 0.35)",
+          overflow: "hidden",
+          animation: "logitrack-cash-pop 180ms ease-out",
+        }}
+      >
+        <div
+          style={{
+            padding: "28px 24px 20px",
+            textAlign: "center",
+            background: "linear-gradient(180deg, var(--info-bg) 0%, var(--bg-card) 100%)",
+          }}
+        >
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              background: "var(--info-bg)",
+              border: "3px solid var(--info-border, var(--info))",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 14px",
+              fontSize: 32,
+            }}
+          >
+            🏦
+          </div>
+          <h2
+            id="transfer-confirm-title"
+            style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.01em" }}
+          >
+            Confirmar transferencia bancaria
+          </h2>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+            Confirmá que verificaste la acreditación de la transferencia en la cuenta.
+          </p>
+        </div>
+
+        <div style={{ padding: "0 24px" }}>
+          <div
+            style={{
+              background: "var(--bg-page)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: "14px 16px",
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Monto a acreditar
+            </span>
+            <span style={{ fontSize: 20, color: "var(--text-primary)", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+              {formatted}
+            </span>
+          </div>
+          <div
+            style={{
+              marginTop: 12,
+              padding: "10px 12px",
+              borderRadius: 10,
+              background: "var(--warn-bg)",
+              border: "1px solid var(--warn-border)",
+              fontSize: 12,
+              color: "var(--warn-text)",
+              lineHeight: 1.4,
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start",
+            }}
+          >
+            <span aria-hidden style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+            <span>
+              Esta acción <strong>confirma el envío</strong> y no puede revertirse.
+            </span>
+          </div>
+        </div>
+
+        <div style={{ padding: "20px 24px 24px", display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "11px 0",
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "var(--bg-card)",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            autoFocus
+            style={{
+              flex: 1,
+              padding: "11px 0",
+              borderRadius: 10,
+              border: "none",
+              background: "var(--info)",
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: "pointer",
+              boxShadow: "0 6px 16px rgba(37, 99, 235, 0.25)",
+            }}
+          >
+            Confirmar transferencia
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CashConfirmModal({ isOpen, amount, currency, onCancel, onConfirm }: CashConfirmModalProps) {
   useEffect(() => {

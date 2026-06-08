@@ -105,6 +105,7 @@ func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evi
 		return model.Claim{}, fmt.Errorf("el dni y el nombre no coinciden con el remitente o destinatario del envio")
 	}
 
+
 	claimID, err := s.claimRepo.NextID()
 	if err != nil {
 		return model.Claim{}, err
@@ -297,6 +298,33 @@ func (s *ClaimService) GetLatestByTrackingID(trackingID string) (model.Claim, er
 		return model.Claim{}, repository.ErrClaimNotFound
 	}
 	return s.claimRepo.GetLatestByTrackingID(trackingID)
+}
+
+// GetLatestActiveClaimByTrackingID devuelve el reclamo más reciente no resuelto para un envío.
+// Retorna ErrClaimNotFound si no existe o si el único reclamo ya está resuelto.
+func (s *ClaimService) GetLatestActiveClaimByTrackingID(trackingID string) (model.Claim, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingID(strings.TrimSpace(trackingID))
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if strings.HasPrefix(string(claim.Status), "resolved_") {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return claim, nil
+}
+
+// GetLatestActiveClaimByTrackingIDAndDNI devuelve el reclamo activo más reciente
+// para un envío cuyo reclamante coincide con el DNI dado.
+// Retorna ErrClaimNotFound si no existe tal reclamo o ya está resuelto.
+func (s *ClaimService) GetLatestActiveClaimByTrackingIDAndDNI(trackingID, dni string) (model.Claim, error) {
+	claim, err := s.claimRepo.GetLatestByTrackingIDAndDNI(strings.TrimSpace(trackingID), strings.TrimSpace(dni))
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if strings.HasPrefix(string(claim.Status), "resolved_") {
+		return model.Claim{}, repository.ErrClaimNotFound
+	}
+	return claim, nil
 }
 
 func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error) {
@@ -617,44 +645,17 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 	case model.EventClaimCustomerResponded:
 		payload := de.Payload.(model.ClaimCustomerRespondedPayload)
 		base.Notes = payload.Response
-		base.EvidenceFileName = payload.EvidenceFileName
-		base.EvidenceFilePath = payload.EvidenceFilePath
 		base.FromStatus = payload.FromStatus
 		base.ToStatus = payload.ToStatus
+		base.EvidenceFileName = payload.EvidenceFileName
+		base.EvidenceFilePath = payload.EvidenceFilePath
 		return base, true
 	default:
 		return model.ClaimEvent{}, false
 	}
 }
 
-// GetPendingCustomerClaim devuelve el reclamo activo en pending_customer para el
-// tracking ID dado, junto con las notas del supervisor de ese evento.
-func (s *ClaimService) GetPendingCustomerClaim(trackingID string) (*model.Claim, string, error) {
-	claim, err := s.claimRepo.GetLatestByTrackingID(strings.TrimSpace(trackingID))
-	if err != nil {
-		return nil, "", err
-	}
-	if claim.Status != model.ClaimStatusPendingCustomer {
-		return nil, "", nil
-	}
-	// Buscar notas del supervisor en el último evento claim_pending_customer
-	supervisorNotes := ""
-	events, err := s.claimEventRepo.LoadStream(claim.ID)
-	if err == nil {
-		for i := len(events) - 1; i >= 0; i-- {
-			if events[i].EventType == model.EventClaimPendingCustomer {
-				if p, ok := events[i].Payload.(model.ClaimPendingCustomerPayload); ok {
-					supervisorNotes = p.Notes
-				}
-				break
-			}
-		}
-	}
-	return &claim, supervisorNotes, nil
-}
-
-// RespondToClaimInfoRequest procesa la respuesta del cliente al reclamo en pending_customer.
-// Valida que el DNI coincida con el reclamante, guarda la evidencia opcional y transiciona a in_review.
+// RespondToClaimInfoRequest procesa la respuesta del cliente a un reclamo pending_customer (US-4)
 func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseText string, evidence *ClaimEvidenceUpload) (model.Claim, error) {
 	claim, err := s.claimRepo.GetByID(claimID)
 	if err != nil {
@@ -667,8 +668,8 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 		return model.Claim{}, fmt.Errorf("el DNI no coincide con el reclamante")
 	}
 	responseText = strings.TrimSpace(responseText)
-	if len(responseText) < 1 || len(responseText) > 400 {
-		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 1 y 400 caracteres")
+	if len(responseText) < 15 || len(responseText) > 400 {
+		return model.Claim{}, fmt.Errorf("la respuesta debe tener entre 15 y 400 caracteres")
 	}
 
 	now := clock.Now().UTC()
@@ -690,7 +691,6 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 	}
 
 	fromStatus := claim.Status
-	// Evento: cliente respondió
 	if err := s.appendClaimEvent(model.DomainEvent{
 		ID:         uuid.NewString(),
 		TrackingID: claim.ID,
@@ -708,7 +708,6 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 		return model.Claim{}, err
 	}
 
-	// Transicionar a in_review
 	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, now); err != nil {
 		return model.Claim{}, err
 	}
@@ -732,11 +731,20 @@ func (s *ClaimService) RespondToClaimInfoRequest(claimID, claimantDNI, responseT
 }
 
 func (s *ClaimService) ValidateClaimant(shipment *model.Shipment, fullName, dni string) bool {
+	dniTrimmed := strings.TrimSpace(dni)
+	// Para reclamos originados en el chatbot el usuario ya fue autenticado; validar solo por DNI.
+	if strings.HasPrefix(fullName, "chatbot-sender:") || strings.HasPrefix(fullName, "chatbot-customer:") {
+		if dniTrimmed == "" {
+			return false
+		}
+		return strings.TrimSpace(shipment.Sender.DNI) == dniTrimmed ||
+			strings.TrimSpace(shipment.Recipient.DNI) == dniTrimmed
+	}
 	normalizedName := normalizeName(fullName)
-	if normalizedName == "" || strings.TrimSpace(dni) == "" {
+	if normalizedName == "" || dniTrimmed == "" {
 		return false
 	}
-	return matchesCustomer(shipment.Sender, normalizedName, dni) || matchesCustomer(shipment.Recipient, normalizedName, dni)
+	return matchesCustomer(shipment.Sender, normalizedName, dniTrimmed) || matchesCustomer(shipment.Recipient, normalizedName, dniTrimmed)
 }
 
 func matchesCustomer(customer model.Customer, normalizedName, dni string) bool {

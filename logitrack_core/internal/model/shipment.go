@@ -117,6 +117,12 @@ type Shipment struct {
 	IsReturning         bool    `json:"is_returning,omitempty"`          // true for counter-shipments and return-mode shipments
 	RejectedByRecipient bool    `json:"rejected_by_recipient,omitempty"` // delivery_failed because recipient explicitly refused
 
+	// Security keyword — última milla only. Generated at create/confirm; sent to recipient via email.
+	// Never returned in API responses (json:"-"); validated by the driver at delivery time.
+	SecurityKeyword     string `json:"-"`
+	KeywordAttempts     int    `json:"keyword_attempts,omitempty"`    // failed keyword attempts by driver (max 3)
+	ContingencyDelivery bool   `json:"contingency_delivery,omitempty"` // true when delivered via DNI fallback after max keyword attempts
+
 	// Corrections: typed non-destructive field overrides; original data is never modified.
 	Corrections *ShipmentCorrections `json:"corrections,omitempty"`
 

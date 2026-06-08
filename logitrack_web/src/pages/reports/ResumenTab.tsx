@@ -450,7 +450,16 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
                 <td className={tdClass}><code className="text-xs font-mono text-blue-950 font-semibold bg-slate-50 px-1.5 py-0.5 rounded">{s.tracking_id}</code></td>
                 <td className={tdClass}>{s.recipient.name}</td>
                 <td className={`${tdClass} text-slate-500`}>{s.recipient.address.city}</td>
-                <td className={tdClass}><StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} /></td>
+                <td className={tdClass}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <StatusBadge status={s.status} label={shipmentStatusLabelOverride(s)} />
+                    {s.contingency_delivery && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                        ⚠️ Contingencia DNI
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className={`${tdClass} text-slate-400`}>{fmtDateTime(s.created_at)}</td>
               </tr>
             ))}</tbody>

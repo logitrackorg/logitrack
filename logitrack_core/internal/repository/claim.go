@@ -15,6 +15,7 @@ type ClaimRepository interface {
 	Delete(id string) error
 	GetByID(id string) (model.Claim, error)
 	GetLatestByTrackingID(trackingID string) (model.Claim, error)
+	GetLatestByTrackingIDAndDNI(trackingID, dni string) (model.Claim, error)
 	ListAll() ([]model.Claim, error)
 	UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error
 	Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error

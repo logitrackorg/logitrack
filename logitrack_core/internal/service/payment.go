@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,8 +51,10 @@ func (s *PaymentService) RequestPayment(trackingID, username string) (model.Paym
 		return model.Payment{}, err
 	}
 
-	// Seal price.
-	s.shipmentSvc.applyPrice(&draft)
+	// Use the price already sealed at confirmation; only compute if missing.
+	if draft.Price == nil || *draft.Price <= 0 {
+		s.shipmentSvc.applyPrice(&draft)
+	}
 	if draft.Price == nil || *draft.Price <= 0 {
 		return model.Payment{}, fmt.Errorf("no se pudo calcular el precio del envío")
 	}
@@ -78,7 +81,7 @@ func (s *PaymentService) RequestPayment(trackingID, username string) (model.Paym
 
 	var preferenceID, initPoint string
 
-	if s.mp != nil {
+	if os.Getenv("MP_ENABLED") == "true" && s.mp != nil && s.mp.IsConfigured() {
 		// Production/sandbox: create a real MP preference.
 		mpResp, err := s.mp.CreatePreference(trackingID, *draft.Price, currency)
 		if err != nil {
@@ -90,7 +93,7 @@ func (s *PaymentService) RequestPayment(trackingID, username string) (model.Paym
 		// Dev mode: mock preference — init_point vacío indica al frontend que use simulación.
 		preferenceID = "MOCK-" + uuid.NewString()[:8]
 		initPoint = ""
-		log.Printf("[payment] MP no configurado — usando mock preference %s", preferenceID)
+		log.Printf("[payment] modo mock activo — usando preferencia simulada %s", preferenceID)
 	}
 
 	now := clock.Now().UTC()

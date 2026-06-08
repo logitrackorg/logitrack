@@ -94,6 +94,7 @@ export function extractForecastEvents(
         const ia = a as InterBranchAssignment;
         if (kindFilter !== "all" && kindFilter !== "inter_branch") continue;
         if (!ia.estimated_departure_min) continue;
+        if (ia.applied) continue; // ya hay un trip real en DB — no duplicar
         const dests = [bp.branch_id, ia.destination_branch];
         (ia.additional_stops ?? []).forEach((s) => dests.push(s.branch_id));
         events.push({
@@ -113,6 +114,7 @@ export function extractForecastEvents(
         const la = a as LastMileAssignment;
         if (kindFilter !== "all" && kindFilter !== "last_mile") continue;
         if (!la.suggested_departure_min) continue;
+        if (la.applied) continue; // ya hay un trip real en DB — no duplicar
         const lastStop = (la.ordered_stops ?? []).at(-1);
         const arrMin = lastStop && lastStop.arrival_min >= 0
           ? la.suggested_departure_min + lastStop.arrival_min

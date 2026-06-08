@@ -2,11 +2,15 @@ import axios from 'axios';
 import type {
   ChatbotAuthRequest,
   ChatbotAuthResponse,
+  SenderChatbotAuthResponse,
   RescheduleOptionsResponse,
   PickupResponse,
   RescheduleResponse,
   CancelResponse,
+  FileClaimResponse,
   ClaimRespondResponse,
+  ClaimType,
+  DamageSubtype,
 } from '../types/chatbot';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1';
@@ -74,10 +78,52 @@ export const chatbotService = {
   },
 
   // LOGITRACK-457: Autenticación del remitente
-  authenticateSender: async (trackingId: string, senderDni: string) => {
-    const response = await chatbotAPI.post('/sender/auth', {
+  authenticateSender: async (trackingId: string, senderDni: string): Promise<SenderChatbotAuthResponse> => {
+    const response = await chatbotAPI.post<SenderChatbotAuthResponse>('/sender/auth', {
       tracking_id: trackingId,
       sender_dni: senderDni,
+    });
+    return response.data;
+  },
+
+  // US5: Crear reclamo desde chatbot
+  fileClaim: async (
+    trackingId: string,
+    claimantDni: string,
+    claimantName: string,
+    claimType: ClaimType,
+    damageSubtypes: DamageSubtype[],
+    description: string,
+    evidenceFile?: File
+  ): Promise<FileClaimResponse> => {
+    const form = new FormData();
+    form.append('tracking_id', trackingId);
+    form.append('claimant_dni', claimantDni);
+    form.append('claimant_name', claimantName);
+    form.append('claim_type', claimType);
+    form.append('damage_subtypes', damageSubtypes.join(','));
+    form.append('description', description);
+    if (evidenceFile) form.append('evidence', evidenceFile);
+    const response = await chatbotAPI.post<FileClaimResponse>('/claim', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // US4: Responder a reclamo pending_customer
+  respondToClaim: async (
+    claimId: string,
+    claimantDni: string,
+    responseText: string,
+    evidenceFile?: File
+  ): Promise<ClaimRespondResponse> => {
+    const form = new FormData();
+    form.append('claim_id', claimId);
+    form.append('claimant_dni', claimantDni);
+    form.append('response_text', responseText);
+    if (evidenceFile) form.append('evidence', evidenceFile);
+    const response = await chatbotAPI.post<ClaimRespondResponse>('/claim/respond', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
@@ -96,23 +142,4 @@ export const chatbotService = {
     return response.data;
   },
 
-  // US-4: Responder a reclamo pending_customer
-  respondToClaim: async (
-    claimId: string,
-    claimantDni: string,
-    responseText: string,
-    evidenceFile?: File
-  ): Promise<ClaimRespondResponse> => {
-    const form = new FormData();
-    form.append('claim_id', claimId);
-    form.append('claimant_dni', claimantDni);
-    form.append('response_text', responseText);
-    if (evidenceFile) {
-      form.append('evidence', evidenceFile);
-    }
-    const response = await chatbotAPI.post<ClaimRespondResponse>('/claim/respond', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
 };

@@ -86,6 +86,7 @@ UUID tokens in PostgreSQL `tokens` table. `Authorization: Bearer <token>` requir
 | `chofer_mendoza` | `chofer_mendoza123` | driver | mendoza |
 | `op_posadas` | `op_posadas123` | operator | posadas |
 | `chofer_posadas` | `chofer_posadas123` | driver | posadas |
+| `sup_santa_cruz` | `sup_santacruz123` | supervisor | santa_cruz |
 | `gerente` | `gerente123` | manager | — |
 | `admin` | `admin123` | admin | — |
 

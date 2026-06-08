@@ -30,6 +30,7 @@ export interface RecomputeLastMileRequest {
   vehicle_id: string;
   shipment_ids: string[];
   mode: RouteMode;
+  plan_date?: string; // YYYY-MM-DD; si se omite usa hoy
 }
 
 export interface RoutingConfig {
@@ -52,9 +53,10 @@ export interface RoutingConfig {
   planning_horizon_days: number;
   backhaul_enabled: boolean;
   keep_one_vehicle_per_branch: boolean;
+  fleet_projection_horizon_hours: number;
 }
 
-export type DispatchRule = "sla_forced" | "consolidation" | "manual";
+export type DispatchRule = "sla_forced" | "consolidation" | "manual" | "projected";
 
 export interface RouteStop {
   tracking_id: string;
@@ -131,10 +133,15 @@ export interface InterBranchAssignment {
   applied_by?: string;
   // Runtime-only: el vehículo ya está en viaje — card informativa.
   in_transit?: boolean;
+  // Runtime-only: el vehículo todavía no llegó a la sucursal — card informativa, no aplicable.
+  projected?: boolean;
+  projected_arrival_at?: string; // ISO timestamp
   // Schedule inter-sucursal: calculados por scheduleInterBranchAssignments.
   estimated_departure_min?: number;       // minutos desde medianoche (hora local)
   primary_estimated_arrival_min?: number;
   estimated_arrival_min?: number;         // última parada
+  // Fecha de salida elegida por el operador (YYYY-MM-DD). Vacío = usa planDate.
+  scheduled_date?: string;
   // Backhaul: carga de retorno al origen (si el dispatch es un round-trip).
   backhaul?: { shipments: string[]; total_weight_kg: number; fill_rate_pct: number };
 }
@@ -163,10 +170,12 @@ export interface IncomingVehicle {
   shipments: string[];
   total_weight_kg: number;
   capacity_kg: number;
+  estimated_arrival_at?: string;
 }
 
 export interface RoutingPlan {
   branch_id: string;
+  plan_date?: string;  // YYYY-MM-DD; presente cuando viene del backend (incluso pronósticos)
   generated_at: string;
   last_mile: LastMileAssignment[];
   inter_branch: InterBranchAssignment[];
@@ -234,8 +243,12 @@ export interface NetworkMetrics {
   total_shipments_unassigned: number;
   total_vehicles_dispatched: number;
   idle_vehicles_count: number;
-  avg_vehicle_utilization_pct: number;
   branches_with_unserved_demand: number;
+  avg_inter_branch_utilization_pct: number;
+  avg_last_mile_utilization_pct: number;
+  sla_forced_pct: number;
+  /** @deprecated usar avg_inter_branch_utilization_pct / avg_last_mile_utilization_pct */
+  avg_vehicle_utilization_pct: number;
 }
 
 export interface NetworkInsights {
@@ -347,6 +360,7 @@ export const DISPATCH_RULE_LABELS: Record<DispatchRule, string> = {
   sla_forced: "SLA crítico",
   consolidation: "Consolidación",
   manual: "Asignación manual",
+  projected: "Despacho proyectado",
 };
 
 export interface InterBranchTrip {

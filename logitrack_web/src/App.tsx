@@ -4,6 +4,7 @@ import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
+import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -34,6 +35,7 @@ import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { PricingConfig } from "./pages/PricingConfig";
 import { RoutingConfig } from "./pages/RoutingConfig";
+import { PaymentConfig } from "./pages/PaymentConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
@@ -52,6 +54,7 @@ import { InterBranchTripsList } from "./pages/InterBranchTripsList";
 import TripsCalendar from "./pages/TripsCalendar";
 import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
+import { NetworkHub } from "./pages/NetworkHub";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -186,7 +189,7 @@ function AppRoutes() {
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+          <ProtectedRoute roles={["supervisor", "manager"]}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -216,13 +219,13 @@ function AppRoutes() {
         } />
 
         <Route path="/claims" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />
 
         <Route path="/claims/:id" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />
@@ -303,6 +306,12 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/payment-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <PaymentConfig />
+          </ProtectedRoute>
+        } />
+
         <Route path="/repartos" element={
           <ProtectedRoute roles={["operator", "supervisor"]}>
             <Repartos />
@@ -328,6 +337,12 @@ function AppRoutes() {
         <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
         <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
         <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
+
+        <Route path="/red" element={
+          <ProtectedRoute roles={["manager", "admin"]}>
+            <NetworkHub />
+          </ProtectedRoute>
+        } />
 
         {/* Legacy redirects */}
         <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
@@ -410,6 +425,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
+      <OrganizationThemeProvider>
       <AuthProvider>
         <BrowserRouter>
           <TwoFAGuard>
@@ -423,6 +439,7 @@ export default function App() {
           </TwoFAGuard>
         </BrowserRouter>
       </AuthProvider>
+      </OrganizationThemeProvider>
     </ThemeProvider>
   );
 }

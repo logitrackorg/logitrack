@@ -214,6 +214,51 @@ func LoadVehicles(repo repository.VehicleRepository) {
 			CurrentLatitude:  fPtr(-27.3671),
 			CurrentLongitude: fPtr(-55.8965),
 		},
+		// ── Bahía Blanca — escenario despacho proyectado ──────────────────────
+		// BB100IS queda disponible (KeepOneVehiclePerBranch). BB200IS parte en
+		// tránsito hacia Santa Cruz; LoadProjectedDispatchScenario lo confirma.
+		{
+			LicensePlate:     "BB100IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
+			Status:           model.VehicleStatusAvailable,
+			AssignedBranch:   strPtr("bahia_blanca"),
+			CurrentLatitude:  fPtr(-38.7183),
+			CurrentLongitude: fPtr(-62.2661),
+		},
+		{
+			LicensePlate:     "BB200IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
+			Status:           model.VehicleStatusAvailable, // → en_transito en LoadProjectedDispatchScenario
+			AssignedBranch:   strPtr("bahia_blanca"),
+			CurrentLatitude:  fPtr(-38.7183),
+			CurrentLongitude: fPtr(-62.2661),
+		},
+		// ── Santa Cruz — sin vehículos disponibles (mantenimiento) ────────────
+		// Crea el déficit que dispara el despacho proyectado con BB200IS.
+		{
+			LicensePlate:     "SC100IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
+			Status:           model.VehicleStatusAvailable, // → mantenimiento en LoadProjectedDispatchScenario
+			AssignedBranch:   strPtr("santa_cruz"),
+			CurrentLatitude:  fPtr(-46.4378),
+			CurrentLongitude: fPtr(-67.5215),
+		},
+		{
+			LicensePlate:     "SC200IS",
+			Type:             model.VehicleTypeVan,
+			Mode:             model.VehicleModeInterBranch,
+			CapacityKg:       1500,
+			Status:           model.VehicleStatusAvailable, // → mantenimiento en LoadProjectedDispatchScenario
+			AssignedBranch:   strPtr("santa_cruz"),
+			CurrentLatitude:  fPtr(-46.4378),
+			CurrentLongitude: fPtr(-67.5215),
+		},
 	}
 	for _, v := range vehicles {
 		err := repo.Add(v)
@@ -978,6 +1023,74 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 				{from: model.StatusAtOriginHub, to: model.StatusAtHub, changedBy: "op_posadas", location: "posadas", notes: "En sucursal Posadas — listo para despacho inter-sucursal", hoursAgo: 4},
 			},
 		},
+
+		// ─────────────────────────────────────────────────────────────────────
+		// Escenario despacho proyectado (branches aisladas — no tocan los otros escenarios):
+		//
+		//   Santa Cruz: 3 envíos at_origin_hub con destino Bahía Blanca.
+		//   SC100IS y SC200IS están en mantenimiento → sin_vehiculos_disponibles.
+		//   BB200IS (Bahía Blanca) está en tránsito hacia Santa Cruz (~850 km,
+		//   ETA ~18h con fallback distancia). Con FleetProjectionHorizonHours=24,
+		//   el motor proyecta los 3 envíos (550 kg) sobre BB200IS → despacho proyectado.
+		//   BB100IS queda disponible en Bahía Blanca (KeepOneVehiclePerBranch ok).
+		//
+		//   Network insight: 1 vehículo ocioso (BB100IS) en Bahía Blanca, Santa Cruz
+		//   con déficit → EmptyMove: mover BB100IS a Santa Cruz.
+		//
+		// Para ver: login como op_santa_cruz (no existe aún, usar gerente) → /red → "Red".
+		// O bien: admin → /routing-config → confirmar FleetProjectionHorizonHours=24.
+		// ─────────────────────────────────────────────────────────────────────
+		{
+			trackingID:         "LT-PROJ0001",
+			sender:             model.Customer{DNI: "30556677", Name: "Pesquera Austral SRL", Phone: "542974881122", Email: "logistica@pesqueraaustral.com", Address: model.Address{Street: "Av. Costanera 450", City: "Caleta Olivia", Province: "Santa Cruz", PostalCode: "Z9011", Latitude: fPtr(-46.4378), Longitude: fPtr(-67.5215)}},
+			recipient:          model.Customer{DNI: "27334455", Name: "Distribuidora Del Sur", Phone: "542914556677", Address: model.Address{Street: "Av. Colón 800", City: "Bahía Blanca", Province: "Buenos Aires", PostalCode: "B8000", Latitude: fPtr(-38.7183), Longitude: fPtr(-62.2661)}},
+			weightKg:           180,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "santa_cruz",
+			finalBranchID:      "bahia_blanca",
+			priority:           "alta",
+			priorityScore:      0.78,
+			priorityConfidence: 0.83,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "gerente", location: "santa_cruz", notes: "Mariscos congelados — urgente, cadena de frío", hoursAgo: 20},
+			},
+		},
+		{
+			trackingID:         "LT-PROJ0002",
+			sender:             model.Customer{DNI: "29887766", Name: "Lana Patagónica SA", Phone: "542974223311", Address: model.Address{Street: "Ruta 3 km 1820", City: "Caleta Olivia", Province: "Santa Cruz", PostalCode: "Z9011", Latitude: fPtr(-46.4400), Longitude: fPtr(-67.5300)}},
+			recipient:          model.Customer{DNI: "33221188", Name: "Textil Bahía SA", Phone: "542914334455", Email: "compras@textilbahia.com", Address: model.Address{Street: "Av. Alem 500", City: "Bahía Blanca", Province: "Buenos Aires", PostalCode: "B8000", Latitude: fPtr(-38.7250), Longitude: fPtr(-62.2700)}},
+			weightKg:           220,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeNormal,
+			timeWindow:         model.TimeWindowFlexible,
+			receivingBranchID:  "santa_cruz",
+			finalBranchID:      "bahia_blanca",
+			priority:           "media",
+			priorityScore:      0.52,
+			priorityConfidence: 0.79,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "gerente", location: "santa_cruz", notes: "Lana en bruto — temporada de esquila", hoursAgo: 15},
+			},
+		},
+		{
+			trackingID:         "LT-PROJ0003",
+			sender:             model.Customer{DNI: "26778899", Name: "Petroquímica Sur Ltda", Phone: "542974667788", Email: "envios@petroquimicasur.com", Address: model.Address{Street: "Parque Industrial Caleta", City: "Caleta Olivia", Province: "Santa Cruz", PostalCode: "Z9011", Latitude: fPtr(-46.4320), Longitude: fPtr(-67.5100)}},
+			recipient:          model.Customer{DNI: "31998877", Name: "Puerto Industrial Bahía Blanca", Phone: "542914889900", Address: model.Address{Street: "Puerto Ing. White s/n", City: "Bahía Blanca", Province: "Buenos Aires", PostalCode: "B8103", Latitude: fPtr(-38.7900), Longitude: fPtr(-62.2800)}},
+			weightKg:           150,
+			packageType:        model.PackageBox,
+			shipmentType:       model.ShipmentTypeExpress,
+			timeWindow:         model.TimeWindowMorning,
+			receivingBranchID:  "santa_cruz",
+			finalBranchID:      "bahia_blanca",
+			priority:           "alta",
+			priorityScore:      0.81,
+			priorityConfidence: 0.87,
+			events: []eventSeed{
+				{from: "", to: model.StatusAtOriginHub, changedBy: "gerente", location: "santa_cruz", notes: "Express — insumos industriales críticos", hoursAgo: 10},
+			},
+		},
 	}
 
 	for _, s := range seeds {
@@ -1064,6 +1177,33 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 	allEvents, _ := store.LoadAll()
 	proj.Rebuild(allEvents)
 
+}
+
+// LoadProjectedDispatchScenario configura el escenario de despacho proyectado
+// usando las sucursales aisladas bahia_blanca y santa_cruz:
+//
+//   - SC100IS / SC200IS → mantenimiento: Santa Cruz sin vehículos inter-sucursal.
+//   - BB200IS → en_transito con destino santa_cruz: viene desde Bahía Blanca,
+//     ~850 km, ETA ~18h (dentro del horizonte de 24h).
+//
+// Bahía Blanca conserva BB100IS disponible (satisface KeepOneVehiclePerBranch).
+// Ningún otro branch se toca: CABA, Córdoba, Mendoza y Posadas mantienen
+// sus escenarios intactos (multi-hop, backhaul, piggyback).
+//
+// Idempotente: solo actúa si el vehículo está en estado disponible.
+func LoadProjectedDispatchScenario(vehicleRepo repository.VehicleRepository) {
+	for _, plate := range []string{"SC100IS", "SC200IS"} {
+		v, ok := vehicleRepo.GetByLicensePlate(plate)
+		if ok && v.Status == model.VehicleStatusAvailable {
+			_ = vehicleRepo.UpdateStatus(v.ID, model.VehicleStatusInMaintenance)
+		}
+	}
+	bb200, ok := vehicleRepo.GetByLicensePlate("BB200IS")
+	if ok && bb200.Status == model.VehicleStatusAvailable {
+		dest := "santa_cruz"
+		_ = vehicleRepo.SetDestinationBranch(bb200.ID, &dest)
+		_ = vehicleRepo.UpdateStatus(bb200.ID, model.VehicleStatusInTransit)
+	}
 }
 
 func estimateDeliverySeed(from time.Time, originBranchID, finalBranchID, shipmentType string, repo repository.BranchRepository) *time.Time {

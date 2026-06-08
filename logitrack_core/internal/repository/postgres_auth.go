@@ -64,6 +64,7 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		},
 		{"15", "chofer_inter_1", "chofer_inter_1_123", "driver", "", "Gabriel", "Batistuta", "gabriel.batistuta@logitrack.com", "", "Av. Corrientes 2000", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043", "intersucursal"},
 		{"16", "chofer_inter_2", "chofer_inter_2_123", "driver", "", "Sergio", "Agüero", "sergio.aguero@logitrack.com", "", "Av. Colón 1500", "Córdoba", "Córdoba", "X5000", "intersucursal"},
+		{"17", "sup_santa_cruz", "sup_santacruz123", "supervisor", "santa_cruz", "Exequiel", "Palacios", "exequiel.palacios@logitrack.com", "", "Av. Costanera 450", "Caleta Olivia", "Santa Cruz", "Z9011", ""},
 	}
 	for _, u := range seed {
 		addrJSON, _ := json.Marshal(map[string]string{

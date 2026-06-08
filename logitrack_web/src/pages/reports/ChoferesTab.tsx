@@ -39,7 +39,7 @@ export default function ChoferesTab({ dateFrom, dateTo, branchId }: ChoferesTabP
     reportsApi
       .driverPerformance(params)
       .then((data) => {
-        setDrivers(data.drivers);
+        setDrivers(data.drivers ?? []);
         setLoading(false);
       })
       .catch(() => {

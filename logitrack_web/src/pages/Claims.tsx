@@ -4,12 +4,12 @@ import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, RefreshCw } fro
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
+  CLAIM_TYPE_LABELS,
   type Claim,
   type ClaimCategory,
   type ClaimEvent,
   type ClaimResolutionType,
   type ClaimStatus,
-  type ClaimType,
 } from "../api/claims";
 import { fmtDateTime } from "../utils/date";
 import { PageHeader } from "../components/ui/page-header";
@@ -17,16 +17,6 @@ import { Card } from "../components/ui/card";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { useAuth } from "../context/AuthContext";
 import { branchApi, type Branch } from "../api/branches";
-
-const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
-  damage: "Daño/Faltante",
-  missing: "Daño/Faltante",
-  delay: "Retraso",
-  not_delivered: "No recibido",
-  bad_treatment: "Maltrato",
-  wrong_data: "Datos incorrectos",
-  other: "Otro",
-};
 
 const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   open: "Abierto",
@@ -38,18 +28,6 @@ const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   resolved_rrhh: "Resuelto: RRHH",
   resolved_improcedente: "Resuelto: improcedente",
 };
-
-function formatChangedBy(changedBy: string): string {
-  if (changedBy.startsWith("chatbot-customer:")) {
-    const dni = changedBy.replace("chatbot-customer:", "");
-    return `Cliente (DNI ${dni}) vía chatbot`;
-  }
-  if (changedBy.startsWith("chatbot-sender:")) {
-    const dni = changedBy.replace("chatbot-sender:", "");
-    return `Remitente (DNI ${dni}) vía chatbot`;
-  }
-  return changedBy;
-}
 
 const CATEGORY_OPTIONS: { value: ClaimCategory; label: string }[] = [
   { value: "operaciones", label: "Operaciones" },
@@ -66,6 +44,19 @@ const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
   { value: "rrhh", label: "RRHH" },
   { value: "improcedente", label: "Improcedente" },
 ];
+
+function formatChangedBy(changedBy: string): string {
+  if (!changedBy || changedBy === "system") return "sistema";
+  if (changedBy.startsWith("chatbot-customer:")) {
+    const dni = changedBy.replace("chatbot-customer:", "");
+    return `Destinatario (DNI ${dni}) vía chatbot`;
+  }
+  if (changedBy.startsWith("chatbot-sender:")) {
+    const dni = changedBy.replace("chatbot-sender:", "");
+    return `Remitente (DNI ${dni}) vía chatbot`;
+  }
+  return changedBy;
+}
 
 function statusBadgeClass(status: ClaimStatus): string {
   switch (status) {
@@ -624,29 +615,26 @@ export function Claims() {
                                 </div>
                                 {ev.notes && <div className="text-slate-500">{ev.notes}</div>}
                                 {ev.event_type === "claim_customer_responded" && ev.evidence_file_name && (
-                                  <a
-                                    href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api/v1'}/claims/${ev.claim_id}/response-evidence/download`}
-                                    download={ev.evidence_file_name}
-                                    className="inline-flex items-center gap-1 mt-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      const token = localStorage.getItem("token");
-                                      fetch((e.currentTarget as HTMLAnchorElement).href, {
-                                        headers: { Authorization: `Bearer ${token}` },
-                                      })
-                                        .then((r) => r.blob())
-                                        .then((blob) => {
+                                  <div className="mt-1">
+                                    <button
+                                      className="text-blue-600 underline text-xs"
+                                      onClick={async () => {
+                                        try {
+                                          const blob = await claimsApi.downloadResponseEvidence(claim.id);
                                           const url = URL.createObjectURL(blob);
                                           const a = document.createElement("a");
                                           a.href = url;
                                           a.download = ev.evidence_file_name!;
                                           a.click();
                                           URL.revokeObjectURL(url);
-                                        });
-                                    }}
-                                  >
-                                    📎 {ev.evidence_file_name}
-                                  </a>
+                                        } catch {
+                                          alert("No se pudo descargar el archivo.");
+                                        }
+                                      }}
+                                    >
+                                      📎 Descargar adjunto: {ev.evidence_file_name}
+                                    </button>
+                                  </div>
                                 )}
                                 <div className="text-slate-500 text-xs mt-1">
                                   por <strong>{formatChangedBy(ev.changed_by)}</strong>

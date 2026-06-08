@@ -13,7 +13,8 @@ import (
 // xSignature format: "ts=<timestamp>,v1=<hex-hash>"
 // Manifest: "id:<dataID>;request-id:<xRequestID>;ts:<ts>;"
 func (c *Client) ValidateSignature(xSignature, xRequestID, dataID string) error {
-	if c.webhookSecret == "" || os.Getenv("MP_SKIP_SIGNATURE") == "true" {
+	_, webhookSecret := c.credentials()
+	if webhookSecret == "" || os.Getenv("MP_SKIP_SIGNATURE") == "true" {
 		return nil
 	}
 
@@ -35,7 +36,7 @@ func (c *Client) ValidateSignature(xSignature, xRequestID, dataID string) error 
 	}
 
 	manifest := fmt.Sprintf("id:%s;request-id:%s;ts:%s;", dataID, xRequestID, ts)
-	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
+	mac := hmac.New(sha256.New, []byte(webhookSecret))
 	mac.Write([]byte(manifest))
 	expected := hex.EncodeToString(mac.Sum(nil))
 

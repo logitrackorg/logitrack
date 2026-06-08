@@ -15,10 +15,13 @@ type SystemConfig struct {
 	// be held before being returned. 0 = no deadline (default). Range: 0–365.
 	PickupDeadlineDays int `json:"pickup_deadline_days"`
 	
-	// ForceEmailNotifications skips WhatsApp entirely and sends only email for all
-	// customer-facing notifications. Useful for testing email templates or when
-	// Twilio is unreliable. Default: false.
-	ForceEmailNotifications bool `json:"force_email_notifications"`
+	// EmailNotificationsEnabled controls whether email notifications are sent to customers.
+	// Default: true.
+	EmailNotificationsEnabled bool `json:"email_notifications_enabled"`
+
+	// WhatsAppNotificationsEnabled controls whether WhatsApp notifications are sent to customers.
+	// Default: true.
+	WhatsAppNotificationsEnabled bool `json:"whatsapp_notifications_enabled"`
 	
 	// MaxReschedules defines the maximum number of times a customer can 
 	// reschedule delivery via chatbot before requiring manual intervention. 
@@ -34,7 +37,8 @@ func DefaultSystemConfig() SystemConfig {
 		DraftRetentionDays:      7,
 		DraftPurgeDays:          30,
 		PickupDeadlineDays:      0,
-		ForceEmailNotifications: false,
+		EmailNotificationsEnabled:    true,
+		WhatsAppNotificationsEnabled: true,
 		MaxReschedules:          2, 
 		MaxRescheduleDays:       3,
 		TwoFACooldownMinutes: 1,

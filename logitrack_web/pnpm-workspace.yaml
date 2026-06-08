@@ -2,3 +2,8 @@ allowBuilds:
   core-js: true
   esbuild: true
   msw: true
+
+overrides:
+  tldts: 7.0.30
+  tldts-core: 7.0.30
+  '@dotenvx/dotenvx': 1.65.0

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"time"
 
@@ -1042,16 +1043,21 @@ func (s *RoutingService) dispatchInterBranch(
 		return nil, unassigned
 	}
 
-	// Si no hay vehículos en pool del branch, todos al unassigned con motivo claro
+	// Si no hay vehículos en pool del branch, todos al unassigned con motivo claro.
+	// Propagamos SLAForced y PriorityScore para que tryProjectedDispatch pueda
+	// evaluar viabilidad contra la capacidad del vehículo entrante.
 	if len(pool) == 0 {
 		for dest, group := range groups {
+			forced := anyForced(group, cfg, now)
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_disponibles",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_disponibles",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 		}
@@ -1103,11 +1109,13 @@ func (s *RoutingService) dispatchInterBranch(
 		if len(poolForDest) == 0 {
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_para_destino",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_para_destino",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 			continue
@@ -1117,11 +1125,13 @@ func (s *RoutingService) dispatchInterBranch(
 		if chosen == nil {
 			for _, sh := range group {
 				unassigned = append(unassigned, model.UnassignedShipment{
-					TrackingID:  sh.TrackingID,
-					Destination: dest,
-					Reason:      "sin_vehiculos_para_destino",
-					WeightKg:    sh.WeightKg,
-					Priority:    sh.Priority,
+					TrackingID:    sh.TrackingID,
+					Destination:   dest,
+					Reason:        "sin_vehiculos_para_destino",
+					WeightKg:      sh.WeightKg,
+					Priority:      sh.Priority,
+					SLAForced:     forced,
+					PriorityScore: sh.PriorityScore,
 				})
 			}
 			continue
@@ -1167,7 +1177,17 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 	// Inicializamos como empty (no nil) para que el JSON siempre serialice
 	// como `[]` y no como `null` — el frontend asume array.
 	items := make([]model.ApplyResultItem, 0)
-	planDate := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+	local := clock.Now().In(clock.LocalTZ)
+	var planDate model.DateOnly
+	if plan.PlanDate != "" {
+		if t, err := time.ParseInLocation("2006-01-02", plan.PlanDate, clock.LocalTZ); err == nil {
+			planDate = model.NewDateOnly(t)
+		} else {
+			planDate = model.NewDateOnly(local)
+		}
+	} else {
+		planDate = model.NewDateOnly(local)
+	}
 	cfg := s.cfgSvc.Get()
 
 	// === Última milla ===
@@ -1303,6 +1323,13 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 	// === Inter-sucursal ===
 	for _, asgmt := range plan.InterBranch {
 		target := "vehicle:" + asgmt.LicensePlate
+		// Despachos proyectados: el vehículo aún no llegó — no se pueden aplicar.
+		if asgmt.Projected {
+			for _, tid := range asgmt.Shipments {
+				items = append(items, failedItem(tid, target, "despacho_proyectado_vehiculo_en_transito"))
+			}
+			continue
+		}
 		v, ok := s.vehicleRepo.GetByID(asgmt.VehicleID)
 		if !ok {
 			for _, tid := range asgmt.Shipments {
@@ -1505,16 +1532,23 @@ func (s *RoutingService) ApplyPlan(_ context.Context, branchID string, req model
 				if len(stops) > 0 {
 					finalDest = stops[len(stops)-1].BranchID
 				}
+				// Determinar la fecha del viaje: scheduled_date del operador o planDate.
+				tripDate := planDate
+				if asgmt.ScheduledDate != "" {
+					if parsed, err := time.ParseInLocation("2006-01-02", asgmt.ScheduledDate, clock.LocalTZ); err == nil {
+						tripDate = model.NewDateOnly(parsed)
+					}
+				}
 				// Propagar estimated_arrival_at a cada TripStop por branch ID
 				// (las paradas se arman condicionalmente; no usar índice posicional).
 				arrivalByBranch := interBranchArrivalByBranch(asgmt)
 				for idx := range stops {
 					if arrMin, ok := arrivalByBranch[stops[idx].BranchID]; ok {
-						t := dateAtMinute(planDate, arrMin)
+						t := dateAtMinute(tripDate, arrMin)
 						stops[idx].EstimatedArrivalAt = &t
 					}
 				}
-				schedDep, estArr := tripScheduleFor(planDate, asgmt.EstimatedDepartureMin, asgmt.EstimatedArrivalMin)
+				schedDep, estArr := tripScheduleFor(tripDate, asgmt.EstimatedDepartureMin, asgmt.EstimatedArrivalMin)
 				createdTrip, err := s.interBranchTripSvc.Create(CreateInterBranchTripCmd{
 					Kind:                 model.TripKindInterBranch,
 					DriverID:             nil,
@@ -1731,11 +1765,11 @@ func (s *RoutingService) checkSLARisk(shipments []model.Shipment, cfg model.Rout
 					continue
 				}
 				shCopy := sh
-				// WhatsApp al remitente/destinatario (con fallback a email) — LOGITRACK-124
+				// Notificaciones al cliente: ambos canales se disparan de forma independiente — LOGITRACK-124
 				if s.slaExpiredWASvc != nil {
 					go s.slaExpiredWASvc.SendSLAExpiredWhatsApp(shCopy)
-				} else if s.slaExpiredEmailSvc != nil {
-					// fallback directo a email si no hay servicio de WA configurado
+				}
+				if s.slaExpiredEmailSvc != nil {
 					go s.slaExpiredEmailSvc.SendSLAExpiredNotification(shCopy)
 				}
 				// Notificación interna a operadores/supervisores — LOGITRACK-404
@@ -3006,7 +3040,10 @@ func (s *RoutingService) GetHorizonPlans(userRole model.Role, userBranch string)
 			}
 			continue
 		}
-		// Pronóstico: aplicar filtro de sucursal sin overrides runtime.
+		// Pronóstico: propagar plan_date a cada BranchPlan.Plan y aplicar filtro.
+		for i := range p.BranchPlans {
+			p.BranchPlans[i].Plan.PlanDate = p.PlanDate
+		}
 		if userRole == model.RoleOperator || userRole == model.RoleSupervisor {
 			if userBranch != "" {
 				filtered := filterBranchPlan(p, userBranch)
@@ -3056,6 +3093,12 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 			}
 		}
 		plan.BranchPlans = filtered
+	}
+
+	// Propagar plan_date a cada BranchPlan.Plan para que el frontend pueda
+	// incluirla en el apply request y el backend use la fecha correcta.
+	for i := range plan.BranchPlans {
+		plan.BranchPlans[i].Plan.PlanDate = plan.PlanDate
 	}
 
 	// Marcar cards de chofer/vehículo en marcha como informativas (runtime-only).
@@ -3113,23 +3156,36 @@ func (s *RoutingService) GetTodayPlan(userRole model.Role, userBranch string) (*
 				origin = *v.AssignedBranch
 			}
 			weight := 0.0
-			tids := append([]string(nil), v.AssignedShipments...)
+			// Usar slice no-nil para que serialice como [] y no como null en JSON.
+			tids := make([]string, 0, len(v.AssignedShipments))
+			tids = append(tids, v.AssignedShipments...)
 			for _, tid := range tids {
 				if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
 					weight += sh.WeightKg
 				}
 			}
+			cfg := s.cfgSvc.Get()
+			eta := s.incomingVehicleETA(v.ID, origin, bp.BranchID, cfg, clock.Now().UTC())
 			incoming = append(incoming, model.IncomingVehicle{
-				VehicleID:     v.ID,
-				LicensePlate:  v.LicensePlate,
-				OriginBranch:  origin,
-				Shipments:     tids,
-				TotalWeightKg: weight,
-				CapacityKg:    v.CapacityKg,
+				VehicleID:          v.ID,
+				LicensePlate:       v.LicensePlate,
+				OriginBranch:       origin,
+				Shipments:          tids,
+				TotalWeightKg:      weight,
+				CapacityKg:         v.CapacityKg,
+				EstimatedArrivalAt: eta,
 			})
 		}
 		bp.Plan.IncomingVehicles = incoming
+
+		// Despacho proyectado: rescatar envíos varados usando vehículos en tránsito.
+		cfg := s.cfgSvc.Get()
+		s.tryProjectedDispatch(&bp.Plan, bp.BranchID, cfg, clock.Now().UTC())
 	}
+
+	// Recalcular insights sobre el plan con overrides runtime ya aplicados.
+	// Los insights no se persisten en DB, por lo que hay que recomputarlos al leer.
+	s.analyzeNetwork(plan)
 
 	return plan, nil
 }
@@ -3201,7 +3257,9 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 	}
 
 	// Generar el plan fresco para esta sucursal con contexto del plan global existente.
-	branchPlan, err := s.generatePlan(ctx, s.liveContext(branchID, false, global))
+	// forGlobal=true: activa el multi-hop sin restricción de fill-rate por tramo
+	// (enforceMinSegmentUtilization poda los tramos subutilizados en el pase global).
+	branchPlan, err := s.generatePlan(ctx, s.liveContext(branchID, true, global))
 	if err != nil {
 		return nil, fmt.Errorf("error generando plan para sucursal %s: %w", branchID, err)
 	}
@@ -3295,7 +3353,8 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 			origin = *v.AssignedBranch
 		}
 		weight := 0.0
-		tids := append([]string(nil), v.AssignedShipments...)
+		tids := make([]string, 0, len(v.AssignedShipments))
+		tids = append(tids, v.AssignedShipments...)
 		for _, tid := range tids {
 			if sh, err := s.shipmentRepo.GetByTrackingID(tid); err == nil {
 				weight += sh.WeightKg
@@ -3311,6 +3370,10 @@ func (s *RoutingService) RegenerateBranchPlan(ctx context.Context, branchID stri
 		})
 	}
 	branchPlan.IncomingVehicles = incoming
+
+	// Despacho proyectado: rescatar envíos varados usando vehículos en tránsito.
+	regenCfg := s.cfgSvc.Get()
+	s.tryProjectedDispatch(&branchPlan, branchID, regenCfg, clock.Now().UTC())
 
 	filtered := &model.GlobalRoutingPlan{
 		ID:          global.ID,
@@ -3371,13 +3434,16 @@ func (s *RoutingService) SaveEditedPlanForBranch(branchID string, edited *model.
 	}
 	local := clock.Now().In(clock.LocalTZ)
 	planDate := local.Format("2006-01-02")
+	if edited.PlanDate != "" {
+		planDate = edited.PlanDate
+	}
 
 	global, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
 		return err
 	}
 	if global == nil {
-		return fmt.Errorf("no hay plan generado para hoy")
+		return fmt.Errorf("no hay plan generado para el %s", planDate)
 	}
 
 	bpIdx := -1
@@ -3453,17 +3519,19 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 	}
 
 	local := clock.Now().In(clock.LocalTZ)
+	// Si se envía un plan con fecha explícita, usar esa fecha para persistir timestamps.
+	// Esto permite pre-aplicar el plan de mañana hoy (ej. operador a las 22hs).
 	planDate := local.Format("2006-01-02")
+	if edited != nil && edited.PlanDate != "" {
+		planDate = edited.PlanDate
+	}
 
 	global, err := s.planRepo.GetByDate(planDate)
 	if err != nil {
 		return model.ApplyPlanResponse{}, fmt.Errorf("no se pudo leer el plan: %w", err)
 	}
 	if global == nil {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para hoy")
-	}
-	if global.IsForecast {
-		return model.ApplyPlanResponse{}, fmt.Errorf("no_se_puede_aplicar_pronostico: el plan del %s es un pronóstico y no puede aplicarse", global.PlanDate)
+		return model.ApplyPlanResponse{}, fmt.Errorf("no hay plan generado para el %s", planDate)
 	}
 
 	// Encontrar el BranchPlan de la sucursal.
@@ -3481,7 +3549,8 @@ func (s *RoutingService) ApplyPlanItems(ctx context.Context, branchID string, ed
 	bp := &global.BranchPlans[bpIdx]
 	now := clock.Now().UTC()
 	items := make([]model.ApplyResultItem, 0)
-	applyPlanDate := model.NewDateOnly(local)
+	parsedPlanDate, _ := time.ParseInLocation("2006-01-02", planDate, clock.LocalTZ)
+	applyPlanDate := model.NewDateOnly(parsedPlanDate)
 	applyPlanCfg := s.cfgSvc.Get()
 
 	// --- Inter-sucursal ---
@@ -3965,8 +4034,16 @@ func (s *RoutingService) RecomputeLastMileAssignment(ctx context.Context, branch
 	}
 
 	cfg := s.cfgSvc.Get()
+	// Usar la fecha del plan para calcular el horario correcto.
+	// Permite pre-calcular rutas de días futuros con ventanas horarias correctas.
+	schedNow := clock.Now().UTC()
+	if req.PlanDate != "" {
+		if t, err := time.ParseInLocation("2006-01-02", req.PlanDate, clock.LocalTZ); err == nil {
+			schedNow = t.UTC()
+		}
+	}
 	assignments := []model.LastMileAssignment{a}
-	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, clock.Now().UTC(), mode)
+	s.scheduleLastMileAssignments(assignments, branchID, shipByTID, cfg, schedNow, mode)
 
 	return assignments[0], nil
 }
@@ -5112,57 +5189,321 @@ func (s *RoutingService) matchBackhauls(plan *model.RoutingPlan, branchID string
 	}
 }
 
-// tryProjectedDispatch is a WIP feature: uses incoming vehicles to rescue unassigned shipments.
-func (s *RoutingService) tryProjectedDispatch(
-	plan *model.RoutingPlan,
-	branchID string,
-	interBranchQ map[string][]model.Shipment,
-	existingLoad map[string]float64,
-	cfg model.RoutingConfig,
-	now time.Time,
-) {
-	if cfg.FleetProjectionHorizonHours <= 0 {
+// incomingVehicleETA devuelve la ETA estimada de un vehículo en tránsito hacia branchID.
+// Prioriza el EstimatedArrivalAt del viaje activo; si no existe, estima con distancia/velocidad.
+func (s *RoutingService) incomingVehicleETA(vehicleID, originBranch, destBranch string, cfg model.RoutingConfig, now time.Time) *time.Time {
+	// 1) Viaje activo con ETA ya calculada
+	if s.interBranchTripSvc != nil {
+		if trip, ok := s.interBranchTripSvc.repo.GetActiveByVehicle(vehicleID); ok {
+			if trip.EstimatedArrivalAt != nil {
+				return trip.EstimatedArrivalAt
+			}
+			// El trip existe pero sin ETA: verificar paradas
+			for _, stop := range trip.Stops {
+				if stop.BranchID == destBranch && stop.EstimatedArrivalAt != nil {
+					return stop.EstimatedArrivalAt
+				}
+			}
+		}
+	}
+	// 2) Fallback: estimar por distancia origen→destino
+	distKm := s.branchDistance(originBranch, destBranch)
+	if distKm <= 0 {
+		return nil
+	}
+	speed := cfg.InterBranchAvgSpeedKmh
+	if speed <= 0 {
+		speed = 60
+	}
+	hours := (distKm * 1.3) / speed
+	eta := now.Add(time.Duration(hours * float64(time.Hour)))
+	return &eta
+}
+
+// tryProjectedDispatch usa vehículos en tránsito hacia la sucursal para rescatar
+// envíos varados por motivos sin_vehiculos_*. Solo actúa cuando FleetProjectionHorizonHours > 0
+// y la ETA del vehículo entrante cae dentro de ese horizonte.
+// Debe llamarse DESPUÉS de poblar plan.IncomingVehicles.
+func (s *RoutingService) tryProjectedDispatch(plan *model.RoutingPlan, branchID string, cfg model.RoutingConfig, now time.Time) {
+	if cfg.FleetProjectionHorizonHours <= 0 || len(plan.IncomingVehicles) == 0 {
 		return
 	}
+	horizon := now.Add(time.Duration(cfg.FleetProjectionHorizonHours) * time.Hour)
+
 	rescuableReasons := map[string]bool{
 		"sin_vehiculos_disponibles":  true,
 		"sin_vehiculos_para_destino": true,
 	}
-	for _, incoming := range plan.IncomingVehicles {
-		if incoming.EstimatedArrivalAt == nil {
-			continue
-		}
-		for i := len(plan.Unassigned) - 1; i >= 0; i-- {
-			u := plan.Unassigned[i]
-			if !rescuableReasons[u.Reason] {
-				continue
-			}
-			dest := u.Destination
-			shipmentsForDest := interBranchQ[dest]
-			if len(shipmentsForDest) == 0 {
-				continue
-			}
-			var total float64
-			var ids []string
-			for _, sh := range shipmentsForDest {
-				total += sh.WeightKg
-				ids = append(ids, sh.TrackingID)
-			}
-			if total > incoming.CapacityKg {
-				continue
-			}
-			plan.InterBranch = append(plan.InterBranch, model.InterBranchAssignment{
-				VehicleID:         incoming.VehicleID,
-				LicensePlate:      incoming.LicensePlate,
-				DestinationBranch: dest,
-				Rule:              model.DispatchRuleSLA,
-				Shipments:         ids,
-				TotalWeightKg:     total,
-				CapacityKg:        incoming.CapacityKg,
-			})
-			// Remove rescued shipments from unassigned
-			plan.Unassigned = append(plan.Unassigned[:i], plan.Unassigned[i+1:]...)
-			break
+
+	// Agrupar envíos varados por destino (re-leer desde el plan actual)
+	varadosByDest := map[string][]model.UnassignedShipment{}
+	for _, u := range plan.Unassigned {
+		if rescuableReasons[u.Reason] {
+			varadosByDest[u.Destination] = append(varadosByDest[u.Destination], u)
 		}
 	}
+	if len(varadosByDest) == 0 {
+		log.Printf("[projected-dispatch] no rescuable unassigned items")
+		return
+	}
+
+	usedVehicles := map[string]bool{}
+	for _, incoming := range plan.IncomingVehicles {
+		// Usar ETA ya calculada si está disponible (ej. tests o trips con ETA known).
+		var eta *time.Time
+		if incoming.EstimatedArrivalAt != nil {
+			eta = incoming.EstimatedArrivalAt
+		} else {
+			eta = s.incomingVehicleETA(incoming.VehicleID, incoming.OriginBranch, branchID, cfg, now)
+		}
+		if eta == nil || eta.After(horizon) {
+			continue
+		}
+		// Capacidad libre: total - ya cargado en el vehículo
+		freeKg := incoming.CapacityKg - incoming.TotalWeightKg
+		if freeKg <= 0 || usedVehicles[incoming.VehicleID] {
+			continue
+		}
+
+		// Iterar destinos en orden determinístico
+		dests := make([]string, 0, len(varadosByDest))
+		for d := range varadosByDest {
+			dests = append(dests, d)
+		}
+		sort.Strings(dests)
+
+		for _, dest := range dests {
+			group := varadosByDest[dest]
+			if len(group) == 0 {
+				continue
+			}
+
+			// Verificar viabilidad: el grupo debe cumplir las mismas condiciones que
+			// dispatchInterBranch habría exigido si hubiera habido vehículos disponibles.
+			groupWeight := 0.0
+			groupForced := false
+			for _, u := range group {
+				groupWeight += u.WeightKg
+				if u.SLAForced || u.PriorityScore >= cfg.PriorityForceThreshold {
+					groupForced = true
+				}
+			}
+			if !groupForced && groupWeight < cfg.MinFillRate*freeKg {
+				continue
+			}
+
+			// Bin-pack por peso disponible, ordenando por prioridad
+			sortUnassignedByPriority(group)
+			var ids []string
+			var totalKg float64
+			var rescuedIdx []int
+			for i, u := range group {
+				if totalKg+u.WeightKg > freeKg {
+					continue
+				}
+				ids = append(ids, u.TrackingID)
+				totalKg += u.WeightKg
+				rescuedIdx = append(rescuedIdx, i)
+			}
+			if len(ids) == 0 {
+				continue
+			}
+
+			plan.InterBranch = append(plan.InterBranch, model.InterBranchAssignment{
+				VehicleID:          incoming.VehicleID,
+				LicensePlate:       incoming.LicensePlate,
+				DestinationBranch:  dest,
+				Rule:               model.DispatchRuleProjected,
+				Shipments:          ids,
+				TotalWeightKg:      roundKg(totalKg),
+				CapacityKg:         incoming.CapacityKg,
+				Projected:          true,
+				ProjectedArrivalAt: eta,
+			})
+			usedVehicles[incoming.VehicleID] = true
+			freeKg -= totalKg
+
+			// Quitar rescatados de varadosByDest y de plan.Unassigned
+			rescuedSet := map[string]bool{}
+			for _, id := range ids {
+				rescuedSet[id] = true
+			}
+			remaining := group[:0]
+			for _, u := range group {
+				if !rescuedSet[u.TrackingID] {
+					remaining = append(remaining, u)
+				}
+			}
+			varadosByDest[dest] = remaining
+
+			filtered := plan.Unassigned[:0]
+			for _, u := range plan.Unassigned {
+				if !rescuedSet[u.TrackingID] {
+					filtered = append(filtered, u)
+				}
+			}
+			plan.Unassigned = filtered
+		}
+	}
+}
+
+// GetActiveRouteETA deriva un ETA dinámico "relativo a ahora" para un envío
+// out_for_delivery, en lugar del ETA comercial estático calculado al crearlo.
+//
+// Algoritmo de sobreescritura (estrictamente en horas relativas desde la
+// hora actual — así el banner "dentro de las próximas N horas" y la fecha
+// de la grilla SIEMPRE coinciden):
+//
+//  1. minutosRestantes := tiempo restante real extraído del viaje/ruta activa
+//  2. horasASumar      := math.Ceil(minutosRestantes / 60)
+//  3. límite de seguridad: if horasASumar < 1 { horasASumar = 1 }
+//  4. nuevaFechaEstimada := ahora.Add(horasASumar * time.Hour)
+//
+// El envío no conoce su viaje directamente (Shipment no tiene TripID), así
+// que la búsqueda intenta dos estrategias en orden, de la más precisa a la
+// más resiliente:
+//
+//  1. lookupETAFromPersistedPlan: cruce directo contra el plan VRP persistido
+//     de hoy (datos de arribo de OrderedStops — preciso, pero solo existe
+//     cuando el despacho se generó/aplicó vía el motor de ruteo).
+//  2. lookupETAFromActiveRoutes (reverse lookup): cuando el plan no tiene
+//     datos VRP para este envío (despacho manual, plan regenerado después de
+//     iniciar el viaje, etc.), se itera sobre los viajes en curso de TODOS
+//     los choferes (Route.Status == en_curso), se ubica la parada de este
+//     envío dentro de las paradas pendientes, y se estima el tiempo restante
+//     a partir de la configuración de ruteo (service_time_minutes × paradas
+//     pendientes hasta llegar a la suya, inclusive).
+//
+// Devuelve (nuevaFechaEstimada, horasASumar). (nil, nil) cuando ninguna
+// estrategia logra ubicar el envío en un viaje activo — el caller debe
+// conservar el EstimatedDeliveryAt comercial original.
+func (s *RoutingService) GetActiveRouteETA(trackingID string) (*time.Time, *int) {
+	now := clock.Now().In(clock.LocalTZ)
+
+	if eta, hours := s.lookupETAFromPersistedPlan(trackingID, now); eta != nil {
+		return eta, hours
+	}
+	if eta, hours := s.lookupETAFromActiveRoutes(trackingID, now); eta != nil {
+		return eta, hours
+	}
+
+	log.Printf("[PublicTracking] ETA dinámico: shipment=%s NO encontrado en ningún viaje activo (ni plan VRP ni reverse lookup de rutas en_curso) — se usará ETA comercial estático", trackingID)
+	return nil, nil
+}
+
+// lookupETAFromPersistedPlan cruza el envío contra el plan de ruteo VRP
+// persistido del día (OrderedStops, con horarios de arribo precisos).
+// Devuelve (nil, nil) si no hay plan para hoy o el envío no aparece en
+// ninguna asignación de última milla.
+func (s *RoutingService) lookupETAFromPersistedPlan(trackingID string, now time.Time) (*time.Time, *int) {
+	today := now.Format("2006-01-02")
+	plan, err := s.planRepo.GetByDate(today)
+	if err != nil || plan == nil {
+		log.Printf("[PublicTracking] ETA dinámico (plan VRP): sin plan persistido para la fecha %s (shipment=%s, err=%v)", today, trackingID, err)
+		return nil, nil
+	}
+
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, clock.LocalTZ)
+
+	for _, bp := range plan.BranchPlans {
+		for _, lma := range bp.Plan.LastMile {
+			for _, stop := range lma.OrderedStops {
+				// Comparación exacta de TrackingID — éste es el cruce
+				// Shipment↔LastMileAssignment que alimenta el algoritmo.
+				if stop.TrackingID != trackingID || stop.Unsequenced {
+					continue
+				}
+				arrivalMin := lma.SuggestedDepartureMin + stop.ArrivalMin
+				stopETA := midnight.Add(time.Duration(arrivalMin) * time.Minute)
+				minutosRestantes := stopETA.Sub(now).Minutes()
+				nuevaFechaEstimada, horasASumar := deriveOverwriteETA(now, minutosRestantes)
+
+				driverID := "(sin asignar)"
+				if lma.DriverID != nil {
+					driverID = *lma.DriverID
+				}
+				log.Printf("[PublicTracking] ETA dinámico (plan VRP): MATCH shipment=%s sucursal=%s vehiculo=%s chofer=%s | horaActual=%s minutosRestantesRuta=%.1f horasASumar=%d → nuevaFechaEstimada=%s",
+					trackingID, bp.BranchID, lma.VehicleID, driverID, now.Format(time.RFC3339), minutosRestantes, *horasASumar, nuevaFechaEstimada.Format(time.RFC3339))
+				return nuevaFechaEstimada, horasASumar
+			}
+		}
+	}
+	log.Printf("[PublicTracking] ETA dinámico (plan VRP): shipment=%s NO encontrado en OrderedStops del plan %s — se intenta reverse lookup sobre viajes activos", trackingID, plan.PlanDate)
+	return nil, nil
+}
+
+// lookupETAFromActiveRoutes es la búsqueda inversa (Trip Iteration): como el
+// envío no referencia su viaje, se recorren los viajes en curso de todos los
+// choferes (Route.Status == en_curso para la fecha de hoy) y, dentro de cada
+// uno, sus paradas pendientes (envíos out_for_delivery aún no resueltos), en
+// busca del TrackingID solicitado.
+//
+// Al no contar con horarios VRP por parada en este camino (Route no persiste
+// arribos por stop), el tiempo restante se estima como
+// service_time_minutes × cantidad de paradas pendientes hasta la propia
+// (inclusive) — un piso conservador que respeta el orden real de entrega del
+// chofer sin inventar datos de distancia/tránsito que no existen para rutas
+// despachadas fuera del motor VRP.
+func (s *RoutingService) lookupETAFromActiveRoutes(trackingID string, now time.Time) (*time.Time, *int) {
+	serviceTimeMin := s.cfgSvc.Get().ServiceTimeMinutes
+
+	for _, driver := range s.authRepo.ListByRole(model.RoleDriver, "") {
+		route, shipments, err := s.routeSvc.GetTodayRoute(driver.ID)
+		if err != nil || route.Status != model.RouteStatusActive || !route.HasShipment(trackingID) {
+			continue
+		}
+
+		// Cuenta las paradas pendientes (out_for_delivery, en orden de ruta)
+		// hasta llegar a la del envío buscado, inclusive.
+		pendingStopsAhead := 0
+		found := false
+		for _, sh := range shipments {
+			if sh.Status != model.StatusOutForDelivery {
+				continue
+			}
+			pendingStopsAhead++
+			if sh.TrackingID == trackingID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+
+		minutosRestantes := float64(pendingStopsAhead * serviceTimeMin)
+		nuevaFechaEstimada, horasASumar := deriveOverwriteETA(now, minutosRestantes)
+
+		log.Printf("[PublicTracking] ETA dinámico (reverse lookup): MATCH shipment=%s ruta=%s chofer=%s | paradasPendientesHastaLaSuya=%d serviceTimeMin=%d minutosRestantesEstimados=%.1f horasASumar=%d → nuevaFechaEstimada=%s",
+			trackingID, route.ID, driver.ID, pendingStopsAhead, serviceTimeMin, minutosRestantes, *horasASumar, nuevaFechaEstimada.Format(time.RFC3339))
+		return nuevaFechaEstimada, horasASumar
+	}
+
+	log.Printf("[PublicTracking] ETA dinámico (reverse lookup): shipment=%s NO encontrado en ningún viaje en_curso", trackingID)
+	return nil, nil
+}
+
+// deriveOverwriteETA aplica la fórmula de sobreescritura sobre minutos
+// restantes ya extraídos (de cualquiera de las dos estrategias de búsqueda):
+// redondeo hacia arriba a horas + piso de seguridad de 1 hora, y la nueva
+// fecha estimada como ahora + esas horas.
+func deriveOverwriteETA(now time.Time, minutosRestantes float64) (*time.Time, *int) {
+	horasASumar := int(math.Ceil(minutosRestantes / 60))
+	if horasASumar < 1 {
+		horasASumar = 1
+	}
+	nuevaFechaEstimada := now.Add(time.Duration(horasASumar) * time.Hour)
+	return &nuevaFechaEstimada, &horasASumar
+}
+
+// sortUnassignedByPriority ordena envíos varados: alta > media > baja, luego WeightKg ASC.
+func sortUnassignedByPriority(items []model.UnassignedShipment) {
+	priOrder := map[string]int{"alta": 0, "media": 1, "baja": 2}
+	sort.SliceStable(items, func(i, j int) bool {
+		pi, pj := priOrder[items[i].Priority], priOrder[items[j].Priority]
+		if pi != pj {
+			return pi < pj
+		}
+		return items[i].WeightKg < items[j].WeightKg
+	})
 }

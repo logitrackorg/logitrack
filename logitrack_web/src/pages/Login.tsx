@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useOrganizationTheme } from "@/context/OrganizationThemeContext";
 import { authApi } from "@/api/auth";
 import { AlertCircle, CheckCircle2, ChevronDown, Truck, Package, MapPin } from "lucide-react";
 import { publicTrackingApi, type PublicStats } from "@/api/publicTracking";
@@ -21,6 +22,7 @@ const TEST_USERS = [
   { u: "op_mendoza", p: "op_mendoza123", r: "Operador", branch: "Mendoza" },
   { u: "sup_mendoza", p: "sup_mendoza123", r: "Supervisor", branch: "Mendoza" },
   { u: "op_posadas", p: "op_posadas123", r: "Operador", branch: "Posadas" },
+  { u: "sup_santa_cruz", p: "sup_santacruz123", r: "Supervisor", branch: "Santa Cruz" },
   { u: "gerente", p: "gerente123", r: "Gerente", branch: "" },
   { u: "admin", p: "admin123", r: "Admin", branch: "" },
   { u: "chofer_caba", p: "chofer_caba123", r: "Chofer Última milla", branch: "CABA" },
@@ -74,6 +76,9 @@ export function Login() {
   const [stats, setStats] = useState<PublicStats | null>(null);
   const navigate = useNavigate();
   const { setToken, setUser } = useAuth();
+  const { config } = useOrganizationTheme();
+  const logoUrl = config?.logo_url?.trim();
+  const orgName = config?.name?.trim() || "LogiTrack";
 
   const [resetStep, setResetStep] = useState<ResetStep>("idle");
   const [resetUsername, setResetUsername] = useState("");
@@ -246,11 +251,19 @@ export function Login() {
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <Truck className="w-5 h-5 text-white" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={orgName}
+              className="w-9 h-9 rounded-xl object-contain bg-white/10 shadow-lg"
+            />
+          ) : (
+            <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <Truck className="w-5 h-5 text-white" />
+            </div>
+          )}
           <div>
-            <span className="font-bold text-white text-lg tracking-tight">LogiTrack</span>
+            <span className="font-bold text-white text-lg tracking-tight">{orgName}</span>
             <div className="text-[10px] text-blue-300 font-medium tracking-widest uppercase -mt-0.5">Sistema logístico</div>
           </div>
         </div>
@@ -303,10 +316,14 @@ export function Login() {
 
           {/* Logo mobile */}
           <div className="flex items-center gap-2.5 lg:hidden">
-            <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center">
-              <Truck className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-blue-900 text-base">LogiTrack</span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-xl object-contain" />
+            ) : (
+              <div className="w-8 h-8 bg-orange-500 rounded-xl flex items-center justify-center">
+                <Truck className="w-4 h-4 text-white" />
+              </div>
+            )}
+            <span className="font-bold text-blue-900 text-base">{orgName}</span>
           </div>
 
           {/* ─── Login ─── */}

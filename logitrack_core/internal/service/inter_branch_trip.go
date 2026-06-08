@@ -153,8 +153,15 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 	if !ok {
 		return model.InterBranchTrip{}, fmt.Errorf("no hay viaje activo para este vehículo")
 	}
-	// Idempotent: same driver claiming again
+	// Idempotent: same driver claiming again — sync route in case new shipments were
+	// added to the trip after the initial claim (e.g. redelivery reloaded onto vehicle).
 	if trip.DriverID != nil && *trip.DriverID == driverID {
+		if trip.Kind == model.TripKindLastMile && s.routeSvc != nil && len(trip.ShipmentIDs) > 0 {
+			today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+			for _, tid := range trip.ShipmentIDs {
+				_ = s.routeSvc.AddShipmentToDriverRoute(driverID, tid, today)
+			}
+		}
 		return trip, nil
 	}
 	// Strict driver type check
@@ -196,6 +203,7 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 	if trip.Kind == model.TripKindLastMile && len(trip.ShipmentIDs) > 0 {
 		if s.routeSvc != nil {
 			today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+			// Pre-populate route before StartRoute so the record exists.
 			for _, tid := range trip.ShipmentIDs {
 				_ = s.routeSvc.AddShipmentToDriverRoute(driverID, tid, today)
 			}
@@ -206,6 +214,17 @@ func (s *InterBranchTripService) ClaimByQR(qrToken, driverID, driverBranchID str
 		}
 		if started, err := s.Start(trip.ID, driverID); err == nil {
 			trip = started
+			// After Start() transitions all shipments to out_for_delivery, re-sync the
+			// route. This ensures shipments added to the trip after the pre-populate step
+			// above (e.g. redeliveries loaded onto the vehicle after routing apply) are
+			// included. At this point all shipments are active, so AddShipmentToDriverRoute
+			// will append without resetting the route status.
+			if s.routeSvc != nil {
+				today := model.NewDateOnly(clock.Now().In(clock.LocalTZ))
+				for _, tid := range trip.ShipmentIDs {
+					_ = s.routeSvc.AddShipmentToDriverRoute(driverID, tid, today)
+				}
+			}
 		}
 	}
 

@@ -18,10 +18,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onFileSelect,
 }) => {
   const [input, setInput] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  // Si fileUploadDisabled no se pasa, hereda el valor de disabled
-  const attachDisabled = fileUploadDisabled !== undefined ? fileUploadDisabled : disabled;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachDisabled = fileUploadDisabled ?? disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +34,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (file && onFileSelect) {
       onFileSelect(file);
     }
-    // Reset para permitir seleccionar el mismo archivo dos veces
-    if (fileRef.current) fileRef.current.value = '';
+    e.target.value = '';
   };
 
   return (
@@ -45,18 +42,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       {showFileUpload && (
         <>
           <input
-            ref={fileRef}
+            ref={fileInputRef}
             type="file"
             accept="image/*,.pdf,.doc,.docx"
             style={{ display: 'none' }}
             onChange={handleFileChange}
+            disabled={attachDisabled}
           />
           <button
             type="button"
-            className="chat-attach-btn"
-            onClick={() => fileRef.current?.click()}
+            className="attach-btn"
             disabled={attachDisabled}
             title="Adjuntar archivo"
+            onClick={() => fileInputRef.current?.click()}
           >
             📎
           </button>

@@ -310,7 +310,8 @@ export function RoutingConfig() {
       draft.inter_branch_avg_speed_kmh !== config.inter_branch_avg_speed_kmh ||
       draft.inter_branch_stop_minutes !== config.inter_branch_stop_minutes ||
       draft.backhaul_enabled !== config.backhaul_enabled ||
-      draft.keep_one_vehicle_per_branch !== config.keep_one_vehicle_per_branch);
+      draft.keep_one_vehicle_per_branch !== config.keep_one_vehicle_per_branch ||
+      draft.fleet_projection_horizon_hours !== config.fleet_projection_horizon_hours);
 
   const handleGenerateGlobal = async () => {
     setGenerating(true);
@@ -401,6 +402,24 @@ export function RoutingConfig() {
                   {draft?.backhaul_enabled ? "Activo" : "Inactivo"}
                 </span>
               </label>
+            </div>
+
+            {/* Despacho proyectado */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Horizonte de despacho proyectado (horas)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Ventana en horas para usar vehículos en tránsito hacia la sucursal. Si la ETA cae
+                dentro del horizonte, el motor los incluye para planificar envíos varados por falta
+                de transporte. 0 = deshabilitado. Rango: 0–168 h.
+              </p>
+              <input
+                type="number"
+                min={0}
+                max={168}
+                value={draft?.fleet_projection_horizon_hours ?? 24}
+                onChange={(e) => setDraft((d) => d ? { ...d, fleet_projection_horizon_hours: parseInt(e.target.value) || 0 } : d)}
+                className="w-28 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
             </div>
 
             {/* Balanceo de flota */}

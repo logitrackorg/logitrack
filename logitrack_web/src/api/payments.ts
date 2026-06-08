@@ -37,6 +37,13 @@ export interface Payment {
   abandoned_reason?: string;
 }
 
+export interface PaymentConfig {
+  mp_enabled: boolean;
+  mock_enabled: boolean;
+  mp_alias: string;
+  mp_cvu: string;
+}
+
 export const paymentApi = {
   requestPayment(trackingId: string): Promise<Payment> {
     return api.post(`/shipments/${trackingId}/request-payment`).then((r) => r.data);
@@ -50,7 +57,24 @@ export const paymentApi = {
   confirmCashPayment(trackingId: string): Promise<{ tracking_id: string }> {
     return api.post(`/shipments/${trackingId}/cash-payment`).then((r) => r.data);
   },
+  confirmTransferPayment(trackingId: string): Promise<{ tracking_id: string }> {
+    return api.post(`/shipments/${trackingId}/transfer-payment`).then((r) => r.data);
+  },
   getQR(trackingId: string): Promise<{ qr_code_base64: string; init_point: string }> {
     return api.get(`/shipments/${trackingId}/payment/qr`).then((r) => r.data);
+  },
+  getConfig(): Promise<PaymentConfig> {
+    return api.get("/payment/config").then((r) => r.data);
+  },
+  updateConfig(cfg: PaymentConfig): Promise<PaymentConfig> {
+    return api.patch("/payment/config", cfg).then((r) => r.data);
+  },
+  updateCredentials(req: {
+    current_access_token?: string;
+    new_access_token?: string;
+    current_webhook_secret?: string;
+    new_webhook_secret?: string;
+  }): Promise<PaymentConfig> {
+    return api.patch("/payment/config/credentials", req).then((r) => r.data);
   },
 };

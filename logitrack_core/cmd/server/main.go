@@ -84,6 +84,7 @@ func main() {
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
+	seed.LoadProjectedDispatchScenario(vehicleRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
@@ -136,17 +137,12 @@ func main() {
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
 
-	// Mercado Pago — nil cuando no está configurado (dev sin MP)
+	// Mercado Pago — siempre non-nil; IsConfigured() depende de credenciales (DB > env vars)
 	mpClient := mercadopago.NewClient(
 		os.Getenv("MP_ACCESS_TOKEN"),
 		os.Getenv("MP_WEBHOOK_SECRET"),
 		getenv("MP_NOTIFICATION_URL", ""),
 	)
-	if mpClient != nil {
-		log.Println("[mercadopago] cliente configurado — webhooks activos")
-	} else {
-		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
-	}
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	// También se dispara el chequeo de SLA en riesgo/vencido para que las
@@ -185,6 +181,17 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
 	paymentScheduler := service.NewPaymentScheduler(paymentSvc)
 	paymentScheduler.Start()
+
+	paymentConfigRepo := repository.NewPostgresPaymentConfigRepository(database)
+	paymentConfigSvc := service.NewPaymentConfigService(paymentConfigRepo)
+	paymentConfigHandler := handler.NewPaymentConfigHandler(paymentConfigSvc)
+	paymentHandler.SetPaymentConfigService(paymentConfigSvc)
+	mpClient.SetCredentialProvider(paymentConfigSvc.GetMPCredentials)
+	if mpClient.IsConfigured() {
+		log.Println("[mercadopago] cliente configurado — webhooks activos")
+	} else {
+		log.Println("[mercadopago] sin credenciales MP — modo simulación activo")
+	}
 
 	notifRepo := repository.NewPostgresNotificationRepository(database)
 	notifSvc := service.NewNotificationService(notifRepo)
@@ -248,6 +255,7 @@ func main() {
 	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
+	shipmentSvc.SetRouteService(routeSvc)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
@@ -310,6 +318,7 @@ func main() {
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
+	shipmentHandler.SetRoutingService(routingSvc)
 
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
@@ -475,8 +484,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
-	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
-	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -524,6 +533,10 @@ func main() {
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
 	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
 	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
+	protected.POST("/shipments/:tracking_id/transfer-payment", shipmentWrite, paymentHandler.ConfirmTransferPayment)
+	protected.GET("/payment/config", authenticated, paymentConfigHandler.Get)
+	protected.PATCH("/payment/config", adminOnly, paymentConfigHandler.Update)
+	protected.PATCH("/payment/config/credentials", adminOnly, paymentConfigHandler.UpdateCredentials)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
@@ -600,8 +613,11 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
-	// Driver route — driver only
+	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
+	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
+
+	// Driver route — driver only
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
@@ -747,6 +763,7 @@ func main() {
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	publicAPI.GET("/config", sysConfigHandler.GetPublicConfig)
+	publicAPI.GET("/organization", orgHandler.GetPublic)
 	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {

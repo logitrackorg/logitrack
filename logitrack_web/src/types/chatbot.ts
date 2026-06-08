@@ -5,9 +5,29 @@ export interface ChatbotAuthRequest {
   recipient_dni: string;
 }
 
-export interface PendingClaimInfo {
+export interface ActiveClaimInfo {
   claim_id: string;
-  supervisor_notes: string;
+  status: string;
+  supervisor_notes?: string;
+}
+
+export interface SenderChatbotAuthResponse {
+  success: boolean;
+  sender_name: string;
+  shipment: Shipment;
+  available_actions: string[];
+  active_claim?: ActiveClaimInfo;
+}
+
+export interface FileClaimResponse {
+  success: boolean;
+  claim_id: string;
+  message: string;
+}
+
+export interface ClaimRespondResponse {
+  success: boolean;
+  message: string;
 }
 
 export interface ChatbotAuthResponse {
@@ -15,14 +35,7 @@ export interface ChatbotAuthResponse {
   recipient_name: string;
   shipment: Shipment;
   available_actions: string[];
-  pending_claim?: PendingClaimInfo;
-}
-
-export interface ClaimRespondResponse {
-  success: boolean;
-  claim_id: string;
-  status: string;
-  message: string;
+  active_claim?: ActiveClaimInfo;
 }
 
 export interface Shipment {
@@ -106,6 +119,17 @@ export interface ChatOption {
   action: ChatAction;
 }
 
+export type ClaimType =
+  | 'damage'
+  | 'missing'
+  | 'delay'
+  | 'not_delivered'
+  | 'bad_treatment'
+  | 'wrong_data'
+  | 'other';
+
+export type DamageSubtype = 'product_damaged' | 'missing_products' | 'packaging_damaged';
+
 export type ChatAction =
   | 'pickup'
   | 'reschedule'
@@ -115,6 +139,13 @@ export type ChatAction =
   | 'restart'
   | 'as_recipient'
   | 'as_sender'
+  // US4/US5: reclamos
   | 'respond_claim'
-  | 'skip_evidence'
-  | 'confirm_claim_response';
+  | 'skip_claim_response_evidence'
+  | 'confirm_claim_response'
+  | 'file_claim'
+  | 'select_claim_type'
+  | 'toggle_damage_subtype'
+  | 'confirm_damage_subtypes'
+  | 'skip_claim_evidence'
+  | 'confirm_claim_submit';

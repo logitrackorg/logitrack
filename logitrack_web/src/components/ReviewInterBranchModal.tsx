@@ -156,7 +156,7 @@ export interface ReviewInterBranchModalProps {
   shipments: Map<string, Shipment>;
   applying?: boolean;
   onClose: () => void;
-  onConfirm: (additionalStops: AssignmentStop[], departureMin: number) => void;
+  onConfirm: (additionalStops: AssignmentStop[], departureMin: number, scheduledDate: string) => void;
 }
 
 const minToHHMM = (m: number) =>
@@ -204,6 +204,9 @@ export function ReviewInterBranchModal({
   const [departureMin, setDepartureMin] = useState<number>(defaultDepartureMin);
   const delta = departureMin - baseDepartureMin;
   const shift = (m?: number): number | undefined => (m && m > 0 ? m + delta : undefined);
+  // Fecha de salida: por defecto hoy o la fecha ya persistida en el assignment.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const [scheduledDate, setScheduledDate] = useState<string>(a.scheduled_date ?? todayISO);
   const [addingStop, setAddingStop] = useState(false);
   const [newStopBranchId, setNewStopBranchId] = useState("");
   const [newStopShipments, setNewStopShipments] = useState<Set<string>>(new Set());
@@ -365,23 +368,35 @@ export function ReviewInterBranchModal({
                   <span className="text-slate-400 text-xs">+ {pickupWeight.toFixed(1)} kg pickups</span>
                 )}
               </div>
-              {/* Horarios estimados (salida editable) */}
+              {/* Horarios estimados (fecha + salida editables) */}
               {(
                 <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5 text-xs text-slate-600">
                       <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="font-medium">Horarios estimados</span>
+                      <span className="font-medium">Fecha y hora de salida</span>
                     </div>
-                    <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                      <span>Salir a</span>
-                      <input
-                        type="time"
-                        value={minToHHMM(departureMin)}
-                        onChange={(e) => setDepartureMin(hhmmToMin(e.target.value))}
-                        className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
-                      />
-                    </label>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                      <label className="flex items-center gap-1.5">
+                        <span>Fecha</span>
+                        <input
+                          type="date"
+                          value={scheduledDate}
+                          min={todayISO}
+                          onChange={(e) => setScheduledDate(e.target.value || todayISO)}
+                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <span>Salir a</span>
+                        <input
+                          type="time"
+                          value={minToHHMM(departureMin)}
+                          onChange={(e) => setDepartureMin(hhmmToMin(e.target.value))}
+                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                        />
+                      </label>
+                    </div>
                   </div>
                   <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-slate-500 pl-5">
                     <span className="text-slate-400">Salida</span>
@@ -419,8 +434,10 @@ export function ReviewInterBranchModal({
                     )}
                   </div>
                   <p className="text-[10.5px] text-slate-400 pl-5">
-                    {departureMin === defaultDepartureMin
-                      ? "Default: 30 min después de ahora. Editá la salida si querés otro horario."
+                    {scheduledDate !== todayISO
+                      ? `Salida programada para el ${scheduledDate.split("-").reverse().join("/")} · llegadas recalculadas.`
+                      : departureMin === defaultDepartureMin
+                      ? "Default: 30 min después de ahora. Editá la fecha u hora si querés otro horario."
                       : hasArrivals
                       ? "Salida ajustada · llegadas recalculadas."
                       : "Salida ajustada."}
@@ -541,7 +558,7 @@ export function ReviewInterBranchModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(additionalStops, departureMin)}
+            onClick={() => onConfirm(additionalStops, departureMin, scheduledDate)}
             disabled={applying}
             className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
           >
