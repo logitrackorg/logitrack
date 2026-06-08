@@ -73,16 +73,13 @@ export function Topbar() {
           "bg-[var(--topbar-bg)]",
           "backdrop-saturate-[1.8] backdrop-blur-lg",
           "border-b border-[var(--border)]",
-          "grid grid-cols-[1fr_auto_1fr] items-center gap-4",
+          "flex items-center gap-4",
           isMobile ? "pr-3 pl-[60px]" : "px-6",
         )}
       >
-        {/* Left: empty spacer for centering */}
-        <div />
-
-        {/* Center: title + subtitle */}
-        <div className="min-w-0 flex flex-col items-center">
-          <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[320px] leading-tight text-center">
+        {/* Left: title + subtitle */}
+        <div className="min-w-0">
+          <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[320px] leading-tight">
             {title}
           </h1>
           {subtitle && !isMobile && (
@@ -90,9 +87,11 @@ export function Topbar() {
           )}
         </div>
 
-        {/* Right: actions slot + theme + bell */}
-        <div className="flex items-center gap-3 justify-end min-w-0">
-          <div ref={registerSlot} className="flex items-center gap-2" />
+        {/* Center: actions slot (portal target) */}
+        <div ref={registerSlot} className="flex-1 min-w-0 flex items-center justify-end gap-2" />
+
+        {/* Right: theme + bell */}
+        <div className="flex items-center gap-3 shrink-0">
           <ThemeToggle compact={isMobile} />
           <NotificationBell />
         </div>
