@@ -115,7 +115,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("profile")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "profile"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -126,7 +126,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("security")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "security"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -138,7 +138,7 @@ export function UserProfile() {
                 onClick={() => setActiveTab("historial")}
                 className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                   activeTab === "historial"
-                    ? "bg-[#1e3a5f] text-white font-bold"
+                    ? "bg-[var(--sidebar-bg)] text-white font-bold"
                     : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
                 }`}
               >
@@ -163,7 +163,7 @@ export function UserProfile() {
                   <button
                     onClick={handleRequestHistory}
                     disabled={requestingHistory}
-                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                    className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {requestingHistory ? "Enviando..." : "Solicitar acceso a mi historial"}
                   </button>
@@ -180,7 +180,7 @@ export function UserProfile() {
                   <button
                     onClick={handleRequestHistory}
                     disabled={requestingHistory}
-                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                    className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {requestingHistory ? "Enviando..." : "Volver a solicitar acceso"}
                   </button>
@@ -395,7 +395,7 @@ export function UserProfile() {
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                  className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {passwordLoading ? "Cambiando..." : "Guardar Cambios"}
                 </button>

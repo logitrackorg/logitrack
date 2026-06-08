@@ -68,7 +68,7 @@ function InterBranchRouteMap({
       points.push(pt);
       L.marker(pt, {
         icon: L.divIcon({
-          html: `<div style="width:28px;height:28px;background:#1e3a5f;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
+          html: `<div style="width:28px;height:28px;background:var(--sidebar-bg);border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
           className: "",
           iconSize: [28, 28],
           iconAnchor: [14, 14],
@@ -111,7 +111,7 @@ function InterBranchRouteMap({
     // Trazar cada segmento individualmente para que en round-trips (A→B→A)
     // la ida y la vuelta sean visibles aunque compartan el mismo recorrido.
     // Segmento i = points[i] → points[i+1].
-    const segmentColors = ["#1e3a5f", "#0f766e", "#b45309", "#7c3aed"];
+    const segmentColors = ["var(--sidebar-bg)", "#0f766e", "#b45309", "#7c3aed"];
     const fetchSegment = (i: number) => {
       if (!layerRef.current || i >= points.length - 1) return;
       const segPoints = [points[i], points[i + 1]];
@@ -384,7 +384,7 @@ export function ReviewInterBranchModal({
                           value={scheduledDate}
                           min={todayISO}
                           onChange={(e) => setScheduledDate(e.target.value || todayISO)}
-                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                         />
                       </label>
                       <label className="flex items-center gap-1.5">
@@ -393,7 +393,7 @@ export function ReviewInterBranchModal({
                           type="time"
                           value={minToHHMM(departureMin)}
                           onChange={(e) => setDepartureMin(hhmmToMin(e.target.value))}
-                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                         />
                       </label>
                     </div>
@@ -456,7 +456,7 @@ export function ReviewInterBranchModal({
                   {canAddMore && (
                     <button
                       onClick={openAddStop}
-                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-dashed border-slate-300 text-slate-500 hover:border-[#1e3a5f] hover:text-[#1e3a5f] transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-dashed border-slate-300 text-slate-500 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)] transition-colors cursor-pointer"
                     >
                       <Plus className="w-3 h-3" /> Agregar
                     </button>
@@ -560,7 +560,7 @@ export function ReviewInterBranchModal({
           <button
             onClick={() => onConfirm(additionalStops, departureMin, scheduledDate)}
             disabled={applying}
-            className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
+            className="px-4 py-2 text-sm bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
           >
             {applying ? "Aplicando…" : "Aplicar"}
           </button>
@@ -586,7 +586,7 @@ export function ReviewInterBranchModal({
                 <select
                   value={newStopBranchId}
                   onChange={(e) => handleNewStopBranchChange(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                  className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                 >
                   <option value="">— Elegí una sucursal —</option>
                   {candidateBranches.map((b) => (
@@ -659,7 +659,7 @@ export function ReviewInterBranchModal({
               <button
                 onClick={saveAddStop}
                 disabled={!newStopBranchId || newStopShipments.size === 0}
-                className="h-9 px-4 rounded-md text-sm font-semibold bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white cursor-pointer"
+                className="h-9 px-4 rounded-md text-sm font-semibold bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white cursor-pointer"
               >
                 Agregar parada
               </button>

@@ -10,7 +10,6 @@ import type {
   DamageSubtype,
   ActiveClaimInfo,
 } from '../../types/chatbot';
-import './chatbot.css';
 
 type ChatState =
   | 'initial'
@@ -916,11 +915,13 @@ export const ChatbotWidget: React.FC = () => {
     });
   };
 
+  const isSessionWarning = timeRemaining < 20 && sessionActive && state === 'authenticated';
+
   return (
     <>
       {/* Botón flotante */}
       <button
-        className={`chatbot-toggle ${isOpen ? 'open' : ''}`}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--brand)] text-white flex items-center justify-center text-2xl shadow-lg hover:shadow-xl cursor-pointer z-50 transition-all border-none max-sm:right-4 max-sm:bottom-4"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir chat"
       >
@@ -929,13 +930,13 @@ export const ChatbotWidget: React.FC = () => {
 
       {/* Ventana del chat */}
       {isOpen && (
-        <div className="chatbot-widget">
-          <div className="chatbot-header">
-            <div className="header-content">
-              <span className="bot-icon">🤖</span>
+        <div className="fixed bottom-24 right-6 w-[360px] max-h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-gray-200 max-sm:right-4 max-sm:bottom-20 max-sm:w-[calc(100vw-32px)] max-sm:max-h-[calc(100vh-120px)]">
+          <div className="bg-[var(--brand)] text-white p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🤖</span>
               <div>
-                <h3>Asistente LogiTrack</h3>
-                <span className={`status-indicator ${timeRemaining < 20 && sessionActive && state === 'authenticated' ? 'warning' : ''}`}>
+                <h3 className="text-sm font-bold m-0">Asistente LogiTrack</h3>
+                <span className={`text-xs opacity-80 font-medium ${isSessionWarning ? 'animate-pulse !opacity-100' : ''}`}>
                   {loading
                     ? '⏳ Procesando...'
                     : sessionActive && state === 'authenticated'
@@ -945,7 +946,7 @@ export const ChatbotWidget: React.FC = () => {
               </div>
             </div>
             <button
-              className="close-button"
+              className="bg-transparent border-none text-white cursor-pointer text-lg w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
               onClick={() => {
                 setIsOpen(false);
                 if (sessionTimeoutRef.current) {
@@ -958,7 +959,7 @@ export const ChatbotWidget: React.FC = () => {
             </button>
           </div>
 
-          <div className="chatbot-messages">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
             {messages.map(message => (
               <ChatMessageComponent
                 key={message.id}
@@ -967,10 +968,10 @@ export const ChatbotWidget: React.FC = () => {
               />
             ))}
             {loading && (
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+              <div className="flex items-center gap-1 px-3 py-2 w-fit">
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '200ms' }} />
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '400ms' }} />
               </div>
             )}
             <div ref={messagesEndRef} />

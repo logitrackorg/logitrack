@@ -39,7 +39,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={`h-11 px-5 text-sm font-medium border-b-2 transition-colors ${
         active
-          ? "border-[#2563eb] text-[#2563eb]"
+          ? "border-[var(--brand)] text-[var(--brand)]"
           : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
       }`}
     >

@@ -14,7 +14,7 @@ import { useAuth } from "../context/AuthContext";
 type SortOrder = "oldest" | "newest";
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all";
 
 /** Returns a human-readable label for the time remaining until a draft expires. */
 function formatTimeLeft(createdAt: string, retentionDays: number, nowMs: number): {
@@ -109,7 +109,7 @@ export function DraftList() {
         <TopbarActions>
           <button
             onClick={() => navigate("/new")}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             Nuevo envío
           </button>
@@ -236,7 +236,7 @@ export function DraftList() {
                         : <Clock className="w-3 h-3" />}
                       {timeLabel}
                     </span>
-                    <span className="text-xs font-semibold text-[#2563eb] group-hover:underline">
+                    <span className="text-xs font-semibold text-[var(--brand)] group-hover:underline">
                       Retomar →
                     </span>
                   </div>

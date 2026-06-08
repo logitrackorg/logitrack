@@ -151,7 +151,7 @@ export function InterBranchTripsList() {
             <select
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
-              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="h-9 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
             >
               <option value="">— Toda la red —</option>
               {branches.map((b) => (
@@ -181,13 +181,13 @@ export function InterBranchTripsList() {
               onClick={() => setTab(t)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
                 tab === t
-                  ? "border-[#1e3a5f] text-[#1e3a5f]"
+                  ? "border-[var(--sidebar-bg)] text-[var(--sidebar-bg)]"
                   : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
               {label}
               <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
-                tab === t ? "bg-[#1e3a5f] text-white" : "bg-slate-100 text-slate-500"
+                tab === t ? "bg-[var(--sidebar-bg)] text-white" : "bg-slate-100 text-slate-500"
               }`}>
                 {loading ? "…" : count}
               </span>
@@ -256,7 +256,7 @@ export function InterBranchTripsList() {
             {!scanning ? (
               <button
                 onClick={() => void startScanner()}
-                className="w-full h-11 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer mb-4"
+                className="w-full h-11 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer mb-4"
               >
                 <QrCode className="w-4 h-4" />
                 Escanear QR del viaje
@@ -280,7 +280,7 @@ export function InterBranchTripsList() {
                 onChange={(e) => setManualTripId(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === "Enter" && manualTripId.trim()) goToReception(manualTripId); }}
                 placeholder="TRIP-XXXXXXXX"
-                className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+                className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
               />
               <button
                 onClick={() => goToReception(manualTripId)}
@@ -363,7 +363,7 @@ function TripCard({
           {/* Origen */}
           <div className="flex items-start gap-3">
             <div className="flex flex-col items-center shrink-0">
-              <div className="w-3 h-3 rounded-full bg-[#1e3a5f] ring-2 ring-[#1e3a5f]/10" />
+              <div className="w-3 h-3 rounded-full bg-[var(--sidebar-bg)] ring-2 ring-[var(--sidebar-bg)]/10" />
               {stops.length > 0 && <div className="w-0.5 h-7 bg-slate-200 my-1" />}
             </div>
             <div className="flex-1 pb-2 text-xs">
@@ -450,7 +450,7 @@ function TripCard({
           <button
             type="button"
             onClick={() => navigate(`/?view=trip&trip_id=${encodeURIComponent(trip.id)}`)}
-            className="ml-auto text-[11px] font-semibold text-[#1e3a5f] hover:underline cursor-pointer"
+            className="ml-auto text-[11px] font-semibold text-[var(--sidebar-bg)] hover:underline cursor-pointer"
           >
             Ver envíos agrupados →
           </button>

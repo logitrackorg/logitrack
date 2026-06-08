@@ -19,7 +19,7 @@ import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
 const COLOR_OK   = "#22c55e";
 const COLOR_WARN = "#f59e0b";
 const COLOR_BAD  = "#ef4444";
-const COLOR_LINE = "#2563eb";
+const COLOR_LINE = "var(--brand)";
 
 function healthColor(rate: number): string {
   if (rate >= 90) return COLOR_OK;
@@ -48,7 +48,7 @@ function LineTooltip({ active, payload, label }: {
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-2 text-xs">
       <p className="font-semibold text-[var(--text-primary)] mb-1">{dd}/{mm}</p>
-      <p className="text-[#2563eb] font-bold">{payload[0].value} escalado{payload[0].value !== 1 ? "s" : ""}</p>
+      <p className="text-[var(--brand)] font-bold">{payload[0].value} escalado{payload[0].value !== 1 ? "s" : ""}</p>
     </div>
   );
 }

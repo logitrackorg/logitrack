@@ -69,7 +69,7 @@ const HOUR_KEYS = [
 ] as const satisfies ReadonlyArray<keyof RoutingConfigType>;
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all w-36 tabular-nums";
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all w-36 tabular-nums";
 
 function formatHint(value: number, fmt: NumberFieldDef["format"]): string {
   switch (fmt) {
@@ -393,7 +393,7 @@ export function RoutingConfig() {
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
                   className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.backhaul_enabled ? "#1e3a5f" : "#e5e7eb" }}
+                  style={{ background: draft?.backhaul_enabled ? "var(--sidebar-bg)" : "#e5e7eb" }}
                   onClick={() => setDraft((d) => (d ? { ...d, backhaul_enabled: !d.backhaul_enabled } : d))}
                 >
                   <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
@@ -432,7 +432,7 @@ export function RoutingConfig() {
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
                   className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.keep_one_vehicle_per_branch ? "#1e3a5f" : "#e5e7eb" }}
+                  style={{ background: draft?.keep_one_vehicle_per_branch ? "var(--sidebar-bg)" : "#e5e7eb" }}
                   onClick={() => setDraft((d) => (d ? { ...d, keep_one_vehicle_per_branch: !d.keep_one_vehicle_per_branch } : d))}
                 >
                   <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
@@ -461,7 +461,7 @@ export function RoutingConfig() {
                       }
                       className={inputClass}
                     />
-                    <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                    <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                       {formatHint(value, field.format)}
                     </span>
                   </div>
@@ -492,7 +492,7 @@ export function RoutingConfig() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#1e3a5f]" />
+              <Clock className="w-4 h-4 text-[var(--sidebar-bg)]" />
               Ventanas operativas
             </CardTitle>
             <CardDescription>
@@ -609,7 +609,7 @@ export function RoutingConfig() {
                     key={opt.value}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all ${
                       draft.last_mile_packing_strategy === opt.value
-                        ? "border-[#2563eb] bg-blue-50 ring-1 ring-[#2563eb]/20"
+                        ? "border-[var(--brand)] bg-blue-50 ring-1 ring-[var(--brand)]/20"
                         : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
@@ -621,12 +621,12 @@ export function RoutingConfig() {
                       onChange={() =>
                         setDraft((d) => (d ? { ...d, last_mile_packing_strategy: opt.value } : d))
                       }
-                      className="accent-[#2563eb]"
+                      className="accent-[var(--brand)]"
                     />
                     <span
                       className={`text-sm font-semibold ${
                         draft.last_mile_packing_strategy === opt.value
-                          ? "text-[#2563eb]"
+                          ? "text-[var(--brand)]"
                           : "text-slate-700"
                       }`}
                     >
@@ -655,7 +655,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {String(draft.inter_branch_dispatch_hour ?? 8).padStart(2, "0")}:00
                 </span>
               </div>
@@ -679,7 +679,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {draft.inter_branch_avg_speed_kmh ?? 60} km/h
                 </span>
               </div>
@@ -704,7 +704,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {(() => {
                     const m = draft.inter_branch_stop_minutes ?? 240;
                     const h = Math.floor(m / 60);
@@ -719,7 +719,7 @@ export function RoutingConfig() {
               <button
                 onClick={handleSave}
                 disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>

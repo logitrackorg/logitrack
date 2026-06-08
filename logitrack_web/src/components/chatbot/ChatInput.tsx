@@ -38,20 +38,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <form className="chat-input" onSubmit={handleSubmit}>
+    <form className="border-t border-gray-200 p-3 flex items-center gap-2" onSubmit={handleSubmit}>
       {showFileUpload && (
         <>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*,.pdf,.doc,.docx"
-            style={{ display: 'none' }}
+            className="hidden"
             onChange={handleFileChange}
             disabled={attachDisabled}
           />
           <button
             type="button"
-            className="attach-btn"
+            className="bg-gray-100 border-none rounded-full w-8 h-8 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={attachDisabled}
             title="Adjuntar archivo"
             onClick={() => fileInputRef.current?.click()}
@@ -66,9 +66,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onChange={(e) => setInput(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] disabled:bg-gray-50 disabled:cursor-not-allowed"
       />
-      <button type="submit" disabled={disabled || !input.trim()}>
-        Enviar
+      <button
+        type="submit"
+        disabled={disabled || !input.trim()}
+        className="bg-[var(--brand)] text-white border-none rounded-full w-8 h-8 flex items-center justify-center cursor-pointer hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        ➤
       </button>
     </form>
   );

@@ -212,7 +212,7 @@ export function NotificationsPage() {
         </h1>
         <button
           onClick={handleMarkAllRead}
-          className="inline-flex items-center gap-1.5 bg-[#1e3a5f] text-slate-200 border-none rounded-lg px-3.5 py-1.5 cursor-pointer text-xs font-medium"
+          className="inline-flex items-center gap-1.5 bg-[var(--sidebar-bg)] text-slate-200 border-none rounded-lg px-3.5 py-1.5 cursor-pointer text-xs font-medium"
         >
           <CheckCheck size={15} />
           Marcar todas como leídas
@@ -258,7 +258,7 @@ export function NotificationsPage() {
         </div>
         <button
           onClick={handleSearch}
-          className="px-4.5 py-1.5 bg-[#1e3a5f] text-white border-none rounded-md cursor-pointer text-xs font-semibold self-end"
+          className="px-4.5 py-1.5 bg-[var(--sidebar-bg)] text-white border-none rounded-md cursor-pointer text-xs font-semibold self-end"
         >
           Buscar
         </button>

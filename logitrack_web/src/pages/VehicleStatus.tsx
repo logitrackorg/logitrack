@@ -216,7 +216,7 @@ export function VehicleStatus() {
           <button
             type="submit"
             disabled={loading}
-            className={`px-5 py-2.5 rounded-md border-none font-semibold text-sm text-white bg-[#1e3a5f] ${
+            className={`px-5 py-2.5 rounded-md border-none font-semibold text-sm text-white bg-[var(--sidebar-bg)] ${
               loading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
             }`}
           >
@@ -292,7 +292,7 @@ export function VehicleStatus() {
                 </div>
                 <button
                   onClick={openStatusModal}
-                  className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm text-white bg-[#1e3a5f]"
+                  className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm text-white bg-[var(--sidebar-bg)]"
                 >
                   Cambiar estado
                 </button>
@@ -492,7 +492,7 @@ export function VehicleStatus() {
                 type="button"
                 onClick={handleStatusChange}
                 disabled={changingStatus}
-                className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm bg-[#1e3a5f] ${
+                className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm bg-[var(--sidebar-bg)] ${
                   changingStatus ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
                 }`}
               >

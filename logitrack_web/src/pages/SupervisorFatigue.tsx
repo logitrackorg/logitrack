@@ -249,7 +249,7 @@ function DriverRow({
         <td className="py-3 px-4 text-center">
           <button
             onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            className="inline-flex items-center gap-1 text-xs text-[#1e3a5f] font-semibold hover:underline cursor-pointer"
+            className="inline-flex items-center gap-1 text-xs text-[var(--sidebar-bg)] font-semibold hover:underline cursor-pointer"
           >
             {(driver.history ?? []).length}
             {expanded ? (
@@ -457,7 +457,7 @@ export function SupervisorFatigue() {
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all"
+            className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all"
           >
             <option value="">Todas</option>
             {branches.map((b) => (

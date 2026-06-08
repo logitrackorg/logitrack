@@ -316,7 +316,7 @@ export function FatigueConfig() {
           <button
             onClick={handleSave}
             disabled={saving || !canSave}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
           >
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>
@@ -340,7 +340,7 @@ export function FatigueConfig() {
           className="w-full flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50/80 transition-colors rounded-xl text-left"
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <ClipboardList className="w-4 h-4 text-[#1e3a5f]" />
+            <ClipboardList className="w-4 h-4 text-[var(--sidebar-bg)]" />
             Historial de auditoría
             {auditLogs !== null && (
               <span className="ml-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
@@ -399,7 +399,7 @@ export function FatigueConfig() {
 // ── sub-componentes ───────────────────────────────────────────────────────────
 
 const inputClass =
-  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all";
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 
@@ -409,7 +409,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
-        checked ? "bg-[#1e3a5f]" : "bg-slate-200"
+        checked ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"
       }`}
       role="switch"
       aria-checked={checked}
@@ -469,7 +469,7 @@ function TestRow({
           disabled={!enabled}
           className={`h-10 w-20 px-3 rounded-lg border text-sm tabular-nums text-right focus:outline-none transition-all ${
             enabled
-              ? "border-slate-200 bg-white text-slate-900 focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              ? "border-slate-200 bg-white text-slate-900 focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
               : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
           }`}
         />

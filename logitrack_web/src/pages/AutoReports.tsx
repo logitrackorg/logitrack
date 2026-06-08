@@ -197,7 +197,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     <button
       onClick={onClick}
       className={`h-10 px-4 text-sm border-b-2 transition-colors cursor-pointer ${
-        active ? "border-[#2563eb] text-[#2563eb] font-semibold" : "border-transparent text-slate-500 hover:text-slate-900"
+        active ? "border-[var(--brand)] text-[var(--brand)] font-semibold" : "border-transparent text-slate-500 hover:text-slate-900"
       }`}
     >
       {children}
@@ -221,7 +221,7 @@ function ConfigTab({ schedules, branches, loading, onCreate, onEdit, onDelete, o
       <div className="flex justify-end">
         <button
           onClick={onCreate}
-          className="inline-flex items-center gap-2 bg-[#2563eb] text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-[#1d4ed8] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 bg-[var(--brand)] text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-[var(--brand-strong)] transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Nuevo reporte
         </button>
@@ -484,7 +484,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50 focus:border-[#2563eb]"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
               placeholder="Reporte ejecutivo semanal"
             />
           </div>
@@ -495,7 +495,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as ReportFrequency)}
-                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
               >
                 <option value="daily">Diaria</option>
                 <option value="weekly">Semanal</option>
@@ -509,7 +509,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                 type="time"
                 value={timeOfDay}
                 onChange={(e) => setTimeOfDay(e.target.value)}
-                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50"
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
               />
             </div>
 
@@ -519,7 +519,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                 <select
                   value={dayOfWeek}
                   onChange={(e) => setDayOfWeek(Number(e.target.value))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
                 >
                   {DAYS_OF_WEEK.map((d) => (
                     <option key={d.value} value={d.value}>
@@ -539,7 +539,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                   max={28}
                   value={dayOfMonth}
                   onChange={(e) => setDayOfMonth(Math.min(28, Math.max(1, Number(e.target.value))))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb]/50"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/50"
                 />
               </div>
             )}
@@ -565,7 +565,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                 placeholder="gerencia@empresa.com"
                 className={`w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
                   isValidEmail
-                    ? "border-slate-300 focus:ring-[#2563eb]/50 focus:border-[#2563eb]"
+                    ? "border-slate-300 focus:ring-[var(--brand)]/50 focus:border-[var(--brand)]"
                     : "border-red-400 focus:ring-red-500/50"
                 }`}
               />
@@ -587,7 +587,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
                     type="checkbox"
                     checked={metrics.includes(m)}
                     onChange={() => toggleMetric(m)}
-                    className="rounded border-slate-300 text-[#2563eb] focus:ring-[#2563eb]/50"
+                    className="rounded border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
                   />
                   <span>{METRIC_LABELS[m]}</span>
                 </label>
@@ -600,7 +600,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
               type="checkbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="rounded border-slate-300 text-[#2563eb] focus:ring-[#2563eb]/50"
+              className="rounded border-slate-300 text-[var(--brand)] focus:ring-[var(--brand)]/50"
             />
             <span>Activo (el scheduler lo va a ejecutar)</span>
           </label>
@@ -617,7 +617,7 @@ function ScheduleModal({ existing, branches, onClose, onSaved }: ModalProps) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 bg-[#2563eb] text-white text-sm font-semibold rounded-md hover:bg-[#1d4ed8] cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 bg-[var(--brand)] text-white text-sm font-semibold rounded-md hover:bg-[var(--brand-strong)] cursor-pointer disabled:opacity-50"
           >
             {saving ? "Guardando…" : existing ? "Guardar cambios" : "Crear reporte"}
           </button>

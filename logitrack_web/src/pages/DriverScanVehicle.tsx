@@ -179,7 +179,7 @@ export default function DriverScanVehicle() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-[#1e3a5f] flex items-center justify-center mb-3">
+          <div className="w-14 h-14 rounded-full bg-[var(--sidebar-bg)] flex items-center justify-center mb-3">
             <Truck className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-xl font-bold text-slate-900">Escanear vehículo</h1>
@@ -212,7 +212,7 @@ export default function DriverScanVehicle() {
           <button
             onClick={() => void startScanner()}
             disabled={loading}
-            className="w-full h-12 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <QrCode className="w-5 h-5" />
             Activar cámara
@@ -235,13 +235,13 @@ export default function DriverScanVehicle() {
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value.toUpperCase())}
               placeholder="Ej.: AB100UM"
-              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
               onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
             />
             <button
               onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
               disabled={!manualToken.trim() || loading}
-              className="h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
             >
               OK
             </button>

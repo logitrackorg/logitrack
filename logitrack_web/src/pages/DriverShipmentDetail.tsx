@@ -149,7 +149,7 @@ export function DriverShipmentDetail() {
       <div className="p-6 max-w-lg mx-auto">
         <button
           onClick={() => navigate("/driver/route")}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1e3a5f] mb-5 cursor-pointer"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--sidebar-bg)] mb-5 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Mi ruta
