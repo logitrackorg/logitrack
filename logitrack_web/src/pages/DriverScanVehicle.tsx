@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, QrCode, AlertCircle, CheckCircle2, Loader2, ClipboardPaste } from "lucide-react";
+import { QrCode, AlertCircle, CheckCircle2, Loader2, ClipboardPaste } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
+import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { Button } from "@/components/ui/button";
 import { DriverShell } from "@/components/DriverShell";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { config: org } = useOrganizationTheme();
+  const orgName = org?.name?.trim() || "LogiTrack";
+  const logoUrl = org?.logo_url?.trim();
+
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -26,45 +31,31 @@ export function DriverScanVehicle() {
     };
   }, []);
 
-  // Gate de fatiga post-escaneo: se activa solo cuando el chofer ya completó
-  // al menos una ruta hoy (segunda ruta en adelante). Para la primera ruta del
-  // día el gate no aplica aquí. El token QR/patente se guarda para usarlo
-  // después de que el chofer pase el test.
   const [showGate, setShowGate] = useState(false);
   const [requiresSleepData, setRequiresSleepData] = useState(false);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
 
-  // Si el chofer ya tiene una ruta activa (last-mile) o un viaje intersucursal
-  // activo, mandarlo directo a esa pantalla sin pedirle que vuelva a escanear.
   useEffect(() => {
     driverApi.getRoute().then((data) => {
       const hasPending = data.shipments.some((s) => s.status === "out_for_delivery");
       const hasFailed  = data.shipments.some((s) => s.status === "delivery_failed");
       if (hasPending || hasFailed) navigate("/driver/route", { replace: true });
-    }).catch(() => { /* sin ruta — chequear inter-sucursal */ });
+    }).catch(() => {});
 
     interBranchTripsApi.getMyTrip().then((trip) => {
       if (trip.status === "pendiente" || trip.status === "en_transito") {
         navigate("/driver/trip", { replace: true });
       }
-    }).catch(() => { /* sin trip — quedarse acá */ });
+    }).catch(() => {});
   }, [navigate]);
 
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);
     setTimeout(() => {
-      if (mountedRef.current) {
-        navigate("/driver/route", { replace: true });
-      }
+      if (mountedRef.current) navigate("/driver/route", { replace: true });
     }, 1800);
   };
 
-  // Realiza el claim del token (QR o patente) y navega a la pantalla
-  // correspondiente. Se llama después de que el gate de fatiga se resuelve
-  // (ya sea porque no era necesario o porque el chofer lo completó).
-  // Llama a markRouteStarted() tras cada claim exitoso de ruta de última milla
-  // para que CompletedRoutesToday quede incrementado ANTES de que el chofer
-  // vuelva a esta pantalla para una eventual segunda ruta.
   const claimAndNavigate = async (token: string) => {
     setLoading(true);
     setError("");
@@ -72,15 +63,13 @@ export function DriverScanVehicle() {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
       if (trip.kind === "last_mile") {
-        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget.
         driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
         navigate("/driver/trip", { replace: true });
       }
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
       if (msg.includes("no hay viaje activo")) {
         try {
           await driverApi.startRoute();
@@ -89,8 +78,7 @@ export function DriverScanVehicle() {
           goToRoute("Ruta iniciada.");
           return;
         } catch (routeErr: unknown) {
-          const routeMsg =
-            (routeErr as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+          const routeMsg = (routeErr as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
           if (routeMsg.includes("no tenés una ruta")) {
             setError("No tenés envíos asignados para hoy. Consultá con el operador.");
             setLoading(false);
@@ -112,12 +100,6 @@ export function DriverScanVehicle() {
 
   const handleToken = async (token: string) => {
     if (loading) return;
-
-    // Solo para choferes de última milla: evaluar si corresponde el gate de
-    // fatiga antes de reclamar el vehículo.
-    // El gate aplica únicamente para la SEGUNDA ruta en adelante del día;
-    // para la primera ruta el backend devuelve requires_fatigue_test: false.
-    // Los choferes intersucursales tienen su propio gate en DriverInterBranchTrip.
     if (user?.driver_type !== "intersucursal") {
       const gateStatus = await driverApi.getCheckinGateStatus();
       if (gateStatus.needs_test) {
@@ -128,7 +110,6 @@ export function DriverScanVehicle() {
         return;
       }
     }
-
     await claimAndNavigate(token);
   };
 
@@ -141,10 +122,8 @@ export function DriverScanVehicle() {
       await html5Qrcode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          void handleToken(decodedText.trim());
-        },
-        () => { /* ignore scan errors */ }
+        (decodedText) => { void handleToken(decodedText.trim()); },
+        () => {}
       );
     } catch {
       setError("No se pudo acceder a la cámara. Ingresá el código manualmente.");
@@ -162,9 +141,7 @@ export function DriverScanVehicle() {
 
   useEffect(() => {
     return () => {
-      if (qrRef.current) {
-        qrRef.current.stop().catch(() => {});
-      }
+      if (qrRef.current) qrRef.current.stop().catch(() => {});
     };
   }, []);
 
@@ -176,14 +153,9 @@ export function DriverScanVehicle() {
         setManualToken(trimmed);
         void handleToken(trimmed);
       }
-    } catch {
-      // Clipboard API not available — user types manually
-    }
+    } catch {}
   };
 
-  // Gate de fatiga post-escaneo: se muestra solo para la segunda ruta en
-  // adelante. requiresSleepData siempre es false aquí porque las horas de
-  // sueño ya fueron registradas durante el primer check-in del día.
   if (showGate && user) {
     return (
       <KssCheckIn
@@ -203,130 +175,113 @@ export function DriverScanVehicle() {
 
   return (
     <DriverShell title="Escanear vehículo" subtitle="Reclamar viaje asignado">
-      <div className="flex flex-col items-center justify-center px-4 py-6">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4 py-8">
         <div className="w-full max-w-sm flex flex-col items-center">
 
-        {/* ── Header icon ───────────────────────────────────── */}
-        <div className="w-14 h-14 rounded-full bg-[var(--brand-800)] flex items-center justify-center mb-6 shadow-lg">
-          <Truck className="w-7 h-7 text-white" />
-        </div>
-
-        {/* ── Loading ───────────────────────────────────────── */}
-        {loading && (
-          <div className="py-12 text-center animate-fade-in">
-            <Loader2 className="w-12 h-12 text-[var(--brand)] animate-spin mx-auto mb-4" />
-            <p className="text-lg font-bold text-[var(--text-primary)]">Escaneando…</p>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">
-              Reclamando vehículo…
-            </p>
-          </div>
-        )}
-
-        {/* ── Success ───────────────────────────────────────── */}
-        {success && !loading && (
-          <div className="py-12 text-center animate-fade-in">
-            <CheckCircle2 className="w-16 h-16 text-[var(--ok)] mx-auto mb-4" />
-            <p className="text-lg font-bold text-[var(--text-primary)] leading-snug">
-              {success}
-            </p>
-          </div>
-        )}
-
-        {/* ── Error ─────────────────────────────────────────── */}
-        {error && !loading && !success && (
-          <div className="w-full flex flex-col items-center gap-3 px-5 py-6 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] animate-fade-in">
-            <AlertCircle className="w-10 h-10 text-[var(--danger-c)]" />
-            <p className="text-sm text-[var(--danger-text)] text-center leading-relaxed">
-              {error}
-            </p>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setError("")}
-              className="mt-1 h-11 rounded-xl font-semibold text-sm"
-            >
-              Reintentar
-            </Button>
-          </div>
-        )}
-
-        {/* ── Main scan UI — hidden during loading/success ──── */}
-        {!loading && !success && (
-          <>
-            {/* Camera viewfinder */}
-            <div
-              id="driver-qr-reader"
-              className={`w-full aspect-square max-w-sm min-h-64 rounded-xl overflow-hidden bg-black border border-[var(--border)] mb-4 shadow-lg ${scanning ? "block" : "hidden"}`}
-            />
-
-            {!scanning ? (
-              <Button
-                variant="accent"
-                onClick={() => void startScanner()}
-                disabled={loading}
-                className="w-full h-14 rounded-xl text-lg font-bold gap-2.5 shadow-md"
-              >
-                <QrCode className="w-5 h-5" />
-                Escanear QR
-              </Button>
+          {/* ── Org logo ──────────────────────────────────────── */}
+          <div className="flex flex-col items-center mb-8">
+            {logoUrl ? (
+              <img src={logoUrl} alt={orgName} className="w-16 h-16 rounded-xl object-contain mb-3" />
             ) : (
-              <Button
-                variant="outline"
-                onClick={stopScanner}
-                className="w-full h-14 rounded-xl text-base font-semibold"
-              >
-                Cancelar escaneo
-              </Button>
-            )}
-
-            {/* ── Manual token input ─────────────────────────── */}
-            <div className="w-full mt-6">
-              <p className="text-xs text-[var(--text-muted)] text-center mb-3">
-                ¿No funciona la cámara? Ingresá la patente del vehículo:
-              </p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={manualToken}
-                    onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-                    onPaste={(e) => {
-                      const pasted = e.clipboardData.getData("text").trim().toUpperCase();
-                      if (pasted) {
-                        e.preventDefault();
-                        setManualToken(pasted);
-                        void handleToken(pasted);
-                      }
-                    }}
-                    placeholder="Ej.: AB100UM"
-                    className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)] transition-shadow"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim());
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handlePasteFromClipboard()}
-                    aria-label="Pegar desde portapapeles"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
-                  >
-                    <ClipboardPaste size={18} />
-                  </button>
-                </div>
-                <Button
-                  onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
-                  disabled={!manualToken.trim() || loading}
-                  variant="accent"
-                  className="h-12 px-5 rounded-xl font-bold text-sm"
-                >
-                  OK
-                </Button>
+              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-2xl mb-3 shadow-lg">
+                {orgName.slice(0, 2).toUpperCase()}
               </div>
+            )}
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">{orgName}</h1>
+            <p className="text-sm text-[var(--text-secondary)] mt-1 text-center">
+              Escaneá el código QR del vehículo para reclamar el viaje.
+            </p>
+          </div>
+
+          {/* ── Loading ───────────────────────────────────────── */}
+          {loading && (
+            <div className="py-10 text-center animate-fade-in">
+              <Loader2 className="w-12 h-12 text-[var(--brand)] animate-spin mx-auto mb-4" />
+              <p className="text-lg font-bold text-[var(--text-primary)]">Escaneando…</p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">Reclamando vehículo…</p>
             </div>
-          </>
-        )}
+          )}
+
+          {/* ── Success ───────────────────────────────────────── */}
+          {success && !loading && (
+            <div className="py-10 text-center animate-fade-in">
+              <CheckCircle2 className="w-16 h-16 text-[var(--ok)] mx-auto mb-4" />
+              <p className="text-lg font-bold text-[var(--text-primary)] leading-snug">{success}</p>
+            </div>
+          )}
+
+          {/* ── Error ─────────────────────────────────────────── */}
+          {error && !loading && !success && (
+            <div className="w-full flex flex-col items-center gap-3 px-5 py-6 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] animate-fade-in">
+              <AlertCircle className="w-10 h-10 text-[var(--danger-c)]" />
+              <p className="text-sm text-[var(--danger-text)] text-center leading-relaxed">{error}</p>
+              <Button variant="outline" size="lg" onClick={() => setError("")} className="mt-1 h-11 rounded-xl font-semibold text-sm">
+                Reintentar
+              </Button>
+            </div>
+          )}
+
+          {/* ── Main scan UI ──────────────────────────────────── */}
+          {!loading && !success && (
+            <>
+              <div
+                id="driver-qr-reader"
+                className={`w-full aspect-square max-w-sm min-h-64 rounded-xl overflow-hidden bg-black border border-[var(--border)] mb-4 shadow-lg ${scanning ? "block" : "hidden"}`}
+              />
+
+              {!scanning ? (
+                <Button variant="accent" onClick={() => void startScanner()} disabled={loading} className="w-full h-14 rounded-xl text-lg font-bold gap-2.5 shadow-md">
+                  <QrCode className="w-5 h-5" />
+                  Escanear QR
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={stopScanner} className="w-full h-14 rounded-xl text-base font-semibold">
+                  Cancelar escaneo
+                </Button>
+              )}
+
+              <div className="w-full mt-6">
+                <p className="text-xs text-[var(--text-muted)] text-center mb-3">
+                  ¿No funciona la cámara? Ingresá la patente del vehículo:
+                </p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value.toUpperCase())}
+                      onPaste={(e) => {
+                        const pasted = e.clipboardData.getData("text").trim().toUpperCase();
+                        if (pasted) { e.preventDefault(); setManualToken(pasted); void handleToken(pasted); }
+                      }}
+                      placeholder="Ej.: AB100UM"
+                      className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
+                      onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handlePasteFromClipboard()}
+                      aria-label="Pegar desde portapapeles"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
+                    >
+                      <ClipboardPaste size={18} />
+                    </button>
+                  </div>
+                  <Button
+                    onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
+                    disabled={!manualToken.trim() || loading}
+                    variant="accent"
+                    className="h-12 px-5 rounded-xl font-bold text-sm"
+                  >
+                    OK
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+        </div>
       </div>
-    </div>
     </DriverShell>
   );
 }
