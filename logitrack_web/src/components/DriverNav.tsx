@@ -1,106 +1,110 @@
-import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { User, LogOut } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface DriverNavProps {
   title: string;
+  subtitle?: string;
 }
 
-export function DriverNav({ title }: DriverNavProps) {
+export function DriverNav({ title, subtitle }: DriverNavProps) {
   const { user, logout } = useAuth();
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
   const logoUrl = org?.logo_url?.trim();
-  const navigate = useNavigate();
-
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("click", onClick);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("click", onClick);
-    };
-  }, [menuOpen]);
 
   if (!user) return null;
 
-  const initials = user.username.slice(0, 2).toUpperCase();
-  const roleLabel = user.driver_type === "intersucursal" ? "Chofer Intersucursal" : "Chofer";
+  const isInterBranch = user.driver_type === "intersucursal";
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      "no-underline font-semibold text-base py-2",
+      isActive ? "text-[var(--brand)]" : "text-[var(--text-secondary)]"
+    );
+
+  const roleLabel = isInterBranch ? "Chofer Intersucursal" : "Chofer";
 
   return (
-    <header className="sticky top-0 z-50 h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3">
-      {/* Left: org logo */}
-      {logoUrl ? (
-        <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10" />
-      ) : (
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
-          {orgName.slice(0, 2).toUpperCase()}
-        </div>
-      )}
-
-      {/* Center: page title */}
-      <h1 className="flex-1 text-center text-[15px] font-bold text-white leading-tight truncate">
-        {title}
-      </h1>
-
-      {/* Right: avatar → dropdown */}
-      <div className="relative shrink-0" ref={menuRef}>
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className="min-h-[44px] min-w-[44px] rounded-full bg-[var(--brand)] flex items-center justify-center text-white font-bold text-sm cursor-pointer border-0"
-          aria-label="Abrir menú de usuario"
-        >
-          {initials}
-        </button>
-
-        {menuOpen && (
-          <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-xl z-50 overflow-hidden">
-            {/* Header: nombre + rol + org */}
-            <div className="px-4 py-3 border-b border-[var(--border)]">
-              <p className="text-sm font-bold text-[var(--text-primary)]">{user.username}</p>
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5">{roleLabel}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">{orgName}</p>
-            </div>
-
-            {/* Theme toggle */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)]">
-              <span className="text-sm text-[var(--text-primary)]">Modo oscuro</span>
-              <ThemeToggle compact />
-            </div>
-
-            {/* Mi perfil */}
-            <button
-              onClick={() => { setMenuOpen(false); navigate("/profile"); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-colors"
-            >
-              <User size={16} className="text-[var(--text-secondary)]" />
-              Mi perfil
-            </button>
-
-            {/* Separator + logout */}
-            <div className="border-t border-[var(--border)]">
-              <button
-                onClick={() => { setMenuOpen(false); logout(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-colors"
-              >
-                <LogOut size={16} />
-                Cerrar sesión
-              </button>
-            </div>
-          </div>
+    <>
+      <header
+        className={cn(
+          "sticky top-0 z-50 h-14",
+          "bg-[var(--topbar-bg)]",
+          "backdrop-saturate-[1.8] backdrop-blur-lg",
+          "border-b border-[var(--border)]",
+          "grid grid-cols-[1fr_auto_1fr] items-center gap-4",
+          "px-4"
         )}
-      </div>
-    </header>
+      >
+        {/* Left: org logo or name */}
+        <div className="flex items-center min-w-0">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={orgName}
+              className="h-7 w-auto rounded"
+            />
+          ) : (
+            <span className="font-extrabold text-[15px] tracking-[1px] text-[var(--text-primary)]">
+              {orgName}
+            </span>
+          )}
+        </div>
+
+        {/* Center: page title + optional subtitle */}
+        <div className="min-w-0 flex flex-col items-center">
+          <h1 className="text-[15px] font-bold text-[var(--text-primary)] leading-tight truncate max-w-[180px] sm:max-w-[320px]">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="text-[11px] text-[var(--text-muted)] truncate">
+              {subtitle}
+            </p>
+          )}
+        </div>
+
+        {/* Right: ThemeToggle + username badge + logout */}
+        <div className="flex items-center gap-2 justify-end">
+          <ThemeToggle compact />
+          <NavLink to="/profile" className="no-underline">
+            <span className="text-[13px] text-[var(--text-secondary)]">
+              <strong className="text-[var(--text-strong)] font-semibold">
+                {user.username}
+              </strong>
+              {" · "}
+              <span className="bg-[var(--bg-muted)] text-[var(--text-muted)] px-2 py-0.5 rounded-[10px] text-xs">
+                {roleLabel}
+              </span>
+            </span>
+          </NavLink>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={logout}
+            className="min-h-11 min-w-11 border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] rounded-md"
+            title="Cerrar sesión"
+          >
+            <LogOut size={18} />
+          </Button>
+        </div>
+      </header>
+
+      {/* Navigation links */}
+      <nav className="bg-[var(--bg-card)] border-b border-[var(--border)] px-4">
+        {isInterBranch ? (
+          <NavLink to="/driver/trip" className={linkClass}>
+            Mi viaje
+          </NavLink>
+        ) : (
+          <NavLink to="/driver/route" className={linkClass}>
+            Mi ruta
+          </NavLink>
+        )}
+      </nav>
+    </>
   );
 }

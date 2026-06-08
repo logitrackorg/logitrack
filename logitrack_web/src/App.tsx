@@ -1,15 +1,10 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ToastContainer } from "./components/Toast";
 import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
-import { OrganizationThemeProvider, useOrganizationTheme } from "./context/OrganizationThemeContext";
-import { LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { useIsMobile } from "./hooks/useIsMobile";
+import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./components/Sidebar";
 import { useSidebarOffset } from "./components/sidebarLayout";
@@ -59,62 +54,6 @@ import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
 import { NetworkHub } from "./pages/NetworkHub";
 
-function DriverNav() {
-  const { user, logout } = useAuth();
-  const { config: org } = useOrganizationTheme();
-  const orgName = org?.name?.trim() || "LogiTrack";
-  const logoUrl = org?.logo_url?.trim();
-  const isMobile = useIsMobile();
-  if (!user) return null;
-
-  const isInterBranch = user.driver_type === "intersucursal";
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    cn("no-underline font-semibold text-base py-2", isActive ? "text-blue-300" : "text-slate-300");
-
-  return (
-    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-4 gap-3 min-h-[56px] py-2">
-      {logoUrl ? (
-        <img src={logoUrl} alt={orgName} className="h-7 w-auto rounded" />
-      ) : (
-        <span className="font-extrabold text-[15px] tracking-[1px]">{orgName}</span>
-      )}
-      {isInterBranch ? (
-        <NavLink to="/driver/trip" className={linkClass}>Mi viaje</NavLink>
-      ) : (
-        <NavLink to="/driver/route" className={linkClass}>Mi ruta</NavLink>
-      )}
-
-      <div className="ml-auto flex items-center gap-2">
-        <ThemeToggle compact />
-        {isMobile ? (
-          <NavLink to="/profile" className="no-underline">
-            <span className="text-sm text-slate-200 font-semibold">{user.username}</span>
-          </NavLink>
-        ) : (
-          <NavLink to="/profile" className="no-underline">
-            <span className="text-[13px] text-slate-400 cursor-pointer">
-              <strong className="text-slate-200 font-semibold">{user.username}</strong>
-              {" · "}
-              <span className="text-slate-500 bg-[#0f2744] px-2 py-0.5 rounded-[10px] text-xs">
-                {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
-              </span>
-            </span>
-          </NavLink>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={logout}
-          className="min-h-11 min-w-11 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md"
-          title="Cerrar sesión"
-        >
-          <LogOut size={18} />
-        </Button>
-      </div>
-    </nav>
-  );
-}
-
 /** Layout wrapper for non-driver roles: sidebar (fixed) + topbar (sticky) + main with left offset. */
 function AppShell({ children }: { children: React.ReactNode }) {
   const offset = useSidebarOffset();
@@ -143,41 +82,15 @@ function AppRoutes() {
   if (user?.role === "driver") {
     const isInterBranch = user.driver_type === "intersucursal";
     const defaultPath = isInterBranch ? "/driver/scan" : "/driver/route";
-
     return (
-      <>
-        <DriverNav />
-        <main>
-          <Routes>
-            <Route path="/driver/route" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverRoute />
-              </ProtectedRoute>
-            } />
-            <Route path="/driver/trip" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverInterBranchTrip />
-              </ProtectedRoute>
-            } />
-            <Route path="/driver/scan" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverScanVehicle />
-              </ProtectedRoute>
-            } />
-            <Route path="/shipments/:trackingId" element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverShipmentDetail />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute roles={["driver"]}>
-                <UserProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to={defaultPath} replace />} />
-          </Routes>
-        </main>
-      </>
+      <Routes>
+        <Route path="/driver/route" element={<ProtectedRoute roles={["driver"]}><DriverRoute /></ProtectedRoute>} />
+        <Route path="/driver/trip" element={<ProtectedRoute roles={["driver"]}><DriverInterBranchTrip /></ProtectedRoute>} />
+        <Route path="/driver/scan" element={<ProtectedRoute roles={["driver"]}><DriverScanVehicle /></ProtectedRoute>} />
+        <Route path="/shipments/:trackingId" element={<ProtectedRoute roles={["driver"]}><DriverShipmentDetail /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute roles={["driver"]}><UserProfile /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to={defaultPath} replace />} />
+      </Routes>
     );
   }
 
