@@ -118,6 +118,25 @@ export function Sidebar() {
   const orgName = config?.name?.trim() || "LogiTrack";
   const isMobile = useIsMobile();
 
+  // Detect sidebar background luminance to pick light/dark text
+  const [sidebarDark, setSidebarDark] = useState(true);
+  useEffect(() => {
+    const el = document.documentElement;
+    const bg = getComputedStyle(el).getPropertyValue("--sidebar-bg").trim();
+    if (!bg) return;
+    const hex = bg.startsWith("#") ? bg : null;
+    if (hex && hex.length >= 7) {
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const g = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      const lr = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+      const lg = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+      const lb = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+      const lum = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+      setSidebarDark(lum < 0.5);
+    }
+  }, [config?.sidebar_color]);
+
   // Pinned (persisted) — true = always expanded, false = rail mode
   const [pinned, setPinned] = useState<boolean>(readPinnedFlag);
   // Hovered — expand on hover only when not pinned
@@ -192,6 +211,7 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside
+        data-sidebar-dark={sidebarDark}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         aria-expanded={expanded}

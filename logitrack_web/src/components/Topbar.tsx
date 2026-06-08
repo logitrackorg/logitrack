@@ -1,9 +1,26 @@
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { NotificationBell } from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useTopbarSlotRef } from "../hooks/useTopbarSlot";
 import { cn } from "../lib/utils";
+
+function titleForPath(pathname: string): string {
+  const found = ROUTE_TITLES.find((r) => r.match.test(pathname));
+  return found?.title ?? "";
+}
+
+function subtitleForPath(pathname: string, role: string): string {
+  if (pathname === "/" || pathname.startsWith("/shipments")) return role === "manager" ? "Todos los envíos" : "Envíos de tu sucursal";
+  if (pathname.startsWith("/dashboard")) return "Métricas y KPIs";
+  if (pathname.startsWith("/vehicles")) return "Gestión de flota";
+  if (pathname.startsWith("/branches")) return "Sucursales activas";
+  if (pathname.startsWith("/admin/users")) return "Gestión de cuentas";
+  if (pathname.startsWith("/repartos")) return "Planificación de última milla";
+  if (pathname.startsWith("/inter-sucursal")) return "Despachos entre sucursales";
+  return "";
+}
 
 /** Mapa de rutas → título legible para mostrar a la izquierda del topbar. */
 const ROUTE_TITLES: Array<{ match: RegExp; title: string }> = [
@@ -33,11 +50,6 @@ const ROUTE_TITLES: Array<{ match: RegExp; title: string }> = [
   { match: /^\/$/,                    title: "Envíos" },
 ];
 
-function titleForPath(pathname: string): string {
-  const found = ROUTE_TITLES.find((r) => r.match.test(pathname));
-  return found?.title ?? "";
-}
-
 /**
  * Topbar slim que se renderiza dentro del wrapper del AppShell — el offset
  * horizontal (sidebar) lo maneja el wrapper, no este componente.
@@ -49,7 +61,9 @@ function titleForPath(pathname: string): string {
 export function Topbar() {
   const isMobile = useIsMobile();
   const location = useLocation();
+  const { user } = useAuth();
   const title = titleForPath(location.pathname);
+  const subtitle = user ? subtitleForPath(location.pathname, user.role) : "";
   const registerSlot = useTopbarSlotRef();
 
   return (
@@ -63,9 +77,14 @@ export function Topbar() {
         isMobile ? "pr-3 pl-[60px]" : "px-6",
       )}
     >
-      <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[280px]">
-        {title}
-      </h1>
+      <div className="min-w-0">
+        <h1 className="text-[15px] font-bold text-[var(--text-heading)] m-0 truncate max-w-[180px] sm:max-w-[280px] leading-tight">
+          {title}
+        </h1>
+        {subtitle && !isMobile && (
+          <p className="text-[11px] text-[var(--text-muted)] m-0 truncate">{subtitle}</p>
+        )}
+      </div>
 
       {/* Slot para acciones de la página activa (portal target) */}
       <div
