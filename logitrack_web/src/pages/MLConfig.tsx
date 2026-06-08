@@ -281,8 +281,7 @@ export function MLConfig() {
           <button
             onClick={handleRegenerate}
             disabled={saving}
-            className="rounded-md px-6 py-2.5 font-semibold text-sm text-white cursor-pointer transition-colors disabled:cursor-not-allowed"
-            style={{ background: saving ? "var(--text-muted)" : "var(--sidebar-bg)" }}
+            className={`rounded-md px-6 py-2.5 font-semibold text-sm text-white cursor-pointer transition-colors disabled:cursor-not-allowed ${saving ? "bg-[var(--text-muted)]" : "bg-[var(--sidebar-bg)]"}`}
           >
             {saving ? "Regenerando modelo..." : "Regenerar modelo"}
           </button>
