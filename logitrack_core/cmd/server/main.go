@@ -252,7 +252,7 @@ func main() {
 	} else {
 		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
 	}
-	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
+	twoFAService := service.NewTwoFAService(twoFARepo, authRepo, sysConfigRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
 	shipmentSvc.SetRouteService(routeSvc)

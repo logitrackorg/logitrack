@@ -624,8 +624,16 @@ func RunMigrations(db *sql.DB) error {
 
 		-- data/migrations/XXXX_add_2fa_cooldown_config.sql
 
-		ALTER TABLE system_config 
+		ALTER TABLE system_config
 		ADD COLUMN IF NOT EXISTS two_fa_cooldown_minutes INTEGER NOT NULL DEFAULT 1;
+
+		-- Lockout por intentos fallidos de 2FA (login)
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+		-- Lockout por intentos fallidos de 2FA (setup)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_locked_until TIMESTAMPTZ;
 
 		-- Constraint: rango 1-10 minutos
 		DO $$
