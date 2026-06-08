@@ -480,19 +480,20 @@ function DeliverSheet({
       </p>
 
       <div className="flex flex-col gap-2 mt-5">
-        <button
+        <Button
           onClick={onConfirm}
           disabled={!dni.trim() || submitting}
-          className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
+          className="w-full h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={onClose}
-          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+          className="w-full h-14 rounded-xl text-base font-semibold"
         >
           Cancelar
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );
@@ -563,19 +564,21 @@ function FailedSheet({
       />
 
       <div className="flex flex-col gap-2 mt-5">
-        <button
+        <Button
+          variant="destructive"
           onClick={onConfirm}
           disabled={!canSubmit || submitting}
-          className="w-full h-14 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
+          className="w-full h-14 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar"}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={onClose}
-          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+          className="w-full h-14 rounded-xl text-base font-semibold"
         >
           Cancelar
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );
@@ -646,19 +649,20 @@ function RejectedSheet({
       />
 
       <div className="flex flex-col gap-2 mt-5">
-        <button
+        <Button
           onClick={onConfirm}
           disabled={!canSubmit || submitting}
-          className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold cursor-pointer disabled:cursor-not-allowed active:scale-95 transition-all"
+          className="w-full h-14 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-[var(--bg-muted)] disabled:text-[var(--text-muted)] text-white text-lg font-bold disabled:cursor-not-allowed active:scale-95 transition-all"
         >
           {submitting ? "Guardando…" : "Confirmar rechazo"}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           onClick={onClose}
-          className="w-full h-14 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] text-[var(--text-strong)] text-base font-semibold cursor-pointer transition-colors"
+          className="w-full h-14 rounded-xl text-base font-semibold"
         >
           Cancelar
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );
