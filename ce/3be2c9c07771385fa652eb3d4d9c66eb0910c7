@@ -1,0 +1,19 @@
+amplify.yml
+  s_7e9c58b8da512f::t_7fecedec028cba 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ce3be2c9c07771385fa652eb3d4d9c66eb0910c7",
+  "prompts": {},
+  "sessions": {
+    "s_7e9c58b8da512f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "82a1d755-a6bd-4043-8feb-1ecf860eceeb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
