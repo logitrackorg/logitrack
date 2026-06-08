@@ -43,7 +43,7 @@ export default function DriverScanVehicle() {
 
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);
-    setTimeout(() => navigate("/driver/route"), 900);
+    navigate("/driver/route", { replace: true });
   };
 
   // Realiza el claim del token (QR o patente) y navega a la pantalla
@@ -59,13 +59,11 @@ export default function DriverScanVehicle() {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
       if (trip.kind === "last_mile") {
-        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget;
-        // la navegación tiene 900 ms de delay, más que suficiente para que complete.
+        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget.
         driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
-        setSuccess(`Vehículo ${trip.license_plate} asignado. Redirigiendo…`);
-        setTimeout(() => navigate("/driver/trip"), 900);
+        navigate("/driver/trip", { replace: true });
       }
     } catch (err: unknown) {
       const msg =
