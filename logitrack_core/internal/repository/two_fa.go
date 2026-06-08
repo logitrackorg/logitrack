@@ -114,10 +114,11 @@ func (r *twoFARepository) CreatePendingSession(ctx context.Context, userID strin
 func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token string) (model.User, error) {
 	var user model.User
 	var twoFAEnrolledAt sql.NullTime
-	
+	var email, phone, branchID, driverType sql.NullString
+
 	err := r.db.QueryRowContext(ctx,
 		`SELECT u.id, u.username, u.first_name, u.last_name, u.email, u.phone,
-		        u.role, u.branch_id, u.status, u.driver_type, 
+		        u.role, u.branch_id, u.status, u.driver_type,
 		        u.two_fa_enabled, u.two_fa_enrolled_at
 		FROM users u
 		INNER JOIN two_fa_pending_sessions s ON s.user_id = u.id
@@ -125,8 +126,8 @@ func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token str
 		token,
 	).Scan(
 		&user.ID, &user.Username, &user.FirstName, &user.LastName,
-		&user.Email, &user.Phone, &user.Role, &user.BranchID,
-		&user.Status, &user.DriverType, &user.TwoFAEnabled, &twoFAEnrolledAt,
+		&email, &phone, &user.Role, &branchID,
+		&user.Status, &driverType, &user.TwoFAEnabled, &twoFAEnrolledAt,
 	)
 	
 	if err != nil {
@@ -136,10 +137,22 @@ func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token str
 		return model.User{}, err
 	}
 	
+	if email.Valid {
+		user.Email = email.String
+	}
+	if phone.Valid {
+		user.Phone = phone.String
+	}
+	if branchID.Valid {
+		user.BranchID = branchID.String
+	}
+	if driverType.Valid {
+		user.DriverType = model.DriverType(driverType.String)
+	}
 	if twoFAEnrolledAt.Valid {
 		user.TwoFAEnrolledAt = &twoFAEnrolledAt.Time
 	}
-	
+
 	return user, nil
 }
 

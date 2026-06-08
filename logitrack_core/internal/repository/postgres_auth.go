@@ -151,11 +151,12 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 	var id, role, status, firstName, lastName, passwordHash string
 	var email, addressJSON, branchID, updatedBy, driverType sql.NullString
 	var updatedAt sql.NullTime
+	var twoFAEnabled bool
 	row := r.db.QueryRow(
-		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type, password FROM users WHERE username = $1`,
+		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type, password, two_fa_enabled FROM users WHERE username = $1`,
 		username,
 	)
-	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType, &passwordHash)
+	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType, &passwordHash, &twoFAEnabled)
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
@@ -196,6 +197,8 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 			u.Address = &addr
 		}
 	}
+
+	u.TwoFAEnabled = twoFAEnabled
 
 	if u.Status == model.UserStatusInactive {
 		return model.User{}, ErrAccountInactive
