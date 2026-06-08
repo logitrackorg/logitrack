@@ -60,12 +60,18 @@ const SECTIONS: NavSection[] = [
     title: "Operación",
     items: [
       { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
-      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
       { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor"] },
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/calendar", label: "Calendario", icon: Calendar, roles: ["operator", "supervisor", "manager"] },
+      { to: "/bulk-upload", label: "Importar CSV", icon: Upload, roles: ["operator", "supervisor"] },
+    ],
+  },
+  {
+    title: "Monitoreo",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
+      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
       { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
       { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["admin", "operator", "supervisor", "manager"] },
       { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
@@ -77,7 +83,6 @@ const SECTIONS: NavSection[] = [
       { to: "/vehicles", label: "Flota", icon: Truck, roles: ["operator", "supervisor", "manager", "admin"] },
       { to: "/branches", label: "Sucursales", icon: Building2, roles: ["supervisor", "manager", "admin"] },
       { to: "/supervisor/fatigue", label: "Fatiga", icon: Activity, roles: ["supervisor", "manager"] },
-      { to: "/bulk-upload", label: "Importar CSV", icon: Upload, roles: ["operator", "supervisor"] },
     ],
   },
   {
