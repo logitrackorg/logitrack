@@ -261,8 +261,8 @@ export function Sidebar() {
               key={section.title}
               className={idx === visibleSections.length - 1 ? "" : "mb-1"}
             >
-              {/* Section titles only when pinned or mobile — not on hover to avoid shifting items */}
-              {(pinned || isMobile) && expanded ? (
+              {/* Section titles visible whenever expanded, divider when collapsed */}
+              {expanded ? (
                 <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-white/40 whitespace-nowrap">
                   {section.title}
                 </div>
