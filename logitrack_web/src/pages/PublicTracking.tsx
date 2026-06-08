@@ -22,6 +22,7 @@ import {
 import { fmtDateTime, fmtRelative, fmtDate } from "../utils/date";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -497,6 +498,10 @@ export function PublicTracking() {
           HEADER — branded strip like Login left panel
           ═══════════════════════════════════════════════════════════ */}
       <header className="relative bg-blue-950 overflow-hidden px-4 pb-10 pt-8">
+        {/* Theme toggle — top right */}
+        <div className="absolute top-3 right-3 z-10">
+          <ThemeToggle />
+        </div>
         {/* Grid decorativo */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
@@ -655,7 +660,7 @@ export function PublicTracking() {
               </CardContent>
             </Card>
 
-            {/* ⚠️ Return banner */}
+            {/* <AlertTriangle size={14} className="inline text-amber-500" /> Return banner */}
             {shipment.is_returning && shipment.status !== "returned" && (
               <AlertBanner
                 variant="warning"
@@ -664,7 +669,7 @@ export function PublicTracking() {
               />
             )}
 
-            {/* ⚠️ Delivery attempts banner */}
+            {/* <AlertTriangle size={14} className="inline text-amber-500" /> Delivery attempts banner */}
             {(shipment.delivery_attempts ?? 0) > 0 &&
              shipment.status !== "delivered" &&
              shipment.status !== "returned" && (

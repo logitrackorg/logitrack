@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, X as XIcon } from "lucide-react";
 import { AddressAutocomplete } from "../components/AddressAutocomplete";
 import { adminApi, type UserUpdatePayload, type UserCreatePayload } from "../api/admin";
 import { branchApi, type Branch } from "../api/branches";
@@ -361,7 +361,7 @@ export function AdminUsers() {
           <div className="bg-[var(--bg-card)] rounded-xl p-7 w-[520px] max-w-[95vw] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="m-0 text-[1.05rem] text-[var(--text-heading)]">Editar usuario</h2>
-              <button onClick={closeEdit} className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)] leading-none">✕</button>
+              <button onClick={closeEdit} className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)] leading-none"><XIcon size={18} /></button>
             </div>
 
             <div className="bg-[var(--bg-page)] rounded-lg py-2 px-3.5 mb-5 flex items-center gap-2.5">
@@ -489,7 +489,7 @@ export function AdminUsers() {
           <div className="bg-[var(--bg-card)] rounded-xl p-7 w-[520px] max-w-[95vw] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h2 className="m-0 text-[1.05rem] text-[var(--text-heading)]">Nuevo usuario</h2>
-              <button onClick={() => setShowCreate(false)} className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)] leading-none">✕</button>
+              <button onClick={() => setShowCreate(false)} className="bg-transparent border-none text-[22px] cursor-pointer text-[var(--text-secondary)] leading-none"><XIcon size={18} /></button>
             </div>
 
             <SectionTitle>Datos de acceso</SectionTitle>

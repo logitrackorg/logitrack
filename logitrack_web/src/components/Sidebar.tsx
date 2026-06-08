@@ -60,14 +60,19 @@ const SECTIONS: NavSection[] = [
     title: "Operación",
     items: [
       { to: "/", label: "Envíos", icon: Package, roles: ["operator", "supervisor", "manager"], end: true },
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
-      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
       { to: "/repartos", label: "Repartos", icon: Send, roles: ["operator", "supervisor"] },
       { to: "/inter-sucursal", label: "Inter-sucursal", icon: RouteIcon, roles: ["operator", "supervisor"] },
       { to: "/viajes", label: "Viajes", icon: Truck, roles: ["operator", "supervisor", "manager"] },
       { to: "/calendar", label: "Calendario", icon: Calendar, roles: ["operator", "supervisor", "manager"] },
-      { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
-      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["admin", "operator", "supervisor", "manager"] },
+      { to: "/bulk-upload", label: "Importar CSV", icon: Upload, roles: ["operator", "supervisor"] },
+    ],
+  },
+  {
+    title: "Monitoreo",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
+      { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
+      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
       { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
     ],
   },
@@ -77,12 +82,12 @@ const SECTIONS: NavSection[] = [
       { to: "/vehicles", label: "Flota", icon: Truck, roles: ["operator", "supervisor", "manager", "admin"] },
       { to: "/branches", label: "Sucursales", icon: Building2, roles: ["supervisor", "manager", "admin"] },
       { to: "/supervisor/fatigue", label: "Fatiga", icon: Activity, roles: ["supervisor", "manager"] },
-      { to: "/bulk-upload", label: "Importar CSV", icon: Upload, roles: ["operator", "supervisor"] },
     ],
   },
   {
     title: "Administración",
     items: [
+      { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
       { to: "/admin/users", label: "Usuarios", icon: Users, roles: ["admin"] },
       { to: "/organization", label: "Organización", icon: Briefcase, roles: ["admin"] },
       { to: "/zones", label: "Zonas", icon: Map, roles: ["admin"] },
@@ -117,6 +122,25 @@ export function Sidebar() {
   const logoUrl = config?.logo_url?.trim();
   const orgName = config?.name?.trim() || "LogiTrack";
   const isMobile = useIsMobile();
+
+  // Detect sidebar background luminance to pick light/dark text
+  const [sidebarDark, setSidebarDark] = useState(true);
+  useEffect(() => {
+    const el = document.documentElement;
+    const bg = getComputedStyle(el).getPropertyValue("--sidebar-bg").trim();
+    if (!bg) return;
+    const hex = bg.startsWith("#") ? bg : null;
+    if (hex && hex.length >= 7) {
+      const r = parseInt(hex.slice(1, 3), 16) / 255;
+      const g = parseInt(hex.slice(3, 5), 16) / 255;
+      const b = parseInt(hex.slice(5, 7), 16) / 255;
+      const lr = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+      const lg = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+      const lb = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+      const lum = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+      setSidebarDark(lum < 0.5);
+    }
+  }, [config?.sidebar_color]);
 
   // Pinned (persisted) — true = always expanded, false = rail mode
   const [pinned, setPinned] = useState<boolean>(readPinnedFlag);
@@ -192,6 +216,7 @@ export function Sidebar() {
 
       {/* Sidebar */}
       <aside
+        data-sidebar-dark={sidebarDark}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         aria-expanded={expanded}
@@ -218,7 +243,7 @@ export function Sidebar() {
               </div>
             )}
             {expanded && (
-              <span className="font-extrabold text-[15px] tracking-[0.5px] text-slate-200 whitespace-nowrap">
+              <span className="font-extrabold text-[15px] tracking-[0.5px] text-white/90 truncate" title={orgName}>
                 {orgName}
               </span>
             )}
@@ -241,13 +266,13 @@ export function Sidebar() {
               key={section.title}
               className={idx === visibleSections.length - 1 ? "" : "mb-1"}
             >
-              {/* Section titles only when pinned or mobile — not on hover to avoid shifting items */}
-              {(pinned || isMobile) && expanded ? (
-                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-slate-500 whitespace-nowrap">
+              {/* Section titles visible whenever expanded, divider when collapsed */}
+              {expanded ? (
+                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-white/40 whitespace-nowrap">
                   {section.title}
                 </div>
               ) : idx > 0 ? (
-                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" />
+                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" title={section.title} />
               ) : null}
               {section.items.map((item) => (
                 <SidebarLink
@@ -272,8 +297,8 @@ export function Sidebar() {
             <button
               onClick={() => setPinned((v) => !v)}
               title={pinned ? "Contraer menú" : "Fijar menú expandido"}
-              className={`bg-transparent border-0 text-slate-500 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-slate-300 ${
-                expanded ? "justify-start" : "justify-center"
+              className={`bg-transparent border-0 text-white/50 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-white/10 hover:text-white/80 ${
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`}
             >
               {pinned ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
@@ -286,8 +311,8 @@ export function Sidebar() {
             to="/profile"
             onClick={isMobile ? closeMobile : undefined}
             className={
-              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-black/20 text-slate-300 transition-colors duration-150 hover:bg-black/30 ${
-                expanded ? "justify-start" : "justify-center"
+              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-white/10 text-white/80 transition-colors duration-150 hover:bg-white/15 ${
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`
             }
           >
@@ -296,10 +321,10 @@ export function Sidebar() {
             </div>
             {expanded && (
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                <div className="text-[13px] font-semibold text-white/90 whitespace-nowrap overflow-hidden text-ellipsis">
                   {user.username}
                 </div>
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-white/50">
                   {ROLE_LABELS[user.role] ?? user.role}
                 </div>
               </div>
@@ -310,9 +335,9 @@ export function Sidebar() {
           <button
             onClick={logout}
             title="Cerrar sesión"
-            className={`bg-transparent border border-[var(--sidebar-bg)] text-slate-400 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-[var(--sidebar-bg)] hover:text-red-300 ${
-              expanded ? "justify-start" : "justify-center"
-            }`}
+className={`bg-transparent border border-white/10 text-white/40 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-white/5 hover:text-red-300 ${
+                expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
+              }`}
           >
             <LogOut size={16} />
             {expanded && <span>Cerrar sesión</span>}
@@ -346,9 +371,9 @@ function SidebarLink({
           ? "py-2.5 px-5 justify-start"
           : "py-2.5 px-0 justify-center";
         if (isActive) {
-          return `${base} ${pad} no-underline text-slate-200 font-semibold bg-[var(--sidebar-bg)] border-l-[3px] border-[var(--brand-400)]`;
+          return `${base} ${pad} no-underline text-white font-semibold bg-white/5 border-l-[3px] border-[var(--brand-400)]`;
         }
-        return `${base} ${pad} no-underline text-slate-400 font-medium hover:bg-[var(--sidebar-hover)] hover:text-slate-200`;
+        return `${base} ${pad} no-underline text-white/60 font-medium hover:bg-[var(--sidebar-hover)] hover:text-white`;
       }}
     >
       <Icon size={18} strokeWidth={2} />

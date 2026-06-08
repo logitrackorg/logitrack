@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Check, Tag, AlertCircle, Info } from "lucide-react";
+import { Loader2, Check, Tag, AlertCircle, Info, X } from "lucide-react";
 import type { SaveDraftPayload } from "../../../api/shipments";
 import { shipmentApi } from "../../../api/shipments";
 import type { Branch } from "../../../api/branches";
@@ -40,7 +40,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
         </button>
         <button type="button" onClick={onDismiss}
           className="bg-transparent text-[var(--text-secondary)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 cursor-pointer text-xs">
-          ✕
+          <X size={14} />
         </button>
       </div>
     </div>

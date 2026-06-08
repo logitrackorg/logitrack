@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, RefreshCw } from "lucide-react";
+import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, Paperclip, RefreshCw } from "lucide-react";
 import {
   claimsApi,
   CLAIM_EVENT_LABELS,
@@ -632,7 +632,7 @@ export function Claims() {
                                         }
                                       }}
                                     >
-                                      📎 Descargar adjunto: {ev.evidence_file_name}
+                                      <Paperclip size={14} className="inline mr-1" /> Descargar adjunto: {ev.evidence_file_name}
                                     </button>
                                   </div>
                                 )}

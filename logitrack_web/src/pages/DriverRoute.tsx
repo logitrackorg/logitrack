@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Film,
   MapPin,
   Package,
   Truck,
@@ -435,7 +436,7 @@ export function DriverRoute() {
                 title="Activar simulación GPS"
                 className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
               >
-                🎬
+                <Film size={16} />
               </button>
             )}
 
@@ -445,7 +446,7 @@ export function DriverRoute() {
                 title="Zona peligrosa activa"
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
               >
-                ⚠️ Zona
+                <AlertTriangle size={12} className="mr-0.5" /> Zona
               </span>
             )}
             <RouteStatusPill status={routeStatus} />
@@ -983,7 +984,7 @@ function DeliverSheet({
       {isLastMile && useContingency && (
         <>
           <div className="mb-3 rounded-xl bg-amber-50 border border-amber-300 px-4 py-3">
-            <p className="text-xs font-bold text-amber-800">⚠️ Entrega de contingencia</p>
+            <p className="text-xs font-bold text-amber-800"><AlertTriangle size={14} className="inline text-amber-500" /> Entrega de contingencia</p>
             <p className="text-[11px] text-amber-700 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
           </div>
           <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
