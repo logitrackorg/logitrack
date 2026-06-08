@@ -356,6 +356,7 @@ function toneGradient(tone: StatusTone): string {
 
 export function PublicTracking() {
   const { config: org } = useOrganizationTheme();
+  const orgName = org?.name?.trim() || "LogiTrack";
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("id") ?? "");
   const [shipment, setShipment] = useState<PublicShipment | null>(null);
@@ -519,9 +520,7 @@ export function PublicTracking() {
             />
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className="font-black text-xl tracking-tight text-[var(--text-heading)] max-sm:text-lg">
-                LogiTrack
-              </span>
+              <span className="font-bold text-[var(--text-heading)] text-lg tracking-tight">{orgName}</span>
               <span className="text-[var(--text-muted)] text-sm max-sm:text-xs">
                 · Seguimiento
               </span>
@@ -537,7 +536,7 @@ export function PublicTracking() {
 
       {/* ── Hero / Search ── */}
       <section className="bg-gradient-to-br from-[var(--brand)] to-[var(--brand-strong)] px-4 py-14 text-center max-sm:py-10">
-        <h1 className="text-white text-3xl font-extrabold mb-2 tracking-tight max-sm:text-2xl">
+        <h1 className="text-white text-4xl font-bold mb-2 tracking-tight leading-[1.15] max-sm:text-2xl">
           ¿Dónde está mi envío?
         </h1>
         <p className="text-white/80 text-base mb-7 max-sm:text-sm max-sm:mb-5">
