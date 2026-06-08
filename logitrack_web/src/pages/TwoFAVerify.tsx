@@ -30,9 +30,9 @@ export const TwoFAVerify: React.FC = () => {
   const attemptsRef = useRef(MAX_ATTEMPTS);
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
 
-  // Lockout: timestamp absoluto en un ref, re-renders forzados por ticker
+  // Lockout: timestamp absoluto en un ref, countdown en state actualizado por ticker
   const lockoutUntilRef = useRef(0);
-  const [, setTick] = useState(0); // solo para forzar re-renders
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,24 +44,27 @@ export const TwoFAVerify: React.FC = () => {
     if (!sessionToken) navigate('/login');
   }, [sessionToken, navigate]);
 
-  // Ticker global: fuerza re-render cada segundo y limpia el lockout al expirar
+  // Ticker global: actualiza countdown cada segundo y limpia el lockout al expirar
   useEffect(() => {
-    const id = setInterval(() => {
-      if (lockoutUntilRef.current > 0 && Date.now() >= lockoutUntilRef.current) {
-        lockoutUntilRef.current = 0;
-        setError('');
-        attemptsRef.current = MAX_ATTEMPTS;
-        setAttemptsLeft(MAX_ATTEMPTS);
+    const tick = () => {
+      if (lockoutUntilRef.current > 0) {
+        const now = Date.now();
+        if (now >= lockoutUntilRef.current) {
+          lockoutUntilRef.current = 0;
+          setLockoutRemaining(0);
+          setError('');
+          attemptsRef.current = MAX_ATTEMPTS;
+          setAttemptsLeft(MAX_ATTEMPTS);
+        } else {
+          setLockoutRemaining(Math.ceil((lockoutUntilRef.current - now) / 1000));
+        }
       }
-      setTick(t => t + 1);
-    }, 1000);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Derivado en el render — siempre fresco
-  const lockoutRemaining = lockoutUntilRef.current > 0
-    ? Math.max(0, Math.ceil((lockoutUntilRef.current - Date.now()) / 1000))
-    : 0;
   const isLocked = lockoutRemaining > 0;
 
   const handleVerify = async () => {
