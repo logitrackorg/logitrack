@@ -20,11 +20,35 @@ import {
   validatePublicClaimForm,
 } from "../utils/publicClaimForm";
 import { fmtDateTime, fmtRelative } from "../utils/date";
-import "./PublicTracking.css";
 import { ChatbotWidget } from "../components/chatbot/ChatbotWidget";
+import {
+  Package,
+  Truck,
+  CheckCircle2,
+  Ban,
+  Search,
+  AlertTriangle,
+  Bike,
+  Rocket,
+  Inbox,
+  UserX,
+  RefreshCw,
+  ClipboardList,
+  Factory,
+  Undo2,
+  Flame,
+  Reply,
+  Repeat,
+  ReceiptText,
+  MapPin,
+  Circle,
+  PartyPopper,
+  ArrowRight,
+  CornerUpLeft,
+} from "lucide-react";
+import type { ReactNode } from "react";
 
-// User-facing one-liner explanation for each status. Shown under the badge in
-// the summary card. Friendlier than the operational labels in StatusBadge.
+// User-facing one-liner explanation for each status.
 const STATUS_BLURBS: Record<ShipmentStatus, string> = {
   draft:                "Aún no se confirmó este envío.",
   at_origin_hub:        "Tu envío está en la sucursal de origen, listo para iniciar el viaje.",
@@ -77,7 +101,7 @@ const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
 };
 
 interface EventDescription {
-  icon: string;
+  icon: ReactNode;
   title: string;
   subtitle?: string;
 }
@@ -85,7 +109,7 @@ interface EventDescription {
 function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescription {
   if (ev.event_type === "claim_created") {
     const statusLabel = ev.claim_status ? CLAIM_STATUS_LABELS[ev.claim_status] ?? "Abierto" : "Abierto";
-    return { icon: "🧾", title: `En Reclamo · ${statusLabel}` };
+    return { icon: <ReceiptText className="w-4 h-4" />, title: `En Reclamo · ${statusLabel}` };
   }
 
   if (ev.event_type === "rescheduled" && ev.current_location && ev.rescheduled_date) {
@@ -100,7 +124,7 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
       year: 'numeric'
     });
     return {
-      icon: "📍",
+      icon: <MapPin className="w-4 h-4" />,
       title: `${locationText} - ${ev.current_location.status}`,
       subtitle: `Entrega reprogramada para el ${formattedDate}`
     };
@@ -112,29 +136,29 @@ function describeEvent(ev: PublicShipmentEvent, branches: Branch[]): EventDescri
     : undefined;
   const cityLine = branch ? `${branch.address.city}, ${branch.province}` : loc ?? undefined;
   const { from_status: from, to_status: to } = ev;
+  const icn = "w-4 h-4 shrink-0";
 
-  if (!from && to === "at_origin_hub") return { icon: "📦", title: "Envío registrado", subtitle: cityLine };
-  if (!from && to === "draft")          return { icon: "📋", title: "Borrador creado" };
-  if (from === "draft" && to === "at_origin_hub") return { icon: "✅", title: "Envío confirmado", subtitle: cityLine };
-  if (to === "loaded")                  return { icon: "🚛", title: "Cargado y listo para despachar", subtitle: cityLine };
-  if (to === "in_transit")              return { icon: "🚀", title: "Despachado — en tránsito" };
-  if (to === "at_hub" || to === "at_origin_hub") return { icon: "🏭", title: "Llegó al centro logístico", subtitle: cityLine };
-  if (to === "out_for_delivery")        return { icon: "🛵", title: "En camino a domicilio", subtitle: cityLine };
-  if (to === "delivered")               return { icon: "🎉", title: "Envío entregado" };
-  if (to === "delivery_failed")         return { icon: "⚠️", title: "El intento de entrega no fue exitoso" };
-  if (to === "redelivery_scheduled")    return { icon: "🔄", title: "Reentrega programada" };
-  if (to === "no_entregado")            return { icon: "🚷", title: "No pudo ser entregado" };
-  if (to === "rechazado")               return { icon: "🚫", title: "Envío rechazado por el destinatario" };
-  if (to === "ready_for_pickup")        return { icon: "📬", title: "Disponible para retiro en el centro logístico", subtitle: cityLine };
-  if (to === "ready_for_return")        return { icon: "↩️", title: "En espera de devolución al remitente", subtitle: cityLine };
-  if (to === "returned")                return { icon: "📤", title: "Devuelto al remitente" };
-  if (to === "cancelled")               return { icon: "🚫", title: "Envío cancelado" };
-  if (to === "lost")                    return { icon: "🔍", title: "Envío extraviado" };
-  if (to === "destroyed")               return { icon: "💥", title: "Daño total — envío destruido" };
-  return { icon: "•", title: to, subtitle: cityLine };
+  if (!from && to === "at_origin_hub") return { icon: <Package className={icn} />, title: "Envío registrado", subtitle: cityLine };
+  if (!from && to === "draft")          return { icon: <ClipboardList className={icn} />, title: "Borrador creado" };
+  if (from === "draft" && to === "at_origin_hub") return { icon: <CheckCircle2 className={icn} />, title: "Envío confirmado", subtitle: cityLine };
+  if (to === "loaded")                  return { icon: <Truck className={icn} />, title: "Cargado y listo para despachar", subtitle: cityLine };
+  if (to === "in_transit")              return { icon: <Rocket className={icn} />, title: "Despachado — en tránsito" };
+  if (to === "at_hub" || to === "at_origin_hub") return { icon: <Factory className={icn} />, title: "Llegó al centro logístico", subtitle: cityLine };
+  if (to === "out_for_delivery")        return { icon: <Bike className={icn} />, title: "En camino a domicilio", subtitle: cityLine };
+  if (to === "delivered")               return { icon: <PartyPopper className={icn} />, title: "Envío entregado" };
+  if (to === "delivery_failed")         return { icon: <AlertTriangle className={icn} />, title: "El intento de entrega no fue exitoso" };
+  if (to === "redelivery_scheduled")    return { icon: <RefreshCw className={icn} />, title: "Reentrega programada" };
+  if (to === "no_entregado")            return { icon: <UserX className={icn} />, title: "No pudo ser entregado" };
+  if (to === "rechazado")               return { icon: <Ban className={icn} />, title: "Envío rechazado por el destinatario" };
+  if (to === "ready_for_pickup")        return { icon: <Inbox className={icn} />, title: "Disponible para retiro en el centro logístico", subtitle: cityLine };
+  if (to === "ready_for_return")        return { icon: <CornerUpLeft className={icn} />, title: "En espera de devolución al remitente", subtitle: cityLine };
+  if (to === "returned")                return { icon: <Undo2 className={icn} />, title: "Devuelto al remitente" };
+  if (to === "cancelled")               return { icon: <Ban className={icn} />, title: "Envío cancelado" };
+  if (to === "lost")                    return { icon: <Search className={icn} />, title: "Envío extraviado" };
+  if (to === "destroyed")               return { icon: <Flame className={icn} />, title: "Daño total — envío destruido" };
+  return { icon: <Circle className={icn} />, title: to, subtitle: cityLine };
 }
 
-// Phase stepper — 5 macro-stages for ultima_milla/branch_pickup, 4 for return.
 type PhaseState = "pending" | "active" | "done" | "failed" | "warn";
 
 interface Phase {
@@ -213,9 +237,6 @@ function getActivePhaseInfo(
     case "pending_payment":      return { phase: 0, pct: 40 };
     case "at_origin_hub":        return { phase: 0, pct: 80 };
     case "loaded": {
-      // Si está cargado en la sucursal final para última milla, la barra
-      // permanece en fase 2 (En sucursal destino). Para carga inter-sucursal
-      // (origen o hub intermedio) va a fase 1 (En camino).
       const isLoadedAtFinalHub =
         shipment.current_location != null &&
         shipment.final_branch_id != null &&
@@ -291,46 +312,43 @@ function computePhaseInfo(
 
 interface StatusHero {
   tone: "success" | "info" | "warn" | "danger" | "muted";
-  icon: string;
+  icon: ReactNode;
   title: string;
   subtitle: string;
 }
+
+const icnHero = "w-10 h-10 max-sm:w-8 max-sm:h-8 shrink-0";
 
 function statusHero(s: PublicShipment): StatusHero {
   switch (s.status) {
     case "delivered":
       return {
         tone: "success",
-        icon: "🎉",
+        icon: <PartyPopper className={icnHero} />,
         title: "¡Tu envío fue entregado!",
         subtitle: s.delivered_at
           ? `Entregado el ${fmtDateTime(s.delivered_at)}`
           : "Listo y entregado.",
       };
     case "returned":
-      return { tone: "muted", icon: "📤", title: "Envío devuelto al remitente", subtitle: "Cerramos este envío con devolución completa." };
+      return { tone: "muted", icon: <Undo2 className={icnHero} />, title: "Envío devuelto al remitente", subtitle: "Cerramos este envío con devolución completa." };
     case "cancelled":
-      return { tone: "muted", icon: "🚫", title: "Envío cancelado", subtitle: "Este envío fue cancelado y no continuará su viaje." };
+      return { tone: "muted", icon: <Ban className={icnHero} />, title: "Envío cancelado", subtitle: "Este envío fue cancelado y no continuará su viaje." };
     case "lost":
-      return { tone: "danger", icon: "🔍", title: "Envío extraviado", subtitle: "Estamos investigando su paradero. Te vamos a contactar." };
+      return { tone: "danger", icon: <Search className={icnHero} />, title: "Envío extraviado", subtitle: "Estamos investigando su paradero. Te vamos a contactar." };
     case "destroyed":
-      return { tone: "danger", icon: "💥", title: "Daño total", subtitle: "El envío sufrió un daño irreparable y no podrá ser entregado." };
+      return { tone: "danger", icon: <Flame className={icnHero} />, title: "Daño total", subtitle: "El envío sufrió un daño irreparable y no podrá ser entregado." };
     case "delivery_failed":
     case "redelivery_scheduled":
-      return { tone: "warn", icon: "⚠️", title: "Intento de entrega fallido", subtitle: STATUS_BLURBS[s.status] };
+      return { tone: "warn", icon: <AlertTriangle className={icnHero} />, title: "Intento de entrega fallido", subtitle: STATUS_BLURBS[s.status] };
     case "no_entregado":
     case "rechazado":
-      return { tone: "danger", icon: "🚷", title: STATUS_BLURBS[s.status], subtitle: "Coordiná con el remitente los próximos pasos." };
+      return { tone: "danger", icon: <UserX className={icnHero} />, title: STATUS_BLURBS[s.status], subtitle: "Coordiná con el remitente los próximos pasos." };
     case "out_for_delivery":
       return {
         tone: "info",
-        icon: "🛵",
+        icon: <Bike className={icnHero} />,
         title: "Tu envío está en camino",
-        // relative_hours viene calculado por el backend (Go) a partir de la
-        // ruta activa del chofer — ya redondeado hacia arriba y con piso de
-        // seguridad de 1 hora. Se renderiza directamente, sin cálculos en el
-        // frontend, para que coincida exactamente con estimated_delivery_at
-        // (el backend sobreescribe ambos a partir del mismo valor).
         subtitle:
           (s.relative_hours != null
             ? formatEtaHoursMessage(s.relative_hours)
@@ -340,7 +358,7 @@ function statusHero(s: PublicShipment): StatusHero {
     case "in_transit":
       return {
         tone: "info",
-        icon: "🚀",
+        icon: <Rocket className={icnHero} />,
         title: "Tu envío está en tránsito",
         subtitle: etaHoursMessage(s.estimated_delivery_at) ?? STATUS_BLURBS["in_transit"],
       };
@@ -351,15 +369,15 @@ function statusHero(s: PublicShipment): StatusHero {
         s.current_location === s.final_branch_id;
       return {
         tone: "info",
-        icon: "📦",
+        icon: <Package className={icnHero} />,
         title: isLoadedAtFinalHub ? "Próximo a salir" : "Tu envío está en camino",
         subtitle: STATUS_BLURBS["loaded"],
       };
     }
     case "ready_for_pickup":
-      return { tone: "info", icon: "📬", title: "Listo para retirar", subtitle: "Te esperamos en la sucursal con tu DNI." };
+      return { tone: "info", icon: <Inbox className={icnHero} />, title: "Listo para retirar", subtitle: "Te esperamos en la sucursal con tu DNI." };
     default:
-      return { tone: "info", icon: "🚚", title: "Tu envío está en camino", subtitle: STATUS_BLURBS[s.status] ?? "" };
+      return { tone: "info", icon: <Truck className={icnHero} />, title: "Tu envío está en camino", subtitle: STATUS_BLURBS[s.status] ?? "" };
   }
 }
 
@@ -383,8 +401,6 @@ function deliveryMethodLabel(m: PublicShipment["delivery_method"]): string | und
 
 function etaSummary(iso: string | null, status: ShipmentStatus): { line: string; rel?: string } | undefined {
   if (!iso) return undefined;
-  // Ocultar en estados terminales y en estados tempranos donde el ETA es sólo
-  // una estimación de creación (el motor de ruteo aún no ha confirmado la entrega).
   const HIDE_STATUSES: ShipmentStatus[] = [
     "delivered", "returned", "cancelled", "lost", "destroyed",
     "draft", "at_origin_hub",
@@ -393,26 +409,12 @@ function etaSummary(iso: string | null, status: ShipmentStatus): { line: string;
   return { line: fmtDateTime(iso), rel: fmtRelative(iso) };
 }
 
-/**
- * Formatea el mensaje de ETA relativo a partir de una cantidad de horas YA
- * redondeada (preferentemente provista por el backend vía relative_hours,
- * calculada en Go como ceil(minutosRestantes/60) con piso de seguridad de 1).
- * Nunca debe recibir minutos — esta función solo formatea, no redondea.
- */
 function formatEtaHoursMessage(hours: number): string {
   return hours === 1
     ? "Tu envío llegará dentro de la próxima 1 hora."
     : `Tu envío llegará dentro de las próximas ${hours} horas.`;
 }
 
-/**
- * Calcula las horas restantes hasta el ETA y devuelve el mensaje seguro para el
- * cliente. Redondea hacia arriba (Math.ceil) para dar una ventana holgada y nunca
- * revelar la hora exacta ni el número de minutos. Fallback para cuando el backend
- * no provee un conteo de horas ya calculado (p. ej. estimated_delivery_at en in_transit).
- * Devuelve undefined si el ETA es nulo, ya pasó, o el envío está en estado
- * que no corresponde mostrarlo.
- */
 function etaHoursMessage(iso: string | null): string | undefined {
   if (!iso) return undefined;
   const diffMs = new Date(iso).getTime() - Date.now();
@@ -562,35 +564,47 @@ export function PublicTracking() {
   };
 
   const chronological = useMemo(() => [...events].reverse(), [events]);
-  // Fix #1: events viene oldest-first del backend; chronological[0] es el evento más reciente.
   const lastUpdate = chronological.length > 0 ? chronological[0].timestamp : shipment?.updated_at;
 
   const hero = shipment ? statusHero(shipment) : null;
   const phaseInfo = shipment ? computePhaseInfo(shipment, events) : null;
-  // El backend (Go) ya sobreescribe estimated_delivery_at con la fecha
-  // dinámica (ahora + relative_hours) cuando el envío está en reparto —
-  // la grilla solo renderiza lo que llega, sin cálculos de fecha en el frontend.
   const eta = shipment ? etaSummary(shipment.estimated_delivery_at, shipment.status) : undefined;
 
+  const skelLine = (w: "sm" | "md" | "lg") => (
+    <div
+      className="h-3.5 rounded-md bg-gradient-to-r from-[var(--bg-muted)] via-[var(--border)] to-[var(--bg-muted)] bg-[length:200%_100%] animate-[pt-skel_1.4s_ease-in-out_infinite] mb-3"
+      style={{ width: w === "sm" ? "30%" : w === "md" ? "60%" : "90%" }}
+    />
+  );
+
+  const toneBg = (tone: string) => {
+    switch (tone) {
+      case "success": return "from-[#059669] to-[#10b981]";
+      case "info":    return "from-[#1e3a5f] to-[#2563eb]";
+      case "warn":    return "from-[#b45309] to-[#f59e0b]";
+      case "danger":  return "from-[#991b1b] to-[#ef4444]";
+      case "muted":   return "from-[#4b5563] to-[#6b7280]";
+      default:        return "from-[#1e3a5f] to-[#2563eb]";
+    }
+  };
+
   return (
-    <div className="pt-root">
-      <header className="pt-header">
-        <div className="pt-brand">
-          <span className="pt-brand-name">LogiTrack</span>
-          <span className="pt-brand-tag">· Seguimiento de envíos</span>
+    <div className="relative min-h-screen bg-[var(--bg-page)] font-[system-ui,-apple-system,Segoe_UI,Roboto,sans-serif] text-[var(--text-primary)] pb-6">
+      <header className="bg-[#1e3a5f] text-white px-10 py-[18px] flex items-center gap-3 max-sm:px-4 max-sm:py-3.5">
+        <div className="flex items-baseline gap-2.5">
+          <span className="font-black text-[22px] tracking-[1px] max-sm:text-lg">LogiTrack</span>
+          <span className="text-[#93c5fd] text-[15px] font-normal max-sm:text-[13px]">· Seguimiento de envíos</span>
         </div>
       </header>
 
-      <section className="pt-hero">
-        <h1>¿Dónde está mi envío?</h1>
-        <p>Ingresá tu número de seguimiento para ver el estado actual</p>
-        <form onSubmit={handleSearch} className="pt-search-form" role="search" aria-label="Buscar envío">
-          <label htmlFor="pt-tracking-input" className="visually-hidden" style={{ position: "absolute", left: -9999 }}>
-            Número de seguimiento
-          </label>
+      <section className="bg-gradient-to-br from-[#1e3a5f] to-[#2563eb] px-10 py-[52px] text-center max-sm:px-4 max-sm:py-8">
+        <h1 className="text-white m-0 mb-2 text-[30px] font-extrabold max-sm:text-[22px]">¿Dónde está mi envío?</h1>
+        <p className="text-[#bfdbfe] m-0 mb-7 text-base max-sm:text-sm max-sm:mb-5">Ingresá tu número de seguimiento para ver el estado actual</p>
+        <form onSubmit={handleSearch} className="flex gap-2 max-w-[560px] mx-auto max-sm:flex-col max-sm:gap-2" role="search" aria-label="Buscar envío">
+          <label htmlFor="pt-tracking-input" className="sr-only">Número de seguimiento</label>
           <input
             id="pt-tracking-input"
-            className="pt-search-input"
+            className="flex-1 py-3.5 px-[18px] rounded-[10px] border-2 border-transparent text-base outline-none shadow-[0_2px_8px_rgba(0,0,0,0.15)] uppercase focus:border-[var(--warn)] placeholder:normal-case placeholder:text-[var(--text-muted)] max-sm:py-3 max-sm:px-3.5 max-sm:text-[15px]"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ej. LT-A1B2C3D4"
@@ -602,79 +616,88 @@ export function PublicTracking() {
           />
           <button
             type="submit"
-            className="pt-search-btn"
+            className="bg-[var(--warn)] text-[#1e3a5f] border-none rounded-[10px] px-7 py-3.5 cursor-pointer font-bold text-base whitespace-nowrap transition-[background,opacity] duration-[120ms] hover:not-disabled:bg-[#fbbf24] disabled:cursor-not-allowed disabled:opacity-70 max-sm:px-[18px] max-sm:py-3 max-sm:text-sm"
             disabled={loading}
             aria-busy={loading}
           >
             {loading ? "Buscando..." : "Rastrear"}
           </button>
         </form>
-        <details className="pt-example-box">
-          <summary>Ejemplos válidos para probar</summary>
-          <div className="pt-example-list">
+        <details className="mt-3.5 mx-auto max-w-[560px] text-left text-[#e2e8f0] max-sm:text-center">
+          <summary className="cursor-pointer text-[13px] font-semibold text-[#dbeafe]">Ejemplos válidos para probar</summary>
+          <div className="flex flex-wrap gap-2 pt-2.5 max-sm:justify-center">
             {EXAMPLE_TRACKING_IDS.map((item) => (
               <button
                 key={item.trackingId}
                 type="button"
-                className="pt-example-btn"
+                className="bg-[rgba(15,23,42,0.45)] border border-[rgba(191,219,254,0.35)] text-[#e2e8f0] rounded-lg px-3 py-2 text-xs font-semibold cursor-pointer text-left disabled:opacity-70 disabled:cursor-not-allowed"
                 onClick={() => handleExampleClick(item.trackingId)}
                 disabled={loading}
               >
-                <span className="pt-example-id">{item.trackingId}</span>
-                <span className="pt-example-meta">
+                <span className="block text-xs font-bold text-[#e2e8f0]">{item.trackingId}</span>
+                <span className="block mt-0.5 text-[11px] font-medium text-[rgba(226,232,240,0.85)]">
                   Remitente: {item.sender.name} (DNI {item.sender.dni}) · Destinatario: {item.recipient.name} (DNI {item.recipient.dni})
                 </span>
               </button>
             ))}
           </div>
         </details>
-        <p className="pt-search-hint">Tu número aparece en el comprobante o en el mail de confirmación.</p>
+        <p className="text-[rgba(191,219,254,0.85)] text-[13px] mt-3.5 mb-0">Tu número aparece en el comprobante o en el mail de confirmación.</p>
       </section>
 
-      <main className="pt-container" aria-live="polite">
-        {error && <div className="pt-error" role="alert">{error}</div>}
+      <main className="max-w-[720px] mx-auto px-5 py-10 max-sm:px-3.5 max-sm:py-6 max-[768px]:pb-[100px]" aria-live="polite">
+        {error && (
+          <div className="bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-[10px] p-4 text-[var(--danger-text)] text-center text-[15px]" role="alert">
+            {error}
+          </div>
+        )}
 
         {loading && !shipment && (
-          <div className="pt-skeleton" aria-hidden="true">
-            <div className="pt-skel-line" data-w="sm" />
-            <div className="pt-skel-line" data-w="md" />
-            <div className="pt-skel-line" data-w="lg" />
-            <div className="pt-skel-line" data-w="md" />
+          <div className="bg-[var(--bg-card)] rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-6 mb-5" aria-hidden="true">
+            {skelLine("sm")}
+            {skelLine("md")}
+            {skelLine("lg")}
+            {skelLine("md")}
           </div>
         )}
 
         {shipment && hero && phaseInfo && (
           <>
             <section
-              className="pt-status-hero"
-              data-tone={hero.tone}
+              className={`rounded-xl p-6 mb-5 text-white flex items-center gap-[18px] shadow-[0_4px_14px_rgba(0,0,0,0.1)] bg-gradient-to-br ${toneBg(hero.tone)} max-sm:p-[18px] max-sm:gap-3.5`}
               aria-label="Estado del envío"
             >
-              <div className="pt-status-hero-icon" aria-hidden="true">{hero.icon}</div>
+              <div className="text-[40px] leading-none max-sm:text-[32px]" aria-hidden="true">
+                {hero.icon}
+              </div>
               <div>
-                <h2 className="pt-status-hero-title">{hero.title}</h2>
-                <p className="pt-status-hero-sub">{hero.subtitle}</p>
+                <h2 className="text-[22px] font-extrabold m-0 max-sm:text-lg">{hero.title}</h2>
+                <p className="mt-1 mb-0 text-sm opacity-[0.92]">{hero.subtitle}</p>
               </div>
             </section>
 
             {shipment.is_returning && shipment.status !== "returned" && (
-              <div className="pt-banner" data-tone="warn" role="status">
-                <span className="pt-banner-icon" aria-hidden="true">↩️</span>
+              <div className="rounded-[10px] p-[14px_18px] mb-5 flex items-start gap-3 text-sm leading-[1.4] bg-[var(--warn-bg)] border border-[var(--warn)] text-[var(--warn-text)]" role="status">
+                <span className="text-[22px] leading-none shrink-0" aria-hidden="true">
+                  <CornerUpLeft className="w-5 h-5" />
+                </span>
                 <div>
-                  <p className="pt-banner-title">Volviendo al remitente</p>
-                  <p className="pt-banner-body">Este envío inició su devolución y está viajando de regreso.</p>
+                  <p className="font-bold m-0 mb-0.5">Volviendo al remitente</p>
+                  <p className="m-0">Este envío inició su devolución y está viajando de regreso.</p>
                 </div>
               </div>
             )}
 
             {(shipment.delivery_attempts ?? 0) > 0 && shipment.status !== "delivered" && shipment.status !== "returned" && (
-              <div className="pt-banner" data-tone="warn" role="status">
-                <span className="pt-banner-icon" aria-hidden="true">🔁</span>
+              <div className="rounded-[10px] p-[14px_18px] mb-5 flex items-start gap-3 text-sm leading-[1.4] bg-[var(--warn-bg)] border border-[var(--warn)] text-[var(--warn-text)]" role="status">
+                <span className="text-[22px] leading-none shrink-0" aria-hidden="true">
+                  <Repeat className="w-5 h-5" />
+                </span>
                 <div>
-                  <p className="pt-banner-title">
+                  <p className="font-bold m-0 mb-0.5">
                     {shipment.delivery_attempts === 1 ? "1 intento de entrega" : `${shipment.delivery_attempts} intentos de entrega`}
                     {shipment.max_delivery_attempts != null && shipment.delivery_attempts != null && (
-                      <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.8 }}>
+                      <span className="font-normal ml-1.5 opacity-80">
                         — {(() => {
                             const left = Math.max(0, shipment.max_delivery_attempts - shipment.delivery_attempts);
                             if (left === 0) return "disponible para retiro en sucursal";
@@ -683,7 +706,7 @@ export function PublicTracking() {
                       </span>
                     )}
                   </p>
-                  <p className="pt-banner-body">
+                  <p className="m-0">
                     {shipment.status === "redelivery_scheduled"
                       ? "Vamos a hacer un nuevo intento de entrega."
                       : shipment.status === "ready_for_pickup"
@@ -696,93 +719,108 @@ export function PublicTracking() {
               </div>
             )}
 
-            <section className="pt-stepper" aria-label="Progreso del envío">
-              <h2 className="pt-stepper-title">Progreso</h2>
-              <ol className="pt-steps">
+            <section className="bg-[var(--bg-card)] rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-6 mb-5 max-sm:p-[18px]" aria-label="Progreso del envío">
+              <h2 className="text-[13px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.6px] m-0 mb-4">Progreso</h2>
+              <ol className="flex items-stretch gap-1.5 list-none p-0 m-0 max-sm:gap-1">
                 {phaseInfo.phases.map((p, i) => {
                   const { state, pct } = phaseInfo.states[i];
                   const label =
                     state === "failed" && phaseInfo.failedPhaseLabel != null
                       ? phaseInfo.failedPhaseLabel
                       : p.label;
+
+                  const barBg = state === "done"
+                    ? "var(--ok)"
+                    : state === "failed"
+                    ? "var(--danger-c)"
+                    : state === "active"
+                    ? `linear-gradient(90deg, var(--ok) ${pct}%, var(--border) ${pct}%)`
+                    : state === "warn"
+                    ? `linear-gradient(90deg, #f59e0b ${pct}%, var(--border) ${pct}%)`
+                    : "var(--border)";
+
+                  const labelColor = state === "done" || state === "active" || state === "warn"
+                    ? "text-[var(--text-primary)]"
+                    : state === "failed"
+                    ? "text-[var(--danger-text)]"
+                    : "text-[var(--text-secondary)]";
+
                   return (
                     <li
                       key={p.key}
-                      className="pt-step"
-                      data-state={state}
+                      className="flex-1 flex flex-col items-center gap-2 text-center relative"
                       aria-current={state === "active" || state === "warn" ? "step" : undefined}
-                      style={{ "--fill": `${pct}%` } as React.CSSProperties}
                     >
-                      <div className="pt-step-bar" aria-hidden="true" />
-                      <span className="pt-step-label">{label}</span>
+                      <div className="w-full h-1.5 rounded-full" style={{ background: barBg }} aria-hidden="true" />
+                      <span className={`text-xs font-semibold leading-[1.25] max-sm:text-[11px] ${labelColor}`}>{label}</span>
                     </li>
                   );
                 })}
               </ol>
             </section>
 
-            <section className="pt-card" aria-label="Resumen del envío">
-              <div className="pt-card-row">
+            <section className="bg-[var(--bg-card)] rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-6 mb-5 max-sm:p-[18px]" aria-label="Resumen del envío">
+              <div className="flex justify-between items-start flex-wrap gap-3">
                 <div>
-                  <div className="pt-label">Número de seguimiento</div>
-                  <code className="pt-tracking-id">{shipment.tracking_id}</code>
+                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Número de seguimiento</div>
+                  <code className="text-[22px] font-extrabold text-[var(--text-heading)] font-mono tracking-[0.5px] max-sm:text-lg">{shipment.tracking_id}</code>
                 </div>
               </div>
 
-              <div className="pt-meta-grid">
+              <div className="mt-[18px] grid grid-cols-2 gap-[18px_24px] max-sm:grid-cols-1 max-sm:gap-3.5">
                 {eta && (
                   <div>
-                    <div className="pt-label">Entrega estimada</div>
-                    <div className="pt-meta-value">{eta.line}</div>
-                    {eta.rel && <div className="pt-meta-eta">{eta.rel}</div>}
+                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Entrega estimada</div>
+                    <div className="font-semibold text-[var(--text-primary)] mt-0.5">{eta.line}</div>
+                    {eta.rel && <div className="text-[13px] text-[var(--text-secondary)] mt-0.5">{eta.rel}</div>}
                   </div>
                 )}
                 {shipment.delivered_at && (
                   <div>
-                    <div className="pt-label">Entregado</div>
-                    <div className="pt-meta-value">{fmtDateTime(shipment.delivered_at)}</div>
-                    <div className="pt-meta-eta">{fmtRelative(shipment.delivered_at)}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Entregado</div>
+                    <div className="font-semibold text-[var(--text-primary)] mt-0.5">{fmtDateTime(shipment.delivered_at)}</div>
+                    <div className="text-[13px] text-[var(--text-secondary)] mt-0.5">{fmtRelative(shipment.delivered_at)}</div>
                   </div>
                 )}
                 {lastUpdate && shipment.status !== "delivered" && (
                   <div>
-                    <div className="pt-label">Última actualización</div>
-                    <div className="pt-meta-value">{fmtDateTime(lastUpdate)}</div>
-                    <div className="pt-meta-eta">{fmtRelative(lastUpdate)}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Última actualización</div>
+                    <div className="font-semibold text-[var(--text-primary)] mt-0.5">{fmtDateTime(lastUpdate)}</div>
+                    <div className="text-[13px] text-[var(--text-secondary)] mt-0.5">{fmtRelative(lastUpdate)}</div>
                   </div>
                 )}
                 {timeWindowLabel(shipment.time_window) && shipment.delivery_method !== "retiro_sucursal" && (
                   <div>
-                    <div className="pt-label">Ventana horaria</div>
-                    <div className="pt-meta-value">{timeWindowLabel(shipment.time_window)}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Ventana horaria</div>
+                    <div className="font-semibold text-[var(--text-primary)] mt-0.5">{timeWindowLabel(shipment.time_window)}</div>
                   </div>
                 )}
                 {deliveryMethodLabel(shipment.delivery_method) && (
                   <div>
-                    <div className="pt-label">Modalidad</div>
-                    <div className="pt-meta-value">{deliveryMethodLabel(shipment.delivery_method)}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Modalidad</div>
+                    <div className="font-semibold text-[var(--text-primary)] mt-0.5">{deliveryMethodLabel(shipment.delivery_method)}</div>
                   </div>
                 )}
                 <div>
-                  <div className="pt-label">Tipo</div>
-                  <div className="pt-meta-value">
+                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Tipo</div>
+                  <div className="font-semibold text-[var(--text-primary)] mt-0.5">
                     {shipmentTypeLabel(shipment.shipment_type)}
                     {shipment.is_fragile && " · Frágil"}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-route">
-                <div className="pt-route-node">
-                  <div className="pt-label">Origen</div>
-                  <div className="pt-meta-value">
+              <div className="flex items-center gap-3 mt-[18px] pt-[18px] border-t border-[var(--border)] max-sm:gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Origen</div>
+                  <div className="font-semibold text-[var(--text-primary)] mt-0.5">
                     {shipment.origin.city}, {shipment.origin.province}
                   </div>
                 </div>
-                <span className="pt-route-arrow" aria-hidden="true">→</span>
-                <div className="pt-route-node">
-                  <div className="pt-label">Destino</div>
-                  <div className="pt-meta-value">
+                <ArrowRight className="shrink-0 text-[var(--text-muted)] max-sm:w-3.5 max-sm:h-3.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.5px] mb-1">Destino</div>
+                  <div className="font-semibold text-[var(--text-primary)] mt-0.5">
                     {shipment.destination.city}, {shipment.destination.province}
                   </div>
                 </div>
@@ -790,9 +828,9 @@ export function PublicTracking() {
             </section>
 
             {chronological.length > 0 && (
-              <section className="pt-timeline-card" aria-label="Historial del envío">
-                <h2 className="pt-timeline-title">Historial del envío</h2>
-                <ol className="pt-timeline">
+              <section className="bg-[var(--bg-card)] rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-7 max-sm:p-[18px]" aria-label="Historial del envío">
+                <h2 className="text-[15px] font-bold text-[var(--text-heading)] m-0 mb-6">Historial del envío</h2>
+                <ol className="relative list-none p-0 m-0 before:content-[''] before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-[var(--border)]">
                   {chronological.map((ev, i) => {
                     const isCurrent = i === 0;
                     const desc = describeEvent(ev, branches);
@@ -800,15 +838,27 @@ export function PublicTracking() {
                       ? ev.claim_updated_at
                       : ev.timestamp;
                     return (
-                      <li key={ev.id} className="pt-event" data-current={isCurrent || undefined}>
-                        <div className="pt-event-dot" aria-current={isCurrent ? "step" : undefined} aria-hidden="true">
+                      <li key={ev.id} className="flex gap-4 relative pb-6 last:pb-0">
+                        <div
+                          className={`shrink-0 w-10 h-10 rounded-full bg-[var(--bg-muted)] border-2 border-[var(--border)] flex items-center justify-center text-lg z-[1] ${
+                            isCurrent ? "!bg-[#1e3a5f] !border-[#1e3a5f] shadow-[0_0_0_4px_var(--brand-tint)]" : ""
+                          }`}
+                          aria-current={isCurrent ? "step" : undefined}
+                          aria-hidden="true"
+                        >
                           {desc.icon}
                         </div>
-                        <div className="pt-event-content">
-                          <div className="pt-event-title">{desc.title}</div>
-                          {desc.subtitle && <div className="pt-event-loc">📍 {desc.subtitle}</div>}
-                          <div className="pt-event-time">
-                            {fmtDateTime(eventTime)} · <span className="pt-event-time-rel">{fmtRelative(eventTime)}</span>
+                        <div className="pt-1.5 min-w-0">
+                          <div className={`text-sm leading-[1.3] ${isCurrent ? "font-bold text-[var(--text-primary)]" : "font-medium text-[var(--text-strong)]"}`}>
+                            {desc.title}
+                          </div>
+                          {desc.subtitle && (
+                            <div className="text-[13px] text-[var(--text-secondary)] mt-[3px]">
+                              {desc.subtitle}
+                            </div>
+                          )}
+                          <div className="text-xs text-[var(--text-muted)] mt-1">
+                            {fmtDateTime(eventTime)} · <span className="text-[var(--text-secondary)] font-medium">{fmtRelative(eventTime)}</span>
                           </div>
                         </div>
                       </li>
@@ -818,15 +868,15 @@ export function PublicTracking() {
               </section>
             )}
 
-            <section className="pt-claim-card" aria-label="Reclamos">
-              <div className="pt-claim-header">
+            <section className="bg-[var(--bg-card)] rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-6 mt-5 max-sm:p-[18px]" aria-label="Reclamos">
+              <div className="flex items-start justify-between gap-4 mb-4 max-sm:flex-col max-sm:items-stretch">
                 <div>
-                  <h2 className="pt-claim-title">¿Tuviste algún inconveniente con este envío?</h2>
-                  <p className="pt-claim-sub">Podemos ayudarte con un reclamo y darte seguimiento.</p>
+                  <h2 className="m-0 mb-1.5 text-base font-extrabold text-[var(--text-heading)]">¿Tuviste algún inconveniente con este envío?</h2>
+                  <p className="m-0 text-sm text-[var(--text-secondary)]">Podemos ayudarte con un reclamo y darte seguimiento.</p>
                 </div>
                 <button
                   type="button"
-                  className="pt-claim-toggle"
+                  className="bg-[#1e3a5f] text-white border-none rounded-[10px] py-2.5 px-4 font-bold cursor-pointer whitespace-nowrap transition-[background,opacity] duration-[120ms] hover:not-disabled:bg-[#274a78] disabled:opacity-70 disabled:cursor-not-allowed"
                   onClick={() => setClaimOpen((prev) => !prev)}
                   disabled={claimSubmitting || !!claimResult}
                 >
@@ -835,29 +885,29 @@ export function PublicTracking() {
               </div>
 
               {claimResult && (
-                <div className="pt-claim-success" role="status">
-                  <div className="pt-claim-success-title">Reclamo creado</div>
-                  <div className="pt-claim-success-body">
+                <div className="bg-[var(--ok-bg)] border border-[var(--ok-border)] text-[var(--ok-text)] rounded-[10px] p-[12px_14px] mb-4" role="status">
+                  <div className="font-bold mb-0.5">Reclamo creado</div>
+                  <div className="text-[13px]">
                     Código: <strong>{claimResult.id}</strong> · Estado: {CLAIM_STATUS_LABELS[claimResult.status]}
                   </div>
                 </div>
               )}
 
               {claimOpen && !claimResult && (
-                <form className="pt-claim-form" onSubmit={handleClaimSubmit}>
+                <form className="flex flex-col gap-3.5" onSubmit={handleClaimSubmit}>
                   <PublicClaimFormFields
                     values={claimForm}
                     onChange={patchClaimForm}
                     disabled={claimSubmitting}
                   />
 
-                  {claimError && <div className="pt-claim-error" role="alert">{claimError}</div>}
+                  {claimError && <div className="bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] p-2.5 rounded-lg text-[13px]" role="alert">{claimError}</div>}
 
-                  <div className="pt-claim-actions">
-                    <button type="button" className="pt-claim-cancel" onClick={() => setClaimOpen(false)}>
+                  <div className="flex justify-end gap-2.5 max-sm:flex-col max-sm:items-stretch">
+                    <button type="button" className="bg-[var(--bg-muted)] text-[var(--text-primary)] border-none rounded-[10px] py-2.5 px-4 font-semibold cursor-pointer" onClick={() => setClaimOpen(false)}>
                       Cancelar
                     </button>
-                    <button type="submit" className="pt-claim-submit" disabled={claimSubmitting}>
+                    <button type="submit" className="bg-[var(--warn)] text-[#1e3a5f] border-none rounded-[10px] py-2.5 px-4 font-bold cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed" disabled={claimSubmitting}>
                       {claimSubmitting ? "Enviando..." : "Enviar reclamo"}
                     </button>
                   </div>
@@ -868,19 +918,19 @@ export function PublicTracking() {
         )}
 
         {!shipment && !error && !loading && (
-          <div className="pt-empty">
+          <div className="text-center text-[var(--text-muted)] mt-8 text-[15px]">
             <p>Ingresá un número de seguimiento para comenzar.</p>
-            <p className="pt-empty-tip">
-              Formato: <code>LT-XXXXXXXX</code>
+            <p className="mt-3 text-[13px] text-[var(--text-secondary)]">
+              Formato: <code className="bg-[var(--bg-muted)] px-1.5 py-0.5 rounded font-mono text-[var(--text-primary)]">LT-XXXXXXXX</code>
             </p>
           </div>
         )}
       </main>
 
-      <footer className="pt-footer">
+      <footer className="text-center px-5 py-6 text-[var(--text-muted)] text-[13px] border-t border-[var(--border)] mt-10 max-[768px]:mb-20">
         © {new Date().getFullYear()} LogiTrack · Seguimiento de envíos
       </footer>
-        <ChatbotWidget />
+      <ChatbotWidget />
     </div>
   );
 }

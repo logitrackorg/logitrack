@@ -138,14 +138,14 @@ export function VehicleAssignment() {
     <div className="p-6 max-w-[1000px] mx-auto">
       {/* Available vehicles list */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-4 text-slate-900">
+        <h2 className="text-lg font-semibold mb-4 dark:text-gray-100 text-slate-900">
           Vehículos disponibles
         </h2>
 
         {loading && availableVehicles.length === 0 ? (
-          <p className="text-slate-600">Cargando vehículos...</p>
+          <p className="dark:text-gray-400 text-slate-600">Cargando vehículos...</p>
         ) : availableVehicles.length === 0 ? (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 text-center text-slate-600">
+          <div className="dark:bg-gray-800/50 bg-slate-50 border dark:border-gray-700 border-slate-200 rounded-lg p-6 text-center dark:text-gray-400 text-slate-600">
             No hay vehículos disponibles para asignación
           </div>
         ) : (
@@ -159,7 +159,7 @@ export function VehicleAssignment() {
                 className={`p-4 flex items-center gap-4 rounded-lg cursor-pointer transition-all ${
                   isSelected
                     ? "bg-blue-50 border-2 border-blue-500"
-                    : "bg-white border-2 border-slate-200 hover:border-blue-400"
+                    : "dark:bg-gray-800 bg-white border-2 dark:border-gray-700 border-slate-200 hover:border-blue-400"
                 }`}
               >
                 <div
@@ -171,8 +171,8 @@ export function VehicleAssignment() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <p className="text-base font-bold text-slate-900 m-0">{v.license_plate}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <p className="text-base font-bold dark:text-gray-100 text-slate-900 m-0">{v.license_plate}</p>
+                  <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">
                     {vehicleTypeLabels[v.type]} · {v.capacity_kg} kg
                   </p>
                 </div>
@@ -193,14 +193,14 @@ export function VehicleAssignment() {
 
       {/* Formulario de asignación */}
       {vehicle && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-6">
-          <div className={`p-5 border-b border-slate-200 ${
+        <div className="dark:bg-gray-800 bg-white border dark:border-gray-700 border-slate-200 rounded-xl overflow-hidden shadow-sm mb-6">
+          <div className={`p-5 border-b dark:border-gray-700 border-slate-200 ${
             vehicle.status === "disponible" ? "bg-emerald-50" : "bg-amber-50"
           }`}>
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
-                <p className="text-xs text-slate-600 m-0 uppercase">Vehículo seleccionado</p>
-                <h2 className="text-2xl font-bold mt-1 text-slate-900">
+                <p className="text-xs dark:text-gray-400 text-slate-600 m-0 uppercase">Vehículo seleccionado</p>
+                <h2 className="text-2xl font-bold mt-1 dark:text-gray-100 text-slate-900">
                   {vehicle.license_plate}
                 </h2>
               </div>
@@ -222,29 +222,29 @@ export function VehicleAssignment() {
           <div className="p-5">
             <div className="grid gap-4 mb-6 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
               <div>
-                <p className="text-xs text-slate-600 m-0 mb-1 uppercase">Tipo</p>
-                <p className="text-sm font-semibold text-slate-900 m-0">{vehicleTypeLabels[vehicle.type]}</p>
+                <p className="text-xs dark:text-gray-400 text-slate-600 m-0 mb-1 uppercase">Tipo</p>
+                <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 m-0">{vehicleTypeLabels[vehicle.type]}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-600 m-0 mb-1 uppercase">Capacidad</p>
-                <p className="text-sm font-semibold text-slate-900 m-0">{vehicle.capacity_kg} kg</p>
+                <p className="text-xs dark:text-gray-400 text-slate-600 m-0 mb-1 uppercase">Capacidad</p>
+                <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 m-0">{vehicle.capacity_kg} kg</p>
               </div>
               <div>
-                <p className="text-xs text-slate-600 m-0 mb-1 uppercase">ID interno</p>
-                <p className="text-sm font-semibold text-slate-900 m-0">#{vehicle.id}</p>
+                <p className="text-xs dark:text-gray-400 text-slate-600 m-0 mb-1 uppercase">ID interno</p>
+                <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 m-0">#{vehicle.id}</p>
               </div>
               {vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-600 m-0 mb-1 uppercase">Envíos asignados</p>
-                  <p className="text-sm font-semibold text-slate-900 m-0">{vehicle.assigned_shipments.join(", ")}</p>
+                  <p className="text-xs dark:text-gray-400 text-slate-600 m-0 mb-1 uppercase">Envíos asignados</p>
+                  <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 m-0">{vehicle.assigned_shipments.join(", ")}</p>
                 </div>
               )}
             </div>
 
             {/* Assignment form — only when available */}
             {vehicle.status === "disponible" && !(vehicle.assigned_shipments && vehicle.assigned_shipments.length > 0) && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                <h3 className="text-base font-semibold text-slate-900 m-0 mb-4">
+              <div className="dark:bg-gray-800/50 bg-slate-50 border dark:border-gray-700 border-slate-200 rounded-lg p-5">
+                <h3 className="text-base font-semibold dark:text-gray-100 text-slate-900 m-0 mb-4">
                   Asignar a envío
                 </h3>
                 <div className="flex gap-3 items-end">
@@ -257,9 +257,9 @@ export function VehicleAssignment() {
                       value={trackingId}
                       onChange={(e) => setTrackingId(e.target.value.toUpperCase())}
                       placeholder="Ej.: LT-AB123456"
-                      className="w-full px-3.5 py-2.5 rounded-md border border-slate-300 text-sm uppercase"
+                      className="w-full px-3.5 py-2.5 rounded-md border dark:border-gray-600 border-slate-300 text-sm uppercase"
                     />
-                    <p className="text-xs text-slate-600 mt-1">
+                    <p className="text-xs dark:text-gray-400 text-slate-600 mt-1">
                       Formato: LT-XXXXXXXX (8 caracteres alfanuméricos)
                     </p>
                   </div>
@@ -299,7 +299,7 @@ export function VehicleAssignment() {
                 </div>
                 <p className="text-sm text-amber-800 m-0">
                   Este vehículo ya está asignado al envío{" "}
-                  <strong className="text-slate-900">{alreadyAssigned.shipment}</strong>
+                  <strong className="dark:text-gray-100 text-slate-900">{alreadyAssigned.shipment}</strong>
                   {" "}y su estado actual es <strong>"{alreadyAssigned.status}"</strong>.
                 </p>
                 <p className="text-xs text-amber-800 mt-2">
@@ -329,7 +329,7 @@ export function VehicleAssignment() {
       <div className="mt-6 text-center">
         <button
           onClick={handleClear}
-          className="bg-transparent border-none text-slate-600 cursor-pointer text-sm underline"
+          className="bg-transparent border-none dark:text-gray-400 text-slate-600 cursor-pointer text-sm underline"
         >
           Limpiar selección
         </button>

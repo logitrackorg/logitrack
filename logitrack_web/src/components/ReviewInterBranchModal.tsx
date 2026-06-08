@@ -300,15 +300,15 @@ export function ReviewInterBranchModal({
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
+      <div className="dark:bg-gray-800 bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b dark:border-gray-700 border-slate-200 shrink-0">
           <div>
-            <h2 className="font-semibold text-slate-900">
+            <h2 className="font-semibold dark:text-gray-100 text-slate-900">
               Revisar despacho · {a.license_plate}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">
               {branchLabelById(originBranchId, branches)}
               {" → "}
               {branchLabelById(a.destination_branch, branches)}
@@ -334,7 +334,7 @@ export function ReviewInterBranchModal({
         <div className="flex-1 flex overflow-hidden min-h-0">
 
           {/* Columna izquierda: mapa + KPIs */}
-          <div className="w-[42%] shrink-0 flex flex-col border-r border-slate-200">
+          <div className="w-[42%] shrink-0 flex flex-col border-r dark:border-gray-700 border-slate-200">
             <div className="flex-1 min-h-0 p-3 pb-2">
               <InterBranchRouteMap
                 originBranch={originBranch}
@@ -344,7 +344,7 @@ export function ReviewInterBranchModal({
             </div>
 
             {/* KPIs */}
-            <div className="shrink-0 px-4 py-3 border-t border-slate-100 space-y-2">
+            <div className="shrink-0 px-4 py-3 border-t dark:border-gray-700 border-slate-100 space-y-2">
               {/* Badge de backhaul */}
               {a.backhaul && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
@@ -357,27 +357,27 @@ export function ReviewInterBranchModal({
                   </div>
                 </div>
               )}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm dark:text-gray-400 text-slate-600">
                 <span className="font-medium">{originShipments.length} envíos de origen</span>
                 {pickupSet.size > 0 && (
-                  <span className="text-slate-400">+ {pickupSet.size} pickup{pickupSet.size > 1 ? "s" : ""} en ruta</span>
+                  <span className="dark:text-gray-500 text-slate-400">+ {pickupSet.size} pickup{pickupSet.size > 1 ? "s" : ""} en ruta</span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm dark:text-gray-400 text-slate-600">
                 <span>{totalLoaded.toFixed(1)} / {a.capacity_kg} kg ({utilPct}%)</span>
                 {pickupWeight > 0 && (
-                  <span className="text-slate-400 text-xs">+ {pickupWeight.toFixed(1)} kg pickups</span>
+                  <span className="dark:text-gray-500 text-slate-400 text-xs">+ {pickupWeight.toFixed(1)} kg pickups</span>
                 )}
               </div>
               {/* Horarios estimados (fecha + salida editables) */}
               {(
-                <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                <div className="pt-2 border-t dark:border-gray-700 border-slate-100 space-y-1.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 text-xs dark:text-gray-400 text-slate-600">
+                      <Clock className="w-3.5 h-3.5 dark:text-gray-500 text-slate-400 shrink-0" />
                       <span className="font-medium">Fecha y hora de salida</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-2 text-[11px] dark:text-gray-400 text-slate-500">
                       <label className="flex items-center gap-1.5">
                         <span>Fecha</span>
                         <input
@@ -385,7 +385,7 @@ export function ReviewInterBranchModal({
                           value={scheduledDate}
                           min={todayISO}
                           onChange={(e) => setScheduledDate(e.target.value || todayISO)}
-                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
+                          className="h-7 px-1.5 rounded border dark:border-gray-600 border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                         />
                       </label>
                       <label className="flex items-center gap-1.5">
@@ -394,20 +394,20 @@ export function ReviewInterBranchModal({
                           type="time"
                           value={minToHHMM(departureMin)}
                           onChange={(e) => setDepartureMin(hhmmToMin(e.target.value))}
-                          className="h-7 px-1.5 rounded border border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
+                          className="h-7 px-1.5 rounded border dark:border-gray-600 border-slate-300 text-xs tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                         />
                       </label>
                     </div>
                   </div>
-                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-slate-500 pl-5">
-                    <span className="text-slate-400">Salida</span>
-                    <span className="font-semibold text-slate-700 tabular-nums">
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] dark:text-gray-400 text-slate-500 pl-5">
+                    <span className="dark:text-gray-500 text-slate-400">Salida</span>
+                    <span className="font-semibold dark:text-gray-300 text-slate-700 tabular-nums">
                       {fmtMinutesAsTime(departureMin)} · {branchLabelById(originBranchId, branches)}
                     </span>
                     {shift(a.primary_estimated_arrival_min) !== undefined && (
                       <>
-                        <span className="text-slate-400">Llega</span>
-                        <span className="font-semibold text-slate-700 tabular-nums">
+                        <span className="dark:text-gray-500 text-slate-400">Llega</span>
+                        <span className="font-semibold dark:text-gray-300 text-slate-700 tabular-nums">
                           {fmtMinutesAsTime(shift(a.primary_estimated_arrival_min)!)} · {branchLabelById(a.destination_branch, branches)}
                         </span>
                       </>
@@ -417,8 +417,8 @@ export function ReviewInterBranchModal({
                       if (arr === undefined) return null;
                       return (
                         <span key={i} className="contents">
-                          <span className="text-slate-400">Llega</span>
-                          <span className="font-semibold text-slate-700 tabular-nums">
+                          <span className="dark:text-gray-500 text-slate-400">Llega</span>
+                          <span className="font-semibold dark:text-gray-300 text-slate-700 tabular-nums">
                             {fmtMinutesAsTime(arr)} · {branchLabelById(st.branch_id, branches)}
                           </span>
                         </span>
@@ -427,14 +427,14 @@ export function ReviewInterBranchModal({
                     {shift(a.estimated_arrival_min) !== undefined &&
                       a.estimated_arrival_min !== a.primary_estimated_arrival_min && (
                       <>
-                        <span className="text-slate-400 font-medium">Llegada final</span>
-                        <span className="font-bold text-slate-800 tabular-nums">
+                        <span className="dark:text-gray-500 text-slate-400 font-medium">Llegada final</span>
+                        <span className="font-bold dark:text-gray-300 text-slate-800 tabular-nums">
                           {fmtMinutesAsTime(shift(a.estimated_arrival_min)!)}
                         </span>
                       </>
                     )}
                   </div>
-                  <p className="text-[10.5px] text-slate-400 pl-5">
+                  <p className="text-[10.5px] dark:text-gray-500 text-slate-400 pl-5">
                     {scheduledDate !== todayISO
                       ? `Salida programada para el ${scheduledDate.split("-").reverse().join("/")} · llegadas recalculadas.`
                       : departureMin === defaultDepartureMin
@@ -451,9 +451,9 @@ export function ReviewInterBranchModal({
               </span>
 
               {/* Paradas adicionales */}
-              <div className="pt-2 border-t border-slate-100">
+              <div className="pt-2 border-t dark:border-gray-700 border-slate-100">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Paradas adicionales</span>
+                  <span className="text-xs font-semibold dark:text-gray-400 text-slate-500 uppercase tracking-wide">Paradas adicionales</span>
                   {canAddMore && (
                     <Button
                       variant="outline"
@@ -466,7 +466,7 @@ export function ReviewInterBranchModal({
                   )}
                 </div>
                 {additionalStops.length === 0 ? (
-                  <p className="text-[11px] text-slate-400">Sin paradas adicionales.</p>
+                  <p className="text-[11px] dark:text-gray-500 text-slate-400">Sin paradas adicionales.</p>
                 ) : (
                   <div className="space-y-1">
                     {additionalStops.map((st, i) => (
@@ -506,18 +506,18 @@ export function ReviewInterBranchModal({
                     alreadyApplied
                       ? "border-emerald-200 bg-emerald-50/60"
                       : isPickup
-                      ? "border-slate-200 bg-slate-50/50 opacity-70"
-                      : "border-slate-200 bg-white"
+                      ? "dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50/50 opacity-70"
+                      : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white"
                   }`}
                 >
                   {/* Número de secuencia */}
-                  <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${isPickup ? "bg-slate-100 text-slate-400" : "bg-slate-200 text-slate-600"}`}>
+                  <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${isPickup ? "dark:bg-gray-700/50 bg-slate-100 dark:text-gray-500 text-slate-400" : "dark:bg-gray-700 bg-slate-200 dark:text-gray-400 text-slate-600"}`}>
                     {i + 1}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className="font-mono text-xs font-semibold text-slate-700">{tid}</span>
+                      <span className="font-mono text-xs font-semibold dark:text-gray-300 text-slate-700">{tid}</span>
                       {sh?.priority && <PriorityBadge priority={sh.priority} />}
                       {sh?.is_fragile && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">FRÁGIL</span>
@@ -526,7 +526,7 @@ export function ReviewInterBranchModal({
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">Express</span>
                       )}
                       {isPickup && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded dark:bg-gray-700/50 bg-slate-100 dark:text-gray-400 text-slate-500 font-medium">
                           Se levanta en {pickupBranch}
                         </span>
                       )}
@@ -534,13 +534,13 @@ export function ReviewInterBranchModal({
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">Ya aplicado</span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-600 truncate">
+                    <div className="text-xs dark:text-gray-400 text-slate-600 truncate">
                       {sh?.recipient?.name}
                       {sh?.recipient?.address?.city && (
-                        <span className="text-slate-400"> · {sh.recipient.address.city}</span>
+                        <span className="dark:text-gray-500 text-slate-400"> · {sh.recipient.address.city}</span>
                       )}
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
+                    <div className="text-[11px] dark:text-gray-500 text-slate-400 mt-0.5">
                       {sh?.weight_kg != null && `${sh.weight_kg.toFixed(1)} kg`}
                       {sh?.final_branch_id && (
                         <span className="ml-2">Destino final: {branchLabelById(sh.final_branch_id, branches)}</span>
@@ -554,7 +554,7 @@ export function ReviewInterBranchModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200 shrink-0">
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t dark:border-gray-700 border-slate-200 shrink-0">
           <Button
             variant="outline"
             onClick={onClose}
@@ -578,20 +578,20 @@ export function ReviewInterBranchModal({
           className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4"
           onMouseDown={(e) => { if (e.target === e.currentTarget) closeAddStop(); }}
         >
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[75vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">Agregar parada</h3>
+          <div className="dark:bg-gray-800 bg-white rounded-xl shadow-xl max-w-md w-full max-h-[75vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b dark:border-gray-700 border-slate-200 flex items-center justify-between">
+              <h3 className="text-base font-semibold dark:text-gray-100 text-slate-900">Agregar parada</h3>
               <Button variant="ghost" size="icon" onClick={closeAddStop}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Sucursal de destino</label>
+                <label className="block text-xs font-medium dark:text-gray-400 text-slate-600 mb-1">Sucursal de destino</label>
                 <select
                   value={newStopBranchId}
                   onChange={(e) => handleNewStopBranchChange(e.target.value)}
-                  className="w-full h-10 px-3 rounded-md border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
+                  className="w-full h-10 px-3 rounded-md border dark:border-gray-600 border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
                 >
                   <option value="">— Elegí una sucursal —</option>
                   {candidateBranches.map((b) => (
@@ -619,20 +619,20 @@ export function ReviewInterBranchModal({
                 }
                 return (
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                    <label className="block text-xs font-medium dark:text-gray-400 text-slate-600 mb-1">
                       Envíos que bajan en esta parada
                     </label>
-                    <p className="text-[11px] text-slate-500 mb-2">
+                    <p className="text-[11px] dark:text-gray-400 text-slate-500 mb-2">
                       Pre-seleccionados según destino final. Podés deseleccionar si alguno continúa.
                     </p>
-                    <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-md">
+                    <div className="max-h-48 overflow-y-auto border dark:border-gray-700 border-slate-200 rounded-md">
                       {relevant.map((tid) => {
                         const sh = shipments.get(tid);
                         const isApplied = appliedSet.has(tid);
                         return (
                           <label
                             key={tid}
-                            className={`flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0 text-xs ${isApplied ? "opacity-50" : "hover:bg-slate-50 cursor-pointer"}`}
+                            className={`flex items-center gap-2 px-3 py-2 border-b dark:border-gray-700 border-slate-100 last:border-0 text-xs ${isApplied ? "opacity-50" : "dark:hover:bg-gray-700 hover:bg-slate-50 cursor-pointer"}`}
                           >
                             <input
                               type="checkbox"
@@ -644,8 +644,8 @@ export function ReviewInterBranchModal({
                                 setNewStopShipments(next);
                               }}
                             />
-                            <span className="font-mono text-slate-700">{tid}</span>
-                            {sh && <span className="ml-auto text-slate-400 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
+                            <span className="font-mono dark:text-gray-300 text-slate-700">{tid}</span>
+                            {sh && <span className="ml-auto dark:text-gray-500 text-slate-400 tabular-nums">{sh.weight_kg.toFixed(1)} kg</span>}
                           </label>
                         );
                       })}
@@ -654,7 +654,7 @@ export function ReviewInterBranchModal({
                 );
               })()}
             </div>
-            <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+            <div className="px-5 py-3 border-t dark:border-gray-700 border-slate-200 flex items-center justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={closeAddStop}

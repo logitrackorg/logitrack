@@ -1025,3 +1025,20 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 }
 .dark ::-webkit-scrollbar-thumb:hover { background: #3a4a6a; }
 .dark { scrollbar-color: #2c3a55 var(--bg-page); }
+
+/* ─── Leaflet popup overrides ────────────────────────────── */
+.leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; }
+.leaflet-popup-content { margin: 14px; }
+.leaflet-popup-tip { background: var(--bg-card); }
+
+/* ─── MapView animations ─────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+}
+
+/* ─── PublicTracking skeleton animation ─────────────────── */
+@keyframes pt-skel {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

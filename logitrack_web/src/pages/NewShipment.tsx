@@ -455,22 +455,22 @@ export function NewShipment() {
     <div className={`${isMobile ? "p-4" : "p-6 md:px-8"} max-w-3xl mx-auto`}>
       <button
         onClick={() => navigate("/")}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 mb-4 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Volver al listado
       </button>
 
-      <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
+      <div className="flex items-start gap-3 mb-6 pb-4 border-b dark:border-gray-700 border-slate-200">
         <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <PackagePlus className="w-5 h-5" />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
+            <h1 className="text-2xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Nuevo envío</h1>
             {/* Auto-save status indicator */}
             {autoSaveStatus === "saving" && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1.5 text-xs dark:text-gray-500 text-slate-400">
                 <Loader2 className="w-3 h-3 animate-spin" />Guardando borrador…
               </span>
             )}
@@ -485,9 +485,9 @@ export function NewShipment() {
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">
             Completá los datos para registrar un envío.{" "}
-            <span className="text-slate-400">El borrador se guarda automáticamente al ingresar el DNI del remitente y del destinatario.</span>
+            <span className="dark:text-gray-500 text-slate-400">El borrador se guarda automáticamente al ingresar el DNI del remitente y del destinatario.</span>
           </p>
         </div>
       </div>
@@ -669,14 +669,14 @@ export function NewShipment() {
         <Section title="Sucursales" icon={<MapPin className="w-4 h-4" />}>
           {/* Sucursal de origen */}
           <div className="grid gap-1.5">
-            <label className="text-xs font-semibold text-slate-700">Sucursal de origen *</label>
+            <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">Sucursal de origen *</label>
             {branchLocked ? (() => {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
                   <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected?.name ?? form.receiving_branch_id}</p>
-                  {selected && <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>}
-                  <p className="mt-1.5 text-[11px] text-slate-500">Asignada a tu sucursal — no se puede cambiar.</p>
+                  {selected && <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>}
+                  <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">Asignada a tu sucursal — no se puede cambiar.</p>
                 </div>
               );
             })() : (
@@ -711,7 +711,7 @@ export function NewShipment() {
                   return (
                     <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                       <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected.name}</p>
-                      <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>
+                      <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>
                     </div>
                   );
                 })()}
@@ -725,11 +725,11 @@ export function NewShipment() {
             if (!finalBranch) return null;
             return (
               <div className="grid gap-1.5">
-                <label className="text-xs font-semibold text-slate-700">Sucursal final</label>
+                <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">Sucursal final</label>
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                   <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{finalBranch.name}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
-                  <p className="mt-1.5 text-[11px] text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                  <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
+                  <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
                 </div>
               </div>
             );
@@ -780,7 +780,7 @@ export function NewShipment() {
                     className={`flex items-start gap-3 cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${
                       selected
                         ? "border-[var(--brand)] bg-blue-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
+                        : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50"
                     }`}
                   >
                     <input
@@ -795,8 +795,8 @@ export function NewShipment() {
                       className="mt-0.5 shrink-0 accent-[var(--brand)]"
                     />
                     <span className="flex flex-col gap-0.5">
-                      <span className="font-semibold text-sm text-slate-900">{m.label}</span>
-                      <span className="text-xs text-slate-500">{m.description}</span>
+                      <span className="font-semibold text-sm dark:text-gray-100 text-slate-900">{m.label}</span>
+                      <span className="text-xs dark:text-gray-400 text-slate-500">{m.description}</span>
                     </span>
                   </label>
                 );
@@ -804,7 +804,7 @@ export function NewShipment() {
             </div>
           </Field>
           <Field label="">
-            <label className="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm dark:text-gray-300 text-slate-700 select-none">
               <input
                 type="checkbox"
                 checked={!!form.is_fragile}
@@ -812,7 +812,7 @@ export function NewShipment() {
                 className="accent-[var(--brand)]"
               />
               <span className="font-medium">Contenido frágil</span>
-              <span className="text-slate-500 text-xs">(manipular con cuidado)</span>
+              <span className="dark:text-gray-400 text-slate-500 text-xs">(manipular con cuidado)</span>
             </label>
           </Field>
           <Field label="Instrucciones especiales">
@@ -867,7 +867,7 @@ export function NewShipment() {
           const blocked = (atLimit && !capacityConfirmed) || envelopeTooHeavy;
           return (
             <div className="flex flex-col gap-2">
-              <p className="text-xs text-slate-400 text-center">Los cambios se guardan automáticamente</p>
+              <p className="text-xs dark:text-gray-500 text-slate-400 text-center">Los cambios se guardan automáticamente</p>
               <button
                 type="submit"
                 disabled={loading || blocked}
@@ -1111,11 +1111,11 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
 function Section({ title, subtitle, children, icon }: { title: string; subtitle?: string; children: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <Card>
-      <CardHeader className="flex items-start gap-2 border-b border-slate-100">
-        {icon && <span className="text-slate-500 mt-0.5">{icon}</span>}
+      <CardHeader className="flex items-start gap-2 border-b dark:border-gray-700 border-slate-100">
+        {icon && <span className="dark:text-gray-400 text-slate-500 mt-0.5">{icon}</span>}
         <div>
           <CardTitle>{title}</CardTitle>
-          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="text-xs dark:text-gray-500 text-slate-400 mt-0.5">{subtitle}</p>}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">{children}</CardContent>
@@ -1133,7 +1133,7 @@ function Field({ label, children, error }: { label: string; children: React.Reac
     <div className="grid gap-1.5">
       {label && (
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-semibold text-slate-700">{label}</label>
+          <label className="text-xs font-semibold dark:text-gray-300 text-slate-700">{label}</label>
           {error && <span className="text-[11px] font-medium text-red-500 leading-tight">{error}</span>}
         </div>
       )}

@@ -76,15 +76,15 @@ function SortableStop({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start gap-3 p-3 rounded-lg border bg-white ${
-        outside ? "border-amber-300 bg-amber-50/40" : "border-slate-200"
+      className={`flex items-start gap-3 p-3 rounded-lg border dark:bg-gray-800 bg-white ${
+        outside ? "border-amber-300 bg-amber-50/40" : "dark:border-gray-700 border-slate-200"
       } ${isDragging ? "shadow-lg" : ""}`}
     >
       {/* Drag handle */}
       <Button
         variant="ghost"
         size="icon-sm"
-        className="cursor-grab active:cursor-grabbing mt-0.5 shrink-0 touch-none [&_svg]:text-slate-400 hover:[&_svg]:text-slate-600"
+        className="cursor-grab active:cursor-grabbing mt-0.5 shrink-0 touch-none [&_svg]:dark:text-gray-500 text-slate-400 hover:[&_svg]:dark:text-gray-400 text-slate-600"
         {...attributes}
         {...listeners}
         tabIndex={-1}
@@ -100,7 +100,7 @@ function SortableStop({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span className="font-mono text-xs font-semibold text-slate-700">{id}</span>
+          <span className="font-mono text-xs font-semibold dark:text-gray-300 text-slate-700">{id}</span>
           {shipment?.priority && <PriorityBadge priority={shipment.priority} />}
           {shipment?.is_fragile && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">
@@ -108,13 +108,13 @@ function SortableStop({
             </span>
           )}
         </div>
-        <div className="text-xs text-slate-600 truncate">
+        <div className="text-xs dark:text-gray-400 text-slate-600 truncate">
           {shipment?.recipient.name}
           {addressParts.length > 0 && (
-            <span className="text-slate-400"> · {addressParts.join(", ")}</span>
+            <span className="dark:text-gray-500 text-slate-400"> · {addressParts.join(", ")}</span>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+        <div className="flex items-center gap-3 mt-1 text-[11px] dark:text-gray-400 text-slate-500 flex-wrap">
           <span>🕗 {windowLabel(shipment?.time_window)}</span>
           {eta && (
             <>
@@ -492,12 +492,12 @@ export function EditDriverStopsModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
+      <div className="dark:bg-gray-800 bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 shrink-0 gap-4">
+        <div className="flex items-start justify-between px-5 py-4 border-b dark:border-gray-700 border-slate-200 shrink-0 gap-4">
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-slate-900">Editar paradas · {driverLabel}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="font-semibold dark:text-gray-100 text-slate-900">Editar paradas · {driverLabel}</h2>
+            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">
               {stops.length} paradas · Arrastrá para reordenar
               {manuallyReordered && (
                 <span className="ml-2 text-amber-600 font-medium">· Orden manual</span>
@@ -534,14 +534,14 @@ export function EditDriverStopsModal({
         <div className="flex-1 flex overflow-hidden min-h-0">
 
           {/* Columna izquierda: mapa fijo + KPIs */}
-          <div className="w-[42%] shrink-0 flex flex-col border-r border-slate-200">
+          <div className="w-[42%] shrink-0 flex flex-col border-r dark:border-gray-700 border-slate-200">
             {/* Mapa — ocupa todo el espacio disponible */}
             <div className="flex-1 min-h-0 p-3 pb-2">
               <RoutePreviewMap stops={stops} shipmentMap={shipmentMap} branchCoords={branchCoords} zones={zones} safeMode={mode === "segura"} roadPolyline={roadPolyline} />
             </div>
 
             {/* KPIs + hora de salida */}
-            <div className="shrink-0 px-4 py-3 border-t border-slate-100 space-y-2.5">
+            <div className="shrink-0 px-4 py-3 border-t dark:border-gray-700 border-slate-100 space-y-2.5">
               {/* Selector de día del horizonte */}
               {availableDates && availableDates.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1">
@@ -566,20 +566,20 @@ export function EditDriverStopsModal({
                   Programado para {planDateLabel}
                 </div>
               )}
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <Clock className="w-4 h-4 shrink-0 text-slate-400" />
-                <span className="shrink-0 text-slate-500">Salida</span>
+              <div className="flex items-center gap-2 text-sm dark:text-gray-400 text-slate-600">
+                <Clock className="w-4 h-4 shrink-0 dark:text-gray-500 text-slate-400" />
+                <span className="shrink-0 dark:text-gray-400 text-slate-500">Salida</span>
                 <input
                   type="time"
                   value={departure}
                   onChange={(e) => setDeparture(e.target.value)}
-                  className="border border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--sidebar-bg)]"
+                  className="border dark:border-gray-700 border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono dark:text-gray-300 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--sidebar-bg)]"
                 />
                 {planDateLabel && (
-                  <span className="text-xs text-slate-400">del {planDate?.slice(8, 10)}/{planDate?.slice(5, 7)}</span>
+                  <span className="text-xs dark:text-gray-500 text-slate-400">del {planDate?.slice(8, 10)}/{planDate?.slice(5, 7)}</span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm dark:text-gray-400 text-slate-500">
                 <span>{totalKm} km</span>
                 <span>{durationStr}</span>
               </div>
@@ -587,7 +587,7 @@ export function EditDriverStopsModal({
                 <span className={`font-medium ${violations === 0 ? "text-emerald-700" : "text-amber-700"}`}>
                   {eta.stops.length - violations}/{eta.stops.length} en ventana
                 </span>
-                <span className="text-slate-500">Regresa {fmtHHMM(eta.returnTime)}</span>
+                <span className="dark:text-gray-400 text-slate-500">Regresa {fmtHHMM(eta.returnTime)}</span>
               </div>
             </div>
           </div>
@@ -618,7 +618,7 @@ export function EditDriverStopsModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-200 shrink-0 gap-3">
+        <div className="flex items-center justify-between px-5 py-4 border-t dark:border-gray-700 border-slate-200 shrink-0 gap-3">
           <Button
             variant="ghost"
             disabled={recomputing}

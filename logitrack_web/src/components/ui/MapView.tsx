@@ -12,8 +12,11 @@ import {
   Play,
   RotateCcw,
   Crosshair,
+  Factory,
+  Film,
+  Zap,
+  X,
 } from "lucide-react";
-import "./MapView.css";
 import type { GeoMode } from "../../hooks/useGeolocation";
 import type { Zone } from "../../api/zones";
 import { ZONE_COLOR } from "../../api/zones";
@@ -76,6 +79,13 @@ function haversineKm(
   return R * 2 * Math.asin(Math.sqrt(h));
 }
 
+// Raw SVG icons for Leaflet HTML strings (can't use React components there)
+const CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><path d="M20 6 9 17l-5-5"/></svg>`;
+const X_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`;
+const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
+const ALERT_TRIANGLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+const MAP_PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+
 export function MapView({
   waypoints,
   origin,
@@ -93,16 +103,13 @@ export function MapView({
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const doneRouteLayer = useRef<L.Polyline | null>(null);
   const pendingRouteLayer = useRef<L.Polyline | null>(null);
-  // Geometría completa de la ruta (origin → todas las paradas) para split local
   const fullRouteGeomRef = useRef<[number, number][]>([]);
 
-  // Para debounce del reroute por GPS (solo GPS real)
   const lastFetchRef = useRef<{
     waypointsKey: string;
     position: { lat: number; lng: number } | null;
     time: number;
   }>({ waypointsKey: "", position: null, time: 0 });
-  // Refs para leer valores actuales dentro de fetchRoute (evita stale closures)
   const userLocationRef = useRef(userLocation);
   const simulationModeRef = useRef(simulationMode);
   const fetchRouteRef = useRef<(silent?: boolean) => Promise<void>>(async () => {});
@@ -117,7 +124,7 @@ export function MapView({
 
   useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
-  // Inicializar mapa
+  // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
@@ -138,7 +145,6 @@ export function MapView({
       }
     });
 
-
     mapInstance.current = map;
     zonesLayerRef.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
@@ -152,7 +158,7 @@ export function MapView({
     };
   }, []);
 
-  // Renderizar zonas peligrosas como polígonos coloreados
+  // Render danger zones as colored polygons
   useEffect(() => {
     const layer = zonesLayerRef.current;
     if (!layer) return;
@@ -168,7 +174,7 @@ export function MapView({
       });
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:140px">
-          <p style="font-weight:700;font-size:13px;margin:0 0 3px">⚠️ ${z.name}</p>
+          <p style="font-weight:700;font-size:13px;margin:0 0 3px">${ALERT_TRIANGLE_SVG} ${z.name}</p>
           ${z.description ? `<p style="font-size:11px;color:#64748b;margin:0">${z.description}</p>` : ""}
         </div>
       `);
@@ -176,7 +182,7 @@ export function MapView({
     });
   }, [zones]);
 
-  // Actualizar marcadores de entrega cuando cambian los waypoints
+  // Update delivery markers when waypoints change
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current || waypoints.length === 0) return;
 
@@ -184,42 +190,43 @@ export function MapView({
     if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
     if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
-    // Sucursal
+    // Origin branch marker
     if (origin) {
       const depotIcon = L.divIcon({
-        html: `<div class="depot-marker"><div class="depot-icon">🏭</div></div>`,
+        html: `<div class="w-10 h-10 rounded-full bg-[#1e3a5f] border-[3px] border-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer"><div class="text-lg leading-none">${FACTORY_SVG}</div></div>`,
         className: "",
         iconSize: [40, 40],
         iconAnchor: [20, 40],
       });
       const dm = L.marker([origin.latitude, origin.longitude], { icon: depotIcon });
       dm.bindPopup(`
-        <div class="marker-popup">
-          <div class="popup-header"><strong class="popup-sequence">Sucursal</strong></div>
-          <h4 class="popup-name">${origin.name}</h4>
-          <p class="popup-address" style="color:#6b7280;font-size:12px">Punto de partida</p>
+        <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
+          <div class="flex items-center justify-between mb-2 gap-2">
+            <strong class="text-[var(--text-heading)] text-[13px]">Sucursal</strong>
+          </div>
+          <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${origin.name}</h4>
+          <p class="text-xs text-[#6b7280] m-0">Punto de partida</p>
         </div>
       `);
       dm.addTo(markersLayer.current!);
     }
 
-    // Paradas
+    // Stops
     waypoints.forEach((wp) => createMarker(wp).addTo(markersLayer.current!));
 
-    // Ajustar vista
+    // Fit view
     const allPoints: [number, number][] = waypoints.map((wp) => [wp.latitude, wp.longitude]);
     if (origin) allPoints.push([origin.latitude, origin.longitude]);
     const curLoc = userLocationRef.current;
     if (curLoc) allPoints.push([curLoc.lat, curLoc.lng]);
     mapInstance.current.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50] });
 
-    // Fetch inmediato cuando cambian waypoints (entrega confirmada, etc.)
     const waypointsKey = waypoints.map((w) => `${w.tracking_id}:${w.status}`).join(",");
     lastFetchRef.current = { waypointsKey, position: userLocationRef.current ?? null, time: Date.now() };
     fetchRouteRef.current();
   }, [waypoints, origin]);
 
-  // Actualizar marcador GPS del chofer (debounced reroute)
+  // Update GPS marker
   useEffect(() => {
     if (!mapInstance.current || !userMarkerLayer.current) return;
 
@@ -228,28 +235,24 @@ export function MapView({
     if (!userLocation) return;
 
     const icon = L.divIcon({
-      html: `<div class="user-marker"><div class="user-dot"></div><div class="user-ring"></div></div>`,
+      html: `<div class="relative w-8 h-8"><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[var(--brand)] border-[3px] border-white shadow-[0_2px_8px_rgba(37,99,235,0.5)] z-[2]"></div><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[rgba(37,99,235,0.2)] animate-[pulse-ring_2s_ease-out_infinite]"></div></div>`,
       className: "",
       iconSize: [32, 32],
       iconAnchor: [16, 16],
     });
     L.marker([userLocation.lat, userLocation.lng], { icon }).addTo(userMarkerLayer.current!);
 
-    // Modo seguimiento: centrar el mapa en la posición del chofer
     if (followModeRef.current) {
       programmaticPanRef.current = true;
       mapInstance.current.panTo([userLocation.lat, userLocation.lng], { animate: true, duration: 0.5 });
       setTimeout(() => { programmaticPanRef.current = false; }, 600);
     }
 
-
-    // En simulación: split local sin llamar a OSRM
     if (simulationModeRef.current === "simulate") {
       splitRouteAtGps(userLocation);
       return;
     }
 
-    // GPS real: reroute OSRM con debounce (100m o 30s)
     const now = Date.now();
     const last = lastFetchRef.current;
     const distMoved = last.position ? haversineKm(userLocation, last.position) > 0.1 : true;
@@ -261,15 +264,12 @@ export function MapView({
     }
   }, [userLocation]);
 
-  // Al cambiar de modo (entrar/salir simulación), resetear el dibujo de la ruta
   useEffect(() => {
     if (!mapInstance.current) return;
 
-    // Borrar ruta vieja siempre que cambia el modo
     if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
     if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
-    // Disparar fetchRoute para redibujar correctamente según el nuevo modo
     fetchRouteRef.current();
   }, [simulationMode]);
 
@@ -278,11 +278,17 @@ export function MapView({
     const isFailed = wp.status === "delivery_failed";
     const isDelivered = wp.status === "delivered";
 
+    const markerColor = isDelivered
+      ? "bg-[var(--ok)]"
+      : isFailed
+      ? "bg-[var(--danger-c)]"
+      : "bg-[var(--warn)]";
+
+    const opacityClass = isCompleted ? "opacity-80" : "";
+
     const icon = L.divIcon({
-      html: `<div class="custom-marker ${isCompleted ? "completed" : ""} ${isFailed ? "failed" : ""} ${isDelivered ? "delivered" : ""}">
-        <div class="marker-number">${wp.sequence}</div>
-      </div>`,
-      className: "",
+      html: `<div class="w-9 h-9 rounded-[50%_50%_50%_0] ${markerColor} border-[3px] border-white shadow-[0_2px_8px_rgba(0,0,0,0.25)] -rotate-45 flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-110 hover:shadow-[0_4px_12px_rgba(0,0,0,0.3)]"><div class="rotate-45 text-white font-bold text-sm">${wp.sequence}</div></div>`,
+      className: opacityClass,
       iconSize: [36, 36],
       iconAnchor: [18, 36],
     });
@@ -290,26 +296,23 @@ export function MapView({
     const marker = L.marker([wp.latitude, wp.longitude], { icon });
 
     const badge = isDelivered
-      ? '<span class="status-badge delivered">✓ Entregado</span>'
+      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--ok-bg)] text-[var(--ok-text)]">${CHECK_SVG} Entregado</span>`
       : isFailed
-      ? '<span class="status-badge failed">✗ No entregado</span>'
-      : '<span class="status-badge pending">Pendiente</span>';
+      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--danger-bg)] text-[var(--danger-text)]">${X_SVG} No entregado</span>`
+      : `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--warn-bg)] text-[var(--warn-text)]">Pendiente</span>`;
 
     marker.bindPopup(`
-      <div class="marker-popup">
-        <div class="popup-header">
-          <strong class="popup-sequence">#${wp.sequence}</strong>
+      <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
+        <div class="flex items-center justify-between mb-2 gap-2">
+          <strong class="text-[var(--text-heading)] text-[13px]">#${wp.sequence}</strong>
           ${badge}
         </div>
-        <h4 class="popup-name">${wp.name}</h4>
-        <p class="popup-address">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
+        <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${wp.name}</h4>
+        <p class="text-xs text-[var(--text-secondary)] m-0 mb-3 flex items-start gap-1.5 leading-[1.4]">
+          ${MAP_PIN_SVG}
           ${wp.address}
         </p>
-        <button class="popup-button" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
+        <button class="w-full px-3 py-2 bg-[#1e3a5f] text-white border-none rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-200 hover:bg-[#2d5a8f]" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
           Ver detalle →
         </button>
       </div>
@@ -339,11 +342,9 @@ export function MapView({
     }
   };
 
-  // Corta la polilínea almacenada en el punto más cercano al GPS — sin llamar a OSRM
   const splitRouteAtGps = (gps: { lat: number; lng: number }) => {
     if (!mapInstance.current) return;
 
-    // Limpiar siempre, independientemente de si tenemos geometría
     if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
     if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
@@ -383,16 +384,12 @@ export function MapView({
       const toCoord = (wp: Waypoint) => `${wp.longitude},${wp.latitude}`;
       const originCoord = origin ? `${origin.longitude},${origin.latitude}` : null;
 
-      // Ruta completa: origin solo en simulación (driver parte de la sucursal);
-      // en modo normal el polyline conecta solo las paradas de entrega.
       const fullPoints: string[] = [];
       if (originCoord && simulationModeRef.current === "simulate") fullPoints.push(originCoord);
       sorted.forEach((wp) => fullPoints.push(toCoord(wp)));
 
-      // Leer userLocation actual (no de closure, sino del ref)
       const currentLocation = userLocationRef.current;
 
-      // Tramo pendiente: GPS > última completada > sucursal → paradas pendientes (para ETA)
       const gpsCoord = currentLocation ? `${currentLocation.lng},${currentLocation.lat}` : null;
       const pendingAnchor =
         gpsCoord ??
@@ -406,26 +403,19 @@ export function MapView({
       if (doneRouteLayer.current) { doneRouteLayer.current.remove(); doneRouteLayer.current = null; }
       if (pendingRouteLayer.current) { pendingRouteLayer.current.remove(); pendingRouteLayer.current = null; }
 
-      // Geometría completa (para dibujar) + segmento pendiente (para ETA)
-      // Si los puntos son iguales, una sola llamada; si no, secuenciales para respetar rate limit
       const samePoints = fullPoints.join(";") === pendingPoints.join(";");
       const fullResult = await fetchOsrm(fullPoints);
       const pendingResult = samePoints ? fullResult : await fetchOsrm(pendingPoints);
 
-      // Guardar geometría completa para split local (solo usada en simulación)
       if (fullResult) fullRouteGeomRef.current = fullResult.coords;
 
-      // En simulación: solo dibujar si ya tenemos posición simulada;
-      // si no, dejar vacío y esperar al primer tick (el efecto [userLocation] dibujará)
       if (simulationModeRef.current === "simulate") {
         if (userLocationRef.current) {
           splitRouteAtGps(userLocationRef.current);
         }
       } else {
-        // GPS real o sin GPS: dibujar gris (debajo) + naranja (encima)
         if (completed.length > 0) {
           const donePoints: string[] = [];
-          // Fuera de simulación: el tramo completado conecta solo las paradas (sin sucursal de origen)
           completed.forEach((wp) => donePoints.push(toCoord(wp)));
           const doneResult = await fetchOsrm(donePoints);
           if (doneResult) {
@@ -459,7 +449,7 @@ export function MapView({
   };
   useLayoutEffect(() => { fetchRouteRef.current = fetchRoute; });
 
-  // Event listener para clicks en popups
+  // Event listener for popup clicks
   useEffect(() => {
     const handle = (e: Event) => onWaypointClick((e as CustomEvent).detail);
     window.addEventListener("waypoint-click", handle);
@@ -468,10 +458,10 @@ export function MapView({
 
   if (waypoints.length === 0) {
     return (
-      <div className="map-empty">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] bg-[var(--bg-page)] rounded-xl border-2 border-dashed border-[var(--border)]">
         <MapPin className="w-12 h-12 text-slate-300 mb-3" />
-        <p className="text-sm font-semibold text-slate-900">No hay entregas para mostrar</p>
-        <p className="text-xs text-slate-500 mt-1">
+        <p className="text-sm font-semibold text-slate-900 dark:text-[var(--text-primary)]">No hay entregas para mostrar</p>
+        <p className="text-xs text-slate-500 dark:text-[var(--text-secondary)] mt-1">
           Las paradas aparecerán aquí cuando inicies la ruta.
         </p>
       </div>
@@ -486,18 +476,20 @@ export function MapView({
   const isSimulating = simulationMode && simulationMode !== "real";
 
   return (
-    <div className="map-view-container">
-      <div ref={mapRef} className="map-canvas" />
+    <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
+      <div ref={mapRef} className="h-full w-full" />
 
-      {/* Banner de simulación */}
+      {/* Simulation banner */}
       {isSimulating && (
-        <div className="sim-banner">
-          <span className="sim-badge">🎬 Modo simulación</span>
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1100] flex items-center gap-2 bg-[rgba(15,23,42,0.85)] backdrop-blur-[8px] text-white px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-[0_2px_12px_rgba(0,0,0,0.2)]">
+          <span className="inline-flex items-center gap-1.5 opacity-90">
+            <Film className="w-3.5 h-3.5" /> Modo simulación
+          </span>
           {simulationMode === "simulate" && simulationControls && (
-            <div className="sim-controls">
+            <div className="flex gap-1 ml-1">
               <button
                 onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
-                className="sim-btn"
+                className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]"
               >
                 {simulationControls.isPaused ? (
                   <><Play className="w-3 h-3" /> Reanudar</>
@@ -505,22 +497,22 @@ export function MapView({
                   <><Pause className="w-3 h-3" /> Pausar</>
                 )}
               </button>
-              <button onClick={simulationControls.reset} className="sim-btn">
+              <button onClick={simulationControls.reset} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]">
                 <RotateCcw className="w-3 h-3" /> Reiniciar
               </button>
               {simulationControls.onCycleSpeed && (
-                <button onClick={simulationControls.onCycleSpeed} className="sim-btn" title="Cambiar velocidad de simulación">
-                  ⚡ x{simulationControls.speedMultiplier ?? 1}
+                <button onClick={simulationControls.onCycleSpeed} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]" title="Cambiar velocidad de simulación">
+                  <Zap className="w-3 h-3" /> x{simulationControls.speedMultiplier ?? 1}
                 </button>
               )}
               {simulationControls.onFastForwardTime && (
-                <button onClick={simulationControls.onFastForwardTime} className="sim-btn" title="Simular paso de 2 horas (test de fatiga)">
+                <button onClick={simulationControls.onFastForwardTime} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]" title="Simular paso de 2 horas (test de fatiga)">
                   ⏩ +2h
                 </button>
               )}
               {simulationControls.onExit && (
-                <button onClick={simulationControls.onExit} className="sim-btn sim-btn-exit">
-                  ✕ Salir
+                <button onClick={simulationControls.onExit} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(239,68,68,0.5)] bg-[rgba(255,255,255,0.12)] text-[#fca5a5] text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(239,68,68,0.2)]">
+                  <X className="w-3 h-3" /> Salir
                 </button>
               )}
             </div>
@@ -528,10 +520,14 @@ export function MapView({
         </div>
       )}
 
-      {/* Botón seguimiento / centrar */}
+      {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`recenter-btn${followMode ? " recenter-btn--active" : ""}`}
+          className={`absolute right-4 bottom-[200px] z-[1000] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+            followMode
+              ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
+              : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
+          }`}
           onClick={() => {
             const next = !followMode;
             setFollowMode(next);
@@ -548,55 +544,55 @@ export function MapView({
       )}
 
       {/* Info panel */}
-      <div className="map-info-panel">
-        <div className="info-card">
-          <Package className="w-4 h-4 text-slate-600" />
-          <div className="info-content">
-            <p className="info-label">Paradas</p>
-            <p className="info-value">{waypoints.length}</p>
+      <div className="absolute top-4 right-4 flex flex-col gap-2 z-[1000] max-w-[180px] max-[640px]:max-w-[160px]">
+        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
+          <Package className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Paradas</p>
+            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{waypoints.length}</p>
           </div>
         </div>
 
         {routeInfo && (
           <>
-            <div className="info-card">
-              <Navigation className="w-4 h-4 text-slate-600" />
-              <div className="info-content">
-                <p className="info-label">Distancia</p>
-                <p className="info-value">{(routeInfo.distance / 1000).toFixed(1)} km</p>
+            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
+              <Navigation className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Distancia</p>
+                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{(routeInfo.distance / 1000).toFixed(1)} km</p>
               </div>
             </div>
-            <div className="info-card">
-              <Clock className="w-4 h-4 text-slate-600" />
-              <div className="info-content">
-                <p className="info-label">Tiempo est.</p>
-                <p className="info-value">{Math.round(routeInfo.duration / 60)} min</p>
+            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
+              <Clock className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Tiempo est.</p>
+                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{Math.round(routeInfo.duration / 60)} min</p>
               </div>
             </div>
           </>
         )}
 
-        <div className="info-card">
+        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <div className="info-content">
-            <p className="info-label">Completadas</p>
-            <p className="info-value">{completedCount}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Completadas</p>
+            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{completedCount}</p>
           </div>
         </div>
 
-        <div className="info-card">
+        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
           <AlertTriangle className="w-4 h-4 text-amber-600" />
-          <div className="info-content">
-            <p className="info-label">Pendientes</p>
-            <p className="info-value">{pendingCount}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Pendientes</p>
+            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{pendingCount}</p>
           </div>
         </div>
       </div>
 
       {loading && (
-        <div className="map-loading">
-          <div className="loading-spinner" />
-          <p className="text-xs text-slate-600 mt-2">Calculando ruta...</p>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">
+          <div className="w-6 h-6 border-[3px] border-[var(--border)] border-t-[var(--warn)] rounded-full animate-spin" />
+          <p className="text-xs text-slate-600 dark:text-[var(--text-secondary)] mt-2">Calculando ruta...</p>
         </div>
       )}
     </div>

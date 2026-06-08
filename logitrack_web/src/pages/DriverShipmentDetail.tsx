@@ -183,18 +183,18 @@ export function DriverShipmentDetail() {
   return (
     <div className="pb-32">
       {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
         <div className="px-4 sm:px-6 max-w-2xl mx-auto py-3 flex items-center gap-3">
           <button
             onClick={() => navigate("/driver/route")}
-            className="-ml-1 w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+            className="-ml-1 w-9 h-9 rounded-full dark:hover:bg-gray-700 hover:bg-slate-100 flex items-center justify-center dark:text-gray-300 text-slate-700 cursor-pointer"
             aria-label="Volver a mi ruta"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-mono text-slate-400 leading-tight">{shipment.tracking_id}</p>
-            <p className="text-sm font-bold text-slate-900 truncate leading-tight">Detalle del envío</p>
+            <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400 leading-tight">{shipment.tracking_id}</p>
+            <p className="text-sm font-bold dark:text-gray-100 text-slate-900 truncate leading-tight">Detalle del envío</p>
           </div>
           {isDelivered && (
             <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full">
@@ -238,15 +238,15 @@ export function DriverShipmentDetail() {
 
         {/* Hero: nombre + dirección */}
         <Card className="p-5 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-2">
             Destinatario
           </p>
-          <h2 className="text-xl font-bold text-slate-900 leading-tight">{name}</h2>
-          <div className="mt-3 flex items-start gap-2 text-slate-700">
-            <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-1" />
+          <h2 className="text-xl font-bold dark:text-gray-100 text-slate-900 leading-tight">{name}</h2>
+          <div className="mt-3 flex items-start gap-2 dark:text-gray-300 text-slate-700">
+            <MapPin className="w-4 h-4 dark:text-gray-500 text-slate-400 shrink-0 mt-1" />
             <div className="flex-1">
               <p className="text-base font-semibold leading-snug">{street}</p>
-              <p className="text-sm text-slate-500 leading-snug">
+              <p className="text-sm dark:text-gray-400 text-slate-500 leading-snug">
                 {[city, province, postal].filter(Boolean).join(", ")}
               </p>
             </div>
@@ -267,7 +267,7 @@ export function DriverShipmentDetail() {
                 Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
               <Package className="w-3 h-3" />
               {weightKg} kg · {PACKAGE_LABELS[packageType] ?? packageType}
             </span>
@@ -287,7 +287,7 @@ export function DriverShipmentDetail() {
             />
           </div>
 
-          <p className="mt-3 text-sm text-slate-700 font-medium">{phone}</p>
+          <p className="mt-3 text-sm dark:text-gray-300 text-slate-700 font-medium">{phone}</p>
         </Card>
 
         {/* Special instructions: prominente */}
@@ -305,7 +305,7 @@ export function DriverShipmentDetail() {
 
         {/* Paquete */}
         <Card className="p-4 mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500 mb-3">
             Paquete
           </p>
           <div className="grid gap-2 text-sm">
@@ -322,19 +322,19 @@ export function DriverShipmentDetail() {
         {/* Remitente — colapsado por defecto, contenido secundario */}
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
-            <User className="w-4 h-4 text-slate-400" />
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <User className="w-4 h-4 dark:text-gray-500 text-slate-400" />
+            <p className="text-[11px] font-bold uppercase tracking-wider dark:text-gray-400 text-slate-500">
               Remitente
             </p>
           </div>
-          <p className="text-sm font-semibold text-slate-900">{senderName}</p>
+          <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">{senderName}</p>
           {senderPhone && (
-            <p className="text-xs text-slate-500 mt-0.5">{senderPhone}</p>
+            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">{senderPhone}</p>
           )}
         </Card>
 
         {!routeStarted && isOutForDelivery && (
-          <p className="mt-4 text-xs text-center text-slate-500 leading-relaxed">
+          <p className="mt-4 text-xs text-center dark:text-gray-400 text-slate-500 leading-relaxed">
             Iniciá tu ruta desde "Mi ruta" para habilitar las acciones de entrega.
           </p>
         )}
@@ -342,12 +342,12 @@ export function DriverShipmentDetail() {
 
       {/* Sticky CTAs cuando se puede actuar */}
       {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur border-t dark:border-gray-700 border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="max-w-2xl mx-auto flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setFailedOpen(true)}
-                className="h-12 rounded-xl border-2 border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
+                className="h-12 rounded-xl border-2 border-rose-300 dark:bg-gray-800 bg-white hover:bg-rose-50 text-rose-700 text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5"
               >
                 <XCircle className="w-4 h-4" />
                 No entregado
@@ -409,8 +409,8 @@ export function DriverShipmentDetail() {
 function Row({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="flex gap-3 items-start">
-      <span className="text-slate-500 min-w-[90px]">{label}</span>
-      <span className={highlight ? "font-semibold text-amber-700" : "font-medium text-slate-900"}>{value}</span>
+      <span className="dark:text-gray-400 text-slate-500 min-w-[90px]">{label}</span>
+      <span className={highlight ? "font-semibold text-amber-700" : "font-medium dark:text-gray-100 text-slate-900"}>{value}</span>
     </div>
   );
 }
@@ -447,7 +447,7 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${recipientName}`}
     >
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         DNI del destinatario
       </label>
       <input
@@ -457,16 +457,16 @@ function DeliverSheet({
         inputMode="numeric"
         autoComplete="off"
         placeholder="Ej: 30123456"
-        className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
+        className="w-full h-12 px-4 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-base placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500"
       />
-      <p className="mt-1.5 text-[11px] text-slate-500">
+      <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
         Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
       </p>
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={onClose}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -513,7 +513,7 @@ function FailedSheet({
       title="Marcar como no entregado"
       description={`No entrega a ${recipientName}`}
     >
-      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
         ¿Qué pasó?
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -526,7 +526,7 @@ function FailedSheet({
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
                 active
                   ? "border-rose-500 bg-rose-50 text-rose-800"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
               }`}
             >
               {r.label}
@@ -535,7 +535,7 @@ function FailedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -543,13 +543,13 @@ function FailedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
+        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-rose-500/20 focus:border-rose-500 resize-y"
       />
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={onClose}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -596,7 +596,7 @@ function RejectedSheet({
       title="Rechazado por destinatario"
       description={`${recipientName} rechazó el envío`}
     >
-      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
         Motivo del rechazo
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -609,7 +609,7 @@ function RejectedSheet({
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${
                 active
                   ? "border-amber-500 bg-amber-50 text-amber-800"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
               }`}
             >
               {r.emoji} {r.label}
@@ -618,7 +618,7 @@ function RejectedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -626,13 +626,13 @@ function RejectedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional"}
         rows={3}
-        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
+        className="w-full px-4 py-3 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
       />
 
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={onClose}
-          className="h-12 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -651,18 +651,18 @@ function RejectedSheet({
 function DetailSkeleton() {
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="h-6 w-24 rounded bg-slate-100 animate-pulse mb-5" />
-      <div className="rounded-xl border border-slate-200 bg-white p-5 mb-3">
-        <div className="h-3 w-20 rounded bg-slate-100 animate-pulse mb-3" />
-        <div className="h-6 w-3/5 rounded bg-slate-100 animate-pulse mb-3" />
-        <div className="h-4 w-4/5 rounded bg-slate-100 animate-pulse" />
+      <div className="h-6 w-24 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-5" />
+      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-5 mb-3">
+        <div className="h-3 w-20 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
+        <div className="h-6 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse mb-3" />
+        <div className="h-4 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         <div className="grid grid-cols-3 gap-2 mt-5">
-          <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
-          <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+          <div className="h-16 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-4 h-24 animate-pulse" />
+      <div className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4 h-24 animate-pulse" />
     </div>
   );
 }

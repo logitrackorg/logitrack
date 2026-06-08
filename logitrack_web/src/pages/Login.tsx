@@ -58,7 +58,7 @@ function formatCountdown(seconds: number): string {
 }
 
 const INPUT_CLASS =
-  "w-full h-12 px-4 rounded-lg border border-blue-200 bg-white dark:bg-gray-800 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all";
+  "w-full h-12 px-4 rounded-lg border border-blue-200 dark:bg-gray-800 bg-white dark:border-gray-600 text-sm dark:text-gray-100 text-gray-900 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all";
 
 const SPINNER = (
   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -275,7 +275,7 @@ export function Login() {
               Gestión logística<br />
               <span className="text-orange-500">centralizada</span>
             </h1>
-            <p className="text-slate-400 text-base leading-relaxed max-w-sm">
+            <p className="dark:text-gray-500 text-slate-400 text-base leading-relaxed max-w-sm">
               Coordiná envíos, flota y sucursales desde una sola plataforma con control de acceso por rol.
             </p>
           </div>
@@ -299,19 +299,19 @@ export function Login() {
                 <div className="text-2xl font-bold text-white tabular-nums">
                   {stats ? stats[key].toLocaleString("es-AR") : "—"}
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+                <div className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">{label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-600">
+        <p className="relative text-xs dark:text-gray-400 text-slate-600">
           UNGS · Laboratorio de Construcción de Software · 2026
         </p>
       </div>
 
       {/* ── Panel derecho ── */}
-      <div className="flex items-center justify-center p-6 bg-white dark:bg-gray-800 border-l border-slate-200 dark:border-gray-700">
+      <div className="flex items-center justify-center p-6 dark:bg-gray-800 bg-white border-l dark:border-gray-700 border-slate-200">
         <div className="w-full max-w-[360px] space-y-7">
 
           {/* Logo mobile */}
@@ -330,13 +330,13 @@ export function Login() {
           {resetStep === "idle" && (
             <>
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido</h2>
-                <p className="text-sm text-gray-500">Ingresá tus credenciales para continuar</p>
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Bienvenido</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tus credenciales para continuar</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="username" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="username" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Usuario
                   </label>
                   <input
@@ -352,7 +352,7 @@ export function Login() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="password" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Contraseña
                   </label>
                   <input
@@ -408,16 +408,16 @@ export function Login() {
               </button>
 
               {/* Cuentas de prueba */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="rounded-xl border dark:border-gray-700 border-slate-200 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setShowTestUsers(!showTestUsers)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between px-4 py-3 dark:bg-gray-800/50 bg-slate-50 dark:hover:bg-gray-700 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span className="text-xs font-semibold dark:text-gray-400 text-slate-500 uppercase tracking-wider">
                     Cuentas de prueba
                   </span>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-4 h-4 dark:text-gray-500 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
                 </button>
 
                 {showTestUsers && (
@@ -427,9 +427,9 @@ export function Login() {
                         key={u}
                         type="button"
                         onClick={() => { setUsername(u); setPassword(p); }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
+                        className="w-full flex items-center justify-between px-4 py-2.5 dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
                       >
-                        <span className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{u}</span>
+                        <span className="text-xs font-semibold dark:text-gray-300 text-gray-800 group-hover:text-blue-600 transition-colors">{u}</span>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
                           {r}
                         </span>
@@ -445,13 +445,13 @@ export function Login() {
           {resetStep === "username" && (
             <div className="space-y-6">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Recuperar contraseña</h2>
-                <p className="text-sm text-gray-500">Ingresá tu nombre de usuario</p>
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Recuperar contraseña</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tu nombre de usuario</p>
               </div>
 
               <form onSubmit={(e) => { e.preventDefault(); handleSendCode(); }} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="reset-username" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="reset-username" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Usuario
                   </label>
                   <input
@@ -491,7 +491,7 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => setResetStep("idle")}
-                className="w-full text-sm text-slate-500 hover:text-slate-700 text-center cursor-pointer"
+                className="w-full text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 text-center cursor-pointer"
               >
                 ← Volver al login
               </button>
@@ -502,8 +502,8 @@ export function Login() {
           {resetStep === "otp" && (
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingresá el código</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Ingresá el código</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">
                   Revisá tu casilla de correo
                 </p>
               </div>
@@ -522,7 +522,7 @@ export function Login() {
               ) : (
                 <form onSubmit={(e) => { e.preventDefault(); if (canConfirm) handleConfirmReset(); }} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label htmlFor="otp-code" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="otp-code" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Código de verificación
                     </label>
                     <input
@@ -535,18 +535,18 @@ export function Login() {
                       onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ""))}
                       placeholder="000000"
                       autoFocus
-                      className="w-full h-14 px-4 rounded-lg border border-blue-200 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-center text-2xl tracking-widest text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      className="w-full h-14 px-4 rounded-lg border border-blue-200 dark:border-gray-600 dark:bg-gray-800 bg-white font-mono text-center text-2xl tracking-widest dark:text-gray-100 text-gray-900 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     />
                   </div>
 
-                  <p className={`text-xs text-center ${otpSecondsLeft === 0 ? "text-red-600 font-medium" : "text-slate-400"}`}>
+                  <p className={`text-xs text-center ${otpSecondsLeft === 0 ? "text-red-600 font-medium" : "dark:text-gray-500 text-slate-400"}`}>
                     {otpSecondsLeft > 0
                       ? `El código expira en ${formatCountdown(otpSecondsLeft)}`
                       : "El código expiró."}
                   </p>
 
                   <div className="space-y-1.5">
-                    <label htmlFor="new-password" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="new-password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Nueva contraseña
                     </label>
                     <input
@@ -568,7 +568,7 @@ export function Login() {
                         </div>
                       );
                       return (
-                        <div className="flex flex-col gap-1 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div className="flex flex-col gap-1 mt-1.5 px-3 py-2 dark:bg-gray-800/50 bg-slate-50 border dark:border-gray-700 border-slate-200 rounded-lg">
                           {item(ok8, "Al menos 8 caracteres")}
                           {item(okNum, "Al menos un número")}
                         </div>
@@ -577,7 +577,7 @@ export function Login() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label htmlFor="confirm-password" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="confirm-password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Confirmar contraseña
                     </label>
                     <input
