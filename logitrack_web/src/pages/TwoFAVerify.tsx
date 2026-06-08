@@ -100,7 +100,7 @@ export const TwoFAVerify: React.FC = () => {
         attemptsRef.current = 0;
         setAttemptsLeft(0);
         setError('');
-        setTick(t => t + 1); // forzar re-render inmediato para mostrar countdown
+        setLockoutRemaining(secs);
       } else {
         const newLeft = Math.max(0, attemptsRef.current - 1);
         attemptsRef.current = newLeft;

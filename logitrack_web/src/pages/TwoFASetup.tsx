@@ -132,7 +132,7 @@ export const TwoFASetup: React.FC<Props> = ({ required = false }) => {
         attemptsRef.current = 0;
         setAttemptsLeft(0);
         setError('');
-        setTick(t => t + 1);
+        setLockoutRemaining(secs);
       } else {
         const newLeft = Math.max(0, attemptsRef.current - 1);
         attemptsRef.current = newLeft;
