@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { twoFAApi } from '../api/two-fa';
 import { useAuth } from '../context/AuthContext';
-import { AlertCircle, Shield, Clock } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
+import { Shield, AlertCircle, Clock, Lock } from 'lucide-react';
 
 const MAX_ATTEMPTS = 3;
 
@@ -21,16 +23,13 @@ function formatCountdown(seconds: number): string {
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`;
 }
 
-export const TwoFAVerify: React.FC = () => {
+export function TwoFAVerify() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Intentos: ref + state para evitar problemas con closures y batching
   const attemptsRef = useRef(MAX_ATTEMPTS);
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
-
-  // Lockout: timestamp absoluto en un ref, countdown en state actualizado por ticker
   const lockoutUntilRef = useRef(0);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
 
@@ -44,7 +43,20 @@ export const TwoFAVerify: React.FC = () => {
     if (!sessionToken) navigate('/login');
   }, [sessionToken, navigate]);
 
-  // Ticker global: actualiza countdown cada segundo y limpia el lockout al expirar
+  useEffect(() => {
+    const storedCooldown = sessionStorage.getItem('2fa_verify_cooldown');
+    if (storedCooldown) {
+      const cooldownTime = parseInt(storedCooldown, 10);
+      if (Date.now() >= cooldownTime) {
+        sessionStorage.removeItem('2fa_verify_cooldown');
+      } else {
+        lockoutUntilRef.current = cooldownTime;
+        attemptsRef.current = 0;
+        setAttemptsLeft(0);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const tick = () => {
       if (lockoutUntilRef.current > 0) {
@@ -55,6 +67,7 @@ export const TwoFAVerify: React.FC = () => {
           setError('');
           attemptsRef.current = MAX_ATTEMPTS;
           setAttemptsLeft(MAX_ATTEMPTS);
+          sessionStorage.removeItem('2fa_verify_cooldown');
         } else {
           setLockoutRemaining(Math.ceil((lockoutUntilRef.current - now) / 1000));
         }
@@ -69,14 +82,11 @@ export const TwoFAVerify: React.FC = () => {
 
   const handleVerify = async () => {
     if (code.length !== 6 || isLocked || loading) return;
-
     setLoading(true);
     setError('');
-
     try {
       const response = await twoFAApi.verify({ session_token: sessionToken, code });
       setSession(response.token, response.user);
-
       const { role, driver_type } = response.user;
       if (role === 'driver') {
         navigate(driver_type === 'intersucursal' ? '/driver/scan' : '/driver/route', { replace: true });
@@ -88,15 +98,14 @@ export const TwoFAVerify: React.FC = () => {
         navigate('/', { replace: true });
       }
     } catch (err: unknown) {
-      const errorMsg = (err as { response?: { data?: { error?: string } } })
-        ?.response?.data?.error || 'Error de verificación';
-
+      const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Error de verificación';
       setCode('');
-
       if (errorMsg.includes('demasiados intentos')) {
         const match = errorMsg.match(/Esperá (.+?) antes/);
         const secs = match ? parseGoDuration(match[1]) : 60;
-        lockoutUntilRef.current = Date.now() + secs * 1000;
+        const cooldownTime = Date.now() + secs * 1000;
+        lockoutUntilRef.current = cooldownTime;
+        sessionStorage.setItem('2fa_verify_cooldown', cooldownTime.toString());
         attemptsRef.current = 0;
         setAttemptsLeft(0);
         setError('');
@@ -113,83 +122,73 @@ export const TwoFAVerify: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg max-w-sm w-full border border-gray-200 dark:border-gray-700">
-
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-7 h-7 text-blue-600 dark:text-blue-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Verificación de seguridad</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1.5 text-sm">
-            Ingresá el código de 6 dígitos de tu app autenticadora
-          </p>
-        </div>
-
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-          placeholder="000000"
-          className="w-full text-center text-3xl tracking-widest border-2 rounded-xl p-4 mb-4 focus:border-blue-500 focus:outline-none disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:text-gray-400 dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 transition-colors"
-          maxLength={6}
-          autoFocus
-          disabled={isLocked || loading}
-        />
-
-        {/* Intentos restantes */}
-        {!isLocked && attemptsLeft < MAX_ATTEMPTS && attemptsLeft > 0 && (
-          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mb-3 px-1">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>
-              {attemptsLeft === 1
-                ? 'Último intento antes del bloqueo temporal'
-                : `${attemptsLeft} intentos restantes antes del bloqueo`}
-            </span>
-          </div>
-        )}
-
-        {/* Bloqueo con cuenta regresiva */}
-        {isLocked && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 mb-4">
-            <Clock className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-red-700 dark:text-red-400">Acceso bloqueado temporalmente</p>
-              <p className="text-sm text-red-600 dark:text-red-500 mt-0.5">
-                Podés reintentar en{' '}
-                <span className="font-mono font-bold">{formatCountdown(lockoutRemaining)}</span>
-              </p>
+    <div className="min-h-screen bg-gradient-to-br from-[var(--sidebar-bg)] to-slate-900 flex items-center justify-center p-6">
+      <Card className="max-w-sm w-full shadow-2xl cursor-default">
+        <CardContent className="p-8">
+          <div className="text-center mb-6">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[var(--brand)]/10 flex items-center justify-center">
+              <Shield className="w-7 h-7 text-[var(--brand)]" />
             </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Verificación de seguridad</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1.5">
+              Ingresá el código de 6 dígitos de tu app autenticadora
+            </p>
           </div>
-        )}
 
-        {/* Error de código incorrecto */}
-        {error && !isLocked && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 mb-4">
-            <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0" />
-            <p className="text-sm text-red-700 dark:text-red-400">Código incorrecto. Verificá tu app autenticadora.</p>
-          </div>
-        )}
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+            placeholder="000000"
+            className="w-full text-center text-3xl tracking-[0.3em] font-mono rounded-xl border-2 border-gray-200 dark:border-gray-600 dark:bg-gray-800 bg-white py-4 dark:text-gray-100 text-gray-900 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed mb-4"
+            maxLength={6}
+            autoFocus
+            disabled={isLocked || loading}
+          />
 
-        <button
-          onClick={handleVerify}
-          disabled={loading || code.length !== 6 || isLocked}
-          className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold text-sm"
-        >
-          {loading ? 'Verificando...' : 'Verificar'}
-        </button>
+          {!isLocked && attemptsLeft < MAX_ATTEMPTS && attemptsLeft > 0 && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 mb-3 px-1">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>
+                {attemptsLeft === 1 ? 'Último intento antes del bloqueo' : `${attemptsLeft} intentos restantes`}
+              </span>
+            </div>
+          )}
 
-        <button
-          onClick={() => navigate('/login')}
-          className="w-full mt-3 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm transition-colors"
-        >
-          ← Volver al inicio de sesión
-        </button>
+          {isLocked && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 mb-4">
+              <Clock className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  Bloqueado temporalmente
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                  Podés reintentar en <span className="font-mono font-bold">{formatCountdown(lockoutRemaining)}</span>
+                </p>
+              </div>
+            </div>
+          )}
 
-      </div>
+          {error && !isLocked && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 mb-4">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-sm text-red-700 dark:text-red-300">Código incorrecto. Verificá tu app autenticadora.</p>
+            </div>
+          )}
+
+          <Button onClick={handleVerify} disabled={loading || code.length !== 6 || isLocked} className="w-full h-11 rounded-xl font-semibold">
+            {loading ? 'Verificando...' : 'Verificar'}
+          </Button>
+
+          <button onClick={() => navigate('/login')} className="w-full mt-3 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            ← Volver al inicio de sesión
+          </button>
+        </CardContent>
+      </Card>
     </div>
   );
-};
+}
