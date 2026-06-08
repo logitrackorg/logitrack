@@ -1,0 +1,36 @@
+logitrack_core/internal/repository/two_fa.go
+  s_dcd5b9c6f804ef::t_655c3afe5144e5 264-299
+  s_dcd5b9c6f804ef::t_5c5bd6829e708c 42-46
+logitrack_web/src/pages/TwoFAVerify.tsx
+  s_dcd5b9c6f804ef::t_91fce863f2fb51 1,36,51,59-60
+  s_dcd5b9c6f804ef::t_27df6d57f654c3 32,48,52,54-55
+  s_dcd5b9c6f804ef::t_e1107bc3a50cbc 28-30,33-35,47,49-50,53,56-58,61-65,96-100,102-104,160
+  s_dcd5b9c6f804ef::t_0ca9afd3a43ab3 4-22,31,43-44,66,68,74,78-83,85,90,92-95,101,105-106,113-115,117-122,128-129,132,134,137,140-159,161-170,176-177,184,188
+logitrack_core/internal/service/two_fa.go
+  s_dcd5b9c6f804ef::t_9ce1e2b1aebc86 81-84,86,95-98,105
+  s_dcd5b9c6f804ef::t_98ea719a9ab4ab 248-249,279-280,286
+  s_dcd5b9c6f804ef::t_17848a722d2319 281-282
+  s_dcd5b9c6f804ef::t_bc5cc5b6cef9fb 191-193
+logitrack_core/internal/db/migrate.go
+  s_dcd5b9c6f804ef::t_649350186c305e 719-721
+logitrack_web/src/pages/TwoFASetup.tsx
+  s_dcd5b9c6f804ef::t_01d61361a4f2cb 1,7-24,39-44,52-70,80,88,121,123-137,209-211,216-217,220,222,225,228-258,264-265
+logitrack_core/internal/handler/two_fa.go
+  s_dcd5b9c6f804ef::t_0410bdcd87e9ed 171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ce8fe838a2058431d212b53ddb09af470f0f8433",
+  "prompts": {},
+  "sessions": {
+    "s_dcd5b9c6f804ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bc563a68-7e0c-4da4-950b-0affbb3bac52",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
