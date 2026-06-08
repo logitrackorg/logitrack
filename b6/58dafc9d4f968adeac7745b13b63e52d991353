@@ -1,0 +1,105 @@
+logitrack_core/internal/model/domain_event.go
+  s_1d772eb2560528::t_9927b85107f740 38
+  s_1d772eb2560528::t_ac37b818abee92 71
+  s_1d772eb2560528::t_56191fdc8907a1 81
+logitrack_core/internal/handler/shipment_deliver.go
+  s_1d772eb2560528::t_6d8a0909db10ce 8,22
+  s_1d772eb2560528::t_2f717dc6837856 1-7,9-21,23-34,36-46
+  s_a9fab93f919dbc::t_6bb594942a9d69 35
+logitrack_core/internal/service/routing_stale_test.go
+  s_1d772eb2560528::t_38a1dda31545db 124-125
+logitrack_core/internal/repository/shipment.go
+  s_1d772eb2560528::t_f869a98ba8f306 43-45
+  s_1d772eb2560528::t_b4d936bfc5f04b 91
+  s_1d772eb2560528::t_915b391c472b01 103
+logitrack_core/internal/projection/postgres_shipment.go
+  s_1d772eb2560528::t_2073e2392057cc 1080,1092-1093
+  s_1d772eb2560528::t_e0aff602851c6a 617-618
+  s_1d772eb2560528::t_fb71519ae4b1db 535-536
+  s_1d772eb2560528::t_6987840705c020 1190
+  s_1d772eb2560528::t_3548cd38cae8c8 61-63,68,77-79,83
+  s_1d772eb2560528::t_d187afebe016b2 88-94,100-102
+  s_1d772eb2560528::t_195c3619d1f2c8 462-464,495-499,510
+  s_1d772eb2560528::t_d8759208685575 558-559
+  s_1d772eb2560528::t_5d0e94739f46b4 775-776
+logitrack_core/internal/service/dispatch_volume_test.go
+  s_1d772eb2560528::t_d9972554e9510f 284-286
+logitrack_core/internal/email/templates.go
+  s_1d772eb2560528::t_c45b3245f07244 638,647
+  s_1d772eb2560528::t_e7d1af90488bc0 97-108
+logitrack_core/internal/service/inter_branch_trip.go
+  s_a9fab93f919dbc::t_1b79a0e2a24e79 206,217-227
+  s_a9fab93f919dbc::t_023e07108e49a0 156-157,159-164
+logitrack_web/src/pages/NewShipment.tsx
+  s_f9c762e903e497::t_c876bd15481409 78-117,121-122,124,127-129,131-136,138
+  s_f9c762e903e497::t_485e19fea49009 17
+  s_f9c762e903e497::t_b660d79a4dcb93 407-408
+  s_f9c762e903e497::t_4dc439fe107195 372-373
+logitrack_core/internal/db/migrate.go
+  s_1d772eb2560528::t_017e07b7bbd3b8 686-689
+logitrack_core/internal/model/shipment.go
+  s_1d772eb2560528::t_6c7bc605d1928c 120-125
+logitrack_web/src/api/shipments.ts
+  s_1d772eb2560528::t_522db515e193fe 281-293
+  s_1d772eb2560528::t_0799f029bb75a5 121-124
+logitrack_web/src/pages/reports/ResumenTab.tsx
+  s_1d772eb2560528::t_a5b07d71bed05c 453-462
+logitrack_web/src/constants.ts
+  s_f9c762e903e497::t_d803cf0e701acc 4
+logitrack_core/internal/repository/shipment_es.go
+  s_1d772eb2560528::t_8d7bb6d52e696c 111
+  s_1d772eb2560528::t_3b0f8c22e9737c 777-791
+  s_1d772eb2560528::t_a838f005bcde0b 84
+logitrack_core/cmd/server/main.go
+  s_1d772eb2560528::t_5c2c3c56fdec3a 616,618-620
+  s_1d772eb2560528::t_5f7ecff5f5fce6 258
+logitrack_core/internal/service/shipment.go
+  s_1d772eb2560528::t_6e7918d55133b3 180,193
+  s_1d772eb2560528::t_1074d8745ad38a 516-518
+  s_1d772eb2560528::t_129d7a0f77f334 1761-1766,1768-1769,1772-1792,1794-1825,1827-1855
+  s_a9fab93f919dbc::t_fbc61e07b73ba1 1767,1770-1771
+  s_a9fab93f919dbc::t_be6345cffbbfe4 1793
+  s_1d772eb2560528::t_fe8b5041ae54bc 1826
+  s_1d772eb2560528::t_683d2bdf818a0b 773-775,787
+logitrack_core/internal/service/keyword.go
+  s_1d772eb2560528::t_f000a41e301c63 1-11,30,32,36,38-44
+  s_1d772eb2560528::t_0cb3ae71f12443 12-29,31,33-35,37
+logitrack_web/src/pages/DriverRoute.tsx
+  s_1d772eb2560528::t_d99598ed7f1e97 115-116
+  s_1d772eb2560528::t_04ff5f965efbae 161-172,176-192,197-202
+  s_1d772eb2560528::t_73c3a3d0a28fa0 891-894,903,908-911,920,922-923,926-928,931,935-941,950-1026,1037,1043-1060
+  s_1d772eb2560528::t_7dfcccf550c842 593,595-598,607
+  s_1d772eb2560528::t_a56ad42e9d1660 70-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b658dafc9d4f968adeac7745b13b63e52d991353",
+  "prompts": {},
+  "sessions": {
+    "s_1d772eb2560528": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cf29259-7164-4c96-8424-f594a8512804",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_a9fab93f919dbc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "486ce4cf-1b19-48ad-a16f-0ac61e32c62b",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_f9c762e903e497": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "72985edb-0e38-4e89-8dc2-731c8a708460",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
