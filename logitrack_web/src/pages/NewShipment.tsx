@@ -463,7 +463,7 @@ export function NewShipment() {
       </button>
 
       <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <PackagePlus className="w-5 h-5" />
         </div>
         <div className="flex-1">
@@ -684,7 +684,7 @@ export function NewShipment() {
               const selected = branches.find(b => b.id === form.receiving_branch_id);
               return (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-                  <p className="text-sm font-semibold text-[#1e3a5f]">{selected?.name ?? form.receiving_branch_id}</p>
+                  <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected?.name ?? form.receiving_branch_id}</p>
                   {selected && <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>}
                   <p className="mt-1.5 text-[11px] text-slate-500">Asignada a tu sucursal — no se puede cambiar.</p>
                 </div>
@@ -720,7 +720,7 @@ export function NewShipment() {
                   if (!selected) return null;
                   return (
                     <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-                      <p className="text-sm font-semibold text-[#1e3a5f]">{selected.name}</p>
+                      <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{selected.name}</p>
                       <p className="text-xs text-slate-600 mt-0.5">{selected.address.street}, {selected.address.city}</p>
                     </div>
                   );
@@ -737,7 +737,7 @@ export function NewShipment() {
               <div className="grid gap-1.5">
                 <label className="text-xs font-semibold text-slate-700">Sucursal final</label>
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <p className="text-sm font-semibold text-[#1e3a5f]">{finalBranch.name}</p>
+                  <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{finalBranch.name}</p>
                   <p className="text-xs text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
                   <p className="mt-1.5 text-[11px] text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
                 </div>
@@ -789,7 +789,7 @@ export function NewShipment() {
                     key={m.value}
                     className={`flex items-start gap-3 cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${
                       selected
-                        ? "border-[#2563eb] bg-blue-50"
+                        ? "border-[var(--brand)] bg-blue-50"
                         : "border-slate-200 bg-white hover:bg-slate-50"
                     }`}
                   >
@@ -802,7 +802,7 @@ export function NewShipment() {
                         set("delivery_method", m.value);
                         if (m.value === "retiro_sucursal") set("time_window", "flexible");
                       }}
-                      className="mt-0.5 shrink-0 accent-[#2563eb]"
+                      className="mt-0.5 shrink-0 accent-[var(--brand)]"
                     />
                     <span className="flex flex-col gap-0.5">
                       <span className="font-semibold text-sm text-slate-900">{m.label}</span>
@@ -819,7 +819,7 @@ export function NewShipment() {
                 type="checkbox"
                 checked={!!form.is_fragile}
                 onChange={(e) => set("is_fragile", e.target.checked)}
-                className="accent-[#2563eb]"
+                className="accent-[var(--brand)]"
               />
               <span className="font-medium">Contenido frágil</span>
               <span className="text-slate-500 text-xs">(manipular con cuidado)</span>
@@ -881,7 +881,7 @@ export function NewShipment() {
               <button
                 type="submit"
                 disabled={loading || blocked}
-                className="w-full h-11 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                className="w-full h-11 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 {loading ? "Procesando…" : "Crear envío y pagar"}
               </button>
@@ -1121,7 +1121,7 @@ function CustomerSuggestion({ customer, onApply, onDismiss }: { customer: Custom
         <button
           type="button"
           onClick={onApply}
-          className="h-7 px-3 rounded-md bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-xs font-semibold cursor-pointer"
+          className="h-7 px-3 rounded-md bg-[var(--brand)] hover:bg-[var(--brand-strong)] text-white text-xs font-semibold cursor-pointer"
         >
           Usar datos
         </button>

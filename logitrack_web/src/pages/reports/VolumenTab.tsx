@@ -30,7 +30,7 @@ const WINDOW_LABELS: Record<string, string> = {
 };
 
 const WINDOW_COLORS: Record<string, string> = {
-  morning: "#2563eb",
+  morning: "var(--brand)",
   afternoon: "#f59e0b",
   flexible: "#22c55e",
 };

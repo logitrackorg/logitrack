@@ -123,15 +123,15 @@ export function printShipmentDocument(
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      border-bottom: 2px solid #1e3a5f;
+      border-bottom: 2px solid var(--sidebar-bg);
       padding-bottom: 12px;
       margin-bottom: 16px;
     }
     .doc-header-left { display: flex; flex-direction: column; gap: 2px; }
-    .brand { font-size: 22px; font-weight: 700; color: #1e3a5f; letter-spacing: 1px; }
+    .brand { font-size: 22px; font-weight: 700; color: var(--sidebar-bg); letter-spacing: 1px; }
     .brand-sub { font-size: 11px; color: #6b7280; }
-    .doc-title { font-size: 18px; font-weight: 700; color: #1e3a5f; text-align: right; }
-    .tracking-id { font-family: 'Courier New', monospace; font-size: 20px; font-weight: 700; color: #1e3a5f; text-align: right; letter-spacing: 2px; }
+    .doc-title { font-size: 18px; font-weight: 700; color: var(--sidebar-bg); text-align: right; }
+    .tracking-id { font-family: 'Courier New', monospace; font-size: 20px; font-weight: 700; color: var(--sidebar-bg); text-align: right; letter-spacing: 2px; }
     .doc-meta { font-size: 11px; color: #6b7280; text-align: right; }
 
     .section-grid {
@@ -183,7 +183,7 @@ export function printShipmentDocument(
     }
     .qr-img { width: 128px; height: 128px; flex-shrink: 0; }
     .qr-info { flex: 1; }
-    .qr-tracking { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: #1e3a5f; letter-spacing: 2px; margin-bottom: 4px; }
+    .qr-tracking { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: var(--sidebar-bg); letter-spacing: 2px; margin-bottom: 4px; }
 .qr-hint { font-size: 11px; color: #374151; margin-top: 8px; }
 
     .sig-section {

@@ -152,7 +152,7 @@ export function MLConfig() {
   };
 
   const btnPrimaryStyle: React.CSSProperties = {
-    background: saving ? "var(--text-muted)" : "#1e3a5f",
+    background: saving ? "var(--text-muted)" : "var(--sidebar-bg)",
     color: "#fff",
     border: "none",
     borderRadius: 6,

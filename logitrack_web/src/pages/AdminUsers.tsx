@@ -241,7 +241,7 @@ export function AdminUsers() {
       <TopbarActions>
         <button
           onClick={() => { setShowCreate(true); setCreateError(""); setCreateForm(emptyCreate()); }}
-          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           Nuevo usuario
@@ -256,13 +256,13 @@ export function AdminUsers() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por usuario, nombre o email…"
-            className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
           />
         </div>
         <select
           value={roleFilter}
           onChange={e => setRoleFilter(e.target.value as Role | "")}
-          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
         >
           <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
@@ -271,7 +271,7 @@ export function AdminUsers() {
           <select
             value={driverTypeFilter}
             onChange={e => setDriverTypeFilter(e.target.value as DriverType | "")}
-            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
           >
             <option value="">Todos los choferes</option>
             <option value="ultima_milla">Última milla</option>
@@ -281,7 +281,7 @@ export function AdminUsers() {
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as UserStatus | "")}
-          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+          className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
         >
           <option value="">Todos los estados</option>
           <option value="activo">Activo</option>
@@ -477,7 +477,7 @@ export function AdminUsers() {
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={closeEdit} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleSave} disabled={saving}
-                style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+                style={{ background: "var(--sidebar-bg)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
             </div>
@@ -604,7 +604,7 @@ export function AdminUsers() {
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setShowCreate(false)} style={{ background: "var(--bg-muted)", color: "var(--text-strong)", border: "none", borderRadius: 6, padding: "8px 18px", cursor: "pointer", fontWeight: 500 }}>Cancelar</button>
               <button onClick={handleCreate} disabled={creating}
-                style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: creating ? "not-allowed" : "pointer", fontWeight: 600, opacity: creating ? 0.7 : 1 }}>
+                style={{ background: "var(--sidebar-bg)", color: "#fff", border: "none", borderRadius: 6, padding: "8px 18px", cursor: creating ? "not-allowed" : "pointer", fontWeight: 600, opacity: creating ? 0.7 : 1 }}>
                 {creating ? "Creando…" : "Crear usuario"}
               </button>
             </div>

@@ -90,7 +90,7 @@ function SortableStop({
       </button>
 
       {/* Sequence badge */}
-      <div className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+      <div className="w-6 h-6 rounded-full bg-[var(--sidebar-bg)] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
         {index + 1}
       </div>
 
@@ -218,7 +218,7 @@ function RoutePreviewMap({
       points.push([branchCoords.lat, branchCoords.lng]);
       L.marker([branchCoords.lat, branchCoords.lng], {
         icon: L.divIcon({
-          html: `<div style="width:26px;height:26px;background:#1e3a5f;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
+          html: `<div style="width:26px;height:26px;background:var(--sidebar-bg);border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
           className: "",
           iconSize: [26, 26],
           iconAnchor: [13, 13],
@@ -240,7 +240,7 @@ function RoutePreviewMap({
         .join(", ");
       L.marker([lat, lng], {
         icon: L.divIcon({
-          html: `<div style="width:26px;height:26px;background:#1e3a5f;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i + 1}</div>`,
+          html: `<div style="width:26px;height:26px;background:var(--sidebar-bg);border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i + 1}</div>`,
           className: "",
           iconSize: [26, 26],
           iconAnchor: [13, 26],
@@ -259,7 +259,7 @@ function RoutePreviewMap({
         ? roadPolyline.map((p) => [p.lat, p.lng] as [number, number])
         : points;
     if (linePoints.length >= 2) {
-      L.polyline(linePoints, { color: "#1e3a5f", weight: 3, opacity: 0.7 }).addTo(layer);
+      L.polyline(linePoints, { color: "var(--sidebar-bg)", weight: 3, opacity: 0.7 }).addTo(layer);
       try {
         map.fitBounds(L.latLngBounds(points), { padding: [32, 32] });
       } catch {
@@ -510,8 +510,8 @@ export function EditDriverStopsModal({
                   onClick={() => void handleModeChange(m)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
                     mode === m
-                      ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                      : "bg-white text-slate-600 border-slate-300 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+                      ? "bg-[var(--sidebar-bg)] text-white border-[var(--sidebar-bg)]"
+                      : "bg-white text-slate-600 border-slate-300 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)]"
                   }`}
                 >
                   {mode === m && recomputing ? (
@@ -551,8 +551,8 @@ export function EditDriverStopsModal({
                       onClick={() => handleDateChange(date)}
                       className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
                         selectedDate === date
-                          ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                          : "bg-white text-slate-600 border-slate-300 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
+                          ? "bg-[var(--sidebar-bg)] text-white border-[var(--sidebar-bg)]"
+                          : "bg-white text-slate-600 border-slate-300 hover:border-[var(--sidebar-bg)] hover:text-[var(--sidebar-bg)]"
                       }`}
                     >
                       <CalendarClock className="w-3 h-3" />
@@ -574,7 +574,7 @@ export function EditDriverStopsModal({
                   type="time"
                   value={departure}
                   onChange={(e) => setDeparture(e.target.value)}
-                  className="border border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
+                  className="border border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--sidebar-bg)]"
                 />
                 {planDateLabel && (
                   <span className="text-xs text-slate-400">del {planDate?.slice(8, 10)}/{planDate?.slice(5, 7)}</span>
@@ -641,7 +641,7 @@ export function EditDriverStopsModal({
               onClick={handleApply}
               disabled={applying || !canApplyDate}
               title={!canApplyDate ? "Los planes de pronóstico no se pueden aplicar. Volvé a este día cuando corresponda." : undefined}
-              className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
+              className="px-4 py-2 text-sm bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
             >
               {applying
                 ? "Aplicando…"

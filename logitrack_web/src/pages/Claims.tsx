@@ -295,7 +295,7 @@ export function Claims() {
         actions={
           <button
             onClick={loadClaims}
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
             Actualizar
@@ -308,7 +308,7 @@ export function Claims() {
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1e3a5f]">Panel gerencial</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sidebar-bg)]">Panel gerencial</p>
                 <h3 className="mt-1 text-base font-semibold text-slate-900">Métricas de reclamos</h3>
                 <p className="mt-1 text-sm text-slate-500">Resumen dinámico sobre el conjunto filtrado.</p>
               </div>
@@ -319,7 +319,7 @@ export function Claims() {
                   <select
                     value={selectedBranch}
                     onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   >
                     <option value="">Todas</option>
                     {branches.map((b) => (
@@ -333,7 +333,7 @@ export function Claims() {
                   <select
                     value={selectedStatus}
                     onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   >
                     <option value="">Todos</option>
                     {Object.keys(CLAIM_STATUS_LABELS).map((s) => (
@@ -348,7 +348,7 @@ export function Claims() {
                     value={selectedClaimId}
                     onChange={(e) => setSelectedClaimId(e.target.value)}
                     placeholder="Buscar por ID"
-                    className="h-10 min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10"
+                    className="h-10 min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/10"
                   />
                 </div>
               </div>
@@ -361,7 +361,7 @@ export function Claims() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total de reclamos</p>
                     <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{visibleMetrics.total}</p>
                   </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)]">
                     <BarChart3 className="h-5 w-5" />
                   </div>
                 </div>
@@ -457,7 +457,7 @@ export function Claims() {
                   <div className="flex flex-wrap gap-3 items-center justify-between">
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-xs font-extrabold tracking-wide uppercase text-slate-900 bg-[#1e3a5f]/[0.08] px-2 py-0.5 rounded-full">
+                        <span className="text-xs font-extrabold tracking-wide uppercase text-slate-900 bg-[var(--sidebar-bg)]/[0.08] px-2 py-0.5 rounded-full">
                           {claim.id}
                         </span>
                         <span className="text-xs text-slate-400">Envío {claim.tracking_id}</span>
@@ -497,7 +497,7 @@ export function Claims() {
                       <button
                         type="button"
                         onClick={() => handleDownloadEvidence(claim.id, claim.evidence_file_name ?? "evidencia")}
-                        className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] inline-flex items-center gap-2"
+                        className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] inline-flex items-center gap-2"
                       >
                         <Download className="w-4 h-4" />
                         Descargar evidencia
@@ -523,7 +523,7 @@ export function Claims() {
                           type="button"
                           onClick={() => handleUpdateCategory(claim.id)}
                           disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                          className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
+                          className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
                         >
                           Aplicar
                         </button>

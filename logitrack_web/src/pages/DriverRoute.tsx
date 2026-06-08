@@ -392,7 +392,7 @@ export function DriverRoute() {
         <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
                 <Truck className="w-4.5 h-4.5" />
               </div>
               <div className="min-w-0">
@@ -409,7 +409,7 @@ export function DriverRoute() {
                 <button
                   onClick={() => setViewMode('list')}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
-                    ? 'bg-[#1e3a5f] text-white'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
                     : 'text-slate-500 hover:bg-slate-100'
                     }`}
                 >
@@ -419,7 +419,7 @@ export function DriverRoute() {
                 <button
                   onClick={() => setViewMode('map')}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
-                    ? 'bg-[#1e3a5f] text-white'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
                     : 'text-slate-500 hover:bg-slate-100'
                     }`}
                 >
@@ -666,12 +666,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[#2563eb]" : "text-slate-500 hover:text-slate-700"
+      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[var(--brand)]" : "text-slate-500 hover:text-slate-700"
         }`}
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[#2563eb]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[var(--brand)]" />
       )}
     </button>
   );
@@ -758,7 +758,7 @@ function ShipmentCard({
       >
         <div className="flex items-start gap-3">
           {order !== undefined && (
-            <div className="shrink-0 w-9 h-9 rounded-xl bg-[#1e3a5f] text-white text-sm font-bold flex items-center justify-center">
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sidebar-bg)] text-white text-sm font-bold flex items-center justify-center">
               {String(order).padStart(2, "0")}
             </div>
           )}
@@ -1316,7 +1316,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <Truck className="w-5 h-5" />
         </div>
         <div>
@@ -1380,14 +1380,14 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
       {/* Sin viaje activo: el operador ya recibió, el chofer puede empezar otro reparto */}
       {!tripActive && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
             <Truck className="w-6 h-6" />
           </div>
           <p className="text-sm font-bold text-slate-900">¿Empezás otro reparto?</p>
           <p className="text-xs text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
           <button
             onClick={() => navigate("/driver/scan")}
-            className="h-10 px-6 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
+            className="h-10 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
           >
             Escanear vehículo
           </button>

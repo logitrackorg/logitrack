@@ -260,7 +260,7 @@ export function SlaAuditLogs() {
                         className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors"
                       >
                         <td className="py-3 px-4">
-                          <span className="font-mono text-xs font-semibold text-[#1e3a5f] bg-[#1e3a5f]/5 px-2 py-0.5 rounded">
+                          <span className="font-mono text-xs font-semibold text-[var(--sidebar-bg)] bg-[var(--sidebar-bg)]/5 px-2 py-0.5 rounded">
                             {log.tracking_id}
                           </span>
                         </td>

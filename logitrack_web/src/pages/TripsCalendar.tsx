@@ -78,7 +78,7 @@ export default function TripsCalendar() {
       {/* Header */}
       <div className="flex items-center justify-between mb-3.5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Calendar size={22} className="text-[#1e3a5f]" />
+          <Calendar size={22} className="text-[var(--sidebar-bg)]" />
           <h1 className="m-0 text-xl font-bold text-slate-900">Calendario de viajes</h1>
         </div>
         <div className="flex gap-2 items-center flex-wrap">

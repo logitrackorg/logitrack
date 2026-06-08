@@ -622,7 +622,7 @@ export function ShipmentList() {
                   onClick={() => setViewModeAndParams("flat")}
                   className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                     viewMode === "flat"
-                      ? "bg-[#1e3a5f] text-white"
+                      ? "bg-[var(--sidebar-bg)] text-white"
                       : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                   }`}
                 >
@@ -642,7 +642,7 @@ export function ShipmentList() {
                   }}
                   className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                     viewMode === "trip"
-                      ? "bg-[#1e3a5f] text-white"
+                      ? "bg-[var(--sidebar-bg)] text-white"
                       : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                   }`}
                 >

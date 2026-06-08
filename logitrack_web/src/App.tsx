@@ -65,7 +65,7 @@ function DriverNav() {
 
   return (
     <nav style={{
-      background: "#1e3a5f", color: "#fff",
+      background: "var(--sidebar-bg)", color: "#fff",
       padding: isMobile ? "8px 12px" : "0 24px",
       display: "flex", alignItems: "center",
       gap: isMobile ? 10 : 24,

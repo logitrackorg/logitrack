@@ -30,7 +30,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const METHOD_COLORS: Record<string, string> = {
-  ultima_milla: "#2563eb",
+  ultima_milla: "var(--brand)",
   retiro_sucursal: "#22c55e",
 };
 

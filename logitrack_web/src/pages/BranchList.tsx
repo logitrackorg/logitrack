@@ -103,7 +103,7 @@ export function BranchList() {
         <TopbarActions>
           <button
             onClick={() => { setShowCreate(true); setError(""); }}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Nueva sucursal
@@ -117,14 +117,14 @@ export function BranchList() {
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
-              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
               placeholder="Buscar por nombre, ID, ciudad o dirección…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select
-            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -419,7 +419,7 @@ function BranchFormModal({
           {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
           <div className="flex gap-2 justify-end mt-1">
             <button type="button" onClick={() => setStep("form")} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Volver</button>
-            <button type="button" onClick={doSubmit} disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+            <button type="button" onClick={doSubmit} disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
               {submitting ? "Guardando..." : "Confirmar cambio"}
             </button>
           </div>
@@ -488,7 +488,7 @@ function BranchFormModal({
         {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
         <div className="flex gap-2 justify-end mt-2">
           <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+          <button type="submit" disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : submitLabel}
           </button>
         </div>
@@ -545,7 +545,7 @@ function StatusModal({
         {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+          <button type="submit" disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : "Actualizar"}
           </button>
         </div>

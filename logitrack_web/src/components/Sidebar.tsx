@@ -291,7 +291,7 @@ export function Sidebar() {
               }`
             }
           >
-            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[var(--brand-400,#60a5fa)] to-[var(--brand-600,#2563eb)] flex items-center justify-center text-white font-bold text-xs shrink-0">
+            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[var(--brand-400,#60a5fa)] to-[var(--brand-600,var(--brand))] flex items-center justify-center text-white font-bold text-xs shrink-0">
               {user.username.slice(0, 2).toUpperCase()}
             </div>
             {expanded && (
