@@ -72,8 +72,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["supervisor", "manager"] },
       { to: "/auto-reports", label: "Reportes auto.", icon: FileBarChart, roles: ["manager"] },
-      { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
-      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["admin", "operator", "supervisor", "manager"] },
+      { to: "/claims", label: "Reclamos", icon: ClipboardList, roles: ["operator", "supervisor", "manager"] },
       { to: "/sla-audit", label: "Escalado SLA", icon: TrendingUp, roles: ["supervisor", "manager"] },
     ],
   },
@@ -88,6 +87,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "Administración",
     items: [
+      { to: "/red", label: "Red", icon: Globe, roles: ["manager", "admin"] },
       { to: "/admin/users", label: "Usuarios", icon: Users, roles: ["admin"] },
       { to: "/organization", label: "Organización", icon: Briefcase, roles: ["admin"] },
       { to: "/zones", label: "Zonas", icon: Map, roles: ["admin"] },
