@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   MapPin,
   Navigation,
   Package,
