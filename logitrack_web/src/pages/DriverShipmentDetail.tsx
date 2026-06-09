@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronDown,
+  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronDown, ChevronLeft,
   Clock, MapPin, MessageCircle, Package, Phone, User, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
@@ -154,7 +154,7 @@ export function DriverShipmentDetail() {
       <DriverShell title="Detalle de envío">
         <div className="px-4 py-4">
           <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 h-12 text-base font-semibold text-[var(--text-primary)]">
-            <ChevronDown className="w-5 h-5 rotate-90" /> Mi ruta
+            <ChevronLeft className="w-5 h-5" /> Mi ruta
           </Button>
           <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">
             {error || "No encontrado."}
@@ -183,6 +183,11 @@ export function DriverShipmentDetail() {
   return (
     <DriverShell title="Detalle de envío">
       <div className="px-4 py-4 space-y-4">
+        {/* Back button */}
+        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 h-10 px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <ChevronLeft className="w-5 h-5" /> Mi ruta
+        </Button>
+
         {/* Action error */}
         {actionError && (
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
