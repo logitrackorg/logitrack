@@ -164,7 +164,7 @@ export function DriverShipmentDetail() {
     );
   }
 
-  const { name, phone, street, city, province, postal, fullAddress, specialInstructions } = recipientView(shipment);
+  const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
   const cor = shipment.corrections ?? {};
   const tw = (cor.time_window ?? shipment.time_window) as typeof shipment.time_window;
   const twTone = timeWindowTone(tw);
