@@ -111,13 +111,13 @@ export function ShipmentKPIStrip({ shipments, activeFilter, onFilter }: Props) {
             {kpi.key === "sla_compromised" && count > 0 && (
               <div className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 rounded px-1.5 py-0.5 inline-flex items-center gap-1">
                 <AlertTriangle size={10} className="inline align-[-1px]" />
-                24–36 h en estado
+                Supera promedio histórico
               </div>
             )}
             {kpi.key === "sla_risk" && count > 0 && (
               <div className="mt-1.5 text-[10px] font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/15 border border-red-200 dark:border-red-500/30 rounded px-1.5 py-0.5 inline-flex items-center gap-1">
                 <Clock size={10} className="inline align-[-1px]" />
-                +36 h en estado
+                Tolerancia de estado superada
               </div>
             )}
           </button>

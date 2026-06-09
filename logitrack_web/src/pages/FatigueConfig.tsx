@@ -258,6 +258,34 @@ export function FatigueConfig() {
         </CardContent>
       </Card>
 
+      {/* ── Bloqueo automático de ruta ───────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Bloqueo automático de ruta</CardTitle>
+          <CardDescription>
+            Cuando está activo, un check-in con nivel ROJO bloquea la pantalla del chofer
+            (última milla e inter-sucursal) hasta que un supervisor lo autorice manualmente.
+            Los supervisores son notificados independientemente de esta configuración.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4 px-4 py-3.5 rounded-xl border border-slate-200 bg-white">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 leading-snug">
+                Bloquear ruta ante alerta ROJA
+              </p>
+              <p className="text-xs text-slate-400 leading-snug mt-0.5">
+                El chofer verá una pantalla de bloqueo y no podrá continuar hasta recibir autorización.
+              </p>
+            </div>
+            <Toggle
+              checked={draft.block_route_on_red ?? true}
+              onChange={(v) => setDraft({ ...draft, block_route_on_red: v })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Pruebas activas y pesos ─────────────────────────────────────── */}
       <Card>
         <CardHeader>
