@@ -181,7 +181,7 @@ export function DriverShipmentDetail() {
     <DriverShell title="Detalle de envío">
       <div className="px-4 py-4 space-y-4">
         {/* Back button */}
-        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 h-10 px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
           <ChevronLeft className="w-5 h-5" /> Mi ruta
         </Button>
 
@@ -217,7 +217,7 @@ export function DriverShipmentDetail() {
             href={waHrefWithText(phone, `Hola ${name}, soy de LogiTrack.`) }
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors no-underline"
+            className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors no-underline cursor-pointer"
           >
             <MessageCircle size={16} className="text-emerald-500" />
             Enviar WhatsApp
