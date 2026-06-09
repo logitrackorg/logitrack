@@ -7,6 +7,7 @@ import {
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
+import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
 import { DriverShell } from "../components/DriverShell";
 import { DeliverSheet } from "../components/driver/DeliverSheet";
@@ -132,7 +133,7 @@ export function DriverShipmentDetail() {
   if (loading) {
     return (
       <DriverShell title="Detalle de envío">
-        <div className="px-4 py-4 space-y-4">
+      <div className="px-4 py-4 space-y-4 pb-[200px]">
           <div className="flex justify-center"><div className="h-7 w-28 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
           <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
             <div className="h-7 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
@@ -199,9 +200,7 @@ export function DriverShipmentDetail() {
 
         {/* Status badge centered */}
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold border bg-[var(--brand-tint)] text-[var(--brand)] border-[var(--brand-tint-border)]">
-            {statusOverride ?? shipment.status}
-          </span>
+          <StatusBadge status={shipment.status} label={statusOverride} />
         </div>
 
         {/* Recipient card */}
@@ -246,9 +245,11 @@ export function DriverShipmentDetail() {
                 <AlertTriangle className="w-3 h-3" />Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
-              {DELIVERY_METHOD_LABEL[deliveryMethod] ?? deliveryMethod}
-            </span>
+            {deliveryMethod !== "ultima_milla" && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
+                {DELIVERY_METHOD_LABEL[deliveryMethod] ?? deliveryMethod}
+              </span>
+            )}
             {attempts > 0 && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
                 Reintento {attempts + 1}
@@ -300,13 +301,13 @@ export function DriverShipmentDetail() {
       {canAct && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="flex flex-col gap-2 max-w-sm mx-auto">
-            <Button onClick={() => setDeliverOpen(true)} className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+            <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
               <CheckCircle2 className="w-5 h-5" />Entregar
             </Button>
-            <Button variant="destructive" onClick={() => setFailedOpen(true)} className="h-12 rounded-xl bg-red-500 hover:bg-red-600 text-white text-base font-bold gap-2">
+            <Button variant="destructive" onClick={() => setFailedOpen(true)} className="h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-base font-bold gap-2">
               <XCircle className="w-5 h-5" />No entregado
             </Button>
-            <Button onClick={() => setRejectedOpen(true)} className="h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-base font-bold gap-2">
+            <Button onClick={() => setRejectedOpen(true)} className="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-base font-bold gap-2">
               <Ban className="w-5 h-5" />Rechazado por destinatario
             </Button>
           </div>
