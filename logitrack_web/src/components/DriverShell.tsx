@@ -9,7 +9,7 @@ interface DriverShellProps {
 export function DriverShell({ title, subtitle, children }: DriverShellProps) {
   return (
     <div className="min-h-screen bg-[var(--bg-page)]">
-      <DriverNav title={title} subtitle={subtitle} />
+      <DriverNav title={title} />
       <main className="pb-[calc(env(safe-area-inset-bottom,0px)+80px)]">
         {children}
       </main>

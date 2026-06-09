@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { User, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
