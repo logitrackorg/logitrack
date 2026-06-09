@@ -337,9 +337,16 @@ func fatigueRiskScore(checkin model.DriverCheckin, cfg model.FatigueConfig) (sco
 		parts = append(parts, testData{math.Min(float64(total)*10.0, 100.0), cfg.TactileWeight})
 	}
 
-	// ── PVT latency — 0 ms = 0 risk, ≥ 500 ms = 100 risk ───────────────────
+	// ── PVT — use composite pvt_score when available (100=ideal → invert to
+	// risk), fall back to raw latency for legacy records without pvt_score.
 	if cfg.PVTEnabled && checkin.PVTMetrics != nil {
-		parts = append(parts, testData{math.Min(checkin.PVTMetrics.LatenciaPromedioMs/5.0, 100.0), cfg.PVTWeight})
+		var pvtRisk float64
+		if checkin.PVTMetrics.PVTScore != nil {
+			pvtRisk = float64(100 - *checkin.PVTMetrics.PVTScore)
+		} else {
+			pvtRisk = math.Min(checkin.PVTMetrics.LatenciaPromedioMs/5.0, 100.0)
+		}
+		parts = append(parts, testData{pvtRisk, cfg.PVTWeight})
 	}
 
 	if len(parts) == 0 {

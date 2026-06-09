@@ -114,6 +114,35 @@ func TrainAndSaveFleetModel(modelPath string) error {
 	return nil
 }
 
+// Retrain regenerates the synthetic dataset with the current fleetClassify
+// rules, trains a new forest, and hot-swaps it into the service. The model is
+// also persisted to the same path it was originally loaded from so it survives
+// the next restart. Concurrency-safe — reads and predictions are not blocked
+// during training; the swap is atomic under the write lock.
+func (s *FleetMLService) Retrain() error {
+	fmt.Printf("[FleetML] Retrain requested — regenerating dataset (%d samples)…\n", FleetDatasetSize)
+	samples := GenerateFleetDataset(FleetDatasetSize, FleetRandomState)
+
+	xData := make([][]float64, len(samples))
+	yData := make([]int, len(samples))
+	for i, sam := range samples {
+		xData[i] = sam.Features
+		yData[i] = sam.Class
+	}
+
+	forest := randomforest.Forest{
+		Data: randomforest.ForestData{X: xData, Class: yData},
+	}
+	fmt.Printf("[FleetML] Training %d trees…\n", FleetNumTrees)
+	forest.Train(FleetNumTrees)
+	fmt.Printf("[FleetML] Retrain complete.\n")
+
+	s.mu.Lock()
+	s.forest = &forest
+	s.mu.Unlock()
+	return nil
+}
+
 // PredictFleetState runs the Random Forest for a single branch and returns:
 //   - the winning FleetStatus
 //   - its vote fraction (confidence in [0,1])

@@ -512,6 +512,7 @@ func (h *DriverHandler) SubmitPVT(c *gin.Context) {
 		Aciertos:           body.Aciertos,
 		Errores:            body.Errores,
 		GameErrors:         body.GameErrors,
+		PVTScore:           computePVTScore(body.LatenciaPromedioMs, body.GameErrors),
 		RecordedAt:         time.Now(),
 	}
 
@@ -970,6 +971,34 @@ func (h *DriverHandler) GetPersonalHistory(c *gin.Context) {
 		"request_status":   string(req.Status),
 		"deletion_request": deletionPayload,
 	})
+}
+
+// computePVTScore converts raw PVT metrics into a composite quality score
+// (0–100, higher = better performance):
+//
+//   - Base:            100 points.
+//   - Latency penalty: -10 pts per 100 ms above the 350 ms ideal (clamped to 0).
+//   - Error penalty:   -15 pts per game error (erroneous click or missed stimulus).
+//
+// The score is clamped to [0, 100] and returned as a pointer so callers can
+// distinguish "not yet computed" (nil) from a genuine score of 0.
+func computePVTScore(latenciaMs float64, gameErrors int) *int {
+	const (
+		idealMs       = 350.0
+		msPerBlock    = 100.0
+		latPenaltyPer = 10
+		errPenalty    = 15
+	)
+	score := 100
+	if latenciaMs > idealMs {
+		blocks := math.Round((latenciaMs - idealMs) / msPerBlock)
+		score -= int(blocks) * latPenaltyPer
+	}
+	score -= gameErrors * errPenalty
+	if score < 0 {
+		score = 0
+	}
+	return &score
 }
 
 // updateBaseline computes a simple running average between the existing baseline

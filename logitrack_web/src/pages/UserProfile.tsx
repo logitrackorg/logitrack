@@ -267,12 +267,20 @@ export function UserProfile() {
                                     <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">Fecha</th>
                                     <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">KSS</th>
                                     <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Sueño</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">PVT</th>
                                     <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Estado</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {historyResult.history.map((rec) => {
                                     const [yy, mm, dd] = rec.date.split("-");
+                                    const pvt = rec.pvt_metrics;
+                                    const pvtScore = pvt?.pvt_score ?? null;
+                                    const pvtScoreColor =
+                                      pvtScore == null ? ""
+                                      : pvtScore > 80  ? "text-emerald-600"
+                                      : pvtScore >= 50 ? "text-amber-600"
+                                      : "text-red-600";
                                     return (
                                       <tr key={rec.recorded_at || rec.date} className="border-b border-slate-100">
                                         <td className="px-3 py-2 text-slate-700">
@@ -296,6 +304,28 @@ export function UserProfile() {
                                         </td>
                                         <td className="px-3 py-2 text-center text-slate-700">
                                           {rec.skipped ? "—" : `${rec.horas_sueno}h`}
+                                        </td>
+                                        {/* PVT: score prominente + detalle técnico en gris */}
+                                        <td className="px-3 py-2 text-center">
+                                          {pvt ? (
+                                            <div className="inline-flex flex-col items-center gap-0.5">
+                                              {pvtScore != null ? (
+                                                <span className={`font-bold text-xs tabular-nums ${pvtScoreColor}`}>
+                                                  Score: {pvtScore}/100
+                                                </span>
+                                              ) : (
+                                                <span className="font-bold text-xs text-slate-400 tabular-nums">
+                                                  {pvt.latencia_promedio_ms.toFixed(0)} ms
+                                                </span>
+                                              )}
+                                              <span className="text-[10px] text-slate-400 tabular-nums leading-tight">
+                                                {pvt.latencia_promedio_ms.toFixed(0)} ms
+                                                {(pvt.game_errors ?? 0) > 0 && ` | ${pvt.game_errors} error${(pvt.game_errors ?? 0) !== 1 ? "es" : ""}`}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-slate-300 text-[11px]">—</span>
+                                          )}
                                         </td>
                                         <td className="px-3 py-2 text-center">
                                           {rec.skipped ? (

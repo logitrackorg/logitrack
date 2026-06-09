@@ -121,6 +121,8 @@ export interface PVTResult {
   aciertos: number;
   errores: number;
   game_errors?: number;
+  /** Composite quality score 0–100 (higher = better). Null/absent for legacy records. */
+  pvt_score?: number | null;
   recorded_at: string;
 }
 
