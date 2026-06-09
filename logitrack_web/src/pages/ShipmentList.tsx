@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, X, Download, AlertTriangle, MapPin, FileText, Clock, ChevronDown, LayoutList, Truck, PackageOpen } from "lucide-react";
 import { shipmentApi, type Shipment, type ShipmentStatus } from "../api/shipments";
@@ -154,7 +154,7 @@ export function ShipmentList() {
   const tripBranchParam =
     user?.role === "manager" && branchFilter ? branchFilter : undefined;
 
-  const load = async (withExpired: boolean) => {
+  const load = useCallback(async (withExpired: boolean) => {
     setLoading(true);
     setSelected(new Set());
     try {
@@ -174,7 +174,7 @@ export function ShipmentList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [tripBranchParam]);
 
   useEffect(() => {
     const withExpired = statusFilter === "expired";
@@ -198,7 +198,7 @@ export function ShipmentList() {
       loadedWithExpiredRef.current = wantExpired;
       load(wantExpired);
     }
-  }, [statusFilter]);
+  }, [statusFilter, load]);
 
   const localDate = (iso: string) => {
     const d = new Date(iso);

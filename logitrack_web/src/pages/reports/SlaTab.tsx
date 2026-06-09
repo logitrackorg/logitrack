@@ -83,7 +83,7 @@ export default function SlaTab({ branchId }: SlaTabProps) {
 
   const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(false);
     const params: { branch_id?: string } = {};
@@ -92,9 +92,9 @@ export default function SlaTab({ branchId }: SlaTabProps) {
       .get(params)
       .then((data) => { setMetrics(data); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
-  };
+  }, [branchId]);
 
-  useEffect(() => { load(); }, [branchId]);
+  useEffect(() => { load(); }, [load]);
   useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
 
   // Sucursal por defecto: la propia para supervisores, la primera del plan para managers/admins.

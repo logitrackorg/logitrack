@@ -77,7 +77,7 @@ export default function WeekCalendarView({
       .then(setTrips)
       .catch(() => setTrips([]))
       .finally(() => setLoading(false));
-  }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   const handleDatesSet = (arg: DatesSetArg) => {
     fetchTrips(localYMD(arg.start), localYMD(arg.end));

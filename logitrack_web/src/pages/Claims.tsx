@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { BadgeCheck, BarChart3, ClipboardList, Clock3, Download, Paperclip, RefreshCw } from "lucide-react";
 import {
@@ -100,7 +100,7 @@ export function Claims() {
     requireComment?: boolean;
   } | null>(null);
 
-  const loadClaims = async () => {
+  const loadClaims = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -114,8 +114,9 @@ export function Claims() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isManager, selectedBranch, selectedStatus]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadClaims(); }, []);
 
   useEffect(() => {
@@ -132,6 +133,7 @@ export function Claims() {
       setOpenClaimId(routeClaimId);
       void loadClaimEvents(routeClaimId, true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeClaimId]);
 
   const loadClaimEvents = async (claimId: string, force = false) => {
@@ -150,7 +152,7 @@ export function Claims() {
   // reload when filters change (for manager)
   useEffect(() => {
     if (isManager) void loadClaims();
-  }, [selectedBranch, selectedStatus]);
+  }, [isManager, selectedBranch, selectedStatus, loadClaims]);
 
   const visibleClaims = isManager && selectedClaimId.trim()
     ? claims.filter((claim) => claim.id.toLowerCase().includes(selectedClaimId.trim().toLowerCase()))
