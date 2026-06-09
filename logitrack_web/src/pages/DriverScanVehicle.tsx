@@ -171,8 +171,8 @@ export function DriverScanVehicle() {
 
   return (
     <DriverShell title="Escanear vehículo" subtitle="Reclamar viaje asignado">
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4">
-        <div className="w-full max-w-sm flex flex-col items-center">
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-md flex flex-col items-center">
 
           {/* ── Loading ───────────────────────────────────────── */}
           {loading && (
@@ -252,7 +252,7 @@ export function DriverScanVehicle() {
                     onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
                     disabled={!manualToken.trim() || loading}
                     variant="accent"
-                    className="h-12 px-5 rounded-xl font-bold text-sm"
+                    className="h-12 px-5 rounded-xl font-bold text-base"
                   >
                     OK
                   </Button>
