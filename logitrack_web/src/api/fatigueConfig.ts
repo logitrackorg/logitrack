@@ -35,6 +35,13 @@ export interface FatigueConfig {
 
   /** ISO timestamp; null/absent when no reset has been triggered yet. */
   last_checkin_reset?: string | null;
+
+  /**
+   * When true (default), a RED fatigue score locks the driver's route screen
+   * until a supervisor authorises resumption. Supervisors are notified regardless.
+   * Absent/null is treated as true for backward compatibility.
+   */
+  block_route_on_red?: boolean | null;
 }
 
 // ── Audit logs (US13) ────────────────────────────────────────────────────────

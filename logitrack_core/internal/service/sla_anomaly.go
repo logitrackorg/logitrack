@@ -232,6 +232,30 @@ func (s *SLAAnomalyService) GetLastCalculationDuration() string {
 	return s.lastDuration
 }
 
+// Start lanza el heartbeat autónomo del Collector en background: un goroutine
+// con un time.Ticker de 1 minuto (misma granularidad que AutoReportScheduler /
+// PaymentScheduler) que llama a RunCheck en cada tick. Sin esto, RunCheck solo
+// se disparaba desde el callback de /admin/clock (una herramienta de testing
+// para "viajar en el tiempo"), por lo que en producción el Collector nunca
+// corría por sí solo con el paso del tiempo real.
+//
+// No hace falta lógica de "reinicio" al cambiar la configuración: RunCheck y
+// collect ya releen settingsRepo.Get() en cada invocación, así que cambios a
+// cache_interval_minutes / escalation_time / calculation_mode hechos vía API
+// se aplican solos en el siguiente tick del heartbeat.
+func (s *SLAAnomalyService) Start() {
+	go s.loop()
+}
+
+func (s *SLAAnomalyService) loop() {
+	s.RunCheck()
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.RunCheck()
+	}
+}
+
 // RunCheck is the entry point called by the clock handler on every tick.
 //
 // Behaviour depends on CalculationMode (read from settings each tick so

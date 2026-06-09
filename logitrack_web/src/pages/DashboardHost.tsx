@@ -35,7 +35,7 @@ const MetodoEntregaTab = lazy(() => import("./reports/MetodoEntregaTab").then(m 
 const RetornoTab = lazy(() => import("./reports/RetornoTab").then(m => ({ default: m.RetornoTab })));
 const ExitoTab = lazy(() => import("./reports/ExitoTab").then(m => ({ default: m.ExitoTab })));
 const FatigaTab = lazy(() => import("./reports/FatigaTab").then(m => ({ default: m.FatigaTab })));
-const SlaTab = lazy(() => import("./reports/SlaTab").then(m => ({ default: m.SlaTab })));
+const SlaTab = lazy(() => import("./reports/SlaTab"));
 
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -235,7 +235,7 @@ export function DashboardHost() {
             {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
-            {activeTab === "sla" && <SlaTab />}
+            {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
           </Suspense>
         </div>
       </div>

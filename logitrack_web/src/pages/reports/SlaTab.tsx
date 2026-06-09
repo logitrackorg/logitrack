@@ -1,16 +1,20 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
-  ChevronDown, ChevronUp, UserPlus, UserMinus,
+  ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
+  Eye, X,
 } from "lucide-react";
-import type { FleetStatus, FleetDiagnosis } from "../../api/slaMetrics";
+import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
   LineChart, Line, CartesianGrid,
 } from "recharts";
 import { slaMetricsApi, type SLAMetrics } from "../../api/slaMetrics";
+import { branchApi, branchLabelById, type Branch } from "../../api/branches";
+import { useAuth } from "../../context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { SelectMenu } from "../../components/ui/SelectMenu";
 import { Skeleton } from "../../utils/dashboard";
 import { ReportExport } from "../../components/ReportExport";
 import { exportToPDF, exportToExcel } from "../../utils/exportHelpers";
@@ -29,13 +33,16 @@ function healthColor(rate: number): string {
 
 // ── Custom tooltips ───────────────────────────────────────────────────────────
 function BarTooltip({ active, payload, label }: {
-  active?: boolean; payload?: { value: number }[]; label?: string;
+  active?: boolean; payload?: { dataKey?: string; value: number }[]; label?: string;
 }) {
   if (!active || !payload?.length) return null;
+  const atRisk = payload.find((p) => p.dataKey === "at_risk_count")?.value ?? 0;
+  const delayed = payload.find((p) => p.dataKey === "delayed_count")?.value ?? 0;
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-2 text-xs">
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-lg px-3 py-2 text-xs space-y-0.5">
       <p className="font-semibold text-[var(--text-primary)] mb-1">{label}</p>
-      <p className="text-rose-600 font-bold">{payload[0].value} envío{payload[0].value !== 1 ? "s" : ""} demorado{payload[0].value !== 1 ? "s" : ""}</p>
+      <p className="font-bold" style={{ color: COLOR_WARN }}>{atRisk} en riesgo</p>
+      <p className="font-bold" style={{ color: COLOR_BAD }}>{delayed} demorado{delayed !== 1 ? "s" : ""} (SLA roto)</p>
     </div>
   );
 }
@@ -53,21 +60,58 @@ function LineTooltip({ active, payload, label }: {
   );
 }
 
+interface SlaTabProps {
+  /** Sucursal del filtro global del Dashboard ("" = todas). Acota únicamente
+   *  las tarjetas/gráficos de SLA (tasa de cumplimiento, en riesgo,
+   *  demorados, cuellos de botella) — el "Diagnóstico de flota" mantiene su
+   *  propio selector de sucursal, independiente de este filtro. */
+  branchId: string;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
-export function SlaTab() {
+export default function SlaTab({ branchId }: SlaTabProps) {
+  const { user, hasRole } = useAuth();
   const [metrics, setMetrics] = useState<SLAMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
 
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState<{ title: string; data: Record<string, number> } | null>(null);
+
+  const isSupervisor = hasRole("supervisor") && !hasRole("manager", "admin");
+
   const load = () => {
+    setLoading(true);
     setError(false);
+    const params: { branch_id?: string } = {};
+    if (branchId) params.branch_id = branchId;
     slaMetricsApi
-      .get()
+      .get(params)
       .then((data) => { setMetrics(data); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [branchId]);
+  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
+
+  // Sucursal por defecto: la propia para supervisores, la primera del plan para managers/admins.
+  useEffect(() => {
+    if (selectedBranchId || !metrics?.fleet_diagnoses.length) return;
+    if (isSupervisor && user?.branch_id) {
+      setSelectedBranchId(user.branch_id);
+    } else {
+      setSelectedBranchId(metrics.fleet_diagnoses[0].branch_id);
+    }
+  }, [metrics, isSupervisor, user, selectedBranchId]);
+
+  const branchDiag: BranchFleetDiagnosis | null = useMemo(() => {
+    if (!metrics?.fleet_diagnoses.length) return null;
+    return metrics.fleet_diagnoses.find((d) => d.branch_id === selectedBranchId)
+        ?? metrics.fleet_diagnoses[0];
+  }, [metrics, selectedBranchId]);
 
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -76,24 +120,27 @@ export function SlaTab() {
   }, []);
 
   const exportExcel = useCallback(() => {
-    if (!metrics) return;
+    if (!metrics || !branchDiag) return;
     const date = new Date().toISOString().slice(0, 10);
+    const heurM = branchDiag.heuristic_diagnosis.raw_metrics;
     exportToExcel(
       [
         {
           name: "Diagnóstico",
           data: [
             {
-              Modelo:  "Heurística",
-              Estado:  metrics.heuristic_diagnosis.status,
-              Mensaje: metrics.heuristic_diagnosis.message,
+              Sucursal: branchDiag.branch_name,
+              Modelo:   "Heurística",
+              Estado:   branchDiag.heuristic_diagnosis.status,
+              Mensaje:  branchDiag.heuristic_diagnosis.message,
             },
-            ...(metrics.ml_prediction
+            ...(branchDiag.ml_prediction
               ? [{
+                  Sucursal:        branchDiag.branch_name,
                   Modelo:          "Random Forest",
-                  Estado:          metrics.ml_prediction.status,
-                  Mensaje:         metrics.ml_prediction.message,
-                  "Confianza (%)": Math.round((metrics.ml_prediction.confidence ?? 0) * 100),
+                  Estado:          branchDiag.ml_prediction.status,
+                  Mensaje:         branchDiag.ml_prediction.message,
+                  "Confianza (%)": Math.round((branchDiag.ml_prediction.confidence ?? 0) * 100),
                 }]
               : []),
           ],
@@ -101,27 +148,36 @@ export function SlaTab() {
         {
           name: "KPIs SLA",
           data: [{
+            Sucursal:                    branchDiag.branch_name,
             "Tasa cumplimiento SLA (%)": metrics.sla_health_rate.toFixed(1),
             "Envíos demorados":          metrics.delayed_total,
             "Envíos activos":            metrics.active_total,
-            "Tasa demora (%)":           metrics.fleet_suggestion.delay_rate_pct.toFixed(1),
-            "Choferes activos":          metrics.fleet_suggestion.active_drivers,
-            "Choferes inactivos":        metrics.fleet_suggestion.idle_drivers,
-            "Envíos huérfanos":          metrics.fleet_suggestion.orphan_shipments,
+            ...(heurM
+              ? {
+                  "Tasa demora sucursal (%)": heurM.sla_delay_pct.toFixed(1),
+                  "Choferes activos":         heurM.active_drivers,
+                  "Choferes sin ruta":        heurM.idle_drivers,
+                  "Envíos huérfanos":         heurM.orphan_shipments,
+                }
+              : {}),
           }],
         },
         {
           name: "Cuellos de botella",
-          data: metrics.bottlenecks.map((b) => ({ Estado: b.status, "Cant. demorados": b.count })),
+          data: metrics.bottlenecks.map((b) => ({
+            Estado: b.status,
+            "Cant. en riesgo": b.at_risk_count,
+            "Cant. demorados (SLA roto)":      b.delayed_count,
+          })),
         },
         {
           name: "Tendencia 7 días",
           data: metrics.delay_trend.map((d) => ({ Fecha: d.date, Escalados: d.count })),
         },
-        ...(metrics.current_averages?.some((a) => a.avg_hours > 0)
+        ...(metrics.current_averages?.some((a) => a.has_data)
           ? [{
               name: "Prom. por estado",
-              data: metrics.current_averages.map((a) => ({
+              data: metrics.current_averages.filter((a) => a.has_data).map((a) => ({
                 Estado:           a.status,
                 "Horas promedio": a.avg_hours.toFixed(1),
               })),
@@ -130,7 +186,22 @@ export function SlaTab() {
       ],
       `metricas_sla_${date}.xlsx`,
     );
-  }, [metrics]);
+  }, [metrics, branchDiag]);
+
+  const branchesByProvince = branches.reduce<Record<string, Branch[]>>((acc, b) => {
+    const prov = b.address.province;
+    if (!acc[prov]) acc[prov] = [];
+    acc[prov].push(b);
+    return acc;
+  }, {});
+  const sortedProvinces = Object.keys(branchesByProvince).sort((a, b) => a.localeCompare(b));
+  for (const prov of sortedProvinces) {
+    branchesByProvince[prov].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  const selectedBranchLabel = (() => {
+    const b = branches.find((br) => br.id === selectedBranchId);
+    return b ? b.name : "Tu sucursal";
+  })();
 
   if (loading) return <Skeleton className="h-96" />;
 
@@ -153,6 +224,13 @@ export function SlaTab() {
   const hue       = healthColor(rate);
   const ShieldIcon = rate >= 90 ? ShieldCheck : ShieldAlert;
 
+  // Tasa de envíos en riesgo: % de los activos que están "en riesgo"
+  // (superaron el 100% del promedio base pero no el 150% de tolerancia).
+  // Solo informativa — no penaliza sla_health_rate (eso es exclusivo de "demorados").
+  const riskRate = metrics.active_total > 0
+    ? Math.round((metrics.at_risk_total / metrics.active_total) * 1000) / 10
+    : 0;
+
   const trendData = metrics.delay_trend.map((d) => {
     const [, mm, dd] = d.date.split("-");
     return { ...d, label: `${dd}/${mm}` };
@@ -168,14 +246,53 @@ export function SlaTab() {
       {/* ── Capturable content ───────────────────────────────────────────────── */}
       <div ref={contentRef} className="space-y-6">
 
-      {/* ── Comparison panel: heuristic vs ML ────────────────────────────────── */}
-      <FleetComparisonPanel
-        heuristic={metrics.heuristic_diagnosis}
-        ml={metrics.ml_prediction}
-        operationalMetrics={metrics.fleet_suggestion}
-      />
+      {/* ── Selector de sucursal: el diagnóstico de flota es por sucursal ─────── */}
+      {metrics.fleet_diagnoses.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">Diagnóstico de flota — Sucursal:</span>
+          {isSupervisor ? (
+            <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-blue-50 border border-blue-200 text-sm font-semibold text-[#1e3a5f] shadow-sm">
+              <MapPin className="w-3.5 h-3.5" />
+              {selectedBranchLabel}
+            </span>
+          ) : (
+            <SelectMenu
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              placeholder="Seleccionar sucursal"
+              ariaLabel="Filtrar diagnóstico de flota por sucursal"
+              size="sm"
+              className="w-[230px]"
+              groups={sortedProvinces
+                .map((prov) => ({
+                  label: prov,
+                  options: branchesByProvince[prov]
+                    .filter((b) => metrics.fleet_diagnoses.some((d) => d.branch_id === b.id))
+                    .map((b) => ({ value: b.id, label: `${b.name} — ${b.address.city}` })),
+                }))
+                .filter((g) => g.options.length > 0)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── Comparison panel: heuristic vs ML (exclusivo de la sucursal elegida) ─ */}
+      {branchDiag && (
+        <FleetComparisonPanel
+          key={branchDiag.branch_id}
+          heuristic={branchDiag.heuristic_diagnosis}
+          ml={branchDiag.ml_prediction}
+        />
+      )}
 
       {/* ── KPI cards ────────────────────────────────────────────────────────── */}
+      <div className="block mb-6 text-sm text-gray-400">
+        <p className="flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5" />
+          Métricas de SLA — {branchId ? branchLabelById(branchId, branches) : "Todas las sucursales"}
+          <span className="text-slate-300">· según el filtro de sucursal del Dashboard</span>
+        </p>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="sm:col-span-1">
           <CardContent className="pt-6 pb-6 flex flex-col items-center text-center gap-3">
@@ -190,7 +307,10 @@ export function SlaTab() {
                 {rate.toFixed(1)}<span className="text-2xl font-bold">%</span>
               </p>
               <p className="text-[11px] text-slate-400 mt-1">
-                {metrics.delayed_total} demorado{metrics.delayed_total !== 1 ? "s" : ""} de {metrics.active_total} activos
+                {metrics.delayed_total} demorado{metrics.delayed_total !== 1 ? "s" : ""} (SLA roto) de {metrics.active_total} activos
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Penaliza solo a los demorados — los envíos en riesgo aún no rompen el acuerdo
               </p>
             </div>
             <div className="w-full h-2 rounded-full mt-1" style={{ background: `${hue}33` }}>
@@ -199,20 +319,53 @@ export function SlaTab() {
           </CardContent>
         </Card>
 
-        <Card className="sm:col-span-2">
-          <CardContent className="p-5 grid grid-cols-2 gap-4 h-full">
+        <Card className="sm:col-span-1">
+          <CardContent className="pt-6 pb-6 flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-yellow-500/15">
+              <ShieldAlert className="w-7 h-7 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Tasa de Envíos en Riesgo
+              </p>
+              <p className="text-5xl font-black tabular-nums text-yellow-500">
+                {riskRate.toFixed(1)}<span className="text-2xl font-bold">%</span>
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {metrics.at_risk_total} en riesgo de {metrics.active_total} activos
+              </p>
+              <p className="text-[10px] text-slate-400">
+                Aún recuperables — todavía no rompieron el acuerdo de SLA
+              </p>
+            </div>
+            <div className="w-full h-2 rounded-full mt-1 bg-yellow-500/20">
+              <div className="h-full rounded-full transition-all duration-500 bg-yellow-500" style={{ width: `${riskRate}%` }} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="sm:col-span-1">
+          <CardContent className="p-5 grid grid-cols-1 gap-4 h-full content-center">
             <KpiChip
-              label="Envíos demorados totales"
+              label="Envíos en riesgo"
+              value={metrics.at_risk_total}
+              color={metrics.at_risk_total === 0 ? COLOR_OK : COLOR_WARN}
+              icon={<ShieldAlert className="w-4 h-4" />}
+              onViewDetail={metrics.at_risk_total > 0 ? () => {
+                setModalContent({ title: "Detalle de Envíos en Riesgo", data: metrics.at_risk_by_branch });
+                setIsDetailsModalOpen(true);
+              } : undefined}
+            />
+            <KpiChip
+              label="Envíos demorados (SLA roto)"
               value={metrics.delayed_total}
               color={metrics.delayed_total === 0 ? COLOR_OK : COLOR_BAD}
               icon={<AlertCircle className="w-4 h-4" />}
-            />
-            <KpiChip
-              label="Estado con mayor cantidad de demorados"
-              value={metrics.bottlenecks[0]?.status ?? "—"}
-              color={COLOR_WARN}
-              icon={<ShieldAlert className="w-4 h-4" />}
-              small
+              subtitle="Demorados en este momento"
+              onViewDetail={metrics.delayed_total > 0 ? () => {
+                setModalContent({ title: "Detalle de Demorados", data: metrics.delayed_by_branch });
+                setIsDetailsModalOpen(true);
+              } : undefined}
             />
           </CardContent>
         </Card>
@@ -222,8 +375,8 @@ export function SlaTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-slate-700">Cantidad de demoras por Estado</CardTitle>
-            <p className="text-[11px] text-slate-400">Cuello de botella por estado actual</p>
+            <CardTitle className="text-sm font-semibold text-slate-700">Envíos en Riesgo y Demorados por Estado</CardTitle>
+            <p className="text-[11px] text-slate-400">En riesgo vs. demorados (SLA roto) por estado actual</p>
           </CardHeader>
           <CardContent>
             {metrics.bottlenecks.length === 0 ? (
@@ -235,11 +388,8 @@ export function SlaTab() {
                   <YAxis type="category" dataKey="status" width={140} tick={{ fontSize: 10 }}
                     tickFormatter={(v: string) => v.length > 20 ? v.slice(0, 18) + "…" : v} />
                   <Tooltip content={<BarTooltip />} />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                    {metrics.bottlenecks.map((_, idx) => (
-                      <Cell key={idx} fill={idx === 0 ? COLOR_BAD : idx === 1 ? COLOR_WARN : "#94a3b8"} />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="at_risk_count" stackId="sla" fill={COLOR_WARN} radius={[0, 0, 0, 0]} maxBarSize={28} />
+                  <Bar dataKey="delayed_count" stackId="sla" fill={COLOR_BAD} radius={[0, 4, 4, 0]} maxBarSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -248,8 +398,8 @@ export function SlaTab() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-slate-700">Tendencia de Demoras (últimos 7 días)</CardTitle>
-            <p className="text-[11px] text-slate-400">Escalados automáticos por día según el log de auditoría</p>
+            <CardTitle className="text-sm font-semibold text-slate-700">Historial de Repriorizaciones Automáticas</CardTitle>
+            <p className="text-[11px] text-slate-400">Acumulado diario de eventos disparados (incluye paquetes ya resueltos/despachados)</p>
           </CardHeader>
           <CardContent>
             {trendData.every((d) => d.count === 0) ? (
@@ -272,8 +422,11 @@ export function SlaTab() {
 
       {/* ── Current averages ─────────────────────────────────────────────────── */}
       {(() => {
-        const avgs    = metrics.current_averages ?? [];
-        const hasData = avgs.some((a) => a.avg_hours > 0);
+        // Mostramos una fila por cada estado monitoreado por el motor de SLA
+        // (el backend ya envía la lista completa, dinámica — sin hardcodear
+        // estados acá). Los que todavía no tienen suficiente historial llegan
+        // con has_data: false y muestran un globo explicativo en vez de "0h".
+        const averages = metrics.current_averages ?? [];
         return (
           <Card>
             <CardHeader className="pb-2">
@@ -285,29 +438,45 @@ export function SlaTab() {
               </p>
             </CardHeader>
             <CardContent>
-              {!hasData ? (
+              {averages.length === 0 ? (
                 <div className="flex items-center justify-center h-[220px] text-slate-400 text-sm text-center px-6">
                   Los promedios aún no han sido calculados en este ciclo
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={avgs} layout="vertical" margin={{ left: 8, right: 40, top: 4, bottom: 4 }}>
-                    <XAxis type="number" tick={{ fontSize: 11 }} unit=" h" allowDecimals={false} />
-                    <YAxis type="category" dataKey="status" width={145} tick={{ fontSize: 10 }}
-                      tickFormatter={(v: string) => v.length > 22 ? v.slice(0, 20) + "…" : v} />
-                    <Tooltip
-                      formatter={(val) => [`${Number(val).toFixed(1)} h`, "Promedio"]}
-                      contentStyle={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                    />
-                    <Bar dataKey="avg_hours" radius={[0, 4, 4, 0]} maxBarSize={28} fill={COLOR_LINE} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {averages.map((a) => (
+                    <div
+                      key={a.status}
+                      className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-100 bg-slate-50/60"
+                    >
+                      <span className="text-xs font-semibold text-slate-600 leading-snug inline-flex items-center gap-1">
+                        {a.status}
+                        {!a.has_data && (
+                          <InfoTooltip text="Todavía no hay suficientes transiciones históricas registradas para este estado — el promedio se calculará automáticamente a medida que los envíos completen su recorrido." />
+                        )}
+                      </span>
+                      {a.has_data ? (
+                        <span className="text-lg font-black tabular-nums shrink-0" style={{ color: COLOR_LINE }}>
+                          {a.avg_hours.toFixed(1)}<span className="text-xs font-bold ml-0.5">h</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-400 shrink-0">Sin datos</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
         );
       })()}
       </div>{/* end contentRef */}
+
+      <BranchDetailsModal
+        open={isDetailsModalOpen}
+        content={modalContent}
+        onClose={() => setIsDetailsModalOpen(false)}
+      />
     </div>
   );
 }
@@ -385,16 +554,32 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+// ── Info tooltip ──────────────────────────────────────────────────────────────
+// Tooltip simple basado en Tailwind (group/group-hover), sin dependencias extra.
+// Fondo oscuro fijo + texto claro para mantener buen contraste tanto en modo
+// claro como oscuro, con z-index alto para no quedar tapado por cards/charts.
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group/tooltip align-middle">
+      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-300 transition-colors cursor-help" />
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 bottom-full z-50 mb-2 w-56 -translate-x-1/2 scale-95
+                   rounded-lg bg-slate-900 px-2.5 py-2 text-[11px] leading-snug text-slate-100 shadow-lg ring-1 ring-black/10
+                   opacity-0 transition-all duration-150 group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 // ── Column sub-components (sin estado — solo contenido) ──────────────────────
 
-function HeuristicColumn({
-  diag,
-  operationalMetrics,
-}: {
-  diag: FleetDiagnosis;
-  operationalMetrics: import("../../api/slaMetrics").FleetSuggestion;
-}) {
+function HeuristicColumn({ diag }: { diag: FleetDiagnosis }) {
   const theme = FLEET_THEME[diag.status] ?? FLEET_THEME["ESTABLE"];
+  const m = diag.raw_metrics;
   return (
     <>
       <div
@@ -415,15 +600,18 @@ function HeuristicColumn({
       <p className="text-sm font-semibold text-slate-800 leading-snug mb-3">
         {diag.message}
       </p>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-black/5">
-        <MetricPill label="Demora"           value={`${operationalMetrics.delay_rate_pct.toFixed(1)}%`} />
-        <MetricPill label="Choferes activos" value={String(operationalMetrics.active_drivers)} />
-        <MetricPill label="Inactivos"        value={String(operationalMetrics.idle_drivers)} />
-        <MetricPill label="Huérfanos"        value={String(operationalMetrics.orphan_shipments)} />
-        {operationalMetrics.active_drivers_load > 0 && (
-          <MetricPill label="Carga prom." value={`${operationalMetrics.active_drivers_load.toFixed(1)} pkg`} />
-        )}
-      </div>
+      {m && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-black/5">
+          <MetricPill label="Demora"           value={`${m.sla_delay_pct.toFixed(1)}%`} />
+          <MetricPill label="Choferes activos" value={String(m.active_drivers)} />
+          <MetricPill label="Choferes sin ruta" value={String(m.idle_drivers)} />
+          <MetricPill
+            label="Huérfanos"
+            value={String(m.orphan_shipments)}
+            tooltip="Envíos en última milla (estado 'En reparto') que no figuran en ninguna ruta activa de chofer para hoy. Es una alerta de integridad de datos: en operación normal debería ser siempre 0."
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -464,11 +652,9 @@ function MLColumn({ diag }: { diag: FleetDiagnosis }) {
 function FleetComparisonPanel({
   heuristic,
   ml,
-  operationalMetrics,
 }: {
   heuristic: FleetDiagnosis;
   ml: FleetDiagnosis | null;
-  operationalMetrics: import("../../api/slaMetrics").FleetSuggestion;
 }) {
   const [expanded, setExpanded] = useState(false);
   const agree    = ml !== null && ml.status === heuristic.status;
@@ -501,7 +687,7 @@ function FleetComparisonPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-700/10">
 
         <div className="p-5 relative overflow-hidden">
-          <HeuristicColumn diag={heuristic} operationalMetrics={operationalMetrics} />
+          <HeuristicColumn diag={heuristic} />
         </div>
 
         <div className="p-5 relative overflow-hidden">
@@ -544,11 +730,10 @@ function FleetComparisonPanel({
             {heurM ? (
               <>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-                  <AnalyticRow label="Envíos activos"     value={String(heurM.total_shipments)} />
-                  <AnalyticRow label="Demora SLA"         value={`${heurM.sla_delay_pct.toFixed(1)}%`} />
-                  <AnalyticRow label="Huérfanos"          value={String(heurM.orphan_shipments)} />
-                  <AnalyticRow label="Choferes inactivos" value={String(heurM.idle_drivers)} />
-                  <AnalyticRow label="Carga promedio"     value={`${heurM.active_drivers_load.toFixed(1)} pkg`} />
+                  <AnalyticRow label="Envíos totales de sucursal" value={String(heurM.total_shipments)} />
+                  <AnalyticRow label="Demora SLA"                 value={`${heurM.sla_delay_pct.toFixed(1)}%`} />
+                  <AnalyticRow label="Huérfanos"                  value={String(heurM.orphan_shipments)} />
+                  <AnalyticRow label="Choferes sin ruta"          value={String(heurM.idle_drivers)} />
                 </div>
                 <DriverDeltaBadge delta={heurM.suggested_driver_delta} />
               </>
@@ -565,19 +750,19 @@ function FleetComparisonPanel({
             {mlM && (
               <>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-                  <AnalyticRow label="Envíos activos"     value={String(mlM.total_shipments)} />
-                  <AnalyticRow label="Demora SLA"         value={`${mlM.sla_delay_pct.toFixed(1)}%`} />
-                  <AnalyticRow label="Huérfanos"          value={String(mlM.orphan_shipments)} />
-                  <AnalyticRow label="Choferes inactivos" value={String(mlM.idle_drivers)} />
-                  <AnalyticRow label="Carga promedio"     value={`${mlM.active_drivers_load.toFixed(1)} pkg`} />
+                  <AnalyticRow label="Envíos totales de sucursal" value={String(mlM.total_shipments)} />
+                  <AnalyticRow label="Demora SLA"                 value={`${mlM.sla_delay_pct.toFixed(1)}%`} />
+                  <AnalyticRow label="Huérfanos"                  value={String(mlM.orphan_shipments)} />
+                  <AnalyticRow label="Choferes sin ruta"          value={String(mlM.idle_drivers)} />
                 </div>
                 <DriverDeltaBadge delta={mlM.suggested_driver_delta} />
               </>
             )}
             {votes ? (
               <div className="space-y-2.5">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Distribución de votos
+                <p className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Distribución de votos (estado mas probable)
+                  <InfoTooltip text="El modelo de IA evalúa múltiples escenarios históricos simultáneamente mediante 'árboles de decisión'. Cada árbol emite un voto basado en patrones pasados. El estado con el mayor porcentaje de votos determina la predicción final." />
                 </p>
                 {FLEET_STATUS_ORDER.map((st) => {
                   const pct = votes[st] ?? 0;
@@ -653,10 +838,10 @@ function statusAccentColor(status: FleetStatus): string {
   }
 }
 
-function MetricPill({ label, value }: { label: string; value: string }) {
+function MetricPill({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
-    <span className="text-[10px] text-slate-500">
-      {label}: <span className="font-bold text-slate-700">{value}</span>
+    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+      {label}{tooltip && <InfoTooltip text={tooltip} />}: <span className="font-bold text-slate-700">{value}</span>
     </span>
   );
 }
@@ -671,23 +856,76 @@ function AnalyticRow({ label, value }: { label: string; value: string }) {
 }
 
 function KpiChip({
-  label, value, color, icon, small = false,
+  label, value, color, icon, small = false, subtitle, onViewDetail,
 }: {
   label: string;
   value: string | number;
   color: string;
   icon: React.ReactNode;
   small?: boolean;
+  subtitle?: string;
+  onViewDetail?: () => void;
 }) {
   return (
-    <div className="flex flex-col justify-between gap-3 p-5 rounded-xl border border-slate-100 bg-slate-50/60 h-full">
+    <div className="relative flex flex-col justify-between gap-3 p-5 rounded-xl border border-slate-100 bg-slate-50/60 h-full">
+      {onViewDetail && (
+        <button
+          type="button"
+          onClick={onViewDetail}
+          className="absolute top-4 right-4 flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+          title="Ver detalle por sucursal"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          Ver detalle
+        </button>
+      )}
       <div className="flex items-center gap-2" style={{ color }}>
         {icon}
         <p className="text-xs font-bold uppercase tracking-wider leading-snug">{label}</p>
       </div>
-      <p className={`font-black leading-none text-slate-800 ${small ? "text-xl break-words" : "text-5xl tabular-nums"}`}>
-        {value}
-      </p>
+      <div>
+        <p className={`font-black leading-none text-slate-800 ${small ? "text-xl break-words" : "text-5xl tabular-nums"}`}>
+          {value}
+        </p>
+        {subtitle && <p className="text-[11px] text-slate-400 mt-1.5">{subtitle}</p>}
+      </div>
+    </div>
+  );
+}
+
+function BranchDetailsModal({
+  open, content, onClose,
+}: {
+  open: boolean;
+  content: { title: string; data: Record<string, number> } | null;
+  onClose: () => void;
+}) {
+  if (!open || !content) return null;
+  const entries = Object.entries(content.data).sort((a, b) => b[1] - a[1]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800">{content.title}</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer" aria-label="Cerrar">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5">
+          {entries.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-6">No hay paquetes en este estado</p>
+          ) : (
+            <ul className="space-y-2">
+              {entries.map(([branchName, count]) => (
+                <li key={branchName} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600 font-medium">{branchName}</span>
+                  <span className="text-slate-800 font-bold tabular-nums">{count} paquetes</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

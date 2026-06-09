@@ -22,6 +22,18 @@ import (
 // The driver's first name is injected at runtime by GetControlPhrase.
 const controlPhraseTemplate = "Hoy es un buen día para trabajar con seguridad, %s."
 
+// silenceEnergyThreshold is the minimum average RMS energy a recording must
+// have to be considered "voiced". Below this, the sample is treated as pure
+// silence / background noise regardless of its VAD frame ratio — this is the
+// explicit amplitude/energy gate requested to stop silent recordings from
+// passing the voice test.
+const silenceEnergyThreshold = 0.10
+
+// silenceDetectedMsg is the user-facing message returned when a recording is
+// analyzable (valid WebM) but contains no voice — distinct from INVALID_AUDIO,
+// which signals a format/transport problem the server can't even analyze.
+const silenceDetectedMsg = "Silencio detectado: no se registró voz en la grabación. Hablá con voz clara y fuerte para continuar con la prueba."
+
 type DriverHandler struct {
 	routeSvc         *service.RouteService
 	branchRepo       repository.BranchRepository
@@ -75,7 +87,7 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 		fullName = user.Username
 	}
 	if h.notifSvc != nil {
-		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score)
+		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score, cfg.IsBlockRouteOnRed())
 	}
 
 	// Stamp the driver's own check-in so the polling endpoint can surface
@@ -317,8 +329,10 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
 	var body struct {
-		HorasSueno *int `json:"horas_sueno"`
-		KSSLevel   int  `json:"kss_level"`
+		HorasSueno *int     `json:"horas_sueno"`
+		KSSLevel   int      `json:"kss_level"`
+		Latitude   *float64 `json:"latitude"`
+		Longitude  *float64 `json:"longitude"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
@@ -326,6 +340,14 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 	}
 	if body.KSSLevel < 1 || body.KSSLevel > 8 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "kss_level debe estar entre 1 y 8"})
+		return
+	}
+	if body.Latitude != nil && (*body.Latitude < -90 || *body.Latitude > 90) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "latitude debe estar entre -90 y 90"})
+		return
+	}
+	if body.Longitude != nil && (*body.Longitude < -180 || *body.Longitude > 180) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "longitude debe estar entre -180 y 180"})
 		return
 	}
 
@@ -377,6 +399,8 @@ func (h *DriverHandler) SubmitCheckin(c *gin.Context) {
 		HorasSueno:    horasSueno,
 		KSSLevel:      body.KSSLevel,
 		RecordedAt:    time.Now(),
+		Latitude:      body.Latitude,
+		Longitude:     body.Longitude,
 		VoiceMetrics:  existing.VoiceMetrics,
 		DriftScore:    existing.DriftScore,
 		BaselineVoice: existing.BaselineVoice,
@@ -469,6 +493,7 @@ func (h *DriverHandler) SubmitPVT(c *gin.Context) {
 		LatenciaPromedioMs float64 `json:"latencia_promedio_ms"`
 		Aciertos           int     `json:"aciertos"`
 		Errores            int     `json:"errores"`
+		GameErrors         int     `json:"game_errors"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
@@ -486,6 +511,8 @@ func (h *DriverHandler) SubmitPVT(c *gin.Context) {
 		LatenciaPromedioMs: body.LatenciaPromedioMs,
 		Aciertos:           body.Aciertos,
 		Errores:            body.Errores,
+		GameErrors:         body.GameErrors,
+		PVTScore:           computePVTScore(body.LatenciaPromedioMs, body.GameErrors),
 		RecordedAt:         time.Now(),
 	}
 
@@ -540,11 +567,13 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 	// ── Nivel 0: tamaño mínimo ────────────────────────────────────────────────
 	// Un WebM con silencio puro pesa solo unos cientos de bytes (cabeceras EBML
 	// + frames CN comprimidos). Cualquier grabación real de voz supera 2 500 B.
+	// Un archivo así de chico es, por definición, silencio puro — lo marcamos
+	// con el error explícito de silencio (no INVALID_AUDIO genérico).
 	const minAudioBytes = 2500
 	if len(audioData) < minAudioBytes {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "INVALID_AUDIO",
-			"message": vadInvalidMsg,
+			"error":   "SILENCE_DETECTED",
+			"message": silenceDetectedMsg,
 		})
 		return
 	}
@@ -554,9 +583,11 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 	// tamaño del payload Opus de cada frame contra el umbral de voz activa.
 	// Los frames CN (silencio Opus) pesan 1-3 bytes; los frames de voz ≥ 20 bytes.
 	// En entornos muy ruidosos (cabina de camión, viento) el ruido puede inflar
-	// los frames por encima del umbral → por eso existe también el Nivel 2.
-	vadOk, vadErr := webmVAD(audioData, vadVoiceThreshold)
-	if vadErr != nil || !vadOk {
+	// los frames por encima del umbral → por eso existen también los niveles
+	// siguientes, que validan la señal acústica medida (no solo el tamaño).
+	voicedFraction, vadOk, vadErr := webmVAD(audioData, vadVoiceThreshold)
+	if vadErr != nil {
+		// Contenedor malformado / no reproducible — no es analizable.
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "INVALID_AUDIO",
 			"message": vadInvalidMsg,
@@ -564,18 +595,20 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 		return
 	}
 
-	// Extract the 5 acoustic features from the raw audio bytes.
-	current := extractVoiceMetrics(audioData)
+	// Extract the 5 acoustic features from the raw audio bytes, derivadas de la
+	// fracción de voz medida por el VAD (señal real, no puramente aleatoria).
+	current := extractVoiceMetrics(audioData, voicedFraction)
 
-	// ── Nivel 2: validación cruzada por speech_rate ────────────────────────────
-	// Si el extractor acústico devuelve speech_rate == 0, no se detectaron
-	// sílabas en el audio — la grabación contiene ruido pero no voz humana.
-	// Con el motor de simulación actual esto no se dispara (siempre 3-6 sil/s),
-	// pero queda operativo para cuando se integre un DSP real.
-	if current.SpeechRate <= 0 {
+	// ── Nivel 2: silencio explícito ───────────────────────────────────────────
+	// El archivo es un WebM válido y analizable, pero no contiene voz humana:
+	// el VAD no encontró fracción de voz suficiente, la energía promedio (RMS)
+	// está por debajo del umbral de ruido de fondo, o el transcriptor no
+	// detectó sílabas (speech_rate == 0). Cualquiera de estas señales — solas
+	// o combinadas — indica silencio puro, no un problema de formato.
+	if !vadOk || current.EnergyRMS < silenceEnergyThreshold || current.SpeechRate <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "INVALID_AUDIO",
-			"message": vadInvalidMsg,
+			"error":   "SILENCE_DETECTED",
+			"message": silenceDetectedMsg,
 		})
 		return
 	}
@@ -625,8 +658,14 @@ func (h *DriverHandler) UploadVoice(c *gin.Context) {
 //
 // Simulation path (current): uses the audio length as a deterministic seed so
 // that the same file always produces the same metrics, making the output
-// reproducible in tests without external dependencies.
-func extractVoiceMetrics(audioData []byte) model.VoiceMetrics {
+// reproducible in tests without external dependencies. EnergyRMS and
+// SpeechRate — the two features the silence gate inspects — are derived from
+// `voicedFraction` (the VAD's *measured* voiced-frame ratio) rather than pure
+// randomness, so genuine silence (fraction ≈ 0) reliably yields near-zero
+// values and trips the explicit "Silencio detectado" check below. The
+// remaining features stay randomly seeded — they aren't derivable from
+// byte-level analysis with the current simulation.
+func extractVoiceMetrics(audioData []byte, voicedFraction float64) model.VoiceMetrics {
 	rng := rand.New(rand.NewSource(int64(len(audioData))))
 
 	return model.VoiceMetrics{
@@ -634,10 +673,12 @@ func extractVoiceMetrics(audioData []byte) model.VoiceMetrics {
 		PitchMean: 120 + rng.Float64()*80,
 		// pitch_range: variation within the sample
 		PitchRange: 20 + rng.Float64()*60,
-		// energy_rms: normalised 0–1 amplitude proxy
-		EnergyRMS: 0.3 + rng.Float64()*0.4,
-		// speech_rate: syllables per second (normal: 3–6)
-		SpeechRate: 3 + rng.Float64()*3,
+		// energy_rms: normalised 0–1 amplitude proxy, scaled by the measured
+		// voiced fraction — silence (fraction ≈ 0) yields energy ≈ 0.
+		EnergyRMS: voicedFraction * (0.5 + rng.Float64()*0.3),
+		// speech_rate: syllables per second, scaled by the measured voiced
+		// fraction — silence (fraction ≈ 0) yields a rate ≈ 0.
+		SpeechRate: voicedFraction * (5 + rng.Float64()*2),
 		// pause_ratio: fraction of silence (normal: 0.1–0.4)
 		PauseRatio: 0.1 + rng.Float64()*0.3,
 	}
@@ -829,7 +870,7 @@ func (h *DriverHandler) FastForwardCheckinTime(c *gin.Context) {
 func (h *DriverHandler) RequestHistory(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	existing, ok := h.historyRepo.Get(user.ID)
+	existing, ok := h.historyRepo.Get(user.ID, model.HistoryRequestTypeAccess)
 	if ok {
 		if existing.Status == model.HistoryRequestPending {
 			c.JSON(http.StatusConflict, gin.H{"error": "ya tenés una solicitud pendiente de revisión"})
@@ -843,6 +884,40 @@ func (h *DriverHandler) RequestHistory(c *gin.Context) {
 
 	req := model.HistoryAccessRequest{
 		DriverID:    user.ID,
+		Type:        model.HistoryRequestTypeAccess,
+		Status:      model.HistoryRequestPending,
+		RequestDate: time.Now(),
+	}
+	if err := h.historyRepo.Upsert(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no se pudo registrar la solicitud"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"ok": true, "request": req})
+}
+
+// RequestHistoryDeletion creates a pending request to revoke / delete the
+// driver's shared check-in history. Only valid once the driver's access
+// request has been approved (Caso C) — otherwise there is nothing to revoke.
+// Returns 409 if access isn't approved yet, or if a deletion request is
+// already pending review.
+func (h *DriverHandler) RequestHistoryDeletion(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+
+	access, ok := h.historyRepo.Get(user.ID, model.HistoryRequestTypeAccess)
+	if !ok || access.Status != model.HistoryRequestApproved {
+		c.JSON(http.StatusConflict, gin.H{"error": "solo podés solicitar la eliminación de tu historial si tu acceso compartido está aprobado"})
+		return
+	}
+
+	existing, ok := h.historyRepo.Get(user.ID, model.HistoryRequestTypeDeletion)
+	if ok && existing.Status == model.HistoryRequestPending {
+		c.JSON(http.StatusConflict, gin.H{"error": "ya tenés una solicitud de eliminación pendiente de revisión"})
+		return
+	}
+
+	req := model.HistoryAccessRequest{
+		DriverID:    user.ID,
+		Type:        model.HistoryRequestTypeDeletion,
 		Status:      model.HistoryRequestPending,
 		RequestDate: time.Now(),
 	}
@@ -854,19 +929,30 @@ func (h *DriverHandler) RequestHistory(c *gin.Context) {
 }
 
 // GetPersonalHistory returns the driver's full check-in history.
-// Returns 403 unless the supervisor has approved the access request.
+// Returns 403 unless the supervisor has approved the access request. Both the
+// 403 and 200 bodies include the flat `request_status` string and
+// `deletion_request` so the frontend can resolve all four privacy states
+// (Caso A/B/C/D) from `request_status`/`deletion_request.status` alone,
+// regardless of which HTTP status the call returned.
 func (h *DriverHandler) GetPersonalHistory(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 
-	req, ok := h.historyRepo.Get(user.ID)
+	req, ok := h.historyRepo.Get(user.ID, model.HistoryRequestTypeAccess)
+	deletionReq, deletionOk := h.historyRepo.Get(user.ID, model.HistoryRequestTypeDeletion)
+	var deletionPayload interface{}
+	if deletionOk {
+		deletionPayload = deletionReq
+	}
+
 	if !ok || req.Status != model.HistoryRequestApproved {
 		status := "sin_solicitud"
 		if ok {
 			status = string(req.Status)
 		}
 		c.JSON(http.StatusForbidden, gin.H{
-			"error":          "acceso no autorizado — solicitá permiso a tu supervisor",
-			"request_status": status,
+			"error":            "acceso no autorizado — solicitá permiso a tu supervisor",
+			"request_status":   status,
+			"deletion_request": deletionPayload,
 		})
 		return
 	}
@@ -879,10 +965,40 @@ func (h *DriverHandler) GetPersonalHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"history": all,
-		"total":   len(all),
-		"request": req,
+		"history":          all,
+		"total":            len(all),
+		"request":          req,
+		"request_status":   string(req.Status),
+		"deletion_request": deletionPayload,
 	})
+}
+
+// computePVTScore converts raw PVT metrics into a composite quality score
+// (0–100, higher = better performance):
+//
+//   - Base:            100 points.
+//   - Latency penalty: -10 pts per 100 ms above the 350 ms ideal (clamped to 0).
+//   - Error penalty:   -15 pts per game error (erroneous click or missed stimulus).
+//
+// The score is clamped to [0, 100] and returned as a pointer so callers can
+// distinguish "not yet computed" (nil) from a genuine score of 0.
+func computePVTScore(latenciaMs float64, gameErrors int) *int {
+	const (
+		idealMs       = 350.0
+		msPerBlock    = 100.0
+		latPenaltyPer = 10
+		errPenalty    = 15
+	)
+	score := 100
+	if latenciaMs > idealMs {
+		blocks := math.Round((latenciaMs - idealMs) / msPerBlock)
+		score -= int(blocks) * latPenaltyPer
+	}
+	score -= gameErrors * errPenalty
+	if score < 0 {
+		score = 0
+	}
+	return &score
 }
 
 // updateBaseline computes a simple running average between the existing baseline

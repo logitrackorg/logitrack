@@ -6,6 +6,7 @@ import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
@@ -40,6 +41,19 @@ export function DriverScanVehicle() {
       }
     }).catch(() => { /* sin trip — quedarse acá */ });
   }, [navigate]);
+
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato sin
+  // esperar un nuevo escaneo — el backend ya considera el check-in "completo"
+  // apenas se envía el paso KSS, así que no podemos confiar solo en su respuesta.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    driverApi.getCheckinGateStatus()
+      .then((status) => setRequiresSleepData(status.requires_sleep_data))
+      .catch(() => {})
+      .finally(() => setShowGate(true));
+  }, [user]);
 
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);

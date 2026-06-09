@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Info, Moon, Shield, ShieldAlert, SkipForward, Send, X, Loader2, MapPin, Mic } from "lucide-react";
 import { driverApi } from "../api/driver";
 import { checkDevicePermissions } from "../utils/devicePermissions";
+import {
+  getPendingFatigueStep,
+  setPendingFatigueStep,
+  clearPendingFatigueStep,
+} from "../utils/fatigueWizardProgress";
 import { VoiceCheckIn } from "./VoiceCheckIn";
 import { PVTCheckIn } from "./PVTCheckIn";
 import { Button } from "@/components/ui/button";
@@ -48,11 +53,24 @@ interface Props {
 }
 
 export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepData = true }: Props) {
+  // FIX F5-bypass: si quedó un wizard a mitad de camino (persistido en
+  // sessionStorage), retomar directo en ese paso en vez de arrancar de cero.
+  // Esto es necesario porque SubmitCheckin (paso "kss") ya marca el check-in
+  // como "completo" en el backend — una recarga después de ese punto haría que
+  // el gate no vuelva a aparecer, permitiendo saltear voz y PVT.
+  const resumeStep = getPendingFatigueStep(driverId);
+
   // BUG-46: paso de permisos obligatorio ANTES de montar el test. Se ejecuta al
   // montar; solo avanza a "kss" cuando ubicación + micrófono están concedidos.
-  const [step, setStep] = useState<"permissions" | "kss" | "voice" | "pvt">("permissions");
-  const [permChecking, setPermChecking] = useState(true);
+  // Si hay un paso pendiente persistido, los permisos ya fueron concedidos
+  // antes (no se llega a "kss" sin pasar por acá), así que se retoma directo.
+  const [step, setStep] = useState<"permissions" | "kss" | "voice" | "pvt">(resumeStep ?? "permissions");
+  const [permChecking, setPermChecking] = useState(resumeStep === null);
   const [permError, setPermError] = useState("");
+
+  // Coordenadas capturadas al concederse el permiso de ubicación — viajan junto
+  // al check-in (LOGITRACK: geolocalización en historial de check-in).
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const [horasSueno, setHorasSueno] = useState<string>("");
   const [kss, setKss] = useState(4);
@@ -92,6 +110,19 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     return () => clearTimeout(t);
   }, [showBackWarning]);
 
+  // Captura las coordenadas actuales una vez concedido el permiso de
+  // ubicación — se adjuntan al check-in para georreferenciar la prueba
+  // (geolocalización en historial de check-in). Best-effort: si falla, el
+  // check-in se envía igual sin coordenadas.
+  const captureLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => { /* best-effort — no bloquear el check-in por esto */ },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  }, []);
+
   // ── BUG-46: verificación de permisos de hardware ──────────────────────────
   // Solicita ubicación + micrófono. Si se conceden, avanza al test; si no,
   // muestra un mensaje bloqueante con opción de reintentar.
@@ -100,14 +131,37 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     setPermError("");
     const result = await checkDevicePermissions();
     if (result.granted) {
+      captureLocation();
       setStep("kss");
     } else {
       setPermError(result.message);
     }
     setPermChecking(false);
-  }, []);
+  }, [captureLocation]);
 
-  useEffect(() => { void runPermissionCheck(); }, [runPermissionCheck]);
+  useEffect(() => {
+    // FIX F5-bypass: si retomamos un wizard a mitad de camino, los permisos ya
+    // fueron concedidos en el intento anterior — no repreguntar, ir directo al paso.
+    if (resumeStep) {
+      captureLocation();
+      return;
+    }
+    void runPermissionCheck();
+  }, [resumeStep, captureLocation, runPermissionCheck]);
+
+  // FIX F5-bypass: persistir el paso actual en sessionStorage en cada
+  // transición, para que una recarga (F5) pueda retomar exactamente acá —
+  // ver utils/fatigueWizardProgress.ts para el porqué.
+  useEffect(() => {
+    if (step !== "permissions") setPendingFatigueStep(driverId, step);
+  }, [step, driverId]);
+
+  // El wizard "termina" (completo o salteado) — limpiar el progreso persistido
+  // para que la próxima vez arranque desde cero.
+  const finishWizard = useCallback(() => {
+    clearPendingFatigueStep(driverId);
+    onDone();
+  }, [driverId, onDone]);
 
   const handleSkipConfirmed = async () => {
     setSkipping(true);
@@ -122,7 +176,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       setShowSkipToast(true);
       setTimeout(() => {
         setShowSkipToast(false);
-        onDone();
+        finishWizard();
       }, 3000);
     }
   };
@@ -140,6 +194,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
         driver_id: driverId,
         kss_level: kss,
         ...(requiresSleepData ? { horas_sueno: horasNum } : {}),
+        ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : {}),
       };
       const result = await driverApi.submitCheckin(payload);
       // Backend can still ask for sleep data if the record wasn't found
@@ -207,7 +262,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   }
 
   if (step === "voice") return <VoiceCheckIn onDone={() => setStep("pvt")} />;
-  if (step === "pvt")   return <PVTCheckIn onDone={onDone} />;
+  if (step === "pvt")   return <PVTCheckIn onDone={finishWizard} />;
 
   const fillPct      = ((kss - 1) / 7) * 100;
   const accent       = kssAccentColor(kss);

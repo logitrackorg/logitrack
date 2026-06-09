@@ -23,6 +23,7 @@ import { Card } from "../components/ui/card";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 // ---------------------------------------------------------------------------
 // Haversine
@@ -132,6 +133,16 @@ export function DriverInterBranchTrip() {
     }
     setMidTripCheckin(true);
   }, []);
+
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
+  // backend ya da por completo el check-in apenas se envía el paso KSS, así
+  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    void openCheckinGate();
+  }, [user, openCheckinGate]);
 
   // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
   // Los routePoints se derivan del trip y las branches. Mientras no haya datos

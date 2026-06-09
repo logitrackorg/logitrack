@@ -30,13 +30,15 @@ const vadInvalidMsg = "No hemos detectado una grabación válida. Por favor, int
 // background noise to pass Level-1. The Level-2 check (speech_rate > 0 in the
 // acoustic extractor) provides a complementary signal that is energy-agnostic.
 //
-// Returns (true, nil)  when voiced fraction ≥ threshold.
-// Returns (false, nil) for silence / background-noise recordings.
-// Returns (false, err) when the container is not a valid WebM file.
-func webmVAD(data []byte, threshold float64) (bool, error) {
+// Returns (fraction, true,  nil) when voiced fraction ≥ threshold.
+// Returns (fraction, false, nil) for silence / background-noise recordings —
+// the caller can inspect `fraction` directly (e.g. to feed the acoustic
+// extractor or to decide between a generic vs. an explicit "silence" error).
+// Returns (0, false, err) when the container is not a valid WebM file.
+func webmVAD(data []byte, threshold float64) (voicedFraction float64, ok bool, err error) {
 	// All WebM / Matroska files begin with the four EBML magic bytes.
 	if len(data) < 4 || data[0] != 0x1A || data[1] != 0x45 || data[2] != 0xDF || data[3] != 0xA3 {
-		return false, fmt.Errorf("not a valid WebM file (EBML magic not found)")
+		return 0, false, fmt.Errorf("not a valid WebM file (EBML magic not found)")
 	}
 
 	const (
@@ -91,10 +93,11 @@ func webmVAD(data []byte, threshold float64) (bool, error) {
 
 	if total == 0 {
 		// No parseable blocks found — file may be malformed or too short.
-		return false, nil
+		return 0, false, nil
 	}
 
-	return float64(voiced)/float64(total) >= threshold, nil
+	fraction := float64(voiced) / float64(total)
+	return fraction, fraction >= threshold, nil
 }
 
 // readEBMLVINT reads a WebM Variable-Length INTeger (VINT) from data[pos].

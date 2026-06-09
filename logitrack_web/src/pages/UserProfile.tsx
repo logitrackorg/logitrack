@@ -39,6 +39,7 @@ export function UserProfile() {
   const [historyResult, setHistoryResult] = useState<PersonalHistoryResult | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [requestingHistory, setRequestingHistory] = useState(false);
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -63,6 +64,31 @@ export function UserProfile() {
       setRequestingHistory(false);
     }
   };
+
+  const handleRequestDeletion = async () => {
+    setRequestingDeletion(true);
+    try {
+      await driverApi.requestHistoryDeletion();
+      toast.success("Solicitud de eliminación enviada. Tu supervisor la revisará a la brevedad.");
+      await loadHistory();
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo enviar la solicitud");
+    } finally {
+      setRequestingDeletion(false);
+    }
+  };
+
+  // Caso A: sin permisos activos (incluye "sin_solicitud" y solicitudes rechazadas).
+  // Caso B: solicitud de acceso pendiente.
+  // Caso C: acceso aprobado — historial compartido.
+  // Caso D: solicitud de eliminación pendiente (tiene precedencia visual sobre C).
+  const accessStatus = historyResult?.request_status;
+  const deletionStatus = historyResult?.deletion_request?.status;
+  const privacyCase: "A" | "B" | "C" | "D" =
+    deletionStatus === "pending" ? "D"
+    : accessStatus === "pending" ? "B"
+    : accessStatus === "approved" ? "C"
+    : "A";
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -353,7 +379,7 @@ export function UserProfile() {
                     </div>
                   )}
                 </div>
-              ) : null}
+              )}
             </div>
           ) : activeTab === "profile" ? (
             <div>

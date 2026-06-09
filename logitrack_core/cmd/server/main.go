@@ -345,10 +345,14 @@ func main() {
 	}
 	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
 
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
-	// Attach to the clock callback so every admin clock tick triggers a check.
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc, branchRepo)
+	// Heartbeat autónomo: corre el Collector/Executor cada minuto en tiempo real,
+	// independiente de /admin/clock (que es solo una herramienta de testing).
+	slaAnomalySvc.Start()
+
+	// Attach to the clock callback so every admin clock tick also triggers a
+	// check immediately (útil para time-travel testing sin esperar al heartbeat).
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
-	_ = slaAnomalySvc // referenced via closure below
 	origSLARiskChecker := slaRiskChecker
 	slaRiskChecker = func() {
 		if origSLARiskChecker != nil {
@@ -585,6 +589,7 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
@@ -631,6 +636,7 @@ func main() {
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.POST("/driver/history-deletion-request", driverOnly, driverHandler.RequestHistoryDeletion)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499

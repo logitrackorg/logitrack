@@ -36,6 +36,7 @@ import {
   recipientView,
   timeWindowTone,
 } from "../utils/driverActions";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 type Tab = "pendientes" | "completados";
 
@@ -54,6 +55,12 @@ export function DriverRoute() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
+  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
+  const pendingAckRef = useRef<string | null>(null);
 
   // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
   const [midRouteCheckin, setMidRouteCheckin] = useState(false);
@@ -107,6 +114,30 @@ export function DriverRoute() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
+
+  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const status = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = status.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
+          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(status.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const closeSheets = () => {
     setDeliverShipment(null);
@@ -286,6 +317,22 @@ export function DriverRoute() {
 
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
+
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
+  // backend ya da por completo el check-in apenas se envía el paso KSS, así
+  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    driverApi.getTodayCheckin()
+      .then((checkin) => setRequiresSleepData(checkin.requires_sleep_data ?? true))
+      .catch(() => setRequiresSleepData(true))
+      .finally(() => {
+        pause();
+        setMidRouteCheckin(true);
+      });
+  }, [user, pause]);
 
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
@@ -637,6 +684,43 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
       />
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo (LOGITRACK-499) */}
+      {fatigueBlocked && (
+        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <AlertTriangle size={64} className="text-red-500" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Alerta de fatiga detectada
+          </h2>
+          <p className="text-slate-400 text-base leading-relaxed m-0">
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
+
+      {/* Cartelito de autorización — visible cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
+      {!fatigueBlocked && fatigueUnblockedBy && (
+        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <CheckCircle2 size={64} className="text-emerald-500" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Ruta autorizada
+          </h2>
+          <p className="text-green-300 text-base leading-relaxed m-0">
+            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
+            que continúes la ruta.
+          </p>
+          <button
+            onClick={() => {
+              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack_route", pendingAckRef.current);
+              setFatigueUnblockedBy(null);
+            }}
+            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
+          >
+            Continuar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
