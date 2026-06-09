@@ -6,7 +6,7 @@ interface DriverShellProps {
   children: React.ReactNode;
 }
 
-export function DriverShell({ title, subtitle, children }: DriverShellProps) {
+export function DriverShell({ title, subtitle: _subtitle, children }: DriverShellProps) {
   return (
     <div className="min-h-screen bg-[var(--bg-page)]">
       <DriverNav title={title} />
