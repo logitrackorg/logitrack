@@ -15,13 +15,12 @@ export function DriverNav({ title }: DriverNavProps) {
 
   if (!user) return null;
 
-  const isInterBranch = user.driver_type === "intersucursal";
   const initials = user.username.slice(0, 2).toUpperCase();
 
   return (
     <header className="sticky top-0 z-50 h-14 bg-[var(--sidebar-bg)] text-white flex items-center px-4 gap-3">
-      {/* Left: logo + org name + nav link */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      {/* Left: logo + org name */}
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
         {logoUrl ? (
           <img
             src={logoUrl}
@@ -36,25 +35,6 @@ export function DriverNav({ title }: DriverNavProps) {
         <span className="font-extrabold text-[15px] tracking-[0.5px] text-white/90 truncate max-w-[100px]" title={orgName}>
           {orgName}
         </span>
-        {isInterBranch ? (
-          <NavLink
-            to="/driver/trip"
-            className={({ isActive }) =>
-              `no-underline font-semibold text-sm ml-1 ${isActive ? "text-white" : "text-slate-300"}`
-            }
-          >
-            Mi viaje
-          </NavLink>
-        ) : (
-          <NavLink
-            to="/driver/route"
-            className={({ isActive }) =>
-              `no-underline font-semibold text-sm ml-1 ${isActive ? "text-white" : "text-slate-300"}`
-            }
-          >
-            Mi ruta
-          </NavLink>
-        )}
       </div>
 
       {/* Center: page title */}

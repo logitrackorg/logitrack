@@ -29,6 +29,7 @@ import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { haversineKm, cityAbbrev } from "@/utils/geo";
+import { fmtDateTime } from "../utils/date";
 
 function mapsUrl(lat: number, lng: number, label: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${encodeURIComponent(label)}`;
@@ -584,7 +585,7 @@ export function DriverInterBranchTrip() {
         </p>
         {trip.completed_at && (
           <p className="text-xs text-[var(--text-muted)] mb-8">
-            {new Date(trip.completed_at).toLocaleString("es-AR")}
+            {fmtDateTime(trip.completed_at)}
           </p>
         )}
         <Button
@@ -608,9 +609,7 @@ export function DriverInterBranchTrip() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-[var(--text-primary)] leading-tight">
-                  Viaje · <span className="font-mono tracking-tight">{trip.license_plate}</span>
-                </h1>
+                <span className="font-mono tracking-tight text-base font-bold text-[var(--text-primary)]">{trip.license_plate}</span>
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${st.cls}`}>
                   {st.label}
                 </span>
@@ -668,9 +667,16 @@ export function DriverInterBranchTrip() {
         )}
 
         {/* ── MAPA ── */}
-        {!!origin?.latitude && (
+        {!!origin?.latitude ? (
           <Card className="overflow-hidden !p-0 border-[var(--border)]" variant="muted">
             <div ref={mapRef} className="h-48 w-full" />
+          </Card>
+        ) : (
+          <Card className="!p-4 border-[var(--border)]" variant="muted">
+            <div className="h-48 flex items-center justify-center text-sm text-[var(--text-muted)]">
+              <MapPin className="w-4 h-4 mr-2" />
+              Cargando mapa…
+            </div>
           </Card>
         )}
 
@@ -765,7 +771,7 @@ export function DriverInterBranchTrip() {
         {/* Timestamps */}
         {trip.started_at && (
           <p className="text-xs text-[var(--text-muted)] text-center pt-2">
-            Iniciado: {new Date(trip.started_at).toLocaleString("es-AR")}
+            Iniciado: {fmtDateTime(trip.started_at)}
           </p>
         )}
       </div>
