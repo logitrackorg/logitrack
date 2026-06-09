@@ -154,6 +154,7 @@ type ConfirmPaymentCmd struct {
 	// Fields needed to rebuild the confirmed shipment state:
 	EstimatedDeliveryAt *time.Time
 	Prediction          *model.PriorityPrediction
+	SecurityKeyword     string
 }
 
 type RevertToDraftCmd struct {

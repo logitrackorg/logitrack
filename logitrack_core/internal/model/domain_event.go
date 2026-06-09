@@ -119,6 +119,7 @@ type PaymentConfirmedPayload struct {
 	Amount              float64
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
+	SecurityKeyword     string
 }
 
 type ReturnedToDraftPayload struct {

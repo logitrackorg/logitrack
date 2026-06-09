@@ -36,6 +36,10 @@ func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.
 		prediction = s.shipmentSvc.mlClient.PredictFromShipment(shipment)
 	}
 
+	securityKeyword := shipment.SecurityKeyword
+	if securityKeyword == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
+		securityKeyword = generateSecurityKeyword()
+	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,
 		NewTrackingID:       newTrackingID,
@@ -46,6 +50,7 @@ func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
 		Prediction:          prediction,
+		SecurityKeyword:     securityKeyword,
 	})
 	if err != nil {
 		return model.Shipment{}, fmt.Errorf("error al confirmar pago simulado: %w", err)
@@ -101,6 +106,10 @@ func (s *PaymentService) ConfirmMockPayment(trackingID, username string) (model.
 		prediction = s.shipmentSvc.mlClient.PredictFromShipment(shipment)
 	}
 
+	securityKeywordMock := shipment.SecurityKeyword
+	if securityKeywordMock == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
+		securityKeywordMock = generateSecurityKeyword()
+	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,
 		NewTrackingID:       newTrackingID,
@@ -111,6 +120,7 @@ func (s *PaymentService) ConfirmMockPayment(trackingID, username string) (model.
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
 		Prediction:          prediction,
+		SecurityKeyword:     securityKeywordMock,
 	})
 	if err != nil {
 		return model.Shipment{}, fmt.Errorf("error al confirmar pago simulado: %w", err)

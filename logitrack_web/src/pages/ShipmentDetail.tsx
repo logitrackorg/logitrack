@@ -665,6 +665,11 @@ export function ShipmentDetail() {
                     Demorado
                   </span>
                 )}
+                {shipment.contingency_delivery && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    ⚠️ Contingencia DNI
+                  </span>
+                )}
               </div>
 
               {/* Route: origin → destination */}

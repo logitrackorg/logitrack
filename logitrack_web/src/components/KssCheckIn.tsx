@@ -81,7 +81,14 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
     };
 
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Si la entrada que pusimos sigue siendo la actual (no fue reemplazada por
+      // navigate()), la removemos para no desfasar el historial de React Router.
+      if (window.history.state?.fatigueGate) {
+        window.history.go(-1);
+      }
+    };
   }, []);
 
   // Auto-ocultar el aviso de retroceso a los 4 segundos.
