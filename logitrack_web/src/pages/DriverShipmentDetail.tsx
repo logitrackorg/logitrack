@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronDown, ChevronLeft,
+  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
   Clock, MapPin, MessageCircle, Phone, User, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
@@ -44,7 +44,6 @@ export function DriverShipmentDetail() {
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [senderExpanded, setSenderExpanded] = useState(false);
 
   const { speedKmh: gpsSpeedKmh, locationReady, requestLocation } = useCurrentSpeed();
   const [simActive] = useState(false);
@@ -233,21 +232,13 @@ export function DriverShipmentDetail() {
           </div>
         )}
 
-        {/* Sender — collapsible */}
-        <div className="rounded-xl border border-[var(--border)] overflow-hidden">
-          <button
-            onClick={() => setSenderExpanded((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] cursor-pointer bg-transparent border-0 transition-colors"
-          >
-            <div className="flex items-center gap-2"><User className="w-4 h-4" />Remitente: {senderName}</div>
-            <ChevronDown className={`w-4 h-4 transition-transform shrink-0 ${senderExpanded ? "rotate-180" : ""}`} />
-          </button>
-          {senderExpanded && (
-            <div className="px-4 pb-3 pt-2 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-1">
-              <p className="text-sm text-[var(--text-primary)]">{senderName}</p>
-              {senderPhone && <p className="text-xs text-[var(--text-secondary)]">{senderPhone}</p>}
-            </div>
-          )}
+        {/* Sender */}
+        <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3 flex items-center gap-3">
+          <User className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{senderName}</p>
+            {senderPhone && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{senderPhone}</p>}
+          </div>
         </div>
       </div>
 
