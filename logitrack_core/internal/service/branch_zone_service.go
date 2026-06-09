@@ -65,6 +65,38 @@ var validTransitions = map[model.BranchZoneType]map[model.BranchZoneType]bool{
 	},
 }
 
+// AssignToEntrada registra automáticamente un envío en la zona Entrada al llegar a una
+// sucursal (US-02 CA-01/CA-02). A diferencia de MoveShipment, no valida transiciones entre
+// zonas: es una recepción automática del sistema que emite EventShipmentZoned y aplica sin
+// importar la zona previa (típicamente nil en el flujo manual desde origen, o "salida" si el
+// envío ya había sido despachado). Es idempotente: si ya está en Entrada, no hace nada.
+func (s *BranchZoneService) AssignToEntrada(trackingID, branchID, username string) error {
+	sh, err := s.shipmentRepo.GetByTrackingID(trackingID)
+	if err != nil {
+		return fmt.Errorf("envío no encontrado")
+	}
+	if sh.CurrentZone != nil && *sh.CurrentZone == string(model.ZoneEntrada) {
+		return nil
+	}
+
+	event := model.DomainEvent{
+		ID:         uuid.New().String(),
+		TrackingID: trackingID,
+		EventType:  model.EventShipmentZoned,
+		Payload: model.ShipmentZonedPayload{
+			BranchID: branchID,
+			Zone:     model.ZoneEntrada,
+		},
+		ChangedBy: username,
+		Timestamp: clock.Now().UTC(),
+	}
+	if err := s.eventStore.Append(event); err != nil {
+		return err
+	}
+	s.proj.Apply(event)
+	return nil
+}
+
 // MoveShipment mueve un envío de una zona a otra dentro de la sucursal.
 // Valida que la transición sea válida según el mapa de transiciones.
 // role es el rol del usuario que ejecuta el movimiento.

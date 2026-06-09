@@ -387,8 +387,9 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 
 	case model.EventShipmentMoved:
 		payload := event.Payload.(model.ShipmentMovedPayload)
+		// ToZone vacío = la zona se limpia a NULL (clasificación lost/destroyed, US-04 CA-02).
 		_, err := p.db.Exec(`
-			UPDATE shipments SET current_zone = $1, updated_at = $2 WHERE tracking_id = $3`,
+			UPDATE shipments SET current_zone = NULLIF($1, ''), updated_at = $2 WHERE tracking_id = $3`,
 			string(payload.ToZone), event.Timestamp, event.TrackingID,
 		)
 		return err

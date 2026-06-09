@@ -808,6 +808,15 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	return confirmed, nil
 }
 
+// dispatchTargetStatuses son los estados que representan un "despacho" desde la
+// sucursal y que, por lo tanto, requieren que el envío esté en zona Salida (US-02 CA-03).
+var dispatchTargetStatuses = map[model.Status]bool{
+	model.StatusLoaded:         true,
+	model.StatusInTransit:      true,
+	model.StatusOutForDelivery: true,
+	model.StatusDelivered:      true,
+}
+
 func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatusRequest) (model.Shipment, error) {
 	if req.Status == model.StatusDeliveryFailed && strings.TrimSpace(req.Notes) == "" {
 		return model.Shipment{}, fmt.Errorf("las notas son obligatorias para fallo de entrega")
@@ -818,6 +827,17 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 	current, err := s.repo.GetByTrackingID(trackingID)
 	if err != nil {
 		return model.Shipment{}, err
+	}
+
+	// US-02 CA-03: un envío físicamente en Entrada o Revisión debe moverse a Salida
+	// antes de poder despacharse (asignar a vehículo → loaded, reparto → out_for_delivery,
+	// tránsito → in_transit, o entrega en mostrador → delivered). El ruteo inteligente
+	// mueve Entrada → Salida automáticamente antes de aplicar, por lo que no se ve afectado.
+	if current.CurrentZone != nil && dispatchTargetStatuses[req.Status] {
+		switch model.BranchZoneType(*current.CurrentZone) {
+		case model.ZoneEntrada, model.ZoneRevision:
+			return model.Shipment{}, fmt.Errorf("El envío debe ser movido a Salida antes de despacharlo")
+		}
 	}
 
 	// Returning shipments cannot do last-mile delivery — they complete via ready_for_return → returned.

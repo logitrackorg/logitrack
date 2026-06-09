@@ -360,3 +360,79 @@ func TestClassifyShipment_WrongBranch(t *testing.T) {
 		t.Fatal("expected error for wrong branch, got nil")
 	}
 }
+
+// ── AssignToEntrada tests (US-02 CA-01/CA-02) ────────────────────────────────────
+
+func TestAssignToEntrada_FromNilZone(t *testing.T) {
+	svc, _, shipmentRepo, eventStore, proj := newBranchZoneTestSvc()
+	// Shipment arriving via end-trip in the manual flow has no prior zone (nil).
+	createTestShipment(t, shipmentRepo, eventStore, proj, "LT-EEEE", "branch_a", model.StatusAtHub)
+
+	if err := svc.AssignToEntrada("LT-EEEE", "branch_a", "sys"); err != nil {
+		t.Fatalf("expected ok, got: %v", err)
+	}
+	sh, _ := shipmentRepo.GetByTrackingID("LT-EEEE")
+	if sh.CurrentZone == nil || *sh.CurrentZone != string(model.ZoneEntrada) {
+		t.Fatalf("expected current_zone=entrada, got %v", sh.CurrentZone)
+	}
+}
+
+// ── Dispatch guard tests (US-02 CA-03) ───────────────────────────────────────────
+
+// setupDispatchGuardTest builds a real ShipmentService plus an at_hub shipment, so we can
+// assert that dispatching is blocked while the shipment sits in Entrada/Revisión.
+func setupDispatchGuardTest(t *testing.T) (*ShipmentService, repository.EventStore, projection.Projector) {
+	t.Helper()
+	shipmentRepo, eventStore, proj := repository.NewInMemoryShipmentRepositoryWithDeps()
+	branchRepo := repository.NewInMemoryBranchRepository()
+	branchRepo.Add(model.Branch{
+		ID: "branch_a", Name: "BRANCH-A", Status: model.BranchStatusActive,
+		Province: "Buenos Aires", Address: model.Address{City: "Buenos Aires"},
+	})
+	customerRepo := repository.NewInMemoryCustomerRepository()
+	commentRepo := repository.NewInMemoryCommentRepository()
+	commentSvc := NewCommentService(commentRepo, shipmentRepo)
+	shipmentSvc := NewShipmentService(shipmentRepo, branchRepo, customerRepo, commentSvc, NewMLService(""))
+	shipmentSvc.SetSystemConfig(&stubSystemConfig{})
+
+	createTestShipment(t, shipmentRepo, eventStore, proj, "LT-DDDD", "branch_a", model.StatusAtHub)
+	return shipmentSvc, eventStore, proj
+}
+
+func TestUpdateStatus_BlockedFromEntrada(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneEntrada)
+
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusOutForDelivery, ChangedBy: "op1", DriverID: "drv1",
+	})
+	if err == nil {
+		t.Fatal("expected dispatch from Entrada to be blocked, got nil")
+	}
+}
+
+func TestUpdateStatus_BlockedFromRevision(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneRevision)
+
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusLoaded, ChangedBy: "op1",
+	})
+	if err == nil {
+		t.Fatal("expected dispatch from Revisión to be blocked, got nil")
+	}
+}
+
+func TestUpdateStatus_AllowedFromSalida(t *testing.T) {
+	shipmentSvc, eventStore, proj := setupDispatchGuardTest(t)
+	setShipmentZone(t, eventStore, proj, "LT-DDDD", model.ZoneSalida)
+
+	// From Salida the zone guard must NOT trigger; any error here must come from
+	// downstream transition rules, not from the "movido a Salida" guard.
+	_, err := shipmentSvc.UpdateStatus("LT-DDDD", model.UpdateStatusRequest{
+		Status: model.StatusOutForDelivery, ChangedBy: "op1", DriverID: "drv1",
+	})
+	if err != nil && err.Error() == "El envío debe ser movido a Salida antes de despacharlo" {
+		t.Fatalf("dispatch from Salida should not be blocked by zone guard, got: %v", err)
+	}
+}

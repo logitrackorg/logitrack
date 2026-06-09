@@ -1055,6 +1055,24 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			_ = store.Append(statusEvent)
 		}
 
+		// Los envíos que ya llegaron a una sucursal (at_hub) se ubican físicamente en la
+		// zona Entrada, igual que en producción al finalizar un viaje (US-02). Esto hace
+		// visible la zona en el detalle del envío desde el seed inicial.
+		if last := s.events[len(s.events)-1]; last.to == model.StatusAtHub {
+			zoneEvent := model.DomainEvent{
+				ID:         uuid.NewString(),
+				TrackingID: s.trackingID,
+				EventType:  model.EventShipmentZoned,
+				Payload: model.ShipmentZonedPayload{
+					BranchID: last.location,
+					Zone:     model.ZoneEntrada,
+				},
+				ChangedBy: "sistema",
+				Timestamp: now.Add(-time.Duration(last.hoursAgo) * time.Hour).Add(time.Minute),
+			}
+			_ = store.Append(zoneEvent)
+		}
+
 		// Upsert customers from this seed entry
 		customerRepo.Upsert(s.sender)
 		customerRepo.Upsert(s.recipient)
