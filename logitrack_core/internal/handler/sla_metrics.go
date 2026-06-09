@@ -438,6 +438,12 @@ func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch m
 // saturation signal that replaced "carga promedio" (avg load of busy drivers
 // only) — same thresholds, same five-case ordering, scoped to one branch.
 func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int, utilizationRatio float64) model.FleetStatus {
+	// Sucursal vacía: sin envíos activos no hay nada que gestionar.
+	// Debe evaluarse ANTES del chequeo de dotación cero para que
+	// activeDrivers==0 && totalShipments==0 retorne ESTABLE (no CRÍTICO).
+	if totalShipments == 0 {
+		return model.FleetStatusStable
+	}
 	// Caso borde: sin choferes activos pero con envíos pendientes — la
 	// protección contra división por cero deja utilizationRatio en 0, lo que
 	// haría caer (incorrectamente) en ESTABLE/OCIOSO. Es el peor escenario
@@ -462,6 +468,12 @@ func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments, activeDriv
 
 // fleetStatusMessage returns the operator-facing message for a given fleet status.
 func fleetStatusMessage(status model.FleetStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments int, utilizationRatio float64) string {
+	// Sucursal vacía: el modelo ML puede haber clasificado como CRÍTICO/AVISO
+	// antes de ser reentrenado con la regla de sucursal vacía. Mostramos siempre
+	// un mensaje neutro para evitar frases sin sentido como "0 envíos estancados".
+	if totalShipments == 0 {
+		return "✅ Sin actividad operativa activa. No se requieren acciones en esta sucursal."
+	}
 	switch status {
 	case model.FleetStatusWarning:
 		return "⚠️ Ineficiencia detectada: SLA comprometido, pero hay " +
@@ -521,6 +533,19 @@ func calcDriverDelta(delayRatePct float64, idleDrivers, orphanShipments, activeD
 		}
 	}
 	return 0
+}
+
+// RetrainFleetML regenerates the synthetic training dataset with the current
+// fleetClassify rules and retrains the fleet RandomForest model in-place.
+// The new model is hot-swapped into the running FleetMLService so subsequent
+// GET /stats/sla-metrics calls immediately use the updated model.
+// Admin-only — any retrain takes ~1-2 s.
+func (h *SLAMetricsHandler) RetrainFleetML(c *gin.Context) {
+	if err := h.fleetML.Retrain(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "retrain failed: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Modelo de flota reentrenado correctamente."})
 }
 
 // itoa converts an int to its decimal string representation without importing strconv.

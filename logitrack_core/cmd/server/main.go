@@ -589,6 +589,7 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)

@@ -79,9 +79,14 @@ type TouchEventRecord struct {
 // PVTResult contains the objective psychomotor metrics captured by the
 // reaction-time mini-game (Psychomotor Vigilance Task).
 type PVTResult struct {
-	LatenciaPromedioMs float64   `json:"latencia_promedio_ms"` // mean response latency
-	Aciertos           int       `json:"aciertos"`             // correct circle taps
-	Errores            int       `json:"errores"`              // false positives (taps with no stimulus)
-	GameErrors         int       `json:"game_errors,omitempty"` // erroneous clicks + missed stimuli (broader error count for the minigame)
-	RecordedAt         time.Time `json:"recorded_at"`
+	LatenciaPromedioMs float64   `json:"latencia_promedio_ms"`  // mean response latency
+	Aciertos           int       `json:"aciertos"`              // correct circle taps
+	Errores            int       `json:"errores"`               // false positives (taps with no stimulus)
+	GameErrors         int       `json:"game_errors,omitempty"` // erroneous clicks + missed stimuli
+	// PVTScore is the composite 0–100 quality score: 100 = ideal, penalised
+	// for slow reactions (+100ms over 350ms ideal) and tactile errors.
+	// Pointer so legacy records without the field are distinguishable from a
+	// genuine score of 0.
+	PVTScore   *int      `json:"pvt_score,omitempty"`
+	RecordedAt time.Time `json:"recorded_at"`
 }

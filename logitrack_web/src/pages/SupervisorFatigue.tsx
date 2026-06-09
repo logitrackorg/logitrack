@@ -156,16 +156,34 @@ function HistoryRow({ record, isInterBranch }: { record: CheckinRecord; isInterB
             )}
           </td>
 
-          {/* PVT — latencia promedio */}
+          {/* PVT — score unificado (protagonista) + detalle técnico en gris */}
           <td className="py-2 px-3 text-center">
-            {record.pvt_metrics ? (
-              <span className={`text-[11px] font-bold tabular-nums ${
-                record.pvt_metrics.latencia_promedio_ms <= 800  ? "text-emerald-600" :
-                record.pvt_metrics.latencia_promedio_ms <= 1100 ? "text-amber-600"   : "text-rose-600"
-              }`}>
-                {record.pvt_metrics.latencia_promedio_ms.toFixed(0)} ms
-              </span>
-            ) : (
+            {record.pvt_metrics ? (() => {
+              const pvt = record.pvt_metrics;
+              const score = pvt.pvt_score ?? null;
+              const scoreColor =
+                score == null ? "text-slate-400"
+                : score > 80  ? "text-emerald-600"
+                : score >= 50 ? "text-amber-600"
+                : "text-rose-600";
+              return (
+                <div className="inline-flex flex-col items-center gap-0.5">
+                  {score != null ? (
+                    <span className={`text-[11px] font-bold tabular-nums ${scoreColor}`}>
+                      {score}/100
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold tabular-nums text-slate-400">
+                      {pvt.latencia_promedio_ms.toFixed(0)} ms
+                    </span>
+                  )}
+                  <span className="text-[10px] text-slate-400 tabular-nums leading-tight">
+                    {pvt.latencia_promedio_ms.toFixed(0)} ms
+                    {(pvt.game_errors ?? 0) > 0 && ` · ${pvt.game_errors}err`}
+                  </span>
+                </div>
+              );
+            })() : (
               <span className="text-[11px] text-slate-300">—</span>
             )}
           </td>
