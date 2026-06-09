@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   Film,
+  Home,
   MapPin,
   Package,
   Truck,
@@ -434,6 +435,13 @@ export function DriverRoute() {
             </span>
           )}
           <RouteStatusPill status={routeStatus} />
+          <button
+            onClick={() => navigate("/driver/scan")}
+            title="Volver al inicio"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer bg-transparent border-0"
+          >
+            <Home size={18} />
+          </button>
         </div>
       </div>
 
