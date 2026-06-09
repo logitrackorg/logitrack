@@ -23,9 +23,6 @@ import {
 } from "../utils/driverActions";
 
 const PACKAGE_LABELS: Record<string, string> = { envelope: "Sobre", box: "Caja" };
-const DELIVERY_METHOD_LABEL: Record<string, string> = {
-  ultima_milla: "Última milla", retiro_sucursal: "Retiro en sucursal",
-};
 
 export function DriverShipmentDetail() {
   const { trackingId } = useParams<{ trackingId: string }>();
@@ -178,7 +175,6 @@ export function DriverShipmentDetail() {
   const weightKg = cor.weight_kg ?? String(shipment.weight_kg);
   const senderName = cor.sender_name ?? shipment.sender.name;
   const senderPhone = cor.sender_phone ?? shipment.sender.phone;
-  const deliveryMethod = shipment.delivery_method ?? "ultima_milla";
   const statusOverride = shipmentStatusLabelOverride(shipment);
 
   return (
@@ -243,11 +239,6 @@ export function DriverShipmentDetail() {
             {fragile && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
                 <AlertTriangle className="w-3 h-3" />Frágil
-              </span>
-            )}
-            {deliveryMethod !== "ultima_milla" && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
-                {DELIVERY_METHOD_LABEL[deliveryMethod] ?? deliveryMethod}
               </span>
             )}
             {attempts > 0 && (
