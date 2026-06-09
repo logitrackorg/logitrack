@@ -15,7 +15,7 @@ import { FailedSheet } from "../components/driver/FailedSheet";
 import { RejectedSheet } from "../components/driver/RejectedSheet";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { useGeolocation } from "../hooks/useGeolocation";
-import { waHrefWithText } from "../utils/driverActions";
+import { waHref } from "../utils/driverActions";
 import {
   FAILED_REASONS, REJECTED_REASONS,
   TIME_WINDOW_HOURS, TIME_WINDOW_LABEL,
@@ -66,34 +66,19 @@ export function DriverShipmentDetail() {
       driverApi.getRoute().then((d) => setRoute(d.route)).catch(() => setRoute(null)),
     ]);
 
-  useEffect(() => {
-    if (!trackingId) return;
-    setLoading(true);
-    reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false));
-  }, [trackingId]);
+  useEffect(() => { if (trackingId) { setLoading(true); reload(trackingId).catch(() => setError("Envío no encontrado.")).finally(() => setLoading(false)); } }, [trackingId]);
 
   const handleDeliver = async () => {
     if (!shipment || !recipientDni.trim()) return;
     const isLastMile = shipment.delivery_method === "ultima_milla";
-    if (isLastMile) {
-      const locked = (shipment.keyword_attempts ?? 0) >= 3;
-      if (useContingency) { if (!recipientDni.trim()) return; }
-      else { if (locked || !deliveryKeyword.trim()) return; }
-    }
+    if (isLastMile) { const locked = (shipment.keyword_attempts ?? 0) >= 3; if (useContingency) { if (!recipientDni.trim()) return; } else { if (locked || !deliveryKeyword.trim()) return; } }
     setSubmitting(true); setActionError("");
     try {
-      if (isLastMile) {
-        await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource });
-      } else {
-        await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
-      }
+      if (isLastMile) await shipmentApi.deliver(shipment.tracking_id, { keyword: useContingency ? undefined : deliveryKeyword.trim(), recipient_dni: useContingency ? recipientDni.trim() : undefined, contingency: useContingency, current_speed: effectiveSpeed, speed_source: speedSource });
+      else await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivered", location: "", recipient_dni: recipientDni.trim(), current_speed: effectiveSpeed, speed_source: speedSource });
       setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false);
       await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); }
-      setActionError(msg ?? "No se pudo registrar la entrega.");
-    } finally { setSubmitting(false); }
+    } catch (err: unknown) { const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error; if (msg?.includes("intento") || msg?.includes("bloqueado")) { setDeliveryKeyword(""); const u = await shipmentApi.get(shipment.tracking_id).catch(() => null); if (u) setShipment(u); } setActionError(msg ?? "No se pudo registrar la entrega."); } finally { setSubmitting(false); }
   };
 
   const handleFailed = async () => {
@@ -102,45 +87,33 @@ export function DriverShipmentDetail() {
     const note = [reasonLabel, failedNotes.trim()].filter(Boolean).join(" — ");
     if (!note) return;
     setSubmitting(true); setActionError("");
-    try {
-      await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource });
-      setFailedOpen(false); setFailedReason(""); setFailedNotes("");
-      await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido.");
-    } finally { setSubmitting(false); }
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setFailedOpen(false); setFailedReason(""); setFailedNotes(""); await reload(shipment.tracking_id); }
+    catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el intento fallido."); } finally { setSubmitting(false); }
   };
 
   const handleRejected = async () => {
     if (!shipment) return;
-    const r = REJECTED_REASONS.find((x) => x.id === rejectedReason);
-    if (!r) return;
+    const r = REJECTED_REASONS.find((x) => x.id === rejectedReason); if (!r) return;
     if (r.id === "otro" && !rejectedNotes.trim()) return;
     const note = r.id === "otro" ? rejectedNotes.trim() : `${r.label}${rejectedNotes.trim() ? ` — ${rejectedNotes.trim()}` : ""}`;
     setSubmitting(true); setActionError("");
-    try {
-      await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource });
-      setRejectedOpen(false); setRejectedReason(""); setRejectedNotes("");
-      await reload(shipment.tracking_id);
-    } catch (err: unknown) {
-      setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo.");
-    } finally { setSubmitting(false); }
+    try { await shipmentApi.updateStatus(shipment.tracking_id, { status: "rechazado", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource }); setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); await reload(shipment.tracking_id); }
+    catch (err: unknown) { setActionError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo registrar el rechazo."); } finally { setSubmitting(false); }
   };
 
   if (loading) {
     return (
       <DriverShell title="Detalle de envío">
-      <div className="px-4 py-4 space-y-4 pb-[200px]">
-          <div className="flex justify-center"><div className="h-7 w-28 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
+        <div className="px-4 pt-2 pb-[200px] space-y-3">
+          <div className="h-8 w-24 rounded bg-[var(--bg-muted)] animate-pulse mx-auto" />
           <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
             <div className="h-7 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
             <div className="h-5 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
             <div className="h-5 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
-            <div className="flex gap-2">
-              <div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-              <div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-              <div className="h-6 w-24 rounded-full bg-[var(--bg-muted)] animate-pulse" />
-            </div>
+            <div className="flex gap-2"><div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" /><div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
+          </div>
+          <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-3">
+            <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
           </div>
         </div>
       </DriverShell>
@@ -150,13 +123,11 @@ export function DriverShipmentDetail() {
   if (error || !shipment) {
     return (
       <DriverShell title="Detalle de envío">
-        <div className="px-4 py-4">
-          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 h-12 text-base font-semibold text-[var(--text-primary)]">
+        <div className="px-4 pt-2">
+          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             <ChevronLeft className="w-5 h-5" /> Mi ruta
           </Button>
-          <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">
-            {error || "No encontrado."}
-          </div>
+          <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">{error || "No encontrado."}</div>
         </div>
       </DriverShell>
     );
@@ -179,75 +150,77 @@ export function DriverShipmentDetail() {
 
   return (
     <DriverShell title="Detalle de envío">
-      <div className="px-4 py-4 space-y-4">
-        {/* Back button */}
-          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-          <ChevronLeft className="w-5 h-5" /> Mi ruta
-        </Button>
+      <div className="px-4 pt-2 pb-[200px] space-y-4">
+        {/* Back + status row */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            <ChevronLeft className="w-5 h-5" /> Mi ruta
+          </Button>
+          <StatusBadge status={shipment.status} label={statusOverride} />
+        </div>
 
-        {/* Action error */}
+        {/* Error */}
         {actionError && (
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="flex-1">{actionError}</span>
             <button onClick={() => setActionError("")} className="text-xs font-semibold opacity-80 hover:opacity-100 shrink-0">Cerrar</button>
           </div>
         )}
 
-        {/* Status badge centered */}
-        <div className="flex justify-center">
-          <StatusBadge status={shipment.status} label={statusOverride} />
-        </div>
-
         {/* Recipient card */}
-        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4">
-          <h2 className="text-xl font-bold text-[var(--text-primary)] leading-tight">{name}</h2>
-
-          <div className="mt-2 flex items-start gap-2">
-            <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-1" />
-            <p className="text-base text-[var(--text-primary)]">{fullAddress}</p>
+        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+          {/* Name + address */}
+          <div className="p-4 pb-3">
+            <h2 className="text-xl font-bold text-[var(--text-primary)] leading-tight">{name}</h2>
+            <div className="flex items-start gap-2 mt-2">
+              <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{fullAddress}</p>
+            </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <Phone className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
-            <span className="text-base text-[var(--text-primary)]">{phone}</span>
-          </div>
-
-          <a
-            href={waHrefWithText(phone, `Hola ${name}, soy de LogiTrack.`) }
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors no-underline cursor-pointer"
-          >
-            <MessageCircle size={16} className="text-emerald-500" />
-            Enviar WhatsApp
-          </a>
-
-          {/* Chips row */}
-          <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          {/* Chips */}
+          <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
             {tw && (
-              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
                 <Clock className="w-3 h-3" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
-              <Package className="w-3 h-3" />{weightKg} kg
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              {weightKg} kg
             </span>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-strong)] border-[var(--border)]">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
               {PACKAGE_LABELS[packageType] ?? packageType}
             </span>
             {fragile && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
                 <AlertTriangle className="w-3 h-3" />Frágil
               </span>
             )}
             {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
                 Reintento {attempts + 1}
               </span>
             )}
           </div>
+
+          {/* Contact actions */}
+          <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
+            <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-2 h-12 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+              <Phone size={16} className="text-[var(--brand)]" />Llamar
+            </a>
+            <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 h-12 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+              <MessageCircle size={16} className="text-emerald-500" />WhatsApp
+            </a>
+          </div>
         </div>
+
+        {/* Route not started */}
+        {!routeStarted && isOutForDelivery && (
+          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-3 text-xs text-center text-[var(--info-text)]">
+            Iniciá tu ruta para habilitar las acciones de entrega.
+          </div>
+        )}
 
         {/* Special instructions */}
         {specialInstructions && (
@@ -260,29 +233,19 @@ export function DriverShipmentDetail() {
           </div>
         )}
 
-        {/* Route not started */}
-        {!routeStarted && isOutForDelivery && (
-          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-3 text-xs text-center text-[var(--info-text)]">
-            Iniciá tu ruta desde "Mi ruta" para habilitar las acciones de entrega.
-          </div>
-        )}
-
         {/* Sender — collapsible */}
         <div className="rounded-xl border border-[var(--border)] overflow-hidden">
           <button
             onClick={() => setSenderExpanded((v) => !v)}
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)] cursor-pointer bg-transparent border-0 transition-colors"
           >
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              Remitente: {senderName}
-            </div>
-            <ChevronDown className={`w-4 h-4 transition-transform ${senderExpanded ? "rotate-180" : ""}`} />
+            <div className="flex items-center gap-2"><User className="w-4 h-4" />Remitente: {senderName}</div>
+            <ChevronDown className={`w-4 h-4 transition-transform shrink-0 ${senderExpanded ? "rotate-180" : ""}`} />
           </button>
           {senderExpanded && (
-            <div className="px-4 pb-3 pt-1 border-t border-[var(--border)] bg-[var(--bg-subtle)]">
+            <div className="px-4 pb-3 pt-2 border-t border-[var(--border)] bg-[var(--bg-subtle)] space-y-1">
               <p className="text-sm text-[var(--text-primary)]">{senderName}</p>
-              {senderPhone && <p className="text-xs text-[var(--text-secondary)] mt-1">{senderPhone}</p>}
+              {senderPhone && <p className="text-xs text-[var(--text-secondary)]">{senderPhone}</p>}
             </div>
           )}
         </div>
@@ -290,17 +253,19 @@ export function DriverShipmentDetail() {
 
       {/* Sticky CTAs */}
       {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-2.5 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="flex flex-col gap-2 max-w-sm mx-auto">
             <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
               <CheckCircle2 className="w-5 h-5" />Entregar
             </Button>
-            <Button variant="destructive" onClick={() => setFailedOpen(true)} className="h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-base font-bold gap-2">
-              <XCircle className="w-5 h-5" />No entregado
-            </Button>
-            <Button onClick={() => setRejectedOpen(true)} className="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-base font-bold gap-2">
-              <Ban className="w-5 h-5" />Rechazado por destinatario
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+                <XCircle className="w-4 h-4" />No entregado
+              </Button>
+              <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold gap-1.5">
+                <Ban className="w-4 h-4" />Rechazado
+              </Button>
+            </div>
           </div>
         </div>
       )}
