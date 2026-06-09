@@ -149,7 +149,7 @@ export function DriverShipmentDetail() {
 
   return (
     <DriverShell title="Detalle de envío">
-      <div className="px-4 pt-2 pb-[200px] space-y-4">
+      <div className="px-4 pt-2 pb-[190px] space-y-3">
         {/* Back + status row */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -157,6 +157,9 @@ export function DriverShipmentDetail() {
           </Button>
           <StatusBadge status={shipment.status} label={statusOverride} />
         </div>
+
+        {/* Tracking ID */}
+        <p className="text-[11px] text-[var(--text-muted)] text-center font-mono tracking-tight">{shipment.tracking_id}</p>
 
         {/* Error */}
         {actionError && (
@@ -168,76 +171,71 @@ export function DriverShipmentDetail() {
         )}
 
         {/* Recipient card */}
-        <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
-          {/* Name + address */}
-          <div className="p-4 pb-3">
-            <h2 className="text-xl font-bold text-[var(--text-primary)] leading-tight">{name}</h2>
-            <div className="flex items-start gap-2 mt-2">
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+          <div className="p-3">
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">{name}</h2>
+            <div className="flex items-start gap-1.5 mt-1.5">
               <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{fullAddress}</p>
+              <p className="text-[13px] text-[var(--text-secondary)]">{fullAddress}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+                {weightKg} kg
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+                {PACKAGE_LABELS[packageType] ?? packageType}
+              </span>
+              {fragile && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
+                  <AlertTriangle className="w-3 h-3" />Frágil
+                </span>
+              )}
+              {tw && (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                  <Clock className="w-3 h-3" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
+                </span>
+              )}
+              {attempts > 0 && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
+                  Reintento {attempts + 1}
+                </span>
+              )}
             </div>
           </div>
-
-          {/* Chips */}
-          <div className="px-4 pb-3 flex flex-wrap items-center gap-1.5">
-            {tw && (
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                <Clock className="w-3 h-3" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
-              {weightKg} kg
-            </span>
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
-              {PACKAGE_LABELS[packageType] ?? packageType}
-            </span>
-            {fragile && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
-                <AlertTriangle className="w-3 h-3" />Frágil
-              </span>
-            )}
-            {attempts > 0 && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
-                Reintento {attempts + 1}
-              </span>
-            )}
-          </div>
-
-          {/* Contact actions */}
           <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
-            <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-2 h-12 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
-              <Phone size={16} className="text-[var(--brand)]" />Llamar
+            <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+              <Phone size={15} />Llamar
             </a>
-            <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 h-12 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
-              <MessageCircle size={16} className="text-emerald-500" />WhatsApp
+            <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+              <MessageCircle size={15} className="text-emerald-500" />WhatsApp
             </a>
           </div>
         </div>
 
         {/* Route not started */}
         {!routeStarted && isOutForDelivery && (
-          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-3 text-xs text-center text-[var(--info-text)]">
+          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-2.5 text-xs text-center text-[var(--info-text)]">
             Iniciá tu ruta para habilitar las acciones de entrega.
           </div>
         )}
 
         {/* Special instructions */}
         {specialInstructions && (
-          <div className="rounded-xl border-2 border-[var(--warn-border)] bg-[var(--warn-bg)] p-4 flex items-start gap-3">
+          <div className="rounded-xl border-2 border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
             <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">Instrucciones especiales</p>
-              <p className="text-sm text-[var(--warn-text)] leading-relaxed">{specialInstructions}</p>
+              <p className="text-[13px] text-[var(--warn-text)]">{specialInstructions}</p>
             </div>
           </div>
         )}
 
         {/* Sender */}
-        <div className="rounded-xl bg-[var(--bg-subtle)] border border-[var(--border)] p-3 flex items-center gap-3">
-          <User className="w-4 h-4 text-[var(--text-secondary)] shrink-0" />
+        <div className="rounded-xl border border-[var(--border)] p-3 flex items-center gap-2.5">
+          <User className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{senderName}</p>
-            {senderPhone && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{senderPhone}</p>}
+            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">{senderName}</p>
+            {senderPhone && <p className="text-xs text-[var(--text-muted)] mt-0.5">{senderPhone}</p>}
           </div>
         </div>
       </div>
