@@ -1,0 +1,52 @@
+logitrack_core/internal/repository/shipment_es.go
+  s_c7d8503a5ebd43::t_8ad1f788325514 247
+logitrack_web/src/components/KssCheckIn.tsx
+  s_e324ed946076cf::t_2731599da71410 84-91
+logitrack_core/internal/projection/postgres_shipment.go
+  s_c7d8503a5ebd43::t_18f85f4a26fb66 252-254,258,265-267,270
+logitrack_core/internal/service/payment.go
+  s_c7d8503a5ebd43::t_414ab500a9b959 179-182,193
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_7cbc644a7378df::t_ec3fc84539a16c 668-672
+logitrack_web/src/pages/DriverRoute.tsx
+  s_e324ed946076cf::t_1809f753e169af 107-125
+logitrack_core/internal/model/domain_event.go
+  s_c7d8503a5ebd43::t_f4d91cd0e97e21 122
+logitrack_core/internal/service/payment_simulate.go
+  s_c7d8503a5ebd43::t_4a24998223a15b 39-42,53
+  s_c7d8503a5ebd43::t_1538c6e863b35c 109-112,123
+logitrack_core/internal/repository/shipment.go
+  s_c7d8503a5ebd43::t_04b9f8d860c05c 157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "aa06cba189a6cb4fe13d5256409e4a0e29240d97",
+  "prompts": {},
+  "sessions": {
+    "s_7cbc644a7378df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e740dfe9-891e-4e6d-b1d8-44bab37c6a55",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_c7d8503a5ebd43": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "182b140f-2ac0-4946-b01d-64cb4661b466",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_e324ed946076cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a53849fd-aff4-49b9-90b1-1eb7cfccc869",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
