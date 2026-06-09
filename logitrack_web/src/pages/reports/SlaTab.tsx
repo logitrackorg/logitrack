@@ -96,18 +96,6 @@ export default function SlaTab({ branchId }: SlaTabProps) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
-    setError(false);
-    const params: { branch_id?: string } = {};
-    if (branchId) params.branch_id = branchId;
-    slaMetricsApi
-      .get(params)
-      .then((data) => { setMetrics(data); setLoading(false); })
-      .catch(() => { setError(true); setLoading(false); });
-  }, []);
-
-<<<<<<< HEAD
-  useEffect(() => { load(); }, [branchId]);
-  useEffect(() => { branchApi.listActive().then(setBranches).catch(() => {}); }, []);
 
   // Sucursal por defecto: la propia para supervisores, la primera del plan para managers/admins.
   useEffect(() => {
@@ -124,9 +112,6 @@ export default function SlaTab({ branchId }: SlaTabProps) {
     return metrics.fleet_diagnoses.find((d) => d.branch_id === selectedBranchId)
         ?? metrics.fleet_diagnoses[0];
   }, [metrics, selectedBranchId]);
-=======
-  useEffect(() => { load(); }, [load]);
->>>>>>> 4ccfc6c (fix(lint): resolve all ESLint warnings — stale disable directives, missing deps, memoized derivations)
 
   const contentRef = useRef<HTMLDivElement>(null);
 
