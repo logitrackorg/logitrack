@@ -43,5 +43,4 @@ function DetailPageSkeleton() {
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export { Skeleton, SkeletonLine, SkeletonCard, SkeletonCircle, DetailPageSkeleton }

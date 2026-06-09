@@ -322,7 +322,7 @@ export function useGeolocation(
     }, TICK_MS);
 
     return () => clearInterval(id);
-  }, [mode, routePoints.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, routePoints.length]);
 
   return { position, mode, isPaused, stoppedTimeMs, pause, play, reset };
 }
