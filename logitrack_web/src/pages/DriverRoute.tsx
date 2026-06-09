@@ -17,17 +17,15 @@ import { DeliverSheet } from "../components/driver/DeliverSheet";
 import { FailedSheet } from "../components/driver/FailedSheet";
 import { RejectedSheet } from "../components/driver/RejectedSheet";
 import { DriverShell } from "../components/DriverShell";
-import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { interBranchTripsApi } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
-import { Button } from "../components/ui/button";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
-import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { zoneApi, type Zone } from "../api/zones";
@@ -558,11 +556,6 @@ export function DriverRoute() {
                     key={shipment.tracking_id}
                     shipment={shipment}
                     order={tab === "pendientes" ? idx + 1 : undefined}
-                    canAct={canAct && tab === "pendientes"}
-                    getMisfires={() => misfireRef.current}
-                    onDeliver={() => setDeliverShipment(shipment)}
-                    onFailed={() => setFailedShipment(shipment)}
-                    onRejected={() => setRejectedShipment(shipment)}
                     onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
                   />
                 ))}
@@ -680,55 +673,13 @@ function TabButton({
 function ShipmentCard({
   shipment,
   order,
-  canAct,
-  getMisfires,
-  onDeliver,
-  onFailed,
-  onRejected,
   onOpen,
 }: {
   shipment: Shipment;
   order?: number;
-  canAct: boolean;
-  getMisfires: () => number;
-  onDeliver: () => void;
-  onFailed: () => void;
-  onRejected: () => void;
   onOpen: () => void;
 }) {
-  // Momento en que la card se montó — para calcular reaction_time_ms.
-  const renderTimeRef = useRef<number>(0);
-  useEffect(() => { renderTimeRef.current = Date.now(); }, []);
-
-  /** Envía el evento táctil al backend (fire-and-forget). */
-  const fireTouchEvent = (action: TouchEventPayload["action"]) => {
-    driverApi.submitTouchEvent({
-      tracking_id: shipment.tracking_id,
-      action,
-      reaction_time_ms: Date.now() - renderTimeRef.current,
-      misfires: getMisfires(), // leer el contador global del padre
-    }).catch(() => {});
-  };
-
-  const handleDeliverClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // no burbujar al listener global → no cuenta como misfire
-    fireTouchEvent("entregado");
-    onDeliver();
-  };
-
-  const handleFailedClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fireTouchEvent("no_entregado");
-    onFailed();
-  };
-
-  const handleRejectedClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fireTouchEvent("no_entregado");
-    onRejected();
-  };
-
-  const { name, phone, fullAddress, specialInstructions } = recipientView(shipment);
+  const { name, fullAddress, specialInstructions } = recipientView(shipment);
   const isCompleted =
     shipment.status === "delivered" ||
     shipment.status === "delivery_failed" ||
@@ -833,59 +784,11 @@ function ShipmentCard({
             <span className="leading-relaxed">{specialInstructions}</span>
           </div>
         )}
+
+        <p className="mt-3 text-[11px] font-mono dark:text-gray-500 text-slate-400">
+          {shipment.tracking_id}
+        </p>
       </button>
-
-      {!isCompleted && (
-        <div className="px-3 pb-4 border-t dark:border-gray-700 border-slate-100">
-          <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-            <WhatsAppQuickButton
-              phone={phone}
-              recipientName={name}
-              trackingId={shipment.tracking_id}
-              compact
-            />
-          </div>
-
-          {canAct && (
-            <div className="flex flex-col gap-2 mt-3">
-              <Button
-                onClick={handleDeliverClick}
-                className="h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-base font-bold transition-all duration-150 gap-2 w-full"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-                Entregar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleFailedClick}
-                className="h-14 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 active:scale-95 text-rose-700 dark:text-rose-400 text-base font-bold transition-all duration-150 gap-2 w-full"
-              >
-                <XCircle className="w-5 h-5" />
-                No entregado
-              </Button>
-              <Button
-                onClick={handleRejectedClick}
-                className="h-14 rounded-xl border-2 border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 active:scale-95 text-amber-800 dark:text-amber-400 text-base font-bold transition-all duration-150 gap-2 w-full"
-              >
-                <Ban className="w-5 h-5" />
-                Rechazado por destinatario
-              </Button>
-            </div>
-          )}
-
-          <p className="mt-3 text-[11px] font-mono dark:text-gray-500 text-slate-400 text-center">{shipment.tracking_id}</p>
-        </div>
-      )}
-
-      {isCompleted && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="w-full px-3 pb-3 -mt-1 text-left cursor-pointer min-h-[44px]"
-        >
-          <p className="text-[11px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</p>
-        </button>
-      )}
     </Card>
   );
 }

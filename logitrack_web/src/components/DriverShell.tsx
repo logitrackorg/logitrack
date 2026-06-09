@@ -8,13 +8,13 @@ interface DriverShellProps {
 
 export function DriverShell({ title, subtitle: _subtitle, children }: DriverShellProps) {
   return (
-    <div className="min-h-screen bg-[var(--bg-page)]">
-      <DriverNav title={title} />
-      <main className="pb-[calc(env(safe-area-inset-bottom,0px)+80px)]">
-        <div className="md:max-w-sm md:mx-auto md:min-h-[calc(100dvh-56px)] md:border-x md:border-[var(--border)] md:bg-[var(--bg-page)]">
+    <div className="min-h-screen md:bg-gray-950 md:flex md:justify-center">
+      <div className="md:max-w-sm md:w-full md:min-h-screen md:bg-[var(--bg-page)] md:shadow-2xl flex flex-col">
+        <DriverNav title={title} />
+        <main className="flex-1 pb-[calc(env(safe-area-inset-bottom,0px)+80px)]">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

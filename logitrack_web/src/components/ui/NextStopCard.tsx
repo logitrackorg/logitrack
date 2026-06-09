@@ -78,40 +78,34 @@ export function NextStopCard({
         </div>
       </div>
 
-      {/* Acciones principales */}
-      <div className="flex gap-2 mt-4">
+      {/* Acciones */}
+      <div className="flex flex-col gap-2 mt-4">
         <a
           href={singleUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-2.5 px-4 text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2 no-underline"
+          className="h-11 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2 no-underline"
         >
           <Navigation className="w-4 h-4" />
           Navegar
         </a>
         {canAct && (
           <>
-            <Button variant="default" onClick={onDeliver} className="flex-1 bg-green-500 hover:bg-green-600 py-2.5 px-4">
+            <Button variant="default" onClick={onDeliver} className="h-11 bg-green-500 hover:bg-green-600 w-full">
               <CheckCircle2 className="w-4 h-4" />
               Entregar
             </Button>
-            <Button variant="destructive" onClick={onFailed} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 px-4">
+            <Button variant="destructive" onClick={onFailed} className="h-11 bg-red-500 hover:bg-red-600 text-white w-full">
               <XCircle className="w-4 h-4" />
               No entregado
+            </Button>
+            <Button variant="secondary" onClick={onRejected} className="h-11 bg-orange-500 hover:bg-orange-600 text-white w-full text-sm">
+              <Ban className="w-4 h-4" />
+              Rechazado por destinatario
             </Button>
           </>
         )}
       </div>
-
-      {/* Acción secundaria: rechazo activo del destinatario */}
-      {canAct && (
-        <div className="flex gap-2 mt-2">
-          <Button variant="secondary" onClick={onRejected} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-2 px-3 text-xs">
-            <Ban className="w-4 h-4" />
-            Rechazado por destinatario
-          </Button>
-        </div>
-      )}
 
       {/* Ruta completa en Google Maps */}
       <a

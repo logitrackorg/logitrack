@@ -6,16 +6,12 @@ import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
-import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { Button } from "@/components/ui/button";
 import { DriverShell } from "@/components/DriverShell";
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { config: org } = useOrganizationTheme();
-  const orgName = org?.name?.trim() || "LogiTrack";
-  const logoUrl = org?.logo_url?.trim();
 
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
@@ -175,23 +171,8 @@ export function DriverScanVehicle() {
 
   return (
     <DriverShell title="Escanear vehículo" subtitle="Reclamar viaje asignado">
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4 py-8">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4">
         <div className="w-full max-w-sm flex flex-col items-center">
-
-          {/* ── Org logo ──────────────────────────────────────── */}
-          <div className="flex flex-col items-center mb-8">
-            {logoUrl ? (
-              <img src={logoUrl} alt={orgName} className="w-16 h-16 rounded-xl object-contain mb-3" />
-            ) : (
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-2xl mb-3 shadow-lg">
-                {orgName.slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">{orgName}</h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-1 text-center">
-              Escaneá el código QR del vehículo para reclamar el viaje.
-            </p>
-          </div>
 
           {/* ── Loading ───────────────────────────────────────── */}
           {loading && (
