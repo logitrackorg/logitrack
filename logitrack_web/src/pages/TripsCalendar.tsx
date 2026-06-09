@@ -14,11 +14,9 @@ import { usersApi, type UserProfile } from "../api/users";
 import { routingApi, type GlobalRoutingPlan } from "../api/routing";
 import { useAuth } from "../context/AuthContext";
 import { fmtDateTime } from "../utils/date";
-import WeekCalendarView from "../components/calendar/WeekCalendarView";
 import VehicleTimelineView from "../components/calendar/VehicleTimelineView";
 
 // ── tipos compartidos ─────────────────────────────────────────────────────────
-type ViewMode = "semana" | "timeline";
 type KindFilter = "all" | "inter_branch" | "last_mile";
 
 const STATUS_STYLE: Record<string, { label: string }> = {
@@ -34,9 +32,8 @@ function hhmm(iso?: string) {
 }
 
 // ── componente principal ──────────────────────────────────────────────────────
-export default function TripsCalendar() {
+export function TripsCalendar() {
   const { user, hasRole } = useAuth();
-  const [view, setView] = useState<ViewMode>("timeline");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedTrip, setSelectedTrip] = useState<InterBranchTrip | null>(null);
   const [popoverRect, setPopoverRect] = useState<DOMRect | null>(null);
@@ -81,27 +78,10 @@ export default function TripsCalendar() {
       {/* Header */}
       <div className="flex items-center justify-between mb-3.5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <Calendar size={22} className="text-[#1e3a5f]" />
+          <Calendar size={22} className="text-[var(--sidebar-bg)]" />
           <h1 className="m-0 text-xl font-bold text-slate-900">Calendario de viajes</h1>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
-          {/* Switch de vista */}
-          <div className="flex border border-slate-200 rounded-lg overflow-hidden">
-            {(["timeline", "semana"] as ViewMode[]).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`px-3.5 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer border-none ${
-                  view === v
-                    ? "bg-[#1e3a5f] text-white font-bold"
-                    : "bg-white text-slate-900 font-normal"
-                }`}
-              >
-                {v === "timeline" ? <><Truck size={14} /> Por vehículo</> : <><Calendar size={14} /> Semana</>}
-              </button>
-            ))}
-          </div>
-
           {/* Filtro por tipo */}
           <select
             value={kindFilter}
@@ -123,30 +103,16 @@ export default function TripsCalendar() {
         </div>
       </div>
 
-      {/* Vista activa */}
-      {view === "semana" ? (
-        <WeekCalendarView
-          key={refreshKey}
-          branches={branches}
-          driverMap={driverMap}
-          branchId={branchId}
-          kindFilter={kindFilter}
-          onTripClick={openTrip}
-          selectedTripId={selectedTrip?.id ?? null}
-          horizonPlans={horizonPlans}
-        />
-      ) : (
-        <VehicleTimelineView
-          key={refreshKey}
-          branches={branches}
-          driverMap={driverMap}
-          branchId={branchId}
-          kindFilter={kindFilter}
-          onTripClick={openTrip}
-          selectedTripId={selectedTrip?.id ?? null}
-          horizonPlans={horizonPlans}
-        />
-      )}
+      <VehicleTimelineView
+        key={refreshKey}
+        branches={branches}
+        driverMap={driverMap}
+        branchId={branchId}
+        kindFilter={kindFilter}
+        onTripClick={openTrip}
+        selectedTripId={selectedTrip?.id ?? null}
+        horizonPlans={horizonPlans}
+      />
 
       {/* Popover de detalle */}
       {selectedTrip && popoverRect && (

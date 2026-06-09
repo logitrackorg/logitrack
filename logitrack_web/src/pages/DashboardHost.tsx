@@ -24,17 +24,17 @@ import { defaultRange } from "../utils/dashboard";
 import { SkeletonCard } from "../components/ui/skeleton";
 import type { ResumenTabRef } from "./reports/ResumenTab";
 
-const ResumenTab = lazy(() => import("./reports/ResumenTab"));
-const ChoferesTab = lazy(() => import("./reports/ChoferesTab"));
-const ReclamosTab = lazy(() => import("./reports/ReclamosTab"));
-const FacturacionTab = lazy(() => import("./reports/FacturacionTab"));
-const RankingTab = lazy(() => import("./reports/RankingTab"));
-const VolumenTab = lazy(() => import("./reports/VolumenTab"));
-const TipoEnvioTab = lazy(() => import("./reports/TipoEnvioTab"));
-const MetodoEntregaTab = lazy(() => import("./reports/MetodoEntregaTab"));
-const RetornoTab = lazy(() => import("./reports/RetornoTab"));
-const ExitoTab = lazy(() => import("./reports/ExitoTab"));
-const FatigaTab = lazy(() => import("./reports/FatigaTab"));
+const ResumenTab = lazy(() => import("./reports/ResumenTab").then(m => ({ default: m.ResumenTab })));
+const ChoferesTab = lazy(() => import("./reports/ChoferesTab").then(m => ({ default: m.ChoferesTab })));
+const ReclamosTab = lazy(() => import("./reports/ReclamosTab").then(m => ({ default: m.ReclamosTab })));
+const FacturacionTab = lazy(() => import("./reports/FacturacionTab").then(m => ({ default: m.FacturacionTab })));
+const RankingTab = lazy(() => import("./reports/RankingTab").then(m => ({ default: m.RankingTab })));
+const VolumenTab = lazy(() => import("./reports/VolumenTab").then(m => ({ default: m.VolumenTab })));
+const TipoEnvioTab = lazy(() => import("./reports/TipoEnvioTab").then(m => ({ default: m.TipoEnvioTab })));
+const MetodoEntregaTab = lazy(() => import("./reports/MetodoEntregaTab").then(m => ({ default: m.MetodoEntregaTab })));
+const RetornoTab = lazy(() => import("./reports/RetornoTab").then(m => ({ default: m.RetornoTab })));
+const ExitoTab = lazy(() => import("./reports/ExitoTab").then(m => ({ default: m.ExitoTab })));
+const FatigaTab = lazy(() => import("./reports/FatigaTab").then(m => ({ default: m.FatigaTab })));
 const SlaTab = lazy(() => import("./reports/SlaTab"));
 
 const tabs = [
@@ -235,7 +235,7 @@ export function DashboardHost() {
             {activeTab === "retorno" && <RetornoTab {...sharedProps} />}
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
-            {activeTab === "sla" && <SlaTab />}
+            {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
           </Suspense>
         </div>
       </div>

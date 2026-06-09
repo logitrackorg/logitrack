@@ -84,6 +84,7 @@ func main() {
 	seed.LoadBranches(branchRepo)
 	seed.LoadVehicles(vehicleRepo)
 	seed.Load(eventStore, shipmentProj, customerRepo, routeRepo, branchRepo, pricingSvc)
+	seed.LoadProjectedDispatchScenario(vehicleRepo)
 
 	commentRepo := repository.NewPostgresCommentRepository(database)
 	incidentRepo := repository.NewPostgresIncidentRepository(database)
@@ -136,17 +137,12 @@ func main() {
 	draftScheduler := service.NewDraftScheduler(draftLifecycleSvc)
 	draftScheduler.Start()
 
-	// Mercado Pago — nil cuando no está configurado (dev sin MP)
+	// Mercado Pago — siempre non-nil; IsConfigured() depende de credenciales (DB > env vars)
 	mpClient := mercadopago.NewClient(
 		os.Getenv("MP_ACCESS_TOKEN"),
 		os.Getenv("MP_WEBHOOK_SECRET"),
 		getenv("MP_NOTIFICATION_URL", ""),
 	)
-	if mpClient != nil {
-		log.Println("[mercadopago] cliente configurado — webhooks activos")
-	} else {
-		log.Println("[mercadopago] MP_ACCESS_TOKEN no configurado — integración real deshabilitada")
-	}
 	// Cuando el reloj cambia, re-ejecutar los jobs de ciclo de vida para que la
 	// expiración/purga se aplique inmediatamente con el nuevo timestamp.
 	// También se dispara el chequeo de SLA en riesgo/vencido para que las
@@ -185,6 +181,17 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
 	paymentScheduler := service.NewPaymentScheduler(paymentSvc)
 	paymentScheduler.Start()
+
+	paymentConfigRepo := repository.NewPostgresPaymentConfigRepository(database)
+	paymentConfigSvc := service.NewPaymentConfigService(paymentConfigRepo)
+	paymentConfigHandler := handler.NewPaymentConfigHandler(paymentConfigSvc)
+	paymentHandler.SetPaymentConfigService(paymentConfigSvc)
+	mpClient.SetCredentialProvider(paymentConfigSvc.GetMPCredentials)
+	if mpClient.IsConfigured() {
+		log.Println("[mercadopago] cliente configurado — webhooks activos")
+	} else {
+		log.Println("[mercadopago] sin credenciales MP — modo simulación activo")
+	}
 
 	notifRepo := repository.NewPostgresNotificationRepository(database)
 	notifSvc := service.NewNotificationService(notifRepo)
@@ -245,14 +252,15 @@ func main() {
 	} else {
 		log.Println("[messaging] Twilio no configurado — WhatsApp deshabilitado (usará email como fallback si SMTP configurado)")
 	}
-	twoFAService := service.NewTwoFAService(twoFARepo, authRepo)
+	twoFAService := service.NewTwoFAService(twoFARepo, authRepo, sysConfigRepo)
 
 	routeSvc := service.NewRouteService(routeRepo, shipmentRepo)
+	shipmentSvc.SetRouteService(routeSvc)
 	branchSvc := service.NewBranchService(branchRepo, shipmentProj)
 	branchSvc.SetBranchZoneService(branchZoneSvc)
 	branchHandler := handler.NewBranchHandler(branchSvc)
 	shipmentHandler := handler.NewShipmentHandler(shipmentSvc, routeSvc, commentSvc, branchSvc, claimSvc)
-	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc)
+	chatbotHandler := handler.NewChatbotHandler(shipmentRepo, branchRepo, notifSvc, shipmentSvc, sysConfigSvc, claimSvc)
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
@@ -310,6 +318,7 @@ func main() {
 	routingSvc.SetORSClient(orsClient)
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
+	shipmentHandler.SetRoutingService(routingSvc)
 
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()
@@ -336,10 +345,14 @@ func main() {
 	}
 	fleetMLSvc := ml.NewFleetMLService(fleetModelPath)
 
-	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc)
-	// Attach to the clock callback so every admin clock tick triggers a check.
+	slaMetricsHandler := handler.NewSLAMetricsHandler(database, priorityLogRepo, slaAnomalySvc, fleetMLSvc, branchRepo)
+	// Heartbeat autónomo: corre el Collector/Executor cada minuto en tiempo real,
+	// independiente de /admin/clock (que es solo una herramienta de testing).
+	slaAnomalySvc.Start()
+
+	// Attach to the clock callback so every admin clock tick also triggers a
+	// check immediately (útil para time-travel testing sin esperar al heartbeat).
 	// The service runs in its own goroutine and is mutex-guarded against overlap.
-	_ = slaAnomalySvc // referenced via closure below
 	origSLARiskChecker := slaRiskChecker
 	slaRiskChecker = func() {
 		if origSLARiskChecker != nil {
@@ -475,8 +488,8 @@ func main() {
 	shipmentRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
-	claimRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager)
-	claimWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
+	claimRead := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor, model.RoleManager)
+	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -524,6 +537,10 @@ func main() {
 	protected.GET("/shipments/:tracking_id/payment", shipmentDetailRead, paymentHandler.GetPayment)
 	protected.GET("/shipments/:tracking_id/payment/qr", shipmentDetailRead, paymentHandler.GeneratePaymentQR)
 	protected.POST("/shipments/:tracking_id/cash-payment", shipmentWrite, paymentHandler.ConfirmCashPayment)
+	protected.POST("/shipments/:tracking_id/transfer-payment", shipmentWrite, paymentHandler.ConfirmTransferPayment)
+	protected.GET("/payment/config", authenticated, paymentConfigHandler.Get)
+	protected.PATCH("/payment/config", adminOnly, paymentConfigHandler.Update)
+	protected.PATCH("/payment/config/credentials", adminOnly, paymentConfigHandler.UpdateCredentials)
 
 	// Comments — read: shipment-detail roles, write: operator/supervisor
 	protected.GET("/shipments/:tracking_id/comments", shipmentDetailRead, commentHandler.GetComments)
@@ -538,6 +555,7 @@ func main() {
 	protected.GET("/claims/:id", claimRead, claimHandler.GetClaim)
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
+	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
 	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
@@ -571,6 +589,7 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)
 	protected.GET("/supervisor/fatigue-dashboard", canViewStats, supervisorFatigueHandler.GetDashboard)
@@ -599,8 +618,11 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
-	// Driver route — driver only
+	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
+	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
+
+	// Driver route — driver only
 	protected.GET("/driver/route", driverOnly, driverHandler.GetRoute)
 	protected.POST("/driver/route/start", driverOnly, driverHandler.StartRoute)
 	protected.GET("/driver/checkin/today", driverOnly, driverHandler.GetTodayCheckin)
@@ -614,6 +636,7 @@ func main() {
 	protected.GET("/driver/control-phrase", driverOnly, driverHandler.GetControlPhrase)
 	protected.POST("/driver/voice-upload", driverOnly, driverHandler.UploadVoice)
 	protected.POST("/driver/history-request", driverOnly, driverHandler.RequestHistory)
+	protected.POST("/driver/history-deletion-request", driverOnly, driverHandler.RequestHistoryDeletion)
 	protected.GET("/driver/history", driverOnly, driverHandler.GetPersonalHistory)
 	protected.POST("/dev/simulator/fast-forward-time", driverOnly, driverHandler.FastForwardCheckinTime) // DEV: simula paso de 2h
 	protected.GET("/driver/fatigue/block-status", driverOnly, driverHandler.GetFatigueBlockStatus)       // LOGITRACK-499
@@ -746,6 +769,7 @@ func main() {
 
 	publicAPI.GET("/track/:tracking_id/qr", qrHandler.GenerateShipmentQR)
 	publicAPI.GET("/config", sysConfigHandler.GetPublicConfig)
+	publicAPI.GET("/organization", orgHandler.GetPublic)
 	chatbotHandler.RegisterRoutes(publicAPI)
 
 	r.GET("/health", func(c *gin.Context) {

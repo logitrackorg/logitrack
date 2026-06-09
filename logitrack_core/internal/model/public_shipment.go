@@ -40,7 +40,23 @@ type PublicShipmentView struct {
 	DeliveryAttempts    int          `json:"delivery_attempts,omitempty"`
 	MaxDeliveryAttempts int          `json:"max_delivery_attempts,omitempty"`
 	HasIncident         bool         `json:"has_incident,omitempty"`
-	IncidentType     IncidentType `json:"incident_type,omitempty"`
+	IncidentType        IncidentType `json:"incident_type,omitempty"`
+
+	// RelativeHours is the rounded-up hour count (ceil(minutosRestantes/60),
+	// floored at 1) used to derive the dynamic EstimatedDeliveryAt overwrite
+	// for out_for_delivery shipments — see RoutingService.GetActiveRouteETA.
+	// EstimatedDeliveryAt is overwritten as now + RelativeHours so the banner
+	// ("dentro de las próximas N horas") and the grid date always agree
+	// exactly. The frontend MUST render this value directly — never derive
+	// an hour count from the timestamp.
+	RelativeHours *int `json:"relative_hours,omitempty"`
+
+	// ActiveRouteETAHours is the pre-rounded hour count for ActiveRouteETA,
+	// computed server-side per the security display rule: minutes<=60 → 1;
+	// minutes>60 → ceil(minutes/60). The frontend MUST render this value
+	// directly — never derive its own hour count from the raw timestamp,
+	// since that risks leaking minute-level precision to the public.
+	ActiveRouteETAHours *int `json:"active_route_eta_hours,omitempty"`
 }
 
 // PublicShipmentEvent is the redacted projection of a ShipmentEvent. It drops

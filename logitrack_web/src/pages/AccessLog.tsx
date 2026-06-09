@@ -90,13 +90,13 @@ export function AccessLog() {
               placeholder="Filtrar por usuario…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
             />
           </div>
           <select
             value={eventFilter}
             onChange={(e) => setEventFilter(e.target.value as AccessEventType | "")}
-            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
           >
             <option value="">Todos los eventos</option>
             <option value="login_success">Inicio de sesión</option>
@@ -180,7 +180,7 @@ export function AccessLog() {
                 {hasMore && (
                   <button
                     onClick={() => toggleExpand(group.key)}
-                    className="mt-2 text-sm font-semibold text-[#2563eb] hover:text-[#1d4ed8] cursor-pointer"
+                    className="mt-2 text-sm font-semibold text-[var(--brand)] hover:text-[var(--brand-strong)] cursor-pointer"
                   >
                     {isExpanded
                       ? "Mostrar menos"

@@ -6,8 +6,9 @@ import { interBranchTripsApi } from "../api/interBranchTrips";
 import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
-export default function DriverScanVehicle() {
+export function DriverScanVehicle() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [scanning, setScanning] = useState(false);
@@ -41,9 +42,22 @@ export default function DriverScanVehicle() {
     }).catch(() => { /* sin trip — quedarse acá */ });
   }, [navigate]);
 
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato sin
+  // esperar un nuevo escaneo — el backend ya considera el check-in "completo"
+  // apenas se envía el paso KSS, así que no podemos confiar solo en su respuesta.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    driverApi.getCheckinGateStatus()
+      .then((status) => setRequiresSleepData(status.requires_sleep_data))
+      .catch(() => {})
+      .finally(() => setShowGate(true));
+  }, [user]);
+
   const goToRoute = (successMsg: string) => {
     setSuccess(successMsg);
-    setTimeout(() => navigate("/driver/route"), 900);
+    navigate("/driver/route", { replace: true });
   };
 
   // Realiza el claim del token (QR o patente) y navega a la pantalla
@@ -59,13 +73,11 @@ export default function DriverScanVehicle() {
       const trip = await interBranchTripsApi.claimByVehicleQR(token);
       stopScanner();
       if (trip.kind === "last_mile") {
-        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget;
-        // la navegación tiene 900 ms de delay, más que suficiente para que complete.
+        // Marcar inicio de ruta antes de navegar. La llamada es fire-and-forget.
         driverApi.markRouteStarted().catch(() => {});
         goToRoute(`Vehículo ${trip.license_plate} asignado. Iniciando ruta…`);
       } else {
-        setSuccess(`Vehículo ${trip.license_plate} asignado. Redirigiendo…`);
-        setTimeout(() => navigate("/driver/trip"), 900);
+        navigate("/driver/trip", { replace: true });
       }
     } catch (err: unknown) {
       const msg =
@@ -181,7 +193,7 @@ export default function DriverScanVehicle() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-full bg-[#1e3a5f] flex items-center justify-center mb-3">
+          <div className="w-14 h-14 rounded-full bg-[var(--sidebar-bg)] flex items-center justify-center mb-3">
             <Truck className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-xl font-bold text-slate-900">Escanear vehículo</h1>
@@ -214,7 +226,7 @@ export default function DriverScanVehicle() {
           <button
             onClick={() => void startScanner()}
             disabled={loading}
-            className="w-full h-12 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <QrCode className="w-5 h-5" />
             Activar cámara
@@ -237,13 +249,13 @@ export default function DriverScanVehicle() {
               value={manualToken}
               onChange={(e) => setManualToken(e.target.value.toUpperCase())}
               placeholder="Ej.: AB100UM"
-              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]"
+              className="flex-1 h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-bg)]"
               onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
             />
             <button
               onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
               disabled={!manualToken.trim() || loading}
-              className="h-10 px-4 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
             >
               OK
             </button>

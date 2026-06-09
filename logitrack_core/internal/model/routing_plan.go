@@ -83,8 +83,17 @@ type NetworkMetrics struct {
 	TotalShipmentsUnassigned   int     `json:"total_shipments_unassigned"`
 	TotalVehiclesDispatched    int     `json:"total_vehicles_dispatched"`
 	IdleVehiclesCount          int     `json:"idle_vehicles_count"`
-	AvgVehicleUtilizationPct   float64 `json:"avg_vehicle_utilization_pct"`
 	BranchesWithUnservedDemand int     `json:"branches_with_unserved_demand"`
+
+	// Utilización separada por tipo de despacho.
+	AvgInterBranchUtilizationPct float64 `json:"avg_inter_branch_utilization_pct"`
+	AvgLastMileUtilizationPct    float64 `json:"avg_last_mile_utilization_pct"`
+	// SLAForcedPct = % de despachos inter-sucursal que salieron por SLA crítico
+	// (sin alcanzar el min_fill_rate).
+	SLAForcedPct float64 `json:"sla_forced_pct"`
+
+	// Deprecated: usar AvgInterBranchUtilizationPct / AvgLastMileUtilizationPct.
+	AvgVehicleUtilizationPct float64 `json:"avg_vehicle_utilization_pct"`
 }
 
 // BranchPlan agrupa el plan de una sucursal dentro del GlobalRoutingPlan.

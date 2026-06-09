@@ -725,6 +725,39 @@ func (s *NotificationService) NotifyRouteReassigned(oldDriverID, tripID, tripDat
 // involucradas en el viaje cuando un chofer lo reclama vía QR.
 // branchIDs es la lista de sucursales a notificar (origen + destino cuando aplica).
 // Diseñado para llamarse como goroutine (fire-and-forget).
+// NotifyClaimCustomerResponded notifica a supervisores y operadores de la sucursal
+// que el cliente respondió al reclamo pending_customer vía chatbot (US-4).
+func (s *NotificationService) NotifyClaimCustomerResponded(claim model.Claim, branchID string) {
+	title := "Cliente respondió al reclamo"
+	body := fmt.Sprintf("El cliente respondió al reclamo %s. Está listo para ser revisado.", claim.ID)
+	now := clock.Now().UTC()
+
+	users, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{
+		model.RoleSupervisor,
+		model.RoleOperator,
+	})
+	if err != nil {
+		log.Printf("[NotificationService] NotifyClaimCustomerResponded GetUsersByBranchAndRoles error: %v", err)
+		return
+	}
+	for _, u := range users {
+		n := model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       model.NotificationClaimCustomerResponded,
+			Title:      title,
+			Body:       body,
+			ResourceID: claim.ID,
+			CreatedAt:  now,
+		}
+		if err := s.repo.Create(n); err != nil {
+			log.Printf("[NotificationService] NotifyClaimCustomerResponded Create error for user %s: %v", u.ID, err)
+		} else if s.hub != nil {
+			s.hub.Push(u.ID)
+		}
+	}
+}
+
 func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, branchIDs []string) {
 	// Dedup: si ya se notificó este viaje en los últimos 5 minutos, saltar.
 	since := clock.Now().Add(-5 * time.Minute)
@@ -772,3 +805,4 @@ func (s *NotificationService) NotifyTripClaimed(tripID, driverUsername string, b
 		}
 	}
 }
+

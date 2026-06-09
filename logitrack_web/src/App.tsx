@@ -4,6 +4,8 @@ import { SupervisorFatigueGuard } from "./components/SupervisorFatigueGuard";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { TwoFAGuard } from "./components/TwoFAGuard";
 import { ThemeProvider } from "./context/ThemeContext";
+import { OrganizationThemeProvider } from "./context/OrganizationThemeContext";
+import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -34,6 +36,7 @@ import { MLConfig } from "./pages/MLConfig";
 import { SystemConfig } from "./pages/SystemConfig";
 import { PricingConfig } from "./pages/PricingConfig";
 import { RoutingConfig } from "./pages/RoutingConfig";
+import { PaymentConfig } from "./pages/PaymentConfig";
 import { OrganizationConfig } from "./pages/OrganizationConfig";
 import { AdminUsers } from "./pages/AdminUsers";
 import { BulkUpload } from "./pages/BulkUpload";
@@ -44,14 +47,15 @@ import { ZoneManagement } from "./pages/ZoneManagement";
 import { FatigueConfig } from "./pages/FatigueConfig";
 import { AutoReports } from "./pages/AutoReports";
 import { SupervisorFatigue } from "./pages/SupervisorFatigue";
-import DriverScanVehicle from "./pages/DriverScanVehicle";
+import { DriverScanVehicle } from "./pages/DriverScanVehicle";
 import { Repartos } from "./pages/Repartos";
-import OperatorTripReception from "./pages/OperatorTripReception";
+import { OperatorTripReception } from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
 import { InterBranchTripsList } from "./pages/InterBranchTripsList";
-import TripsCalendar from "./pages/TripsCalendar";
+import { TripsCalendar } from "./pages/TripsCalendar";
 import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
+import { NetworkHub } from "./pages/NetworkHub";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -59,41 +63,37 @@ function DriverNav() {
   if (!user) return null;
 
   const isInterBranch = user.driver_type === "intersucursal";
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    cn("no-underline font-medium text-sm", isActive ? "text-blue-300" : "text-slate-300");
 
   return (
-    <nav style={{
-      background: "#1e3a5f", color: "#fff",
-      padding: isMobile ? "8px 12px" : "0 24px",
-      display: "flex", alignItems: "center",
-      gap: isMobile ? 10 : 24,
-      minHeight: 52,
-    }}>
-      <span style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, letterSpacing: 1 }}>LogiTrack</span>
+    <nav className="bg-[var(--sidebar-bg)] text-white flex items-center px-3 sm:px-6 gap-3 sm:gap-6 min-h-[52px]">
+      <span className="font-extrabold text-[15px] sm:text-[17px] tracking-[1px]">LogiTrack</span>
       {isInterBranch ? (
-        <NavLink to="/driver/trip" style={navStyle}>Mi viaje</NavLink>
+        <NavLink to="/driver/trip" className={linkClass}>Mi viaje</NavLink>
       ) : (
-        <NavLink to="/driver/route" style={navStyle}>Mi ruta</NavLink>
+        <NavLink to="/driver/route" className={linkClass}>Mi ruta</NavLink>
       )}
 
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 14 }}>
+      <div className="ml-auto flex items-center gap-2 sm:gap-3.5">
         <ThemeToggle compact />
         {isMobile ? (
-          <NavLink to="/profile" style={{ textDecoration: "none" }}>
-            <span style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 600 }}>{user.username}</span>
+          <NavLink to="/profile" className="no-underline">
+            <span className="text-xs text-slate-200 font-semibold">{user.username}</span>
           </NavLink>
         ) : (
-          <NavLink to="/profile" style={{ textDecoration: "none" }}>
-            <span style={{ fontSize: 13, color: "#94a3b8", cursor: "pointer" }}>
-              <strong style={{ color: "#e2e8f0" }}>{user.username}</strong>
+          <NavLink to="/profile" className="no-underline">
+            <span className="text-[13px] text-slate-400 cursor-pointer">
+              <strong className="text-slate-200 font-semibold">{user.username}</strong>
               {" · "}
-              <span style={{ color: "#64748b", background: "#0f2744", padding: "2px 8px", borderRadius: 10, fontSize: 11 }}>
+              <span className="text-slate-500 bg-[#0f2744] px-2 py-0.5 rounded-[10px] text-[11px]">
                 {isInterBranch ? "Chofer Intersucursal" : "Chofer"}
               </span>
             </span>
           </NavLink>
         )}
         <button onClick={logout}
-          style={{ background: "none", border: "1px solid #334155", color: "#94a3b8", borderRadius: 6, padding: isMobile ? "4px 8px" : "4px 12px", cursor: "pointer", fontSize: isMobile ? 12 : 13 }}>
+          className="bg-transparent border border-slate-700 text-slate-400 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm cursor-pointer">
           {isMobile ? "✕" : "Cerrar sesión"}
         </button>
       </div>
@@ -186,7 +186,7 @@ function AppRoutes() {
         <Route path="/login" element={<Navigate to={user.role === "admin" ? "/admin/users" : "/"} replace />} />
 
         <Route path="/dashboard" element={
-          <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
+          <ProtectedRoute roles={["supervisor", "manager"]}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -216,13 +216,13 @@ function AppRoutes() {
         } />
 
         <Route path="/claims" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />
 
         <Route path="/claims/:id" element={
-          <ProtectedRoute roles={["operator", "supervisor", "manager"]}>
+          <ProtectedRoute roles={["admin", "operator", "supervisor", "manager"]}>
             <Claims />
           </ProtectedRoute>
         } />
@@ -303,6 +303,12 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/payment-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <PaymentConfig />
+          </ProtectedRoute>
+        } />
+
         <Route path="/repartos" element={
           <ProtectedRoute roles={["operator", "supervisor"]}>
             <Repartos />
@@ -328,6 +334,12 @@ function AppRoutes() {
         <Route path="/reports/volume-by-window" element={<Navigate to="/dashboard?tab=volumen" replace />} />
         <Route path="/reports/return-metrics" element={<Navigate to="/dashboard?tab=retorno" replace />} />
         <Route path="/reports/success-rate" element={<Navigate to="/dashboard?tab=exito" replace />} />
+
+        <Route path="/red" element={
+          <ProtectedRoute roles={["manager", "admin"]}>
+            <NetworkHub />
+          </ProtectedRoute>
+        } />
 
         {/* Legacy redirects */}
         <Route path="/routing" element={<Navigate to="/inter-sucursal" replace />} />
@@ -410,26 +422,23 @@ function AppRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
+      <OrganizationThemeProvider>
       <AuthProvider>
         <BrowserRouter>
           <TwoFAGuard>
             <Routes>
               <Route path="/track" element={<PublicTracking />} />
               {/* Rutas de 2FA: accesibles sin sesión establecida */}
-              <Route path="/2fa/verify" element={<TwoFAVerify />} />
-              <Route path="/2fa/setup-required" element={<TwoFASetup required />} />
+<Route path="/2fa/verify" element={<TwoFAVerify />} />
+<Route path="/2fa/setup-required" element={<TwoFASetup required />} />
+<Route path="/2fa/setup" element={<TwoFASetup />} />
               <Route path="*" element={<AppRoutes />} />
             </Routes>
           </TwoFAGuard>
         </BrowserRouter>
       </AuthProvider>
+      </OrganizationThemeProvider>
     </ThemeProvider>
   );
 }
 
-const navStyle = ({ isActive }: { isActive: boolean }): React.CSSProperties => ({
-  color: isActive ? "#93c5fd" : "#cbd5e1",
-  textDecoration: "none",
-  fontWeight: 500,
-  fontSize: 14,
-});

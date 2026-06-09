@@ -25,7 +25,7 @@ function formatARS(value: number): string {
   }).format(value);
 }
 
-export default function FacturacionTab({ dateFrom, dateTo, branchId }: FacturacionTabProps) {
+export function FacturacionTab({ dateFrom, dateTo, branchId }: FacturacionTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [data, setData] = useState<BillingMetricsResponse | null>(null);

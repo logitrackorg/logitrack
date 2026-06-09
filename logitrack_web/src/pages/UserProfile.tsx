@@ -27,6 +27,7 @@ export function UserProfile() {
   const [historyResult, setHistoryResult] = useState<PersonalHistoryResult | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [requestingHistory, setRequestingHistory] = useState(false);
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -51,6 +52,31 @@ export function UserProfile() {
       setRequestingHistory(false);
     }
   };
+
+  const handleRequestDeletion = async () => {
+    setRequestingDeletion(true);
+    try {
+      await driverApi.requestHistoryDeletion();
+      toast.success("Solicitud de eliminación enviada. Tu supervisor la revisará a la brevedad.");
+      await loadHistory();
+    } catch (err: unknown) {
+      toast.error((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "No se pudo enviar la solicitud");
+    } finally {
+      setRequestingDeletion(false);
+    }
+  };
+
+  // Caso A: sin permisos activos (incluye "sin_solicitud" y solicitudes rechazadas).
+  // Caso B: solicitud de acceso pendiente.
+  // Caso C: acceso aprobado — historial compartido.
+  // Caso D: solicitud de eliminación pendiente (tiene precedencia visual sobre C).
+  const accessStatus = historyResult?.request_status;
+  const deletionStatus = historyResult?.deletion_request?.status;
+  const privacyCase: "A" | "B" | "C" | "D" =
+    deletionStatus === "pending" ? "D"
+    : accessStatus === "pending" ? "B"
+    : accessStatus === "approved" ? "C"
+    : "A";
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -101,7 +127,7 @@ export function UserProfile() {
     <div className="p-6 max-w-2xl mx-auto">
       <button
         onClick={() => navigate(-1)}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4 cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 mb-4 cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         Volver
@@ -115,7 +141,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("profile")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "profile"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -126,7 +152,7 @@ export function UserProfile() {
               onClick={() => setActiveTab("security")}
               className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                 activeTab === "security"
-                  ? "bg-[#1e3a5f] text-white font-bold"
+                  ? "bg-[var(--sidebar-bg)] text-white font-bold"
                   : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
               }`}
             >
@@ -138,7 +164,7 @@ export function UserProfile() {
                 onClick={() => setActiveTab("historial")}
                 className={`w-full text-left px-4 py-3 border-none rounded-lg cursor-pointer mb-3 ${
                   activeTab === "historial"
-                    ? "bg-[#1e3a5f] text-white font-bold"
+                    ? "bg-[var(--sidebar-bg)] text-white font-bold"
                     : "bg-[var(--bg-page)] text-[var(--text-primary)] font-medium"
                 }`}
               >
@@ -152,106 +178,181 @@ export function UserProfile() {
         <div className="flex-1 min-w-0">
           {activeTab === "historial" && isDriver ? (
             <div>
-              <h2 className="mb-4">Historial de Fatiga</h2>
+              <h2 className="mb-4">Privacidad e Historial de Check-in</h2>
               {historyLoading ? (
                 <p className="text-slate-500">Cargando historial...</p>
-              ) : !historyResult || historyResult.request_status === "sin_solicitud" ? (
+              ) : (
                 <div>
                   <p className="mb-4 text-slate-600 text-sm">
-                    Tu historial de check-ins de fatiga es privado. Para consultarlo, solicitá acceso a tu supervisor.
+                    Tu historial de check-ins de fatiga es privado. Para que tu supervisor pueda
+                    consultarlo, primero tenés que autorizar el acceso — y podés revocarlo cuando quieras.
                   </p>
-                  <button
-                    onClick={handleRequestHistory}
-                    disabled={requestingHistory}
-                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {requestingHistory ? "Enviando..." : "Solicitar acceso a mi historial"}
-                  </button>
-                </div>
-              ) : historyResult.request_status === "pending" ? (
-                <div className="px-5 py-4 bg-yellow-50 border border-yellow-300 rounded-lg text-amber-900 text-sm">
-                  Solicitud pendiente — tu supervisor revisará tu petición a la brevedad.
-                </div>
-              ) : historyResult.request_status === "rejected" ? (
-                <div>
-                  <div className="px-5 py-4 bg-red-50 border border-red-300 rounded-lg text-red-900 text-sm mb-4">
-                    Tu solicitud fue rechazada. Podés volver a solicitarla si necesitás acceso.
-                  </div>
-                  <button
-                    onClick={handleRequestHistory}
-                    disabled={requestingHistory}
-                    className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {requestingHistory ? "Enviando..." : "Volver a solicitar acceso"}
-                  </button>
-                </div>
-              ) : historyResult.ok && historyResult.history ? (
-                <div>
-                  <p className="text-xs text-slate-500 mb-3">
-                    Acceso aprobado · {historyResult.total} registro{historyResult.total !== 1 ? "s" : ""}
-                  </p>
-                  {historyResult.history.length === 0 ? (
-                    <p className="text-slate-400 text-sm">Sin check-ins registrados aún.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-50">
-                            <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">Fecha</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">KSS</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Sueño</th>
-                            <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {historyResult.history.map((rec) => {
-                            const [yy, mm, dd] = rec.date.split("-");
-                            return (
-                              <tr key={rec.recorded_at || rec.date} className="border-b border-slate-100">
-                                <td className="px-3 py-2 text-slate-700">
-                                  {dd}/{mm}/{yy}
-                                  {rec.recorded_at && (
-                                    <span className="ml-1.5 text-slate-400 text-[11px]">
-                                      {new Date(rec.recorded_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 text-center">
-                                  {rec.skipped ? (
-                                    <span className="text-amber-600 font-semibold text-[11px]">Saltado</span>
-                                  ) : (
-                                    <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
-                                      rec.kss_level <= 4 ? "bg-emerald-100 text-emerald-800" : rec.kss_level <= 7 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
-                                    }`}>
-                                      {rec.kss_level}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 text-center text-slate-700">
-                                  {rec.skipped ? "—" : `${rec.horas_sueno}h`}
-                                </td>
-                                <td className="px-3 py-2 text-center">
-                                  {rec.skipped ? (
-                                    <span className="text-amber-600 text-[11px]">Salteado</span>
-                                  ) : rec.drift_score != null ? (
-                                    <span className={`text-[11px] font-semibold ${
-                                      rec.drift_score <= 29 ? "text-emerald-600" : rec.drift_score < 60 ? "text-amber-600" : "text-red-600"
-                                    }`}>
-                                      Score: {rec.drift_score}
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-300 text-[11px]">—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+
+                  {/* Caso A: sin permisos activos */}
+                  {privacyCase === "A" && (
+                    <div>
+                      {accessStatus === "rejected" && (
+                        <div className="px-5 py-4 bg-red-50 border border-red-300 rounded-lg text-red-900 text-sm mb-4">
+                          Tu solicitud anterior fue rechazada. Podés volver a solicitar la revisión cuando quieras.
+                        </div>
+                      )}
+                      <button
+                        onClick={handleRequestHistory}
+                        disabled={requestingHistory}
+                        className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {requestingHistory ? "Enviando..." : "Solicitar revisión de historial personal"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Caso B: solicitud de acceso pendiente */}
+                  {privacyCase === "B" && (
+                    <div>
+                      <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-100 border border-yellow-300 text-amber-900 text-sm font-semibold">
+                        Solicitud de acceso pendiente de aprobación
+                      </span>
+                      <p className="mt-3 text-xs text-slate-500">
+                        Tu supervisor revisará la petición a la brevedad. Mientras tanto, los controles quedan deshabilitados.
+                      </p>
+                      <button
+                        disabled
+                        className="mt-3 bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium opacity-50 cursor-not-allowed"
+                      >
+                        Solicitar revisión de historial personal
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Caso D: solicitud de eliminación pendiente (precede a C) */}
+                  {privacyCase === "D" && (
+                    <div>
+                      <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 border border-orange-300 text-orange-900 text-sm font-semibold">
+                        Solicitud de eliminación en proceso de revisión
+                      </span>
+                      <p className="mt-3 text-xs text-slate-500">
+                        Tu supervisor revisará la petición de revocación. Cuando se apruebe, el historial dejará de estar compartido.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Caso C: historial compartido / aprobado */}
+                  {privacyCase === "C" && (
+                    <div>
+                      <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-sm font-semibold">
+                        Historial compartido con supervisores
+                      </span>
+                      <div className="mt-3">
+                        <button
+                          onClick={handleRequestDeletion}
+                          disabled={requestingDeletion}
+                          className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {requestingDeletion ? "Enviando..." : "Solicitar eliminación / Revocar acceso de historial"}
+                        </button>
+                      </div>
+
+                      {historyResult?.ok && historyResult.history && (
+                        <div className="mt-6">
+                          <p className="text-xs text-slate-500 mb-3">
+                            Acceso aprobado · {historyResult.total} registro{historyResult.total !== 1 ? "s" : ""}
+                          </p>
+                          {historyResult.history.length === 0 ? (
+                            <p className="text-slate-400 text-sm">Sin check-ins registrados aún.</p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse text-xs">
+                                <thead>
+                                  <tr className="bg-slate-50">
+                                    <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b border-slate-200">Fecha</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">KSS</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Sueño</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">PVT</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-600 border-b border-slate-200">Estado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {historyResult.history.map((rec) => {
+                                    const [yy, mm, dd] = rec.date.split("-");
+                                    const pvt = rec.pvt_metrics;
+                                    const pvtScore = pvt?.pvt_score ?? null;
+                                    const pvtScoreColor =
+                                      pvtScore == null ? ""
+                                      : pvtScore > 80  ? "text-emerald-600"
+                                      : pvtScore >= 50 ? "text-amber-600"
+                                      : "text-red-600";
+                                    return (
+                                      <tr key={rec.recorded_at || rec.date} className="border-b border-slate-100">
+                                        <td className="px-3 py-2 text-slate-700">
+                                          {dd}/{mm}/{yy}
+                                          {rec.recorded_at && (
+                                            <span className="ml-1.5 text-slate-400 text-[11px]">
+                                              {new Date(rec.recorded_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          {rec.skipped ? (
+                                            <span className="text-amber-600 font-semibold text-[11px]">Saltado</span>
+                                          ) : (
+                                            <span className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${
+                                              rec.kss_level <= 4 ? "bg-emerald-100 text-emerald-800" : rec.kss_level <= 7 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
+                                            }`}>
+                                              {rec.kss_level}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-slate-700">
+                                          {rec.skipped ? "—" : `${rec.horas_sueno}h`}
+                                        </td>
+                                        {/* PVT: score prominente + detalle técnico en gris */}
+                                        <td className="px-3 py-2 text-center">
+                                          {pvt ? (
+                                            <div className="inline-flex flex-col items-center gap-0.5">
+                                              {pvtScore != null ? (
+                                                <span className={`font-bold text-xs tabular-nums ${pvtScoreColor}`}>
+                                                  Score: {pvtScore}/100
+                                                </span>
+                                              ) : (
+                                                <span className="font-bold text-xs text-slate-400 tabular-nums">
+                                                  {pvt.latencia_promedio_ms.toFixed(0)} ms
+                                                </span>
+                                              )}
+                                              <span className="text-[10px] text-slate-400 tabular-nums leading-tight">
+                                                {pvt.latencia_promedio_ms.toFixed(0)} ms
+                                                {(pvt.game_errors ?? 0) > 0 && ` | ${pvt.game_errors} error${(pvt.game_errors ?? 0) !== 1 ? "es" : ""}`}
+                                              </span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-slate-300 text-[11px]">—</span>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                          {rec.skipped ? (
+                                            <span className="text-amber-600 text-[11px]">Salteado</span>
+                                          ) : rec.drift_score != null ? (
+                                            <span className={`text-[11px] font-semibold ${
+                                              rec.drift_score <= 29 ? "text-emerald-600" : rec.drift_score < 60 ? "text-amber-600" : "text-red-600"
+                                            }`}>
+                                              Score: {rec.drift_score}
+                                            </span>
+                                          ) : (
+                                            <span className="text-slate-300 text-[11px]">—</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              ) : null}
+              )}
             </div>
           ) : activeTab === "profile" ? (
             <div>
@@ -311,7 +412,7 @@ export function UserProfile() {
                         value={profile.branch_name || profile.branch_id}
                         readOnly
                         disabled
-                        className="w-full px-3 py-2.5 border border-gray-300 rounded-md bg-slate-50 text-slate-700"
+                        className="w-full px-3 py-2.5 border dark:border-gray-600 border-gray-300 rounded-md dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700"
                       />
                     </div>
                   )}
@@ -395,7 +496,7 @@ export function UserProfile() {
                 <button
                   type="submit"
                   disabled={passwordLoading}
-                  className="bg-[#1e3a5f] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
+                  className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-5 py-2.5 text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {passwordLoading ? "Cambiando..." : "Guardar Cambios"}
                 </button>

@@ -168,7 +168,7 @@ func (h *TwoFAHandler) Verify(c *gin.Context) {
 			return
 		}
 		h.logAccess("", "", "2fa_verification_failed")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

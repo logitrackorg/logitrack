@@ -72,7 +72,7 @@ export function NetworkPlanView({ embedded = false }: NetworkPlanViewProps = {})
           <button
             onClick={() => void regenerate()}
             disabled={regenerating}
-            className="h-10 px-4 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] disabled:opacity-50 flex items-center gap-2"
+            className="h-10 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-medium hover:bg-[var(--brand-strong)] disabled:opacity-50 flex items-center gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
             {regenerating ? "Regenerando…" : "Regenerar plan global"}
@@ -91,10 +91,24 @@ export function NetworkPlanView({ embedded = false }: NetworkPlanViewProps = {})
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard label="Vehículos despachados" value={insights.metrics.total_vehicles_dispatched.toString()} />
             <KpiCard label="Envíos asignados" value={insights.metrics.total_shipments_assigned.toString()} tone="green" />
-            <KpiCard label="Envíos sin asignar" value={insights.metrics.total_shipments_unassigned.toString()} tone="amber" />
-            <KpiCard label="Utilización promedio" value={fmtPct(insights.metrics.avg_vehicle_utilization_pct)} />
-            <KpiCard label="Vehículos ociosos" value={insights.metrics.idle_vehicles_count.toString()} tone="slate" />
-            <KpiCard label="Sucursales con déficit" value={insights.metrics.branches_with_unserved_demand.toString()} tone="amber" />
+            <KpiCard label="Envíos sin asignar" value={insights.metrics.total_shipments_unassigned.toString()} tone={insights.metrics.total_shipments_unassigned > 0 ? "amber" : undefined} />
+            <KpiCard
+              label="Util. inter-sucursal"
+              value={fmtPct(insights.metrics.avg_inter_branch_utilization_pct)}
+              tone={insights.metrics.avg_inter_branch_utilization_pct < 40 ? "amber" : "green"}
+              hint="Promedio de llenado de los camiones inter-sucursal (umbral mín: 40%)"
+            />
+            <KpiCard
+              label="Util. última milla"
+              value={insights.metrics.avg_last_mile_utilization_pct > 0 ? fmtPct(insights.metrics.avg_last_mile_utilization_pct) : "—"}
+              hint="Promedio de llenado de los vehículos de reparto local"
+            />
+            <KpiCard
+              label="Despachos SLA"
+              value={insights.metrics.total_vehicles_dispatched > 0 ? fmtPct(insights.metrics.sla_forced_pct) : "—"}
+              tone={insights.metrics.sla_forced_pct > 50 ? "amber" : undefined}
+              hint="% de despachos inter-sucursal forzados por SLA crítico (sin alcanzar el umbral de llenado)"
+            />
           </div>
         )}
 
@@ -243,7 +257,7 @@ export function NetworkPlanView({ embedded = false }: NetworkPlanViewProps = {})
   );
 }
 
-function KpiCard({ label, value, tone }: { label: string; value: string; tone?: "green" | "amber" | "slate" }) {
+function KpiCard({ label, value, tone, hint }: { label: string; value: string; tone?: "green" | "amber" | "slate"; hint?: string }) {
   const toneClasses: Record<string, string> = {
     green: "text-emerald-600",
     amber: "text-amber-600",
@@ -251,7 +265,7 @@ function KpiCard({ label, value, tone }: { label: string; value: string; tone?: 
   };
   const valueClass = tone ? toneClasses[tone] : "";
   return (
-    <Card>
+    <Card title={hint}>
       <CardContent className="pt-4 pb-4">
         <div className="text-[11px] text-slate-500 mb-1 uppercase tracking-wide">{label}</div>
         <div className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</div>

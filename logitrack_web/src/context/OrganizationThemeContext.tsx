@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { organizationApi, type OrganizationConfig } from "../api/organizationApi";
+import { organizationApi, type OrganizationBranding } from "../api/organizationApi";
 
 /**
  * Convierte un color hex a un objeto HSL { h, s, l }.
@@ -103,7 +103,11 @@ const ORG_TOKEN_KEYS = [
   "--accent-50", "--accent-100", "--accent-200", "--accent-300", "--accent-400",
   "--accent-500", "--accent-600", "--accent-700", "--accent-800", "--accent-900", "--accent-950",
   "--accent", "--accent-hover", "--accent-tint", "--accent-tint-border", "--accent-foreground",
-  "--sidebar-bg", "--text-heading",
+  "--sidebar-bg", "--sidebar-hover", "--sidebar-border",
+  "--text-heading",
+  "--ring",
+  "--fc-button-bg-color", "--fc-button-border-color",
+  "--fc-button-hover-bg-color", "--fc-button-active-bg-color", "--fc-highlight-color",
 ];
 
 function clearOrgTokens(root: HTMLElement) {
@@ -112,7 +116,7 @@ function clearOrgTokens(root: HTMLElement) {
   }
 }
 
-function injectThemeTokens(config: OrganizationConfig | null) {
+function injectThemeTokens(config: OrganizationBranding | null) {
   const root = document.documentElement;
 
   // Always clear stale org overrides first — fallback to index.css defaults
@@ -131,6 +135,22 @@ function injectThemeTokens(config: OrganizationConfig | null) {
     root.style.setProperty("--brand-strong", palette["700"] || brandHex);
     root.style.setProperty("--brand-tint", `${brandHex}14`);
     root.style.setProperty("--brand-tint-border", `${brandHex}34`);
+
+    // Sidebar item hover → brand color
+    root.style.setProperty("--sidebar-hover", brandHex);
+
+    // Focus rings (shadcn --ring token)
+    root.style.setProperty("--ring", brandHex);
+
+    // FullCalendar navigation buttons
+    root.style.setProperty("--fc-button-bg-color", brandHex);
+    root.style.setProperty("--fc-button-border-color", brandHex);
+    root.style.setProperty("--fc-button-hover-bg-color", palette["600"] || brandHex);
+    root.style.setProperty("--fc-button-active-bg-color", palette["700"] || brandHex);
+    root.style.setProperty("--fc-highlight-color", `${brandHex}1a`);
+
+    // Heading text → brand-800 tone
+    root.style.setProperty("--text-heading", palette["800"] || brandHex);
   }
 
   // --accent palette
@@ -147,21 +167,23 @@ function injectThemeTokens(config: OrganizationConfig | null) {
     root.style.setProperty("--accent-foreground", "#ffffff");
   }
 
-  // --sidebar color
+  // --sidebar color + border derivado
   if (config.sidebar_color) {
+    const sidebarHSL = hexToHSL(config.sidebar_color);
     root.style.setProperty("--sidebar-bg", config.sidebar_color);
-  }
-
-  // --text-heading: use primary color in light mode only when brand is set
-  if (brandHex && hexToHSL(brandHex)) {
-    const palette = generatePalette(brandHex);
-    root.style.setProperty("--text-heading", palette["800"] || brandHex);
+    if (sidebarHSL) {
+      // Borde del sidebar: 10% más oscuro que el fondo
+      root.style.setProperty(
+        "--sidebar-border",
+        hslToHex(sidebarHSL.h, sidebarHSL.s, Math.max(sidebarHSL.l - 10, 0))
+      );
+    }
   }
 }
 
 /** Context shape: exposed only for potential consumer components. */
 interface OrganizationThemeCtx {
-  config: OrganizationConfig | null;
+  config: OrganizationBranding | null;
   loading: boolean;
   refreshTheme: () => Promise<void>;
   resetTheme: () => void;
@@ -175,13 +197,13 @@ const Ctx = createContext<OrganizationThemeCtx>({
 });
 
 export function OrganizationThemeProvider({ children }: { children: ReactNode }) {
-  const [config, setConfig] = useState<OrganizationConfig | null>(null);
+  const [config, setConfig] = useState<OrganizationBranding | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchAndInject = async () => {
     setLoading(true);
     try {
-      const cfg = await organizationApi.get();
+      const cfg = await organizationApi.getPublic();
       if (cfg && Object.keys(cfg).length > 0) {
         setConfig(cfg);
         injectThemeTokens(cfg);

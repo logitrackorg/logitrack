@@ -40,7 +40,8 @@ type RoutingConfig struct {
 	// Estrategia de asignación de envíos a choferes.
 	LastMilePackingStrategy LastMilePackingStrategy `json:"last_mile_packing_strategy"`
 
-	// FleetProjectionHorizonHours is a WIP param: window for projected-dispatch logic.
+	// FleetProjectionHorizonHours: ventana en horas para usar vehículos en tránsito
+	// en el despacho proyectado. 0 = deshabilitado. Default 24.
 	FleetProjectionHorizonHours int `json:"fleet_projection_horizon_hours"`
 
 	// InterBranchDispatchHour es la hora fija de salida (local ART) para todos
@@ -93,7 +94,8 @@ func DefaultRoutingConfig() RoutingConfig {
 		InterBranchAvgSpeedKmh:   60.0,
 		InterBranchStopMinutes:   240,
 		PlanningHorizonDays:      3,
-		BackhaulEnabled:          true,
-		KeepOneVehiclePerBranch:  true,
+		BackhaulEnabled:             true,
+		KeepOneVehiclePerBranch:     true,
+		FleetProjectionHorizonHours: 24,
 	}
 }

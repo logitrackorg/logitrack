@@ -189,7 +189,7 @@ export function OrganizationConfig() {
               </div>
               <div
                 className="flex-1 flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: form.sidebar_color || "#1e3a5f" }}
+                style={{ background: form.sidebar_color || "var(--sidebar-bg)" }}
               >
                 Sidebar
               </div>
@@ -243,18 +243,18 @@ export function OrganizationConfig() {
                 <input
                   type="color"
                   className={`${colorPickerClass} w-12 shrink-0`}
-                  value={form.sidebar_color || "#1e3a5f"}
-                  onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                />
-                <input
-                  className={inputClass}
-                  value={form.sidebar_color}
-                  onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
-                  placeholder="#1e3a5f"
-                  maxLength={7}
-                />
-              </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral. Default: azul oscuro #1e3a5f</p>
+                    value={form.sidebar_color || "#1e3a5f"}
+                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                  />
+                  <input
+                    className={inputClass}
+                    value={form.sidebar_color}
+                    onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                    placeholder="#1e3a5f"
+                    maxLength={7}
+                  />
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Fondo de la barra lateral. Default: azul oscuro #1e3a5f</p>
             </div>
 
             <div className="grid gap-1.5">

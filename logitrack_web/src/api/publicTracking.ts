@@ -40,6 +40,12 @@ export interface PublicShipment {
   max_delivery_attempts?: number;
   has_incident?: boolean;
   incident_type?: IncidentType;
+  /** Rounded-up hour count (ceil(minutosRestantes/60), floored at 1) used by
+   *  the backend to overwrite estimated_delivery_at as "ahora + relative_hours"
+   *  for out_for_delivery shipments. Render this value directly in the banner
+   *  — never derive an hour count from the timestamp; the backend guarantees
+   *  both already agree. */
+  relative_hours?: number | null;
 }
 
 export interface EventLocation {

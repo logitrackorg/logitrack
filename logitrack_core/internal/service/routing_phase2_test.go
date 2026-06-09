@@ -182,12 +182,6 @@ func TestTryProjectedDispatch_OnlyRescuesNoVehicleReasons(t *testing.T) {
 		},
 	}
 
-	interBranchQ := map[string][]model.Shipment{
-		"mendoza": {{TrackingID: "LT-WAIT", WeightKg: 50}},
-		"cordoba": {{TrackingID: "LT-NOVEH", WeightKg: 100}},
-		"posadas": {{TrackingID: "LT-OVERSIZE", WeightKg: 5000}},
-	}
-
 	graphSvc := NewBranchGraphService(
 		&fakeBranchGraphRepo{},
 		&fakeBranchRepo{branches: map[string]model.Branch{}},
@@ -201,7 +195,7 @@ func TestTryProjectedDispatch_OnlyRescuesNoVehicleReasons(t *testing.T) {
 	}
 	cfg := model.RoutingConfig{FleetProjectionHorizonHours: 8}
 
-	svc.tryProjectedDispatch(plan, "caba", interBranchQ, map[string]float64{}, cfg, now)
+	svc.tryProjectedDispatch(plan, "caba", cfg, now)
 
 	// Solo "sin_vehiculos_disponibles" debe haberse rescatado (cordoba dispatch nuevo)
 	if len(plan.InterBranch) != 1 {

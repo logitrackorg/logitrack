@@ -316,7 +316,7 @@ export function FatigueConfig() {
           <button
             onClick={handleSave}
             disabled={saving || !canSave}
-            className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+            className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
           >
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>
@@ -340,7 +340,7 @@ export function FatigueConfig() {
           className="w-full flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50/80 transition-colors rounded-xl text-left"
         >
           <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <ClipboardList className="w-4 h-4 text-[#1e3a5f]" />
+            <ClipboardList className="w-4 h-4 text-[var(--sidebar-bg)]" />
             Historial de auditoría
             {auditLogs !== null && (
               <span className="ml-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
@@ -368,13 +368,13 @@ export function FatigueConfig() {
             {!auditLoading && auditLogs && auditLogs.length > 0 && (
               <>
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <table className="w-full border-collapse text-[13px]">
                     <thead>
-                      <tr style={{ background: "var(--bg-subtle)" }}>
-                        <th style={thStyle}>Fecha / hora</th>
-                        <th style={thStyle}>Usuario</th>
-                        <th style={thStyle}>Acción</th>
-                        <th style={thStyle}>Detalles</th>
+                      <tr className="bg-[var(--bg-subtle)]">
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Fecha / hora</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Usuario</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Acción</th>
+                        <th className="px-3 py-2 text-left font-bold text-[11px] text-[var(--text-secondary)] uppercase tracking-[0.05em] whitespace-nowrap">Detalles</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -399,7 +399,7 @@ export function FatigueConfig() {
 // ── sub-componentes ───────────────────────────────────────────────────────────
 
 const inputClass =
-  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all";
+  "h-10 w-32 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 tabular-nums focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all";
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 
@@ -409,7 +409,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
-        checked ? "bg-[#1e3a5f]" : "bg-slate-200"
+        checked ? "bg-[var(--sidebar-bg)]" : "bg-slate-200"
       }`}
       role="switch"
       aria-checked={checked}
@@ -469,7 +469,7 @@ function TestRow({
           disabled={!enabled}
           className={`h-10 w-20 px-3 rounded-lg border text-sm tabular-nums text-right focus:outline-none transition-all ${
             enabled
-              ? "border-slate-200 bg-white text-slate-900 focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              ? "border-slate-200 bg-white text-slate-900 focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
               : "border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed"
           }`}
         />
@@ -579,23 +579,6 @@ function RiskBandBar({ greenMax, redMin }: { greenMax: number; redMin: number })
 
 // ── Audit log sub-components ──────────────────────────────────────────────────
 
-const thStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  textAlign: "left",
-  fontWeight: 700,
-  fontSize: 11,
-  color: "var(--text-secondary)",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--border)",
-  verticalAlign: "top",
-};
-
 const ACTION_BADGE: Record<string, { label: string; bg: string; color: string }> = {
   UPDATE_FATIGUE_CONFIG: { label: "Config. fatiga", bg: "var(--brand-tint)", color: "var(--brand)" },
   SUBMIT_CHECKIN:        { label: "Check-in",        bg: "var(--ok-bg)", color: "var(--ok-text)" },
@@ -628,17 +611,17 @@ function AuditRow({ log }: { log: AuditLog }) {
   }
 
   return (
-    <tr style={{ borderBottom: "1px solid var(--border)" }}>
-      <td style={{ ...tdStyle, whiteSpace: "nowrap", color: "var(--text-strong)" }}>
+    <tr className="border-b border-[var(--border)]">
+      <td className="px-3 py-2 align-top whitespace-nowrap text-[var(--text-strong)]">
         {formatAuditDate(log.created_at)}
       </td>
-      <td style={{ ...tdStyle, fontWeight: 600, color: "var(--text-primary)" }}>{log.created_by}</td>
-      <td style={tdStyle}>
-        <span style={{ background: badge.bg, color: badge.color, borderRadius: 4, padding: "2px 8px", fontWeight: 600, fontSize: 11, whiteSpace: "nowrap" }}>
+      <td className="px-3 py-2 align-top font-semibold text-[var(--text-primary)]">{log.created_by}</td>
+      <td className="px-3 py-2 align-top">
+        <span className="rounded font-semibold text-[11px] whitespace-nowrap px-2 py-0.5" style={{ background: badge.bg, color: badge.color }}>
           {badge.label}
         </span>
       </td>
-      <td style={{ ...tdStyle, color: "var(--text-secondary)", fontSize: 12 }}>{detailText}</td>
+      <td className="px-3 py-2 align-top text-xs text-[var(--text-secondary)]">{detailText}</td>
     </tr>
   );
 }

@@ -252,20 +252,28 @@ func RunMigrations(db *sql.DB) error {
 		);
 
 		CREATE TABLE IF NOT EXISTS organization_config (
-			id         INTEGER PRIMARY KEY DEFAULT 1,
-			name       TEXT NOT NULL DEFAULT '',
-			cuit       TEXT NOT NULL DEFAULT '',
-			address    TEXT NOT NULL DEFAULT '',
-			phone      TEXT NOT NULL DEFAULT '',
-			email      TEXT NOT NULL DEFAULT '',
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_by TEXT NOT NULL DEFAULT '',
-			track_url  TEXT NOT NULL DEFAULT ''
+			id            INTEGER PRIMARY KEY DEFAULT 1,
+			name          TEXT NOT NULL DEFAULT '',
+			cuit          TEXT NOT NULL DEFAULT '',
+			address       TEXT NOT NULL DEFAULT '',
+			phone         TEXT NOT NULL DEFAULT '',
+			email         TEXT NOT NULL DEFAULT '',
+			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_by    TEXT NOT NULL DEFAULT '',
+			track_url     TEXT NOT NULL DEFAULT '',
+			primary_color TEXT NOT NULL DEFAULT '',
+			accent_color  TEXT NOT NULL DEFAULT '',
+			sidebar_color TEXT NOT NULL DEFAULT '',
+			logo_url      TEXT NOT NULL DEFAULT ''
 		);
 		INSERT INTO organization_config (id, name, cuit, address, phone, email, updated_by, track_url)
 		VALUES (1, 'Transportes del Sur S.A.', '30-71234567-8', 'Av. San Martín 1450, Buenos Aires', '+54 11 4567-8900', 'operaciones@transportesdelsur.com.ar', 'system', '')
 		ON CONFLICT (id) DO NOTHING;
 		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS track_url TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS primary_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS sidebar_color TEXT NOT NULL DEFAULT '';
+		ALTER TABLE organization_config ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '';
 
 		CREATE TABLE IF NOT EXISTS access_logs (
 			id         TEXT PRIMARY KEY,
@@ -530,6 +538,10 @@ func RunMigrations(db *sql.DB) error {
 		-- Notificaciones: forzar canal email (saltear WhatsApp)
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS force_email_notifications BOOLEAN NOT NULL DEFAULT FALSE;
 
+		-- Canales de notificación independientes (reemplaza force_email_notifications)
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS email_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS whatsapp_notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
 		-- Parametrización de reprogramaciones vía chatbot
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_reschedules INTEGER NOT NULL DEFAULT 2;
 		UPDATE system_config SET max_reschedules = 2 WHERE id = 1 AND max_reschedules = 0;
@@ -612,21 +624,101 @@ func RunMigrations(db *sql.DB) error {
 
 		-- data/migrations/XXXX_add_2fa_cooldown_config.sql
 
-		ALTER TABLE system_config 
+		ALTER TABLE system_config
 		ADD COLUMN IF NOT EXISTS two_fa_cooldown_minutes INTEGER NOT NULL DEFAULT 1;
 
+		-- Lockout por intentos fallidos de 2FA (login)
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE two_fa_pending_sessions ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+		-- Lockout por intentos fallidos de 2FA (setup)
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_setup_locked_until TIMESTAMPTZ;
+
 		-- Constraint: rango 1-10 minutos
-		DO $$ 
+		DO $$
 		BEGIN
 			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint 
+				SELECT 1 FROM pg_constraint
 				WHERE conname = 'check_2fa_cooldown_range'
 			) THEN
-				ALTER TABLE system_config 
-				ADD CONSTRAINT check_2fa_cooldown_range 
+				ALTER TABLE system_config
+				ADD CONSTRAINT check_2fa_cooldown_range
 				CHECK (two_fa_cooldown_minutes >= 1 AND two_fa_cooldown_minutes <= 10);
 			END IF;
 		END $$;
+
+		-- Despacho proyectado: ventana en horas para usar vehículos en tránsito
+		ALTER TABLE routing_config ADD COLUMN IF NOT EXISTS fleet_projection_horizon_hours INTEGER NOT NULL DEFAULT 24;
+
+		-- Métodos de pago habilitados (feature flags para el panel de cobro)
+		CREATE TABLE IF NOT EXISTS payment_config (
+			id           INTEGER PRIMARY KEY DEFAULT 1,
+			mp_enabled   BOOLEAN NOT NULL DEFAULT TRUE,
+			mock_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+			mp_alias     TEXT NOT NULL DEFAULT '',
+			mp_cvu       TEXT NOT NULL DEFAULT ''
+		);
+		INSERT INTO payment_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_alias          TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
+
+		-- Métricas de calidad del ruteo
+		CREATE TABLE IF NOT EXISTS routing_plan_metrics (
+			id                   TEXT PRIMARY KEY,
+			branch_id            TEXT NOT NULL,
+			generated_at         TIMESTAMPTZ NOT NULL,
+			generation_time_ms   INTEGER NOT NULL DEFAULT 0,
+			last_mile_count      INTEGER NOT NULL DEFAULT 0,
+			inter_branch_count   INTEGER NOT NULL DEFAULT 0,
+			unassigned_count     INTEGER NOT NULL DEFAULT 0,
+			vrp_used             BOOLEAN NOT NULL DEFAULT FALSE,
+			window_coverage_pct  DOUBLE PRECISION NOT NULL DEFAULT 0,
+			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS routing_apply_metrics (
+			id                   TEXT PRIMARY KEY,
+			branch_id            TEXT NOT NULL,
+			applied_at           TIMESTAMPTZ NOT NULL,
+			applied_by           TEXT NOT NULL DEFAULT '',
+			applied_count        INTEGER NOT NULL DEFAULT 0,
+			failed_count         INTEGER NOT NULL DEFAULT 0,
+			drift_count          INTEGER NOT NULL DEFAULT 0,
+			manual_override_count INTEGER NOT NULL DEFAULT 0,
+			created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS keyword_attempts      INT  NOT NULL DEFAULT 0;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS contingency_delivery  BOOLEAN NOT NULL DEFAULT FALSE;
+
+		CREATE TABLE IF NOT EXISTS shipment_hop_metrics (
+			id             TEXT PRIMARY KEY,
+			tracking_id    TEXT NOT NULL,
+			from_branch_id TEXT NOT NULL,
+			to_branch_id   TEXT NOT NULL,
+			departed_at    TIMESTAMPTZ,
+			arrived_at     TIMESTAMPTZ,
+			transit_hours  DOUBLE PRECISION NOT NULL DEFAULT 0,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS od_pair_daily_volume (
+			id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			origin_branch_id     TEXT NOT NULL,
+			destination_branch_id TEXT NOT NULL,
+			date                 DATE NOT NULL,
+			shipment_count       INTEGER NOT NULL DEFAULT 0,
+			total_weight_kg      DOUBLE PRECISION NOT NULL DEFAULT 0,
+			updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (origin_branch_id, destination_branch_id, date)
+		);
+
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
 	`)
 	return err
 }

@@ -64,6 +64,7 @@ func NewPostgresAuthRepository(db *sql.DB) AuthRepository {
 		},
 		{"15", "chofer_inter_1", "chofer_inter_1_123", "driver", "", "Gabriel", "Batistuta", "gabriel.batistuta@logitrack.com", "", "Av. Corrientes 2000", "Buenos Aires", "Ciudad Autónoma de Buenos Aires", "C1043", "intersucursal"},
 		{"16", "chofer_inter_2", "chofer_inter_2_123", "driver", "", "Sergio", "Agüero", "sergio.aguero@logitrack.com", "", "Av. Colón 1500", "Córdoba", "Córdoba", "X5000", "intersucursal"},
+		{"17", "sup_santa_cruz", "sup_santacruz123", "supervisor", "santa_cruz", "Exequiel", "Palacios", "exequiel.palacios@logitrack.com", "", "Av. Costanera 450", "Caleta Olivia", "Santa Cruz", "Z9011", ""},
 	}
 	for _, u := range seed {
 		addrJSON, _ := json.Marshal(map[string]string{
@@ -150,11 +151,12 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 	var id, role, status, firstName, lastName, passwordHash string
 	var email, addressJSON, branchID, updatedBy, driverType sql.NullString
 	var updatedAt sql.NullTime
+	var twoFAEnabled bool
 	row := r.db.QueryRow(
-		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type, password FROM users WHERE username = $1`,
+		`SELECT id, username, first_name, last_name, email, role, branch_id, status, address, updated_by, updated_at, driver_type, password, two_fa_enabled FROM users WHERE username = $1`,
 		username,
 	)
-	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType, &passwordHash)
+	err := row.Scan(&id, &username, &firstName, &lastName, &email, &role, &branchID, &status, &addressJSON, &updatedBy, &updatedAt, &driverType, &passwordHash, &twoFAEnabled)
 	if err == sql.ErrNoRows {
 		return model.User{}, fmt.Errorf("invalid credentials")
 	}
@@ -195,6 +197,8 @@ func (r *postgresAuthRepository) FindUser(username, password string) (model.User
 			u.Address = &addr
 		}
 	}
+
+	u.TwoFAEnabled = twoFAEnabled
 
 	if u.Status == model.UserStatusInactive {
 		return model.User{}, ErrAccountInactive

@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, RotateCcw, X, AlertTriangle, Clock, Loader2, ShieldAlert, DollarSign, CalendarClock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { LastMileAssignment, RoutingConfig, RouteMode, LatLng } from "../api/routing";
 import { routingApi } from "../api/routing";
 import type { Shipment } from "../api/shipments";
@@ -75,29 +76,31 @@ function SortableStop({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start gap-3 p-3 rounded-lg border bg-white ${
-        outside ? "border-amber-300 bg-amber-50/40" : "border-slate-200"
+      className={`flex items-start gap-3 p-3 rounded-lg border dark:bg-gray-800 bg-white ${
+        outside ? "border-amber-300 bg-amber-50/40" : "dark:border-gray-700 border-slate-200"
       } ${isDragging ? "shadow-lg" : ""}`}
     >
       {/* Drag handle */}
-      <button
-        className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 mt-0.5 shrink-0 touch-none"
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="cursor-grab active:cursor-grabbing mt-0.5 shrink-0 touch-none [&_svg]:dark:text-gray-500 text-slate-400 hover:[&_svg]:dark:text-gray-400 text-slate-600"
         {...attributes}
         {...listeners}
         tabIndex={-1}
       >
         <GripVertical className="w-4 h-4" />
-      </button>
+      </Button>
 
       {/* Sequence badge */}
-      <div className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+      <div className="w-6 h-6 rounded-full bg-[var(--sidebar-bg)] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
         {index + 1}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
-          <span className="font-mono text-xs font-semibold text-slate-700">{id}</span>
+          <span className="font-mono text-xs font-semibold dark:text-gray-300 text-slate-700">{id}</span>
           {shipment?.priority && <PriorityBadge priority={shipment.priority} />}
           {shipment?.is_fragile && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">
@@ -105,13 +108,13 @@ function SortableStop({
             </span>
           )}
         </div>
-        <div className="text-xs text-slate-600 truncate">
+        <div className="text-xs dark:text-gray-400 text-slate-600 truncate">
           {shipment?.recipient.name}
           {addressParts.length > 0 && (
-            <span className="text-slate-400"> · {addressParts.join(", ")}</span>
+            <span className="dark:text-gray-500 text-slate-400"> · {addressParts.join(", ")}</span>
           )}
         </div>
-        <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+        <div className="flex items-center gap-3 mt-1 text-[11px] dark:text-gray-400 text-slate-500 flex-wrap">
           <span>🕗 {windowLabel(shipment?.time_window)}</span>
           {eta && (
             <>
@@ -218,7 +221,7 @@ function RoutePreviewMap({
       points.push([branchCoords.lat, branchCoords.lng]);
       L.marker([branchCoords.lat, branchCoords.lng], {
         icon: L.divIcon({
-          html: `<div style="width:26px;height:26px;background:#1e3a5f;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
+          html: `<div style="width:26px;height:26px;background:var(--sidebar-bg);border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏭</div>`,
           className: "",
           iconSize: [26, 26],
           iconAnchor: [13, 13],
@@ -240,7 +243,7 @@ function RoutePreviewMap({
         .join(", ");
       L.marker([lat, lng], {
         icon: L.divIcon({
-          html: `<div style="width:26px;height:26px;background:#1e3a5f;border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i + 1}</div>`,
+          html: `<div style="width:26px;height:26px;background:var(--sidebar-bg);border-radius:50%;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)">${i + 1}</div>`,
           className: "",
           iconSize: [26, 26],
           iconAnchor: [13, 26],
@@ -259,7 +262,7 @@ function RoutePreviewMap({
         ? roadPolyline.map((p) => [p.lat, p.lng] as [number, number])
         : points;
     if (linePoints.length >= 2) {
-      L.polyline(linePoints, { color: "#1e3a5f", weight: 3, opacity: 0.7 }).addTo(layer);
+      L.polyline(linePoints, { color: "var(--sidebar-bg)", weight: 3, opacity: 0.7 }).addTo(layer);
       try {
         map.fitBounds(L.latLngBounds(points), { padding: [32, 32] });
       } catch {
@@ -286,6 +289,10 @@ export interface EditDriverStopsModalProps {
   shipmentMap: Map<string, Shipment>;
   branchCoords: { lat: number; lng: number } | null;
   config: RoutingConfig;
+  /** Fecha del plan en formato YYYY-MM-DD. Si es futura, se muestra junto a la hora de salida. */
+  planDate?: string;
+  /** Fechas disponibles del horizonte para cambiar el contexto de optimización. */
+  availableDates?: { date: string; label: string }[];
   onClose: () => void;
   /** Recibe los tracking IDs en el orden elegido por el operador y el modo de ruta activo. */
   onApply: (orderedTids: string[], mode: RouteMode) => Promise<void>;
@@ -326,6 +333,8 @@ export function EditDriverStopsModal({
   shipmentMap,
   branchCoords,
   config,
+  planDate,
+  availableDates,
   onClose,
   onApply,
 }: EditDriverStopsModalProps) {
@@ -335,6 +344,7 @@ export function EditDriverStopsModal({
     depMinToString(assignment.suggested_departure_min, config.morning_window_start_hour),
   );
   const [mode, setMode] = useState<RouteMode>(assignment.route_mode ?? "ventanas");
+  const [selectedDate, setSelectedDate] = useState<string>(planDate ?? "");
   const [recomputing, setRecomputing] = useState(false);
   const [manuallyReordered, setManuallyReordered] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -352,14 +362,16 @@ export function EditDriverStopsModal({
   }, []);
 
   const recomputeForMode = useCallback(
-    async (targetMode: RouteMode, shipmentIds: string[]) => {
+    async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
       setRecomputing(true);
       setError("");
+      const dateToUse = overrideDate ?? (selectedDate || planDate);
       try {
         const updated = await routingApi.recomputeLastMile({
           vehicle_id: assignment.vehicle_id,
           shipment_ids: shipmentIds,
           mode: targetMode,
+          ...(dateToUse ? { plan_date: dateToUse } : {}),
         });
         if (updated.ordered_stops && updated.ordered_stops.length > 0) {
           setStops(updated.ordered_stops.map((s) => s.tracking_id));
@@ -373,15 +385,8 @@ export function EditDriverStopsModal({
         setRecomputing(false);
       }
     },
-    [assignment.vehicle_id, config.morning_window_start_hour],
+    [assignment.vehicle_id, config.morning_window_start_hour, planDate, selectedDate],
   );
-
-  // Al abrir el modal, recomputar para el modo actual con morningStart como
-  // base → el operador ve el horario óptimo sin necesidad de cambiar de modo.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    void recomputeForMode(mode, originalOrder);
-  }, []); // intencional: solo al montar
 
   const handleModeChange = useCallback(
     (newMode: RouteMode) => {
@@ -391,6 +396,19 @@ export function EditDriverStopsModal({
     },
     [mode, stops, recomputeForMode],
   );
+
+  const handleDateChange = useCallback(
+    (newDate: string) => {
+      if (newDate === selectedDate) return;
+      setSelectedDate(newDate);
+      void recomputeForMode(mode, stops, newDate);
+    },
+    [selectedDate, mode, stops, recomputeForMode],
+  );
+
+  // Apply está habilitado solo cuando se edita el plan del día base (hoy).
+  // Los planes de pronóstico no se pueden aplicar desde el backend.
+  const canApplyDate = !planDate || selectedDate === planDate;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -450,6 +468,16 @@ export function EditDriverStopsModal({
     ? `${assignment.driver_name} · ${assignment.license_plate}`
     : assignment.license_plate;
 
+  // Etiqueta de fecha cuando el plan es de un día futuro.
+  const planDateLabel = (() => {
+    if (!planDate) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    if (planDate === today) return null;
+    const [y, m, d] = planDate.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  })();
+
   const violations = eta.stops.filter((s) => s.outsideWindow).length;
   const totalKm = eta.totalDistanceKm.toFixed(1);
   const totalMin = Math.round(eta.totalDurationMin);
@@ -464,12 +492,12 @@ export function EditDriverStopsModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
+      <div className="dark:bg-gray-800 bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 shrink-0 gap-4">
+        <div className="flex items-start justify-between px-5 py-4 border-b dark:border-gray-700 border-slate-200 shrink-0 gap-4">
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-slate-900">Editar paradas · {driverLabel}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="font-semibold dark:text-gray-100 text-slate-900">Editar paradas · {driverLabel}</h2>
+            <p className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">
               {stops.length} paradas · Arrastrá para reordenar
               {manuallyReordered && (
                 <span className="ml-2 text-amber-600 font-medium">· Orden manual</span>
@@ -478,16 +506,14 @@ export function EditDriverStopsModal({
             {/* Mode selector */}
             <div className="flex items-center gap-1.5 mt-2.5">
               {ROUTE_MODES.map(({ mode: m, label, tooltip, icon }) => (
-                <button
+                <Button
                   key={m}
                   title={tooltip}
                   disabled={recomputing}
+                  variant={mode === m ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full"
                   onClick={() => void handleModeChange(m)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
-                    mode === m
-                      ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                      : "bg-white text-slate-600 border-slate-300 hover:border-[#1e3a5f] hover:text-[#1e3a5f]"
-                  }`}
                 >
                   {mode === m && recomputing ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -495,38 +521,65 @@ export function EditDriverStopsModal({
                     icon
                   )}
                   {label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer shrink-0">
+          <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Body: dos columnas */}
         <div className="flex-1 flex overflow-hidden min-h-0">
 
           {/* Columna izquierda: mapa fijo + KPIs */}
-          <div className="w-[42%] shrink-0 flex flex-col border-r border-slate-200">
+          <div className="w-[42%] shrink-0 flex flex-col border-r dark:border-gray-700 border-slate-200">
             {/* Mapa — ocupa todo el espacio disponible */}
             <div className="flex-1 min-h-0 p-3 pb-2">
               <RoutePreviewMap stops={stops} shipmentMap={shipmentMap} branchCoords={branchCoords} zones={zones} safeMode={mode === "segura"} roadPolyline={roadPolyline} />
             </div>
 
             {/* KPIs + hora de salida */}
-            <div className="shrink-0 px-4 py-3 border-t border-slate-100 space-y-2.5">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <Clock className="w-4 h-4 shrink-0 text-slate-400" />
-                <span className="shrink-0 text-slate-500">Salida</span>
+            <div className="shrink-0 px-4 py-3 border-t dark:border-gray-700 border-slate-100 space-y-2.5">
+              {/* Selector de día del horizonte */}
+              {availableDates && availableDates.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {availableDates.map(({ date, label }) => (
+                    <Button
+                      key={date}
+                      disabled={recomputing}
+                      variant={selectedDate === date ? "default" : "outline"}
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => handleDateChange(date)}
+                    >
+                      <CalendarClock className="w-3 h-3" />
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {planDateLabel && selectedDate === planDate && (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                  <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+                  Programado para {planDateLabel}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm dark:text-gray-400 text-slate-600">
+                <Clock className="w-4 h-4 shrink-0 dark:text-gray-500 text-slate-400" />
+                <span className="shrink-0 dark:text-gray-400 text-slate-500">Salida</span>
                 <input
                   type="time"
                   value={departure}
                   onChange={(e) => setDeparture(e.target.value)}
-                  className="border border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]"
+                  className="border dark:border-gray-700 border-slate-200 rounded px-1.5 py-0.5 text-sm font-mono dark:text-gray-300 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--sidebar-bg)]"
                 />
+                {planDateLabel && (
+                  <span className="text-xs dark:text-gray-500 text-slate-400">del {planDate?.slice(8, 10)}/{planDate?.slice(5, 7)}</span>
+                )}
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm dark:text-gray-400 text-slate-500">
                 <span>{totalKm} km</span>
                 <span>{durationStr}</span>
               </div>
@@ -534,7 +587,7 @@ export function EditDriverStopsModal({
                 <span className={`font-medium ${violations === 0 ? "text-emerald-700" : "text-amber-700"}`}>
                   {eta.stops.length - violations}/{eta.stops.length} en ventana
                 </span>
-                <span className="text-slate-500">Regresa {fmtHHMM(eta.returnTime)}</span>
+                <span className="dark:text-gray-400 text-slate-500">Regresa {fmtHHMM(eta.returnTime)}</span>
               </div>
             </div>
           </div>
@@ -565,31 +618,38 @@ export function EditDriverStopsModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-200 shrink-0 gap-3">
-          <button
+        <div className="flex items-center justify-between px-5 py-4 border-t dark:border-gray-700 border-slate-200 shrink-0 gap-3">
+          <Button
+            variant="ghost"
             disabled={recomputing}
             onClick={() => void recomputeForMode(mode, originalOrder)}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 cursor-pointer transition-colors disabled:opacity-40"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Restaurar óptimo
-          </button>
+          </Button>
           <div className="flex items-center gap-3">
             {error && <p className="text-xs text-red-600">{error}</p>}
-            <button
+            <Button
+              variant="outline"
               onClick={onClose}
               disabled={applying}
-              className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer text-slate-600 disabled:opacity-40 transition-colors"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="default"
               onClick={handleApply}
-              disabled={applying}
-              className="px-4 py-2 text-sm bg-[#1e3a5f] hover:bg-[#15294a] disabled:opacity-40 text-white rounded-lg font-semibold cursor-pointer transition-colors"
+              disabled={applying || !canApplyDate}
+              title={!canApplyDate ? "Los planes de pronóstico no se pueden aplicar. Volvé a este día cuando corresponda." : undefined}
             >
-              {applying ? "Aplicando…" : "Aplicar"}
-            </button>
+              {applying
+                ? "Aplicando…"
+                : !canApplyDate
+                  ? `Solo visualización (${selectedDate.slice(8, 10)}/${selectedDate.slice(5, 7)})`
+                  : planDateLabel
+                    ? `Programar para el ${planDate?.slice(8, 10)}/${planDate?.slice(5, 7)}`
+                    : "Aplicar"}
+            </Button>
           </div>
         </div>
       </div>

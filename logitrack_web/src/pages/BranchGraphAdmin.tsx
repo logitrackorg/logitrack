@@ -113,7 +113,7 @@ export function BranchGraphAdmin({ embedded = false }: { embedded?: boolean } = 
               <button
                 onClick={() => void handleDerive()}
                 disabled={deriving}
-                className="h-10 px-4 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] flex items-center gap-2 disabled:opacity-50"
+                className="h-10 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-medium hover:bg-[var(--brand-strong)] flex items-center gap-2 disabled:opacity-50"
               >
                 <GitBranch className={`h-4 w-4 ${deriving ? "animate-pulse" : ""}`} />
                 {deriving ? "Derivando…" : "Auto-derive ahora"}
@@ -175,7 +175,7 @@ export function BranchGraphAdmin({ embedded = false }: { embedded?: boolean } = 
                 <button
                   onClick={() => void handleCreateEdge()}
                   disabled={creating}
-                  className="h-9 px-4 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] disabled:opacity-50"
+                  className="h-9 px-4 rounded-lg bg-[var(--brand)] text-white text-sm font-medium hover:bg-[var(--brand-strong)] disabled:opacity-50"
                 >
                   {creating ? "Creando…" : "Crear"}
                 </button>

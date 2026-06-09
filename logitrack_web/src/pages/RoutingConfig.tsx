@@ -69,7 +69,7 @@ const HOUR_KEYS = [
 ] as const satisfies ReadonlyArray<keyof RoutingConfigType>;
 
 const inputClass =
-  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb] transition-all w-36 tabular-nums";
+  "h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] transition-all w-36 tabular-nums";
 
 function formatHint(value: number, fmt: NumberFieldDef["format"]): string {
   switch (fmt) {
@@ -310,7 +310,8 @@ export function RoutingConfig() {
       draft.inter_branch_avg_speed_kmh !== config.inter_branch_avg_speed_kmh ||
       draft.inter_branch_stop_minutes !== config.inter_branch_stop_minutes ||
       draft.backhaul_enabled !== config.backhaul_enabled ||
-      draft.keep_one_vehicle_per_branch !== config.keep_one_vehicle_per_branch);
+      draft.keep_one_vehicle_per_branch !== config.keep_one_vehicle_per_branch ||
+      draft.fleet_projection_horizon_hours !== config.fleet_projection_horizon_hours);
 
   const handleGenerateGlobal = async () => {
     setGenerating(true);
@@ -362,18 +363,14 @@ export function RoutingConfig() {
                     }
                   />
                   <div
-                    className="w-10 h-6 rounded-full transition-colors"
-                    style={{
-                      background: draft?.enforce_time_windows
-                        ? "var(--brand)"
-                        : "var(--border-strong)",
-                    }}
+                    className={`w-10 h-6 rounded-full transition-colors ${
+                      draft?.enforce_time_windows ? "bg-[var(--brand)]" : "bg-[var(--border-strong)]"
+                    }`}
                   />
                   <div
-                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform ${
+                    className={`absolute top-1 w-4 h-4 rounded-full shadow transition-transform bg-white ${
                       draft?.enforce_time_windows ? "translate-x-5" : "translate-x-1"
                     }`}
-                    style={{ background: "#fff" }}
                   />
                 </div>
                 <span className="text-sm text-slate-700">
@@ -391,16 +388,35 @@ export function RoutingConfig() {
               </p>
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
-                  className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.backhaul_enabled ? "#1e3a5f" : "#e5e7eb" }}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    draft?.backhaul_enabled ? "bg-[var(--sidebar-bg)]" : "bg-[#e5e7eb]"
+                  }`}
                   onClick={() => setDraft((d) => (d ? { ...d, backhaul_enabled: !d.backhaul_enabled } : d))}
                 >
-                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${draft?.backhaul_enabled ? "translate-x-5" : "translate-x-0"}`} />
                 </div>
                 <span className="text-sm text-slate-700">
                   {draft?.backhaul_enabled ? "Activo" : "Inactivo"}
                 </span>
               </label>
+            </div>
+
+            {/* Despacho proyectado */}
+            <div className="grid gap-2">
+              <label className="text-sm font-semibold text-slate-700">Horizonte de despacho proyectado (horas)</label>
+              <p className="text-xs text-slate-500 leading-relaxed -mt-1">
+                Ventana en horas para usar vehículos en tránsito hacia la sucursal. Si la ETA cae
+                dentro del horizonte, el motor los incluye para planificar envíos varados por falta
+                de transporte. 0 = deshabilitado. Rango: 0–168 h.
+              </p>
+              <input
+                type="number"
+                min={0}
+                max={168}
+                value={draft?.fleet_projection_horizon_hours ?? 24}
+                onChange={(e) => setDraft((d) => d ? { ...d, fleet_projection_horizon_hours: parseInt(e.target.value) || 0 } : d)}
+                className="w-28 border border-slate-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
             </div>
 
             {/* Balanceo de flota */}
@@ -412,11 +428,12 @@ export function RoutingConfig() {
               </p>
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <div
-                  className="relative w-11 h-6 rounded-full transition-colors"
-                  style={{ background: draft?.keep_one_vehicle_per_branch ? "#1e3a5f" : "#e5e7eb" }}
+                  className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    draft?.keep_one_vehicle_per_branch ? "bg-[var(--sidebar-bg)]" : "bg-[#e5e7eb]"
+                  }`}
                   onClick={() => setDraft((d) => (d ? { ...d, keep_one_vehicle_per_branch: !d.keep_one_vehicle_per_branch } : d))}
                 >
-                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-1"}`} style={{ background: "#fff" }} />
+                  <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${draft?.keep_one_vehicle_per_branch ? "translate-x-5" : "translate-x-0"}`} />
                 </div>
                 <span className="text-sm text-slate-700">
                   {draft?.keep_one_vehicle_per_branch ? "Activo" : "Inactivo"}
@@ -442,7 +459,7 @@ export function RoutingConfig() {
                       }
                       className={inputClass}
                     />
-                    <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                    <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                       {formatHint(value, field.format)}
                     </span>
                   </div>
@@ -473,7 +490,7 @@ export function RoutingConfig() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#1e3a5f]" />
+              <Clock className="w-4 h-4 text-[var(--sidebar-bg)]" />
               Ventanas operativas
             </CardTitle>
             <CardDescription>
@@ -590,7 +607,7 @@ export function RoutingConfig() {
                     key={opt.value}
                     className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-all ${
                       draft.last_mile_packing_strategy === opt.value
-                        ? "border-[#2563eb] bg-blue-50 ring-1 ring-[#2563eb]/20"
+                        ? "border-[var(--brand)] bg-blue-50 ring-1 ring-[var(--brand)]/20"
                         : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                     }`}
                   >
@@ -602,12 +619,12 @@ export function RoutingConfig() {
                       onChange={() =>
                         setDraft((d) => (d ? { ...d, last_mile_packing_strategy: opt.value } : d))
                       }
-                      className="accent-[#2563eb]"
+                      className="accent-[var(--brand)]"
                     />
                     <span
                       className={`text-sm font-semibold ${
                         draft.last_mile_packing_strategy === opt.value
-                          ? "text-[#2563eb]"
+                          ? "text-[var(--brand)]"
                           : "text-slate-700"
                       }`}
                     >
@@ -636,7 +653,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {String(draft.inter_branch_dispatch_hour ?? 8).padStart(2, "0")}:00
                 </span>
               </div>
@@ -660,7 +677,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {draft.inter_branch_avg_speed_kmh ?? 60} km/h
                 </span>
               </div>
@@ -685,7 +702,7 @@ export function RoutingConfig() {
                   }
                   className={inputClass}
                 />
-                <span className="text-xs font-semibold text-[#1e3a5f] tabular-nums">
+                <span className="text-xs font-semibold text-[var(--sidebar-bg)] tabular-nums">
                   {(() => {
                     const m = draft.inter_branch_stop_minutes ?? 240;
                     const h = Math.floor(m / 60);
@@ -700,7 +717,7 @@ export function RoutingConfig() {
               <button
                 onClick={handleSave}
                 disabled={saving || !isDirty}
-                className="h-10 px-5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                className="h-10 px-5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold transition-colors disabled:cursor-not-allowed cursor-pointer"
               >
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>

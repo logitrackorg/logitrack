@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Unlock } from "lucide-react";
 import { supervisorFatigueApi, type ActiveFatigueAlert } from "../api/supervisorFatigue";
 import { useAuth } from "../context/AuthContext";
 
@@ -89,72 +89,28 @@ export function SupervisorFatigueGuard({ children }: Props) {
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="sup-fatigue-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(15, 23, 42, 0.88)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-          }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-6 bg-[rgba(15,23,42,0.88)]"
         >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              maxWidth: 440,
-              width: "100%",
-              padding: "32px 28px",
-              boxShadow: "0 25px 50px rgba(0,0,0,0.4)",
-              border: "3px solid #fca5a5",
-              position: "relative",
-            }}
-          >
+          <div className="bg-white rounded-2xl max-w-[440px] w-full p-8 shadow-2xl border-[3px] border-red-300 relative">
             {/* Contador de alertas si hay más de una */}
             {queue.length > 1 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 16,
-                  right: 16,
-                  background: "#fca5a5",
-                  color: "#7f1d1d",
-                  borderRadius: 999,
-                  padding: "2px 10px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
+              <span className="absolute top-4 right-4 bg-red-300 text-red-900 rounded-full px-2.5 py-0.5 text-[11px] font-bold">
                 1 de {queue.length}
               </span>
             )}
 
             {/* Encabezado */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  background: "#fee2e2",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  animation: "sup-pulse 1.4s ease-in-out infinite",
-                }}
-              >
-                <AlertTriangle style={{ width: 26, height: 26, color: "#dc2626" }} />
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center shrink-0 animate-[sup-pulse_1.4s_ease-in-out_infinite]">
+                <AlertTriangle className="w-[26px] h-[26px] text-red-600" />
               </div>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>
+                <p className="text-[11px] font-bold text-red-600 tracking-wider uppercase mb-0.5">
                   Alerta de fatiga crítica
                 </p>
                 <h2
                   id="sup-fatigue-title"
-                  style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: 0 }}
+                  className="text-lg font-extrabold text-slate-900 m-0"
                 >
                   {current.full_name}
                 </h2>
@@ -162,66 +118,43 @@ export function SupervisorFatigueGuard({ children }: Props) {
             </div>
 
             {/* Score */}
-            <div
-              style={{
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                borderRadius: 8,
-                padding: "10px 14px",
-                marginBottom: 16,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 13, color: "#7f1d1d" }}>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-center gap-2">
+              <span className="text-[13px] text-red-900">
                 Score de riesgo:{" "}
-                <strong style={{ fontSize: 15 }}>{current.score}/100</strong>
+                <strong className="text-[15px]">{current.score}/100</strong>
                 {" — nivel "}
-                <strong style={{ color: "#dc2626" }}>ROJO</strong>
+                <strong className="text-red-600">ROJO</strong>
               </span>
             </div>
 
             {/* Mensaje */}
-            <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, marginBottom: 24 }}>
+            <p className="text-sm text-slate-700 leading-relaxed mb-6">
               El chofer <strong>{current.full_name}</strong> tuvo un mal desempeño en el
               test de fatiga. Realizá las acciones correspondientes de inmediato.
             </p>
 
             {/* Confirmación de desbloqueo */}
             {unblocked ? (
-              <div style={{
-                background: "#fff7ed", border: "1px solid #fed7aa",
-                borderRadius: 8, padding: "12px 16px",
-                color: "#9a3412", fontSize: 13, fontWeight: 600, textAlign: "center",
-              }}>
-                🔓 Ruta desbloqueada. El chofer puede continuar.
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-orange-800 text-[13px] font-semibold text-center">
+                <Unlock size={16} className="inline mr-1" /> Ruta desbloqueada. El chofer puede continuar.
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="flex flex-col gap-2.5">
                 <button
                   onClick={() => void handleUnblock()}
                   disabled={unblocking}
-                  style={{
-                    background: "#f97316", color: "#fff", border: "none",
-                    borderRadius: 10, padding: "13px 20px", fontSize: 14, fontWeight: 700,
-                    cursor: unblocking ? "not-allowed" : "pointer",
-                    opacity: unblocking ? 0.7 : 1,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  }}
+                  className={`bg-orange-500 text-white rounded-xl py-3 px-5 text-sm font-bold flex items-center justify-center gap-2 ${
+                    unblocking ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+                  }`}
                 >
-                  🔓 {unblocking ? "Desbloqueando…" : "Desbloquear ruta"}
+                  <Unlock size={14} className="mr-1" /> {unblocking ? "Desbloqueando…" : "Desbloquear ruta"}
                 </button>
                 <button
                   onClick={() => void handleContinue()}
                   disabled={unblocking}
-                  style={{
-                    background: "transparent", color: "#64748b",
-                    border: "1px solid #cbd5e1", borderRadius: 10,
-                    padding: "12px 20px", fontSize: 14, fontWeight: 600,
-                    cursor: unblocking ? "not-allowed" : "pointer",
-                    opacity: unblocking ? 0.7 : 1,
-                  }}
+                  className={`bg-transparent text-slate-500 border border-slate-300 rounded-xl py-3 px-5 text-sm font-semibold ${
+                    unblocking ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
+                  }`}
                 >
                   Continuar
                 </button>

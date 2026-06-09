@@ -81,6 +81,7 @@ func (r *eventSourcedShipmentRepository) ConfirmDraft(cmd ConfirmDraftCmd) (mode
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 			Price:               cmd.Price,
 			PriceBreakdown:      cmd.PriceBreakdown,
+			SecurityKeyword:     cmd.SecurityKeyword,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -107,6 +108,7 @@ func (r *eventSourcedShipmentRepository) UpdateStatus(cmd StatusUpdateCmd) (mode
 			Notes:               cmd.Notes,
 			DriverID:            cmd.DriverID,
 			RejectedByRecipient: cmd.RejectedByRecipient,
+			ContingencyDelivery: cmd.ContingencyDelivery,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -401,7 +403,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			TrackingID: de.TrackingID,
 			EventType:  model.EventClaimCreated,
 			ChangedBy:  de.ChangedBy,
-			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, payload.ClaimType),
+			Notes:      fmt.Sprintf("Reclamo %s registrado (%s)", payload.ClaimID, claimTypeLabel(payload.ClaimType)),
 			Timestamp:  de.Timestamp,
 		}, true
 
@@ -771,4 +773,40 @@ func (r *eventSourcedShipmentRepository) CancelByRecipient(cmd CancelByRecipient
 
 	r.projection.Apply(event)
 	return r.projection.Get(cmd.TrackingID)
+}
+
+func (r *eventSourcedShipmentRepository) RecordKeywordFailed(trackingID, changedBy string) error {
+	event := model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: trackingID,
+		EventType:  model.EventDeliveryKeywordFailed,
+		ChangedBy:  changedBy,
+		Timestamp:  time.Now().UTC(),
+	}
+	if err := r.store.Append(event); err != nil {
+		return err
+	}
+	r.projection.Apply(event)
+	return nil
+}
+
+func claimTypeLabel(ct model.ClaimType) string {
+	switch ct {
+	case model.ClaimTypeDamage:
+		return "Daño en mercadería"
+	case model.ClaimTypeMissing:
+		return "Faltante"
+	case model.ClaimTypeDelay:
+		return "Demora"
+	case model.ClaimTypeNotDelivered:
+		return "No entregado"
+	case model.ClaimTypeBadTreatment:
+		return "Maltrato"
+	case model.ClaimTypeWrongData:
+		return "Datos incorrectos"
+	case model.ClaimTypeOther:
+		return "Otro"
+	default:
+		return string(ct)
+	}
 }

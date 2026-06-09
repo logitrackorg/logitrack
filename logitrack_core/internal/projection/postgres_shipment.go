@@ -58,12 +58,14 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7,
 				    estimated_delivery_at = $8,
 				    price = COALESCE($9, price),
-				    price_breakdown = COALESCE($10, price_breakdown)
-				WHERE tracking_id = $11`,
+				    price_breakdown = COALESCE($10, price_breakdown),
+				    security_keyword = CASE WHEN $11 != '' THEN $11 ELSE security_keyword END
+				WHERE tracking_id = $12`,
 				payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
 				payload.EstimatedDeliveryAt,
 				nullableFloat(payload.Price), nullableBytes(priceBreakdown),
+				payload.SecurityKeyword,
 				payload.OldTrackingID,
 			)
 			return err
@@ -72,12 +74,21 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 			UPDATE shipments
 			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4,
 			    price = COALESCE($5, price),
-			    price_breakdown = COALESCE($6, price_breakdown)
-			WHERE tracking_id = $7`,
+			    price_breakdown = COALESCE($6, price_breakdown),
+			    security_keyword = CASE WHEN $7 != '' THEN $7 ELSE security_keyword END
+			WHERE tracking_id = $8`,
 			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 			payload.EstimatedDeliveryAt,
 			nullableFloat(payload.Price), nullableBytes(priceBreakdown),
+			payload.SecurityKeyword,
 			payload.OldTrackingID,
+		)
+		return err
+
+	case model.EventDeliveryKeywordFailed:
+		_, err := p.db.Exec(`
+			UPDATE shipments SET keyword_attempts = keyword_attempts + 1, updated_at = $1 WHERE tracking_id = $2`,
+			event.Timestamp, event.TrackingID,
 		)
 		return err
 
@@ -86,9 +97,9 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 		if payload.ToStatus == model.StatusDelivered {
 			_, err := p.db.Exec(`
 				UPDATE shipments
-				SET status = $1, updated_at = $2, delivered_at = $3
-				WHERE tracking_id = $4`,
-				string(payload.ToStatus), event.Timestamp, event.Timestamp, event.TrackingID,
+				SET status = $1, updated_at = $2, delivered_at = $3, contingency_delivery = $4
+				WHERE tracking_id = $5`,
+				string(payload.ToStatus), event.Timestamp, event.Timestamp, payload.ContingencyDelivery, event.TrackingID,
 			)
 			return err
 		}
@@ -449,8 +460,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			parent_shipment_id, delivery_attempts, is_returning,
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency,
-			rejected_by_recipient, chatbot_metadata
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
+			rejected_by_recipient, chatbot_metadata,
+			security_keyword, keyword_attempts, contingency_delivery
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -481,8 +493,11 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			price_breakdown       = COALESCE(EXCLUDED.price_breakdown, shipments.price_breakdown),
 			price_currency        = EXCLUDED.price_currency,
 			rejected_by_recipient = EXCLUDED.rejected_by_recipient,
-			chatbot_metadata      = EXCLUDED.chatbot_metadata`,
-			s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
+			chatbot_metadata      = EXCLUDED.chatbot_metadata,
+			security_keyword      = CASE WHEN EXCLUDED.security_keyword != '' THEN EXCLUDED.security_keyword ELSE shipments.security_keyword END,
+			keyword_attempts      = EXCLUDED.keyword_attempts,
+			contingency_delivery  = EXCLUDED.contingency_delivery`,
+		s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
 		sender, recipient, nullableBytes(corrections),
@@ -493,6 +508,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		s.FinalBranchID, string(deliveryMethod),
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
 		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
+		s.SecurityKeyword, s.KeywordAttempts, s.ContingencyDelivery,
 )
 	return err
 }
@@ -517,7 +533,8 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata,
+		       security_keyword, keyword_attempts, contingency_delivery
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	s, err := scanShipment(row)
 	if err == nil {
@@ -539,7 +556,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata,
+		       security_keyword, keyword_attempts, contingency_delivery
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -597,7 +615,8 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata,
+		       security_keyword, keyword_attempts, contingency_delivery
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -754,7 +773,8 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		       has_incident, incident_type,
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
-		       rejected_by_recipient, chatbot_metadata
+		       rejected_by_recipient, chatbot_metadata,
+		       security_keyword, keyword_attempts, contingency_delivery
 		FROM shipments
 		WHERE `+strings.Join(recentClauses, " AND ")+`
 		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
@@ -1058,7 +1078,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		reservedForTripID    sql.NullString
 		slaNotifiedAt        *time.Time
 		slaExpiredNotifiedAt *time.Time
-		chatbotMetadataJSON []byte 
+		chatbotMetadataJSON []byte
 	)
 	err := row.Scan(
 		&s.TrackingID, &status, &s.CurrentLocation, &s.CurrentZone, &s.WeightKg, &packageType,
@@ -1070,7 +1090,8 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&s.HasIncident, &incidentType,
 		&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
-		&s.RejectedByRecipient,	&chatbotMetadataJSON,
+		&s.RejectedByRecipient, &chatbotMetadataJSON,
+		&s.SecurityKeyword, &s.KeywordAttempts, &s.ContingencyDelivery,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -1167,6 +1188,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&s.ParentShipmentID, &s.DeliveryAttempts, &s.IsReturning, &s.FinalBranchID, &deliveryMethod,
 			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
 			&s.RejectedByRecipient, &chatbotMetadataJSON,
+			&s.SecurityKeyword, &s.KeywordAttempts, &s.ContingencyDelivery,
 		)
 		if err != nil {
 			return nil, err

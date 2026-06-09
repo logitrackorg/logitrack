@@ -23,6 +23,7 @@ import { Card } from "../components/ui/card";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { useGeolocation } from "../hooks/useGeolocation";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 // ---------------------------------------------------------------------------
 // Haversine
@@ -132,6 +133,16 @@ export function DriverInterBranchTrip() {
     }
     setMidTripCheckin(true);
   }, []);
+
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
+  // backend ya da por completo el check-in apenas se envía el paso KSS, así
+  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    void openCheckinGate();
+  }, [user, openCheckinGate]);
 
   // ── Simulación de ruta (modo ?gps=simulate) ────────────────────────────────
   // Los routePoints se derivan del trip y las branches. Mientras no haya datos
@@ -380,7 +391,7 @@ export function DriverInterBranchTrip() {
         });
 
       points.forEach((p, i) => {
-        let bg = "#1e3a5f", content = "🏭";
+        let bg = "var(--sidebar-bg)", content = "🏭";
         if (i > 0) {
           if (p.completed) { bg = "#059669"; content = "✓"; }
           else if (p.current) { bg = "#0284c7"; content = "📍"; }
@@ -420,7 +431,7 @@ export function DriverInterBranchTrip() {
               if (legData.code !== "Ok" || !legData.routes?.[0]) {
                 // fallback línea recta para este segmento
                 L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-                  color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                  color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
                   weight: 3,
                   dashArray: points[i + 1].completed ? undefined : "8 6",
                 }).addTo(map);
@@ -430,7 +441,7 @@ export function DriverInterBranchTrip() {
                 (c: number[]) => [c[1], c[0]] as [number, number],
               );
               L.polyline(coords, {
-                color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+                color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
                 weight: 3,
                 opacity: 0.8,
                 dashArray: points[i + 1].completed ? undefined : "8 6",
@@ -442,7 +453,7 @@ export function DriverInterBranchTrip() {
           // fallback: líneas rectas si OSRM no responde
           for (let i = 0; i < points.length - 1; i++) {
             L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-              color: points[i + 1].completed ? "#059669" : "#1e3a5f",
+              color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
               weight: 3,
               dashArray: points[i + 1].completed ? undefined : "8 6",
             }).addTo(map);
@@ -591,7 +602,7 @@ export function DriverInterBranchTrip() {
 
   const statusMap: Record<string, { label: string; cls: string }> = {
     pendiente: { label: "Pendiente", cls: "bg-amber-100 text-amber-800" },
-    en_transito: { label: "En ruta", cls: "bg-blue-100 text-blue-800" },
+    en_transito: { label: "En ruta", cls: "bg-[var(--brand-100)] text-[var(--brand-800)]" },
     completado: { label: "Completado", cls: "bg-emerald-100 text-emerald-800" },
     cancelado: { label: "Cancelado", cls: "bg-slate-100 text-slate-600" },
   };
@@ -613,7 +624,7 @@ export function DriverInterBranchTrip() {
         )}
         <button
           onClick={() => navigate("/driver/scan")}
-          className="h-12 px-8 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white font-bold text-sm transition-colors cursor-pointer"
+          className="h-12 px-8 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white font-bold text-sm transition-colors cursor-pointer"
         >
           Volver al inicio
         </button>
@@ -628,7 +639,7 @@ export function DriverInterBranchTrip() {
         <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
                 <Truck className="w-4.5 h-4.5" />
               </div>
               <div className="min-w-0">
@@ -785,7 +796,7 @@ export function DriverInterBranchTrip() {
           <div className="max-w-2xl mx-auto">
             <button
               onClick={openQR}
-              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#1e3a5f] hover:bg-[#162d4a] active:bg-[#0f2135] text-white text-base font-bold cursor-pointer transition-colors shadow-sm"
+              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#162d4a] active:bg-[#0f2135] text-white text-base font-bold cursor-pointer transition-colors shadow-sm"
             >
               <QrCode className="w-5 h-5" />
               Llegué — mostrar QR al operador
@@ -805,7 +816,7 @@ export function DriverInterBranchTrip() {
             <button
               onClick={handleStart}
               disabled={starting}
-              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#1e3a5f] hover:bg-[#162d4a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="w-full inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#162d4a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-base font-bold cursor-pointer disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               <Play className="w-5 h-5" />
               {starting ? "Iniciando viaje…" : "Iniciar viaje"}
@@ -832,7 +843,7 @@ export function DriverInterBranchTrip() {
       {/* Overlay de bloqueo por fatiga — fixed encima de todo, no desmonta el mapa */}
       {fatigueBlocked && (
         <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <span className="text-6xl">⚠️</span>
+          <AlertTriangle size={64} className="text-red-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
           </h2>
@@ -846,7 +857,7 @@ export function DriverInterBranchTrip() {
       {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
       {!fatigueBlocked && fatigueUnblockedBy && (
         <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
-          <span className="text-6xl">✅</span>
+          <CheckCircle2 size={64} className="text-emerald-500" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Ruta autorizada
           </h2>
@@ -918,7 +929,7 @@ function StepperBar({
           let dotCls = "bg-slate-400";
           let dotContent = <span className="text-[9px] font-bold text-white">{idx}</span>;
           if (isOriginPt) {
-            dotCls = "bg-[#1e3a5f]";
+            dotCls = "bg-[var(--sidebar-bg)]";
             dotContent = <Truck className="w-3 h-3 text-white" />;
           } else if (isCompleted) {
             dotCls = "bg-emerald-500";
@@ -987,10 +998,10 @@ function HeroNextStop({
       : null;
 
   return (
-    <Card className="p-4 border-2 border-[#1e3a5f]/20 bg-gradient-to-br from-white to-slate-50/80">
+    <Card className="p-4 border-2 border-[var(--sidebar-bg)]/20 bg-gradient-to-br from-white to-slate-50/80">
       {/* Chip de parada */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] uppercase tracking-wider">
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] uppercase tracking-wider">
           Parada {stopNumber} de {totalStops}
         </span>
         {distKm !== null && (
@@ -1016,7 +1027,7 @@ function HeroNextStop({
       {etaHours !== null && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-slate-100 flex items-center gap-2">
           <span className="text-xs font-bold text-slate-700">ETA estimada</span>
-          <span className="ml-auto text-sm font-bold text-[#1e3a5f]">~{formatDuration(etaHours)}</span>
+          <span className="ml-auto text-sm font-bold text-[var(--sidebar-bg)]">~{formatDuration(etaHours)}</span>
         </div>
       )}
 
@@ -1169,7 +1180,7 @@ function QRModal({
                 {qrLoading ? (
                   <div className="w-56 h-56 rounded-2xl bg-slate-100 animate-pulse" />
                 ) : qrData ? (
-                  <div className="p-3 bg-white rounded-2xl border-2 border-[#1e3a5f]/20 shadow-md">
+                  <div className="p-3 bg-white rounded-2xl border-2 border-[var(--sidebar-bg)]/20 shadow-md">
                     <img
                       src={`data:image/png;base64,${qrData.qr_code_base64}`}
                       alt="QR del viaje"
@@ -1236,7 +1247,7 @@ function NoTripView() {
   return (
     <div className="p-6 max-w-lg mx-auto">
       <div className="flex items-start gap-3 mb-6 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <Truck className="w-5 h-5" />
         </div>
         <div>
@@ -1251,7 +1262,7 @@ function NoTripView() {
         </p>
         <button
           onClick={() => navigate("/driver/scan")}
-          className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white font-bold text-sm transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white font-bold text-sm transition-colors cursor-pointer"
         >
           <QrCode className="w-4 h-4" />
           Escanear vehículo

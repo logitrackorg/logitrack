@@ -15,8 +15,8 @@ function statusBgClass(status: VehicleStatus): string {
     case "disponible": return "bg-green-50";
     case "mantenimiento": return "bg-orange-50";
     case "en_transito": return "bg-violet-50";
-    case "inactivo": return "bg-gray-50";
-    default: return "bg-slate-50";
+    case "inactivo": return "dark:bg-gray-800/50 bg-gray-50";
+    default: return "dark:bg-gray-800/50 bg-slate-50";
   }
 }
 function statusBorderClass(status: VehicleStatus): string {
@@ -24,8 +24,8 @@ function statusBorderClass(status: VehicleStatus): string {
     case "disponible": return "border-green-200";
     case "mantenimiento": return "border-orange-200";
     case "en_transito": return "border-violet-200";
-    case "inactivo": return "border-gray-200";
-    default: return "border-slate-200";
+    case "inactivo": return "dark:border-gray-700 border-gray-200";
+    default: return "dark:border-gray-700 border-slate-200";
   }
 }
 function statusDotClass(status: VehicleStatus): string {
@@ -42,8 +42,8 @@ function statusTextClass(status: VehicleStatus): string {
     case "disponible": return "text-green-600";
     case "mantenimiento": return "text-orange-600";
     case "en_transito": return "text-violet-600";
-    case "inactivo": return "text-gray-600";
-    default: return "text-slate-600";
+    case "inactivo": return "dark:text-gray-400 text-gray-600";
+    default: return "dark:text-gray-400 text-slate-600";
   }
 }
 function statusBadgeClass(status: VehicleStatus): string {
@@ -51,8 +51,8 @@ function statusBadgeClass(status: VehicleStatus): string {
     case "disponible": return "bg-green-100";
     case "mantenimiento": return "bg-orange-100";
     case "en_transito": return "bg-violet-100";
-    case "inactivo": return "bg-gray-100";
-    default: return "bg-slate-100";
+    case "inactivo": return "dark:bg-gray-700/50 bg-gray-100";
+    default: return "dark:bg-gray-700/50 bg-slate-100";
   }
 }
 
@@ -210,13 +210,13 @@ export function VehicleStatus() {
               value={plate}
               onChange={(e) => setPlate(e.target.value.toUpperCase())}
               placeholder="Ej.: AB123CD"
-              className="w-full px-3.5 py-2.5 rounded-md border border-slate-300 text-base uppercase font-medium"
+              className="w-full px-3.5 py-2.5 rounded-md border dark:border-gray-600 border-slate-300 text-base uppercase font-medium"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className={`px-5 py-2.5 rounded-md border-none font-semibold text-sm text-white bg-[#1e3a5f] ${
+            className={`px-5 py-2.5 rounded-md border-none font-semibold text-sm text-white bg-[var(--sidebar-bg)] ${
               loading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
             }`}
           >
@@ -225,7 +225,7 @@ export function VehicleStatus() {
           <button
             type="button"
             onClick={handleClear}
-            className="px-5 py-2.5 rounded-md border-none font-medium text-sm cursor-pointer bg-slate-100 text-slate-800"
+            className="px-5 py-2.5 rounded-md border-none font-medium text-sm cursor-pointer dark:bg-gray-700/50 bg-slate-100 dark:text-gray-300 text-slate-800"
           >
             Limpiar
           </button>
@@ -271,15 +271,15 @@ export function VehicleStatus() {
 
       {/* Lookup result */}
       {vehicle && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="dark:bg-gray-800 bg-white border dark:border-gray-700 border-slate-200 rounded-xl overflow-hidden shadow-sm">
           {/* Header with status */}
           <div className={`p-6 ${statusBgClass(vehicle.status)} border-b-2 ${statusBorderClass(vehicle.status)}`}>
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
-                <p className="text-xs text-slate-600 m-0 uppercase tracking-wide">
+                <p className="text-xs dark:text-gray-400 text-slate-600 m-0 uppercase tracking-wide">
                   Patente
                 </p>
-                <h2 className="text-[28px] font-bold mt-1 text-slate-900">
+                <h2 className="text-[28px] font-bold mt-1 dark:text-gray-100 text-slate-900">
                   {vehicle.license_plate}
                 </h2>
               </div>
@@ -292,7 +292,7 @@ export function VehicleStatus() {
                 </div>
                 <button
                   onClick={openStatusModal}
-                  className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm text-white bg-[#1e3a5f]"
+                  className="px-4 py-2 rounded-md border-none cursor-pointer font-medium text-sm text-white bg-[var(--sidebar-bg)]"
                 >
                   Cambiar estado
                 </button>
@@ -302,7 +302,7 @@ export function VehicleStatus() {
 
           {/* Vehicle information */}
           <div className="p-6">
-            <h3 className="text-sm font-semibold text-slate-600 m-0 mb-4 uppercase tracking-wide">
+            <h3 className="text-sm font-semibold dark:text-gray-400 text-slate-600 m-0 mb-4 uppercase tracking-wide">
               Información del vehículo
             </h3>
             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
@@ -394,10 +394,10 @@ export function VehicleStatus() {
                   </svg>
                   Envíos asignados
                 </h3>
-                <p className="text-base font-semibold text-slate-900 m-0">
+                <p className="text-base font-semibold dark:text-gray-100 text-slate-900 m-0">
                   {vehicle.assigned_shipments.join(", ")}
                 </p>
-                <p className="text-xs text-slate-600 mt-1">
+                <p className="text-xs dark:text-gray-400 text-slate-600 mt-1">
                   Este vehículo tiene envíos cargados activos.
                 </p>
               </div>
@@ -425,10 +425,10 @@ export function VehicleStatus() {
           onClick={() => !changingStatus && setShowStatusModal(false)}
         >
           <div
-            className="bg-white rounded-xl p-6 max-w-[450px] w-[90%] shadow-xl"
+            className="dark:bg-gray-800 bg-white rounded-xl p-6 max-w-[450px] w-[90%] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold m-0 mb-5 text-slate-900">
+            <h2 className="text-lg font-semibold m-0 mb-5 dark:text-gray-100 text-slate-900">
               Cambiar estado del vehículo
             </h2>
 
@@ -456,7 +456,7 @@ export function VehicleStatus() {
               <select
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value as VehicleStatus)}
-                className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm bg-white"
+                className="w-full px-3 py-2 rounded-md border dark:border-gray-600 border-slate-300 text-sm dark:bg-gray-800 bg-white"
               >
                 {statusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -473,7 +473,7 @@ export function VehicleStatus() {
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Motivo del cambio de estado..."
                 rows={3}
-                className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm resize-y"
+                className="w-full px-3 py-2 rounded-md border dark:border-gray-600 border-slate-300 text-sm resize-y"
               />
             </div>
 
@@ -484,7 +484,7 @@ export function VehicleStatus() {
                 disabled={changingStatus}
                 className={`px-4 py-2 rounded-md border-none font-medium cursor-pointer text-sm ${
                   changingStatus ? "opacity-70 cursor-not-allowed" : ""
-                } bg-slate-100 text-slate-800`}
+                } dark:bg-gray-700/50 bg-slate-100 dark:text-gray-300 text-slate-800`}
               >
                 Cancelar
               </button>
@@ -492,7 +492,7 @@ export function VehicleStatus() {
                 type="button"
                 onClick={handleStatusChange}
                 disabled={changingStatus}
-                className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm bg-[#1e3a5f] ${
+                className={`px-5 py-2 rounded-md border-none font-semibold text-white text-sm bg-[var(--sidebar-bg)] ${
                   changingStatus ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
                 }`}
               >
@@ -505,7 +505,7 @@ export function VehicleStatus() {
 
       {/* Initial instructions */}
       {!vehicle && !error && !notFound && (
-        <div className="text-center py-[60px] px-5 text-slate-600">
+        <div className="text-center py-[60px] px-5 dark:text-gray-400 text-slate-600">
           <svg
             className="w-16 h-16 mx-auto mb-4 opacity-50"
             fill="none"
@@ -536,13 +536,13 @@ export function VehicleStatus() {
 
 function InfoCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
-    <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-3">
-      <div className="text-slate-600 shrink-0">{icon}</div>
+    <div className="p-4 dark:bg-gray-800/50 bg-slate-50 border dark:border-gray-700 border-slate-200 rounded-lg flex items-start gap-3">
+      <div className="dark:text-gray-400 text-slate-600 shrink-0">{icon}</div>
       <div>
-        <p className="text-xs text-slate-600 m-0 mb-1 uppercase tracking-wide">
+        <p className="text-xs dark:text-gray-400 text-slate-600 m-0 mb-1 uppercase tracking-wide">
           {label}
         </p>
-        <p className="text-base font-semibold text-slate-900 m-0">{value}</p>
+        <p className="text-base font-semibold dark:text-gray-100 text-slate-900 m-0">{value}</p>
       </div>
     </div>
   );

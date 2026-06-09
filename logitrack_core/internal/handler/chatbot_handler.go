@@ -43,22 +43,47 @@ type ChatbotHandler struct {
 	notifSvc     *service.NotificationService
 	shipmentSvc  *service.ShipmentService
 	sysConfigSvc *service.SystemConfigService
+	claimSvc     *service.ClaimService
 }
 
 func NewChatbotHandler(
-	shipmentRepo repository.ShipmentRepository, 
-	branchRepo repository.BranchRepository, 
-	notifSvc *service.NotificationService, 
+	shipmentRepo repository.ShipmentRepository,
+	branchRepo repository.BranchRepository,
+	notifSvc *service.NotificationService,
 	shipmentSvc *service.ShipmentService,
-	sysConfigSvc *service.SystemConfigService, 
+	sysConfigSvc *service.SystemConfigService,
+	claimSvc *service.ClaimService,
 ) *ChatbotHandler {
 	return &ChatbotHandler{
 		shipmentRepo: shipmentRepo,
 		branchRepo:   branchRepo,
 		notifSvc:     notifSvc,
 		shipmentSvc:  shipmentSvc,
-		sysConfigSvc: sysConfigSvc, 
+		sysConfigSvc: sysConfigSvc,
+		claimSvc:     claimSvc,
 	}
+}
+
+// ActiveClaimInfo es la info de un reclamo activo detectada en el auth del chatbot
+type ActiveClaimInfo struct {
+	ClaimID         string `json:"claim_id"`
+	Status          string `json:"status"`
+	SupervisorNotes string `json:"supervisor_notes,omitempty"`
+}
+
+// getSupervisorNotes devuelve las notas del último evento claim_pending_customer del reclamo.
+func (h *ChatbotHandler) getSupervisorNotes(claimID string) string {
+	events, err := h.claimSvc.GetEvents(claimID, "")
+	if err != nil {
+		return ""
+	}
+	var notes string
+	for _, ev := range events {
+		if ev.EventType == model.EventClaimPendingCustomer && ev.Notes != "" {
+			notes = ev.Notes
+		}
+	}
+	return notes
 }
 
 // RegisterRoutes registra las rutas públicas del chatbot (sin autenticación)
@@ -73,6 +98,10 @@ func (h *ChatbotHandler) RegisterRoutes(r *gin.RouterGroup) {
 		// Flujo remitente (LOGITRACK-457)
 		chatbot.POST("/sender/auth", h.AuthenticateSender)
 		chatbot.POST("/sender/cancel", h.CancelBySender)
+		// US5: crear reclamo desde chatbot
+		chatbot.POST("/claim", h.FileClaim)
+		// US4: responder a reclamo pending_customer
+		chatbot.POST("/claim/respond", h.RespondToClaim)
 	}
 }
 
@@ -82,12 +111,19 @@ type AuthRequest struct {
 	RecipientDNI string `json:"recipient_dni" binding:"required"`
 }
 
+// PendingClaimInfo contiene el reclamo pendiente de respuesta del cliente
+type PendingClaimInfo struct {
+	ClaimID         string `json:"claim_id"`
+	SupervisorNotes string `json:"supervisor_notes"`
+}
+
 // AuthResponse contiene los datos del envío después de autenticar
 type AuthResponse struct {
-	Success       bool           `json:"success"`
-	RecipientName string         `json:"recipient_name"`
-	Shipment      model.Shipment `json:"shipment"`
-	AvailableActions []string    `json:"available_actions"`
+	Success          bool             `json:"success"`
+	RecipientName    string           `json:"recipient_name"`
+	Shipment         model.Shipment   `json:"shipment"`
+	AvailableActions []string         `json:"available_actions"`
+	ActiveClaim      *ActiveClaimInfo `json:"active_claim,omitempty"`
 }
 
 // Authenticate valida el tracking ID y DNI del destinatario (US1)
@@ -124,6 +160,27 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 	// Determinar acciones disponibles
 	actions := h.getAvailableActions(shipment)
 
+	// Detectar reclamo activo de este destinatario para este envío
+	var activeClaim *ActiveClaimInfo
+	if h.claimSvc != nil {
+		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(shipment.TrackingID, req.RecipientDNI); err == nil {
+			activeClaim = &ActiveClaimInfo{
+				ClaimID: claim.ID,
+				Status:  string(claim.Status),
+			}
+			if claim.Status == model.ClaimStatusPendingCustomer {
+				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
+				actions = append(actions, "respond_claim")
+			}
+		} else {
+			// Sin reclamo activo propio: ofrecer la acción de crear uno
+			s := string(shipment.Status)
+			if s != "draft" && s != "cancelled" && s != "returned" {
+				actions = append(actions, "file_claim")
+			}
+		}
+	}
+
 	// Obtener nombre del destinatario
 	recipientName := shipment.Recipient.Name
 	if shipment.Corrections != nil && shipment.Corrections.RecipientName != nil {
@@ -135,6 +192,7 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 		RecipientName:    recipientName,
 		Shipment:         shipment,
 		AvailableActions: actions,
+		ActiveClaim:      activeClaim,
 	})
 }
 
@@ -527,10 +585,11 @@ type SenderAuthRequest struct {
 
 // SenderAuthResponse contiene los datos del envío tras autenticar al remitente
 type SenderAuthResponse struct {
-	Success          bool           `json:"success"`
-	SenderName       string         `json:"sender_name"`
-	Shipment         model.Shipment `json:"shipment"`
-	AvailableActions []string       `json:"available_actions"`
+	Success          bool             `json:"success"`
+	SenderName       string           `json:"sender_name"`
+	Shipment         model.Shipment   `json:"shipment"`
+	AvailableActions []string         `json:"available_actions"`
+	ActiveClaim      *ActiveClaimInfo `json:"active_claim,omitempty"`
 }
 
 // SenderCancelRequest es el payload para que el remitente cancele el envío
@@ -562,11 +621,32 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 		actions = append(actions, "cancel")
 	}
 
+	// Detectar reclamo activo de este remitente para este envío
+	var activeClaim *ActiveClaimInfo
+	if h.claimSvc != nil {
+		if claim, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(shipment.TrackingID, req.SenderDNI); err == nil {
+			activeClaim = &ActiveClaimInfo{
+				ClaimID: claim.ID,
+				Status:  string(claim.Status),
+			}
+			if claim.Status == model.ClaimStatusPendingCustomer {
+				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
+				actions = append(actions, "respond_claim")
+			}
+		} else {
+			s := string(shipment.Status)
+			if s != "draft" && s != "cancelled" && s != "returned" {
+				actions = append(actions, "file_claim")
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, SenderAuthResponse{
 		Success:          true,
 		SenderName:       shipment.Sender.Name,
 		Shipment:         shipment,
 		AvailableActions: actions,
+		ActiveClaim:      activeClaim,
 	})
 }
 
@@ -612,6 +692,61 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 	return actions
 }*/
 
+// RespondToClaim procesa la respuesta del cliente a un reclamo pending_customer (US-4)
+func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
+	claimID := strings.TrimSpace(c.PostForm("claim_id"))
+	claimantDNI := strings.TrimSpace(c.PostForm("claimant_dni"))
+	responseText := strings.TrimSpace(c.PostForm("response_text"))
+
+	if claimID == "" || claimantDNI == "" || responseText == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "claim_id, claimant_dni y response_text son requeridos"})
+		return
+	}
+
+	var evidenceSvc *service.ClaimEvidenceUpload
+	if file, err := c.FormFile("evidence"); err == nil {
+		f, err := file.Open()
+		if err == nil {
+			defer f.Close()
+			data := make([]byte, file.Size)
+			if _, err := f.Read(data); err == nil {
+				evidenceSvc = &service.ClaimEvidenceUpload{
+					FileName: file.Filename,
+					MimeType: file.Header.Get("Content-Type"),
+					Data:     data,
+				}
+			}
+		}
+	}
+
+	if h.claimSvc == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "servicio no disponible"})
+		return
+	}
+
+	claim, err := h.claimSvc.RespondToClaimInfoRequest(claimID, claimantDNI, responseText, evidenceSvc)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Notificación interna al supervisor (usando la sucursal de origen del envío)
+	go func() {
+		branchID := ""
+		if shipment, err := h.shipmentRepo.GetByTrackingID(claim.TrackingID); err == nil {
+			branchID = shipment.OriginBranchID
+		}
+		h.notifSvc.NotifyClaimCustomerResponded(claim, branchID)
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"claim_id": claim.ID,
+		"status":   claim.Status,
+		"message":  "Tu respuesta fue enviada. El equipo la revisará y te avisaremos cuando haya novedades.",
+	})
+}
+
 // ✅ CÓDIGO NUEVO:
 func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	actions := []string{}
@@ -636,4 +771,126 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	}
 
 	return actions
+}
+// FileClaimRequest es el payload para crear un reclamo desde el chatbot
+type FileClaimRequest struct {
+	TrackingID    string   `json:"tracking_id" binding:"required"`
+	ClaimantDNI   string   `json:"claimant_dni" binding:"required"`
+	ClaimantName  string   `json:"claimant_name" binding:"required"`
+	ClaimType     string   `json:"claim_type" binding:"required"`
+	DamageSubtypes []string `json:"damage_subtypes"`
+	Description   string   `json:"description" binding:"required"`
+}
+
+// FileClaimResponse es la respuesta tras crear un reclamo
+type FileClaimResponse struct {
+	Success bool   `json:"success"`
+	ClaimID string `json:"claim_id"`
+	Message string `json:"message"`
+}
+
+// FileClaim permite al cliente crear un reclamo desde el chatbot (US5).
+func (h *ChatbotHandler) FileClaim(c *gin.Context) {
+	// Soporta multipart (con evidencia) y JSON (sin evidencia)
+	var trackingID, claimantDNI, claimantName, claimType, description string
+	var damageSubtypes []string
+	var evidenceUpload *service.ClaimEvidenceUpload
+
+	contentType := c.ContentType()
+	if strings.Contains(contentType, "multipart/form-data") {
+		trackingID = strings.TrimSpace(c.PostForm("tracking_id"))
+		claimantDNI = strings.TrimSpace(c.PostForm("claimant_dni"))
+		claimantName = strings.TrimSpace(c.PostForm("claimant_name"))
+		claimType = strings.TrimSpace(c.PostForm("claim_type"))
+		description = strings.TrimSpace(c.PostForm("description"))
+		damageSubtypes = strings.Split(c.PostForm("damage_subtypes"), ",")
+
+		if fh, err := c.FormFile("evidence"); err == nil {
+			f, err := fh.Open()
+			if err == nil {
+				defer f.Close()
+				data := make([]byte, fh.Size)
+				if _, err := f.Read(data); err == nil {
+					evidenceUpload = &service.ClaimEvidenceUpload{
+						FileName: fh.Filename,
+						MimeType: fh.Header.Get("Content-Type"),
+						Data:     data,
+					}
+				}
+			}
+		}
+	} else {
+		var req FileClaimRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
+			return
+		}
+		trackingID = req.TrackingID
+		claimantDNI = req.ClaimantDNI
+		claimantName = req.ClaimantName
+		claimType = req.ClaimType
+		description = req.Description
+		damageSubtypes = req.DamageSubtypes
+	}
+
+	if h.claimSvc == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Servicio no disponible"})
+		return
+	}
+
+	// Verificar si este mismo reclamante ya tiene un reclamo activo para este envío.
+	// Un reclamo de otra parte (ej: remitente vs destinatario) no bloquea.
+	if existing, err := h.claimSvc.GetLatestActiveClaimByTrackingIDAndDNI(trackingID, claimantDNI); err == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":    fmt.Sprintf("Ya tenés un reclamo abierto (%s) en estado '%s'. No podés abrir otro hasta que se resuelva.", existing.ID, existing.Status),
+			"claim_id": existing.ID,
+			"status":   string(existing.Status),
+		})
+		return
+	}
+
+	// Validar que si el tipo es daño con producto dañado, se adjuntó evidencia
+	if model.ClaimType(claimType) == model.ClaimTypeDamage {
+		hasProdDamaged := false
+		for _, st := range damageSubtypes {
+			if strings.TrimSpace(st) == "product_damaged" {
+				hasProdDamaged = true
+				break
+			}
+		}
+		if hasProdDamaged && evidenceUpload == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Para producto dañado es obligatorio adjuntar evidencia fotográfica"})
+			return
+		}
+	}
+
+	// Determinar si el reclamante es remitente o destinatario para formatear created_by
+	createdBy := "chatbot-customer:" + claimantDNI
+	if s, err := h.shipmentRepo.GetByTrackingID(trackingID); err == nil {
+		if strings.TrimSpace(s.Sender.DNI) == strings.TrimSpace(claimantDNI) {
+			createdBy = "chatbot-sender:" + claimantDNI
+		}
+	}
+	_ = claimantName // nombre usado solo en contexto de autenticación previa
+
+	req := model.CreatePublicClaimRequest{
+		TrackingID:  trackingID,
+		DNI:         claimantDNI,
+		CreatedBy:   createdBy,
+		ClaimType:   model.ClaimType(claimType),
+		Description: description,
+	}
+
+	claim, err := h.claimSvc.CreatePublicClaim(req, evidenceUpload)
+	if err != nil {
+		log.Printf("[chatbot] FileClaim error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, FileClaimResponse{
+		Success: true,
+		ClaimID: claim.ID,
+		Message: fmt.Sprintf("Tu reclamo %s fue registrado correctamente. Te notificaremos cuando haya novedades.", claim.ID),
+	})
 }

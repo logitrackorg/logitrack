@@ -4,11 +4,12 @@ import "time"
 
 // Claim domain event types (persisted in claim_events).
 const (
-	EventClaimCreated         = "claim_created"
-	EventClaimCategoryUpdated = "claim_category_updated"
-	EventClaimResolved        = "claim_resolved"
-	EventClaimPendingCustomer = "claim_pending_customer"
-	EventClaimInReview        = "claim_in_review"
+	EventClaimCreated           = "claim_created"
+	EventClaimCategoryUpdated   = "claim_category_updated"
+	EventClaimResolved          = "claim_resolved"
+	EventClaimPendingCustomer   = "claim_pending_customer"
+	EventClaimInReview          = "claim_in_review"
+	EventClaimCustomerResponded = "claim_customer_responded"
 )
 
 // ClaimEvent is the API representation of a claim timeline entry.
@@ -24,6 +25,8 @@ type ClaimEvent struct {
 	ResolutionType   ClaimResolutionType `json:"resolution_type,omitempty"`
 	FromStatus       ClaimStatus         `json:"from_status,omitempty"`
 	ToStatus         ClaimStatus         `json:"to_status,omitempty"`
+	EvidenceFileName string              `json:"evidence_file_name,omitempty"`
+	EvidenceFilePath string              `json:"evidence_file_path,omitempty"`
 }
 
 type ClaimCreatedPayload struct {
@@ -54,4 +57,12 @@ type ClaimPendingCustomerPayload struct {
 type ClaimInReviewPayload struct {
 	FromStatus ClaimStatus `json:"from_status"`
 	ToStatus   ClaimStatus `json:"to_status"`
+}
+
+type ClaimCustomerRespondedPayload struct {
+	Response         string      `json:"response"`
+	FromStatus       ClaimStatus `json:"from_status"`
+	ToStatus         ClaimStatus `json:"to_status"`
+	EvidenceFileName string      `json:"evidence_file_name,omitempty"`
+	EvidenceFilePath string      `json:"evidence_file_path,omitempty"`
 }

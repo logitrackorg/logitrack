@@ -31,7 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_COLORS: Record<string, string> = {
   express: "#f97316",
-  normal: "#2563eb",
+  normal: "var(--brand)",
 };
 
 const TYPE_BG: Record<string, string> = {
@@ -41,7 +41,7 @@ const TYPE_BG: Record<string, string> = {
 
 const TYPE_ORDER = ["express", "normal"];
 
-export default function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTabProps) {
+export function TipoEnvioTab({ dateFrom, dateTo, branchId }: TipoEnvioTabProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [total, setTotal] = useState(0);

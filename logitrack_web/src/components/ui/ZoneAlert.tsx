@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import type { Zone } from "../../api/zones";
+import { Button } from "@/components/ui/button";
 
 interface ZoneAlertProps {
   zones: Zone[];
@@ -44,36 +45,38 @@ export function ZoneAlert({ zones, onDismissedChange }: ZoneAlertProps) {
      *   - z-20 queda por debajo del z-30 de los controles del simulador.
      */
     <div
-      className={[
-        "zone-alert",
-        // Asegura que no intercepte eventos fuera de su área visual
-        "w-fit max-w-[calc(100%-2rem)] pointer-events-auto",
-      ].join(" ")}
+      className="fixed top-[92px] left-1/2 -translate-x-1/2 z-[1600] w-fit max-w-[calc(100%-2rem)] pointer-events-auto"
       role="alert"
       aria-live="assertive"
     >
-      <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+      <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 shadow-[0_4px_20px_rgba(239,68,68,0.25)] animate-[zone-pulse_2s_ease-in-out_infinite] dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
+        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
 
-      <div className="zone-alert-content">
-        <p className="zone-alert-title">ZONA PELIGROSA</p>
-        <p className="zone-alert-desc">
-          {first.name}
-          {first.description ? ` — ${first.description}` : ""}
-        </p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-xs uppercase tracking-wide">ZONA PELIGROSA</p>
+          <p className="text-xs mt-0.5 truncate">
+            {first.name}
+            {first.description ? ` — ${first.description}` : ""}
+          </p>
+        </div>
+
+        {activeZones.length > 1 && (
+          <span className="shrink-0 bg-red-100 text-red-700 rounded-full px-1.5 py-0.5 text-[10px] font-semibold dark:bg-red-500/20 dark:text-red-300">
+            +{activeZones.length - 1}
+          </span>
+        )}
+
+        {/* Botón de cierre */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsDismissed(true)}
+          aria-label="Cerrar aviso de zona peligrosa"
+          className="ml-2 shrink-0 w-6 h-6 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-full"
+        >
+          <X className="w-3.5 h-3.5" />
+        </Button>
       </div>
-
-      {activeZones.length > 1 && (
-        <span className="zone-alert-count">+{activeZones.length - 1}</span>
-      )}
-
-      {/* Botón de cierre */}
-      <button
-        onClick={() => setIsDismissed(true)}
-        aria-label="Cerrar aviso de zona peligrosa"
-        className="ml-2 shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors cursor-pointer"
-      >
-        <X className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }

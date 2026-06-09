@@ -30,6 +30,20 @@ type TwoFARepository interface {
 	MarkCodeAsUsed(ctx context.Context, userID, code string) error
 	IsCodeUsed(ctx context.Context, userID, code string) (bool, error)
 	CleanupExpiredCodes(ctx context.Context) error
+
+	// Lockout por intentos fallidos (login — por sesión)
+	IncrementFailedAttempts(ctx context.Context, token string, lockUntil *time.Time) error
+	GetSessionLockStatus(ctx context.Context, token string) (attempts int, lockedUntil *time.Time, err error)
+
+	// Lockout por intentos fallidos (setup — por usuario)
+	IncrementSetupFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error
+	GetSetupLockStatus(ctx context.Context, userID string) (attempts int, lockedUntil *time.Time, err error)
+	ResetSetupFailedAttempts(ctx context.Context, userID string) error
+
+	// Lockout por intentos fallidos de login (verify — por usuario, persiste entre sesiones)
+	IncrementLoginFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error
+	GetLoginLockStatus(ctx context.Context, userID string) (attempts int, lockedUntil *time.Time, err error)
+	ResetLoginFailedAttempts(ctx context.Context, userID string) error
 }
 
 type twoFARepository struct {
@@ -105,10 +119,11 @@ func (r *twoFARepository) CreatePendingSession(ctx context.Context, userID strin
 func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token string) (model.User, error) {
 	var user model.User
 	var twoFAEnrolledAt sql.NullTime
-	
+	var email, phone, branchID, driverType sql.NullString
+
 	err := r.db.QueryRowContext(ctx,
 		`SELECT u.id, u.username, u.first_name, u.last_name, u.email, u.phone,
-		        u.role, u.branch_id, u.status, u.driver_type, 
+		        u.role, u.branch_id, u.status, u.driver_type,
 		        u.two_fa_enabled, u.two_fa_enrolled_at
 		FROM users u
 		INNER JOIN two_fa_pending_sessions s ON s.user_id = u.id
@@ -116,8 +131,8 @@ func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token str
 		token,
 	).Scan(
 		&user.ID, &user.Username, &user.FirstName, &user.LastName,
-		&user.Email, &user.Phone, &user.Role, &user.BranchID,
-		&user.Status, &user.DriverType, &user.TwoFAEnabled, &twoFAEnrolledAt,
+		&email, &phone, &user.Role, &branchID,
+		&user.Status, &driverType, &user.TwoFAEnabled, &twoFAEnrolledAt,
 	)
 	
 	if err != nil {
@@ -127,10 +142,22 @@ func (r *twoFARepository) GetUserByPendingSession(ctx context.Context, token str
 		return model.User{}, err
 	}
 	
+	if email.Valid {
+		user.Email = email.String
+	}
+	if phone.Valid {
+		user.Phone = phone.String
+	}
+	if branchID.Valid {
+		user.BranchID = branchID.String
+	}
+	if driverType.Valid {
+		user.DriverType = model.DriverType(driverType.String)
+	}
 	if twoFAEnrolledAt.Valid {
 		user.TwoFAEnrolledAt = &twoFAEnrolledAt.Time
 	}
-	
+
 	return user, nil
 }
 
@@ -168,6 +195,106 @@ func (r *twoFARepository) IsCodeUsed(ctx context.Context, userID, code string) (
 func (r *twoFARepository) CleanupExpiredCodes(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx,
 		`DELETE FROM two_fa_used_codes WHERE used_at < NOW() - INTERVAL '2 minutes'`,
+	)
+	return err
+}
+
+func (r *twoFARepository) IncrementFailedAttempts(ctx context.Context, token string, lockUntil *time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE two_fa_pending_sessions
+		 SET failed_attempts = failed_attempts + 1,
+		     locked_until    = $2
+		 WHERE token = $1`,
+		token, lockUntil,
+	)
+	return err
+}
+
+func (r *twoFARepository) GetSessionLockStatus(ctx context.Context, token string) (int, *time.Time, error) {
+	var attempts int
+	var lockedUntil sql.NullTime
+	err := r.db.QueryRowContext(ctx,
+		`SELECT failed_attempts, locked_until FROM two_fa_pending_sessions WHERE token = $1`,
+		token,
+	).Scan(&attempts, &lockedUntil)
+	if err != nil {
+		return 0, nil, err
+	}
+	if lockedUntil.Valid {
+		t := lockedUntil.Time
+		return attempts, &t, nil
+	}
+	return attempts, nil, nil
+}
+
+func (r *twoFARepository) IncrementSetupFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users
+		 SET two_fa_setup_failed_attempts = two_fa_setup_failed_attempts + 1,
+		     two_fa_setup_locked_until    = $2
+		 WHERE id = $1`,
+		userID, lockUntil,
+	)
+	return err
+}
+
+func (r *twoFARepository) GetSetupLockStatus(ctx context.Context, userID string) (int, *time.Time, error) {
+	var attempts int
+	var lockedUntil sql.NullTime
+	err := r.db.QueryRowContext(ctx,
+		`SELECT two_fa_setup_failed_attempts, two_fa_setup_locked_until FROM users WHERE id = $1`,
+		userID,
+	).Scan(&attempts, &lockedUntil)
+	if err != nil {
+		return 0, nil, err
+	}
+	if lockedUntil.Valid {
+		t := lockedUntil.Time
+		return attempts, &t, nil
+	}
+	return attempts, nil, nil
+}
+
+func (r *twoFARepository) ResetSetupFailedAttempts(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET two_fa_setup_failed_attempts = 0, two_fa_setup_locked_until = NULL WHERE id = $1`,
+		userID,
+	)
+	return err
+}
+
+func (r *twoFARepository) IncrementLoginFailedAttempts(ctx context.Context, userID string, lockUntil *time.Time) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users
+		 SET two_fa_login_failed_attempts = two_fa_login_failed_attempts + 1,
+		     two_fa_login_locked_until    = $2
+		 WHERE id = $1`,
+		userID, lockUntil,
+	)
+	return err
+}
+
+func (r *twoFARepository) GetLoginLockStatus(ctx context.Context, userID string) (int, *time.Time, error) {
+	var attempts int
+	var lockedUntil sql.NullTime
+	err := r.db.QueryRowContext(ctx,
+		`SELECT two_fa_login_failed_attempts, two_fa_login_locked_until FROM users WHERE id = $1`,
+		userID,
+	).Scan(&attempts, &lockedUntil)
+	if err != nil {
+		return 0, nil, err
+	}
+	if lockedUntil.Valid {
+		t := lockedUntil.Time
+		return attempts, &t, nil
+	}
+	return attempts, nil, nil
+}
+
+func (r *twoFARepository) ResetLoginFailedAttempts(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET two_fa_login_failed_attempts = 0, two_fa_login_locked_until = NULL WHERE id = $1`,
+		userID,
 	)
 	return err
 }
