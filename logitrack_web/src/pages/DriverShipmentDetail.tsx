@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
-  Clock, MapPin, MessageCircle, Phone, User, XCircle,
+  Clock, MapPin, MessageCircle, Phone, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
@@ -202,6 +202,11 @@ export function DriverShipmentDetail() {
               )}
             </div>
           </div>
+          <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1.5">
+            <p className="text-[11px] text-[var(--text-muted)] truncate">
+              Remitente: {senderName}{senderPhone ? ` · ${senderPhone}` : ""}
+            </p>
+          </div>
           <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
             <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
               <Phone size={15} />Llamar
@@ -230,14 +235,6 @@ export function DriverShipmentDetail() {
           </div>
         )}
 
-        {/* Sender */}
-        <div className="rounded-xl border border-[var(--border)] p-3 flex items-center gap-2.5">
-          <User className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">{senderName}</p>
-            {senderPhone && <p className="text-xs text-[var(--text-muted)] mt-0.5">{senderPhone}</p>}
-          </div>
-        </div>
       </div>
 
       {/* Sticky CTAs */}
