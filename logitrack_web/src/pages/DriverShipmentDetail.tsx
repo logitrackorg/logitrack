@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronDown, ChevronLeft,
-  Clock, MapPin, MessageCircle, Package, Phone, User, XCircle,
+  Clock, MapPin, MessageCircle, Phone, User, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
