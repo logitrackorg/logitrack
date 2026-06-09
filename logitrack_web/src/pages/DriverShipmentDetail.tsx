@@ -162,7 +162,7 @@ export function DriverShipmentDetail() {
           <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             <ChevronLeft className="w-5 h-5" /> Mi ruta
           </Button>
-          <StatusBadge status={shipment.status} label={statusOverride ?? (shipment.status === "out_for_delivery" ? "En reparto" : undefined)} />
+          <StatusBadge status={shipment.status} label={statusOverride} />
         </div>
 
         {/* Tracking ID */}
