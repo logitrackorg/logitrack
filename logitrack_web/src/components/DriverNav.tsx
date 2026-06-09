@@ -1,57 +1,106 @@
-import { NavLink } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { User, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface DriverNavProps {
   title: string;
-  subtitle?: string;
 }
 
 export function DriverNav({ title }: DriverNavProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
   const logoUrl = org?.logo_url?.trim();
+  const navigate = useNavigate();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onClick);
+    };
+  }, [menuOpen]);
 
   if (!user) return null;
 
   const initials = user.username.slice(0, 2).toUpperCase();
+  const roleLabel = user.driver_type === "intersucursal" ? "Chofer Intersucursal" : "Chofer";
 
   return (
-    <header className="sticky top-0 z-50 h-14 bg-[var(--sidebar-bg)] text-white flex items-center px-4 gap-3">
-      {/* Left: logo + org name */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt={orgName}
-            className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10"
-          />
-        ) : (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
-            {orgName.slice(0, 2).toUpperCase()}
-          </div>
-        )}
-        <span className="font-extrabold text-[15px] tracking-[0.5px] text-white/90 truncate max-w-[100px]" title={orgName}>
-          {orgName}
-        </span>
-      </div>
+    <header className="sticky top-0 z-50 h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3">
+      {/* Left: org logo */}
+      {logoUrl ? (
+        <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10" />
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-extrabold text-sm shrink-0">
+          {orgName.slice(0, 2).toUpperCase()}
+        </div>
+      )}
 
       {/* Center: page title */}
-      <h1 className="text-[15px] font-bold text-white/90 leading-tight truncate max-w-[160px] text-center shrink-0">
+      <h1 className="flex-1 text-center text-[15px] font-bold text-white leading-tight truncate">
         {title}
       </h1>
 
-      {/* Right: avatar → /profile */}
-      <NavLink
-        to="/profile"
-        className="no-underline shrink-0"
-        title={user.username}
-      >
-        <div className="min-h-[44px] min-w-[44px] rounded-full bg-[var(--brand)] flex items-center justify-center text-white font-bold text-sm">
+      {/* Right: avatar → dropdown */}
+      <div className="relative shrink-0" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className="min-h-[44px] min-w-[44px] rounded-full bg-[var(--brand)] flex items-center justify-center text-white font-bold text-sm cursor-pointer border-0"
+          aria-label="Abrir menú de usuario"
+        >
           {initials}
-        </div>
-      </NavLink>
+        </button>
+
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] shadow-xl z-50 overflow-hidden">
+            {/* Header: nombre + rol + org */}
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <p className="text-sm font-bold text-[var(--text-primary)]">{user.username}</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">{roleLabel}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">{orgName}</p>
+            </div>
+
+            {/* Theme toggle */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--border)]">
+              <span className="text-sm text-[var(--text-primary)]">Modo oscuro</span>
+              <ThemeToggle compact />
+            </div>
+
+            {/* Mi perfil */}
+            <button
+              onClick={() => { setMenuOpen(false); navigate("/profile"); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+            >
+              <User size={16} className="text-[var(--text-secondary)]" />
+              Mi perfil
+            </button>
+
+            {/* Separator + logout */}
+            <div className="border-t border-[var(--border)]">
+              <button
+                onClick={() => { setMenuOpen(false); logout(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+              >
+                <LogOut size={16} />
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
