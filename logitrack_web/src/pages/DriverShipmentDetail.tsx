@@ -147,6 +147,13 @@ export function DriverShipmentDetail() {
   const senderPhone = cor.sender_phone ?? shipment.sender.phone;
   const statusOverride = shipmentStatusLabelOverride(shipment);
 
+  const fmtPhone = (raw: string) => {
+    const d = raw.replace(/\D/g, "");
+    if (d.length === 10) return `${d.slice(0,4)}-${d.slice(4)}`;
+    if (d.length >= 11) return `${d.slice(0,2)} ${d.slice(2,6)}-${d.slice(6)}`;
+    return raw;
+  };
+
   return (
     <DriverShell title="Detalle de envío">
       <div className="px-4 pt-2 pb-[190px] space-y-3">
@@ -155,7 +162,7 @@ export function DriverShipmentDetail() {
           <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             <ChevronLeft className="w-5 h-5" /> Mi ruta
           </Button>
-          <StatusBadge status={shipment.status} label={statusOverride} />
+          <StatusBadge status={shipment.status} label={statusOverride ?? (shipment.status === "out_for_delivery" ? "En reparto" : undefined)} />
         </div>
 
         {/* Tracking ID */}
@@ -204,7 +211,7 @@ export function DriverShipmentDetail() {
           </div>
           <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1.5">
             <p className="text-[11px] text-[var(--text-muted)] truncate">
-              Remitente: {senderName}{senderPhone ? ` · ${senderPhone}` : ""}
+              Remitente: {senderName}{senderPhone ? ` · ${fmtPhone(senderPhone)}` : ""}
             </p>
           </div>
           <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
