@@ -22,6 +22,8 @@ export interface DeliverSheetProps {
   needsLocation: boolean;
   onRequestLocation: () => void;
   error: string;
+  effectiveSpeed?: number;
+  speedSource?: string;
 }
 
 export function DeliverSheet({

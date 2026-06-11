@@ -17,6 +17,8 @@ interface FailedSheetProps {
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  effectiveSpeed?: number;
+  speedSource?: string;
 }
 
 export function FailedSheet({

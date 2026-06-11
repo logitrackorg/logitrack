@@ -18,6 +18,8 @@ interface RejectedSheetProps {
   blockMessage: string;
   needsLocation: boolean;
   onRequestLocation: () => void;
+  effectiveSpeed?: number;
+  speedSource?: string;
 }
 
 export function RejectedSheet({
@@ -65,7 +67,7 @@ export function RejectedSheet({
                   : "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50",
               )}
             >
-              <r.icon className="w-5 h-5" />
+              <span className="text-lg">{r.emoji}</span>
               <span className="text-xs leading-tight text-center">{r.label}</span>
             </Button>
           );
