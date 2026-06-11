@@ -475,7 +475,7 @@ export function MapView({
   const isSimulating = simulationMode && simulationMode !== "real";
 
   return (
-    <div className="relative h-[55vh] min-h-[350px] w-full rounded-xl overflow-hidden">
+    <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
       <div ref={mapRef} className="h-full w-full" />
 
       {/* Simulation banner */}
