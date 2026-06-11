@@ -12,6 +12,7 @@ import {
   Play,
   RotateCcw,
   Crosshair,
+  FastForward,
   Film,
   Zap,
   X,
@@ -475,7 +476,7 @@ export function MapView({
   const isSimulating = simulationMode && simulationMode !== "real";
 
   return (
-    <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
+    <div className="relative z-0 h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
       <div ref={mapRef} className="h-full w-full" />
 
       {/* Simulation banner */}
@@ -505,8 +506,8 @@ export function MapView({
                 </button>
               )}
               {simulationControls.onFastForwardTime && (
-                <button onClick={simulationControls.onFastForwardTime} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]" title="Simular paso de 2 horas (test de fatiga)">
-                  ⏩ +2h
+                <button onClick={simulationControls.onFastForwardTime} className="inline-flex items-center gap-1 p-[3px_8px] rounded-full border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.12)] text-white text-[11px] font-semibold cursor-pointer transition-colors duration-150 hover:bg-[rgba(255,255,255,0.22)]"                   title="Simular paso de 2 horas (test de fatiga)">
+                  <FastForward className="w-3 h-3" /> +2h
                 </button>
               )}
               {simulationControls.onExit && (
@@ -522,7 +523,7 @@ export function MapView({
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-4 bottom-[200px] z-[1000] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-4 bottom-4 z-[1000] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 shadow-lg ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"

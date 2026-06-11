@@ -49,7 +49,7 @@ export function ZoneAlert({ zones, onDismissedChange }: ZoneAlertProps) {
       role="alert"
       aria-live="assertive"
     >
-      <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-red-800 shadow-[0_4px_20px_rgba(239,68,68,0.25)] animate-[zone-pulse_2s_ease-in-out_infinite] dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300">
+      <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3 text-red-800 dark:text-red-300 shadow-[0_4px_20px_rgba(239,68,68,0.25)] animate-[zone-pulse_2s_ease-in-out_infinite]">
         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
 
         <div className="flex-1 min-w-0">
@@ -61,7 +61,7 @@ export function ZoneAlert({ zones, onDismissedChange }: ZoneAlertProps) {
         </div>
 
         {activeZones.length > 1 && (
-          <span className="shrink-0 bg-red-100 text-red-700 rounded-full px-1.5 py-0.5 text-[10px] font-semibold dark:bg-red-500/20 dark:text-red-300">
+          <span className="shrink-0 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
             +{activeZones.length - 1}
           </span>
         )}
