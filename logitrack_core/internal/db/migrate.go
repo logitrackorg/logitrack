@@ -719,6 +719,11 @@ func RunMigrations(db *sql.DB) error {
 
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
+
+		-- Detector de falta de sucursal: umbral de área de cobertura por celda Voronoi.
+		-- Una celda cuya área supera este valor (km²) se marca como zona sub-cubierta (gap).
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1500;
+		UPDATE system_config SET max_coverage_area_km2 = 1500 WHERE id = 1 AND max_coverage_area_km2 = 0;
 	`)
 	return err
 }

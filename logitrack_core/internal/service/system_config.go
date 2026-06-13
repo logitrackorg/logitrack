@@ -43,7 +43,11 @@ func (s *SystemConfigService) Update(cfg model.SystemConfig) (model.SystemConfig
 	if cfg.MaxRescheduleDays < 1 || cfg.MaxRescheduleDays > 7 {
 		return model.SystemConfig{}, fmt.Errorf("max_reschedule_days debe estar entre 1 y 7")
 	}
-	
+
+	if cfg.MaxCoverageAreaKm2 < 100 || cfg.MaxCoverageAreaKm2 > 500000 {
+		return model.SystemConfig{}, fmt.Errorf("max_coverage_area_km2 debe estar entre 100 y 500000")
+	}
+
 	// CA01: Guardar configuración
 	if err := s.repo.Update(cfg); err != nil {
 		return model.SystemConfig{}, err

@@ -9,6 +9,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuth } from "../context/AuthContext";
 import { AddressAutocomplete, type AddressParts } from "../components/AddressAutocomplete";
 import { pricingApi, formatCurrencyARS, type QuoteResponse } from "../api/pricing";
+import { coverageApi, type BranchRecommendation, GAP_STYLE } from "../api/coverage";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { GradientCard, GradientCardIcon, GradientCardLabel, GradientCardValue } from "../components/ui/gradient-card";
 import PaymentMethodsPanel from "../components/PaymentMethodsPanel";
@@ -206,6 +207,24 @@ export function NewShipment() {
     if (!form.receiving_branch_id) return;
     branchApi.getCapacity(form.receiving_branch_id).then(setBranchCapacity).catch(() => {});
   }, [form.receiving_branch_id]);
+
+  // Sugerencia de cobertura (no intrusiva): cuando el destinatario tiene
+  // coordenadas, consulta la sucursal óptima y si la zona está sub-cubierta.
+  const [coverageRec, setCoverageRec] = useState<BranchRecommendation | null>(null);
+  const recipLat = form.recipient.address.latitude;
+  const recipLng = form.recipient.address.longitude;
+  useEffect(() => {
+    if (recipLat == null || recipLng == null) {
+      setCoverageRec(null);
+      return;
+    }
+    let cancelled = false;
+    coverageApi
+      .branchForPoint(recipLat, recipLng)
+      .then((rec) => { if (!cancelled) setCoverageRec(rec); })
+      .catch(() => { if (!cancelled) setCoverageRec(null); });
+    return () => { cancelled = true; };
+  }, [recipLat, recipLng]);
 
   // Live pricing quote — debounced 400ms when relevant fields change.
   useEffect(() => {
@@ -730,6 +749,16 @@ export function NewShipment() {
                   <p className="text-sm font-semibold text-[var(--sidebar-bg)]">{finalBranch.name}</p>
                   <p className="text-xs dark:text-gray-400 text-slate-600 mt-0.5">{finalBranch.address.street}, {finalBranch.address.city}</p>
                   <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">Sucursal más cercana al domicilio del destinatario.</p>
+                  {coverageRec?.is_gap && coverageRec.gap_severity && (
+                    <div className={`mt-2 flex items-start gap-1.5 rounded-md px-2 py-1.5 text-[11px] ${GAP_STYLE[coverageRec.gap_severity].badge}`}>
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        Zona con cobertura limitada: el domicilio queda lejos de la sucursal más cercana
+                        ({Math.round(coverageRec.area_km2).toLocaleString("es-AR")} km² de área de servicio).
+                        La entrega de última milla puede demorar más.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );

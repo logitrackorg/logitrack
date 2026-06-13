@@ -29,6 +29,11 @@ type SystemConfig struct {
 	MaxReschedules int `json:"max_reschedules"`
 	MaxRescheduleDays  int `json:"max_reschedule_days"`
 	TwoFACooldownMinutes int `json:"two_fa_cooldown_minutes" db:"two_fa_cooldown_minutes"`
+
+	// MaxCoverageAreaKm2 is the branch-coverage threshold for the gap detector.
+	// A Voronoi cell whose service area exceeds this value (in km²) is flagged as
+	// an under-covered zone. Default: 1500. Range: 100–500000.
+	MaxCoverageAreaKm2 float64 `json:"max_coverage_area_km2" db:"max_coverage_area_km2"`
 }
 
 func DefaultSystemConfig() SystemConfig {
@@ -42,5 +47,6 @@ func DefaultSystemConfig() SystemConfig {
 		MaxReschedules:          2, 
 		MaxRescheduleDays:       3,
 		TwoFACooldownMinutes: 1,
+		MaxCoverageAreaKm2:   1500,
 	}
 }
