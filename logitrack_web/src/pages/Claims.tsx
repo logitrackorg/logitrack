@@ -601,104 +601,110 @@ export function Claims() {
                   {!isManager && (() => {
                     const isTerminal = String(claim.status).startsWith("resolved_");
                     const isTransferred = claim.status === "transferred";
-                    const isBlockedForActions = isTerminal || isTransferred;
                     const isReceivedTransfer = isTransferred && claim.assigned_branch_id === myBranchId;
                     return (
                       <div className="grid gap-3 border-t dark:border-gray-700 border-slate-200 pt-4">
-                        {/* Derivar a área interna */}
-                        <div className="flex flex-wrap gap-2.5 items-end">
-                          <label className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
-                          <select
-                            value={categoryDraft[claim.id] ?? ""}
-                            onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
-                            disabled={isBlockedForActions}
-                            className="min-w-[240px] border dark:border-gray-700 border-slate-200 rounded-xl px-3 py-2.5 text-xs dark:bg-gray-800 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-50"
-                          >
-                            <option value="">Seleccionar área</option>
-                            {CATEGORY_OPTIONS.map((cat) => (
-                              <option key={cat.value} value={cat.value}>{cat.label}</option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateCategory(claim.id)}
-                            disabled={!categoryDraft[claim.id] || busyId === claim.id || isBlockedForActions}
-                            className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
-                          >
-                            Aplicar
-                          </button>
-                        </div>
+                        {isTransferred ? (
+                          <div className="flex items-center gap-2 text-xs text-violet-600 dark:text-violet-400 font-semibold">
+                            <SendHorizonal className="w-4 h-4 shrink-0" />
+                            Reclamo derivado a otra sucursal — las acciones no están disponibles hasta que sea aceptado o rechazado.
+                          </div>
+                        ) : !isTerminal ? (
+                          <>
+                            {/* Derivar a área interna */}
+                            <div className="flex flex-wrap gap-2.5 items-end">
+                              <label className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
+                              <select
+                                value={categoryDraft[claim.id] ?? ""}
+                                onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
+                                className="min-w-[240px] border dark:border-gray-700 border-slate-200 rounded-xl px-3 py-2.5 text-xs dark:bg-gray-800 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-50"
+                              >
+                                <option value="">Seleccionar área</option>
+                                {CATEGORY_OPTIONS.map((cat) => (
+                                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCategory(claim.id)}
+                                disabled={!categoryDraft[claim.id] || busyId === claim.id}
+                                className="bg-gradient-to-b from-[var(--sidebar-bg)] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
+                              >
+                                Aplicar
+                              </button>
+                            </div>
 
-                        {/* Acciones principales */}
-                        <div className="flex flex-wrap gap-2.5 items-center">
-                          <span className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Resolver</span>
-                          {RESOLUTION_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => handleResolve(claim.id, opt.value)}
-                              disabled={busyId === claim.id || isBlockedForActions}
-                              className="bg-amber-50 dark:text-gray-100 text-slate-900 border border-amber-200 rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-60"
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setConfirmDialog({
-                                isOpen: true,
-                                title: "Solicitar más información",
-                                message: "Solicitar más información al cliente (por ejemplo: fotos o aclaraciones). Se registrará en el historial.",
-                                confirmLabel: "Solicitar",
-                                cancelLabel: "Cancelar",
-                                variant: "default",
-                                requireComment: true,
-                                onConfirm: (notes?: string) => {
-                                  setConfirmDialog(null);
-                                  setBusyId(claim.id);
-                                  (async () => {
-                                    try {
-                                      const updated = await claimsApi.requestInfo(claim.id, notes);
-                                      setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
-                                      await loadClaimEvents(claim.id, true);
-                                    } catch {
-                                      setError("No se pudo solicitar información al cliente.");
-                                    } finally {
-                                      setBusyId(null);
-                                    }
-                                  })();
-                                },
-                              });
-                            }}
-                            disabled={busyId === claim.id || isBlockedForActions}
-                            className="bg-gradient-to-b from-sky-500 to-sky-600 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(14,165,233,0.18)] disabled:opacity-60"
-                          >
-                            Solicitar más info
-                          </button>
-                          {claim.status === "pending_customer" && (
-                            <button
-                              type="button"
-                              onClick={() => handleMarkInReview(claim.id)}
-                              disabled={busyId === claim.id}
-                              className="bg-gradient-to-b from-blue-600 to-blue-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(37,99,235,0.18)] disabled:opacity-60"
-                            >
-                              Pasar a revisión
-                            </button>
-                          )}
-                          {/* Derivar a sucursal — solo supervisor, no disponible si ya derivado o resuelto */}
-                          {isSupervisor && !isTerminal && !isTransferred && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenTransferModal(claim.id)}
-                              disabled={busyId === claim.id}
-                              className="bg-gradient-to-b from-violet-600 to-violet-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(124,58,237,0.18)] disabled:opacity-60 inline-flex items-center gap-1.5"
-                            >
-                              <SendHorizonal className="w-3.5 h-3.5" />
-                              Derivar a sucursal
-                            </button>
-                          )}
-                        </div>
+                            {/* Acciones principales */}
+                            <div className="flex flex-wrap gap-2.5 items-center">
+                              <span className="text-xs dark:text-gray-400 text-slate-500 font-bold uppercase tracking-wide">Resolver</span>
+                              {RESOLUTION_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => handleResolve(claim.id, opt.value)}
+                                  disabled={busyId === claim.id}
+                                  className="bg-amber-50 dark:text-gray-100 text-slate-900 border border-amber-200 rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] disabled:opacity-60"
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: "Solicitar más información",
+                                    message: "Solicitar más información al cliente (por ejemplo: fotos o aclaraciones). Se registrará en el historial.",
+                                    confirmLabel: "Solicitar",
+                                    cancelLabel: "Cancelar",
+                                    variant: "default",
+                                    requireComment: true,
+                                    onConfirm: (notes?: string) => {
+                                      setConfirmDialog(null);
+                                      setBusyId(claim.id);
+                                      (async () => {
+                                        try {
+                                          const updated = await claimsApi.requestInfo(claim.id, notes);
+                                          setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
+                                          await loadClaimEvents(claim.id, true);
+                                        } catch {
+                                          setError("No se pudo solicitar información al cliente.");
+                                        } finally {
+                                          setBusyId(null);
+                                        }
+                                      })();
+                                    },
+                                  });
+                                }}
+                                disabled={busyId === claim.id}
+                                className="bg-gradient-to-b from-sky-500 to-sky-600 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(14,165,233,0.18)] disabled:opacity-60"
+                              >
+                                Solicitar más info
+                              </button>
+                              {claim.status === "pending_customer" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMarkInReview(claim.id)}
+                                  disabled={busyId === claim.id}
+                                  className="bg-gradient-to-b from-blue-600 to-blue-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(37,99,235,0.18)] disabled:opacity-60"
+                                >
+                                  Pasar a revisión
+                                </button>
+                              )}
+                              {isSupervisor && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTransferModal(claim.id)}
+                                  disabled={busyId === claim.id}
+                                  className="bg-gradient-to-b from-violet-600 to-violet-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(124,58,237,0.18)] disabled:opacity-60 inline-flex items-center gap-1.5"
+                                >
+                                  <SendHorizonal className="w-3.5 h-3.5" />
+                                  Derivar a sucursal
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        ) : null}
 
                         {/* Aceptar / Rechazar — solo supervisor de la sucursal receptora */}
                         {isSupervisor && isReceivedTransfer && (
