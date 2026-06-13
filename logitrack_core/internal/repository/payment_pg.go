@@ -29,7 +29,7 @@ func (r *postgresPaymentRepository) Create(p model.Payment) error {
 func (r *postgresPaymentRepository) GetByTrackingID(trackingID string) (model.Payment, error) {
 	row := r.db.QueryRow(`
 		SELECT id, tracking_id, mp_preference_id, mp_payment_id, init_point,
-		       amount, currency, status, created_at, approved_at, abandoned_at, abandoned_reason
+		       amount, currency, status, method, created_at, approved_at, abandoned_at, abandoned_reason
 		FROM payments
 		WHERE (tracking_id = $1 OR original_tracking_id = $1)
 		ORDER BY created_at DESC
@@ -40,7 +40,7 @@ func (r *postgresPaymentRepository) GetByTrackingID(trackingID string) (model.Pa
 func (r *postgresPaymentRepository) GetActiveByTrackingID(trackingID string) (model.Payment, error) {
 	row := r.db.QueryRow(`
 		SELECT id, tracking_id, mp_preference_id, mp_payment_id, init_point,
-		       amount, currency, status, created_at, approved_at, abandoned_at, abandoned_reason
+		       amount, currency, status, method, created_at, approved_at, abandoned_at, abandoned_reason
 		FROM payments
 		WHERE tracking_id = $1 AND status = 'pending'
 		ORDER BY created_at DESC
@@ -48,12 +48,12 @@ func (r *postgresPaymentRepository) GetActiveByTrackingID(trackingID string) (mo
 	return scanPayment(row)
 }
 
-func (r *postgresPaymentRepository) MarkApproved(paymentID, mpPaymentID, newTrackingID string, ts time.Time) error {
+func (r *postgresPaymentRepository) MarkApproved(paymentID, mpPaymentID, newTrackingID string, ts time.Time, method model.PaymentMethod) error {
 	res, err := r.db.Exec(`
 		UPDATE payments
-		SET status = 'approved', mp_payment_id = $1, tracking_id = $2, approved_at = $3
+		SET status = 'approved', mp_payment_id = $1, tracking_id = $2, approved_at = $3, method = $5
 		WHERE id = $4`,
-		mpPaymentID, newTrackingID, ts, paymentID,
+		mpPaymentID, newTrackingID, ts, paymentID, string(method),
 	)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (r *postgresPaymentRepository) UpdateTrackingID(oldTrackingID, newTrackingI
 func (r *postgresPaymentRepository) ListExpired(cutoff time.Time) ([]model.Payment, error) {
 	rows, err := r.db.Query(`
 		SELECT id, tracking_id, mp_preference_id, mp_payment_id, init_point,
-		       amount, currency, status, created_at, approved_at, abandoned_at, abandoned_reason
+		       amount, currency, status, method, created_at, approved_at, abandoned_at, abandoned_reason
 		FROM payments
 		WHERE status = 'pending' AND created_at < $1`, cutoff)
 	if err != nil {
@@ -130,7 +130,7 @@ func scanPayment(row *sql.Row) (model.Payment, error) {
 	var approvedAt, abandonedAt sql.NullTime
 	err := row.Scan(
 		&p.ID, &p.TrackingID, &p.MPPreferenceID, &mpPaymentID, &p.InitPoint,
-		&p.Amount, &p.Currency, &p.Status, &p.CreatedAt, &approvedAt, &abandonedAt, &p.AbandonedReason,
+		&p.Amount, &p.Currency, &p.Status, &p.Method, &p.CreatedAt, &approvedAt, &abandonedAt, &p.AbandonedReason,
 	)
 	if err != nil {
 		return model.Payment{}, err
@@ -153,7 +153,7 @@ func scanPaymentRow(rows *sql.Rows) (model.Payment, error) {
 	var approvedAt, abandonedAt sql.NullTime
 	err := rows.Scan(
 		&p.ID, &p.TrackingID, &p.MPPreferenceID, &mpPaymentID, &p.InitPoint,
-		&p.Amount, &p.Currency, &p.Status, &p.CreatedAt, &approvedAt, &abandonedAt, &p.AbandonedReason,
+		&p.Amount, &p.Currency, &p.Status, &p.Method, &p.CreatedAt, &approvedAt, &abandonedAt, &p.AbandonedReason,
 	)
 	if err != nil {
 		return model.Payment{}, err

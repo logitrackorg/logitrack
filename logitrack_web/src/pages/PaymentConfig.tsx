@@ -6,10 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../co
 // ── Toggle section ────────────────────────────────────────────────────────────
 
 interface ToggleDef {
-  key: keyof Pick<PaymentConfigType, "mp_enabled" | "mock_enabled">;
+  key: keyof Pick<PaymentConfigType, "mp_enabled" | "transfer_enabled">;
   label: string;
   description: string;
-  badge?: string;
 }
 
 const TOGGLES: ToggleDef[] = [
@@ -19,11 +18,10 @@ const TOGGLES: ToggleDef[] = [
     description: "Permite cobrar mediante link de pago o código QR de Mercado Pago.",
   },
   {
-    key: "mock_enabled",
+    key: "transfer_enabled",
     label: "Transferencia bancaria",
     description:
-      "Permite registrar pagos por transferencia bancaria (CBU/CVU). La confirmación es manual por el operador.",
-    badge: "Próximamente",
+      "Permite registrar pagos por transferencia bancaria (alias/CBU/CVU). La confirmación es manual por el operador.",
   },
 ];
 
@@ -93,9 +91,9 @@ export function PaymentConfig() {
 
   // ── Toggle & text handlers ────────────────────────────────────────────────
 
-  const handleToggle = (key: keyof Pick<PaymentConfigType, "mp_enabled" | "mock_enabled">) => {
+  const handleToggle = (key: keyof Pick<PaymentConfigType, "mp_enabled" | "transfer_enabled">) => {
     if (!draft) return;
-    if (key === "mock_enabled" && !draft.mock_enabled) {
+    if (key === "transfer_enabled" && !draft.transfer_enabled) {
       const activeDestValue = qrType === "alias" ? draft.mp_alias : draft.mp_cvu;
       if (!activeDestValue.trim()) {
         setError("Ingresá un alias o CBU/CVU antes de activar la transferencia bancaria.");
@@ -106,7 +104,7 @@ export function PaymentConfig() {
     setDraft({ ...draft, [key]: !draft[key] });
   };
 
-  const handleText = (key: keyof PaymentConfigType, value: string) => {
+  const handleText = (key: keyof Pick<PaymentConfigType, "mp_alias" | "mp_cvu" | "transfer_holder">, value: string) => {
     if (!draft) return;
     setDraft({ ...draft, [key]: value });
   };
@@ -116,7 +114,7 @@ export function PaymentConfig() {
   const handleSave = async () => {
     if (!draft) return;
     const activeDestValue = qrType === "alias" ? draft.mp_alias : draft.mp_cvu;
-    if (draft.mock_enabled && !activeDestValue.trim()) {
+    if (draft.transfer_enabled && !activeDestValue.trim()) {
       setError("Para activar la transferencia bancaria debés ingresar un alias o CBU/CVU destino.");
       return;
     }
@@ -212,14 +210,13 @@ export function PaymentConfig() {
             TOGGLES.map((t, i) => (
               <div
                 key={t.key}
-                className={`flex items-center justify-between gap-4 py-4 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
+                className={`flex items-center justify-between gap-4 py-4 px-6 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-[var(--text-primary)]">
                       {t.label}
                     </span>
-                    {t.badge && <Badge label={t.badge} />}
                   </div>
                   <p className="mt-[3px] text-xs text-[var(--text-secondary)] leading-[1.45]">
                     {t.description}
@@ -271,6 +268,12 @@ export function PaymentConfig() {
                 onChange={(v) => handleText("mp_cvu", v)}
               />
             )}
+            <TextRow
+              label="Titular"
+              value={draft.transfer_holder}
+              placeholder="ej: LogiTrack S.A."
+              onChange={(v) => handleText("transfer_holder", v)}
+            />
           </CardContent>
         </Card>
       )}
@@ -389,26 +392,16 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`relative w-11 h-6 rounded-xl border-none cursor-pointer transition-colors duration-150 p-0 shrink-0 ${
-        checked ? "bg-[var(--ok)]" : "bg-[var(--border)]"
+      className={`relative w-11 h-6 rounded-xl border-none cursor-pointer transition-colors duration-150 p-0 shrink-0 overflow-hidden ${
+        checked ? "bg-[var(--ok)]" : "bg-slate-300 dark:bg-slate-600"
       }`}
     >
       <span
-        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.18)] transition-transform duration-150 ${
+        className={`absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.25)] transition-transform duration-150 ${
           checked ? "translate-x-[22px]" : "translate-x-0.5"
         }`}
       />
     </button>
-  );
-}
-
-function Badge({ label }: { label: string }) {
-  return (
-    <span
-      className="text-[10px] font-bold py-0.5 px-[7px] rounded-[20px] bg-[var(--warn-bg)] text-[var(--warn-text)] border border-[var(--warn-border)] tracking-[0.03em] uppercase"
-    >
-      {label}
-    </span>
   );
 }
 

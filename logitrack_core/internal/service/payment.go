@@ -182,6 +182,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 		PaymentID:           payment.ID,
 		MPPaymentID:         mpPaymentID,
 		Amount:              payment.Amount,
+		Method:              model.PaymentMethodMP,
 		ChangedBy:           "mercadopago",
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
@@ -191,7 +192,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 		return fmt.Errorf("error al confirmar pago en repo: %w", err)
 	}
 
-	if err := s.paymentRepo.MarkApproved(payment.ID, mpPaymentID, newTrackingID, now); err != nil {
+	if err := s.paymentRepo.MarkApproved(payment.ID, mpPaymentID, newTrackingID, now, model.PaymentMethodMP); err != nil {
 		log.Printf("[payment] advertencia: no se pudo marcar pago como aprobado: %v", err)
 	}
 

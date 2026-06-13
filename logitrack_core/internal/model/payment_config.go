@@ -3,6 +3,8 @@ package model
 type PaymentConfig struct {
 	MPEnabled        bool   `json:"mp_enabled" db:"mp_enabled"`
 	MockEnabled      bool   `json:"mock_enabled" db:"mock_enabled"`
+	TransferEnabled  bool   `json:"transfer_enabled" db:"transfer_enabled"`
+	TransferHolder   string `json:"transfer_holder" db:"transfer_holder"`
 	MPAlias          string `json:"mp_alias" db:"mp_alias"`
 	MPCVU            string `json:"mp_cvu" db:"mp_cvu"`
 	MPAccessToken    string `json:"mp_access_token" db:"mp_access_token"`
@@ -13,6 +15,8 @@ func DefaultPaymentConfig() PaymentConfig {
 	return PaymentConfig{
 		MPEnabled:       true,
 		MockEnabled:     false,
+		TransferEnabled: false,
+		TransferHolder:  "",
 		MPAlias:         "",
 		MPCVU:           "",
 		MPAccessToken:   "",

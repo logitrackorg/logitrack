@@ -390,6 +390,7 @@ func RunMigrations(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
 		ALTER TABLE payments ADD COLUMN IF NOT EXISTS original_tracking_id TEXT;
 		UPDATE payments SET original_tracking_id = tracking_id WHERE original_tracking_id IS NULL;
+		ALTER TABLE payments ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT '';
 
 		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
 		CREATE TABLE IF NOT EXISTS payment_events (
@@ -664,6 +665,8 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_enabled  BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_holder   TEXT NOT NULL DEFAULT '';
 
 		-- Métricas de calidad del ruteo
 		CREATE TABLE IF NOT EXISTS routing_plan_metrics (

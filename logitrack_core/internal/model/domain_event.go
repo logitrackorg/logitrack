@@ -117,6 +117,7 @@ type PaymentConfirmedPayload struct {
 	OldTrackingID       string
 	NewTrackingID       string
 	Amount              float64
+	Method              PaymentMethod
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
 }
