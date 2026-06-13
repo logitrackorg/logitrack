@@ -1,0 +1,68 @@
+logitrack_core/internal/db/migrate.go
+  s_9a1c739e2657cc::t_113fdcddb3195d 393
+  s_9a1c739e2657cc::t_34cdb632877455 668-669
+logitrack_core/internal/model/payment.go
+  s_9a1c739e2657cc::t_e53b50cd101256 13-20,30
+logitrack_core/internal/service/payment.go
+  s_9a1c739e2657cc::t_1c54c572f3d715 195
+  s_9a1c739e2657cc::t_f57b8b3ac6c203 185
+logitrack_core/internal/repository/shipment.go
+  s_9a1c739e2657cc::t_ac432b7e9cb490 152
+logitrack_web/src/api/payments.ts
+  s_9a1c739e2657cc::t_d2fce89918156a 43-44
+logitrack_web/src/pages/PaymentConfig.tsx
+  s_9a1c739e2657cc::t_00ca0f1419b972 396
+  s_9a1c739e2657cc::t_7af9a6dca6d47f 107
+  s_9a1c739e2657cc::t_837a8ce65a4382 9,21,24
+  s_9a1c739e2657cc::t_2f0f23819d7179 213
+  s_9a1c739e2657cc::t_186862de9d527e 271-276
+  s_9a1c739e2657cc::t_1d4750af682b04 117
+  s_9a1c739e2657cc::t_e162041e388d2f 395,400
+  s_9a1c739e2657cc::t_5558e54a0fd96e 94,96
+logitrack_core/internal/repository/payment.go
+  s_9a1c739e2657cc::t_6968945082d2bc 14
+logitrack_core/internal/repository/payment_pg.go
+  s_9a1c739e2657cc::t_dd7a498109a392 94
+  s_9a1c739e2657cc::t_b420aaaf21f485 133
+  s_9a1c739e2657cc::t_2216d1ffb386d3 156
+  s_9a1c739e2657cc::t_d4f1a6fdc1411c 32,43
+  s_9a1c739e2657cc::t_56ee02f0147bc8 51,54,56
+logitrack_core/internal/service/payment_simulate.go
+  s_9a1c739e2657cc::t_b8460652c0e368 14,16-17,19-22,25,39,52,61,64-65
+  s_9a1c739e2657cc::t_03f7e09718da05 54
+logitrack_core/internal/handler/payment.go
+  s_9a1c739e2657cc::t_84419a4d71462d 133,144
+logitrack_web/src/components/PaymentMethodsPanel.tsx
+  s_9a1c739e2657cc::t_aae5b5ce89ebed 28
+  s_9a1c739e2657cc::t_aa174cbd35a969 145,148
+  s_9a1c739e2657cc::t_4e720248600785 315-316,319-326,328-336,338-345
+  s_9a1c739e2657cc::t_fb63156e812c90 256,263
+logitrack_core/internal/model/payment_config.go
+  s_9a1c739e2657cc::t_3c37f965e68408 6-7,18-19
+logitrack_core/internal/repository/postgres_payment_config.go
+  s_9a1c739e2657cc::t_d2101b96b39a3a 28,30
+  s_9a1c739e2657cc::t_da9c36cca29030 53-54,56-57
+logitrack_core/internal/repository/shipment_es.go
+  s_9a1c739e2657cc::t_4aa216c22a8fa9 245
+  s_9a1c739e2657cc::t_728282bd25392f 432
+  s_9a1c739e2657cc::t_a5a3194578b8ed 814-827
+  s_9a1c739e2657cc::t_f6f6af0bedede9 419
+logitrack_core/internal/model/domain_event.go
+  s_9a1c739e2657cc::t_2efd214e02488a 120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9e257b4b92e16ee48e55f7e7521d5d31cf186aa0",
+  "prompts": {},
+  "sessions": {
+    "s_9a1c739e2657cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5070fdd6-1fff-4d56-a7f7-1b3942da96cb",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
