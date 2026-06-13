@@ -17,7 +17,9 @@ type ClaimRepository interface {
 	GetLatestByTrackingID(trackingID string) (model.Claim, error)
 	GetLatestByTrackingIDAndDNI(trackingID, dni string) (model.Claim, error)
 	ListAll() ([]model.Claim, error)
+	ListByAssignedBranch(branchID string) ([]model.Claim, error)
 	UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error
 	Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error
 	UpdateStatus(id string, status model.ClaimStatus, updatedAt time.Time) error
+	UpdateTransferStatus(id, assignedBranchID string, status model.ClaimStatus, updatedAt time.Time) error
 }

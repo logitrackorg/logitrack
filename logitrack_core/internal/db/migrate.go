@@ -437,6 +437,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS assigned_branch_id TEXT;
 
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
