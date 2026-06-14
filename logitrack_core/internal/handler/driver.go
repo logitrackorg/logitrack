@@ -87,7 +87,7 @@ func (h *DriverHandler) checkAndNotifyFatigueRisk(user model.User, checkin model
 		fullName = user.Username
 	}
 	if h.notifSvc != nil {
-		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score)
+		h.notifSvc.NotifyFatigueAlert(user.BranchID, user.ID, user.Username, fullName, score, cfg.IsBlockRouteOnRed())
 	}
 
 	// Stamp the driver's own check-in so the polling endpoint can surface

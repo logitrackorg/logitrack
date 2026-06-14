@@ -390,6 +390,7 @@ func RunMigrations(db *sql.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_payments_status_created_at ON payments(status, created_at);
 		ALTER TABLE payments ADD COLUMN IF NOT EXISTS original_tracking_id TEXT;
 		UPDATE payments SET original_tracking_id = tracking_id WHERE original_tracking_id IS NULL;
+		ALTER TABLE payments ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT '';
 
 		-- Idempotencia de webhooks: evita procesar el mismo payment_id dos veces
 		CREATE TABLE IF NOT EXISTS payment_events (
@@ -436,6 +437,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_mime_type   TEXT;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS evidence_upload_date TIMESTAMPTZ;
 		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS claimant_dni VARCHAR(20);
+		ALTER TABLE shipment_claims ADD COLUMN IF NOT EXISTS assigned_branch_id TEXT;
 
 		-- Ensure branches table exists before branch_zones FK can reference it
 		CREATE TABLE IF NOT EXISTS branches (
@@ -610,6 +612,11 @@ func RunMigrations(db *sql.DB) error {
 		-- Auditoría específica de eventos 2FA
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS role           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS country        TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS city           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS result         TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS failure_reason TEXT NOT NULL DEFAULT '';
 
 		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
 		CREATE TABLE IF NOT EXISTS fatigue_blocks (
@@ -664,6 +671,8 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_cvu            TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_access_token   TEXT NOT NULL DEFAULT '';
 		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS mp_webhook_secret TEXT NOT NULL DEFAULT '';
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_enabled  BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE payment_config ADD COLUMN IF NOT EXISTS transfer_holder   TEXT NOT NULL DEFAULT '';
 
 		-- Métricas de calidad del ruteo
 		CREATE TABLE IF NOT EXISTS routing_plan_metrics (

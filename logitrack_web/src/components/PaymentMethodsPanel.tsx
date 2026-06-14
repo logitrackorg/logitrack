@@ -25,7 +25,7 @@ export default function PaymentMethodsPanel({
   const [confirmingTransfer, setConfirmingTransfer] = useState(false);
   const [showTransferConfirm, setShowTransferConfirm] = useState(false);
   const [copiedDest, setCopiedDest] = useState(false);
-  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({ mp_enabled: true, mock_enabled: false, mp_alias: "", mp_cvu: "" });
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({ mp_enabled: true, mock_enabled: false, transfer_enabled: false, transfer_holder: "", mp_alias: "", mp_cvu: "" });
 
   useEffect(() => {
     paymentApi.getConfig().then(setPaymentConfig).catch(() => {});
@@ -142,9 +142,10 @@ export default function PaymentMethodsPanel({
           onClick: () => setShowCashConfirm(true),
         }}
       />
-      {paymentConfig.mock_enabled && (
+      {paymentConfig.transfer_enabled && (
         <TransferCard
           dest={paymentConfig.mp_alias || paymentConfig.mp_cvu}
+          holder={paymentConfig.transfer_holder}
           copied={copiedDest}
           confirming={confirmingTransfer}
           onCopyDest={handleCopyDest}
@@ -252,12 +253,14 @@ type CashConfirmModalProps = {
 
 function TransferCard({
   dest,
+  holder,
   copied,
   confirming,
   onCopyDest,
   onConfirm,
 }: {
   dest: string;
+  holder: string;
   copied: boolean;
   confirming: boolean;
   onCopyDest: (dest: string) => void;
@@ -309,27 +312,38 @@ function TransferCard({
             borderRadius: 8,
             padding: "8px 12px",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
+            flexDirection: "column",
+            gap: 6,
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Alias / CBU destino
+          {holder && (
+            <div>
+              <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Titular
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginTop: 2 }}>
+                {holder}
+              </div>
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", fontFamily: "monospace", marginTop: 2, wordBreak: "break-all" }}>
-              {dest}
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Alias / CBU destino
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", fontFamily: "monospace", marginTop: 2, wordBreak: "break-all" }}>
+                {dest}
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => onCopyDest(dest)}
+            >
+              {copied ? "✓ Copiado" : "Copiar"}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => onCopyDest(dest)}
-          >
-            {copied ? "✓ Copiado" : "Copiar"}
-          </Button>
         </div>
       )}
 

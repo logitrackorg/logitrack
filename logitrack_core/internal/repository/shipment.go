@@ -149,6 +149,7 @@ type ConfirmPaymentCmd struct {
 	PaymentID     string
 	MPPaymentID   string
 	Amount        float64
+	Method        model.PaymentMethod
 	ChangedBy     string
 	Timestamp     time.Time
 	// Fields needed to rebuild the confirmed shipment state:

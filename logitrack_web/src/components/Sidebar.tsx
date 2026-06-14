@@ -266,14 +266,20 @@ export function Sidebar() {
               key={section.title}
               className={idx === visibleSections.length - 1 ? "" : "mb-1"}
             >
-              {/* Section titles visible whenever expanded, divider when collapsed */}
+              {/* Section titles visible whenever expanded.
+                   When collapsed, a thin line occupies the same
+                   fixed height so items never shift position.
+                   overflow-hidden + min-h-0 prevent flex from
+                   stretching the container during the width transition. */}
               {expanded ? (
-                <div className="py-1.5 px-5 text-[10px] font-bold tracking-[1px] uppercase text-white/40 whitespace-nowrap">
+                <div className="h-[27px] min-h-0 overflow-hidden flex items-center px-5 text-[10px] font-bold tracking-[1px] uppercase text-white/40 whitespace-nowrap">
                   {section.title}
                 </div>
-              ) : idx > 0 ? (
-                <div className="h-px bg-sidebar-border my-1.5 mx-3.5" title={section.title} />
-              ) : null}
+              ) : (
+                <div className="h-[27px] min-h-0 flex items-center px-3.5" title={section.title}>
+                  <div className="h-px bg-sidebar-border flex-1" />
+                </div>
+              )}
               {section.items.map((item) => (
                 <SidebarLink
                   key={item.to}
@@ -297,12 +303,12 @@ export function Sidebar() {
             <button
               onClick={() => setPinned((v) => !v)}
               title={pinned ? "Contraer menú" : "Fijar menú expandido"}
-              className={`bg-transparent border-0 text-white/50 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-white/10 hover:text-white/80 ${
+              className={`bg-transparent border-0 text-white/50 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-xs transition-colors duration-150 hover:bg-white/10 hover:text-white/80 h-[34px] ${
                 expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`}
             >
               {pinned ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-              {expanded && <span>{pinned ? "Contraer" : "Fijar expandido"}</span>}
+              {expanded && <span className="whitespace-nowrap">{pinned ? "Contraer" : "Fijar expandido"}</span>}
             </button>
           )}
 
@@ -311,7 +317,7 @@ export function Sidebar() {
             to="/profile"
             onClick={isMobile ? closeMobile : undefined}
             className={
-              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-white/10 text-white/80 transition-colors duration-150 hover:bg-white/15 ${
+              `no-underline flex items-center gap-2.5 py-2 px-2.5 rounded-lg bg-white/10 text-white/80 transition-colors duration-150 hover:bg-white/15 h-[52px] ${
                 expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`
             }
@@ -320,11 +326,11 @@ export function Sidebar() {
               {user.username.slice(0, 2).toUpperCase()}
             </div>
             {expanded && (
-              <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-semibold text-white/90 whitespace-nowrap overflow-hidden text-ellipsis">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <div className="text-[13px] font-semibold text-white/90 truncate">
                   {user.username}
                 </div>
-                <div className="text-[11px] text-white/50">
+                <div className="text-[11px] text-white/50 whitespace-nowrap">
                   {ROLE_LABELS[user.role] ?? user.role}
                 </div>
               </div>
@@ -335,12 +341,12 @@ export function Sidebar() {
           <button
             onClick={logout}
             title="Cerrar sesión"
-className={`bg-transparent border border-white/10 text-white/40 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-white/5 hover:text-red-300 ${
+            className={`bg-transparent border border-white/10 text-white/40 cursor-pointer flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-[13px] transition-colors duration-150 hover:bg-white/5 hover:text-red-300 h-[38px] ${
                 expanded ? "justify-start w-full" : "justify-center w-fit mx-auto"
               }`}
           >
             <LogOut size={16} />
-            {expanded && <span>Cerrar sesión</span>}
+            {expanded && <span className="whitespace-nowrap">Cerrar sesión</span>}
           </button>
         </div>
       </aside>
@@ -366,7 +372,7 @@ function SidebarLink({
       title={expanded ? undefined : item.label}
       className={({ isActive }) => {
         const base =
-          "flex items-center gap-3 my-px mx-2 rounded-lg text-[13px] relative whitespace-nowrap transition-colors duration-[120ms]";
+          "flex items-center gap-3 my-px mx-2 rounded-lg text-[13px] relative transition-colors duration-[120ms] h-10";
         const pad = expanded
           ? "py-2.5 px-5 justify-start"
           : "py-2.5 px-0 justify-center";
@@ -377,7 +383,7 @@ function SidebarLink({
       }}
     >
       <Icon size={18} strokeWidth={2} />
-      {expanded && <span>{item.label}</span>}
+      {expanded && <span className="whitespace-nowrap">{item.label}</span>}
     </NavLink>
   );
 }

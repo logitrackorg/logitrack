@@ -10,6 +10,14 @@ const (
 	PaymentStatusAbandoned PaymentStatus = "abandoned" // operador volvió a draft o expiró
 )
 
+type PaymentMethod string
+
+const (
+	PaymentMethodMP       PaymentMethod = "mp"
+	PaymentMethodCash     PaymentMethod = "cash"
+	PaymentMethodTransfer PaymentMethod = "transfer"
+)
+
 type Payment struct {
 	ID              string        `json:"id"`
 	TrackingID      string        `json:"tracking_id"`               // BORRADOR-XXX al crear, LT-XXX al aprobar
@@ -19,6 +27,7 @@ type Payment struct {
 	Amount          float64       `json:"amount"`
 	Currency        string        `json:"currency"`
 	Status          PaymentStatus `json:"status"`
+	Method          PaymentMethod `json:"method"`                    // mp | cash | transfer
 	CreatedAt       time.Time     `json:"created_at"`
 	ApprovedAt      *time.Time    `json:"approved_at,omitempty"`
 	AbandonedAt     *time.Time    `json:"abandoned_at,omitempty"`

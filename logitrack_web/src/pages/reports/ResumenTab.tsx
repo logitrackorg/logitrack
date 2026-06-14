@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, ArrowRight, Package, Truck, CheckCircle2, AlertCircle,
@@ -160,15 +160,18 @@ const ResumenTab = forwardRef<ResumenTabRef, ResumenTabProps>(function ResumenTa
   const delivered = stats?.by_status?.delivered??0;
   const issues = (stats?.by_status?.delivery_failed??0)+(stats?.by_status?.lost??0)+(stats?.by_status?.destroyed??0);
 
-  const chartData: {date:string;creados:number;entregados:number}[] = [];
-  if (dateFrom && dateTo) {
-    const cur = new Date(dateFrom+"T00:00:00"), end = new Date(dateTo+"T00:00:00");
-    while (cur <= end) {
-      const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
-      chartData.push({ date:k, creados: stats?.by_day?.[k]??0, entregados: stats?.by_day_delivered?.[k]??0 });
-      cur.setDate(cur.getDate()+1);
+  const chartData = useMemo(() => {
+    const result: {date:string;creados:number;entregados:number}[] = [];
+    if (dateFrom && dateTo) {
+      const cur = new Date(dateFrom+"T00:00:00"), end = new Date(dateTo+"T00:00:00");
+      while (cur <= end) {
+        const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
+        result.push({ date:k, creados: stats?.by_day?.[k]??0, entregados: stats?.by_day_delivered?.[k]??0 });
+        cur.setDate(cur.getDate()+1);
+      }
     }
-  }
+    return result;
+  }, [dateFrom, dateTo, stats?.by_day, stats?.by_day_delivered]);
 
   const doughnutItems: DoughnutDataItem[] = stats?.by_branch
     ? Object.entries(stats.by_branch).map(([id,count],i)=>({ name:branches.find(b=>b.id===id)?.name??id, value:count, color:BRANCH_COLORS[i%BRANCH_COLORS.length] }))

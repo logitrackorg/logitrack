@@ -30,6 +30,7 @@ type ClaimService struct {
 	eventStore     repository.EventStore
 	claimEmailSvc  ClaimEmailSender
 	claimWASvc     ClaimWASender
+	notifRepo      repository.NotificationRepository
 }
 
 // ClaimEmailSender sends customer-facing claim notifications by email.
@@ -69,6 +70,11 @@ func (s *ClaimService) SetClaimEmailService(svc ClaimEmailSender) {
 // SetClaimWAService wires the WhatsApp (+ email fallback) sender for claim notifications.
 func (s *ClaimService) SetClaimWAService(svc ClaimWASender) {
 	s.claimWASvc = svc
+}
+
+// SetNotificationRepository wires the notification repository for supervisor in-app notifications.
+func (s *ClaimService) SetNotificationRepository(repo repository.NotificationRepository) {
+	s.notifRepo = repo
 }
 
 func (s *ClaimService) CreatePublicClaim(req model.CreatePublicClaimRequest, evidence *ClaimEvidenceUpload) (model.Claim, error) {
@@ -335,6 +341,10 @@ func (s *ClaimService) GetByIDForBranch(id, branchID string) (model.Claim, error
 	if branchID == "" {
 		return claim, nil
 	}
+	// Allow access if the claim is assigned to this branch (transferred).
+	if claim.AssignedBranchID == branchID {
+		return claim, nil
+	}
 	shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID)
 	if err != nil {
 		return model.Claim{}, repository.ErrClaimNotFound
@@ -353,13 +363,28 @@ func (s *ClaimService) ListByOriginBranch(branchID string) ([]model.Claim, error
 	if branchID == "" {
 		return claims, nil
 	}
+
+	// Index origin-branch claims.
 	filtered := make([]model.Claim, 0, len(claims))
+	seen := make(map[string]bool)
 	for _, claim := range claims {
 		shipment, err := s.shipmentRepo.GetByTrackingID(claim.TrackingID)
 		if err != nil {
 			continue
 		}
 		if shipment.OriginBranchID == branchID {
+			filtered = append(filtered, claim)
+			seen[claim.ID] = true
+		}
+	}
+
+	// Also include claims currently assigned to this branch (transferred and not yet rejected).
+	assigned, err := s.claimRepo.ListByAssignedBranch(branchID)
+	if err != nil {
+		return nil, err
+	}
+	for _, claim := range assigned {
+		if !seen[claim.ID] {
 			filtered = append(filtered, claim)
 		}
 	}
@@ -399,8 +424,8 @@ func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, c
 	if err != nil {
 		return model.Claim{}, err
 	}
-	// Block operations on already resolved (final) claims
-	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+	// Block operations on already resolved (final) claims or while transferred.
+	if isTerminalOrTransferred(claim.Status) {
 		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
 	}
 	fromStatus := claim.Status
@@ -443,8 +468,8 @@ func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, 
 	if err != nil {
 		return model.Claim{}, err
 	}
-	// Block resolving an already resolved (final) claim
-	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+	// Block resolving an already resolved (final) claim or while transferred.
+	if isTerminalOrTransferred(claim.Status) {
 		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
 	}
 	status, err := statusForResolution(resolution)
@@ -499,8 +524,8 @@ func (s *ClaimService) RequestCustomerInfo(id string, changedBy, branchID, notes
 	if err != nil {
 		return model.Claim{}, err
 	}
-	// Block if already final/resolved
-	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
+	// Block if already final/resolved or while transferred.
+	if isTerminalOrTransferred(claim.Status) {
 		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
 	}
 	fromStatus := claim.Status
@@ -572,6 +597,182 @@ func (s *ClaimService) MarkInReview(id string, changedBy, branchID string) (mode
 
 func (s *ClaimService) appendClaimEvent(event model.DomainEvent) error {
 	return s.claimEventRepo.Append(event)
+}
+
+func isTerminalOrTransferred(status model.ClaimStatus) bool {
+	return status == model.ClaimStatusResolvedOperativa ||
+		status == model.ClaimStatusResolvedComercial ||
+		status == model.ClaimStatusResolvedRRHH ||
+		status == model.ClaimStatusResolvedImprocedente ||
+		status == model.ClaimStatusTransferred
+}
+
+func (s *ClaimService) notifyBranchSupervisors(branchID string, notifType model.NotificationType, title, body, resourceID string) {
+	if s.notifRepo == nil {
+		return
+	}
+	users, err := s.notifRepo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})
+	if err != nil {
+		return
+	}
+	now := clock.Now().UTC()
+	for _, u := range users {
+		_ = s.notifRepo.Create(model.Notification{
+			ID:         uuid.NewString(),
+			UserID:     u.ID,
+			Type:       notifType,
+			Title:      title,
+			Body:       body,
+			ResourceID: resourceID,
+			CreatedAt:  now,
+		})
+	}
+}
+
+// TransferClaim transfiere un reclamo a otra sucursal. Solo supervisores.
+func (s *ClaimService) TransferClaim(id, targetBranchID, changedBy, sourceBranchID, notes string) (model.Claim, error) {
+	notes = strings.TrimSpace(notes)
+	if len(notes) < 15 {
+		return model.Claim{}, fmt.Errorf("el motivo debe tener al menos 15 caracteres")
+	}
+	targetBranchID = strings.TrimSpace(targetBranchID)
+	if targetBranchID == "" {
+		return model.Claim{}, fmt.Errorf("sucursal destino requerida")
+	}
+	if targetBranchID == sourceBranchID {
+		return model.Claim{}, fmt.Errorf("no se puede derivar a la misma sucursal")
+	}
+	claim, err := s.GetByIDForBranch(id, sourceBranchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if isTerminalOrTransferred(claim.Status) {
+		return model.Claim{}, fmt.Errorf("operación no permitida en el estado actual del reclamo")
+	}
+	fromStatus := claim.Status
+	updatedAt := clock.Now().UTC()
+	if err := s.claimRepo.UpdateTransferStatus(claim.ID, targetBranchID, model.ClaimStatusTransferred, updatedAt); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimTransferred,
+		Payload: model.ClaimTransferredPayload{
+			OriginBranchID: sourceBranchID,
+			TargetBranchID: targetBranchID,
+			FromStatus:     fromStatus,
+			ToStatus:       model.ClaimStatusTransferred,
+			Notes:          notes,
+		},
+		ChangedBy: changedBy,
+		Timestamp: updatedAt,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+	claim.Status = model.ClaimStatusTransferred
+	claim.AssignedBranchID = targetBranchID
+	claim.UpdatedAt = updatedAt
+
+	go s.notifyBranchSupervisors(
+		targetBranchID,
+		model.NotificationClaimTransferred,
+		"Reclamo derivado a su sucursal",
+		fmt.Sprintf("El reclamo %s fue derivado a su sucursal. Motivo: %s", claim.ID, notes),
+		claim.ID,
+	)
+	return claim, nil
+}
+
+// AcceptTransfer acepta un reclamo transferido. Solo supervisores de la sucursal receptora.
+func (s *ClaimService) AcceptTransfer(id, changedBy, branchID string) (model.Claim, error) {
+	claim, err := s.GetByIDForBranch(id, branchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if claim.Status != model.ClaimStatusTransferred {
+		return model.Claim{}, fmt.Errorf("el reclamo no está en estado derivado")
+	}
+	if claim.AssignedBranchID != branchID {
+		return model.Claim{}, ErrClaimForbidden
+	}
+	updatedAt := clock.Now().UTC()
+	// Keep assigned_branch_id to track that this branch now owns it.
+	if err := s.claimRepo.UpdateTransferStatus(claim.ID, branchID, model.ClaimStatusInReview, updatedAt); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimTransferAccepted,
+		Payload: model.ClaimTransferAcceptedPayload{
+			AssignedBranchID: branchID,
+			FromStatus:       model.ClaimStatusTransferred,
+			ToStatus:         model.ClaimStatusInReview,
+		},
+		ChangedBy: changedBy,
+		Timestamp: updatedAt,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+	claim.Status = model.ClaimStatusInReview
+	claim.UpdatedAt = updatedAt
+	return claim, nil
+}
+
+// RejectTransfer rechaza un reclamo transferido. Solo supervisores de la sucursal receptora.
+func (s *ClaimService) RejectTransfer(id, changedBy, branchID, notes string) (model.Claim, error) {
+	notes = strings.TrimSpace(notes)
+	if len(notes) < 15 {
+		return model.Claim{}, fmt.Errorf("el motivo debe tener al menos 15 caracteres")
+	}
+	claim, err := s.GetByIDForBranch(id, branchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if claim.Status != model.ClaimStatusTransferred {
+		return model.Claim{}, fmt.Errorf("el reclamo no está en estado derivado")
+	}
+	if claim.AssignedBranchID != branchID {
+		return model.Claim{}, ErrClaimForbidden
+	}
+	originBranchID := claim.AssignedBranchID
+	updatedAt := clock.Now().UTC()
+	// Clear assigned_branch_id → claim returns to origin branch.
+	if err := s.claimRepo.UpdateTransferStatus(claim.ID, "", model.ClaimStatusTransferRejected, updatedAt); err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimTransferRejected,
+		Payload: model.ClaimTransferRejectedPayload{
+			AssignedBranchID: originBranchID,
+			FromStatus:       model.ClaimStatusTransferred,
+			ToStatus:         model.ClaimStatusTransferRejected,
+			Notes:            notes,
+		},
+		ChangedBy: changedBy,
+		Timestamp: updatedAt,
+	}); err != nil {
+		return model.Claim{}, err
+	}
+	claim.Status = model.ClaimStatusTransferRejected
+	claim.AssignedBranchID = ""
+	claim.UpdatedAt = updatedAt
+
+	// Notify origin branch supervisors about the rejection.
+	shipment, sErr := s.shipmentRepo.GetByTrackingID(claim.TrackingID)
+	if sErr == nil {
+		go s.notifyBranchSupervisors(
+			shipment.OriginBranchID,
+			model.NotificationClaimTransferRejected,
+			"Reclamo devuelto por la sucursal receptora",
+			fmt.Sprintf("El reclamo %s fue rechazado. Nota: %s", claim.ID, notes),
+			claim.ID,
+		)
+	}
+	return claim, nil
 }
 
 func statusForResolution(resolution model.ClaimResolutionType) (model.ClaimStatus, error) {
@@ -649,6 +850,36 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		base.ToStatus = payload.ToStatus
 		base.EvidenceFileName = payload.EvidenceFileName
 		base.EvidenceFilePath = payload.EvidenceFilePath
+		return base, true
+	case model.EventClaimTransferred:
+		payload := de.Payload.(model.ClaimTransferredPayload)
+		if strings.TrimSpace(payload.Notes) != "" {
+			base.Notes = payload.Notes
+		} else {
+			base.Notes = fmt.Sprintf("Derivado a sucursal %s", payload.TargetBranchID)
+		}
+		base.OriginBranchID = payload.OriginBranchID
+		base.TargetBranchID = payload.TargetBranchID
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		return base, true
+	case model.EventClaimTransferAccepted:
+		payload := de.Payload.(model.ClaimTransferAcceptedPayload)
+		base.Notes = "Reclamo aceptado por la sucursal"
+		base.TargetBranchID = payload.AssignedBranchID
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
+		return base, true
+	case model.EventClaimTransferRejected:
+		payload := de.Payload.(model.ClaimTransferRejectedPayload)
+		if strings.TrimSpace(payload.Notes) != "" {
+			base.Notes = payload.Notes
+		} else {
+			base.Notes = "Reclamo rechazado por la sucursal receptora"
+		}
+		base.OriginBranchID = payload.AssignedBranchID
+		base.FromStatus = payload.FromStatus
+		base.ToStatus = payload.ToStatus
 		return base, true
 	default:
 		return model.ClaimEvent{}, false

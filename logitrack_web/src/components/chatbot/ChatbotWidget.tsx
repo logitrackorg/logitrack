@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, X, Bot, Loader } from 'lucide-react';
 import { ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -387,7 +387,7 @@ export function ChatbotWidget() {
   };
 
   // Función para limpiar la sesión
-  const clearSession = () => {
+  const clearSession = useCallback(() => {
     setSessionActive(false);
     setShipment(null);
     setRecipientDni('');
@@ -409,7 +409,7 @@ export function ChatbotWidget() {
 
     // Volver a authenticating para que el usuario pueda reingresar sus datos
     setState('authenticating');
-  };
+  }, []);
 
   // Función para reiniciar el timer de inactividad
   const resetSessionTimer = () => {
@@ -464,7 +464,7 @@ export function ChatbotWidget() {
     if (timeRemaining === 0 && sessionActive && state === 'authenticated') {
       clearSession();
     }
-  }, [timeRemaining, sessionActive, state]);
+  }, [timeRemaining, sessionActive, state, clearSession]);
 
   // US-4: enviar respuesta a reclamo pendiente_customer
   const handleSubmitClaimResponse = async (file: File | null) => {

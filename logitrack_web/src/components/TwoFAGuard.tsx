@@ -31,18 +31,22 @@ export function TwoFAGuard({ children }: { children: React.ReactNode }) {
     // Si requiere 2FA y NO lo tiene activado
     if (requiresTwoFA && !user.two_fa_enabled) {
       console.log('🚫 Acceso bloqueado: 2FA no configurado');
-      
+
       // Verificar si hay un setup en progreso
       const isPending = sessionStorage.getItem("pending_2fa_setup");
-      
+
       if (isPending === "true") {
         // Hay un setup en progreso, permitir acceso a la página de setup
         navigate('/2fa/setup-required', { replace: true });
       } else {
         // No hay setup en progreso, forzar logout
         console.log('❌ No hay setup en progreso - forzando logout');
-        sessionStorage.clear();
-        localStorage.clear();
+        sessionStorage.removeItem("pending_2fa_setup");
+        sessionStorage.removeItem("temp_token");
+        sessionStorage.removeItem("temp_user");
+        sessionStorage.removeItem("2fa_setup_cooldown");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         navigate('/login', { replace: true });
       }
     }

@@ -38,6 +38,18 @@ type FatigueConfig struct {
 	// GetTodayCheckin returns 404 when the stored check-in RecordedAt is before
 	// this timestamp, forcing the driver to redo the gate.
 	LastCheckinReset *time.Time `json:"last_checkin_reset,omitempty"`
+
+	// BlockRouteOnRed controls whether a RED fatigue score automatically locks the
+	// driver's route screen until a supervisor authorises resumption.
+	// nil is treated as true for backward compatibility with configs saved before
+	// this field existed. Supervisor notifications are sent regardless of this flag.
+	BlockRouteOnRed *bool `json:"block_route_on_red,omitempty"`
+}
+
+// IsBlockRouteOnRed returns true unless BlockRouteOnRed is explicitly set to false.
+// nil (field absent from old JSON) defaults to true.
+func (c FatigueConfig) IsBlockRouteOnRed() bool {
+	return c.BlockRouteOnRed == nil || *c.BlockRouteOnRed
 }
 
 // RiskThresholds defines the composite-score colour bands shown in the
@@ -47,19 +59,22 @@ type RiskThresholds struct {
 	RedMin   int `json:"red_min"`   // lower bound for red (high-risk) zone
 }
 
+func ptrBool(v bool) *bool { return &v }
+
 func DefaultFatigueConfig() FatigueConfig {
 	return FatigueConfig{
 		RiskThresholds: RiskThresholds{
 			GreenMax: 29,
 			RedMin:   60,
 		},
-		KSSWeight:      0.15,
-		VoiceWeight:    0.25,
-		TactileWeight:  0.25,
-		PVTWeight:      0.35,
-		KSSEnabled:     true,
-		VoiceEnabled:   true,
-		TactileEnabled: true,
-		PVTEnabled:     true,
+		KSSWeight:       0.15,
+		VoiceWeight:     0.25,
+		TactileWeight:   0.25,
+		PVTWeight:       0.35,
+		KSSEnabled:      true,
+		VoiceEnabled:    true,
+		TactileEnabled:  true,
+		PVTEnabled:      true,
+		BlockRouteOnRed: ptrBool(true),
 	}
 }

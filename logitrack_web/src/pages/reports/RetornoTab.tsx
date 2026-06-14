@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Undo2, Percent, AlertTriangle } from "lucide-react";
 import {
   AreaChart,
@@ -65,17 +65,17 @@ export function RetornoTab({ dateFrom, dateTo, branchId }: RetornoTabProps) {
   const readyForReturn = data?.total_ready_for_return ?? 0;
 
   // Most common return reason — from by_branch, find branch with most returns
-  const byBranchEntries = data ? Object.entries(data.by_branch) : [];
+  const byBranchEntries = useMemo(() => data ? Object.entries(data.by_branch) : [], [data]);
   const topBranch = byBranchEntries.length > 0
     ? byBranchEntries.reduce((best, [, v]) => v.returned > best.returned ? v : best, byBranchEntries[0][1])
     : null;
 
   // Chart data from by_day
-  const lineData = data
+  const lineData = useMemo(() => data
     ? Object.entries(data.by_day)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, count]) => ({ date, retornos: count }))
-    : [];
+    : [], [data]);
 
   const maxVal = lineData.length > 0 ? Math.max(...lineData.map((d) => d.retornos), 1) : 1;
 

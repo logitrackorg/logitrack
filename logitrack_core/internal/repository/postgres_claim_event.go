@@ -99,6 +99,15 @@ func unmarshalClaimPayload(eventType string, data []byte) (interface{}, error) {
 	case model.EventClaimCustomerResponded:
 		var p model.ClaimCustomerRespondedPayload
 		return p, json.Unmarshal(data, &p)
+	case model.EventClaimTransferred:
+		var p model.ClaimTransferredPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventClaimTransferAccepted:
+		var p model.ClaimTransferAcceptedPayload
+		return p, json.Unmarshal(data, &p)
+	case model.EventClaimTransferRejected:
+		var p model.ClaimTransferRejectedPayload
+		return p, json.Unmarshal(data, &p)
 	default:
 		return nil, fmt.Errorf("unknown claim event type: %s", eventType)
 	}

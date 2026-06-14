@@ -130,7 +130,7 @@ func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 
 // ConfirmTransferPayment godoc
 // @Summary      Confirmar pago por transferencia bancaria
-// @Description  Registra el pago como confirmado mediante transferencia bancaria. Modo simulado — a futuro validará el CBU/CVU contra el sistema bancario.
+// @Description  Registra el pago como confirmado mediante transferencia bancaria. El operador confirma una vez verificada la acreditación en la cuenta destino.
 // @Tags         payments
 // @Produce      json
 // @Security     BearerAuth
@@ -141,7 +141,7 @@ func (h *PaymentHandler) ConfirmCashPayment(c *gin.Context) {
 func (h *PaymentHandler) ConfirmTransferPayment(c *gin.Context) {
 	user := c.MustGet(middleware.UserKey).(model.User)
 	trackingID := c.Param("tracking_id")
-	shipment, err := h.svc.ConfirmMockPayment(trackingID, user.Username)
+	shipment, err := h.svc.ConfirmTransferPayment(trackingID, user.Username)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
