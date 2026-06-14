@@ -11,6 +11,7 @@ import (
 	"github.com/logitrack/core/internal/middleware"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
+	"github.com/logitrack/core/internal/geo" 
 )
 
 type AuthHandler struct {
@@ -28,13 +29,27 @@ func (h *AuthHandler) RegisterRoutes(r *gin.RouterGroup) {
 	r.POST("/auth/logout", h.Logout)
 }
 
-func (h *AuthHandler) log(username, userID string, event model.AccessEventType) {
+func (h *AuthHandler) logWithContext(c *gin.Context, username, userID, role string, event model.AccessEventType, failureReason string) {
+	ip := c.ClientIP()
+	loc := geo.LookupIP(ip)
+
+	result := "success"
+	if event == model.AccessEventLoginFailure {
+		result = "failure"
+	}
+
 	_ = h.accessLog.Log(model.AccessLog{
-		ID:        uuid.NewString(),
-		Username:  username,
-		UserID:    userID,
-		EventType: event,
-		Timestamp: clock.Now(),
+		ID:            uuid.NewString(),
+		Username:      username,
+		UserID:        userID,
+		Role:          role,
+		EventType:     event,
+		IPAddress:     ip,
+		Country:       loc.Country,
+		City:          loc.City,
+		Result:        result,
+		FailureReason: failureReason,
+		Timestamp:     clock.Now(),
 	})
 }
 
@@ -59,7 +74,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	
 	user, err := h.repo.FindUser(req.Username, req.Password)
 	if err != nil {
-		h.log(req.Username, "", model.AccessEventLoginFailure)
+		h.logWithContext(c, req.Username, "", "", model.AccessEventLoginFailure, "invalid_credentials")
 		if err == repository.ErrAccountInactive {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "account_inactive"})
 			return
@@ -80,7 +95,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
-		h.log(user.Username, user.ID, "2fa_required")
+		h.logWithContext(c, user.Username, user.ID, string(user.Role), "2fa_required", "")
 		
 		c.JSON(http.StatusOK, model.LoginResponse{
 			Requires2FA:  true,
@@ -92,7 +107,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token := uuid.NewString()
 	h.repo.SaveToken(token, user)
-	h.log(user.Username, user.ID, model.AccessEventLoginSuccess)
+	h.logWithContext(c, user.Username, user.ID, string(user.Role), model.AccessEventLoginSuccess, "")
 	
 	c.JSON(http.StatusOK, model.LoginResponse{
 		Token:       token,
@@ -115,7 +130,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if strings.HasPrefix(header, "Bearer ") {
 		token := strings.TrimPrefix(header, "Bearer ")
 		if user, err := h.repo.GetUserByToken(token); err == nil {
-			h.log(user.Username, user.ID, model.AccessEventLogout)
+			h.logWithContext(c, user.Username, user.ID, string(user.Role), model.AccessEventLogout, "")
 		}
 		h.repo.DeleteToken(token)
 	}

@@ -44,18 +44,20 @@ export function TwoFAVerify() {
   }, [sessionToken, navigate]);
 
   useEffect(() => {
-    const storedCooldown = sessionStorage.getItem('2fa_verify_cooldown');
+    if (!sessionToken) return;
+    const key = `2fa_cooldown_${sessionToken}`;
+    const storedCooldown = sessionStorage.getItem(key);
     if (storedCooldown) {
       const cooldownTime = parseInt(storedCooldown, 10);
       if (Date.now() >= cooldownTime) {
-        sessionStorage.removeItem('2fa_verify_cooldown');
+        sessionStorage.removeItem(key);
       } else {
         lockoutUntilRef.current = cooldownTime;
         attemptsRef.current = 0;
         setAttemptsLeft(0);
       }
     }
-  }, []);
+  }, [sessionToken]);
 
   useEffect(() => {
     const tick = () => {
@@ -67,7 +69,7 @@ export function TwoFAVerify() {
           setError('');
           attemptsRef.current = MAX_ATTEMPTS;
           setAttemptsLeft(MAX_ATTEMPTS);
-          sessionStorage.removeItem('2fa_verify_cooldown');
+          sessionStorage.removeItem(`2fa_cooldown_${sessionToken}`);
         } else {
           setLockoutRemaining(Math.ceil((lockoutUntilRef.current - now) / 1000));
         }
@@ -86,6 +88,11 @@ export function TwoFAVerify() {
     setError('');
     try {
       const response = await twoFAApi.verify({ session_token: sessionToken, code });
+      sessionStorage.removeItem("pending_2fa_setup");
+      sessionStorage.removeItem("temp_token");
+      sessionStorage.removeItem("temp_user");
+      sessionStorage.removeItem("2fa_setup_cooldown");
+      sessionStorage.removeItem(`2fa_cooldown_${sessionToken}`);
       setSession(response.token, response.user);
       const { role, driver_type } = response.user;
       if (role === 'driver') {
@@ -105,7 +112,7 @@ export function TwoFAVerify() {
         const secs = match ? parseGoDuration(match[1]) : 60;
         const cooldownTime = Date.now() + secs * 1000;
         lockoutUntilRef.current = cooldownTime;
-        sessionStorage.setItem('2fa_verify_cooldown', cooldownTime.toString());
+        sessionStorage.setItem(`2fa_cooldown_${sessionToken}`, cooldownTime.toString());
         attemptsRef.current = 0;
         setAttemptsLeft(0);
         setError('');

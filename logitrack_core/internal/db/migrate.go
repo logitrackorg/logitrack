@@ -612,6 +612,11 @@ func RunMigrations(db *sql.DB) error {
 		-- Auditoría específica de eventos 2FA
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
 		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS role           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS country        TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS city           TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS result         TEXT NOT NULL DEFAULT '';
+		ALTER TABLE access_logs ADD COLUMN IF NOT EXISTS failure_reason TEXT NOT NULL DEFAULT '';
 
 		-- Bloqueo de pantalla por alerta de fatiga (LOGITRACK-499)
 		CREATE TABLE IF NOT EXISTS fatigue_blocks (
