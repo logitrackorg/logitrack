@@ -160,6 +160,14 @@ export function Claims() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeClaimId]);
 
+  // Resuelve el ID de una sucursal a su nombre usando las sucursales ya
+  // cargadas (las del filtro de manager o las del dropdown de derivación).
+  // Si no la encuentra, cae al ID para no romper el renglón del historial.
+  const branchName = (id?: string): string => {
+    if (!id) return "";
+    return [...transferBranches, ...branches].find((b) => b.id === id)?.name ?? id;
+  };
+
   const loadClaimEvents = async (claimId: string, force = false) => {
     if (!force && eventsByClaim[claimId]) return;
     setEventsLoadingId(claimId);
@@ -352,10 +360,12 @@ export function Claims() {
     if (!rejectModal) return;
     setBusyId(rejectModal.claimId);
     try {
-      const updated = await claimsApi.rejectTransfer(rejectModal.claimId, rejectNotes);
-      setClaims((prev) => prev.map((c) => (c.id === rejectModal.claimId ? updated : c)));
-      await loadClaimEvents(rejectModal.claimId, true);
+      await claimsApi.rejectTransfer(rejectModal.claimId, rejectNotes);
       setRejectModal(null);
+      // Al rechazar, el reclamo deja de estar asignado a esta sucursal
+      // (AssignedBranchID = ""), por lo que pedir su historial devolvería 403.
+      // Recargamos la lista ya re-scopeada en vez de refrescar los eventos.
+      await loadClaims();
     } catch {
       setError("No se pudo rechazar el reclamo.");
     } finally {
@@ -781,7 +791,11 @@ export function Claims() {
                                 <div className="dark:text-gray-400 text-slate-500 text-xs mt-1">
                                   por <strong>{formatChangedBy(ev.changed_by)}</strong>
                                   {ev.from_status && ev.to_status && (
-                                    <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}</span>
+                                    <span> · {CLAIM_STATUS_LABELS[ev.from_status]} → {CLAIM_STATUS_LABELS[ev.to_status]}
+                                      {ev.event_type === "claim_transferred" && ev.target_branch_id && (
+                                        <> {branchName(ev.target_branch_id)}</>
+                                      )}
+                                    </span>
                                   )}
                                 </div>
                               </div>
