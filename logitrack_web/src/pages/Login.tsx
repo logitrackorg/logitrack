@@ -376,14 +376,15 @@ export function Login() {
         const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
 
         if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
-          console.log('<AlertTriangle size={14} className="inline text-amber-500" /> Usuario sin 2FA detectado - debe activarlo');
+          
+          sessionStorage.removeItem("pending_2fa_setup");
+          sessionStorage.removeItem("temp_token");
+          sessionStorage.removeItem("temp_user");
+          sessionStorage.removeItem("2fa_setup_cooldown");
 
-          // 🔑 CLAVE: Guardar token EN SESSIONSTORAGE con flag especial
           sessionStorage.setItem("pending_2fa_setup", "true");
           sessionStorage.setItem("temp_token", response.token!);
           sessionStorage.setItem("temp_user", JSON.stringify(user));
-
-          console.log('✅ Navegando a /2fa/setup-required');
           navigate("/2fa/setup-required");
           return;
         }
