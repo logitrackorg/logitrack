@@ -728,6 +728,32 @@ func (r *inMemoryClaimRepository) UpdateStatus(id string, status model.ClaimStat
 	return ErrClaimNotFound
 }
 
+func (r *inMemoryClaimRepository) UpdateTransferStatus(id, assignedBranchID string, status model.ClaimStatus, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.claims {
+		if r.claims[i].ID == id {
+			r.claims[i].Status = status
+			r.claims[i].AssignedBranchID = assignedBranchID
+			r.claims[i].UpdatedAt = updatedAt
+			return nil
+		}
+	}
+	return ErrClaimNotFound
+}
+
+func (r *inMemoryClaimRepository) ListByAssignedBranch(branchID string) ([]model.Claim, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []model.Claim
+	for _, c := range r.claims {
+		if c.AssignedBranchID == branchID {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}
+
 // ── InMemory ClaimEventRepository ─────────────────────────────────────────────
 
 type inMemoryClaimEventRepository struct {

@@ -395,6 +395,73 @@ func containsAny(values []string, target string) bool {
 	return false
 }
 
+// TransferClaim transfers a claim to another branch. Supervisor only.
+func (h *ClaimHandler) TransferClaim(c *gin.Context) {
+	var req model.TransferClaimRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.TransferClaim(c.Param("id"), req.TargetBranchID, user.Username, user.BranchID, req.Notes)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
+// AcceptTransfer accepts a transferred claim. Supervisor only.
+func (h *ClaimHandler) AcceptTransfer(c *gin.Context) {
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.AcceptTransfer(c.Param("id"), user.Username, user.BranchID)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
+// RejectTransfer rejects a transferred claim. Supervisor only.
+func (h *ClaimHandler) RejectTransfer(c *gin.Context) {
+	var req model.RejectTransferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.RejectTransfer(c.Param("id"), user.Username, user.BranchID, req.Notes)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
 // GetPublicClaim returns a public claim by ID.
 //
 // @Summary      Get public claim

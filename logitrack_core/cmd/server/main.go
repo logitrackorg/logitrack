@@ -264,6 +264,7 @@ func main() {
 	qrHandler := handler.NewQRHandler(shipmentSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc, shipmentSvc)
 	incidentHandler := handler.NewIncidentHandler(incidentSvc, shipmentSvc)
+	claimSvc.SetNotificationRepository(notifRepo)
 	claimHandler := handler.NewClaimHandler(claimSvc)
 	authHandler := handler.NewAuthHandler(authRepo, accessLogRepo, twoFARepo)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogRepo)
@@ -560,6 +561,10 @@ func main() {
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)
+	claimSupervisor := middleware.RequireRoles(model.RoleSupervisor)
+	protected.POST("/claims/:id/transfer", claimSupervisor, claimHandler.TransferClaim)
+	protected.POST("/claims/:id/accept-transfer", claimSupervisor, claimHandler.AcceptTransfer)
+	protected.POST("/claims/:id/reject-transfer", claimSupervisor, claimHandler.RejectTransfer)
 
 	// Correct / cancel shipment — operator, supervisor (branch check enforced in handler/service)
 	protected.PATCH("/shipments/:tracking_id/correct", shipmentWrite, shipmentHandler.CorrectShipment)
