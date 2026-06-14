@@ -117,6 +117,9 @@ func (f *fakeAccessLog) Log(e model.AccessLog) error {
 	return nil
 }
 func (f *fakeAccessLog) List(_ int) ([]model.AccessLog, error) { return f.entries, nil }
+func (f *fakeAccessLog) ListFiltered(_ model.AccessLogFilter) ([]model.AccessLog, error) {
+	return f.entries, nil
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
