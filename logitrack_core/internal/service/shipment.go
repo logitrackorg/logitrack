@@ -2,9 +2,12 @@ package service
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -992,6 +995,22 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		}
 	}
 
+	// Handle delivery photo from base64 (DriverShipmentDetail path for última milla).
+	var photoPath, photoName, photoMime string
+	if targetStatus == model.StatusDelivered && req.DeliveryPhotoBase64 != "" {
+		imgData, decErr := base64.StdEncoding.DecodeString(req.DeliveryPhotoBase64)
+		if decErr != nil {
+			return model.Shipment{}, fmt.Errorf("la foto de entrega tiene un formato inválido")
+		}
+		if len(imgData) > 10<<20 {
+			return model.Shipment{}, fmt.Errorf("la foto de entrega no puede superar los 10 MB")
+		}
+		photoPath, photoName, photoMime, err = saveDeliveryPhoto(trackingID, imgData, "image/jpeg")
+		if err != nil {
+			return model.Shipment{}, fmt.Errorf("no se pudo guardar la foto de entrega: %w", err)
+		}
+	}
+
 	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 		TrackingID:          trackingID,
 		FromStatus:          current.Status,
@@ -1002,8 +1021,14 @@ func (s *ShipmentService) UpdateStatus(trackingID string, req model.UpdateStatus
 		DriverID:            req.DriverID,
 		RejectedByRecipient: req.RejectedByRecipient && targetStatus == model.StatusDeliveryFailed,
 		Timestamp:           clock.Now().UTC(),
+		DeliveryPhotoPath:   photoPath,
+		DeliveryPhotoName:   photoName,
+		DeliveryPhotoMime:   photoMime,
 	})
 	if err != nil {
+		if photoPath != "" {
+			_ = os.Remove(photoPath)
+		}
 		return model.Shipment{}, err
 	}
 
@@ -1782,6 +1807,12 @@ func returnETA(now time.Time, currentETA *time.Time) *time.Time {
 // maxKeywordAttempts is the fixed limit of failed keyword attempts before the field locks.
 const maxKeywordAttempts = 3
 
+// DeliveryPhotoUpload holds the binary data for a delivery evidence photo.
+type DeliveryPhotoUpload struct {
+	Data     []byte
+	MimeType string
+}
+
 // DeliverRequest carries the delivery confirmation data from the driver.
 type DeliverRequest struct {
 	Keyword      string // security keyword spoken by recipient
@@ -1791,6 +1822,7 @@ type DeliverRequest struct {
 	ChangedBy    string // user.Username used for audit trail
 	CurrentSpeed float64
 	SpeedSource  string
+	Photo        *DeliveryPhotoUpload // required for última milla deliveries
 }
 
 // DeliverShipment confirms last-mile delivery via security keyword (primary) or
@@ -1832,7 +1864,7 @@ func (s *ShipmentService) DeliverShipment(trackingID string, req DeliverRequest)
 		if expectedDNI != strings.TrimSpace(req.RecipientDNI) {
 			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del destinatario")
 		}
-		return s.finalizeDelivery(current, req.ChangedBy, true)
+		return s.finalizeDelivery(current, req.ChangedBy, true, req.Photo)
 	}
 
 	// Primary path: keyword validation.
@@ -1851,12 +1883,22 @@ func (s *ShipmentService) DeliverShipment(trackingID string, req DeliverRequest)
 		return model.Shipment{}, fmt.Errorf("palabra clave inválida — %d intento(s) restante(s)", remaining)
 	}
 
-	return s.finalizeDelivery(current, req.ChangedBy, false)
+	return s.finalizeDelivery(current, req.ChangedBy, false, req.Photo)
 }
 
 // finalizeDelivery executes the → delivered transition and fires delivery notifications.
-func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy string, contingency bool) (model.Shipment, error) {
+func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy string, contingency bool, photo *DeliveryPhotoUpload) (model.Shipment, error) {
 	now := clock.Now().UTC()
+
+	var photoPath, photoName, photoMime string
+	if photo != nil && len(photo.Data) > 0 {
+		var err error
+		photoPath, photoName, photoMime, err = saveDeliveryPhoto(current.TrackingID, photo.Data, photo.MimeType)
+		if err != nil {
+			return model.Shipment{}, fmt.Errorf("no se pudo guardar la foto de entrega: %w", err)
+		}
+	}
+
 	updated, err := s.repo.UpdateStatus(repository.StatusUpdateCmd{
 		TrackingID:          current.TrackingID,
 		FromStatus:          current.Status,
@@ -1864,12 +1906,39 @@ func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy str
 		ChangedBy:           changedBy,
 		Timestamp:           now,
 		ContingencyDelivery: contingency,
+		DeliveryPhotoPath:   photoPath,
+		DeliveryPhotoName:   photoName,
+		DeliveryPhotoMime:   photoMime,
 	})
 	if err != nil {
+		// Best-effort cleanup: remove the photo if the event failed to append.
+		if photoPath != "" {
+			_ = os.Remove(photoPath)
+		}
 		return model.Shipment{}, err
 	}
 	if s.deliveryNotifSvc != nil {
 		go s.deliveryNotifSvc.SendDeliveryConfirmedNotification(updated)
 	}
 	return updated, nil
+}
+
+// saveDeliveryPhoto saves delivery evidence to uploads/shipments/ and returns path, name, mime.
+func saveDeliveryPhoto(trackingID string, data []byte, mimeType string) (path, name, mime string, err error) {
+	dir := filepath.Join("uploads", "shipments")
+	if err = os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	ext := evidenceFileExtension(mimeType)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	name = fmt.Sprintf("%s_%s%s", trackingID, uuid.NewString()[:8], ext)
+	path = filepath.Join(dir, name)
+	mime = mimeType
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	err = os.WriteFile(path, data, 0o644)
+	return
 }

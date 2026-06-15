@@ -152,11 +152,12 @@ export interface ShipmentEvent {
   location?: string;
   notes?: string;
   timestamp: string;
-  
-  // ✅ NUEVOS CAMPOS para eventos de reprogramación
   current_location?: EventLocation;
   rescheduled_date?: string;
   via?: string;
+  // Delivery photo evidence (última milla)
+  has_delivery_photo?: boolean;
+  delivery_photo_name?: string;
 }
 
 export interface AvgTimePerStatusItem {
@@ -259,6 +260,8 @@ export interface UpdateStatusPayload {
   current_speed?: number;
   /** Origen de la velocidad reportada, para auditoría (BUG-43). */
   speed_source?: "simulation" | "real_gps";
+  /** Base64-encoded JPEG photo for última milla delivered transitions. */
+  delivery_photo_base64?: string;
 }
 
 export const shipmentApi = {
@@ -286,11 +289,22 @@ export const shipmentApi = {
       contingency?: boolean;
       current_speed?: number;
       speed_source?: "simulation" | "real_gps";
+      photo: Blob;
     }
-  ) =>
+  ) => {
+    const form = new FormData();
+    if (payload.keyword) form.append("keyword", payload.keyword);
+    if (payload.recipient_dni) form.append("recipient_dni", payload.recipient_dni);
+    if (payload.contingency) form.append("contingency", "true");
+    if (payload.current_speed !== undefined) form.append("current_speed", String(payload.current_speed));
+    if (payload.speed_source) form.append("speed_source", payload.speed_source);
+    form.append("photo", payload.photo, "delivery.jpg");
+    return api.post<Shipment>(`/shipments/${trackingId}/deliver`, form).then((r) => r.data);
+  },
+  getDeliveryPhoto: (trackingId: string) =>
     api
-      .post<Shipment>(`/shipments/${trackingId}/deliver`, payload)
-      .then((r) => r.data),
+      .get(`/shipments/${trackingId}/delivery-photo`, { responseType: "blob" })
+      .then((r) => r.data as Blob),
   getEvents: (trackingId: string) =>
     api
       .get<ShipmentEvent[]>(`/shipments/${trackingId}/events`)

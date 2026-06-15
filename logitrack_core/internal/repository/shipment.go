@@ -102,6 +102,10 @@ type StatusUpdateCmd struct {
 	RejectedByRecipient bool
 	ContingencyDelivery bool
 	Timestamp           time.Time
+	// Delivery photo evidence (última milla delivered events)
+	DeliveryPhotoPath string
+	DeliveryPhotoName string
+	DeliveryPhotoMime string
 }
 
 type CorrectCmd struct {

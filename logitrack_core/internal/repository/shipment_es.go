@@ -109,6 +109,9 @@ func (r *eventSourcedShipmentRepository) UpdateStatus(cmd StatusUpdateCmd) (mode
 			DriverID:            cmd.DriverID,
 			RejectedByRecipient: cmd.RejectedByRecipient,
 			ContingencyDelivery: cmd.ContingencyDelivery,
+			DeliveryPhotoPath:   cmd.DeliveryPhotoPath,
+			DeliveryPhotoName:   cmd.DeliveryPhotoName,
+			DeliveryPhotoMime:   cmd.DeliveryPhotoMime,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,
@@ -348,7 +351,7 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 	case model.EventStatusChanged:
 		payload := de.Payload.(model.StatusChangedPayload)
 		from := payload.FromStatus
-		return model.ShipmentEvent{
+		ev := model.ShipmentEvent{
 			ID:         de.ID,
 			TrackingID: de.TrackingID,
 			FromStatus: &from,
@@ -357,7 +360,13 @@ func toShipmentEvent(de model.DomainEvent) (model.ShipmentEvent, bool) {
 			Location:   payload.Location,
 			Notes:      payload.Notes,
 			Timestamp:  de.Timestamp,
-		}, true
+		}
+		if payload.DeliveryPhotoPath != "" {
+			ev.HasDeliveryPhoto = true
+			ev.DeliveryPhotoName = payload.DeliveryPhotoName
+			ev.DeliveryPhotoPath = payload.DeliveryPhotoPath
+		}
+		return ev, true
 
 	case model.EventShipmentCorrected:
 		payload := de.Payload.(model.ShipmentCorrectedPayload)
