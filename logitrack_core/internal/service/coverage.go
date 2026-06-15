@@ -696,7 +696,7 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			break
 		}
 
-		point, ok := bestInteriorPoint(current, *sites)
+		point, ok := bestInteriorPoint(current, *sites, radiusKm, countryLocal)
 		if !ok {
 			// Degenerate fragment (e.g. a sliver thinner than the grid
 			// resolution, with no grid point strictly inside): fall back to
@@ -771,31 +771,53 @@ func largestFragment(frags []geometry.Polygon) geometry.Polygon {
 	return best
 }
 
-// bestInteriorPoint implements a "Pole of Inaccessibility" grid-search
-// heuristic to place a new-branch suggestion well inside an uncovered
-// fragment, instead of on one of its vertices.
+// coverageInteriorPointCandidates is the size of the "Top N" shortlist that
+// Pass 1 of bestInteriorPoint hands to Pass 2. Pass 2's polyclip
+// INTERSECTION is too expensive to run over the full grid
+// ((coverageSuggestionGridSteps+1)^2 points), so only the candidates that
+// already look best on the cheap distance heuristic are re-scored precisely.
+const coverageInteriorPointCandidates = 10
+
+// bestInteriorPoint implements a two-pass "Pole of Inaccessibility" heuristic
+// to place a new-branch suggestion well inside an uncovered fragment, instead
+// of on one of its vertices or near a national border.
 //
 // DIFFERENCE (Voronoi cell minus simulated coverage circle) typically leaves a
 // concave "crescent" fragment whose vertices sit on the cell/country/circle
 // boundary — picking one of them pins the suggestion to a national border or
 // to the edge of the simulated coverage circle, which is rarely a viable
-// branch location.
+// branch location. Worse, a grid point deep inside the fragment can still sit
+// close enough to the border that half its own coverage circle (radiusKm)
+// would spill into Chile/Brazil/etc. — the "Edge Effect" — wasting coverage
+// area.
 //
-// Instead, this overlays a (coverageSuggestionGridSteps+1)^2 grid over frag's
-// bounding box, keeps only the points that fall inside the polygon, and
-// returns the one farthest from the nearest existing branch site (sites,
-// already projected into the same local frame) — i.e. the point deepest
-// inside the gap and farthest from the already-covered area around the
-// orange circle.
+// Pass 1 (cheap distance filter): overlay a (coverageSuggestionGridSteps+1)^2
+// grid over frag's bounding box, keep only the points that fall inside the
+// polygon, and rank them by distance to the nearest existing branch site
+// (sites, already projected into the same local frame) — i.e. how deep inside
+// the gap and how far from already-covered area each candidate is. Keep the
+// top coverageInteriorPointCandidates.
+//
+// Pass 2 (precise area filter): for each shortlisted candidate, build its
+// simulated coverage circle (radiusKm) and intersect it with countryLocal
+// (Argentina's contour, projected into the same frame) via polyclip
+// INTERSECTION — the "useful area" that wouldn't be wasted across the border.
+// The winner is the candidate with the largest useful area; ties (e.g. both
+// circles land 100% inside the country) fall back to Pass 1's distance score.
+//
+// If radiusKm <= 0 (no coverage circle to score), Pass 1's winner is returned
+// directly — Pass 2 would be meaningless.
 //
 // Returns ok=false if no grid point falls inside frag (a sliver thinner than
 // the grid resolution); callers should fall back to a vertex-based heuristic.
-func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point) (geometry.Point, bool) {
+func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) (geometry.Point, bool) {
 	bbox := boundingBox(frag)
 
-	var best geometry.Point
-	bestScore := -1.0
-	found := false
+	type candidate struct {
+		point geometry.Point
+		dist2 float64
+	}
+	var candidates []candidate
 
 	for i := 0; i <= coverageSuggestionGridSteps; i++ {
 		x := bbox.MinX + (bbox.MaxX-bbox.MinX)*float64(i)/float64(coverageSuggestionGridSteps)
@@ -805,15 +827,41 @@ func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point) (geometry.
 			if !frag.Contains(pt) {
 				continue
 			}
-			score := nearestSiteDist2(pt, sites)
-			if !found || score > bestScore {
-				best = pt
-				bestScore = score
-				found = true
-			}
+			candidates = append(candidates, candidate{point: pt, dist2: nearestSiteDist2(pt, sites)})
 		}
 	}
-	return best, found
+	if len(candidates) == 0 {
+		return geometry.Point{}, false
+	}
+
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].dist2 > candidates[j].dist2 })
+	if len(candidates) > coverageInteriorPointCandidates {
+		candidates = candidates[:coverageInteriorPointCandidates]
+	}
+
+	if radiusKm <= 0 {
+		return candidates[0].point, true
+	}
+
+	best := candidates[0]
+	bestUsefulArea := usefulCircleArea(best.point, radiusKm, countryLocal)
+	for _, cand := range candidates[1:] {
+		area := usefulCircleArea(cand.point, radiusKm, countryLocal)
+		if area > bestUsefulArea || (area == bestUsefulArea && cand.dist2 > best.dist2) {
+			best = cand
+			bestUsefulArea = area
+		}
+	}
+	return best.point, true
+}
+
+// usefulCircleArea returns the area (km²) of a simulated coverage circle of
+// radiusKm centred on point that falls within countryLocal (Argentina's
+// contour, already projected into the same local km frame) — the part of the
+// circle that would actually contribute coverage on national territory.
+func usefulCircleArea(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon) float64 {
+	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
+	return sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
 }
 
 // boundingBox returns the axis-aligned bounding box of poly's vertices.

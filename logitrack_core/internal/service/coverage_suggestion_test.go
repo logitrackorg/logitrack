@@ -25,7 +25,7 @@ func TestBestInteriorPoint_BalancesMultipleSites(t *testing.T) {
 	// each is the midpoint of the top edge, (5, 10).
 	sites := []geometry.Point{{X: 0, Y: 0}, {X: 10, Y: 0}}
 
-	pt, ok := bestInteriorPoint(square, sites)
+	pt, ok := bestInteriorPoint(square, sites, 0, nil)
 	if !ok {
 		t.Fatal("expected an interior point to be found")
 	}
@@ -51,7 +51,7 @@ func TestBestInteriorPoint_ResultIsInsidePolygon(t *testing.T) {
 	}
 	sites := []geometry.Point{{X: -50, Y: -50}}
 
-	pt, ok := bestInteriorPoint(square, sites)
+	pt, ok := bestInteriorPoint(square, sites, 0, nil)
 	if !ok {
 		t.Fatal("expected an interior point to be found")
 	}
@@ -65,8 +65,48 @@ func TestBestInteriorPoint_ResultIsInsidePolygon(t *testing.T) {
 // farthestVertex.
 func TestBestInteriorPoint_NoneForDegenerateFragment(t *testing.T) {
 	line := geometry.Polygon{{X: 0, Y: 0}, {X: 1, Y: 0}}
-	if _, ok := bestInteriorPoint(line, nil); ok {
+	if _, ok := bestInteriorPoint(line, nil, 0, nil); ok {
 		t.Error("expected no interior point for a degenerate (zero-area) fragment")
+	}
+}
+
+// TestBestInteriorPoint_PrefersUsefulAreaOverRawDistance verifies Pass 2 of
+// the two-pass "Edge Effect" heuristic: a candidate that sits exactly on the
+// country border — and whose coverage circle would therefore "waste" half its
+// area outside the country — loses to a slightly-less-distant candidate
+// (still in Pass 1's Top-N shortlist) whose circle lands more fully inside the
+// country, even though the border candidate scores highest on Pass 1's raw
+// distance-to-nearest-site metric.
+func TestBestInteriorPoint_PrefersUsefulAreaOverRawDistance(t *testing.T) {
+	square := geometry.Polygon{
+		{X: 0, Y: 0},
+		{X: 10, Y: 0},
+		{X: 10, Y: 10},
+		{X: 0, Y: 10},
+	}
+	// Two sites at the bottom corners: the point maximizing the distance to
+	// the nearest of them is (5,10) — exactly on the line x=5.
+	sites := []geometry.Point{{X: 0, Y: 0}, {X: 10, Y: 0}}
+
+	// "Argentina" is only the left half of the fragment (x <= 5). A coverage
+	// circle centred exactly at x=5 (Pass 1's winner) has exactly half its
+	// area inside the country; one centred slightly to the left has more.
+	country := toPolyclip(geometry.Polygon{
+		{X: 0, Y: -50},
+		{X: 5, Y: -50},
+		{X: 5, Y: 50},
+		{X: 0, Y: 50},
+	})
+
+	pt, ok := bestInteriorPoint(square, sites, 3, country)
+	if !ok {
+		t.Fatal("expected an interior point to be found")
+	}
+	if pt.X == 5 && pt.Y == 10 {
+		t.Error("expected the border candidate (5,10) to lose to a candidate further inside the country")
+	}
+	if pt.X >= 5 {
+		t.Errorf("expected the winning candidate to sit inside the country (x < 5), got %+v", pt)
 	}
 }
 
