@@ -1090,3 +1090,33 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 .leaflet-bottom {
   z-index: 900 !important;
 }
+
+/* ─── Leaflet zoom controls — estilo coherente con la app ─── */
+.leaflet-control-zoom {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+}
+.leaflet-control-zoom a {
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 16px !important;
+  font-weight: 600;
+  color: var(--text-secondary) !important;
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--border) !important;
+  transition: background 0.15s, color 0.15s;
+}
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+.leaflet-control-zoom a.leaflet-disabled {
+  color: var(--text-muted) !important;
+  cursor: default;
+}
