@@ -1091,8 +1091,12 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   z-index: 900 !important;
 }
 
-/* ─── Leaflet zoom controls — estilo coherente con la app ─── */
+/* ─── Leaflet zoom controls — posición y estilo ──────────── */
 .leaflet-control-zoom {
+  position: fixed !important;
+  bottom: 12px !important;
+  left: 12px !important;
+  top: auto !important;
   border: 1px solid var(--border) !important;
   border-radius: 10px !important;
   overflow: hidden;

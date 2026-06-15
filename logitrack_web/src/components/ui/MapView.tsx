@@ -564,7 +564,7 @@ export function MapView({
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-3 bottom-28 z-[900] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-3 bottom-3 z-[900] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
