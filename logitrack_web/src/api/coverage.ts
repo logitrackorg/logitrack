@@ -86,6 +86,10 @@ export interface SuggestedLocation {
   branch_id: string;
   branch_name: string;
   gap_area_km2: number;
+  /** Área real (km²) que aportaría el círculo de cobertura simulado sobre territorio argentino. */
+  actual_added_km2: number;
+  /** Sucursales existentes cuyas celdas de Voronoi se ven aliviadas por esta sugerencia. */
+  affected_branches: string[];
 }
 
 export interface SimulationResult {
@@ -106,10 +110,33 @@ export interface SnappedCity {
   lng: number;
   city_name: string;
   is_snapped: boolean;
+  /**
+   * Frontend-only (no proviene del backend): true cuando el usuario "pausó"
+   * esta sugerencia para un análisis What-If sin descartarla. Las
+   * sugerencias pausadas se ocultan del mapa y se excluyen de la Proyección
+   * de Impacto.
+   */
+  is_paused?: boolean;
 }
 
 export interface SnapToCityResponse {
   results: SnappedCity[];
+}
+
+/**
+ * Compara, para cada sucursal existente, su porcentaje de cobertura actual
+ * contra el que tendría si la red incluyera también las sugerencias activas
+ * (`ProjectionRequest.suggestions`) — la sección "Proyección de Impacto".
+ */
+export interface BranchProjection {
+  branch_id: string;
+  branch_name: string;
+  current_coverage_pct: number;
+  projected_coverage_pct: number;
+}
+
+export interface ProjectionResult {
+  branches: BranchProjection[];
 }
 
 export const coverageApi = {
@@ -142,6 +169,16 @@ export const coverageApi = {
     api
       .post<SnapToCityResponse>("/coverage/snap-to-city", { points, radius_km: radiusKm })
       .then((r) => r.data.results),
+
+  /**
+   * "Proyección de Impacto": recalcula el diagrama de Voronoi incluyendo las
+   * sugerencias activas y devuelve, para cada sucursal existente, su
+   * cobertura actual vs. proyectada con el mismo área simulada.
+   */
+  project: (areaKm2: number, suggestions: LatLng[]) =>
+    api
+      .post<ProjectionResult>("/coverage/project", { area_km2: areaKm2, suggestions })
+      .then((r) => r.data),
 };
 
 // Paleta por severidad de gap (consistente con StatusBadge/PriorityBadge del sistema).

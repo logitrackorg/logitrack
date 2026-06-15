@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,9 +70,9 @@ type overpassResponse struct {
 }
 
 // SnapToCities resolves a batch of geometric coverage-gap points (lat/lng) to
-// the nearest real populated place (city/town/village/hamlet) within
-// radiusKm of each — typically the suggested branches' simulated coverage
-// radius, capped at snapToCityMaxRadiusKm.
+// the best real populated place (city or town — see snapChunk and
+// candidateScore) within radiusKm of each — typically the suggested
+// branches' simulated coverage radius, capped at snapToCityMaxRadiusKm.
 //
 // Points are processed in small sequential chunks (snapToCityChunkSize), each
 // resolved with a single Overpass request — one "around" clause per point in
@@ -114,10 +115,14 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64) 
 func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, out []model.SnappedCity) {
 	radiusMeters := int(radiusKm * 1000)
 
+	// Only city/town: these are real urban centers viable as logistics hubs.
+	// village/hamlet/isolated_dwelling are excluded at the query level so
+	// Overpass never returns tiny settlements that would otherwise win on
+	// raw proximity to the gap centroid (see candidateScore).
 	var q strings.Builder
 	q.WriteString("[out:json][timeout:25];(")
 	for _, p := range points {
-		fmt.Fprintf(&q, `node["place"~"^(city|town|village|hamlet)$"](around:%d,%f,%f);`, radiusMeters, p.Lat, p.Lng)
+		fmt.Fprintf(&q, `node["place"~"^(city|town)$"](around:%d,%f,%f);`, radiusMeters, p.Lat, p.Lng)
 	}
 	totalLimit := snapToCityResultsPerPoint * len(points)
 	if totalLimit > snapToCityMaxTotalResults {
@@ -167,12 +172,58 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, out
 	}
 }
 
-// bestSnapCandidate picks the named populated place closest to the origin
-// point, among those within radiusKm. Candidates without a "name" tag (not
-// usable as a CityName) or beyond radiusKm are skipped.
+// placeTypeWeight is the base "urban hierarchy" weight for an OSM place=
+// tag. snapChunk only queries place=city|town (see above), so in practice
+// every candidate has one of these two values; the default only matters for
+// hand-built test fixtures or a future relaxed query.
+var placeTypeWeight = map[string]float64{
+	"city": 50.0,
+	"town": 5.0,
+}
+
+// placeScorePopulationDivisor and placeScoreDistanceDivisorKm tune
+// candidateScore (see below).
+const (
+	placeScorePopulationDivisor  = 500_000.0
+	placeScoreDistanceDivisorKm  = 20.0
+	placeScoreDefaultPlaceWeight = 1.0
+)
+
+// candidateScore implements the "gravity" scoring used to rank snap-to-city
+// candidates: place-type hierarchy and population pull the score up, distance
+// pulls it down.
+//
+//	score = placeWeight * (1 + population/500_000) / (1 + distanceKm/20)
+//
+// The distance decay (÷20km) is gentle enough that the city/town weight gap
+// (50 vs 5 — a 10x difference) dominates even at the edges of the search
+// radius: a place=city 40km away always outscores a place=town 10km away
+// (50/(1+40/20)=16.7 vs 5/(1+10/20)=3.3), so a real city is never passed over
+// for a small town just because the town sits closer to the geometric gap
+// centroid. Population, when present, adds a further multiplier so that e.g.
+// a provincial capital outranks a smaller city at a similar distance.
+func candidateScore(el overpassElement, distanceKm float64) float64 {
+	weight, ok := placeTypeWeight[el.Tags["place"]]
+	if !ok {
+		weight = placeScoreDefaultPlaceWeight
+	}
+
+	if popStr := el.Tags["population"]; popStr != "" {
+		if population, err := strconv.ParseFloat(popStr, 64); err == nil && population > 0 {
+			weight *= 1 + population/placeScorePopulationDivisor
+		}
+	}
+
+	return weight / (1 + distanceKm/placeScoreDistanceDivisorKm)
+}
+
+// bestSnapCandidate picks the named populated place with the highest
+// candidateScore among those within radiusKm of the origin point.
+// Candidates without a "name" tag (not usable as a CityName) or beyond
+// radiusKm are skipped.
 func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64) (overpassElement, bool) {
 	var best overpassElement
-	bestDist := math.Inf(1)
+	bestScore := math.Inf(-1)
 	found := false
 
 	for _, el := range elements {
@@ -183,9 +234,10 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 		if dist > radiusKm {
 			continue
 		}
-		if !found || dist < bestDist {
+		score := candidateScore(el, dist)
+		if !found || score > bestScore {
 			best = el
-			bestDist = dist
+			bestScore = score
 			found = true
 		}
 	}

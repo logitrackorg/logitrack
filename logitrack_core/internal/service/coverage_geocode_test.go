@@ -12,27 +12,52 @@ import (
 	"github.com/logitrack/core/internal/model"
 )
 
-// TestBestSnapCandidate_PrefersNearest verifies the simplified "Snap to City"
-// selection: among named candidates within radiusKm, the one closest to the
-// origin point wins — regardless of place type (city/town/village/hamlet).
-func TestBestSnapCandidate_PrefersNearest(t *testing.T) {
+// TestBestSnapCandidate_PrefersHigherScore verifies the "gravity" scoring: a
+// place=city farther from the gap centroid outranks a place=town that is
+// geometrically closer, per candidateScore's place-type weight (50 vs 5)
+// dominating its gentle distance decay (÷20km).
+func TestBestSnapCandidate_PrefersHigherScore(t *testing.T) {
 	originLat, originLng := -34.0, -64.0
 
-	far := overpassElement{
-		Lat: -34.9, Lon: -64.0, // ~100km away
-		Tags: map[string]string{"place": "city", "name": "Ciudad Lejana", "population": "100000"},
+	city := overpassElement{
+		Lat: -34.36, Lon: -64.0, // ~40km away
+		Tags: map[string]string{"place": "city", "name": "Ciudad Principal"},
 	}
-	near := overpassElement{
-		Lat: -34.05, Lon: -64.0, // ~5.5km away
-		Tags: map[string]string{"place": "village", "name": "Pueblo Cercano"},
+	town := overpassElement{
+		Lat: -34.09, Lon: -64.0, // ~10km away, but lower hierarchy
+		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
-	best, found := bestSnapCandidate([]overpassElement{far, near}, originLat, originLng, 150)
+	best, found := bestSnapCandidate([]overpassElement{town, city}, originLat, originLng, 100)
 	if !found {
 		t.Fatal("expected a candidate to be found")
 	}
-	if best.Tags["name"] != "Pueblo Cercano" {
-		t.Errorf("expected the nearest candidate to win regardless of place type, got %q", best.Tags["name"])
+	if best.Tags["name"] != "Ciudad Principal" {
+		t.Errorf("expected the farther city to outscore the nearer town, got %q", best.Tags["name"])
+	}
+}
+
+// TestBestSnapCandidate_PopulationBreaksTie verifies that, between two
+// place=city candidates at the same distance, the one with a larger reported
+// population wins.
+func TestBestSnapCandidate_PopulationBreaksTie(t *testing.T) {
+	originLat, originLng := -34.0, -64.0
+
+	small := overpassElement{
+		Lat: -34.1, Lon: -64.0,
+		Tags: map[string]string{"place": "city", "name": "Ciudad Chica", "population": "8000"},
+	}
+	big := overpassElement{
+		Lat: -34.1, Lon: -64.1,
+		Tags: map[string]string{"place": "city", "name": "Ciudad Capital", "population": "1300000"},
+	}
+
+	best, found := bestSnapCandidate([]overpassElement{small, big}, originLat, originLng, 100)
+	if !found {
+		t.Fatal("expected a candidate to be found")
+	}
+	if best.Tags["name"] != "Ciudad Capital" {
+		t.Errorf("expected the more populous city to win, got %q", best.Tags["name"])
 	}
 }
 
@@ -43,7 +68,7 @@ func TestBestSnapCandidate_SkipsUnnamed(t *testing.T) {
 
 	elements := []overpassElement{
 		{Lat: -34.0, Lon: -64.0, Tags: map[string]string{"place": "city", "population": "500000"}}, // unnamed, distance 0
-		{Lat: -34.2, Lon: -64.0, Tags: map[string]string{"place": "village", "name": "Pueblo Chico"}},
+		{Lat: -34.2, Lon: -64.0, Tags: map[string]string{"place": "town", "name": "Pueblo Chico"}},
 	}
 
 	best, found := bestSnapCandidate(elements, originLat, originLng, 150)
@@ -51,13 +76,13 @@ func TestBestSnapCandidate_SkipsUnnamed(t *testing.T) {
 		t.Fatal("expected a candidate to be found")
 	}
 	if best.Tags["name"] != "Pueblo Chico" {
-		t.Errorf("expected the unnamed (closer) candidate to be skipped, got %q", best.Tags["name"])
+		t.Errorf("expected the unnamed (closer, higher-weight) candidate to be skipped, got %q", best.Tags["name"])
 	}
 }
 
 // TestBestSnapCandidate_SkipsBeyondRadius verifies that candidates farther
-// than radiusKm from the origin are excluded, even if they would otherwise be
-// the nearest named candidate.
+// than radiusKm from the origin are excluded, even if they would otherwise
+// score higher.
 func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 	originLat, originLng := -34.0, -64.0
 
@@ -67,7 +92,7 @@ func TestBestSnapCandidate_SkipsBeyondRadius(t *testing.T) {
 	}
 	withinRadius := overpassElement{
 		Lat: -34.5, Lon: -64.0, // ~55km away
-		Tags: map[string]string{"place": "village", "name": "Pueblo Cercano"},
+		Tags: map[string]string{"place": "town", "name": "Pueblo Cercano"},
 	}
 
 	best, found := bestSnapCandidate([]overpassElement{tooFar, withinRadius}, originLat, originLng, 60)
@@ -94,6 +119,32 @@ func TestBestSnapCandidate_NoneFound(t *testing.T) {
 	tooFar := []overpassElement{{Lat: -35.0, Lon: -64.0, Tags: map[string]string{"place": "city", "name": "Lejos"}}}
 	if _, found := bestSnapCandidate(tooFar, -34.0, -64.0, 10); found {
 		t.Error("expected found=false when every named candidate is beyond radiusKm")
+	}
+}
+
+// TestCandidateScore_PopulationIncreasesScore verifies that, for the same
+// place type and distance, a higher reported population increases the score.
+func TestCandidateScore_PopulationIncreasesScore(t *testing.T) {
+	small := overpassElement{Tags: map[string]string{"place": "city", "population": "20000"}}
+	big := overpassElement{Tags: map[string]string{"place": "city", "population": "1300000"}}
+
+	if candidateScore(big, 30) <= candidateScore(small, 30) {
+		t.Error("expected higher population to increase the score at the same distance")
+	}
+}
+
+// TestCandidateScore_MissingOrInvalidPopulation verifies candidates without a
+// population tag, or with an unparsable value, still score using just the
+// place-type weight and distance (no panic, positive score).
+func TestCandidateScore_MissingOrInvalidPopulation(t *testing.T) {
+	noPop := overpassElement{Tags: map[string]string{"place": "town"}}
+	if got := candidateScore(noPop, 5); got <= 0 {
+		t.Errorf("expected a positive score, got %v", got)
+	}
+
+	badPop := overpassElement{Tags: map[string]string{"place": "town", "population": "not-a-number"}}
+	if got := candidateScore(badPop, 5); got <= 0 {
+		t.Errorf("expected a positive score with unparsable population, got %v", got)
 	}
 }
 
@@ -201,6 +252,34 @@ func TestSnapToCities_ChunksRequests(t *testing.T) {
 		}
 		if r.CityName == "" {
 			t.Errorf("point %d: expected a city name, got empty", i)
+		}
+	}
+}
+
+// TestSnapToCities_QueryFiltersByPlaceType verifies that the Overpass query
+// only matches place=city|town nodes, excluding village/hamlet/
+// isolated_dwelling — small settlements that would otherwise win on raw
+// proximity to the gap centroid.
+func TestSnapToCities_QueryFiltersByPlaceType(t *testing.T) {
+	var capturedQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.Query().Get("data")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(overpassResponse{})
+	}))
+	defer server.Close()
+
+	svc := NewCoverageService(nil, nil)
+	svc.httpClient = &http.Client{Transport: redirectingTransport{base: server.URL}}
+
+	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50)
+
+	if !strings.Contains(capturedQuery, `place"~"^(city|town)$"`) {
+		t.Fatalf("expected query to filter on place=city|town, query was: %s", capturedQuery)
+	}
+	for _, excluded := range []string{"village", "hamlet", "isolated_dwelling"} {
+		if strings.Contains(capturedQuery, excluded) {
+			t.Errorf("expected query to exclude place=%s, query was: %s", excluded, capturedQuery)
 		}
 	}
 }

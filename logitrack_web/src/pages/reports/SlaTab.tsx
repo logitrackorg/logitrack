@@ -3,7 +3,7 @@ import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
-  Eye, X, AlertTriangle, Lightbulb, Gauge, Maximize2, Minimize2,
+  Eye, EyeOff, X, AlertTriangle, Lightbulb, Gauge, Maximize2, Minimize2, Target, Trash2, ExternalLink,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -24,10 +24,13 @@ import {
   type CoverageCell,
   type SimulationResult,
   type SnappedCity,
+  type SuggestedLocation,
+  type BranchProjection,
   GAP_STYLE,
 } from "../../api/coverage";
 import { VoronoiCoverageMap } from "../../components/VoronoiCoverageMap";
 import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
+import { CollapsiblePanel } from "../../components/CollapsiblePanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
 const COLOR_OK   = "#22c55e";
@@ -980,8 +983,19 @@ export function CoberturaTab() {
   // resueltas para simResult.suggested_locations, en el mismo orden. Se
   // resetea cada vez que cambia el diagnóstico simulado.
   const [snappedCities, setSnappedCities] = useState<SnappedCity[] | null>(null);
-  const [snapLoading, setSnapLoading] = useState(false);
+  // Bloquea el slider del simulador y el botón "Confirmar y Diagnosticar"
+  // mientras se geocodifican las sugerencias ("Aterrizar sugerencias en
+  // ciudades reales"), para que el usuario no pueda disparar un nuevo
+  // diagnóstico mientras eso está en curso.
+  const [isFetchingCities, setIsFetchingCities] = useState(false);
   const [snapError, setSnapError] = useState<string | null>(null);
+
+  // "Proyección de Impacto": cobertura actual vs. proyectada de cada sucursal
+  // si la red incluyera también las sugerencias activas. Se recalcula cada
+  // vez que cambia simResult (nuevo diagnóstico o sugerencia descartada).
+  const [projection, setProjection] = useState<BranchProjection[] | null>(null);
+  const [projectionLoading, setProjectionLoading] = useState(false);
+  const [projectionError, setProjectionError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1006,21 +1020,108 @@ export function CoberturaTab() {
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
   }, []);
 
+  // Sugerencias que todavía no aterrizaron en una ciudad real: solo estas se
+  // vuelven a enviar al backend en cada click (evita re-consultar Overpass
+  // para puntos que ya tienen resultado).
+  const pendingSnapIndexes = useMemo(() => {
+    if (!simResult) return [];
+    return simResult.suggested_locations
+      .map((_, i) => i)
+      .filter((i) => !snappedCities || !snappedCities[i]?.is_snapped);
+  }, [simResult, snappedCities]);
+
+  const snappedCount = useMemo(
+    () => snappedCities?.filter((c) => c.is_snapped).length ?? 0,
+    [snappedCities]
+  );
+
   const handleSnapToCity = useCallback(() => {
-    if (!simResult || simResult.suggested_locations.length === 0) return;
-    setSnapLoading(true);
+    if (!simResult || pendingSnapIndexes.length === 0) return;
+    setIsFetchingCities(true);
     setSnapError(null);
     // Radio de búsqueda = radio de la zona de cobertura simulada (mismo
     // círculo gris punteado dibujado en el mapa), para que una ciudad
     // importante dentro de esa zona (p.ej. Río Gallegos, Salta) sea
     // detectada como ubicación posible.
     const radiusKm = Math.sqrt(simResult.simulated_area_km2 / Math.PI);
+    const pendingPoints = pendingSnapIndexes.map((i) => {
+      const loc = simResult.suggested_locations[i];
+      return { lat: loc.lat, lng: loc.lng };
+    });
+
     coverageApi
-      .snapToCity(simResult.suggested_locations.map((l) => ({ lat: l.lat, lng: l.lng })), radiusKm)
-      .then(setSnappedCities)
+      .snapToCity(pendingPoints, radiusKm)
+      .then((results) => {
+        setSnappedCities((prev) => {
+          const merged: SnappedCity[] =
+            prev ??
+            simResult.suggested_locations.map(() => ({ lat: 0, lng: 0, city_name: "", is_snapped: false }));
+          pendingSnapIndexes.forEach((origIndex, i) => {
+            merged[origIndex] = results[i];
+          });
+          return [...merged];
+        });
+      })
       .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
-      .finally(() => setSnapLoading(false));
-  }, [simResult]);
+      .finally(() => setIsFetchingCities(false));
+  }, [simResult, pendingSnapIndexes]);
+
+  // Descarta una sugerencia: la quita de `simResult.suggested_locations` y de
+  // `snappedCities` en el mismo índice, manteniendo ambos arrays alineados.
+  // VoronoiCoverageMap reconstruye sus marcadores/círculos cuando cambia
+  // `suggestedLocations`, así que el círculo verde desaparece del mapa al instante.
+  const removeSuggestion = useCallback((index: number) => {
+    setSimResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        suggested_locations: prev.suggested_locations.filter((_, i) => i !== index),
+      };
+    });
+    setSnappedCities((prev) => (prev ? prev.filter((_, i) => i !== index) : prev));
+  }, []);
+
+  // Pausa/reanuda una sugerencia (análisis "What-If"): no la elimina, solo la
+  // excluye temporalmente del mapa y de la Proyección de Impacto.
+  const togglePauseSuggestion = useCallback((index: number) => {
+    setSnappedCities((prev) => {
+      if (!prev) return prev;
+      return prev.map((c, i) => (i === index ? { ...c, is_paused: !c.is_paused } : c));
+    });
+  }, []);
+
+  // Sugerencias activas (no pausadas): se filtran del mismo modo y en el
+  // mismo orden, así `suggestedLocations`/`snappedCities` siguen alineados al
+  // pasarlos a VoronoiCoverageMap y a la Proyección de Impacto.
+  const activeSuggestionLocations = useMemo(() => {
+    if (!simResult) return undefined;
+    return simResult.suggested_locations.filter((_, i) => !snappedCities?.[i]?.is_paused);
+  }, [simResult, snappedCities]);
+
+  const activeSnappedCities = useMemo(() => {
+    if (!snappedCities) return snappedCities;
+    return snappedCities.filter((c) => !c.is_paused);
+  }, [snappedCities]);
+
+  // Recalcula la proyección de impacto contra el backend cada vez que cambia
+  // simResult o el conjunto de sugerencias activas — incluyendo cuando
+  // removeSuggestion/togglePauseSuggestion lo actualizan, para que el
+  // "What-If" se mantenga sincronizado con las tarjetas visibles.
+  useEffect(() => {
+    if (!simResult || !activeSuggestionLocations || activeSuggestionLocations.length === 0) {
+      setProjection(null);
+      setProjectionError(null);
+      return;
+    }
+    setProjectionLoading(true);
+    setProjectionError(null);
+    const suggestions = activeSuggestionLocations.map((loc) => ({ lat: loc.lat, lng: loc.lng }));
+    coverageApi
+      .project(simResult.simulated_area_km2, suggestions)
+      .then((res) => setProjection(res.branches))
+      .catch(() => setProjectionError("No se pudo calcular la proyección de impacto en este momento."))
+      .finally(() => setProjectionLoading(false));
+  }, [simResult, activeSuggestionLocations]);
 
   const gaps = useMemo<CoverageCell[]>(() => {
     if (!diagram) return [];
@@ -1101,8 +1202,8 @@ export function CoberturaTab() {
               highlightedBranchId={highlighted}
               onSelectBranch={(id) => setHighlighted(id)}
               simulationAreaKm2={visualArea}
-              suggestedLocations={simResult?.suggested_locations}
-              snappedCities={snappedCities}
+              suggestedLocations={activeSuggestionLocations}
+              snappedCities={activeSnappedCities}
             />
           </div>
         </Card>
@@ -1110,73 +1211,153 @@ export function CoberturaTab() {
         {/* Panel: simulador + situación actual + recomendaciones — scroll propio en desktop */}
         <div className="flex flex-col gap-4 lg:h-full lg:overflow-y-auto lg:pr-1">
           <Card variant="muted" className="p-5">
-            <CoverageSimulatorPanel
-              areaKm2={visualArea}
-              onAreaChange={setVisualArea}
-              onConfirm={handleConfirmSimulation}
-              scopeLabel={simScopeLabel}
-            />
-            {simResult !== null && (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
-              </p>
-            )}
-            {simError && (
-              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
-            )}
-            {simResult && simResult.suggested_locations.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
-                <button
-                  onClick={handleSnapToCity}
-                  disabled={snapLoading}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-gray-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-gray-700/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${snapLoading ? "animate-spin" : ""}`} />
-                  {snapLoading
-                    ? "Buscando ciudades cercanas…"
-                    : "Aterrizar sugerencias en ciudades reales"}
-                </button>
-                {snapError && (
-                  <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{snapError}</p>
-                )}
-                {snappedCities && !snapError && (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {snappedCities.filter((c) => c.is_snapped).length} de {snappedCities.length} sugerencias
-                    aterrizadas en ciudades reales cercanas.
-                  </p>
-                )}
-              </div>
-            )}
+            <CollapsiblePanel
+              title={
+                <>
+                  <Target className="w-4 h-4 text-orange-500" /> Simulador de cobertura
+                </>
+              }
+            >
+              <CoverageSimulatorPanel
+                areaKm2={visualArea}
+                onAreaChange={setVisualArea}
+                onConfirm={handleConfirmSimulation}
+                scopeLabel={simScopeLabel}
+                disabled={isFetchingCities}
+              />
+              {simResult !== null && (
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
+                </p>
+              )}
+              {simError && (
+                <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
+              )}
+              {simResult && simResult.suggested_locations.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
+                  {pendingSnapIndexes.length > 0 ? (
+                    <button
+                      onClick={handleSnapToCity}
+                      disabled={isFetchingCities}
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-gray-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-gray-700/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isFetchingCities ? "animate-spin" : ""}`} />
+                      {isFetchingCities
+                        ? "Buscando ciudades cercanas…"
+                        : snappedCities
+                          ? `Reintentar ${pendingSnapIndexes.length} sugerencia${pendingSnapIndexes.length === 1 ? "" : "s"} pendiente${pendingSnapIndexes.length === 1 ? "" : "s"}`
+                          : "Aterrizar sugerencias en ciudades reales"}
+                    </button>
+                  ) : (
+                    <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      Todas las sugerencias fueron aterrizadas en ciudades reales.
+                    </p>
+                  )}
+                  {snapError && (
+                    <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{snapError}</p>
+                  )}
+                  {snappedCities && !snapError && (
+                    <>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        {snappedCount} de {snappedCities.length} sugerencias aterrizadas en ciudades reales cercanas.
+                        {pendingSnapIndexes.length > 0 && " Si no se encuentra alguna, pruebe nuevamente."}
+                      </p>
+                      {snappedCount > 0 && (
+                        <div className="mt-2 space-y-2">
+                          <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            {snappedCount} {snappedCount === 1 ? "ciudad candidata confirmada" : "ciudades candidatas confirmadas"}:
+                          </p>
+                          <ul className="space-y-2">
+                            {snappedCities
+                              .map((c, i) => ({ city: c, index: i }))
+                              .filter(({ city }) => city.is_snapped)
+                              .map(({ city, index }) => (
+                                <SuggestionCard
+                                  key={`${city.city_name}-${index}`}
+                                  city={city}
+                                  loc={simResult.suggested_locations[index]}
+                                  onRemove={() => removeSuggestion(index)}
+                                  onTogglePause={() => togglePauseSuggestion(index)}
+                                />
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {(projection || projectionLoading || projectionError) && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        <Gauge className="w-3.5 h-3.5" /> Proyección de impacto
+                      </p>
+                      {projectionLoading && (
+                        <p className="text-xs text-slate-400">Calculando proyección…</p>
+                      )}
+                      {projectionError && (
+                        <p className="text-xs text-rose-600 dark:text-rose-400">{projectionError}</p>
+                      )}
+                      {projection && projection.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {projection.map((p) => (
+                            <li
+                              key={p.branch_id}
+                              className="flex items-center justify-between gap-2 text-xs"
+                            >
+                              <span className="font-medium text-slate-700 dark:text-slate-200">
+                                {p.branch_name}
+                              </span>
+                              <span className="font-mono text-slate-500 dark:text-slate-400">
+                                {Math.round(p.current_coverage_pct)}% &rarr;{" "}
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {Math.round(p.projected_coverage_pct)}%
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CollapsiblePanel>
           </Card>
 
           <Card variant="muted" className="p-5">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
-              <MapPin className="w-4 h-4 text-blue-600" /> Situación actual
-            </h3>
-            <SituationSummary
-              covered={coveredCount}
-              total={diagram.branch_count}
-              gapCount={diagram.gap_count}
-              severity={severityCounts}
-              threshold={diagram.threshold_km2}
-            />
-            {simResult && (
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
-                <SimulationSummary simResult={simResult} highlighted={highlighted} />
-              </div>
-            )}
+            <CollapsiblePanel
+              title={
+                <>
+                  <MapPin className="w-4 h-4 text-blue-600" /> Situación actual
+                </>
+              }
+            >
+              <SituationSummary
+                covered={coveredCount}
+                total={diagram.branch_count}
+                gapCount={diagram.gap_count}
+                severity={severityCounts}
+                threshold={diagram.threshold_km2}
+                simResult={simResult}
+                highlighted={highlighted}
+              />
+            </CollapsiblePanel>
           </Card>
 
           <Card variant="muted" className="p-5">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
-              <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
-            </h3>
-            <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
-            {simResult && (
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
-                <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
-              </div>
-            )}
+            <CollapsiblePanel
+              title={
+                <>
+                  <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
+                </>
+              }
+            >
+              <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
+              {simResult && (
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
+                  <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
+                </div>
+              )}
+            </CollapsiblePanel>
           </Card>
         </div>
       </div>
@@ -1208,22 +1389,69 @@ export function CoberturaTab() {
   );
 }
 
+/**
+ * "Situación actual": estado de cobertura de la red. Si hay una simulación
+ * activa, su diagnóstico tiene prioridad — un radio simulado con déficits
+ * reemplaza el mensaje verde estático (que reflejaría solo el diagrama real,
+ * no el escenario que el usuario está evaluando) por un resumen de alerta u
+ * OK basado en la simulación. Sin simulación activa, se muestra el
+ * diagnóstico real del diagrama de cobertura.
+ */
 function SituationSummary({
   covered,
   total,
   gapCount,
   severity,
   threshold,
+  simResult,
+  highlighted,
 }: {
   covered: number;
   total: number;
   gapCount: number;
   severity: { critico: number; moderado: number; leve: number };
   threshold: number;
+  simResult: SimulationResult | null;
+  highlighted: string | null;
 }) {
-  if (gapCount === 0) {
-    return (
-      <div className="flex items-start gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+  const simCells = simResult
+    ? highlighted
+      ? simResult.cells.filter((c) => c.branch_id === highlighted)
+      : simResult.cells
+    : [];
+  const simGapCells = simCells.filter((c) => c.is_gap);
+  const areaLabel = simResult ? formatKm2(simResult.simulated_area_km2) : "";
+
+  let statusBlock: ReactNode = null;
+  if (simCells.length > 0) {
+    if (simGapCells.length > 0) {
+      statusBlock = (
+        <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <p>
+            <strong>Estado: Alerta.</strong>{" "}
+            {highlighted
+              ? `Esta sucursal presenta un déficit de cobertura bajo el radio simulado actual de ${areaLabel}.`
+              : `${simGapCells.length} de ${simCells.length} sucursales presentan un déficit de cobertura bajo el radio simulado actual de ${areaLabel}.`}
+          </p>
+        </div>
+      );
+    } else {
+      statusBlock = (
+        <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+          <p>
+            <strong>Estado: OK.</strong>{" "}
+            {highlighted
+              ? `Un radio de cobertura simulado de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de esta sucursal.`
+              : `Un radio de cobertura simulado de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de las ${simCells.length} sucursales.`}
+          </p>
+        </div>
+      );
+    }
+  } else if (gapCount === 0) {
+    statusBlock = (
+      <div className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
         <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
         <p>
           La red de <strong>{total}</strong> sucursales cubre adecuadamente el territorio. No se
@@ -1233,22 +1461,28 @@ function SituationSummary({
       </div>
     );
   }
+
   return (
     <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-      <p>
-        De <strong>{total}</strong> sucursales activas, <strong>{covered}</strong> tienen cobertura
-        adecuada y <strong className="text-rose-600 dark:text-rose-400">{gapCount}</strong> presentan
-        un área de servicio mayor al umbral de {formatKm2(threshold)}.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {severity.critico > 0 && (
-          <SeverityPill count={severity.critico} severity="critico" />
-        )}
-        {severity.moderado > 0 && (
-          <SeverityPill count={severity.moderado} severity="moderado" />
-        )}
-        {severity.leve > 0 && <SeverityPill count={severity.leve} severity="leve" />}
-      </div>
+      {statusBlock}
+      {gapCount > 0 && (
+        <>
+          <p>
+            De <strong>{total}</strong> sucursales activas, <strong>{covered}</strong> tienen cobertura
+            adecuada y <strong className="text-rose-600 dark:text-rose-400">{gapCount}</strong> presentan
+            un área de servicio mayor al umbral de {formatKm2(threshold)}.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {severity.critico > 0 && (
+              <SeverityPill count={severity.critico} severity="critico" />
+            )}
+            {severity.moderado > 0 && (
+              <SeverityPill count={severity.moderado} severity="moderado" />
+            )}
+            {severity.leve > 0 && <SeverityPill count={severity.leve} severity="leve" />}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1325,49 +1559,75 @@ function Recommendations({
   );
 }
 
+/**
+ * Tarjeta de sugerencia "aterrizada": ciudad real candidata a nueva sucursal,
+ * con un enlace a Google Maps y el detalle de impacto operativo (cobertura
+ * neta real sobre territorio + sucursales que se verían aliviadas). El botón
+ * de descarte la quita del estado (y, por lo tanto, del mapa y de la
+ * proyección de impacto) sin volver a consultar el backend de diagnóstico.
+ */
+function SuggestionCard({
+  city,
+  loc,
+  onRemove,
+  onTogglePause,
+}: {
+  city: SnappedCity;
+  loc: SuggestedLocation;
+  onRemove: () => void;
+  onTogglePause: () => void;
+}) {
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${city.lat},${city.lng}`;
+  const isPaused = city.is_paused ?? false;
+  return (
+    <li
+      className={`relative p-3 pr-16 rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 transition-opacity ${
+        isPaused ? "opacity-50" : ""
+      }`}
+    >
+      <div className="absolute top-2 right-2 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onTogglePause}
+          aria-label={isPaused ? `Reanudar sugerencia: ${city.city_name}` : `Pausar sugerencia: ${city.city_name}`}
+          title={isPaused ? "Reanudar sugerencia" : "Pausar sugerencia"}
+          className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors"
+        >
+          {isPaused ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Descartar sugerencia: ${city.city_name}`}
+          title="Descartar sugerencia"
+          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 cursor-pointer transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{city.city_name}</p>
+      <a
+        href={mapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+      >
+        <ExternalLink className="w-3 h-3" /> Ver en Google Maps
+      </a>
+      <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
+        Aportará ~{formatKm2(loc.actual_added_km2)} de cobertura neta.
+        {loc.affected_branches.length > 0 && (
+          <> Descomprimirá las zonas de: {loc.affected_branches.join(", ")}.</>
+        )}
+      </p>
+    </li>
+  );
+}
+
 // ── Diagnóstico del simulador ─────────────────────────────────────────────────
 // Estilo para sucursales con cobertura adecuada (severity === "") — no está en
 // GAP_STYLE porque ese mapa solo cubre las severidades de gap.
 const ADEQUATE_BADGE = "bg-emerald-100 text-emerald-800";
-
-function SimulationSummary({
-  simResult,
-  highlighted,
-}: {
-  simResult: SimulationResult;
-  highlighted: string | null;
-}) {
-  const cells = highlighted
-    ? simResult.cells.filter((c) => c.branch_id === highlighted)
-    : simResult.cells;
-  if (cells.length === 0) return null;
-
-  const gapCells = cells.filter((c) => c.is_gap);
-  const areaLabel = formatKm2(simResult.simulated_area_km2);
-
-  return (
-    <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
-      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">
-        <Gauge className="w-3.5 h-3.5" /> Diagnóstico del simulador ({areaLabel})
-      </p>
-      {gapCells.length === 0 ? (
-        <p className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
-          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-          {highlighted
-            ? `Un radio de cobertura de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de esta sucursal.`
-            : `Un radio de cobertura de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de las ${cells.length} sucursales.`}
-        </p>
-      ) : (
-        <p className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          {highlighted
-            ? `Con un radio de cobertura de ${areaLabel}, esta sucursal presenta un gap de capacidad frente a su territorio asignado.`
-            : `Con un radio de cobertura de ${areaLabel}, ${gapCells.length} de ${cells.length} sucursales presentan un gap de capacidad frente a su territorio asignado.`}
-        </p>
-      )}
-    </div>
-  );
-}
 
 function SimulationRecommendations({
   simResult,

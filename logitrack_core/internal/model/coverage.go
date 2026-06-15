@@ -75,6 +75,16 @@ type SuggestedLocation struct {
 	BranchID   string  `json:"branch_id"`   // cell whose uncovered fragment produced this suggestion
 	BranchName string  `json:"branch_name"`
 	GapAreaKm2 float64 `json:"gap_area_km2"` // area of the uncovered fragment
+
+	// ActualAddedKm2 is the area of the simulated coverage circle centred on
+	// this suggestion, intersected with Argentina's national outline — the
+	// real net surface coverage a new branch here would add.
+	ActualAddedKm2 float64 `json:"actual_added_km2"`
+
+	// AffectedBranches lists the names of existing branches whose Voronoi
+	// cells intersect this suggestion's simulated coverage circle — the
+	// branches that would be relieved by a new branch at this location.
+	AffectedBranches []string `json:"affected_branches"`
 }
 
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
@@ -114,4 +124,28 @@ type SnapToCityRequest struct {
 // preserving the request order so the frontend can merge by index.
 type SnapToCityResponse struct {
 	Results []SnappedCity `json:"results"`
+}
+
+// ProjectionRequest is the body of POST /coverage/project: the simulated
+// coverage area (used to size every site's coverage radius, including the
+// new candidates) and the candidate new-branch locations currently active in
+// the frontend simulator.
+type ProjectionRequest struct {
+	AreaKm2     float64  `json:"area_km2"`
+	Suggestions []LatLng `json:"suggestions"`
+}
+
+// BranchProjection compares an existing branch's current coverage percentage
+// (from CoverageService.Diagnose) against the percentage it would have if the
+// network also included the candidate locations from ProjectionRequest.
+type BranchProjection struct {
+	BranchID             string  `json:"branch_id"`
+	BranchName           string  `json:"branch_name"`
+	CurrentCoveragePct   float64 `json:"current_coverage_pct"`
+	ProjectedCoveragePct float64 `json:"projected_coverage_pct"`
+}
+
+// ProjectionResult is the response of CoverageService.ProjectScenario.
+type ProjectionResult struct {
+	Branches []BranchProjection `json:"branches"`
 }

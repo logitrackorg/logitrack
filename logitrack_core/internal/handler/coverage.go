@@ -87,3 +87,18 @@ func (h *CoverageHandler) SnapToCity(c *gin.Context) {
 
 	c.JSON(http.StatusOK, model.SnapToCityResponse{Results: results})
 }
+
+// Project answers "what if the network also included these candidate
+// new-branch locations?" for the coverage simulator's "Proyección de
+// Impacto" section: rebuilds the Voronoi diagram over the active branches
+// plus the given suggestions, and returns each existing branch's current vs.
+// projected coverage percentage for the given simulated coverage area.
+func (h *CoverageHandler) Project(c *gin.Context) {
+	var req model.ProjectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.AreaKm2 <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "area_km2 es requerido y debe ser un número positivo"})
+		return
+	}
+
+	c.JSON(http.StatusOK, h.svc.ProjectScenario(req.AreaKm2, req.Suggestions))
+}

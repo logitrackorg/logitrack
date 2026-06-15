@@ -418,6 +418,9 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 		var cellPoly polyclip.Polygon
 		haveGeometry := simulatedAreaKm2 > 0 && len(c.Polygon) > 0
 
+		var countryLocal polyclip.Polygon
+		var otherCellsLocal []namedCellPoly
+
 		if haveGeometry {
 			// Project centred on the branch's own site: minimises distortion
 			// for this cell's geometry regardless of where it sits in the
@@ -428,6 +431,9 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 
 			intersection := fromPolyclip(cellPoly.Construct(polyclip.INTERSECTION, circle))
 			intersectedAreaKm2 = sumArea(intersection)
+
+			countryLocal = projectCountry(geo.ArgentinaContour(), proj)
+			otherCellsLocal = projectCellsLocal(d.Cells, proj)
 		}
 
 		var pct float64
@@ -456,7 +462,7 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			Severity:           severity,
 		})
 		if haveGeometry && severity == model.GapSeverityCritico {
-			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle, radiusKm, branchSites) {
+			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle, radiusKm, branchSites, countryLocal, otherCellsLocal) {
 				if !tooCloseToExisting(cand, suggestions, minSeparationKm) {
 					suggestions = append(suggestions, cand)
 				}
@@ -468,6 +474,158 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 		Cells:              cells,
 		SuggestedLocations: suggestions,
 	}
+}
+
+// voronoiSite is a generic Voronoi seed for buildVoronoiCells: either an
+// existing branch (branchID non-empty) or a candidate new-branch suggestion
+// (branchID empty).
+type voronoiSite struct {
+	branchID   string
+	branchName string
+	province   string
+	lat        float64
+	lng        float64
+}
+
+// buildVoronoiCells runs the same Voronoi-diagram + country-clip pipeline as
+// Refresh, but over an arbitrary set of sites instead of the active branch
+// set — used by ProjectScenario to compute "what if" cells for a network that
+// also includes candidate new-branch locations. Returns one CoverageCell per
+// site, in the same order as sites. Cells carry BranchID/BranchName/Province
+// copied from the corresponding site (empty for suggestion sites).
+func (s *CoverageService) buildVoronoiCells(sites []voronoiSite) []model.CoverageCell {
+	if len(sites) == 0 {
+		return nil
+	}
+
+	var sumLat, sumLng float64
+	for _, site := range sites {
+		sumLat += site.lat
+		sumLng += site.lng
+	}
+	proj := newProjector(sumLat/float64(len(sites)), sumLng/float64(len(sites)))
+
+	pts := make([]geometry.Point, len(sites))
+	for i, site := range sites {
+		pts[i] = proj.project(site.lat, site.lng)
+	}
+
+	minPt := proj.project(coverageBBoxMinLat, coverageBBoxMinLng)
+	maxPt := proj.project(coverageBBoxMaxLat, coverageBBoxMaxLng)
+	bbox := geometry.BBox{
+		MinX: math.Min(minPt.X, maxPt.X),
+		MinY: math.Min(minPt.Y, maxPt.Y),
+		MaxX: math.Max(minPt.X, maxPt.X),
+		MaxY: math.Max(minPt.Y, maxPt.Y),
+	}
+	cells := geometry.VoronoiCells(pts, bbox)
+
+	country := projectCountry(geo.ArgentinaContour(), proj)
+
+	out := make([]model.CoverageCell, len(cells))
+	for i, cell := range cells {
+		site := sites[i]
+		mc := model.CoverageCell{
+			BranchID:   site.branchID,
+			BranchName: site.branchName,
+			Province:   site.province,
+			Site:       model.LatLng{Lat: site.lat, Lng: site.lng},
+		}
+		if len(cell) >= 3 {
+			fragments := fromPolyclip(toPolyclip(cell).Construct(polyclip.INTERSECTION, country))
+			mc.Polygon = make([][]model.LatLng, 0, len(fragments))
+			for _, frag := range fragments {
+				area := frag.Area()
+				mc.AreaKm2 += area
+				ring := make([]model.LatLng, len(frag))
+				for j, v := range frag {
+					ring[j] = proj.unproject(v)
+				}
+				mc.Polygon = append(mc.Polygon, ring)
+			}
+		}
+		out[i] = mc
+	}
+	return out
+}
+
+// coveragePercentageForCell computes the same "simulated coverage circle
+// intersected with the cell" percentage as Diagnose's per-cell loop, for an
+// arbitrary cell and radius. Used by ProjectScenario to score the projected
+// cells from buildVoronoiCells.
+func coveragePercentageForCell(cell model.CoverageCell, radiusKm float64) float64 {
+	if cell.AreaKm2 <= 0 || len(cell.Polygon) == 0 || radiusKm <= 0 {
+		return 0
+	}
+	proj := newProjector(cell.Site.Lat, cell.Site.Lng)
+	cellPoly := projectRings(cell.Polygon, proj)
+	circle := toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
+	intersectedAreaKm2 := sumArea(fromPolyclip(cellPoly.Construct(polyclip.INTERSECTION, circle)))
+	pct := (intersectedAreaKm2 / cell.AreaKm2) * 100
+	if pct > 100 {
+		pct = 100
+	}
+	return pct
+}
+
+// ProjectScenario answers "what if the network also included these candidate
+// new-branch locations?": it rebuilds the Voronoi diagram over the active
+// branches plus suggestions, and for every original branch reports its
+// current coverage percentage (from Diagnose) alongside the projected one in
+// the combined network — both using the same simulatedAreaKm2 coverage
+// circle.
+func (s *CoverageService) ProjectScenario(simulatedAreaKm2 float64, suggestions []model.LatLng) model.ProjectionResult {
+	branches := s.branchRepo.ListActive()
+
+	var sites []voronoiSite
+	for _, b := range branches {
+		if b.Latitude != nil && b.Longitude != nil {
+			sites = append(sites, voronoiSite{
+				branchID:   b.ID,
+				branchName: b.Name,
+				province:   b.Province,
+				lat:        *b.Latitude,
+				lng:        *b.Longitude,
+			})
+		}
+	}
+	if len(sites) == 0 {
+		return model.ProjectionResult{Branches: []model.BranchProjection{}}
+	}
+
+	for _, sug := range suggestions {
+		sites = append(sites, voronoiSite{
+			branchName: "Sugerencia",
+			lat:        sug.Lat,
+			lng:        sug.Lng,
+		})
+	}
+
+	radiusKm := 0.0
+	if simulatedAreaKm2 > 0 {
+		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
+	}
+
+	current := s.Diagnose(simulatedAreaKm2)
+	currentByID := make(map[string]float64, len(current.Cells))
+	for _, c := range current.Cells {
+		currentByID[c.BranchID] = c.CoveragePercentage
+	}
+
+	newCells := s.buildVoronoiCells(sites)
+	branchProjections := make([]model.BranchProjection, 0, len(branches))
+	for _, cell := range newCells {
+		if cell.BranchID == "" {
+			continue // candidate suggestion site, not an existing branch
+		}
+		branchProjections = append(branchProjections, model.BranchProjection{
+			BranchID:             cell.BranchID,
+			BranchName:           cell.BranchName,
+			CurrentCoveragePct:   currentByID[cell.BranchID],
+			ProjectedCoveragePct: coveragePercentageForCell(cell, radiusKm),
+		})
+	}
+	return model.ProjectionResult{Branches: branchProjections}
 }
 
 // tooCloseToExisting reports whether candidate lies within minSeparationKm of
@@ -489,7 +647,7 @@ func tooCloseToExisting(candidate model.SuggestedLocation, existing []model.Sugg
 // cell's Voronoi polygon via DIFFERENCE, and for every remaining fragment
 // large enough to be relevant, runs fillFragmentIteratively to place one or
 // more suggestions ("Iterative Greedy Covering") inside it.
-func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjector, cellPoly, circle polyclip.Polygon, radiusKm float64, branchSites []model.LatLng) []model.SuggestedLocation {
+func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjector, cellPoly, circle polyclip.Polygon, radiusKm float64, branchSites []model.LatLng, countryLocal polyclip.Polygon, otherCells []namedCellPoly) []model.SuggestedLocation {
 	remainder := fromPolyclip(cellPoly.Construct(polyclip.DIFFERENCE, circle))
 
 	// Branch sites projected into this cell's local frame (origin-centred on
@@ -503,7 +661,7 @@ func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjec
 
 	var out []model.SuggestedLocation
 	for _, frag := range remainder {
-		out = append(out, fillFragmentIteratively(cell, proj, frag, radiusKm, &sites)...)
+		out = append(out, fillFragmentIteratively(cell, proj, frag, radiusKm, &sites, countryLocal, otherCells)...)
 	}
 	return out
 }
@@ -528,7 +686,7 @@ func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjec
 // Stops when the (sub-)fragment drops below
 // coverageSuggestionMinFragmentAreaKm2, when DIFFERENCE leaves nothing, or
 // after coverageSuggestionMaxPerFragment iterations (safety bound).
-func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point) []model.SuggestedLocation {
+func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point, countryLocal polyclip.Polygon, otherCells []namedCellPoly) []model.SuggestedLocation {
 	var out []model.SuggestedLocation
 	current := frag
 
@@ -544,20 +702,26 @@ func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, fr
 			// resolution, with no grid point strictly inside): fall back to
 			// the vertex farthest from the branch site, and stop — the
 			// circle-subtraction step below assumes an interior point.
+			actualAddedKm2, affected := suggestionImpact(farthestVertex(current), radiusKm, countryLocal, otherCells)
 			out = append(out, model.SuggestedLocation{
-				LatLng:     proj.unproject(farthestVertex(current)),
-				BranchID:   cell.BranchID,
-				BranchName: cell.BranchName,
-				GapAreaKm2: area,
+				LatLng:           proj.unproject(farthestVertex(current)),
+				BranchID:         cell.BranchID,
+				BranchName:       cell.BranchName,
+				GapAreaKm2:       area,
+				ActualAddedKm2:   actualAddedKm2,
+				AffectedBranches: affected,
 			})
 			break
 		}
 
+		actualAddedKm2, affected := suggestionImpact(point, radiusKm, countryLocal, otherCells)
 		out = append(out, model.SuggestedLocation{
-			LatLng:     proj.unproject(point),
-			BranchID:   cell.BranchID,
-			BranchName: cell.BranchName,
-			GapAreaKm2: area,
+			LatLng:           proj.unproject(point),
+			BranchID:         cell.BranchID,
+			BranchName:       cell.BranchName,
+			GapAreaKm2:       area,
+			ActualAddedKm2:   actualAddedKm2,
+			AffectedBranches: affected,
 		})
 
 		// Update 1: future grid searches (this fragment's remaining
@@ -705,4 +869,45 @@ func sumArea(frags []geometry.Polygon) float64 {
 		total += f.Area()
 	}
 	return total
+}
+
+// namedCellPoly pairs a branch's name with its Voronoi cell polygon (all
+// fragments merged into a single multi-contour polyclip.Polygon), projected
+// into a shared local frame — used by suggestionImpact to determine which
+// existing branches a new suggestion's coverage circle would relieve.
+type namedCellPoly struct {
+	name string
+	poly polyclip.Polygon
+}
+
+// projectCellsLocal projects every cell's (already country-clipped) polygon
+// into proj's local frame, pairing each with its branch name. Cells without
+// geometry are skipped.
+func projectCellsLocal(cells []model.CoverageCell, proj equirectProjector) []namedCellPoly {
+	out := make([]namedCellPoly, 0, len(cells))
+	for _, c := range cells {
+		if len(c.Polygon) == 0 {
+			continue
+		}
+		out = append(out, namedCellPoly{name: c.BranchName, poly: projectRings(c.Polygon, proj)})
+	}
+	return out
+}
+
+// suggestionImpact computes a suggestion's real-world impact: the net surface
+// area its simulated coverage circle would add within Argentina's outline,
+// and the names of existing branches whose Voronoi cells it would relieve
+// (any cell whose polygon intersects the circle).
+func suggestionImpact(point geometry.Point, radiusKm float64, countryLocal polyclip.Polygon, cells []namedCellPoly) (float64, []string) {
+	circle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
+
+	actualAddedKm2 := sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, countryLocal)))
+
+	affected := make([]string, 0)
+	for _, nc := range cells {
+		if sumArea(fromPolyclip(circle.Construct(polyclip.INTERSECTION, nc.poly))) > 0 {
+			affected = append(affected, nc.name)
+		}
+	}
+	return actualAddedKm2, affected
 }

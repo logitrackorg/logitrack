@@ -1,5 +1,3 @@
-import { Target } from "lucide-react";
-
 export const SIM_AREA_MIN = 10_000;
 export const SIM_AREA_MAX = 3_000_000;
 export const SIM_AREA_STEP = 10_000;
@@ -14,6 +12,8 @@ interface CoverageSimulatorPanelProps {
   onConfirm: (areaKm2: number) => void;
   /** A qué sucursal(es) se aplica el círculo de previsualización. */
   scopeLabel: string;
+  /** Bloquea el slider y el botón de confirmación (p.ej. mientras se geocodifican sugerencias). */
+  disabled?: boolean;
 }
 
 /**
@@ -27,13 +27,10 @@ export function CoverageSimulatorPanel({
   onAreaChange,
   onConfirm,
   scopeLabel,
+  disabled = false,
 }: CoverageSimulatorPanelProps) {
   return (
     <div className="space-y-3">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-        <Target className="w-4 h-4 text-orange-500" /> Simulador de cobertura
-      </h3>
-
       <div className="flex items-center justify-between text-sm">
         <span className="text-slate-600 dark:text-slate-300">Radio de prueba</span>
         <span className="font-mono font-semibold text-orange-600 dark:text-orange-400">
@@ -48,7 +45,8 @@ export function CoverageSimulatorPanel({
         step={SIM_AREA_STEP}
         value={areaKm2}
         onChange={(e) => onAreaChange(Number(e.target.value))}
-        className="w-full accent-orange-500 cursor-pointer"
+        disabled={disabled}
+        className="w-full accent-orange-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Área de cobertura simulada en kilómetros cuadrados"
       />
 
@@ -58,7 +56,8 @@ export function CoverageSimulatorPanel({
 
       <button
         onClick={() => onConfirm(areaKm2)}
-        className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 cursor-pointer transition-colors"
+        disabled={disabled}
+        className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium px-3 py-2 rounded-md bg-orange-500 text-white hover:bg-orange-600 cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange-500"
       >
         Confirmar y Diagnosticar
       </button>
