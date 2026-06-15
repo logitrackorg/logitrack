@@ -11,7 +11,8 @@ interface VoronoiCoverageMapProps {
   cells: CoverageCell[];
   /** branch_id resaltado (p.ej. fila seleccionada en el panel). */
   highlightedBranchId?: string | null;
-  onSelectBranch?: (branchId: string) => void;
+  /** Recibe `null` cuando se hace click sobre la celda ya seleccionada (toggle). */
+  onSelectBranch?: (branchId: string | null) => void;
   /**
    * Área simulada (km²) para previsualizar un radio de cobertura con un
    * círculo punteado. Si `highlightedBranchId` está seteado, el círculo se
@@ -113,7 +114,9 @@ export function VoronoiCoverageMap({
           opacity: isHighlighted ? 1 : 0.8,
           dashArray: cell.is_gap ? "6, 5" : undefined,
         });
-        poly.on("click", () => onSelectRef.current?.(cell.branch_id));
+        poly.on("click", () => {
+          onSelectRef.current?.(cell.branch_id === highlightedBranchId ? null : cell.branch_id);
+        });
         poly.bindTooltip(
           `<strong>${cell.branch_name}</strong><br/>${cell.province}<br/>Cobertura: ${formatKm2(cell.area_km2)}${
             cell.is_gap ? `<br/><em>Zona sub-cubierta (${cell.gap_severity})</em>` : ""

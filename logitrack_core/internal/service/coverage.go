@@ -29,6 +29,13 @@ const (
 	coverageBBoxMaxLat = -21.7811
 	coverageBBoxMinLng = -73.5665
 	coverageBBoxMaxLng = -53.6386
+
+	// Thresholds for the coverage simulator (Diagnose): classify the
+	// percentage of a branch's real Voronoi area that a simulated new-branch
+	// coverage radius would represent.
+	simCoverageCriticalPct = 50.0 // < 50%: gap crítico
+	simCoverageModeratePct = 85.0 // [50, 85): gap moderado
+	simCoverageAdequatePct = 90.0 // [85, 90): gap leve; >= 90: cobertura adecuada
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -69,6 +76,22 @@ func gapSeverity(areaKm2, threshold float64) (bool, string) {
 		return true, model.GapSeverityModerado
 	default:
 		return true, model.GapSeverityLeve
+	}
+}
+
+// simulationSeverity classifies the coverage percentage from Diagnose
+// (simulated area / real Voronoi area * 100). Returns whether it represents a
+// capacity gap and the severity code.
+func simulationSeverity(pct float64) (bool, string) {
+	switch {
+	case pct < simCoverageCriticalPct:
+		return true, model.GapSeverityCritico
+	case pct < simCoverageModeratePct:
+		return true, model.GapSeverityModerado
+	case pct < simCoverageAdequatePct:
+		return true, model.GapSeverityLeve
+	default:
+		return false, model.GapSeverityNone
 	}
 }
 
@@ -303,4 +326,37 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 	s.mu.Lock()
 	s.diagram = d
 	s.mu.Unlock()
+}
+
+// Diagnose evaluates a hypothetical new-branch coverage radius — expressed as
+// an area in km², chosen via the frontend simulator slider — against every
+// branch's real, post-clip Voronoi area: coveragePercentage = simulatedAreaKm2
+// / cell.AreaKm2 * 100. A low percentage means the simulated radius would only
+// cover a small fraction of the branch's assigned territory, surfaced as a
+// capacity gap (crítico/moderado/leve) independent of the admin-configured
+// MaxCoverageAreaKm2 threshold used by the main diagram.
+func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationResult {
+	d := s.Diagram()
+	cells := make([]model.SimulationDiagnosis, 0, len(d.Cells))
+	for _, c := range d.Cells {
+		var pct float64
+		if c.AreaKm2 > 0 {
+			pct = (simulatedAreaKm2 / c.AreaKm2) * 100
+		}
+		isGap, severity := simulationSeverity(pct)
+		deficit := c.AreaKm2 - simulatedAreaKm2
+		if deficit < 0 {
+			deficit = 0
+		}
+		cells = append(cells, model.SimulationDiagnosis{
+			BranchID:           c.BranchID,
+			BranchName:         c.BranchName,
+			VoronoiAreaKm2:     c.AreaKm2,
+			CoveragePercentage: pct,
+			DeficitKm2:         deficit,
+			IsGap:              isGap,
+			Severity:           severity,
+		})
+	}
+	return model.SimulationResult{SimulatedAreaKm2: simulatedAreaKm2, Cells: cells}
 }

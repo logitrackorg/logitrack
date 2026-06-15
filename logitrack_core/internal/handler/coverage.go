@@ -56,3 +56,15 @@ func (h *CoverageHandler) BranchForPoint(c *gin.Context) {
 		"gap_severity": cell.GapSeverity,
 	})
 }
+
+// Diagnose evaluates a simulated new-branch coverage radius (area_km2 query
+// param, in km²) against every branch's real post-clip Voronoi area, for the
+// coverage simulator panel's "Confirmar y Diagnosticar" action.
+func (h *CoverageHandler) Diagnose(c *gin.Context) {
+	areaKm2, err := strconv.ParseFloat(c.Query("area_km2"), 64)
+	if err != nil || areaKm2 <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "area_km2 es requerido y debe ser un número positivo"})
+		return
+	}
+	c.JSON(http.StatusOK, h.svc.Diagnose(areaKm2))
+}

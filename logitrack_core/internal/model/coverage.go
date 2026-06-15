@@ -47,3 +47,27 @@ type CoverageDiagram struct {
 	GapCount     int            `json:"gap_count"`
 	ComputedAt   time.Time      `json:"computed_at"`
 }
+
+// SimulationDiagnosis is the result, for a single branch, of comparing a
+// hypothetical new-branch coverage radius (an area in km², chosen via the
+// frontend simulator slider) against this branch's real, post-clip Voronoi
+// cell area: CoveragePercentage = simulated area / VoronoiAreaKm2 * 100. A low
+// percentage means the simulated radius would only cover a small fraction of
+// the branch's assigned territory — a capacity gap distinct from the
+// area-vs-threshold gaps in CoverageCell.
+type SimulationDiagnosis struct {
+	BranchID           string  `json:"branch_id"`
+	BranchName         string  `json:"branch_name"`
+	VoronoiAreaKm2     float64 `json:"voronoi_area_km2"`
+	CoveragePercentage float64 `json:"coverage_percentage"`
+	DeficitKm2         float64 `json:"deficit_km2"`
+	IsGap              bool    `json:"is_gap"`
+	Severity           string  `json:"severity"`
+}
+
+// SimulationResult is the response of CoverageService.Diagnose: the per-branch
+// diagnosis for a single simulated coverage area.
+type SimulationResult struct {
+	SimulatedAreaKm2 float64                `json:"simulated_area_km2"`
+	Cells            []SimulationDiagnosis  `json:"cells"`
+}

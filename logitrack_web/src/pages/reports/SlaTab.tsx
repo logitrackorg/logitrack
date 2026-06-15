@@ -3,7 +3,7 @@ import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
-  Eye, X, AlertTriangle, Lightbulb,
+  Eye, X, AlertTriangle, Lightbulb, Gauge,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -22,6 +22,7 @@ import {
   coverageApi,
   type CoverageDiagram,
   type CoverageCell,
+  type SimulationResult,
   GAP_STYLE,
 } from "../../api/coverage";
 import { VoronoiCoverageMap } from "../../components/VoronoiCoverageMap";
@@ -973,9 +974,10 @@ export function CoberturaTab() {
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
   // Simulador de cobertura: visualArea sigue al slider al instante (sin
-  // llamar al servidor); confirmedArea refleja el último valor confirmado.
+  // llamar al servidor); simResult refleja el último diagnóstico confirmado.
   const [visualArea, setVisualArea] = useState(SIM_AREA_DEFAULT);
-  const [confirmedArea, setConfirmedArea] = useState<number | null>(null);
+  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [simError, setSimError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -989,14 +991,14 @@ export function CoberturaTab() {
 
   useEffect(() => load(), [load]);
 
-  // Diagnóstico: dispara el recálculo real (Voronoi + recorte) en el backend.
-  const handleConfirmSimulation = useCallback(
-    (area: number) => {
-      setConfirmedArea(area);
-      load();
-    },
-    [load]
-  );
+  // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
+  const handleConfirmSimulation = useCallback((area: number) => {
+    setSimError(null);
+    coverageApi
+      .diagnose(area)
+      .then(setSimResult)
+      .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
+  }, []);
 
   const gaps = useMemo<CoverageCell[]>(() => {
     if (!diagram) return [];
@@ -1057,10 +1059,17 @@ export function CoberturaTab() {
     : "Todas las sucursales";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Mapa — ocupa 2/3 en desktop, ancho completo en mobile/tablet */}
-      <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0">
-        <div className="h-[420px] sm:h-[520px] lg:h-[640px] w-full">
+    // "Dashboard bloqueado": en desktop la fila ocupa el alto restante de la
+    // pantalla (100vh - 3.5rem del topbar sticky). El mapa llena ese alto;
+    // el panel lateral scrollea de forma independiente (overflow-y-auto) sin
+    // estirar la página. En mobile/tablet se mantiene el stack vertical normal.
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[calc(100vh-3.5rem)]">
+      {/* Mapa — ocupa 2/3 en desktop, ancho completo en mobile/tablet.
+          `isolate` crea un nuevo stacking context: los panes/controles de
+          Leaflet (z-index hasta 1000) quedan contenidos dentro del Card y
+          nunca compiten con el z-index del topbar sticky (z-50). */}
+      <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0 isolate">
+        <div className="h-[420px] sm:h-[520px] lg:h-full w-full">
           <VoronoiCoverageMap
             cells={diagram.cells}
             highlightedBranchId={highlighted}
@@ -1070,8 +1079,8 @@ export function CoberturaTab() {
         </div>
       </Card>
 
-      {/* Panel: simulador + situación actual + recomendaciones */}
-      <div className="flex flex-col gap-4">
+      {/* Panel: simulador + situación actual + recomendaciones — scroll propio en desktop */}
+      <div className="flex flex-col gap-4 lg:h-full lg:overflow-y-auto lg:pr-1">
         <Card variant="muted" className="p-5">
           <CoverageSimulatorPanel
             areaKm2={visualArea}
@@ -1079,10 +1088,13 @@ export function CoberturaTab() {
             onConfirm={handleConfirmSimulation}
             scopeLabel={simScopeLabel}
           />
-          {confirmedArea !== null && (
+          {simResult !== null && (
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Último diagnóstico confirmado para {formatKm2(confirmedArea)} ({simScopeLabel}).
+              Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
             </p>
+          )}
+          {simError && (
+            <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
           )}
         </Card>
 
@@ -1097,6 +1109,11 @@ export function CoberturaTab() {
             severity={severityCounts}
             threshold={diagram.threshold_km2}
           />
+          {simResult && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
+              <SimulationSummary simResult={simResult} highlighted={highlighted} />
+            </div>
+          )}
         </Card>
 
         <Card variant="muted" className="p-5">
@@ -1104,6 +1121,11 @@ export function CoberturaTab() {
             <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
           </h3>
           <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
+          {simResult && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
+              <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -1220,6 +1242,104 @@ function Recommendations({
                 para reducir el área de servicio.
               </p>
             </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ── Diagnóstico del simulador ─────────────────────────────────────────────────
+// Estilo para sucursales con cobertura adecuada (severity === "") — no está en
+// GAP_STYLE porque ese mapa solo cubre las severidades de gap.
+const ADEQUATE_BADGE = "bg-emerald-100 text-emerald-800";
+
+function SimulationSummary({
+  simResult,
+  highlighted,
+}: {
+  simResult: SimulationResult;
+  highlighted: string | null;
+}) {
+  const cells = highlighted
+    ? simResult.cells.filter((c) => c.branch_id === highlighted)
+    : simResult.cells;
+  if (cells.length === 0) return null;
+
+  const gapCells = cells.filter((c) => c.is_gap);
+  const areaLabel = formatKm2(simResult.simulated_area_km2);
+
+  return (
+    <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
+      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">
+        <Gauge className="w-3.5 h-3.5" /> Diagnóstico del simulador ({areaLabel})
+      </p>
+      {gapCells.length === 0 ? (
+        <p className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          {highlighted
+            ? `Un radio de cobertura de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de esta sucursal.`
+            : `Un radio de cobertura de ${areaLabel} alcanzaría para cubrir adecuadamente el territorio de las ${cells.length} sucursales.`}
+        </p>
+      ) : (
+        <p className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          {highlighted
+            ? `Con un radio de cobertura de ${areaLabel}, esta sucursal presenta un gap de capacidad frente a su territorio asignado.`
+            : `Con un radio de cobertura de ${areaLabel}, ${gapCells.length} de ${cells.length} sucursales presentan un gap de capacidad frente a su territorio asignado.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SimulationRecommendations({
+  simResult,
+  highlighted,
+}: {
+  simResult: SimulationResult;
+  highlighted: string | null;
+}) {
+  const cells = useMemo(() => {
+    const filtered = highlighted
+      ? simResult.cells.filter((c) => c.branch_id === highlighted)
+      : simResult.cells;
+    return [...filtered].sort(
+      (a, b) =>
+        (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0) ||
+        a.coverage_percentage - b.coverage_percentage
+    );
+  }, [simResult, highlighted]);
+
+  if (cells.length === 0) return null;
+
+  return (
+    <ul className="space-y-2.5">
+      {cells.map((c) => {
+        const pct = Math.round(c.coverage_percentage);
+        const style = c.severity ? GAP_STYLE[c.severity] : null;
+        return (
+          <li
+            key={c.branch_id}
+            className="p-3 rounded-lg border border-slate-200 dark:border-gray-700"
+          >
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {c.branch_name}
+              </span>
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  style ? style.badge : ADEQUATE_BADGE
+                }`}
+              >
+                {style ? style.label : "Adecuada"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {c.is_gap
+                ? `${c.branch_name} solo alcanza a cubrir el ${pct}% de su territorio asignado (Déficit de ${formatKm2(c.deficit_km2)}). Se recomienda abrir una sucursal cercana.`
+                : `${c.branch_name} alcanzaría una cobertura adecuada: el área simulada cubre el ${pct}% de su territorio asignado.`}
+            </p>
           </li>
         );
       })}

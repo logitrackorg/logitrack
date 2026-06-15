@@ -238,6 +238,101 @@ func TestCoverage_ClipReducesAreaForCoastalBranch(t *testing.T) {
 	}
 }
 
+func TestCoverage_Diagnose_Thresholds(t *testing.T) {
+	cases := []struct {
+		pct          float64
+		wantGap      bool
+		wantSeverity string
+	}{
+		{30, true, model.GapSeverityCritico},
+		{49.999, true, model.GapSeverityCritico},
+		{50, true, model.GapSeverityModerado},
+		{84.999, true, model.GapSeverityModerado},
+		{85, true, model.GapSeverityLeve},
+		{89.999, true, model.GapSeverityLeve},
+		{90, false, model.GapSeverityNone},
+		{150, false, model.GapSeverityNone},
+	}
+	for _, c := range cases {
+		gap, sev := simulationSeverity(c.pct)
+		if gap != c.wantGap || sev != c.wantSeverity {
+			t.Fatalf("simulationSeverity(%v) = (%v,%q), esperado (%v,%q)", c.pct, gap, sev, c.wantGap, c.wantSeverity)
+		}
+	}
+}
+
+func TestCoverage_Diagnose_PercentageAndDeficit(t *testing.T) {
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+	d := svc.Refresh()
+
+	// Área simulada menor que cualquier celda real: todas deben quedar como gap.
+	minArea := math.Inf(1)
+	for _, c := range d.Cells {
+		if c.AreaKm2 < minArea {
+			minArea = c.AreaKm2
+		}
+	}
+	simArea := minArea / 4
+
+	res := svc.Diagnose(simArea)
+	if res.SimulatedAreaKm2 != simArea {
+		t.Fatalf("SimulatedAreaKm2 = %v, esperado %v", res.SimulatedAreaKm2, simArea)
+	}
+	if len(res.Cells) != len(d.Cells) {
+		t.Fatalf("esperaba %d celdas, dio %d", len(d.Cells), len(res.Cells))
+	}
+
+	areaByBranch := make(map[string]float64, len(d.Cells))
+	for _, c := range d.Cells {
+		areaByBranch[c.BranchID] = c.AreaKm2
+	}
+
+	for _, sc := range res.Cells {
+		realArea := areaByBranch[sc.BranchID]
+		wantPct := simArea / realArea * 100
+		if math.Abs(sc.CoveragePercentage-wantPct) > 1e-9 {
+			t.Fatalf("celda %s: coverage_percentage = %v, esperado %v", sc.BranchID, sc.CoveragePercentage, wantPct)
+		}
+		if !sc.IsGap || sc.Severity != model.GapSeverityCritico {
+			t.Fatalf("celda %s: con área simulada muy chica se esperaba gap crítico, dio is_gap=%v severity=%q", sc.BranchID, sc.IsGap, sc.Severity)
+		}
+		wantDeficit := realArea - simArea
+		if math.Abs(sc.DeficitKm2-wantDeficit) > 1e-9 {
+			t.Fatalf("celda %s: deficit_km2 = %v, esperado %v", sc.BranchID, sc.DeficitKm2, wantDeficit)
+		}
+	}
+}
+
+func TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell(t *testing.T) {
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+	d := svc.Refresh()
+
+	maxArea := 0.0
+	for _, c := range d.Cells {
+		if c.AreaKm2 > maxArea {
+			maxArea = c.AreaKm2
+		}
+	}
+
+	res := svc.Diagnose(maxArea * 2)
+	for _, sc := range res.Cells {
+		if sc.IsGap || sc.Severity != model.GapSeverityNone {
+			t.Fatalf("celda %s: con área simulada >= área real se esperaba cobertura adecuada, dio is_gap=%v severity=%q", sc.BranchID, sc.IsGap, sc.Severity)
+		}
+		if sc.DeficitKm2 != 0 {
+			t.Fatalf("celda %s: deficit_km2 debería ser 0 cuando el área simulada cubre la celda, dio %v", sc.BranchID, sc.DeficitKm2)
+		}
+	}
+}
+
 func TestCoverage_SuggestionFallsWithinArgentina(t *testing.T) {
 	// Umbral bajo a escala nacional: todas las celdas quedan marcadas como gap
 	// con sugerencia. Cada sugerencia debe caer dentro del contorno real del

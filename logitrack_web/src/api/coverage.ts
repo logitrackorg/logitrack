@@ -64,6 +64,22 @@ export interface BranchRecommendation {
   gap_severity: GapSeverity;
 }
 
+/** Diagnóstico del simulador para una sucursal: cobertura simulada vs. área Voronoi real. */
+export interface SimulationDiagnosis {
+  branch_id: string;
+  branch_name: string;
+  voronoi_area_km2: number;
+  coverage_percentage: number;
+  deficit_km2: number;
+  is_gap: boolean;
+  severity: GapSeverity;
+}
+
+export interface SimulationResult {
+  simulated_area_km2: number;
+  cells: SimulationDiagnosis[];
+}
+
 export const coverageApi = {
   getDiagram: () =>
     api.get<CoverageDiagram>("/coverage/diagram").then((r) => r.data),
@@ -77,6 +93,12 @@ export const coverageApi = {
       .then((r) =>
         r.data.branch_id ? (r.data as BranchRecommendation) : null
       ),
+
+  /** Evalúa un radio de cobertura simulado (km²) contra el área Voronoi real de cada sucursal. */
+  diagnose: (areaKm2: number) =>
+    api
+      .get<SimulationResult>("/coverage/diagnose", { params: { area_km2: areaKm2 } })
+      .then((r) => r.data),
 };
 
 // Paleta por severidad de gap (consistente con StatusBadge/PriorityBadge del sistema).
