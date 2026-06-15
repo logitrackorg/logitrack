@@ -9,6 +9,7 @@ import (
 
 	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/geometry"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -433,6 +434,62 @@ func TestCoverage_Diagnose_SuggestedLocationsForCriticalGap(t *testing.T) {
 	}
 }
 
+func TestCoverage_Diagnose_IterativeGreedyCoveringFillsLargeGap(t *testing.T) {
+	// Área simulada muy chica frente a las celdas reales: el "hueco" que deja
+	// el círculo simulado en cada celda crítica es enorme — mucho más grande
+	// que lo que una sola sugerencia (con su propio círculo de cobertura)
+	// podría representar. fillFragmentIteratively debe rellenar ese hueco con
+	// varias sugerencias en lugar de una sola.
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+	d := svc.Refresh()
+
+	minArea := math.Inf(1)
+	for _, c := range d.Cells {
+		if c.AreaKm2 < minArea {
+			minArea = c.AreaKm2
+		}
+	}
+	simArea := minArea / 100
+	radiusKm := math.Sqrt(simArea / math.Pi)
+
+	res := svc.Diagnose(simArea)
+
+	byBranch := make(map[string][]model.SuggestedLocation)
+	for _, sug := range res.SuggestedLocations {
+		byBranch[sug.BranchID] = append(byBranch[sug.BranchID], sug)
+	}
+
+	multi := false
+	for branchID, sugs := range byBranch {
+		if len(sugs) > coverageSuggestionMaxPerFragment {
+			t.Fatalf("sucursal %s: %d sugerencias supera el límite de seguridad %d", branchID, len(sugs), coverageSuggestionMaxPerFragment)
+		}
+		if len(sugs) > 1 {
+			multi = true
+		}
+
+		// Update 2 garantiza que cada nueva sugerencia cae fuera del círculo
+		// de cobertura de las anteriores: la distancia entre cualquier par de
+		// sugerencias de la misma sucursal debe ser >= radiusKm.
+		for i := range sugs {
+			for j := i + 1; j < len(sugs); j++ {
+				dist := ml.HaversineKm(sugs[i].Lat, sugs[i].Lng, sugs[j].Lat, sugs[j].Lng)
+				if dist < radiusKm-1e-6 {
+					t.Fatalf("sucursal %s: sugerencias %+v y %+v separadas por %v km, esperado >= %v km (radio simulado)",
+						branchID, sugs[i], sugs[j], dist, radiusKm)
+				}
+			}
+		}
+	}
+	if !multi {
+		t.Fatal("se esperaba al menos una sucursal con más de una sugerencia (llenado iterativo)")
+	}
+}
+
 func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 	// Área simulada que cubre por completo todas las celdas (ver
 	// TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell): ninguna
@@ -449,6 +506,14 @@ func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
 	res := svc.Diagnose(simArea)
 	if len(res.SuggestedLocations) != 0 {
 		t.Fatalf("no se esperaban sugerencias con cobertura adecuada, dio %+v", res.SuggestedLocations)
+	}
+	// Regression: SuggestedLocations debe ser un slice vacío no-nil, no nil —
+	// un nil slice se serializa como `null` en JSON, y el frontend
+	// (SlaTab.tsx) llama `.length` sobre suggested_locations sin chequear
+	// null, lo que crashea la página (pantalla en blanco) cuando un área
+	// simulada grande no produce sugerencias.
+	if res.SuggestedLocations == nil {
+		t.Fatal("SuggestedLocations no debe ser nil (debe serializar como [] en JSON, no null)")
 	}
 }
 

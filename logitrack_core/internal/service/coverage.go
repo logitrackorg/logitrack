@@ -56,6 +56,20 @@ const (
 	// near-identical coordinates; the effective separation used is
 	// max(simulated coverage radius, this constant) — see dedupeSuggestion.
 	coverageSuggestionMinSeparationKm = 150.0
+
+	// coverageSuggestionGridSteps is the resolution of the grid-search
+	// ("Pole of Inaccessibility") heuristic used to place a new-branch
+	// suggestion inside an uncovered fragment: a
+	// (coverageSuggestionGridSteps+1) x (coverageSuggestionGridSteps+1) grid
+	// over the fragment's bounding box.
+	coverageSuggestionGridSteps = 30
+
+	// coverageSuggestionMaxPerFragment caps how many suggestions the
+	// iterative greedy-covering loop (fillFragmentIteratively) can place
+	// inside a single uncovered fragment, regardless of how large it is —
+	// a safety bound against pathological/degenerate geometry producing an
+	// unbounded loop.
+	coverageSuggestionMaxPerFragment = 4
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -372,7 +386,7 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationResult {
 	d := s.Diagram()
 	cells := make([]model.SimulationDiagnosis, 0, len(d.Cells))
-	var suggestions []model.SuggestedLocation
+	suggestions := make([]model.SuggestedLocation, 0)
 
 	// The circle is the same in every cell's site-centred projection (always
 	// centred on the origin with this radius), so build it once.
@@ -389,6 +403,13 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 	minSeparationKm := radiusKm
 	if minSeparationKm < coverageSuggestionMinSeparationKm {
 		minSeparationKm = coverageSuggestionMinSeparationKm
+	}
+
+	// All active branch sites, used by the grid-search heuristic below to
+	// push suggestions away from already-covered areas (see bestInteriorPoint).
+	branchSites := make([]model.LatLng, len(d.Cells))
+	for i, c := range d.Cells {
+		branchSites[i] = c.Site
 	}
 
 	for _, c := range d.Cells {
@@ -435,7 +456,7 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			Severity:           severity,
 		})
 		if haveGeometry && severity == model.GapSeverityCritico {
-			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle) {
+			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle, radiusKm, branchSites) {
 				if !tooCloseToExisting(cand, suggestions, minSeparationKm) {
 					suggestions = append(suggestions, cand)
 				}
@@ -466,37 +487,204 @@ func tooCloseToExisting(candidate model.SuggestedLocation, existing []model.Sugg
 // a single "crítico" gap cell. It subtracts the simulated coverage circle
 // (already projected, centred on the branch site at the origin) from the
 // cell's Voronoi polygon via DIFFERENCE, and for every remaining fragment
-// large enough to be relevant, picks the vertex farthest from the branch site
-// — see farthestVertex for why.
-func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjector, cellPoly, circle polyclip.Polygon) []model.SuggestedLocation {
+// large enough to be relevant, runs fillFragmentIteratively to place one or
+// more suggestions ("Iterative Greedy Covering") inside it.
+func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjector, cellPoly, circle polyclip.Polygon, radiusKm float64, branchSites []model.LatLng) []model.SuggestedLocation {
 	remainder := fromPolyclip(cellPoly.Construct(polyclip.DIFFERENCE, circle))
+
+	// Branch sites projected into this cell's local frame (origin-centred on
+	// cell.Site), used as the repulsion points by bestInteriorPoint. Shared
+	// (and grown) across fragments so a suggestion placed in one fragment
+	// also repels candidates considered for the next.
+	sites := make([]geometry.Point, len(branchSites))
+	for i, site := range branchSites {
+		sites[i] = proj.project(site.Lat, site.Lng)
+	}
 
 	var out []model.SuggestedLocation
 	for _, frag := range remainder {
-		area := frag.Area()
-		if area < coverageSuggestionMinFragmentAreaKm2 {
-			continue
-		}
-		out = append(out, model.SuggestedLocation{
-			LatLng:     proj.unproject(farthestVertex(frag)),
-			BranchID:   cell.BranchID,
-			BranchName: cell.BranchName,
-			GapAreaKm2: area,
-		})
+		out = append(out, fillFragmentIteratively(cell, proj, frag, radiusKm, &sites)...)
 	}
 	return out
 }
 
-// farthestVertex returns the vertex of poly with the greatest Euclidean
-// distance from the origin. Callers project poly so that the reference point
-// (the branch site) sits at the origin.
+// fillFragmentIteratively implements "Iterative Greedy Covering": a single
+// fragment left over from the simulated-coverage DIFFERENCE can be far larger
+// than one new branch's coverage circle would address, so a single
+// bestInteriorPoint suggestion leaves most of the gap unaddressed. Instead,
+// this repeatedly:
+//
+//  1. Picks the fragment's "Pole of Inaccessibility" via bestInteriorPoint,
+//     using sites (existing branches + suggestions placed so far) as
+//     repulsion points.
+//  2. Appends that point as a new suggestion.
+//  3. Adds the point to *sites, so the next iteration's grid search also
+//     repels from it (suggestions spread out rather than clustering).
+//  4. Subtracts a simulated coverage circle of radiusKm centred on the new
+//     point from the current fragment (DIFFERENCE) — modelling "this part of
+//     the gap would now be covered by the new branch" — and continues with
+//     the largest remaining sub-fragment.
+//
+// Stops when the (sub-)fragment drops below
+// coverageSuggestionMinFragmentAreaKm2, when DIFFERENCE leaves nothing, or
+// after coverageSuggestionMaxPerFragment iterations (safety bound).
+func fillFragmentIteratively(cell model.CoverageCell, proj equirectProjector, frag geometry.Polygon, radiusKm float64, sites *[]geometry.Point) []model.SuggestedLocation {
+	var out []model.SuggestedLocation
+	current := frag
+
+	for i := 0; i < coverageSuggestionMaxPerFragment; i++ {
+		area := current.Area()
+		if area < coverageSuggestionMinFragmentAreaKm2 {
+			break
+		}
+
+		point, ok := bestInteriorPoint(current, *sites)
+		if !ok {
+			// Degenerate fragment (e.g. a sliver thinner than the grid
+			// resolution, with no grid point strictly inside): fall back to
+			// the vertex farthest from the branch site, and stop — the
+			// circle-subtraction step below assumes an interior point.
+			out = append(out, model.SuggestedLocation{
+				LatLng:     proj.unproject(farthestVertex(current)),
+				BranchID:   cell.BranchID,
+				BranchName: cell.BranchName,
+				GapAreaKm2: area,
+			})
+			break
+		}
+
+		out = append(out, model.SuggestedLocation{
+			LatLng:     proj.unproject(point),
+			BranchID:   cell.BranchID,
+			BranchName: cell.BranchName,
+			GapAreaKm2: area,
+		})
+
+		// Update 1: future grid searches (this fragment's remaining
+		// iterations, later fragments, and other cells' suggestions via the
+		// shared slice) repel from this new suggestion too.
+		*sites = append(*sites, point)
+
+		if radiusKm <= 0 {
+			break
+		}
+
+		// Update 2: model this new branch's own coverage circle and subtract
+		// it from the current fragment — the part of the gap it would now
+		// cover.
+		coverCircle := toPolyclip(translatePolygon(circlePolygon(radiusKm, coverageSuggestionCircleVertices), point))
+		remainder := fromPolyclip(toPolyclip(current).Construct(polyclip.DIFFERENCE, coverCircle))
+		if len(remainder) == 0 {
+			break
+		}
+		current = largestFragment(remainder)
+	}
+	return out
+}
+
+// translatePolygon returns a copy of poly with every vertex shifted by
+// offset. Used to move a circle polygon generated at the origin (by
+// circlePolygon) to be centred on an arbitrary point.
+func translatePolygon(poly geometry.Polygon, offset geometry.Point) geometry.Polygon {
+	out := make(geometry.Polygon, len(poly))
+	for i, v := range poly {
+		out[i] = geometry.Point{X: v.X + offset.X, Y: v.Y + offset.Y}
+	}
+	return out
+}
+
+// largestFragment returns the polygon with the greatest area among frags.
+// frags must be non-empty.
+func largestFragment(frags []geometry.Polygon) geometry.Polygon {
+	best := frags[0]
+	bestArea := best.Area()
+	for _, f := range frags[1:] {
+		if a := f.Area(); a > bestArea {
+			bestArea = a
+			best = f
+		}
+	}
+	return best
+}
+
+// bestInteriorPoint implements a "Pole of Inaccessibility" grid-search
+// heuristic to place a new-branch suggestion well inside an uncovered
+// fragment, instead of on one of its vertices.
 //
 // DIFFERENCE (Voronoi cell minus simulated coverage circle) typically leaves a
-// concave "crescent" fragment. Its area-weighted Centroid() can land outside
-// the fragment entirely — back inside the subtracted circle, i.e. inside the
-// zone already covered. The farthest vertex from the site is always a real
-// vertex of the fragment, sitting on its outer boundary: the point of the gap
-// most disconnected from the current network.
+// concave "crescent" fragment whose vertices sit on the cell/country/circle
+// boundary — picking one of them pins the suggestion to a national border or
+// to the edge of the simulated coverage circle, which is rarely a viable
+// branch location.
+//
+// Instead, this overlays a (coverageSuggestionGridSteps+1)^2 grid over frag's
+// bounding box, keeps only the points that fall inside the polygon, and
+// returns the one farthest from the nearest existing branch site (sites,
+// already projected into the same local frame) — i.e. the point deepest
+// inside the gap and farthest from the already-covered area around the
+// orange circle.
+//
+// Returns ok=false if no grid point falls inside frag (a sliver thinner than
+// the grid resolution); callers should fall back to a vertex-based heuristic.
+func bestInteriorPoint(frag geometry.Polygon, sites []geometry.Point) (geometry.Point, bool) {
+	bbox := boundingBox(frag)
+
+	var best geometry.Point
+	bestScore := -1.0
+	found := false
+
+	for i := 0; i <= coverageSuggestionGridSteps; i++ {
+		x := bbox.MinX + (bbox.MaxX-bbox.MinX)*float64(i)/float64(coverageSuggestionGridSteps)
+		for j := 0; j <= coverageSuggestionGridSteps; j++ {
+			y := bbox.MinY + (bbox.MaxY-bbox.MinY)*float64(j)/float64(coverageSuggestionGridSteps)
+			pt := geometry.Point{X: x, Y: y}
+			if !frag.Contains(pt) {
+				continue
+			}
+			score := nearestSiteDist2(pt, sites)
+			if !found || score > bestScore {
+				best = pt
+				bestScore = score
+				found = true
+			}
+		}
+	}
+	return best, found
+}
+
+// boundingBox returns the axis-aligned bounding box of poly's vertices.
+func boundingBox(poly geometry.Polygon) geometry.BBox {
+	bb := geometry.BBox{MinX: poly[0].X, MinY: poly[0].Y, MaxX: poly[0].X, MaxY: poly[0].Y}
+	for _, v := range poly[1:] {
+		bb.MinX = math.Min(bb.MinX, v.X)
+		bb.MinY = math.Min(bb.MinY, v.Y)
+		bb.MaxX = math.Max(bb.MaxX, v.X)
+		bb.MaxY = math.Max(bb.MaxY, v.Y)
+	}
+	return bb
+}
+
+// nearestSiteDist2 returns the squared distance from pt to the nearest of
+// sites. An empty sites slice (no branches at all) scores every candidate
+// equally via +Inf, so the grid search degenerates to "any interior point".
+func nearestSiteDist2(pt geometry.Point, sites []geometry.Point) float64 {
+	if len(sites) == 0 {
+		return math.Inf(1)
+	}
+	best := geometry.Dist2(pt, sites[0])
+	for _, s := range sites[1:] {
+		if d := geometry.Dist2(pt, s); d < best {
+			best = d
+		}
+	}
+	return best
+}
+
+// farthestVertex returns the vertex of poly with the greatest Euclidean
+// distance from the origin. Callers project poly so that the reference point
+// (the branch site) sits at the origin. Used as a fallback by
+// suggestLocationsFromDifference when bestInteriorPoint finds no interior
+// grid point.
 func farthestVertex(poly geometry.Polygon) geometry.Point {
 	origin := geometry.Point{}
 	best := poly[0]
