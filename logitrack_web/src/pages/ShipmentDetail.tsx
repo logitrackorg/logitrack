@@ -22,6 +22,7 @@ import { VehicleDetailModal } from "./VehicleList";
 import { StatusBadge } from "../components/StatusBadge";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { ZoneBadge } from "../components/ZoneBadge";
+import { RevisionReasonModal } from "../components/RevisionReasonModal";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { extractErrorMessage } from "../utils/errors";
 
@@ -196,6 +197,9 @@ export function ShipmentDetail() {
   const [qrError, setQRError] = useState<string>('');
   const [generatingQR, setGeneratingQR] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [approveModalOpen, setApproveModalOpen] = useState(false);
+  const [resolutionText, setResolutionText] = useState("");
 
   // Estados para impresión de alta
   const [printingDoc, setPrintingDoc] = useState(false);
@@ -868,37 +872,112 @@ export function ShipmentDetail() {
                     </span>
                     {shipment.current_zone === "entrada" && (
                       <>
-                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
-                          Mover a Salida
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={async () => { const m = prompt("Motivo (opcional):"); setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision", m ?? undefined); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
+                        {shipment.is_returning ? (
+                          <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "devolucion"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--brand)] dark:border-blue-400 text-[var(--brand)] dark:text-blue-400 hover:bg-[var(--brand-tint)]">
+                            Mover a Devolución
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "salida"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
+                            Mover a Salida
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => setRevisionModalOpen(true)} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
                           Mover a Revisión
                         </Button>
                       </>
                     )}
                     {shipment.current_zone === "salida" && (
-                      <>
-                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "revision"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--warn)] text-[var(--warn-text)] hover:bg-[var(--warn-bg)]">
-                          Mover a Revisión
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.moveZone(shipment.tracking_id, "entrada"); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--brand)] dark:border-blue-400 text-[var(--brand)] dark:text-blue-400 hover:bg-[var(--brand-tint)]">
-                          Reingresar a Entrada
-                        </Button>
-                      </>
+                      <span className="text-[13px] text-[var(--text-muted)]">
+                        Listo para despacho. No puede moverse a otra zona.
+                      </span>
+                    )}
+                    {shipment.current_zone === "devolucion" && (
+                      <span className="text-[13px] text-[var(--text-muted)]">
+                        Listo para devolución.
+                      </span>
                     )}
                     {shipment.current_zone === "revision" && hasRole("supervisor") && (
                       <>
-                        <Button size="sm" variant="outline" onClick={async () => { setMoving(true); try { await shipmentApi.approveFromRevision(shipment.tracking_id); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
-                          Aprobar (→ Salida)
+                        <Button size="sm" variant="outline" onClick={() => { setResolutionText(""); setApproveModalOpen(true); }} disabled={moving} className="border-[var(--ok)] text-[var(--ok-text)] hover:bg-[var(--ok-bg)]">
+                          {shipment.is_returning ? "Aprobar (→ Devolución)" : "Aprobar (→ Salida)"}
                         </Button>
-                        <Button size="sm" variant="outline" onClick={async () => { const c = prompt("Clasificación: lost (extraviado) o destroyed (daño total)"); if (!c || !["lost", "destroyed"].includes(c)) return; const m = prompt("Motivo (opcional):") ?? ""; setMoving(true); try { await shipmentApi.classifyShipment(shipment.tracking_id, c as "lost" | "destroyed", m); reload(); } catch { setMoving(false); } finally { setMoving(false); } }} disabled={moving} className="border-red-600 dark:border-red-400 text-[var(--danger-text)] hover:bg-[var(--danger-bg)]">
-                          Clasificar (Perdido/Destruido)
+                        <Button size="sm" variant="outline" onClick={() => { setShowIncidentModal(true); setIncidentError(""); setIncidentDescription(""); setIncidentType("extraviado"); }} disabled={moving} className="gap-1.5 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/15">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Incidencia
                         </Button>
                       </>
                     )}
                   </div>
                 </div>
               )}
+
+              <RevisionReasonModal
+                open={revisionModalOpen}
+                trackingId={shipment.tracking_id}
+                submitting={moving}
+                onCancel={() => setRevisionModalOpen(false)}
+                onConfirm={async (reason) => {
+                  setMoving(true);
+                  try {
+                    await shipmentApi.moveZone(shipment.tracking_id, "revision", reason);
+                    setRevisionModalOpen(false);
+                    reload();
+                  } catch {
+                    setMoving(false);
+                  } finally {
+                    setMoving(false);
+                  }
+                }}
+              />
+
+              {/* Resolución de revisión (comentario obligatorio) */}
+              <Dialog open={approveModalOpen} onClose={() => setApproveModalOpen(false)}>
+                <DialogContent>
+                  <DialogHeader onClose={() => setApproveModalOpen(false)}>
+                    <DialogTitle>
+                      {shipment.is_returning ? "Aprobar revisión (→ Devolución)" : "Aprobar revisión (→ Salida)"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="px-6 pb-2 space-y-3">
+                    <p className="text-sm text-[var(--text-muted)]">
+                      Dejá un comentario sobre la resolución de la revisión del envío{" "}
+                      <span className="font-semibold text-[var(--text-primary)]">{shipment.tracking_id}</span>.
+                    </p>
+                    <textarea
+                      autoFocus
+                      value={resolutionText}
+                      onChange={(e) => setResolutionText(e.target.value)}
+                      placeholder="Ej.: Embalaje reforzado, sin daños en el contenido. Apto para continuar."
+                      rows={4}
+                      className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setApproveModalOpen(false)} disabled={moving}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      disabled={moving || !resolutionText.trim()}
+                      onClick={async () => {
+                        if (!resolutionText.trim()) return;
+                        setMoving(true);
+                        try {
+                          await shipmentApi.approveFromRevision(shipment.tracking_id, resolutionText.trim());
+                          setApproveModalOpen(false);
+                          reload();
+                        } catch {
+                          setMoving(false);
+                        } finally {
+                          setMoving(false);
+                        }
+                      }}
+                      className="border-[var(--ok)] bg-[var(--ok)] hover:opacity-90 text-white"
+                    >
+                      Confirmar y aprobar
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Fleet notices */}
               {(shipment.status === "loaded" || shipment.status === "in_transit") && hasRole("supervisor", "operator") && !operatorOutOfBranch && (

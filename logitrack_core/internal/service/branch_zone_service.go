@@ -17,6 +17,7 @@ type BranchZoneService struct {
 	eventStore   repository.EventStore
 	proj         projection.Projector
 	shipmentSvc  *ShipmentService
+	commentSvc   *CommentService
 }
 
 func NewBranchZoneService(
@@ -37,6 +38,19 @@ func (s *BranchZoneService) SetShipmentService(svc *ShipmentService) {
 	s.shipmentSvc = svc
 }
 
+func (s *BranchZoneService) SetCommentService(svc *CommentService) {
+	s.commentSvc = svc
+}
+
+// logZoneComment registra un movimiento de zona como comentario del envío.
+// Es best-effort: si falla (o no hay CommentService inyectado) no interrumpe el flujo.
+func (s *BranchZoneService) logZoneComment(trackingID, author, body string) {
+	if s.commentSvc == nil {
+		return
+	}
+	_, _ = s.commentSvc.AddComment(trackingID, author, body)
+}
+
 func (s *BranchZoneService) EnsureZonesForBranch(branchID string) error {
 	return s.zoneRepo.EnsureZonesForBranch(branchID)
 }
@@ -49,20 +63,35 @@ func (s *BranchZoneService) SetActiveForBranch(branchID string, active bool) err
 	return s.zoneRepo.SetActiveForBranch(branchID, active)
 }
 
-// validTransitions defines allowed zone-to-zone moves.
-// key = from_zone, value = set of allowed to_zones.
-var validTransitions = map[model.BranchZoneType]map[model.BranchZoneType]bool{
-	model.ZoneEntrada: {
-		model.ZoneSalida:   true,
-		model.ZoneRevision: true,
-	},
-	model.ZoneSalida: {
-		model.ZoneRevision: true,
-		model.ZoneEntrada:  true,
-	},
-	model.ZoneRevision: {
-		model.ZoneSalida: true,
-	},
+// allowedZoneTransitions devuelve las zonas destino válidas desde fromZone.
+//
+// Reglas:
+//   - Salida y Devolución son terminales: una vez ahí el envío no se mueve a otra zona.
+//   - Para envíos en modo devolución (is_returning), desde Entrada solo se puede ir a
+//     Devolución o Revisión (nunca a Salida); tras Revisión vuelven a Devolución.
+//   - Para el resto, desde Entrada se va a Salida o Revisión; tras Revisión, a Salida.
+func allowedZoneTransitions(fromZone model.BranchZoneType, isReturning bool) map[model.BranchZoneType]bool {
+	switch fromZone {
+	case model.ZoneEntrada:
+		if isReturning {
+			return map[model.BranchZoneType]bool{
+				model.ZoneDevolucion: true,
+				model.ZoneRevision:   true,
+			}
+		}
+		return map[model.BranchZoneType]bool{
+			model.ZoneSalida:   true,
+			model.ZoneRevision: true,
+		}
+	case model.ZoneRevision:
+		if isReturning {
+			return map[model.BranchZoneType]bool{model.ZoneDevolucion: true}
+		}
+		return map[model.BranchZoneType]bool{model.ZoneSalida: true}
+	default:
+		// Salida y Devolución son terminales.
+		return map[model.BranchZoneType]bool{}
+	}
 }
 
 // AssignToEntrada registra automáticamente un envío en la zona Entrada al llegar a una
@@ -94,6 +123,7 @@ func (s *BranchZoneService) AssignToEntrada(trackingID, branchID, username strin
 		return err
 	}
 	s.proj.Apply(event)
+	s.logZoneComment(trackingID, username, "[Zona] Recepción en almacén → Entrada")
 	return nil
 }
 
@@ -121,18 +151,19 @@ func (s *BranchZoneService) MoveShipment(trackingID, username, branchID, notes s
 		return fmt.Errorf("Solo un supervisor puede mover envíos desde la zona Revisión")
 	}
 
-	// Validar transición
-	if toZone == model.ZoneDevolucion {
-		return fmt.Errorf("Debe pasar por Revisión antes de clasificar como devolución")
+	// Salida es terminal: el envío ya está listo para despacho y no puede moverse a otra zona.
+	if fromZone == model.ZoneSalida {
+		return fmt.Errorf("Un envío en Salida está listo para despacho y no puede moverse a otra zona")
 	}
 
-	if toZone == model.ZoneEntrada && fromZone != model.ZoneSalida {
-		return fmt.Errorf("solo se puede mover a Entrada desde Salida")
+	// Devolución solo está disponible para envíos en modo devolución.
+	if toZone == model.ZoneDevolucion && !sh.IsReturning {
+		return fmt.Errorf("Solo los envíos en devolución pueden moverse a la zona Devolución")
 	}
 
-	allowed, ok := validTransitions[fromZone]
-	if !ok || !allowed[toZone] {
-		return fmt.Errorf("no se puede mover de %s a %s", fromZone, toZone)
+	// Validar transición según la zona actual y si el envío está en modo devolución.
+	if !allowedZoneTransitions(fromZone, sh.IsReturning)[toZone] {
+		return fmt.Errorf("no se puede mover de %s a %s", model.BranchZoneNames[fromZone], model.BranchZoneNames[toZone])
 	}
 
 	// Validar que la zona destino existe en la sucursal
@@ -158,12 +189,30 @@ func (s *BranchZoneService) MoveShipment(trackingID, username, branchID, notes s
 		return err
 	}
 	s.proj.Apply(event)
+
+	body := fmt.Sprintf("[Zona] %s → %s", model.BranchZoneNames[fromZone], model.BranchZoneNames[toZone])
+	if strings.TrimSpace(notes) != "" {
+		body += ": " + strings.TrimSpace(notes)
+	}
+	s.logZoneComment(trackingID, username, body)
 	return nil
 }
 
-// ApproveFromRevision mueve un envío de Revisión a Salida (solo supervisor).
+// ApproveFromRevision aprueba un envío que estaba en Revisión (solo supervisor).
+// Los envíos en modo devolución pasan a Devolución; el resto, a Salida.
 func (s *BranchZoneService) ApproveFromRevision(trackingID, username, branchID, notes string) error {
-	return s.MoveShipment(trackingID, username, branchID, notes, model.ZoneSalida, model.RoleSupervisor)
+	if strings.TrimSpace(notes) == "" {
+		return fmt.Errorf("Debe indicar un comentario sobre la resolución de la revisión")
+	}
+	sh, err := s.shipmentRepo.GetByTrackingID(trackingID)
+	if err != nil {
+		return fmt.Errorf("envío no encontrado")
+	}
+	target := model.ZoneSalida
+	if sh.IsReturning {
+		target = model.ZoneDevolucion
+	}
+	return s.MoveShipment(trackingID, username, branchID, notes, target, model.RoleSupervisor)
 }
 
 // ClassifyShipment clasifica un envío en Revisión como lost o destroyed (solo supervisor).
@@ -212,6 +261,7 @@ func (s *BranchZoneService) ClassifyShipment(trackingID, username, branchID, cla
 		return err
 	}
 	s.proj.Apply(event)
+	s.logZoneComment(trackingID, username, fmt.Sprintf("[Zona] %s → clasificación %s. %s", model.BranchZoneNames[fromZone], strings.ToUpper(classification), notes))
 
 	// Actualizar estado del envío a lost o destroyed
 	targetStatus := model.StatusLost
