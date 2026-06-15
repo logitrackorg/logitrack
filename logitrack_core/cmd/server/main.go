@@ -176,6 +176,7 @@ func main() {
 	shipmentSvc.SetSystemConfig(sysConfigSvc)
 	shipmentSvc.SetPricingService(pricingSvc)
 	branchZoneSvc.SetShipmentService(shipmentSvc)
+	branchZoneSvc.SetCommentService(commentSvc)
 	paymentRepo := repository.NewPostgresPaymentRepository(database)
 	paymentSvc := service.NewPaymentService(paymentRepo, shipmentSvc, mpClient)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, mpClient, shipmentSvc)
