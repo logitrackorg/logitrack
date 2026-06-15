@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, type ReactNode } from "react";
 import {
   AlertCircle, RefreshCw, ShieldCheck, ShieldAlert,
   TrendingDown, TrendingUp, CheckCircle2, Zap, Brain,
   ChevronDown, ChevronUp, UserPlus, UserMinus, Info, MapPin,
-  Eye, X, AlertTriangle, Lightbulb, Gauge,
+  Eye, X, AlertTriangle, Lightbulb, Gauge, Maximize2, Minimize2,
 } from "lucide-react";
 import type { FleetStatus, FleetDiagnosis, BranchFleetDiagnosis } from "../../api/slaMetrics";
 import {
@@ -490,14 +490,6 @@ export default function SlaTab({ branchId }: SlaTabProps) {
 
       {/* ── Cobertura territorial (detector de falta de sucursal) ─────────────── */}
       <div className="pt-2">
-        <div className="mb-3">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
-            <MapPin className="w-4 h-4 text-blue-600" /> Cobertura territorial
-          </h2>
-          <p className="text-[11px] text-slate-400">
-            Diagrama de cobertura por sucursal (Voronoi) y detección de zonas sub-cubiertas
-          </p>
-        </div>
         <CoberturaTab />
       </div>
 
@@ -979,6 +971,10 @@ export function CoberturaTab() {
   const [simResult, setSimResult] = useState<SimulationResult | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
 
+  // Modo pantalla completa: superpone el mapa + panel lateral sobre toda la
+  // ventana (incluyendo el topbar) para aprovechar el espacio al analizar el mapa.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -1021,10 +1017,21 @@ export function CoberturaTab() {
     return counts;
   }, [gaps]);
 
-  if (loading) return <SkeletonCard className="h-[600px]" />;
+  // Contenido principal: mapa + panel lateral, o un placeholder de carga/error.
+  // "Dashboard bloqueado": en desktop la fila ocupa el alto restante de la
+  // pantalla. El mapa llena ese alto; el panel lateral scrollea de forma
+  // independiente (overflow-y-auto) sin estirar la página. En mobile/tablet
+  // se mantiene el stack vertical normal. En pantalla completa, el contenedor
+  // ya no resta el alto del topbar (no es visible) y descuenta solo el
+  // encabezado propio de esta sección.
+  const gridHeightClass = isFullscreen ? "lg:h-[calc(100vh-8rem)]" : "lg:h-[calc(100vh-10rem)]";
 
-  if (error) {
-    return (
+  let body: ReactNode;
+
+  if (loading) {
+    body = <SkeletonCard className="h-[600px]" />;
+  } else if (error) {
+    body = (
       <Card variant="muted" className="flex flex-col items-center justify-center h-[400px] gap-3">
         <AlertTriangle className="w-10 h-10 text-amber-500" />
         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{error}</p>
@@ -1036,10 +1043,8 @@ export function CoberturaTab() {
         </button>
       </Card>
     );
-  }
-
-  if (!diagram || diagram.branch_count < 3) {
-    return (
+  } else if (!diagram || diagram.branch_count < 3) {
+    body = (
       <Card variant="muted" className="flex flex-col items-center justify-center h-[400px] gap-2 text-center px-6">
         <MapPin className="w-10 h-10 text-slate-300" />
         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -1050,85 +1055,105 @@ export function CoberturaTab() {
         </p>
       </Card>
     );
+  } else {
+    const coveredCount = diagram.branch_count - diagram.gap_count;
+
+    const simScopeLabel = highlighted
+      ? diagram.cells.find((c) => c.branch_id === highlighted)?.branch_name ?? "Sucursal seleccionada"
+      : "Todas las sucursales";
+
+    body = (
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-4 ${gridHeightClass}`}>
+        {/* Mapa — ocupa 2/3 en desktop, ancho completo en mobile/tablet.
+            `isolate` crea un nuevo stacking context: los panes/controles de
+            Leaflet (z-index hasta 1000) quedan contenidos dentro del Card y
+            nunca compiten con el z-index del topbar sticky (z-50). */}
+        <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0 isolate">
+          <div className="h-[420px] sm:h-[520px] lg:h-full w-full">
+            <VoronoiCoverageMap
+              cells={diagram.cells}
+              highlightedBranchId={highlighted}
+              onSelectBranch={(id) => setHighlighted(id)}
+              simulationAreaKm2={visualArea}
+              suggestedLocations={simResult?.suggested_locations}
+            />
+          </div>
+        </Card>
+
+        {/* Panel: simulador + situación actual + recomendaciones — scroll propio en desktop */}
+        <div className="flex flex-col gap-4 lg:h-full lg:overflow-y-auto lg:pr-1">
+          <Card variant="muted" className="p-5">
+            <CoverageSimulatorPanel
+              areaKm2={visualArea}
+              onAreaChange={setVisualArea}
+              onConfirm={handleConfirmSimulation}
+              scopeLabel={simScopeLabel}
+            />
+            {simResult !== null && (
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
+              </p>
+            )}
+            {simError && (
+              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
+            )}
+          </Card>
+
+          <Card variant="muted" className="p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
+              <MapPin className="w-4 h-4 text-blue-600" /> Situación actual
+            </h3>
+            <SituationSummary
+              covered={coveredCount}
+              total={diagram.branch_count}
+              gapCount={diagram.gap_count}
+              severity={severityCounts}
+              threshold={diagram.threshold_km2}
+            />
+            {simResult && (
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
+                <SimulationSummary simResult={simResult} highlighted={highlighted} />
+              </div>
+            )}
+          </Card>
+
+          <Card variant="muted" className="p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
+              <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
+            </h3>
+            <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
+            {simResult && (
+              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
+                <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    );
   }
 
-  const coveredCount = diagram.branch_count - diagram.gap_count;
-
-  const simScopeLabel = highlighted
-    ? diagram.cells.find((c) => c.branch_id === highlighted)?.branch_name ?? "Sucursal seleccionada"
-    : "Todas las sucursales";
-
   return (
-    // "Dashboard bloqueado": en desktop la fila ocupa el alto restante de la
-    // pantalla (100vh - 3.5rem del topbar sticky). El mapa llena ese alto;
-    // el panel lateral scrollea de forma independiente (overflow-y-auto) sin
-    // estirar la página. En mobile/tablet se mantiene el stack vertical normal.
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[calc(100vh-3.5rem)]">
-      {/* Mapa — ocupa 2/3 en desktop, ancho completo en mobile/tablet.
-          `isolate` crea un nuevo stacking context: los panes/controles de
-          Leaflet (z-index hasta 1000) quedan contenidos dentro del Card y
-          nunca compiten con el z-index del topbar sticky (z-50). */}
-      <Card className="lg:col-span-2 overflow-hidden !cursor-default p-0 isolate">
-        <div className="h-[420px] sm:h-[520px] lg:h-full w-full">
-          <VoronoiCoverageMap
-            cells={diagram.cells}
-            highlightedBranchId={highlighted}
-            onSelectBranch={(id) => setHighlighted(id)}
-            simulationAreaKm2={visualArea}
-            suggestedLocations={simResult?.suggested_locations}
-          />
+    <div className={isFullscreen ? "fullscreen-mode" : ""}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-white">
+            <MapPin className="w-4 h-4 text-blue-600" /> Cobertura territorial
+          </h2>
+          <p className="text-[11px] text-slate-400">
+            Diagrama de cobertura por sucursal (Voronoi) y detección de zonas sub-cubiertas
+          </p>
         </div>
-      </Card>
-
-      {/* Panel: simulador + situación actual + recomendaciones — scroll propio en desktop */}
-      <div className="flex flex-col gap-4 lg:h-full lg:overflow-y-auto lg:pr-1">
-        <Card variant="muted" className="p-5">
-          <CoverageSimulatorPanel
-            areaKm2={visualArea}
-            onAreaChange={setVisualArea}
-            onConfirm={handleConfirmSimulation}
-            scopeLabel={simScopeLabel}
-          />
-          {simResult !== null && (
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Último diagnóstico confirmado para {formatKm2(simResult.simulated_area_km2)} ({simScopeLabel}).
-            </p>
-          )}
-          {simError && (
-            <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
-          )}
-        </Card>
-
-        <Card variant="muted" className="p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
-            <MapPin className="w-4 h-4 text-blue-600" /> Situación actual
-          </h3>
-          <SituationSummary
-            covered={coveredCount}
-            total={diagram.branch_count}
-            gapCount={diagram.gap_count}
-            severity={severityCounts}
-            threshold={diagram.threshold_km2}
-          />
-          {simResult && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
-              <SimulationSummary simResult={simResult} highlighted={highlighted} />
-            </div>
-          )}
-        </Card>
-
-        <Card variant="muted" className="p-5">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
-            <Lightbulb className="w-4 h-4 text-amber-500" /> Recomendaciones
-          </h3>
-          <Recommendations gaps={gaps} highlighted={highlighted} onHighlight={setHighlighted} />
-          {simResult && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-gray-700">
-              <SimulationRecommendations simResult={simResult} highlighted={highlighted} />
-            </div>
-          )}
-        </Card>
+        <button
+          onClick={() => setIsFullscreen((v) => !v)}
+          title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+          aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+          className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-gray-700 cursor-pointer"
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+        </button>
       </div>
+      {body}
     </div>
   );
 }

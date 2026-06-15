@@ -10,6 +10,7 @@ import (
 
 	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/geometry"
+	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 )
@@ -47,6 +48,13 @@ const (
 	// as a new-branch suggestion — filters out thin sliver fragments left over
 	// from country/cell-boundary clipping noise.
 	coverageSuggestionMinFragmentAreaKm2 = 50000.0
+
+	// coverageSuggestionMinSeparationKm is the static floor for the minimum
+	// distance between two new-branch suggestions. Neighbouring branches can
+	// each detect a "crítico" gap in the same border area and propose
+	// near-identical coordinates; the effective separation used is
+	// max(simulated coverage radius, this constant) — see dedupeSuggestion.
+	coverageSuggestionMinSeparationKm = 150.0
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -364,9 +372,18 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 	// The circle is the same in every cell's site-centred projection (always
 	// centred on the origin with this radius), so build it once.
 	var circle polyclip.Polygon
+	var radiusKm float64
 	if simulatedAreaKm2 > 0 {
-		radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
+		radiusKm = math.Sqrt(simulatedAreaKm2 / math.Pi)
 		circle = toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
+	}
+
+	// Minimum distance between two suggestions: the larger of the simulated
+	// coverage radius and a static floor, so neighbouring branches that each
+	// flag the same border gap don't produce near-overlapping markers.
+	minSeparationKm := radiusKm
+	if minSeparationKm < coverageSuggestionMinSeparationKm {
+		minSeparationKm = coverageSuggestionMinSeparationKm
 	}
 
 	for _, c := range d.Cells {
@@ -413,7 +430,11 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			Severity:           severity,
 		})
 		if haveGeometry && severity == model.GapSeverityCritico {
-			suggestions = append(suggestions, suggestLocationsFromDifference(c, proj, cellPoly, circle)...)
+			for _, cand := range suggestLocationsFromDifference(c, proj, cellPoly, circle) {
+				if !tooCloseToExisting(cand, suggestions, minSeparationKm) {
+					suggestions = append(suggestions, cand)
+				}
+			}
 		}
 	}
 	return model.SimulationResult{
@@ -421,6 +442,19 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 		Cells:              cells,
 		SuggestedLocations: suggestions,
 	}
+}
+
+// tooCloseToExisting reports whether candidate lies within minSeparationKm of
+// any suggestion already collected. Used to spatially deduplicate
+// suggestions raised independently by neighbouring gap cells, which often
+// point at the same underserved border area.
+func tooCloseToExisting(candidate model.SuggestedLocation, existing []model.SuggestedLocation, minSeparationKm float64) bool {
+	for _, s := range existing {
+		if ml.HaversineKm(candidate.Lat, candidate.Lng, s.Lat, s.Lng) < minSeparationKm {
+			return true
+		}
+	}
+	return false
 }
 
 // suggestLocationsFromDifference computes new-branch location suggestions for

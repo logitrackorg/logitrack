@@ -23,8 +23,9 @@ interface VoronoiCoverageMapProps {
   simulationAreaKm2?: number | null;
   /**
    * Ubicaciones sugeridas para nuevas sucursales (gaps críticos detectados por
-   * el último diagnóstico del simulador). Se dibujan como marcadores
-   * distintivos con animación de pulso.
+   * el último diagnóstico del simulador). Se dibujan con el ícono de sucursal
+   * "apagado" (escala de grises) y un círculo gris punteado del mismo radio
+   * que el simulador.
    */
   suggestedLocations?: SuggestedLocation[];
 }
@@ -67,7 +68,7 @@ export function VoronoiCoverageMap({
       center: [-38.0, -63.0],
       zoom: 4,
       zoomControl: true,
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
     });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
@@ -200,8 +201,10 @@ export function VoronoiCoverageMap({
     });
   }, [cells, highlightedBranchId, simulationAreaKm2]);
 
-  // Ubicaciones sugeridas para nuevas sucursales: marcadores rojos con
-  // animación de pulso, derivados de los gaps críticos del último diagnóstico.
+  // Ubicaciones sugeridas para nuevas sucursales: ícono de sucursal "apagado"
+  // (mismo ícono que las sucursales reales, en escala de grises y con opacidad
+  // reducida) más un círculo gris punteado con el mismo radio del simulador,
+  // derivados de los gaps críticos del último diagnóstico.
   useEffect(() => {
     const sgLayer = suggestionsLayer.current;
     if (!sgLayer) return;
@@ -209,9 +212,25 @@ export function VoronoiCoverageMap({
     sgLayer.clearLayers();
     if (!suggestedLocations || suggestedLocations.length === 0) return;
 
+    const radiusMeters =
+      simulationAreaKm2 && simulationAreaKm2 > 0
+        ? 1000 * Math.sqrt(simulationAreaKm2 / Math.PI)
+        : null;
+
     suggestedLocations.forEach((loc) => {
+      if (radiusMeters) {
+        L.circle([loc.lat, loc.lng], {
+          radius: radiusMeters,
+          color: "#808080",
+          weight: 2,
+          dashArray: "5, 5",
+          fillColor: "#808080",
+          fillOpacity: 0.1,
+        }).addTo(sgLayer);
+      }
+
       const icon = L.divIcon({
-        html: `<div class="relative w-7 h-7"><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-[rgba(239,68,68,0.25)] animate-[pulse-ring_2s_ease-out_infinite]"></div><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white shadow-[0_1px_6px_rgba(0,0,0,0.4)] z-[2]"></div></div>`,
+        html: `<div class="coverage-suggestion-icon" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center">${FACTORY_SVG}</div>`,
         className: "",
         iconSize: [28, 28],
         iconAnchor: [14, 14],
@@ -223,7 +242,7 @@ export function VoronoiCoverageMap({
         )
         .addTo(sgLayer);
     });
-  }, [suggestedLocations]);
+  }, [suggestedLocations, simulationAreaKm2]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
