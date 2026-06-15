@@ -1084,3 +1084,9 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ─── Leaflet control z-index — debajo del nav sticky ─────── */
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 900 !important;
+}
