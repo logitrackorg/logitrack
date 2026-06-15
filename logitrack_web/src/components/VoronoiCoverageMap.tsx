@@ -12,6 +12,13 @@ interface VoronoiCoverageMapProps {
   /** branch_id resaltado (p.ej. fila seleccionada en el panel). */
   highlightedBranchId?: string | null;
   onSelectBranch?: (branchId: string) => void;
+  /**
+   * Área simulada (km²) para previsualizar un radio de cobertura con un
+   * círculo punteado. Si `highlightedBranchId` está seteado, el círculo se
+   * dibuja solo sobre esa sucursal; si es `null`, se dibuja uno por sucursal.
+   * `null`/`0` = sin simulación activa.
+   */
+  simulationAreaKm2?: number | null;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -31,11 +38,13 @@ export function VoronoiCoverageMap({
   cells,
   highlightedBranchId,
   onSelectBranch,
+  simulationAreaKm2,
 }: VoronoiCoverageMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const cellsLayer = useRef<L.LayerGroup | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
+  const simLayer = useRef<L.LayerGroup | null>(null);
   const onSelectRef = useRef(onSelectBranch);
   useEffect(() => {
     onSelectRef.current = onSelectBranch;
@@ -57,6 +66,7 @@ export function VoronoiCoverageMap({
     mapRef.current = map;
     cellsLayer.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
+    simLayer.current = L.layerGroup().addTo(map);
 
     // Responsive: re-ajustar el tamaño del mapa cuando cambia el contenedor.
     const ro = new ResizeObserver(() => map.invalidateSize());
@@ -149,6 +159,33 @@ export function VoronoiCoverageMap({
     // Asegurar el cálculo correcto tras el primer render del contenedor.
     setTimeout(() => map.invalidateSize(), 0);
   }, [cells, highlightedBranchId]);
+
+  // Círculo de previsualización del simulador de cobertura: radio = sqrt(área/π)
+  // convertido de km a metros (Leaflet espera metros). Si hay una sucursal
+  // resaltada, se dibuja solo sobre esa; si no, uno por sucursal.
+  useEffect(() => {
+    const sLayer = simLayer.current;
+    if (!sLayer) return;
+
+    sLayer.clearLayers();
+    if (!simulationAreaKm2 || simulationAreaKm2 <= 0) return;
+
+    const radiusMeters = 1000 * Math.sqrt(simulationAreaKm2 / Math.PI);
+    const targets = highlightedBranchId
+      ? cells.filter((c) => c.branch_id === highlightedBranchId)
+      : cells;
+
+    targets.forEach((cell) => {
+      L.circle([cell.site.lat, cell.site.lng], {
+        radius: radiusMeters,
+        color: "#ff9900",
+        weight: 2,
+        dashArray: "8, 8",
+        fillColor: "#ff9900",
+        fillOpacity: 0.1,
+      }).addTo(sLayer);
+    });
+  }, [cells, highlightedBranchId, simulationAreaKm2]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

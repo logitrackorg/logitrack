@@ -25,6 +25,7 @@ import {
   GAP_STYLE,
 } from "../../api/coverage";
 import { VoronoiCoverageMap } from "../../components/VoronoiCoverageMap";
+import { CoverageSimulatorPanel, SIM_AREA_DEFAULT } from "../../components/CoverageSimulatorPanel";
 import { SkeletonCard } from "../../components/ui/skeleton";
 // ── Palette ──────────────────────────────────────────────────────────────────
 const COLOR_OK   = "#22c55e";
@@ -971,6 +972,11 @@ export function CoberturaTab() {
   const [error, setError] = useState<string | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
+  // Simulador de cobertura: visualArea sigue al slider al instante (sin
+  // llamar al servidor); confirmedArea refleja el último valor confirmado.
+  const [visualArea, setVisualArea] = useState(SIM_AREA_DEFAULT);
+  const [confirmedArea, setConfirmedArea] = useState<number | null>(null);
+
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -982,6 +988,15 @@ export function CoberturaTab() {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  // Diagnóstico: dispara el recálculo real (Voronoi + recorte) en el backend.
+  const handleConfirmSimulation = useCallback(
+    (area: number) => {
+      setConfirmedArea(area);
+      load();
+    },
+    [load]
+  );
 
   const gaps = useMemo<CoverageCell[]>(() => {
     if (!diagram) return [];
@@ -1037,6 +1052,10 @@ export function CoberturaTab() {
 
   const coveredCount = diagram.branch_count - diagram.gap_count;
 
+  const simScopeLabel = highlighted
+    ? diagram.cells.find((c) => c.branch_id === highlighted)?.branch_name ?? "Sucursal seleccionada"
+    : "Todas las sucursales";
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Mapa — ocupa 2/3 en desktop, ancho completo en mobile/tablet */}
@@ -1046,12 +1065,27 @@ export function CoberturaTab() {
             cells={diagram.cells}
             highlightedBranchId={highlighted}
             onSelectBranch={(id) => setHighlighted(id)}
+            simulationAreaKm2={visualArea}
           />
         </div>
       </Card>
 
-      {/* Panel: situación actual + recomendaciones */}
+      {/* Panel: simulador + situación actual + recomendaciones */}
       <div className="flex flex-col gap-4">
+        <Card variant="muted" className="p-5">
+          <CoverageSimulatorPanel
+            areaKm2={visualArea}
+            onAreaChange={setVisualArea}
+            onConfirm={handleConfirmSimulation}
+            scopeLabel={simScopeLabel}
+          />
+          {confirmedArea !== null && (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Último diagnóstico confirmado para {formatKm2(confirmedArea)} ({simScopeLabel}).
+            </p>
+          )}
+        </Card>
+
         <Card variant="muted" className="p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white mb-3">
             <MapPin className="w-4 h-4 text-blue-600" /> Situación actual
