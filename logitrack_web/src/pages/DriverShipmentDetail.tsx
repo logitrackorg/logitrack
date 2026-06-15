@@ -156,7 +156,7 @@ export function DriverShipmentDetail() {
 
   return (
     <DriverShell title="Detalle de envío">
-      <div className="px-4 pt-2 pb-[190px] space-y-3">
+      <div className="px-4 py-4 max-w-2xl mx-auto space-y-3 pb-[190px]">
         {/* Back + status row */}
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
@@ -170,7 +170,7 @@ export function DriverShipmentDetail() {
 
         {/* Error */}
         {actionError && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
+          <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span className="flex-1">{actionError}</span>
             <button onClick={() => setActionError("")} className="text-xs font-semibold opacity-80 hover:opacity-100 shrink-0">Cerrar</button>
@@ -186,24 +186,24 @@ export function DriverShipmentDetail() {
               <p className="text-[13px] text-[var(--text-secondary)]">{fullAddress}</p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
                 {weightKg} kg
               </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
                 {PACKAGE_LABELS[packageType] ?? packageType}
               </span>
               {fragile && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
                   <AlertTriangle className="w-3 h-3" />Frágil
                 </span>
               )}
               {tw && (
-                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
                   <Clock className="w-3 h-3" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
                 </span>
               )}
               {attempts > 0 && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
                   Reintento {attempts + 1}
                 </span>
               )}
@@ -247,7 +247,7 @@ export function DriverShipmentDetail() {
       {/* Sticky CTAs */}
       {canAct && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-2.5 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="flex flex-col gap-2 max-w-sm mx-auto">
+          <div className="flex flex-col gap-2 max-w-2xl mx-auto">
             <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
               <CheckCircle2 className="w-5 h-5" />Entregar
             </Button>

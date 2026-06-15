@@ -782,7 +782,7 @@ export function DriverInterBranchTrip() {
           <div className="max-w-2xl mx-auto">
             <button
               onClick={openQR}
-              className="w-full h-14 rounded-2xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg shadow-[var(--brand)]/20"
+              className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg shadow-[var(--brand)]/20"
             >
               <QrCode className="w-5 h-5" />
               Llegué — mostrar QR al operador
@@ -802,7 +802,7 @@ export function DriverInterBranchTrip() {
             <button
               onClick={handleStart}
               disabled={starting}
-              className="w-full h-14 rounded-2xl bg-[var(--brand)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg"
+              className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg"
             >
               <Play className="w-5 h-5" />
               {starting ? "Iniciando viaje…" : "Iniciar viaje"}
@@ -833,7 +833,7 @@ export function DriverInterBranchTrip() {
           <h2 className="text-white text-[22px] font-bold m-0">
             Alerta de fatiga detectada
           </h2>
-          <p className="text-slate-400 text-base leading-relaxed m-0">
+          <p className="text-[var(--text-muted)] text-base leading-relaxed m-0">
             Tu supervisor fue notificado.<br/>
             Esperá su indicación antes de continuar.
           </p>
@@ -842,12 +842,12 @@ export function DriverInterBranchTrip() {
 
       {/* Cartelito de autorización — se muestra cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
       {!fatigueBlocked && fatigueUnblockedBy && (
-        <div className="fixed inset-0 z-[9999] bg-emerald-950 flex flex-col items-center justify-center p-8 text-center gap-6">
-          <CheckCircle2 size={64} className="text-emerald-500" />
+        <div className="fixed inset-0 z-[9999] bg-[var(--sidebar-bg)] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <CheckCircle2 size={64} className="text-[var(--ok)]" />
           <h2 className="text-white text-[22px] font-bold m-0">
             Ruta autorizada
           </h2>
-          <p className="text-green-300 text-base leading-relaxed m-0">
+          <p className="text-[var(--text-secondary)] text-base leading-relaxed m-0">
             Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
             que continúes la ruta.
           </p>
@@ -856,7 +856,7 @@ export function DriverInterBranchTrip() {
               if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
               setFatigueUnblockedBy(null);
             }}
-            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
+            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-[var(--ok)] text-white text-base font-bold cursor-pointer"
           >
             Continuar
           </button>
@@ -1003,7 +1003,7 @@ function HeroNextStop({
       : null;
 
   return (
-    <Card className="!p-5 border-2 border-[var(--sidebar-bg)]/10 dark:border-[var(--sidebar-bg)]/20 bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-subtle)]">
+    <Card className="!p-4 border-2 border-[var(--sidebar-bg)]/10 dark:border-[var(--sidebar-bg)]/20 bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-subtle)]">
       {/* Chip de parada */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs font-bold px-3 py-1 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] uppercase tracking-wider">
@@ -1155,7 +1155,7 @@ function QRModal({
     >
       {/* Card — click dentro no cierra */}
       <div
-        className="relative w-full sm:max-w-sm bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
+        className="relative w-full sm:max-w-sm bg-[var(--bg-card)] rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle / Header */}
@@ -1189,9 +1189,9 @@ function QRModal({
               {/* QR */}
               <div className="flex flex-col items-center gap-2 w-full">
                 {qrLoading ? (
-                  <div className="w-56 h-56 rounded-2xl bg-[var(--bg-muted)] animate-pulse" />
+                  <div className="w-56 h-56 rounded-xl bg-[var(--bg-muted)] animate-pulse" />
                 ) : qrData ? (
-                  <div className="p-3 bg-[var(--bg-card)] rounded-2xl border-2 border-[var(--brand)]/20 shadow-md">
+                  <div className="p-3 bg-[var(--bg-card)] rounded-xl border-2 border-[var(--brand)]/20 shadow-md">
                     <img
                       src={`data:image/png;base64,${qrData.qr_code_base64}`}
                       alt="QR del viaje"
@@ -1199,7 +1199,7 @@ function QRModal({
                     />
                   </div>
                 ) : (
-                  <div className="w-56 h-56 rounded-2xl border-2 border-dashed border-[var(--border)] flex items-center justify-center">
+                  <div className="w-56 h-56 rounded-xl border-2 border-dashed border-[var(--border)] flex items-center justify-center">
                     <p className="text-sm text-[var(--text-muted)] text-center px-4">No se pudo cargar el QR.</p>
                   </div>
                 )}
@@ -1341,7 +1341,7 @@ function TripSkeleton() {
       {/* Bottom CTA skeleton */}
       <div className="fixed bottom-0 inset-x-0 bg-[var(--bg-card)] border-t border-[var(--border)] px-4 py-3">
         <div className="max-w-2xl mx-auto">
-          <Skeleton className="h-14 w-full rounded-2xl" />
+          <Skeleton className="h-14 w-full rounded-xl" />
         </div>
       </div>
     </div>

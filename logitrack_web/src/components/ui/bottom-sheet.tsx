@@ -37,14 +37,14 @@ export function BottomSheet({ open, onClose, title, description, children, class
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative w-full sm:max-w-md bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 dark:border-gray-700",
+          "relative w-full sm:max-w-md bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 dark:border-gray-700",
           "max-h-[92vh] overflow-y-auto",
           "pb-[env(safe-area-inset-bottom,0px)]",
           "animate-in slide-in-from-bottom-4 fade-in duration-200",
           className,
         )}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-slate-100 dark:border-gray-700 px-5 pt-3 pb-3 rounded-t-2xl">
+        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-slate-100 dark:border-gray-700 px-5 pt-3 pb-3 rounded-t-2xl">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600 sm:hidden" />
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">

@@ -138,7 +138,7 @@ export function NextStopCard({
           href={fullRouteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full text-center text-blue-600 dark:text-blue-400 text-[11px] py-2 cursor-pointer hover:underline flex items-center justify-center gap-1 no-underline border-t border-gray-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50"
+          className="w-full text-center text-[var(--brand)] dark:text-[var(--info-text)] text-[11px] py-2 cursor-pointer hover:underline flex items-center justify-center gap-1 no-underline border-t border-gray-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50"
         >
           <Map className="w-3 h-3 shrink-0" />
           Ruta completa en Google Maps

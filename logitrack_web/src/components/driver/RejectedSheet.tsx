@@ -119,7 +119,7 @@ export function RejectedSheet({
                 e.stopPropagation();
                 onRequestLocation();
               }}
-              className="mt-2 h-11 px-6 rounded-xl text-white text-sm font-bold"
+              className="mt-2 h-11 px-6 rounded-xl bg-[var(--brand)] hover:opacity-90 active:scale-95 text-white text-sm font-bold transition-all duration-150"
             >
               Activar ubicación
             </Button>

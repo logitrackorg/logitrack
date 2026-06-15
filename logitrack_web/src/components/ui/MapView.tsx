@@ -192,7 +192,7 @@ export function MapView({
     // Origin branch marker
     if (origin) {
       const depotIcon = L.divIcon({
-        html: `<div class="w-10 h-10 rounded-full bg-[#1e3a5f] border-[3px] border-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer"><div class="text-lg leading-none">${FACTORY_SVG}</div></div>`,
+        html: `<div class="w-10 h-10 rounded-full border-[3px] border-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] flex items-center justify-center cursor-pointer" style="background-color:var(--sidebar-bg)"><div class="text-lg leading-none">${FACTORY_SVG}</div></div>`,
         className: "",
         iconSize: [40, 40],
         iconAnchor: [20, 40],
@@ -311,7 +311,7 @@ export function MapView({
           ${MAP_PIN_SVG}
           ${wp.address}
         </p>
-        <button class="w-full px-3 py-2 bg-[#1e3a5f] text-white border-none rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-200 hover:bg-[#2d5a8f]" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
+        <button class="w-full px-3 py-2 text-white border-none rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-200" style="background-color:var(--sidebar-bg)" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter=''" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
           Ver detalle →
         </button>
       </div>
