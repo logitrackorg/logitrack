@@ -514,28 +514,8 @@ export function DriverRoute() {
           </Card>
         )}
 
-        {/* Renderizado condicional Lista o Mapa */}
-        {viewMode === 'map' ? (
-          <>
-            <MapView
-              waypoints={waypoints}
-              origin={origin}
-              userLocation={userLocation ?? undefined}
-              simulationMode={simulationMode}
-              simulationControls={{
-                isPaused, pause, play, reset,
-                onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
-                speedMultiplier,
-                onCycleSpeed: cycleSpeedMultiplier,
-                onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
-              }}
-              zones={zones}
-              onRouteInfoChange={setRouteInfo}
-              onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
-            />
-            <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
-          </>
-        ) : (
+        {/* Vista Lista */}
+        {viewMode !== 'map' && (
           <>
             {visibleList.length === 0 ? (
               <div className="py-16 text-center">
@@ -572,6 +552,29 @@ export function DriverRoute() {
           </>
         )}
       </div>
+
+      {/* Vista Mapa — fuera del wrapper para que tome ancho completo */}
+      {viewMode === 'map' && (
+        <>
+          <MapView
+            waypoints={waypoints}
+            origin={origin}
+            userLocation={userLocation ?? undefined}
+            simulationMode={simulationMode}
+            simulationControls={{
+              isPaused, pause, play, reset,
+              onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
+              speedMultiplier,
+              onCycleSpeed: cycleSpeedMultiplier,
+              onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
+            }}
+            zones={zones}
+            onRouteInfoChange={setRouteInfo}
+            onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+          />
+          <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
+        </>
+      )}
 
       {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
       {viewMode === 'map' && canAct && (
