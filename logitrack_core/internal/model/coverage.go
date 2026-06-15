@@ -87,14 +87,15 @@ type SimulationResult struct {
 }
 
 // SnappedCity is the result of "Snap to City": resolving a geometric
-// coverage-gap point to a nearby real populated place (OSM Overpass), so
-// new-branch suggestions land on viable locations instead of empty terrain.
-// Found is false when no populated place was found within the search radius —
-// callers should keep the original geometric point in that case.
+// coverage-gap point to the nearest real populated place (OSM Overpass)
+// within the search radius, so new-branch suggestions land on viable
+// locations instead of empty terrain. Snapped is false when no populated
+// place was found within the search radius — callers should keep the
+// original geometric point in that case.
 type SnappedCity struct {
 	LatLng
-	Name  string `json:"name"`
-	Found bool   `json:"found"`
+	CityName string `json:"city_name"`
+	Snapped  bool   `json:"is_snapped"`
 }
 
 // SnapToCityRequest is the body of POST /coverage/snap-to-city: the geometric

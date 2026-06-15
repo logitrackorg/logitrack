@@ -96,16 +96,16 @@ export interface SimulationResult {
 
 /**
  * Resultado de "Snap to City" para un punto sugerido: lugar poblado real más
- * cercano (OSM Overpass) que mejor balancea cercanía e importancia
- * (city > town > village). `found = false` cuando no se encontró ningún
- * lugar poblado dentro del radio de búsqueda — el punto geométrico original
- * debe conservarse en ese caso.
+ * cercano (OSM Overpass) dentro del radio de cobertura simulado.
+ * `is_snapped = false` cuando no se encontró ningún lugar poblado dentro del
+ * radio de búsqueda — el punto geométrico original debe conservarse en ese
+ * caso.
  */
 export interface SnappedCity {
   lat: number;
   lng: number;
-  name: string;
-  found: boolean;
+  city_name: string;
+  is_snapped: boolean;
 }
 
 export interface SnapToCityResponse {
@@ -134,10 +134,9 @@ export const coverageApi = {
 
   /**
    * "Aterrizar sugerencias en ciudades reales": resuelve cada punto
-   * geométrico sugerido a la ciudad/pueblo real más relevante dentro de
-   * `radiusKm` (la zona de cobertura simulada), siguiendo la jerarquía
-   * city > town > village > hamlet. Devuelve un resultado por punto, en el
-   * mismo orden.
+   * geométrico sugerido al lugar poblado real más cercano dentro de
+   * `radiusKm` (la zona de cobertura simulada). Devuelve un resultado por
+   * punto, en el mismo orden.
    */
   snapToCity: (points: LatLng[], radiusKm: number) =>
     api

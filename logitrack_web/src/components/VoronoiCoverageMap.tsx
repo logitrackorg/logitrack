@@ -32,14 +32,31 @@ interface VoronoiCoverageMapProps {
   /**
    * "Aterrizar sugerencias en ciudades reales": resultado de Snap to City para
    * cada entrada de `suggestedLocations`, en el mismo orden (mismo largo). Las
-   * entradas con `found = true` mueven el marcador y su círculo a la
-   * coordenada real (animado vía transición CSS) y actualizan el tooltip.
+   * entradas con `is_snapped = true` mueven el marcador y su círculo a la
+   * coordenada real (animado vía transición CSS), los pintan de verde y
+   * actualizan el tooltip con el nombre de la ciudad. Las entradas con
+   * `is_snapped = false` mantienen el color gris (no se encontró ciudad real).
    */
   snappedCities?: SnappedCity[] | null;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
 const STAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
+// Color de las sugerencias geométricas (sin ciudad real cercana).
+const SUGGESTION_COLOR_UNSNAPPED = "#808080";
+// Color de las sugerencias "aterrizadas" en una ciudad real (Snap to City).
+const SUGGESTION_COLOR_SNAPPED = "#28a745";
+
+/** Ícono de fábrica circular usado para los marcadores de sugerencia, en el color dado. */
+function suggestionIcon(color: string): L.DivIcon {
+  return L.divIcon({
+    html: `<div class="coverage-suggestion-icon" style="width:28px;height:28px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center">${FACTORY_SVG}</div>`,
+    className: "coverage-suggestion-marker",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
 
 /**
  * VoronoiCoverageMap renderiza el diagrama de cobertura por sucursal: cada celda
@@ -241,21 +258,18 @@ export function VoronoiCoverageMap({
       if (radiusMeters) {
         circle = L.circle([loc.lat, loc.lng], {
           radius: radiusMeters,
-          color: "#808080",
+          color: SUGGESTION_COLOR_UNSNAPPED,
           weight: 2,
           dashArray: "5, 5",
-          fillColor: "#808080",
+          fillColor: SUGGESTION_COLOR_UNSNAPPED,
           fillOpacity: 0.1,
         }).addTo(sgLayer);
       }
 
-      const icon = L.divIcon({
-        html: `<div class="coverage-suggestion-icon" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center">${FACTORY_SVG}</div>`,
-        className: "coverage-suggestion-marker",
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-      const marker = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1000 })
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: suggestionIcon(SUGGESTION_COLOR_UNSNAPPED),
+        zIndexOffset: 1000,
+      })
         .bindTooltip(
           `<strong>Ubicación sugerida para nueva sucursal</strong><br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`,
           { sticky: true }
@@ -275,13 +289,17 @@ export function VoronoiCoverageMap({
 
     suggestionMarkersRef.current.forEach(({ marker, circle, loc }, i) => {
       const snapped = snappedCities[i];
-      if (!snapped || !snapped.found) return;
+      if (!snapped) return;
+
+      if (!snapped.is_snapped) return; // mantiene gris (#808080), sin cambios
 
       const latLng: L.LatLngTuple = [snapped.lat, snapped.lng];
       marker.setLatLng(latLng);
+      marker.setIcon(suggestionIcon(SUGGESTION_COLOR_SNAPPED));
       circle?.setLatLng(latLng);
+      circle?.setStyle({ color: SUGGESTION_COLOR_SNAPPED, fillColor: SUGGESTION_COLOR_SNAPPED });
       marker.setTooltipContent(
-        `<strong>Sugerencia real: ${snapped.name}</strong> - Cerca del centro de déficit<br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`
+        `<strong>Sugerencia viable: ${snapped.city_name}</strong> - Ciudad real cercana al centro de déficit<br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`
       );
     });
   }, [snappedCities]);

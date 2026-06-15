@@ -1141,7 +1141,7 @@ export function CoberturaTab() {
                 )}
                 {snappedCities && !snapError && (
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {snappedCities.filter((c) => c.found).length} de {snappedCities.length} sugerencias
+                    {snappedCities.filter((c) => c.is_snapped).length} de {snappedCities.length} sugerencias
                     aterrizadas en ciudades reales cercanas.
                   </p>
                 )}
