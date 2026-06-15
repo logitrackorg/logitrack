@@ -82,15 +82,20 @@ export function VoronoiCoverageMap({
     const allLatLngs: [number, number][] = [];
 
     cells.forEach((cell) => {
-      if (cell.polygon.length >= 3) {
-        const ring = cell.polygon.map((p) => [p.lat, p.lng] as [number, number]);
-        allLatLngs.push(...ring);
+      const rings = cell.polygon
+        .filter((ring) => ring.length >= 3)
+        .map((ring) => ring.map((p) => [p.lat, p.lng] as [number, number]));
+      if (rings.length > 0) {
+        rings.forEach((ring) => allLatLngs.push(...ring));
         const style =
           cell.is_gap && cell.gap_severity
             ? GAP_STYLE[cell.gap_severity]
             : COVERED_STYLE;
         const isHighlighted = cell.branch_id === highlightedBranchId;
-        const poly = L.polygon(ring, {
+        // rings puede contener varios fragmentos desconectados (p.ej.
+        // continente + Tierra del Fuego); L.polygon los renderiza como una
+        // sola layer con un anillo por fragmento.
+        const poly = L.polygon(rings, {
           color: style.stroke,
           fillColor: style.fill,
           fillOpacity: 1,

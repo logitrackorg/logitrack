@@ -32,7 +32,9 @@ type SystemConfig struct {
 
 	// MaxCoverageAreaKm2 is the branch-coverage threshold for the gap detector.
 	// A Voronoi cell whose service area exceeds this value (in km²) is flagged as
-	// an under-covered zone. Default: 1500. Range: 100–500000.
+	// an under-covered zone. The Voronoi diagram spans a fixed national bounding
+	// box (~6.7M km²), so cell areas are on the order of hundreds of thousands to
+	// millions of km². Default: 1000000. Range: 100–10000000.
 	MaxCoverageAreaKm2 float64 `json:"max_coverage_area_km2" db:"max_coverage_area_km2"`
 }
 
@@ -47,6 +49,6 @@ func DefaultSystemConfig() SystemConfig {
 		MaxReschedules:          2, 
 		MaxRescheduleDays:       3,
 		TwoFACooldownMinutes: 1,
-		MaxCoverageAreaKm2:   1500,
+		MaxCoverageAreaKm2:   1000000,
 	}
 }

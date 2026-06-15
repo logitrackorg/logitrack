@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ctessum/polyclip-go"
+
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/geometry"
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
@@ -14,11 +17,18 @@ import (
 const (
 	coverageEarthRadiusKm = 6371.0
 
-	// coverageBBoxMarginKm pads the bounding box derived from the branch sites so
-	// that boundary cells get a finite, sensible extent instead of being clipped
-	// tight against the outermost branch. It bounds how far a branch is
-	// considered to "cover" outward into empty territory.
-	coverageBBoxMarginKm = 80.0
+	// Fixed national bounding box for the coverage diagram, so that boundary
+	// cells reflect the true uncovered extent of the country rather than a
+	// small margin around the current branch network. Approximate extremes of
+	// continental Argentina:
+	//   Norte (Jujuy):           lat -21.7811
+	//   Sur (Tierra del Fuego):  lat -55.0558
+	//   Este (Misiones):         lng -53.6386
+	//   Oeste (Santa Cruz):      lng -73.5665
+	coverageBBoxMinLat = -55.0558
+	coverageBBoxMaxLat = -21.7811
+	coverageBBoxMinLng = -73.5665
+	coverageBBoxMaxLng = -53.6386
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -152,8 +162,20 @@ func (s *CoverageService) Refresh() *model.CoverageDiagram {
 		pts[i] = p
 	}
 
-	bbox := boundingBox(pts).Pad(coverageBBoxMarginKm)
+	minPt := proj.project(coverageBBoxMinLat, coverageBBoxMinLng)
+	maxPt := proj.project(coverageBBoxMaxLat, coverageBBoxMaxLng)
+	bbox := geometry.BBox{
+		MinX: math.Min(minPt.X, maxPt.X),
+		MinY: math.Min(minPt.Y, maxPt.Y),
+		MaxX: math.Max(minPt.X, maxPt.X),
+		MaxY: math.Max(minPt.Y, maxPt.Y),
+	}
 	cells := geometry.VoronoiCells(pts, bbox)
+
+	// Clip every cell against Argentina's real outline so that areas and
+	// suggested locations never land in the ocean or a neighbouring country.
+	// Projected per Refresh since proj is centred on the current branch set.
+	country := projectCountry(geo.ArgentinaContour(), proj)
 
 	for i, cell := range cells {
 		b := sites[i].branch
@@ -164,16 +186,30 @@ func (s *CoverageService) Refresh() *model.CoverageDiagram {
 			Site:       model.LatLng{Lat: *b.Latitude, Lng: *b.Longitude},
 		}
 		if len(cell) >= 3 {
-			mc.AreaKm2 = cell.Area()
-			mc.Polygon = make([]model.LatLng, len(cell))
-			for j, v := range cell {
-				mc.Polygon[j] = proj.unproject(v)
+			fragments := fromPolyclip(toPolyclip(cell).Construct(polyclip.INTERSECTION, country))
+
+			var bestFrag geometry.Polygon
+			var bestArea float64
+			mc.Polygon = make([][]model.LatLng, 0, len(fragments))
+			for _, frag := range fragments {
+				area := frag.Area()
+				mc.AreaKm2 += area
+				if area > bestArea {
+					bestArea, bestFrag = area, frag
+				}
+				ring := make([]model.LatLng, len(frag))
+				for j, v := range frag {
+					ring[j] = proj.unproject(v)
+				}
+				mc.Polygon = append(mc.Polygon, ring)
 			}
+
 			mc.IsGap, mc.GapSeverity = gapSeverity(mc.AreaKm2, threshold)
-			if mc.IsGap {
-				// Suggested new-branch location: the point of the cell worst
-				// served by the current network (its centroid).
-				c := proj.unproject(cell.Centroid())
+			if mc.IsGap && bestArea > 0 {
+				// Suggested new-branch location: the centroid of the largest
+				// land fragment of the cell worst served by the current
+				// network — guaranteed to fall within Argentina's territory.
+				c := proj.unproject(bestFrag.Centroid())
 				mc.Suggestion = &c
 				diagram.GapCount++
 			}
@@ -267,18 +303,4 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 	s.mu.Lock()
 	s.diagram = d
 	s.mu.Unlock()
-}
-
-func boundingBox(pts []geometry.Point) geometry.BBox {
-	b := geometry.BBox{
-		MinX: math.Inf(1), MinY: math.Inf(1),
-		MaxX: math.Inf(-1), MaxY: math.Inf(-1),
-	}
-	for _, p := range pts {
-		b.MinX = math.Min(b.MinX, p.X)
-		b.MinY = math.Min(b.MinY, p.Y)
-		b.MaxX = math.Max(b.MaxX, p.X)
-		b.MaxY = math.Max(b.MaxY, p.Y)
-	}
-	return b
 }

@@ -13,7 +13,6 @@ import {
   Zap,
   Truck,
   ShieldAlert,
-  Map as MapIcon,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -37,7 +36,6 @@ const RetornoTab = lazy(() => import("./reports/RetornoTab").then(m => ({ defaul
 const ExitoTab = lazy(() => import("./reports/ExitoTab").then(m => ({ default: m.ExitoTab })));
 const FatigaTab = lazy(() => import("./reports/FatigaTab").then(m => ({ default: m.FatigaTab })));
 const SlaTab = lazy(() => import("./reports/SlaTab"));
-const CoberturaTab = lazy(() => import("./reports/CoberturaTab").then(m => ({ default: m.CoberturaTab })));
 
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -52,7 +50,6 @@ const tabs = [
   { id: "exito", label: "Tasa de Éxito", icon: TrendingUp },
   { id: "fatiga", label: "Fatiga", icon: Activity },
   { id: "sla", label: "SLA", icon: ShieldAlert },
-  { id: "cobertura", label: "Cobertura", icon: MapIcon },
 ];
 
 const VALID_TABS = new Set(tabs.map((t) => t.id));
@@ -239,7 +236,6 @@ export function DashboardHost() {
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
             {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
-            {activeTab === "cobertura" && <CoberturaTab />}
           </Suspense>
         </div>
       </div>

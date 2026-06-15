@@ -25,7 +25,7 @@ export interface SystemConfig {
   max_reschedules: number;
   max_reschedule_days: number;
   two_fa_cooldown_minutes: number;
-  /** Umbral del detector de cobertura: área máxima (km²) de una celda antes de marcarla como gap. Rango 100–500000 (default 1500). */
+  /** Umbral del detector de cobertura: área máxima (km²) de una celda antes de marcarla como gap. El diagrama usa un bounding box nacional fijo (~6.7M km²). Rango 100–10000000 (default 1000000). */
   max_coverage_area_km2: number;
 }
 

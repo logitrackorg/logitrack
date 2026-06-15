@@ -677,8 +677,10 @@ export function SystemConfig() {
               </div>
               <CardDescription>
                 Área máxima de servicio (en km²) que puede cubrir una sucursal antes de marcarse como
-                zona sub-cubierta en el detector de falta de sucursal. Cuanto menor el umbral, más
-                exigente es la detección de gaps. Rango permitido: 100–500.000 km².
+                zona sub-cubierta en el detector de falta de sucursal. El diagrama de cobertura abarca
+                todo el territorio nacional (~6,7 millones de km²), por lo que las celdas suelen medir
+                cientos de miles o millones de km². Cuanto menor el umbral, más exigente es la
+                detección de gaps. Rango permitido: 100–10.000.000 km².
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -690,8 +692,8 @@ export function SystemConfig() {
                   <input
                     type="number"
                     min={100}
-                    max={500000}
-                    step={100}
+                    max={10000000}
+                    step={1000}
                     value={draft.max_coverage_area_km2}
                     onChange={(e) =>
                       setDraft((d) =>

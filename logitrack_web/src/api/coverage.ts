@@ -34,7 +34,12 @@ export interface CoverageCell {
   branch_name: string;
   province: string;
   site: LatLng;
-  polygon: LatLng[];
+  /**
+   * Geometría de la celda recortada contra el contorno real de Argentina: un
+   * anillo cerrado por fragmento de territorio desconectado (p.ej. continente
+   * + Tierra del Fuego).
+   */
+  polygon: LatLng[][];
   area_km2: number;
   is_gap: boolean;
   gap_severity: GapSeverity;

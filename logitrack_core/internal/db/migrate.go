@@ -722,8 +722,10 @@ func RunMigrations(db *sql.DB) error {
 
 		-- Detector de falta de sucursal: umbral de área de cobertura por celda Voronoi.
 		-- Una celda cuya área supera este valor (km²) se marca como zona sub-cubierta (gap).
-		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1500;
-		UPDATE system_config SET max_coverage_area_km2 = 1500 WHERE id = 1 AND max_coverage_area_km2 = 0;
+		-- El diagrama usa un bounding box nacional fijo (~6.7M km²), por lo que las celdas
+		-- son del orden de cientos de miles a millones de km².
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
+		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
 	`)
 	return err
 }
