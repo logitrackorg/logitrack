@@ -498,63 +498,63 @@ export function MapView({
 
       {/* Simulation bar — compact single row */}
       {isSimulating && simulationControls && (
-        <div className="absolute top-2 left-2 right-2 z-[900] h-9 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center justify-between gap-2">
+        <div className="absolute top-2 left-2 right-2 z-[900] h-11 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center justify-between gap-2">
           {/* Left group */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-5 h-5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Film className="w-3 h-3" />
+            <div className="w-6 h-6 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Film className="w-3.5 h-3.5" />
             </div>
-            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">Simulación</span>
+            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Simulación</span>
             {simulationControls.speedMultiplier !== undefined && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 leading-none">
+              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 leading-none">
                 x{simulationControls.speedMultiplier}
               </span>
             )}
           </div>
 
           {/* Right group */}
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
               title={simulationControls.isPaused ? "Reanudar" : "Pausar"}
-              className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+              className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
-              {simulationControls.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              {simulationControls.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
             </button>
             <button
               onClick={simulationControls.reset}
               title="Reiniciar"
-              className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+              className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
             {simulationControls.onCycleSpeed && (
               <button
                 onClick={simulationControls.onCycleSpeed}
                 title="Cambiar velocidad"
-                className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="h-8 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
               >
-                <Zap className="w-3 h-3" />
-                <span className="text-[10px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
               </button>
             )}
             {simulationControls.onFastForwardTime && (
               <button
                 onClick={simulationControls.onFastForwardTime}
                 title="Adelantar 2 horas"
-                className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="h-8 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
               >
-                <Clock className="w-3 h-3" />
-                <span className="text-[10px] font-semibold">+2h</span>
+                <Clock className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">+2h</span>
               </button>
             )}
             {simulationControls.onExit && (
               <button
                 onClick={simulationControls.onExit}
                 title="Salir de simulación"
-                className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 ml-0.5"
+                className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 ml-0.5"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
