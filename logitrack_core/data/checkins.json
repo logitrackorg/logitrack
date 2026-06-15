@@ -596,5 +596,70 @@
         "recorded_at": "2026-05-24T11:10:56.404432-03:00"
       }
     ]
+  },
+  "5|2026-06-15": {
+    "driver_id": "5",
+    "date": "2026-06-15",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-15T12:50:26.128318-03:00",
+    "touch_events": [
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 8187,
+        "misfires": 0,
+        "recorded_at": "2026-06-15T12:50:26.128318-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 28465,
+        "misfires": 8,
+        "recorded_at": "2026-06-15T12:50:46.406751-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 39854,
+        "misfires": 0,
+        "recorded_at": "2026-06-15T12:52:26.993909-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 49571,
+        "misfires": 2,
+        "recorded_at": "2026-06-15T12:52:36.717039-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 1689,
+        "misfires": 0,
+        "recorded_at": "2026-06-15T12:52:45.953735-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 74020,
+        "misfires": 2,
+        "recorded_at": "2026-06-15T12:53:58.276654-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 13379,
+        "misfires": 0,
+        "recorded_at": "2026-06-15T12:54:16.38482-03:00"
+      },
+      {
+        "tracking_id": "LT-DELIVER01",
+        "action": "entregado",
+        "reaction_time_ms": 141210,
+        "misfires": 0,
+        "recorded_at": "2026-06-15T12:56:24.212816-03:00"
+      }
+    ]
   }
 }

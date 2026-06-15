@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Ban,
+  Camera,
   CheckCircle2,
   Clock,
   MapPin,
@@ -16,6 +17,7 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { Card } from "../components/ui/card";
 import { BottomSheet } from "../components/ui/bottom-sheet";
+import { CameraCapture } from "../components/ui/CameraCapture";
 import { WhatsAppQuickButton } from "../components/ui/WhatsAppQuickButton";
 import {
   FAILED_REASONS,
@@ -54,6 +56,8 @@ export function DriverShipmentDetail() {
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const reload = (id: string) =>
     Promise.all([
@@ -71,16 +75,31 @@ export function DriverShipmentDetail() {
 
   const handleDeliver = async () => {
     if (!shipment || !recipientDni.trim()) return;
+    const isLastMile = shipment.delivery_method === "ultima_milla";
+    if (isLastMile && !deliveryPhoto) return;
     setSubmitting(true);
     setActionError("");
     try {
-      await shipmentApi.updateStatus(shipment.tracking_id, {
-        status: "delivered",
-        location: "",
-        recipient_dni: recipientDni.trim(),
-      });
+      if (isLastMile && deliveryPhoto) {
+        // Última milla: encode photo as base64 and send through updateStatus
+        const arrayBuffer = await deliveryPhoto.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        await shipmentApi.updateStatus(shipment.tracking_id, {
+          status: "delivered",
+          location: "",
+          recipient_dni: recipientDni.trim(),
+          delivery_photo_base64: base64,
+        });
+      } else {
+        await shipmentApi.updateStatus(shipment.tracking_id, {
+          status: "delivered",
+          location: "",
+          recipient_dni: recipientDni.trim(),
+        });
+      }
       setDeliverOpen(false);
       setRecipientDni("");
+      setDeliveryPhoto(null);
       await reload(shipment.tracking_id);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -353,7 +372,13 @@ export function DriverShipmentDetail() {
                 No entregado
               </button>
               <button
-                onClick={() => setDeliverOpen(true)}
+                onClick={() => {
+                  if (shipment.delivery_method === "ultima_milla") {
+                    setCameraOpen(true);
+                  } else {
+                    setDeliverOpen(true);
+                  }
+                }}
                 className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <CheckCircle2 className="w-4 h-4" />
@@ -373,13 +398,27 @@ export function DriverShipmentDetail() {
 
       <DeliverSheet
         open={deliverOpen}
-        onClose={() => { setDeliverOpen(false); setRecipientDni(""); }}
+        onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryPhoto(null); }}
         recipientName={name}
         dni={recipientDni}
         onDniChange={setRecipientDni}
         submitting={submitting}
         onConfirm={handleDeliver}
+        photo={deliveryPhoto}
+        isLastMile={shipment.delivery_method === "ultima_milla"}
+        onRetakePhoto={() => { setDeliverOpen(false); setCameraOpen(true); }}
       />
+
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(blob) => {
+            setDeliveryPhoto(blob);
+            setCameraOpen(false);
+            setDeliverOpen(true);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
       <FailedSheet
         open={failedOpen}
         onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }}
@@ -423,6 +462,9 @@ function DeliverSheet({
   onDniChange,
   submitting,
   onConfirm,
+  photo,
+  isLastMile,
+  onRetakePhoto,
 }: {
   open: boolean;
   onClose: () => void;
@@ -431,14 +473,31 @@ function DeliverSheet({
   onDniChange: (s: string) => void;
   submitting: boolean;
   onConfirm: () => void;
+  photo: Blob | null;
+  isLastMile: boolean;
+  onRetakePhoto: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => inputRef.current?.focus(), 80);
       return () => clearTimeout(t);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!photo) {
+      setPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  const canConfirm = !!dni.trim() && (!isLastMile || !!photo) && !submitting;
 
   return (
     <BottomSheet
@@ -447,6 +506,33 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${recipientName}`}
     >
+      {/* Photo section — only for última milla */}
+      {isLastMile && (
+        <div className="mb-4">
+          {photo && photoPreview ? (
+            <div className="relative rounded-xl overflow-hidden">
+              <img src={photoPreview} alt="Foto de entrega" className="w-full h-40 object-cover" />
+              <button
+                onClick={onRetakePhoto}
+                className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                Sacar de nuevo
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onRetakePhoto}
+              className="w-full rounded-xl border-2 border-dashed border-emerald-400 dark:border-emerald-600 p-4 flex flex-col items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+            >
+              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Tomar foto de entrega</span>
+              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-500">Obligatoria para confirmar</span>
+            </button>
+          )}
+        </div>
+      )}
+
       <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         DNI del destinatario
       </label>
@@ -472,7 +558,7 @@ function DeliverSheet({
         </button>
         <button
           onClick={onConfirm}
-          disabled={!dni.trim() || submitting}
+          disabled={!canConfirm}
           className="h-12 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {submitting ? "Guardando…" : "Confirmar entrega"}

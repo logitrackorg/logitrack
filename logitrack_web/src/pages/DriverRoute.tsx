@@ -4,6 +4,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Ban,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -19,6 +20,7 @@ import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
+import { CameraCapture } from "../components/ui/CameraCapture";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
@@ -76,6 +78,8 @@ export function DriverRoute() {
   const [rejectedShipment, setRejectedShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState("");
   const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
@@ -150,6 +154,7 @@ export function DriverRoute() {
     setFailedNotes("");
     setRejectedReason("");
     setRejectedNotes("");
+    setDeliveryPhoto(null);
   };
 
   // Secuencia post-entrega:
@@ -199,6 +204,7 @@ export function DriverRoute() {
       } else {
         if (locked || !deliveryKeyword.trim()) return;
       }
+      if (!deliveryPhoto) return;
     } else {
       if (!recipientDni.trim()) return;
     }
@@ -212,6 +218,7 @@ export function DriverRoute() {
           contingency: useContingency,
           current_speed: effectiveSpeed,
           speed_source: speedSource,
+          photo: deliveryPhoto!,
         });
       } else {
         await shipmentApi.updateStatus(deliverShipment.tracking_id, {
@@ -628,16 +635,38 @@ export function DriverRoute() {
           userLocation={userLocation ?? undefined}
           routeInfo={routeInfo}
           canAct={canAct}
-          onDeliver={() => { if (nextShipment) setDeliverShipment(nextShipment); }}
+          onDeliver={() => {
+            if (!nextShipment) return;
+            if (nextShipment.delivery_method === "ultima_milla") {
+              setDeliverShipment(nextShipment);
+              setCameraOpen(true);
+            } else {
+              setDeliverShipment(nextShipment);
+            }
+          }}
           onFailed={() => { if (nextShipment) setFailedShipment(nextShipment); }}
           onRejected={() => { if (nextShipment) setRejectedShipment(nextShipment); }}
         />
       )}
 
 
+      {/* Camera for delivery photo */}
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(blob) => {
+            setDeliveryPhoto(blob);
+            setCameraOpen(false);
+          }}
+          onClose={() => {
+            setCameraOpen(false);
+            if (!deliveryPhoto) setDeliverShipment(null);
+          }}
+        />
+      )}
+
       {/* Bottom sheets */}
       <DeliverSheet
-        open={!!deliverShipment}
+        open={!!deliverShipment && !cameraOpen}
         onClose={closeSheets}
         shipment={deliverShipment}
         keyword={deliveryKeyword}
@@ -653,6 +682,8 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         error={actionError}
+        photo={deliveryPhoto}
+        onRetakePhoto={() => setCameraOpen(true)}
       />
       <FailedSheet
         open={!!failedShipment}
@@ -986,6 +1017,8 @@ function DeliverSheet({
   needsLocation,
   onRequestLocation,
   error,
+  photo,
+  onRetakePhoto,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1003,9 +1036,13 @@ function DeliverSheet({
   needsLocation: boolean;
   onRequestLocation: () => void;
   error: string;
+  photo: Blob | null;
+  onRetakePhoto: () => void;
 }) {
   const keywordRef = useRef<HTMLInputElement>(null);
   const dniRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => {
@@ -1015,6 +1052,13 @@ function DeliverSheet({
     }
   }, [open, useContingency]);
 
+  useEffect(() => {
+    if (!photo) { setPhotoPreview(null); return; }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
   if (!shipment) return null;
   const { name } = recipientView(shipment);
   const isLastMile = shipment.delivery_method === "ultima_milla";
@@ -1022,7 +1066,7 @@ function DeliverSheet({
   const locked = keywordAttempts >= 3;
 
   const canConfirm = isLastMile
-    ? useContingency ? !!dni.trim() : (!locked && !!keyword.trim())
+    ? (useContingency ? !!dni.trim() : (!locked && !!keyword.trim())) && !!photo
     : !!dni.trim();
 
   return (
@@ -1032,6 +1076,32 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${name}`}
     >
+      {/* Delivery photo — required for última milla */}
+      {isLastMile && (
+        <div className="mb-4">
+          {photo && photoPreview ? (
+            <div className="relative rounded-xl overflow-hidden">
+              <img src={photoPreview} alt="Foto de entrega" className="w-full h-36 object-cover" />
+              <button
+                onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
+                className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer"
+              >
+                Sacar de nuevo
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
+              className="w-full rounded-xl border-2 border-dashed border-emerald-400 dark:border-emerald-600 p-4 flex flex-col items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+            >
+              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Tomar foto de entrega</span>
+              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-500">Obligatoria para confirmar</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {isLastMile && !useContingency && (
         <>
           {locked && (

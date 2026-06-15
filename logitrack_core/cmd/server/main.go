@@ -624,6 +624,9 @@ func main() {
 	protected.GET("/admin/routing/forecast/quality", managerAdmin, routingForecastHandler.GetForecastQuality)
 	protected.GET("/admin/routing/rolling-plan", managerAdmin, routingForecastHandler.GetRollingPlan)
 
+	// Delivery photo — operator, supervisor, manager (read access to delivery evidence)
+	protected.GET("/shipments/:tracking_id/delivery-photo", shipmentRead, shipmentHandler.GetDeliveryPhoto)
+
 	// Keyword delivery — driver only
 	driverOnly := middleware.RequireRoles(model.RoleDriver)
 	protected.POST("/shipments/:tracking_id/deliver", driverOnly, shipmentHandler.DeliverShipment)
