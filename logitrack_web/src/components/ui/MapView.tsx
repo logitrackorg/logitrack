@@ -6,8 +6,6 @@ import {
   Navigation,
   Clock,
   CheckCircle2,
-  Package,
-  AlertTriangle,
   Pause,
   Play,
   RotateCcw,
@@ -127,16 +125,36 @@ export function MapView({
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
+    const isDark = document.documentElement.classList.contains("dark");
+    const tileUrl = isDark
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
     const map = L.map(mapRef.current, {
       center: [-34.6037, -58.3816],
       zoom: 12,
       zoomControl: true,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors",
+    const tileLayer = L.tileLayer(tileUrl, {
+      attribution: isDark
+        ? '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>'
+        : "© OpenStreetMap contributors",
       maxZoom: 19,
     }).addTo(map);
+
+    // Watch for theme changes to swap tiles
+    const observer = new MutationObserver(() => {
+      const dark = document.documentElement.classList.contains("dark");
+      const newUrl = dark
+        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      tileLayer.setUrl(newUrl);
+      tileLayer.options.attribution = dark
+        ? '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>'
+        : "© OpenStreetMap contributors";
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
     map.on("dragstart", () => {
       if (!programmaticPanRef.current) {
@@ -150,6 +168,7 @@ export function MapView({
     userMarkerLayer.current = L.layerGroup().addTo(map);
 
     return () => {
+      observer.disconnect();
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;
@@ -467,7 +486,6 @@ export function MapView({
     );
   }
 
-  const pendingCount = waypoints.filter((w) => w.status === "out_for_delivery").length;
   const completedCount = waypoints.filter(
     (w) => w.status === "delivered" || w.status === "delivery_failed"
   ).length;
@@ -478,66 +496,68 @@ export function MapView({
     <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
       <div ref={mapRef} className="h-full w-full" />
 
-      {/* Simulation controls */}
-      {isSimulating && (
-        <div className="absolute top-3 left-3 right-3 z-[900] bg-[var(--bg-card)] rounded-xl px-3 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.12)] border border-amber-200 dark:border-amber-500/20">
-          {/* Header: label + speed */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <Film className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-xs font-bold text-amber-800 dark:text-amber-300">Simulación</span>
+      {/* Simulation bar — compact single row */}
+      {isSimulating && simulationControls && (
+        <div className="absolute top-2 left-2 right-2 z-[900] h-9 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center justify-between gap-2">
+          {/* Left group */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-5 h-5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Film className="w-3 h-3" />
             </div>
-            <div className="flex items-center gap-1.5">
-              {simulationControls?.onExit && (
-                <button
-                  onClick={simulationControls.onExit}
-                  className="h-7 px-2 rounded-lg cursor-pointer border transition-colors flex items-center gap-1 text-[11px] font-semibold bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
-                >
-                  <X className="w-3 h-3" /> Salir
-                </button>
-              )}
-            </div>
+            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">Simulación</span>
+            {simulationControls.speedMultiplier !== undefined && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 leading-none">
+                x{simulationControls.speedMultiplier}
+              </span>
+            )}
           </div>
 
-          {/* Controls row */}
-          {simulationControls && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Right group */}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
+              title={simulationControls.isPaused ? "Reanudar" : "Pausar"}
+              className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              {simulationControls.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+            </button>
+            <button
+              onClick={simulationControls.reset}
+              title="Reiniciar"
+              className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
+            {simulationControls.onCycleSpeed && (
               <button
-                onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
-                className="h-7 px-2 rounded-lg text-[11px] font-semibold cursor-pointer border transition-colors flex items-center gap-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                onClick={simulationControls.onCycleSpeed}
+                title="Cambiar velocidad"
+                className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
               >
-                {simulationControls.isPaused ? (
-                  <><Play className="w-3 h-3" /><span className="hidden sm:inline">Reanudar</span></>
-                ) : (
-                  <><Pause className="w-3 h-3" /><span className="hidden sm:inline">Pausar</span></>
-                )}
+                <Zap className="w-3 h-3" />
+                <span className="text-[10px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
               </button>
+            )}
+            {simulationControls.onFastForwardTime && (
               <button
-                onClick={simulationControls.reset}
-                className="h-7 px-2 rounded-lg text-[11px] font-semibold cursor-pointer border transition-colors flex items-center gap-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                onClick={simulationControls.onFastForwardTime}
+                title="Adelantar 2 horas"
+                className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
               >
-                <RotateCcw className="w-3 h-3" /><span className="hidden sm:inline">Reiniciar</span>
+                <Clock className="w-3 h-3" />
+                <span className="text-[10px] font-semibold">+2h</span>
               </button>
-              {simulationControls.onCycleSpeed && (
-                <button
-                  onClick={simulationControls.onCycleSpeed}
-                  className="h-7 px-2 rounded-lg text-[11px] font-semibold cursor-pointer border transition-colors flex items-center gap-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                >
-                  <Zap className="w-3 h-3" /> x{simulationControls.speedMultiplier ?? 1}
-                </button>
-              )}
-              {simulationControls.onFastForwardTime && (
-                <button
-                  onClick={simulationControls.onFastForwardTime}
-                  className="h-7 px-2 rounded-lg text-[11px] font-semibold cursor-pointer border transition-colors flex items-center gap-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                >
-                  <Clock className="w-3 h-3" /> +2h
-                </button>
-              )}
-            </div>
-          )}
+            )}
+            {simulationControls.onExit && (
+              <button
+                onClick={simulationControls.onExit}
+                title="Salir de simulación"
+                className="w-7 h-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 ml-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -564,50 +584,46 @@ export function MapView({
         </button>
       )}
 
-      {/* Info panel — compacto */}
-      <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-[900]">
-        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-          <Package className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Paradas</p>
-            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{waypoints.length}</p>
-          </div>
-        </div>
-
-        {routeInfo && (
+      {/* Info bar — single compact row */}
+      <div className={`absolute ${isSimulating ? 'top-12' : 'top-2'} left-2 right-2 z-[900] h-8 bg-[var(--bg-card)] rounded-lg shadow-sm border border-[var(--border)] px-3 flex items-center justify-center gap-3 text-xs`}>
+        <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+          <MapPin className="w-3 h-3 shrink-0" />
+          <span className="font-semibold text-[var(--text-primary)]">{waypoints.length}</span>
+          <span className="hidden sm:inline">paradas</span>
+        </span>
+        <span className="text-[var(--border)] select-none">·</span>
+        {routeInfo ? (
           <>
-            <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-              <Navigation className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Distancia</p>
-                <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{(routeInfo.distance / 1000).toFixed(1)} km</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-              <Clock className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Tiempo</p>
-                <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{Math.round(routeInfo.duration / 60)} min</p>
-              </div>
-            </div>
+            <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+              <Navigation className="w-3 h-3 shrink-0" />
+              <span className="font-semibold text-[var(--text-primary)]">{(routeInfo.distance / 1000).toFixed(1)} km</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+            <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span className="font-semibold text-[var(--text-primary)]">{Math.round(routeInfo.duration / 60)} min</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-1 text-[var(--text-muted)] whitespace-nowrap">
+              <Navigation className="w-3 h-3 shrink-0" />
+              <span className="text-[var(--text-muted)]">-- km</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
+            <span className="flex items-center gap-1 text-[var(--text-muted)] whitespace-nowrap">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span className="text-[var(--text-muted)]">-- min</span>
+            </span>
+            <span className="text-[var(--border)] select-none">·</span>
           </>
         )}
-
-        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Listas</p>
-            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{completedCount}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Pend.</p>
-            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{pendingCount}</p>
-          </div>
-        </div>
+        <span className="flex items-center gap-1 whitespace-nowrap">
+          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+          <span className="font-semibold text-[var(--text-primary)]">{completedCount}/{waypoints.length}</span>
+          <span className="text-[var(--text-secondary)] hidden sm:inline">completadas</span>
+        </span>
       </div>
 
       {loading && (
