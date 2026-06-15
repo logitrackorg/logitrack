@@ -522,7 +522,7 @@ export function MapView({
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-4 bottom-[200px] z-[1000] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-3 bottom-28 z-[1000] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
@@ -542,48 +542,48 @@ export function MapView({
         </button>
       )}
 
-      {/* Info panel */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2 z-[1000] max-w-[180px] max-[640px]:max-w-[160px]">
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <Package className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Paradas</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{waypoints.length}</p>
+      {/* Info panel — compacto */}
+      <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-[1000]">
+        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+          <Package className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Paradas</p>
+            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{waypoints.length}</p>
           </div>
         </div>
 
         {routeInfo && (
           <>
-            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-              <Navigation className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Distancia</p>
-                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{(routeInfo.distance / 1000).toFixed(1)} km</p>
+            <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+              <Navigation className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Distancia</p>
+                <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{(routeInfo.distance / 1000).toFixed(1)} km</p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-              <Clock className="w-4 h-4 text-slate-600 dark:text-[var(--text-secondary)]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Tiempo est.</p>
-                <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{Math.round(routeInfo.duration / 60)} min</p>
+            <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+              <Clock className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Tiempo</p>
+                <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{Math.round(routeInfo.duration / 60)} min</p>
               </div>
             </div>
           </>
         )}
 
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Completadas</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{completedCount}</p>
+        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Listas</p>
+            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{completedCount}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 bg-[var(--bg-card)] px-3.5 py-2.5 rounded-[10px] shadow-[0_2px_12px_rgba(0,0,0,0.1)] max-sm:min-w-0 max-sm:flex-none">
-          <AlertTriangle className="w-4 h-4 text-amber-600" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] m-0">Pendientes</p>
-            <p className="text-base font-bold text-[var(--text-primary)] m-0 leading-tight max-sm:text-sm">{pendingCount}</p>
+        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[9px] font-semibold text-[var(--text-secondary)] uppercase tracking-[0.5px] leading-none">Pend.</p>
+            <p className="text-sm font-bold text-[var(--text-primary)] leading-tight">{pendingCount}</p>
           </div>
         </div>
       </div>

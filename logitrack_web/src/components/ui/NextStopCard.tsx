@@ -1,7 +1,6 @@
 import { Navigation, CheckCircle2, XCircle, MapPin, Clock, Map, Ban } from "lucide-react";
 import { googleMapsSingleStop, googleMapsRoute } from "../../utils/googleMaps";
 import type { GeoPoint } from "../../utils/googleMaps";
-import { Button } from "@/components/ui/button";
 
 export interface NextStop {
   sequence: number;
@@ -37,9 +36,9 @@ export function NextStopCard({
 
   if (!nextStop) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 text-center py-6">
-        <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0 mx-auto mb-2" />
-        <div>
+      <div className="px-4 pb-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 text-center">
+          <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0 mx-auto mb-2" />
           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">¡Ruta completada!</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Todas las paradas registradas.</p>
         </div>
@@ -54,72 +53,100 @@ export function NextStopCard({
   });
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-t-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-      {/* Handle visual */}
-      <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-3" />
+    <div className="px-4 pb-4">
+      <div className="rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="px-3 py-3">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-[var(--sidebar-bg)] text-white text-base font-bold flex items-center justify-center">
+              {String(nextStop.sequence).padStart(2, "0")}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-bold leading-snug truncate dark:text-gray-100 text-slate-900">
+                {nextStop.name}
+              </p>
+              <p className="mt-1 text-sm leading-snug flex items-start gap-1.5 dark:text-gray-300 text-slate-600">
+                <MapPin className="w-3.5 h-3.5 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
+                <span className="break-words">{nextStop.address}</span>
+              </p>
+              {routeInfo && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-700 text-slate-500 dark:text-gray-400">
+                    <Clock className="w-3 h-3" />
+                    {Math.round(routeInfo.duration / 60)} min
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-gray-700 text-slate-500 dark:text-gray-400">
+                    <Navigation className="w-3 h-3" />
+                    {(routeInfo.distance / 1000).toFixed(1)} km
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
-      {/* Encabezado: nro de parada + info */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-full bg-[var(--sidebar-bg)] text-white font-bold text-sm flex items-center justify-center shrink-0">
-          {String(nextStop.sequence).padStart(2, "0")}
-        </div>
-        <div className="min-w-0">
-          <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{nextStop.name}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            <MapPin className="inline w-3 h-3 mr-0.5 opacity-50" />
-            {nextStop.address}
-          </p>
-          {routeInfo && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              <Clock className="inline w-3 h-3 mr-0.5 opacity-50" />
-              {Math.round(routeInfo.duration / 60)} min · {(routeInfo.distance / 1000).toFixed(1)} km
-            </p>
+          {/* Action buttons row */}
+          {canAct && (
+            <div className="flex items-center gap-1.5 mt-3">
+              <a
+                href={singleUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1 no-underline"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                Navegar
+              </a>
+              <button
+                onClick={onDeliver}
+                className="flex-1 h-9 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Entregar
+              </button>
+              <button
+                onClick={onFailed}
+                className="h-9 w-9 bg-red-500 hover:bg-red-600 text-white rounded-lg cursor-pointer border-none transition-colors flex items-center justify-center shrink-0"
+                title="No entregado"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+              <button
+                onClick={onRejected}
+                className="h-9 w-9 bg-orange-500 hover:bg-orange-600 text-white rounded-lg cursor-pointer border-none transition-colors flex items-center justify-center shrink-0"
+                title="Rechazado"
+              >
+                <Ban className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {!canAct && (
+            <a
+              href={singleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1 no-underline"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              Navegar
+            </a>
           )}
         </div>
-      </div>
 
-      {/* Acciones */}
-      <div className="flex flex-col gap-2 mt-4">
+        {/* Footer: Google Maps link */}
         <a
-          href={singleUrl}
+          href={fullRouteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="h-11 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-2 no-underline"
+          className="w-full text-center text-blue-600 dark:text-blue-400 text-[11px] py-2 cursor-pointer hover:underline flex items-center justify-center gap-1 no-underline border-t border-gray-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50"
         >
-          <Navigation className="w-4 h-4" />
-          Navegar
+          <Map className="w-3 h-3 shrink-0" />
+          Ruta completa en Google Maps
+          {truncated && (
+            <span className="text-[10px] text-gray-400 ml-1">(9 primeras)</span>
+          )}
         </a>
-        {canAct && (
-          <>
-            <Button variant="default" onClick={onDeliver} className="h-11 bg-green-500 hover:bg-green-600 w-full">
-              <CheckCircle2 className="w-4 h-4" />
-              Entregar
-            </Button>
-            <Button variant="destructive" onClick={onFailed} className="h-11 bg-red-500 hover:bg-red-600 text-white w-full">
-              <XCircle className="w-4 h-4" />
-              No entregado
-            </Button>
-            <Button variant="secondary" onClick={onRejected} className="h-11 bg-orange-500 hover:bg-orange-600 text-white w-full text-sm">
-              <Ban className="w-4 h-4" />
-              Rechazado por destinatario
-            </Button>
-          </>
-        )}
       </div>
-
-      {/* Ruta completa en Google Maps */}
-      <a
-        href={fullRouteUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full text-center text-blue-600 dark:text-blue-400 text-xs py-2 cursor-pointer hover:underline flex items-center justify-center gap-1.5 mt-2 no-underline"
-      >
-        <Map className="w-3.5 h-3.5 shrink-0" />
-        Abrir ruta completa en Google Maps
-        {truncated && (
-          <span className="text-[10px] text-gray-400 ml-1">(primeras 9 paradas)</span>
-        )}
-      </a>
     </div>
   );
 }
