@@ -1093,14 +1093,11 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 
 /* ─── Leaflet zoom controls — posición y estilo ──────────── */
 .leaflet-control-zoom {
-  position: fixed !important;
-  bottom: 12px !important;
-  left: 12px !important;
-  top: auto !important;
   border: 1px solid var(--border) !important;
   border-radius: 10px !important;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+  margin-bottom: 36px !important;
 }
 .leaflet-control-zoom a {
   width: 34px !important;

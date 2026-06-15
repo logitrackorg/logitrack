@@ -133,8 +133,10 @@ export function MapView({
     const map = L.map(mapRef.current, {
       center: [-34.6037, -58.3816],
       zoom: 12,
-      zoomControl: true,
+      zoomControl: false,
     });
+
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
 
     const tileLayer = L.tileLayer(tileUrl, {
       attribution: isDark
@@ -496,75 +498,66 @@ export function MapView({
     <div className="relative h-[calc(100vh-200px)] w-full rounded-xl overflow-hidden">
       <div ref={mapRef} className="h-full w-full" />
 
-      {/* Simulation bar — compact single row */}
+      {/* Simulation bar — icon-only buttons */}
       {isSimulating && simulationControls && (
-        <div className="absolute top-2 left-2 right-2 z-[900] h-11 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center justify-between gap-2">
-          {/* Left group */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-6 h-6 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-              <Film className="w-3.5 h-3.5" />
+        <div className="absolute top-2 left-2 right-2 z-[900] h-10 bg-[var(--bg-card)] rounded-lg shadow-sm border border-amber-200 dark:border-amber-500/20 px-2 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0 mr-1">
+            <div className="w-5 h-5 rounded bg-amber-100 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Film className="w-3 h-3" />
             </div>
-            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Simulación</span>
-            {simulationControls.speedMultiplier !== undefined && (
-              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 leading-none">
-                x{simulationControls.speedMultiplier}
-              </span>
-            )}
+            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">Sim</span>
           </div>
 
-          {/* Right group */}
-          <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
+            title={simulationControls.isPaused ? "Reanudar" : "Pausar"}
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            {simulationControls.isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={simulationControls.reset}
+            title="Reiniciar"
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+
+          <div className="flex-1" />
+
+          {simulationControls.onCycleSpeed && (
             <button
-              onClick={simulationControls.isPaused ? simulationControls.play : simulationControls.pause}
-              title={simulationControls.isPaused ? "Reanudar" : "Pausar"}
-              className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+              onClick={simulationControls.onCycleSpeed}
+              title="Cambiar velocidad"
+              className="h-7 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center gap-0.5 shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
-              {simulationControls.isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              <Zap className="w-3 h-3" />
+              <span className="text-[10px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
             </button>
+          )}
+          {simulationControls.onFastForwardTime && (
             <button
-              onClick={simulationControls.reset}
-              title="Reiniciar"
-              className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+              onClick={simulationControls.onFastForwardTime}
+              title="Adelantar 2 horas"
+              className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <Clock className="w-3 h-3" />
             </button>
-            {simulationControls.onCycleSpeed && (
-              <button
-                onClick={simulationControls.onCycleSpeed}
-                title="Cambiar velocidad"
-                className="h-8 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                <Zap className="w-3.5 h-3.5" />
-                <span className="text-[11px] font-semibold">x{simulationControls.speedMultiplier ?? 1}</span>
-              </button>
-            )}
-            {simulationControls.onFastForwardTime && (
-              <button
-                onClick={simulationControls.onFastForwardTime}
-                title="Adelantar 2 horas"
-                className="h-8 px-1.5 rounded-md cursor-pointer border transition-colors flex items-center justify-center gap-0.5 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span className="text-[11px] font-semibold">+2h</span>
-              </button>
-            )}
-            {simulationControls.onExit && (
-              <button
-                onClick={simulationControls.onExit}
-                title="Salir de simulación"
-                className="min-w-[32px] h-8 rounded-md cursor-pointer border transition-colors flex items-center justify-center bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 ml-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          )}
+          <button
+            onClick={simulationControls.onExit}
+            title="Salir de simulación"
+            className="h-7 w-7 rounded-md cursor-pointer border transition-colors flex items-center justify-center shrink-0 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20"
+          >
+            <X className="w-3 h-3" />
+          </button>
         </div>
       )}
 
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-3 bottom-3 z-[900] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-3 bottom-10 z-[900] w-10 h-10 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
@@ -585,7 +578,7 @@ export function MapView({
       )}
 
       {/* Info bar — single compact row */}
-      <div className={`absolute ${isSimulating ? 'top-12' : 'top-2'} left-2 right-2 z-[900] h-8 bg-[var(--bg-card)] rounded-lg shadow-sm border border-[var(--border)] px-3 flex items-center justify-center gap-3 text-xs`}>
+      <div className={`absolute ${isSimulating ? 'top-14' : 'top-2'} left-2 right-2 z-[900] h-8 bg-[var(--bg-card)] rounded-lg shadow-sm border border-[var(--border)] px-3 flex items-center justify-center gap-3 text-xs`}>
         <span className="flex items-center gap-1 text-[var(--text-secondary)] whitespace-nowrap">
           <MapPin className="w-3 h-3 shrink-0" />
           <span className="font-semibold text-[var(--text-primary)]">{waypoints.length}</span>
