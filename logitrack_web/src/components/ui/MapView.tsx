@@ -457,7 +457,7 @@ export function MapView({
 
   if (waypoints.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[500px] bg-[var(--bg-page)] rounded-xl border-2 border-dashed border-[var(--border)]">
+      <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border)]" style={{ height: 500, backgroundColor: 'var(--bg-page)' }}>
         <MapPin className="w-12 h-12 text-slate-300 mb-3" />
         <p className="text-sm font-semibold text-slate-900 dark:text-[var(--text-primary)]">No hay entregas para mostrar</p>
         <p className="text-xs text-slate-500 dark:text-[var(--text-secondary)] mt-1">
@@ -475,7 +475,7 @@ export function MapView({
   const isSimulating = simulationMode && simulationMode !== "real";
 
   return (
-    <div className="relative h-[500px] w-full rounded-xl overflow-hidden z-0 bg-white dark:bg-gray-800 border-4 border-red-500">
+    <div className="relative rounded-xl overflow-hidden z-0 border-4 border-red-500" style={{ width: '100%', height: 500, backgroundColor: 'white' }}>
       <div ref={mapRef} className="h-full w-full" />
 
       {/* Simulation banner */}
