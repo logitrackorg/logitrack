@@ -116,7 +116,25 @@ export function DriverRoute() {
       .catch(() => setNoRoute(true))
       .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  // En producción puede haber un fallo transitorio inmediatamente después de que
+  // el chofer reclamó el vehículo o inició la ruta. En ese caso reintentamos una
+  // vez antes de redirigir a scan, para evitar el bounce-back post gate de fatiga.
+  const loadWithRetry = () => {
+    setLoading(true);
+    driverApi
+      .getRoute()
+      .then((d) => { setData(d); setNoRoute(false); setLoading(false); })
+      .catch(() => {
+        setTimeout(() => {
+          driverApi.getRoute()
+            .then((d) => { setData(d); setNoRoute(false); })
+            .catch(() => setNoRoute(true))
+            .finally(() => setLoading(false));
+        }, 2000);
+      });
+  };
+
+  useEffect(() => { loadWithRetry(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
 
   // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).

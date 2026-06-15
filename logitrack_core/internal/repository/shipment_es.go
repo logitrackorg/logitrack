@@ -248,6 +248,7 @@ func (r *eventSourcedShipmentRepository) ConfirmPayment(cmd ConfirmPaymentCmd) (
 			Method:              cmd.Method,
 			EstimatedDeliveryAt: cmd.EstimatedDeliveryAt,
 			Prediction:          cmd.Prediction,
+			SecurityKeyword:     cmd.SecurityKeyword,
 		},
 		ChangedBy: cmd.ChangedBy,
 		Timestamp: cmd.Timestamp,

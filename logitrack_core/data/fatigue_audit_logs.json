@@ -88,5 +88,16 @@
       "date": "2026-06-07",
       "skipped": true
     }
+  },
+  {
+    "id": "153446a995015ee1",
+    "created_at": "2026-06-08T21:05:20.829979-03:00",
+    "created_by": "chofer_caba2",
+    "action": "SKIP_CHECKIN",
+    "details": {
+      "driver_id": "12",
+      "date": "2026-06-08",
+      "skipped": true
+    }
   }
 ]

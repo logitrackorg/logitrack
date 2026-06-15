@@ -249,21 +249,25 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 				UPDATE shipments
 				SET tracking_id = $1, status = $2, updated_at = $3,
 				    priority = $4, priority_score = $5, priority_confidence = $6, priority_factors = $7,
-				    estimated_delivery_at = $8
-				WHERE tracking_id = $9`,
+				    estimated_delivery_at = $8,
+				    security_keyword = CASE WHEN $9 != '' THEN $9 ELSE security_keyword END
+				WHERE tracking_id = $10`,
 				payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 				payload.Prediction.Priority, payload.Prediction.Score, payload.Prediction.Confidence, factorsJSON,
 				payload.EstimatedDeliveryAt,
+				payload.SecurityKeyword,
 				payload.OldTrackingID,
 			)
 			return err
 		}
 		_, err := p.db.Exec(`
 			UPDATE shipments
-			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4
-			WHERE tracking_id = $5`,
+			SET tracking_id = $1, status = $2, updated_at = $3, estimated_delivery_at = $4,
+			    security_keyword = CASE WHEN $5 != '' THEN $5 ELSE security_keyword END
+			WHERE tracking_id = $6`,
 			payload.NewTrackingID, string(model.StatusAtOriginHub), event.Timestamp,
 			payload.EstimatedDeliveryAt,
+			payload.SecurityKeyword,
 			payload.OldTrackingID,
 		)
 		return err

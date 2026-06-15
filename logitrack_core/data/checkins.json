@@ -546,6 +546,23 @@
       }
     ]
   },
+  "12|2026-06-08": {
+    "driver_id": "12",
+    "date": "2026-06-08",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-08T21:05:20.827858-03:00",
+    "skipped": true,
+    "touch_events": [
+      {
+        "tracking_id": "LT-471C6860",
+        "action": "entregado",
+        "reaction_time_ms": 1818,
+        "misfires": 0,
+        "recorded_at": "2026-06-08T21:05:25.729458-03:00"
+      }
+    ]
+  },
   "15|2026-05-23": {
     "driver_id": "15",
     "date": "2026-05-23",
@@ -594,6 +611,22 @@
         "reaction_time_ms": 9641,
         "misfires": 0,
         "recorded_at": "2026-05-24T11:10:56.404432-03:00"
+      }
+    ]
+  },
+  "5|2026-06-08": {
+    "driver_id": "5",
+    "date": "2026-06-08",
+    "horas_sueno": 0,
+    "kss_level": 0,
+    "recorded_at": "2026-06-08T21:14:36.089578-03:00",
+    "touch_events": [
+      {
+        "tracking_id": "LT-F559D414",
+        "action": "entregado",
+        "reaction_time_ms": 2962,
+        "misfires": 0,
+        "recorded_at": "2026-06-08T21:14:36.089578-03:00"
       }
     ]
   },

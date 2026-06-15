@@ -16,6 +16,7 @@ const (
 	PaymentMethodMP       PaymentMethod = "mp"
 	PaymentMethodCash     PaymentMethod = "cash"
 	PaymentMethodTransfer PaymentMethod = "transfer"
+	PaymentMethodMock     PaymentMethod = "mock"
 )
 
 type Payment struct {

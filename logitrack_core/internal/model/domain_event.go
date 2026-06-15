@@ -124,6 +124,7 @@ type PaymentConfirmedPayload struct {
 	Method              PaymentMethod
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
+	SecurityKeyword     string
 }
 
 type ReturnedToDraftPayload struct {
