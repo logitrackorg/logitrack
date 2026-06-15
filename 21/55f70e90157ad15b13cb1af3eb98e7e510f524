@@ -1,0 +1,39 @@
+logitrack_core/internal/repository/shipment.go
+  s_4caca535ff3864::t_d634476657c5aa 162
+logitrack_core/data/fatigue_audit_logs.json
+  s_4caca535ff3864::t_d634476657c5aa 91-101
+logitrack_core/internal/projection/postgres_shipment.go
+  s_4caca535ff3864::t_d634476657c5aa 252-254,258,265-267,270
+logitrack_core/data/checkins.json
+  s_4caca535ff3864::t_d634476657c5aa 549-565,617-629
+logitrack_core/internal/repository/shipment_es.go
+  s_4caca535ff3864::t_d634476657c5aa 251
+logitrack_web/src/pages/DriverRoute.tsx
+  s_4caca535ff3864::t_d634476657c5aa 119-137
+logitrack_core/internal/model/domain_event.go
+  s_4caca535ff3864::t_d634476657c5aa 127
+logitrack_core/data/route_starts.json
+  s_4caca535ff3864::t_d634476657c5aa 3-4
+logitrack_web/src/pages/ShipmentDetail.tsx
+  s_4caca535ff3864::t_d634476657c5aa 673-677
+logitrack_web/src/components/KssCheckIn.tsx
+  s_4caca535ff3864::t_d634476657c5aa 103-110
+logitrack_core/internal/model/payment.go
+  s_4caca535ff3864::t_63df69648201ac 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "2155f70e90157ad15b13cb1af3eb98e7e510f524",
+  "prompts": {},
+  "sessions": {
+    "s_4caca535ff3864": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8d0c0c3-fba2-4ea1-8a7e-750e8910f579",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
