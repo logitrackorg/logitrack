@@ -131,6 +131,10 @@ func main() {
 	sysConfigRepo := repository.NewPostgresSystemConfigRepository(database)
 	sysConfigSvc := service.NewSystemConfigService(sysConfigRepo)
 	sysConfigHandler := handler.NewSystemConfigHandler(sysConfigSvc)
+
+	// Detector de falta de sucursal: diagrama de cobertura (Voronoi) + gaps.
+	coverageSvc := service.NewCoverageService(branchRepo, sysConfigSvc)
+	coverageHandler := handler.NewCoverageHandler(coverageSvc)
 	draftLifecycleRepo := repository.NewPostgresDraftLifecycleRepository(database)
 	draftLifecycleSvc := service.NewDraftLifecycleService(draftLifecycleRepo, sysConfigSvc)
 	draftLifecycleHandler := handler.NewDraftLifecycleHandler(draftLifecycleSvc)
@@ -595,6 +599,13 @@ func main() {
 	protected.GET("/stats/success-rate-by-branch", canViewStats, statsExtendedHandler.SuccessRateByBranch)
 	protected.GET("/supervisor/priority-logs", canViewStats, priorityLogHandler.List)
 	protected.GET("/stats/sla-metrics", canViewStats, slaMetricsHandler.Get)
+	// Detector de falta de sucursal: diagrama de cobertura (dashboard) +
+	// sucursal óptima para una coordenada (form de nuevo envío).
+	protected.GET("/coverage/diagram", canViewStats, coverageHandler.GetDiagram)
+	protected.GET("/coverage/branch-for", shipmentWrite, coverageHandler.BranchForPoint)
+	protected.GET("/coverage/diagnose", canViewStats, coverageHandler.Diagnose)
+	protected.POST("/coverage/snap-to-city", canViewStats, coverageHandler.SnapToCity)
+	protected.POST("/coverage/project", canViewStats, coverageHandler.Project)
 	protected.POST("/admin/fleet-ml/retrain", adminOnly, slaMetricsHandler.RetrainFleetML)
 	protected.GET("/admin/sla-settings", adminOnly, slaSettingsHandler.Get)
 	protected.PUT("/admin/sla-settings", adminOnly, slaSettingsHandler.Update)

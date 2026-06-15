@@ -728,6 +728,13 @@ func RunMigrations(db *sql.DB) error {
 
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_failed_attempts INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_login_locked_until TIMESTAMPTZ;
+
+		-- Detector de falta de sucursal: umbral de área de cobertura por celda Voronoi.
+		-- Una celda cuya área supera este valor (km²) se marca como zona sub-cubierta (gap).
+		-- El diagrama usa un bounding box nacional fijo (~6.7M km²), por lo que las celdas
+		-- son del orden de cientos de miles a millones de km².
+		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
+		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
 	`)
 	return err
 }

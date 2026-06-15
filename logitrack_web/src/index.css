@@ -1037,6 +1037,33 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
 }
 
+/* ─── Coverage suggestion markers ────────────────────────── */
+/* Ícono de sucursal "apagado": misma forma que las sucursales reales,
+   pero en escala de grises y con opacidad reducida para indicar que
+   es una ubicación proyectada/sugerida, no operativa. */
+.coverage-suggestion-icon {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
+/* "Aterrizar sugerencias en ciudades reales": el marcador (y su ícono)
+   animan su posición cuando se mueve a la coordenada real vía setLatLng. */
+.coverage-suggestion-marker {
+  transition: transform 0.6s ease;
+}
+
+/* ─── Cobertura territorial: modo pantalla completa ──────── */
+.fullscreen-mode {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: var(--bg-page);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
 /* ─── PublicTracking animations ──────────────────────────── */
 @keyframes pt-fade-in {
   from { opacity: 0; transform: translateY(8px); }
