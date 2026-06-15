@@ -293,16 +293,25 @@ func TestCoverage_Diagnose_PercentageAndDeficit(t *testing.T) {
 
 	for _, sc := range res.Cells {
 		realArea := areaByBranch[sc.BranchID]
-		wantPct := simArea / realArea * 100
-		if math.Abs(sc.CoveragePercentage-wantPct) > 1e-9 {
-			t.Fatalf("celda %s: coverage_percentage = %v, esperado %v", sc.BranchID, sc.CoveragePercentage, wantPct)
+		// El área intersectada (celda ∩ círculo simulado) nunca puede superar
+		// el área del círculo ni el área de la celda, así que el porcentaje
+		// queda acotado por ambos límites — y nunca puede pasar de 100%.
+		upperBoundPct := simArea / realArea * 100
+		if sc.CoveragePercentage < 0 || sc.CoveragePercentage > upperBoundPct+1e-9 {
+			t.Fatalf("celda %s: coverage_percentage = %v fuera de rango [0, %v]", sc.BranchID, sc.CoveragePercentage, upperBoundPct)
+		}
+		if sc.CoveragePercentage > 100+1e-9 {
+			t.Fatalf("celda %s: coverage_percentage = %v supera el 100%%", sc.BranchID, sc.CoveragePercentage)
 		}
 		if !sc.IsGap || sc.Severity != model.GapSeverityCritico {
 			t.Fatalf("celda %s: con área simulada muy chica se esperaba gap crítico, dio is_gap=%v severity=%q", sc.BranchID, sc.IsGap, sc.Severity)
 		}
-		wantDeficit := realArea - simArea
-		if math.Abs(sc.DeficitKm2-wantDeficit) > 1e-9 {
-			t.Fatalf("celda %s: deficit_km2 = %v, esperado %v", sc.BranchID, sc.DeficitKm2, wantDeficit)
+		// El déficit debe ser el complemento del área intersectada
+		// (coverage_percentage) sobre el área real de la celda.
+		intersectedArea := sc.CoveragePercentage / 100 * realArea
+		wantDeficit := realArea - intersectedArea
+		if math.Abs(sc.DeficitKm2-wantDeficit) > 1e-6 {
+			t.Fatalf("celda %s: deficit_km2 = %v, esperado %v (consistente con coverage_percentage)", sc.BranchID, sc.DeficitKm2, wantDeficit)
 		}
 	}
 }
@@ -315,21 +324,131 @@ func TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell(t *testing.T) {
 	)
 	d := svc.Refresh()
 
-	maxArea := 0.0
+	// Radio ~6300km (área 1.25e8 km²) desde cualquier sitio cubre por completo
+	// el territorio argentino, incluso celdas muy alargadas como la de Mendoza
+	// (que se extiende hasta Tierra del Fuego): la intersección celda∩círculo
+	// coincide con el polígono completo de la celda.
+	const simArea = 1.25e8
+
+	areaByBranch := make(map[string]float64, len(d.Cells))
 	for _, c := range d.Cells {
-		if c.AreaKm2 > maxArea {
-			maxArea = c.AreaKm2
-		}
+		areaByBranch[c.BranchID] = c.AreaKm2
 	}
 
-	res := svc.Diagnose(maxArea * 2)
+	res := svc.Diagnose(simArea)
 	for _, sc := range res.Cells {
+		// Bug 1: el porcentaje nunca puede superar el 100%, ni siquiera por
+		// errores de redondeo del recorte de polígonos.
+		if sc.CoveragePercentage < 0 || sc.CoveragePercentage > 100+1e-9 {
+			t.Fatalf("celda %s: coverage_percentage = %v fuera de rango [0, 100]", sc.BranchID, sc.CoveragePercentage)
+		}
+		// Con el círculo conteniendo geométricamente toda la celda, la
+		// intersección es el polígono completo proyectado, que cae dentro
+		// del umbral de "cobertura adecuada" (>= simCoverageAdequatePct).
+		if sc.CoveragePercentage < simCoverageAdequatePct {
+			t.Fatalf("celda %s: coverage_percentage = %v por debajo del umbral de adecuado (%v) con círculo que cubre toda la celda", sc.BranchID, sc.CoveragePercentage, simCoverageAdequatePct)
+		}
 		if sc.IsGap || sc.Severity != model.GapSeverityNone {
-			t.Fatalf("celda %s: con área simulada >= área real se esperaba cobertura adecuada, dio is_gap=%v severity=%q", sc.BranchID, sc.IsGap, sc.Severity)
+			t.Fatalf("celda %s: con área simulada que cubre toda la celda se esperaba cobertura adecuada, dio is_gap=%v severity=%q", sc.BranchID, sc.IsGap, sc.Severity)
 		}
-		if sc.DeficitKm2 != 0 {
-			t.Fatalf("celda %s: deficit_km2 debería ser 0 cuando el área simulada cubre la celda, dio %v", sc.BranchID, sc.DeficitKm2)
+		realArea := areaByBranch[sc.BranchID]
+		intersectedArea := sc.CoveragePercentage / 100 * realArea
+		wantDeficit := realArea - intersectedArea
+		if math.Abs(sc.DeficitKm2-wantDeficit) > 1e-6 {
+			t.Fatalf("celda %s: deficit_km2 = %v, esperado %v (consistente con coverage_percentage)", sc.BranchID, sc.DeficitKm2, wantDeficit)
 		}
+	}
+}
+
+func TestCoverage_Diagnose_SuggestedLocationsForCriticalGap(t *testing.T) {
+	// Área simulada muy chica frente a cualquier celda real: todas las celdas
+	// quedan "crítico" y deberían producir al menos una sugerencia (el resto de
+	// la celda, descontado el círculo simulado, sigue siendo enorme).
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+	d := svc.Refresh()
+
+	minArea := math.Inf(1)
+	for _, c := range d.Cells {
+		if c.AreaKm2 < minArea {
+			minArea = c.AreaKm2
+		}
+	}
+	simArea := minArea / 100
+
+	res := svc.Diagnose(simArea)
+
+	criticalBranches := make(map[string]bool)
+	for _, sc := range res.Cells {
+		if sc.Severity == model.GapSeverityCritico {
+			criticalBranches[sc.BranchID] = true
+		}
+	}
+	if len(criticalBranches) == 0 {
+		t.Fatal("se esperaba al menos una celda con severidad crítica")
+	}
+	if len(res.SuggestedLocations) == 0 {
+		t.Fatal("se esperaba al menos una ubicación sugerida para gaps críticos")
+	}
+
+	siteByBranch := make(map[string]model.LatLng, len(d.Cells))
+	for _, c := range d.Cells {
+		siteByBranch[c.BranchID] = c.Site
+	}
+	radiusKm := math.Sqrt(simArea / math.Pi)
+
+	contour := geo.ArgentinaContour()
+	// Tolerancia para puntos sobre (o casi sobre) la frontera del país: el
+	// fragmento "hueco" resultante del DIFFERENCE suele tener su vértice más
+	// lejano justo en el borde del territorio, y planar.MultiPolygonContains
+	// puede dar falso negativo por errores de punto flotante en el borde
+	// exacto. ~0.05° ≈ 5.5km.
+	const borderToleranceDeg = 0.05
+
+	for _, sug := range res.SuggestedLocations {
+		if !criticalBranches[sug.BranchID] {
+			t.Fatalf("sugerencia %+v asociada a una celda no crítica", sug)
+		}
+		if sug.GapAreaKm2 < coverageSuggestionMinFragmentAreaKm2 {
+			t.Fatalf("sugerencia %+v: gap_area_km2 por debajo del umbral mínimo", sug)
+		}
+		pt := orb.Point{sug.Lng, sug.Lat}
+		if !planar.MultiPolygonContains(contour, pt) && planar.DistanceFrom(contour, pt) > borderToleranceDeg {
+			t.Fatalf("sugerencia %+v cae fuera del territorio argentino", sug)
+		}
+
+		// Bug 2: el vértice sugerido debe estar sobre el "hueco" (DIFFERENCE),
+		// es decir fuera del círculo de cobertura simulado alrededor de su
+		// propia sucursal — nunca dentro de la zona ya cubierta.
+		site := siteByBranch[sug.BranchID]
+		proj := newProjector(site.Lat, site.Lng)
+		p := proj.project(sug.Lat, sug.Lng)
+		dist := math.Sqrt(p.X*p.X + p.Y*p.Y)
+		if dist < radiusKm-1e-6 {
+			t.Fatalf("sugerencia %+v cae dentro del círculo de cobertura simulado (dist=%v km < radio=%v km)", sug, dist, radiusKm)
+		}
+	}
+}
+
+func TestCoverage_Diagnose_NoSuggestionsWhenAdequate(t *testing.T) {
+	// Área simulada que cubre por completo todas las celdas (ver
+	// TestCoverage_Diagnose_AdequateWhenSimulatedAreaCoversCell): ninguna
+	// celda queda crítica, así que no debe haber sugerencias.
+	svc := newCoverageSvc(
+		coverageBranch("caba", "CABA", "Buenos Aires", -34.60, -58.38),
+		coverageBranch("cordoba", "CORD", "Córdoba", -31.42, -64.18),
+		coverageBranch("mendoza", "MEND", "Mendoza", -32.89, -68.82),
+	)
+	svc.Refresh()
+
+	const simArea = 1.25e8
+
+	res := svc.Diagnose(simArea)
+	if len(res.SuggestedLocations) != 0 {
+		t.Fatalf("no se esperaban sugerencias con cobertura adecuada, dio %+v", res.SuggestedLocations)
 	}
 }
 

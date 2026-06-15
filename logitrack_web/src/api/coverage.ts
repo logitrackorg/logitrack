@@ -75,9 +75,23 @@ export interface SimulationDiagnosis {
   severity: GapSeverity;
 }
 
+/**
+ * Ubicación sugerida para una nueva sucursal, derivada de un fragmento del
+ * área Voronoi de una sucursal con gap crítico que el radio simulado no llega
+ * a cubrir (celda menos círculo de cobertura simulado).
+ */
+export interface SuggestedLocation {
+  lat: number;
+  lng: number;
+  branch_id: string;
+  branch_name: string;
+  gap_area_km2: number;
+}
+
 export interface SimulationResult {
   simulated_area_km2: number;
   cells: SimulationDiagnosis[];
+  suggested_locations: SuggestedLocation[];
 }
 
 export const coverageApi = {

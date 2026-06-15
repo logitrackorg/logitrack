@@ -36,6 +36,17 @@ const (
 	simCoverageCriticalPct = 50.0 // < 50%: gap crítico
 	simCoverageModeratePct = 85.0 // [50, 85): gap moderado
 	simCoverageAdequatePct = 90.0 // [85, 90): gap leve; >= 90: cobertura adecuada
+
+	// coverageSuggestionCircleVertices is the vertex count used to approximate
+	// the simulated coverage radius as a polygon for the DIFFERENCE operation
+	// against a "crítico" gap cell (Diagnose new-branch suggestions).
+	coverageSuggestionCircleVertices = 32
+
+	// coverageSuggestionMinFragmentAreaKm2 is the minimum area an uncovered
+	// fragment (cell minus simulated coverage circle) must have to be surfaced
+	// as a new-branch suggestion — filters out thin sliver fragments left over
+	// from country/cell-boundary clipping noise.
+	coverageSuggestionMinFragmentAreaKm2 = 50000.0
 )
 
 // coverageConfigProvider supplies the configurable coverage threshold. Both
@@ -330,21 +341,65 @@ func (s *CoverageService) store(d *model.CoverageDiagram) {
 
 // Diagnose evaluates a hypothetical new-branch coverage radius — expressed as
 // an area in km², chosen via the frontend simulator slider — against every
-// branch's real, post-clip Voronoi area: coveragePercentage = simulatedAreaKm2
-// / cell.AreaKm2 * 100. A low percentage means the simulated radius would only
-// cover a small fraction of the branch's assigned territory, surfaced as a
-// capacity gap (crítico/moderado/leve) independent of the admin-configured
+// branch's real, post-clip Voronoi area.
+//
+// The simulated radius is modelled as a circle centred on the branch site and
+// intersected with the cell's (already country-clipped) Voronoi polygon:
+// coveragePercentage = AreaIntersectada / cell.AreaKm2 * 100, where
+// AreaIntersectada is the portion of the simulated circle that actually falls
+// within this branch's jurisdiction. Using the raw circle area instead would
+// let the percentage exceed 100% whenever the circle spills over into a
+// neighbouring cell or the ocean — intersecting first guarantees
+// AreaIntersectada <= cell.AreaKm2.
+//
+// A low percentage means the simulated radius would only cover a small
+// fraction of the branch's assigned territory, surfaced as a capacity gap
+// (crítico/moderado/leve) independent of the admin-configured
 // MaxCoverageAreaKm2 threshold used by the main diagram.
 func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationResult {
 	d := s.Diagram()
 	cells := make([]model.SimulationDiagnosis, 0, len(d.Cells))
+	var suggestions []model.SuggestedLocation
+
+	// The circle is the same in every cell's site-centred projection (always
+	// centred on the origin with this radius), so build it once.
+	var circle polyclip.Polygon
+	if simulatedAreaKm2 > 0 {
+		radiusKm := math.Sqrt(simulatedAreaKm2 / math.Pi)
+		circle = toPolyclip(circlePolygon(radiusKm, coverageSuggestionCircleVertices))
+	}
+
 	for _, c := range d.Cells {
+		var intersectedAreaKm2 float64
+		var proj equirectProjector
+		var cellPoly polyclip.Polygon
+		haveGeometry := simulatedAreaKm2 > 0 && len(c.Polygon) > 0
+
+		if haveGeometry {
+			// Project centred on the branch's own site: minimises distortion
+			// for this cell's geometry regardless of where it sits in the
+			// country, and places the site — and therefore the simulated
+			// coverage circle — at the origin.
+			proj = newProjector(c.Site.Lat, c.Site.Lng)
+			cellPoly = projectRings(c.Polygon, proj)
+
+			intersection := fromPolyclip(cellPoly.Construct(polyclip.INTERSECTION, circle))
+			intersectedAreaKm2 = sumArea(intersection)
+		}
+
 		var pct float64
 		if c.AreaKm2 > 0 {
-			pct = (simulatedAreaKm2 / c.AreaKm2) * 100
+			pct = (intersectedAreaKm2 / c.AreaKm2) * 100
+			if pct > 100 {
+				// La intersección es geométricamente un subconjunto de la
+				// celda; un resultado > 100% solo puede venir del error de
+				// redondeo del recorte de polígonos (polyclip).
+				pct = 100
+				intersectedAreaKm2 = c.AreaKm2
+			}
 		}
 		isGap, severity := simulationSeverity(pct)
-		deficit := c.AreaKm2 - simulatedAreaKm2
+		deficit := c.AreaKm2 - intersectedAreaKm2
 		if deficit < 0 {
 			deficit = 0
 		}
@@ -357,6 +412,70 @@ func (s *CoverageService) Diagnose(simulatedAreaKm2 float64) model.SimulationRes
 			IsGap:              isGap,
 			Severity:           severity,
 		})
+		if haveGeometry && severity == model.GapSeverityCritico {
+			suggestions = append(suggestions, suggestLocationsFromDifference(c, proj, cellPoly, circle)...)
+		}
 	}
-	return model.SimulationResult{SimulatedAreaKm2: simulatedAreaKm2, Cells: cells}
+	return model.SimulationResult{
+		SimulatedAreaKm2:   simulatedAreaKm2,
+		Cells:              cells,
+		SuggestedLocations: suggestions,
+	}
+}
+
+// suggestLocationsFromDifference computes new-branch location suggestions for
+// a single "crítico" gap cell. It subtracts the simulated coverage circle
+// (already projected, centred on the branch site at the origin) from the
+// cell's Voronoi polygon via DIFFERENCE, and for every remaining fragment
+// large enough to be relevant, picks the vertex farthest from the branch site
+// — see farthestVertex for why.
+func suggestLocationsFromDifference(cell model.CoverageCell, proj equirectProjector, cellPoly, circle polyclip.Polygon) []model.SuggestedLocation {
+	remainder := fromPolyclip(cellPoly.Construct(polyclip.DIFFERENCE, circle))
+
+	var out []model.SuggestedLocation
+	for _, frag := range remainder {
+		area := frag.Area()
+		if area < coverageSuggestionMinFragmentAreaKm2 {
+			continue
+		}
+		out = append(out, model.SuggestedLocation{
+			LatLng:     proj.unproject(farthestVertex(frag)),
+			BranchID:   cell.BranchID,
+			BranchName: cell.BranchName,
+			GapAreaKm2: area,
+		})
+	}
+	return out
+}
+
+// farthestVertex returns the vertex of poly with the greatest Euclidean
+// distance from the origin. Callers project poly so that the reference point
+// (the branch site) sits at the origin.
+//
+// DIFFERENCE (Voronoi cell minus simulated coverage circle) typically leaves a
+// concave "crescent" fragment. Its area-weighted Centroid() can land outside
+// the fragment entirely — back inside the subtracted circle, i.e. inside the
+// zone already covered. The farthest vertex from the site is always a real
+// vertex of the fragment, sitting on its outer boundary: the point of the gap
+// most disconnected from the current network.
+func farthestVertex(poly geometry.Polygon) geometry.Point {
+	origin := geometry.Point{}
+	best := poly[0]
+	bestDist := geometry.Dist2(origin, best)
+	for _, v := range poly[1:] {
+		if d := geometry.Dist2(origin, v); d > bestDist {
+			bestDist = d
+			best = v
+		}
+	}
+	return best
+}
+
+// sumArea returns the total area of a set of polygon fragments.
+func sumArea(frags []geometry.Polygon) float64 {
+	var total float64
+	for _, f := range frags {
+		total += f.Area()
+	}
+	return total
 }

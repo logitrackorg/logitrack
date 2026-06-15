@@ -65,9 +65,23 @@ type SimulationDiagnosis struct {
 	Severity           string  `json:"severity"`
 }
 
+// SuggestedLocation is a recommended coordinate for a new branch, derived from
+// a fragment of an existing branch's Voronoi cell that the simulated coverage
+// radius would leave unserved (cell minus simulated coverage circle). Only
+// fragments large enough to be relevant are surfaced — see
+// coverageSuggestionMinFragmentAreaKm2 in internal/service/coverage.go.
+type SuggestedLocation struct {
+	LatLng
+	BranchID   string  `json:"branch_id"`   // cell whose uncovered fragment produced this suggestion
+	BranchName string  `json:"branch_name"`
+	GapAreaKm2 float64 `json:"gap_area_km2"` // area of the uncovered fragment
+}
+
 // SimulationResult is the response of CoverageService.Diagnose: the per-branch
-// diagnosis for a single simulated coverage area.
+// diagnosis for a single simulated coverage area, plus any new-branch location
+// suggestions derived from "crítico" gaps.
 type SimulationResult struct {
-	SimulatedAreaKm2 float64                `json:"simulated_area_km2"`
-	Cells            []SimulationDiagnosis  `json:"cells"`
+	SimulatedAreaKm2   float64              `json:"simulated_area_km2"`
+	Cells              []SimulationDiagnosis `json:"cells"`
+	SuggestedLocations []SuggestedLocation   `json:"suggested_locations"`
 }

@@ -1075,6 +1075,7 @@ export function CoberturaTab() {
             highlightedBranchId={highlighted}
             onSelectBranch={(id) => setHighlighted(id)}
             simulationAreaKm2={visualArea}
+            suggestedLocations={simResult?.suggested_locations}
           />
         </div>
       </Card>

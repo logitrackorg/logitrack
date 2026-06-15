@@ -3,6 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   type CoverageCell,
+  type SuggestedLocation,
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
@@ -20,6 +21,12 @@ interface VoronoiCoverageMapProps {
    * `null`/`0` = sin simulación activa.
    */
   simulationAreaKm2?: number | null;
+  /**
+   * Ubicaciones sugeridas para nuevas sucursales (gaps críticos detectados por
+   * el último diagnóstico del simulador). Se dibujan como marcadores
+   * distintivos con animación de pulso.
+   */
+  suggestedLocations?: SuggestedLocation[];
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -40,12 +47,14 @@ export function VoronoiCoverageMap({
   highlightedBranchId,
   onSelectBranch,
   simulationAreaKm2,
+  suggestedLocations,
 }: VoronoiCoverageMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const cellsLayer = useRef<L.LayerGroup | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
   const simLayer = useRef<L.LayerGroup | null>(null);
+  const suggestionsLayer = useRef<L.LayerGroup | null>(null);
   const onSelectRef = useRef(onSelectBranch);
   useEffect(() => {
     onSelectRef.current = onSelectBranch;
@@ -68,6 +77,7 @@ export function VoronoiCoverageMap({
     cellsLayer.current = L.layerGroup().addTo(map);
     markersLayer.current = L.layerGroup().addTo(map);
     simLayer.current = L.layerGroup().addTo(map);
+    suggestionsLayer.current = L.layerGroup().addTo(map);
 
     // Responsive: re-ajustar el tamaño del mapa cuando cambia el contenedor.
     const ro = new ResizeObserver(() => map.invalidateSize());
@@ -189,6 +199,31 @@ export function VoronoiCoverageMap({
       }).addTo(sLayer);
     });
   }, [cells, highlightedBranchId, simulationAreaKm2]);
+
+  // Ubicaciones sugeridas para nuevas sucursales: marcadores rojos con
+  // animación de pulso, derivados de los gaps críticos del último diagnóstico.
+  useEffect(() => {
+    const sgLayer = suggestionsLayer.current;
+    if (!sgLayer) return;
+
+    sgLayer.clearLayers();
+    if (!suggestedLocations || suggestedLocations.length === 0) return;
+
+    suggestedLocations.forEach((loc) => {
+      const icon = L.divIcon({
+        html: `<div class="relative w-7 h-7"><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-[rgba(239,68,68,0.25)] animate-[pulse-ring_2s_ease-out_infinite]"></div><div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-[#ef4444] border-2 border-white shadow-[0_1px_6px_rgba(0,0,0,0.4)] z-[2]"></div></div>`,
+        className: "",
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+      L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1000 })
+        .bindTooltip(
+          `<strong>Ubicación sugerida para nueva sucursal</strong><br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`,
+          { sticky: true }
+        )
+        .addTo(sgLayer);
+    });
+  }, [suggestedLocations]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

@@ -1,10 +1,13 @@
 package service
 
 import (
+	"math"
+
 	"github.com/ctessum/polyclip-go"
 	"github.com/paulmach/orb"
 
 	"github.com/logitrack/core/internal/geometry"
+	"github.com/logitrack/core/internal/model"
 )
 
 // toPolyclip wraps a single ring (km-space) as a one-contour polyclip.Polygon.
@@ -32,6 +35,39 @@ func fromPolyclip(p polyclip.Polygon) []geometry.Polygon {
 		out = append(out, ring)
 	}
 	return out
+}
+
+// circlePolygon returns a regular polygon with the given number of vertices
+// approximating a circle of radiusKm centred at the origin, in the planar km
+// frame. Used to model a simulated branch coverage radius for the DIFFERENCE
+// operation against a Voronoi cell.
+func circlePolygon(radiusKm float64, vertices int) geometry.Polygon {
+	poly := make(geometry.Polygon, vertices)
+	for i := 0; i < vertices; i++ {
+		theta := 2 * math.Pi * float64(i) / float64(vertices)
+		poly[i] = geometry.Point{
+			X: radiusKm * math.Cos(theta),
+			Y: radiusKm * math.Sin(theta),
+		}
+	}
+	return poly
+}
+
+// projectRings projects geographic rings (lat/lng) into the planar km frame
+// defined by proj, producing one polyclip contour per ring. Used to bring a
+// CoverageCell's already country-clipped geometry back into km space for
+// boolean operations against the simulated coverage circle.
+func projectRings(rings [][]model.LatLng, proj equirectProjector) polyclip.Polygon {
+	var poly polyclip.Polygon
+	for _, ring := range rings {
+		c := make(polyclip.Contour, len(ring))
+		for i, v := range ring {
+			p := proj.project(v.Lat, v.Lng)
+			c[i] = polyclip.Point{X: p.X, Y: p.Y}
+		}
+		poly = append(poly, c)
+	}
+	return poly
 }
 
 // projectCountry projects a geographic MultiPolygon (orb, [lng,lat] degrees)
