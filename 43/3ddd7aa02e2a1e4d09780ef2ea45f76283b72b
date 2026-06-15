@@ -1,0 +1,78 @@
+logitrack_core/internal/model/domain_event.go
+  s_644c53d33327c6::t_fa0c1768eac762 82-85
+logitrack_core/internal/service/shipment.go
+  s_644c53d33327c6::t_0791df436daebb 1890,1892-1901,1909-1911,1914-1917
+  s_644c53d33327c6::t_c81703284eb7a1 998-1013,1024-1026,1029-1031
+  s_644c53d33327c6::t_57da2563a3156a 1867,1886
+  s_644c53d33327c6::t_24bd3ead03ea86 1925-1944
+  s_644c53d33327c6::t_1090d2c858b9b2 1810-1815,1825
+  s_644c53d33327c6::t_7534455394524e 5,9-10
+logitrack_core/internal/repository/shipment_es.go
+  s_644c53d33327c6::t_c9ae9b15a83bbb 112-114
+  s_644c53d33327c6::t_b123a55b66be86 354,363-369
+logitrack_core/cmd/server/main.go
+  s_644c53d33327c6::t_c032932c13e133 627-629
+logitrack_web/src/api/shipments.ts
+  s_644c53d33327c6::t_c87281f21e3514 292,294-304,306-307
+  s_644c53d33327c6::t_25c92f2e71053c 263-264
+  s_644c53d33327c6::t_acbb8f28778e8c 158-160
+logitrack_web/src/components/ui/event-timeline.tsx
+  s_644c53d33327c6::t_a0aa50459131cb 235-237
+  s_644c53d33327c6::t_4900db35a944b4 1,3,6
+  s_644c53d33327c6::t_ae38ace9b505bf 84-139
+logitrack_core/internal/handler/delivery_photo.go
+  s_644c53d33327c6::t_d04a8ad3aac41f 1-58
+logitrack_core/internal/service/routing.go
+  s_644c53d33327c6::t_0597b25133f26d 1243,1267
+  s_644c53d33327c6::t_e9097fc827abb3 3860,3868-3873
+  s_644c53d33327c6::t_6da679e98bd92c 203
+logitrack_core/internal/handler/shipment_deliver.go
+  s_644c53d33327c6::t_dec138b1f79102 4,6-7,15,18-19,24-65,70-72,75-77
+logitrack_web/src/pages/DriverRoute.tsx
+  s_644c53d33327c6::t_9cf0f928e4350d 638-646
+  s_644c53d33327c6::t_9322cf1522a59a 653-666,669,685-686
+  s_644c53d33327c6::t_e2626ddf1cfc4c 7
+  s_644c53d33327c6::t_858633e206bb9f 81-82
+  s_644c53d33327c6::t_7dc637f128eb2d 207,221
+  s_644c53d33327c6::t_f102b6e83f2961 157
+  s_644c53d33327c6::t_588ad4dafd753c 1020-1021,1039-1040,1044-1045,1055-1061,1069
+  s_644c53d33327c6::t_a418de3b9a5791 23
+  s_644c53d33327c6::t_6681629da4ba8c 1079-1092,1101-1104
+  s_644c53d33327c6::t_8cda475666174a 1093-1100
+logitrack_core/data/checkins.json
+  s_644c53d33327c6::t_6e18131f9797f8 599-663
+.gitignore
+  s_644c53d33327c6::t_cc646bec1aae1b 25
+logitrack_web/src/pages/DriverShipmentDetail.tsx
+  s_644c53d33327c6::t_0e2eebcdf08802 8,20
+  s_644c53d33327c6::t_d182b596ddd628 401,407-409,411-421
+  s_644c53d33327c6::t_d60dd9151e359d 375-381
+  s_644c53d33327c6::t_e847537a2dedaf 59-60
+  s_644c53d33327c6::t_b11f90f0c5829a 465-467,476-478,481-482,490-501,509-523,532-535,561
+  s_644c53d33327c6::t_3bae8069349c58 78-79,83-99,102
+  s_644c53d33327c6::t_609b6f4fdc851f 524-531
+logitrack_core/internal/model/event.go
+  s_644c53d33327c6::t_bb932cf1f43b88 16-24
+  s_644c53d33327c6::t_80a8c73a68e4c4 46-48,59-61
+logitrack_core/internal/repository/shipment.go
+  s_644c53d33327c6::t_dbb1de09164c7e 105-108
+logitrack_web/src/components/ui/CameraCapture.tsx
+  s_644c53d33327c6::t_6aea75aa2bf757 44,90-134,137,139-149,159-164,167-178
+  s_644c53d33327c6::t_ef92edca0db1fe 1-43,45-89,135-136,138,150-158,165-166,179-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "433ddd7aa02e2a1e4d09780ef2ea45f76283b72b",
+  "prompts": {},
+  "sessions": {
+    "s_644c53d33327c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a5af89a-040f-4d6c-adeb-df6f8b47500e",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
