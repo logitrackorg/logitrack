@@ -9,6 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/planar"
+
+	"github.com/logitrack/core/internal/geo"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
 )
@@ -119,10 +123,15 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, out
 	// village/hamlet/isolated_dwelling are excluded at the query level so
 	// Overpass never returns tiny settlements that would otherwise win on
 	// raw proximity to the gap centroid (see candidateScore).
+	//
+	// area["ISO3166-1"="AR"]->.ar restricts every node search to Argentine
+	// territory, so border cities of neighboring countries (Chile, Brazil,
+	// etc.) are never downloaded in the first place — this is the first of
+	// two barriers (see bestSnapCandidate for the second, geometric one).
 	var q strings.Builder
-	q.WriteString("[out:json][timeout:25];(")
+	q.WriteString(`[out:json][timeout:25];area["ISO3166-1"="AR"]->.ar;(`)
 	for _, p := range points {
-		fmt.Fprintf(&q, `node["place"~"^(city|town)$"](around:%d,%f,%f);`, radiusMeters, p.Lat, p.Lng)
+		fmt.Fprintf(&q, `node["place"~"^(city|town)$"](around:%d,%f,%f)(area.ar);`, radiusMeters, p.Lat, p.Lng)
 	}
 	totalLimit := snapToCityResultsPerPoint * len(points)
 	if totalLimit > snapToCityMaxTotalResults {
@@ -217,10 +226,28 @@ func candidateScore(el overpassElement, distanceKm float64) float64 {
 	return weight / (1 + distanceKm/placeScoreDistanceDivisorKm)
 }
 
+// argentinaBorderToleranceDeg absorbs floating-point/simplified-geometry
+// false negatives for points exactly on (or just outside) the simplified
+// national contour — ~0.05° ≈ 5.5km. Same tolerance used in coverage_test.go.
+const argentinaBorderToleranceDeg = 0.05
+
+// isWithinArgentina is the second barrier: a Point-in-Polygon check against
+// the national contour (geo.ArgentinaContour), independent of the Overpass
+// area filter in snapChunk. A candidate outside Argentina's land borders is
+// discarded regardless of population or score.
+func isWithinArgentina(el overpassElement) bool {
+	pt := orb.Point{el.Lon, el.Lat}
+	contour := geo.ArgentinaContour()
+	if planar.MultiPolygonContains(contour, pt) {
+		return true
+	}
+	return planar.DistanceFrom(contour, pt) <= argentinaBorderToleranceDeg
+}
+
 // bestSnapCandidate picks the named populated place with the highest
-// candidateScore among those within radiusKm of the origin point.
-// Candidates without a "name" tag (not usable as a CityName) or beyond
-// radiusKm are skipped.
+// candidateScore among those within radiusKm of the origin point and inside
+// Argentina. Candidates without a "name" tag (not usable as a CityName),
+// beyond radiusKm, or outside the national contour are skipped.
 func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusKm float64) (overpassElement, bool) {
 	var best overpassElement
 	bestScore := math.Inf(-1)
@@ -232,6 +259,9 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 		}
 		dist := ml.HaversineKm(originLat, originLng, el.Lat, el.Lon)
 		if dist > radiusKm {
+			continue
+		}
+		if !isWithinArgentina(el) {
 			continue
 		}
 		score := candidateScore(el, dist)

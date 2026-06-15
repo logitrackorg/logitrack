@@ -122,6 +122,46 @@ func TestBestSnapCandidate_NoneFound(t *testing.T) {
 	}
 }
 
+// TestBestSnapCandidate_DiscardsOutsideArgentina verifies the second barrier:
+// a Point-in-Polygon check against geo.ArgentinaContour discards candidates
+// outside Argentina's land borders, even when they would otherwise win on
+// score (place=city + large population) against a lower-scoring candidate
+// genuinely inside Argentina.
+func TestBestSnapCandidate_DiscardsOutsideArgentina(t *testing.T) {
+	originLat, originLng := -34.6, -58.4 // Ciudad de Buenos Aires
+
+	outsideArgentina := overpassElement{
+		Lat: -15.78, Lon: -47.93, // Brasília, Brasil
+		Tags: map[string]string{"place": "city", "name": "Brasilia", "population": "3000000"},
+	}
+	insideArgentina := overpassElement{
+		Lat: -34.92, Lon: -57.95, // La Plata, Argentina
+		Tags: map[string]string{"place": "town", "name": "La Plata"},
+	}
+
+	best, found := bestSnapCandidate([]overpassElement{outsideArgentina, insideArgentina}, originLat, originLng, 5000)
+	if !found {
+		t.Fatal("expected a candidate to be found")
+	}
+	if best.Tags["name"] != "La Plata" {
+		t.Errorf("expected the candidate outside Argentina to be discarded regardless of score, got %q", best.Tags["name"])
+	}
+}
+
+// TestBestSnapCandidate_NoneFound_AllOutsideArgentina verifies found=false
+// when every candidate within radiusKm is outside Argentina's land borders.
+func TestBestSnapCandidate_NoneFound_AllOutsideArgentina(t *testing.T) {
+	originLat, originLng := -34.6, -58.4 // Ciudad de Buenos Aires
+
+	outsideArgentina := []overpassElement{
+		{Lat: -15.78, Lon: -47.93, Tags: map[string]string{"place": "city", "name": "Brasilia"}},
+	}
+
+	if _, found := bestSnapCandidate(outsideArgentina, originLat, originLng, 5000); found {
+		t.Error("expected found=false when every candidate is outside Argentina")
+	}
+}
+
 // TestCandidateScore_PopulationIncreasesScore verifies that, for the same
 // place type and distance, a higher reported population increases the score.
 func TestCandidateScore_PopulationIncreasesScore(t *testing.T) {
@@ -281,6 +321,32 @@ func TestSnapToCities_QueryFiltersByPlaceType(t *testing.T) {
 		if strings.Contains(capturedQuery, excluded) {
 			t.Errorf("expected query to exclude place=%s, query was: %s", excluded, capturedQuery)
 		}
+	}
+}
+
+// TestSnapToCities_QueryFiltersByCountryArea verifies the Overpass query
+// restricts node search to Argentine territory via
+// area["ISO3166-1"="AR"]->.ar and (area.ar) on each node clause — the first
+// of two barriers against returning cities from neighboring countries.
+func TestSnapToCities_QueryFiltersByCountryArea(t *testing.T) {
+	var capturedQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.Query().Get("data")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(overpassResponse{})
+	}))
+	defer server.Close()
+
+	svc := NewCoverageService(nil, nil)
+	svc.httpClient = &http.Client{Transport: redirectingTransport{base: server.URL}}
+
+	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 50)
+
+	if !strings.Contains(capturedQuery, `area["ISO3166-1"="AR"]->.ar`) {
+		t.Fatalf("expected query to define an Argentina area filter, query was: %s", capturedQuery)
+	}
+	if !strings.Contains(capturedQuery, "(area.ar)") {
+		t.Fatalf("expected node search to be restricted by (area.ar), query was: %s", capturedQuery)
 	}
 }
 
