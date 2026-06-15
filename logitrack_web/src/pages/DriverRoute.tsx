@@ -553,9 +553,9 @@ export function DriverRoute() {
         )}
       </div>
 
-      {/* Vista Mapa — fuera del wrapper para que tome ancho completo */}
+      {/* Vista Mapa — padding y max-width consistentes con la lista */}
       {viewMode === 'map' && (
-        <>
+        <div className="px-4 max-w-2xl mx-auto w-full flex-1 flex flex-col">
           <MapView
             waypoints={waypoints}
             origin={origin}
@@ -573,7 +573,7 @@ export function DriverRoute() {
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />
           <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
-        </>
+        </div>
       )}
 
       {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
