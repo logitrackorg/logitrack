@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/service"
 )
 
@@ -67,4 +69,35 @@ func (h *CoverageHandler) Diagnose(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, h.svc.Diagnose(areaKm2))
+}
+
+// SnapToCity resolves a batch of geometric suggested-location points (from a
+// previous Diagnose) to nearby real populated places via OSM Overpass, for
+// the coverage simulator's "Aterrizar sugerencias en ciudades reales" action.
+// Results preserve request order so the frontend can merge by index. Lookups
+// run concurrently since each is an independent external HTTP call.
+func (h *CoverageHandler) SnapToCity(c *gin.Context) {
+	var req model.SnapToCityRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Points) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "points es requerido y no puede estar vacío"})
+		return
+	}
+
+	results := make([]model.SnappedCity, len(req.Points))
+	var wg sync.WaitGroup
+	for i, p := range req.Points {
+		wg.Add(1)
+		go func(i int, p model.LatLng) {
+			defer wg.Done()
+			snapped, err := h.svc.SnapToCity(p.Lat, p.Lng, req.RadiusKm)
+			if err != nil {
+				results[i] = model.SnappedCity{Found: false}
+				return
+			}
+			results[i] = snapped
+		}(i, p)
+	}
+	wg.Wait()
+
+	c.JSON(http.StatusOK, model.SnapToCityResponse{Results: results})
 }

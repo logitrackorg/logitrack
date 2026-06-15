@@ -23,6 +23,7 @@ import {
   type CoverageDiagram,
   type CoverageCell,
   type SimulationResult,
+  type SnappedCity,
   GAP_STYLE,
 } from "../../api/coverage";
 import { VoronoiCoverageMap } from "../../components/VoronoiCoverageMap";
@@ -975,6 +976,13 @@ export function CoberturaTab() {
   // ventana (incluyendo el topbar) para aprovechar el espacio al analizar el mapa.
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // "Aterrizar sugerencias en ciudades reales": ciudades reales (OSM Overpass)
+  // resueltas para simResult.suggested_locations, en el mismo orden. Se
+  // resetea cada vez que cambia el diagnóstico simulado.
+  const [snappedCities, setSnappedCities] = useState<SnappedCity[] | null>(null);
+  const [snapLoading, setSnapLoading] = useState(false);
+  const [snapError, setSnapError] = useState<string | null>(null);
+
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -990,11 +998,29 @@ export function CoberturaTab() {
   // Diagnóstico: compara el área simulada contra el área Voronoi real (post-recorte) de cada sucursal.
   const handleConfirmSimulation = useCallback((area: number) => {
     setSimError(null);
+    setSnappedCities(null);
+    setSnapError(null);
     coverageApi
       .diagnose(area)
       .then(setSimResult)
       .catch(() => setSimError("No se pudo calcular el diagnóstico en este momento."));
   }, []);
+
+  const handleSnapToCity = useCallback(() => {
+    if (!simResult || simResult.suggested_locations.length === 0) return;
+    setSnapLoading(true);
+    setSnapError(null);
+    // Radio de búsqueda = radio de la zona de cobertura simulada (mismo
+    // círculo gris punteado dibujado en el mapa), para que una ciudad
+    // importante dentro de esa zona (p.ej. Río Gallegos, Salta) sea
+    // detectada como ubicación posible.
+    const radiusKm = Math.sqrt(simResult.simulated_area_km2 / Math.PI);
+    coverageApi
+      .snapToCity(simResult.suggested_locations.map((l) => ({ lat: l.lat, lng: l.lng })), radiusKm)
+      .then(setSnappedCities)
+      .catch(() => setSnapError("No se pudo aterrizar las sugerencias en ciudades reales en este momento."))
+      .finally(() => setSnapLoading(false));
+  }, [simResult]);
 
   const gaps = useMemo<CoverageCell[]>(() => {
     if (!diagram) return [];
@@ -1076,6 +1102,7 @@ export function CoberturaTab() {
               onSelectBranch={(id) => setHighlighted(id)}
               simulationAreaKm2={visualArea}
               suggestedLocations={simResult?.suggested_locations}
+              snappedCities={snappedCities}
             />
           </div>
         </Card>
@@ -1096,6 +1123,29 @@ export function CoberturaTab() {
             )}
             {simError && (
               <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{simError}</p>
+            )}
+            {simResult && simResult.suggested_locations.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-gray-700">
+                <button
+                  onClick={handleSnapToCity}
+                  disabled={snapLoading}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-gray-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-gray-700/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${snapLoading ? "animate-spin" : ""}`} />
+                  {snapLoading
+                    ? "Buscando ciudades cercanas…"
+                    : "Aterrizar sugerencias en ciudades reales"}
+                </button>
+                {snapError && (
+                  <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{snapError}</p>
+                )}
+                {snappedCities && !snapError && (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    {snappedCities.filter((c) => c.found).length} de {snappedCities.length} sugerencias
+                    aterrizadas en ciudades reales cercanas.
+                  </p>
+                )}
+              </div>
             )}
           </Card>
 

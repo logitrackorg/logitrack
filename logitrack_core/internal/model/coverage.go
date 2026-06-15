@@ -85,3 +85,32 @@ type SimulationResult struct {
 	Cells              []SimulationDiagnosis `json:"cells"`
 	SuggestedLocations []SuggestedLocation   `json:"suggested_locations"`
 }
+
+// SnappedCity is the result of "Snap to City": resolving a geometric
+// coverage-gap point to a nearby real populated place (OSM Overpass), so
+// new-branch suggestions land on viable locations instead of empty terrain.
+// Found is false when no populated place was found within the search radius —
+// callers should keep the original geometric point in that case.
+type SnappedCity struct {
+	LatLng
+	Name  string `json:"name"`
+	Found bool   `json:"found"`
+}
+
+// SnapToCityRequest is the body of POST /coverage/snap-to-city: the geometric
+// points (typically SuggestedLocation coordinates) to resolve, in order.
+type SnapToCityRequest struct {
+	Points []LatLng `json:"points"`
+
+	// RadiusKm is the search radius around each point, in km — typically the
+	// simulated coverage circle's radius, so a populated place anywhere within
+	// the would-be branch's coverage area can be snapped to. <= 0 falls back
+	// to a default radius.
+	RadiusKm float64 `json:"radius_km"`
+}
+
+// SnapToCityResponse pairs each input point with its SnappedCity result,
+// preserving the request order so the frontend can merge by index.
+type SnapToCityResponse struct {
+	Results []SnappedCity `json:"results"`
+}

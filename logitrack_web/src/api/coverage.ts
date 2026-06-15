@@ -94,6 +94,24 @@ export interface SimulationResult {
   suggested_locations: SuggestedLocation[];
 }
 
+/**
+ * Resultado de "Snap to City" para un punto sugerido: lugar poblado real más
+ * cercano (OSM Overpass) que mejor balancea cercanía e importancia
+ * (city > town > village). `found = false` cuando no se encontró ningún
+ * lugar poblado dentro del radio de búsqueda — el punto geométrico original
+ * debe conservarse en ese caso.
+ */
+export interface SnappedCity {
+  lat: number;
+  lng: number;
+  name: string;
+  found: boolean;
+}
+
+export interface SnapToCityResponse {
+  results: SnappedCity[];
+}
+
 export const coverageApi = {
   getDiagram: () =>
     api.get<CoverageDiagram>("/coverage/diagram").then((r) => r.data),
@@ -113,6 +131,18 @@ export const coverageApi = {
     api
       .get<SimulationResult>("/coverage/diagnose", { params: { area_km2: areaKm2 } })
       .then((r) => r.data),
+
+  /**
+   * "Aterrizar sugerencias en ciudades reales": resuelve cada punto
+   * geométrico sugerido a la ciudad/pueblo real más relevante dentro de
+   * `radiusKm` (la zona de cobertura simulada), siguiendo la jerarquía
+   * city > town > village > hamlet. Devuelve un resultado por punto, en el
+   * mismo orden.
+   */
+  snapToCity: (points: LatLng[], radiusKm: number) =>
+    api
+      .post<SnapToCityResponse>("/coverage/snap-to-city", { points, radius_km: radiusKm })
+      .then((r) => r.data.results),
 };
 
 // Paleta por severidad de gap (consistente con StatusBadge/PriorityBadge del sistema).

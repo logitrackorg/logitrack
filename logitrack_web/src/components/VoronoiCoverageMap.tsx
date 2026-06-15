@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import {
   type CoverageCell,
   type SuggestedLocation,
+  type SnappedCity,
   GAP_STYLE,
   COVERED_STYLE,
 } from "../api/coverage";
@@ -28,6 +29,13 @@ interface VoronoiCoverageMapProps {
    * que el simulador.
    */
   suggestedLocations?: SuggestedLocation[];
+  /**
+   * "Aterrizar sugerencias en ciudades reales": resultado de Snap to City para
+   * cada entrada de `suggestedLocations`, en el mismo orden (mismo largo). Las
+   * entradas con `found = true` mueven el marcador y su círculo a la
+   * coordenada real (animado vía transición CSS) y actualizan el tooltip.
+   */
+  snappedCities?: SnappedCity[] | null;
 }
 
 const FACTORY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/></svg>`;
@@ -49,6 +57,7 @@ export function VoronoiCoverageMap({
   onSelectBranch,
   simulationAreaKm2,
   suggestedLocations,
+  snappedCities,
 }: VoronoiCoverageMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -56,6 +65,13 @@ export function VoronoiCoverageMap({
   const markersLayer = useRef<L.LayerGroup | null>(null);
   const simLayer = useRef<L.LayerGroup | null>(null);
   const suggestionsLayer = useRef<L.LayerGroup | null>(null);
+  // Marcadores/círculos de sugerencias geométricas, en el mismo orden que
+  // `suggestedLocations`, para que el efecto de Snap to City pueda moverlos
+  // (setLatLng anima vía la transición CSS de .coverage-suggestion-marker) y
+  // actualizar su tooltip sin reconstruir toda la capa.
+  const suggestionMarkersRef = useRef<
+    { marker: L.Marker; circle: L.Circle | null; loc: SuggestedLocation }[]
+  >([]);
   const onSelectRef = useRef(onSelectBranch);
   useEffect(() => {
     onSelectRef.current = onSelectBranch;
@@ -204,12 +220,15 @@ export function VoronoiCoverageMap({
   // Ubicaciones sugeridas para nuevas sucursales: ícono de sucursal "apagado"
   // (mismo ícono que las sucursales reales, en escala de grises y con opacidad
   // reducida) más un círculo gris punteado con el mismo radio del simulador,
-  // derivados de los gaps críticos del último diagnóstico.
+  // derivados de los gaps críticos del último diagnóstico. Se guarda cada
+  // marcador/círculo en suggestionMarkersRef para que el efecto de Snap to
+  // City pueda moverlos sin reconstruir la capa.
   useEffect(() => {
     const sgLayer = suggestionsLayer.current;
     if (!sgLayer) return;
 
     sgLayer.clearLayers();
+    suggestionMarkersRef.current = [];
     if (!suggestedLocations || suggestedLocations.length === 0) return;
 
     const radiusMeters =
@@ -218,8 +237,9 @@ export function VoronoiCoverageMap({
         : null;
 
     suggestedLocations.forEach((loc) => {
+      let circle: L.Circle | null = null;
       if (radiusMeters) {
-        L.circle([loc.lat, loc.lng], {
+        circle = L.circle([loc.lat, loc.lng], {
           radius: radiusMeters,
           color: "#808080",
           weight: 2,
@@ -231,18 +251,40 @@ export function VoronoiCoverageMap({
 
       const icon = L.divIcon({
         html: `<div class="coverage-suggestion-icon" style="width:28px;height:28px;border-radius:50%;background:#1e3a5f;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center">${FACTORY_SVG}</div>`,
-        className: "",
+        className: "coverage-suggestion-marker",
         iconSize: [28, 28],
         iconAnchor: [14, 14],
       });
-      L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1000 })
+      const marker = L.marker([loc.lat, loc.lng], { icon, zIndexOffset: 1000 })
         .bindTooltip(
           `<strong>Ubicación sugerida para nueva sucursal</strong><br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`,
           { sticky: true }
         )
         .addTo(sgLayer);
+
+      suggestionMarkersRef.current.push({ marker, circle, loc });
     });
   }, [suggestedLocations, simulationAreaKm2]);
+
+  // "Aterrizar sugerencias en ciudades reales": mueve cada marcador (y su
+  // círculo, si lo tiene) a la coordenada real devuelta por Snap to City y
+  // actualiza el tooltip. setLatLng sobre el marcador existente anima la
+  // transición vía la clase CSS .coverage-suggestion-marker (transform).
+  useEffect(() => {
+    if (!snappedCities || snappedCities.length === 0) return;
+
+    suggestionMarkersRef.current.forEach(({ marker, circle, loc }, i) => {
+      const snapped = snappedCities[i];
+      if (!snapped || !snapped.found) return;
+
+      const latLng: L.LatLngTuple = [snapped.lat, snapped.lng];
+      marker.setLatLng(latLng);
+      circle?.setLatLng(latLng);
+      marker.setTooltipContent(
+        `<strong>Sugerencia real: ${snapped.name}</strong> - Cerca del centro de déficit<br/>Cubre zona sin cobertura de ${loc.branch_name}<br/>Área sin cubrir: ${formatKm2(loc.gap_area_km2)}`
+      );
+    });
+  }, [snappedCities]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
