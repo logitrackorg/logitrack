@@ -480,7 +480,7 @@ export function MapView({
 
       {/* Simulation controls */}
       {isSimulating && (
-        <div className="absolute top-3 left-3 right-3 z-[1100] bg-[var(--bg-card)] rounded-xl px-3 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.12)] border border-amber-200 dark:border-amber-500/20">
+        <div className="absolute top-3 left-3 right-3 z-[900] bg-[var(--bg-card)] rounded-xl px-3 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.12)] border border-amber-200 dark:border-amber-500/20">
           {/* Header: label + speed */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -544,7 +544,7 @@ export function MapView({
       {/* Recenter / follow button */}
       {userLocation && (
         <button
-          className={`absolute right-3 bottom-28 z-[1000] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
+          className={`absolute right-3 bottom-28 z-[900] w-9 h-9 rounded-full border-none flex items-center justify-center cursor-pointer transition-colors duration-150 ${
             followMode
               ? "bg-[var(--brand)] text-white shadow-[0_2px_12px_rgba(37,99,235,0.4)] hover:bg-[var(--brand)]"
               : "bg-[var(--bg-card)] text-[var(--text-heading)] shadow-[0_2px_12px_rgba(0,0,0,0.15)] hover:bg-[var(--bg-inset)]"
@@ -565,7 +565,7 @@ export function MapView({
       )}
 
       {/* Info panel — compacto */}
-      <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-[1000]">
+      <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-[900]">
         <div className="flex items-center gap-2 bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
           <Package className="w-3.5 h-3.5 text-slate-500 dark:text-[var(--text-secondary)] shrink-0" />
           <div className="min-w-0">
