@@ -214,7 +214,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   // ── Paso de permisos (BUG-46) — bloquea el test hasta que se concedan ──────
   if (step === "permissions") {
     return (
-      <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+      <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
         <div className="max-w-sm w-full text-center">
           {permChecking ? (
             <>
@@ -234,11 +234,11 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               <p className="text-sm text-slate-300 leading-relaxed mb-5">{permError}</p>
 
               <div className="flex flex-col gap-2 mb-6 text-left">
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-[var(--border)]">
                   <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
                   <span className="text-xs text-slate-300">Ubicación (GPS) — seguimiento de ruta</span>
                 </div>
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-[var(--border)]">
                   <Mic className="w-4 h-4 text-blue-400 shrink-0" />
                   <span className="text-xs text-slate-300">Micrófono — prueba de voz del test</span>
                 </div>
@@ -270,7 +270,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
   const currentLevel = KSS_LEVELS[kss - 1];
 
   return (
-    <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-[3000] bg-[var(--sidebar-bg)]/95 backdrop-blur-sm flex flex-col">
 
       {/* ── Toast: check-in saltado + conteo de misfires ────────────────── */}
       {showSkipToast && (
@@ -362,7 +362,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               )}
             </div>
           ) : (
-            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700">
+            <div className="mb-6 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-[var(--border)]">
               <Moon className="w-4 h-4 text-blue-400 shrink-0" />
               <p className="text-xs text-slate-400 leading-snug">
                 Horas de sueño ya registradas para este día logístico.
@@ -376,13 +376,13 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                 Escala de somnolencia KSS
               </label>
-              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 ${band.cls}`}>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 border border-[var(--border)] ${band.cls}`}>
                 {band.text}
               </span>
             </div>
 
             {/* Tarjeta del nivel actual */}
-            <div className="mb-5 px-4 py-4 rounded-xl bg-slate-800 border border-slate-700">
+            <div className="mb-5 px-4 py-4 rounded-xl bg-slate-800 border border-[var(--border)]">
               <div className="flex items-baseline gap-3 mb-3">
                 <span
                   className="text-4xl font-black tabular-nums transition-colors duration-150"
@@ -460,8 +460,8 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       {/* ── Modal de consentimiento informado (Ley 25.326 art. 6) ──────────── */}
       {showInfo && (
         <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[#0d1f38] border border-slate-700 shadow-2xl flex flex-col max-h-[90dvh]">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-700 shrink-0">
+          <div className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-[var(--sidebar-bg)] border border-[var(--border)] shadow-2xl flex flex-col max-h-[90dvh]">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[var(--border)] shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0">
                   <Shield className="w-4 h-4" />
@@ -515,7 +515,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-slate-700 shrink-0">
+            <div className="px-5 py-4 border-t border-[var(--border)] shrink-0">
               <Button
                 onClick={() => setShowInfo(false)}
                 className="w-full h-10 rounded-xl font-bold"
@@ -530,7 +530,7 @@ export function KssCheckIn({ driverId, onDone, misfireCount = 0, requiresSleepDa
       {/* ── Modal de confirmación de salto ─────────────────────────────────── */}
       {showSkipConfirm && (
         <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-[#0f2744] border border-slate-600 p-6 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--sidebar-bg)] border border-[var(--border)] p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />

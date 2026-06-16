@@ -37,7 +37,7 @@ export function BottomSheet({ open, onClose, title, description, children, class
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative w-full sm:max-w-md bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-slate-200 dark:border-gray-700",
+          "relative w-full sm:max-w-md bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl border-t sm:border border-[var(--border)]",
           "max-h-[92vh] overflow-y-auto",
           "pb-[env(safe-area-inset-bottom,0px)]",
           "animate-in slide-in-from-bottom-4 fade-in duration-200",

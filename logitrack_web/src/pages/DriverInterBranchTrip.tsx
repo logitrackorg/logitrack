@@ -1155,7 +1155,7 @@ function QRModal({
     >
       {/* Card — click dentro no cierra */}
       <div
-        className="relative w-full sm:max-w-sm bg-[var(--bg-card)] rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
+        className="relative w-full sm:max-w-sm bg-[var(--bg-card)] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle / Header */}
