@@ -134,7 +134,7 @@ export function ChatbotWidget() {
             `¿Querés responderlo ahora?`,
             [
               { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
-              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+              { label: '⏭️ Responder después', value: 'skip', action: 'restart' as const },
             ]
           );
         } else {
@@ -219,7 +219,7 @@ export function ChatbotWidget() {
             `¿Querés responderlo ahora?`,
             [
               { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
-              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+              { label: '⏭️ Responder después', value: 'skip', action: 'restart' as const },
             ]
           );
         } else {
@@ -320,7 +320,7 @@ export function ChatbotWidget() {
           '¿Cómo ingresás al sistema?',
           [
             { label: '📦 Soy el destinatario', value: 'recipient', action: 'as_recipient' },
-            { label: '🏢 Soy el remitente',    value: 'sender',    action: 'as_sender'    },
+            { label: '🏢 Soy el remitente', value: 'sender', action: 'as_sender' },
           ]
         );
       } else if (awaitingDni) {
@@ -595,12 +595,12 @@ export function ChatbotWidget() {
           addBotMessage(
             '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?',
             [
-              { label: '📦 Daño / Faltante',       value: 'damage',        action: 'select_claim_type' as const },
-              { label: '🕐 Demora en entrega',      value: 'delay',         action: 'select_claim_type' as const },
-              { label: '🚫 No lo recibí',           value: 'not_delivered', action: 'select_claim_type' as const },
-              { label: '😡 Maltrato del personal',  value: 'bad_treatment', action: 'select_claim_type' as const },
-              { label: '📝 Datos incorrectos',      value: 'wrong_data',    action: 'select_claim_type' as const },
-              { label: '❓ Otro',                   value: 'other',         action: 'select_claim_type' as const },
+              { label: '📦 Daño / Faltante', value: 'damage', action: 'select_claim_type' as const },
+              { label: '🕐 Demora en entrega', value: 'delay', action: 'select_claim_type' as const },
+              { label: '🚫 No lo recibí', value: 'not_delivered', action: 'select_claim_type' as const },
+              { label: '😡 Maltrato del personal', value: 'bad_treatment', action: 'select_claim_type' as const },
+              { label: '📝 Datos incorrectos', value: 'wrong_data', action: 'select_claim_type' as const },
+              { label: '❓ Otro', value: 'other', action: 'select_claim_type' as const },
             ]
           );
           setState('authenticated');
@@ -615,10 +615,10 @@ export function ChatbotWidget() {
             addBotMessage(
               '¿Qué tipo de daño o faltante?  (podés elegir más de uno)',
               [
-                { label: '📦 Producto dañado',    value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
-                { label: '📉 Falta mercadería',   value: 'missing_products',  action: 'toggle_damage_subtype' as const },
-                { label: '📫 Embalaje dañado',    value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
-                { label: '✅ Listo, continuar',   value: 'done',              action: 'confirm_damage_subtypes' as const },
+                { label: '📦 Producto dañado', value: 'product_damaged', action: 'toggle_damage_subtype' as const },
+                { label: '📉 Falta mercadería', value: 'missing_products', action: 'toggle_damage_subtype' as const },
+                { label: '📫 Embalaje dañado', value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+                { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
               ]
             );
           } else {
@@ -644,10 +644,10 @@ export function ChatbotWidget() {
               ? '¿Qué tipo de daño o faltante? (podés elegir más de uno)'
               : `Seleccionados: ${newSubtypes.length}. ¿Alguno más o continuás?`,
             [
-              { label: label('product_damaged',   'Producto dañado'),  value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
-              { label: label('missing_products',  'Falta mercadería'), value: 'missing_products',  action: 'toggle_damage_subtype' as const },
-              { label: label('packaging_damaged', 'Embalaje dañado'),  value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
-              { label: '✅ Listo, continuar',                           value: 'done',              action: 'confirm_damage_subtypes' as const },
+              { label: label('product_damaged', 'Producto dañado'), value: 'product_damaged', action: 'toggle_damage_subtype' as const },
+              { label: label('missing_products', 'Falta mercadería'), value: 'missing_products', action: 'toggle_damage_subtype' as const },
+              { label: label('packaging_damaged', 'Embalaje dañado'), value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+              { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
             ]
           );
           break;
@@ -759,7 +759,7 @@ export function ChatbotWidget() {
       'Esta acción no se puede deshacer.',
       [
         { label: `✅ Sí, ${verb}`, value: 'yes', action: 'confirm_cancel' },
-        { label: '❌ No, volver',  value: 'no',  action: 'restart' },
+        { label: '❌ No, volver', value: 'no', action: 'restart' },
       ]
     );
   };
@@ -874,7 +874,7 @@ export function ChatbotWidget() {
 
   const isTerminalStatus = (status: string): boolean => {
     return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed',
-            'rechazado', 'no_entregado', 'expired'].includes(status);
+      'rechazado', 'no_entregado', 'expired'].includes(status);
   };
 
   const getNoActionsMessage = (status: string): string => {
@@ -977,13 +977,20 @@ export function ChatbotWidget() {
 
           <ChatInput
             onSend={handleUserInput}
-            disabled={loading || state === 'authenticated' || state === 'claim_evidence'}
+            disabled={
+              loading ||
+              state === 'authenticated' ||
+              state === 'claim_evidence' ||
+              state === 'claim_damage_subtypes' ||
+              state === 'claim_response_evidence' ||
+              (state === 'authenticating' && !!trackingId && !awaitingDni)
+            }
             placeholder={
               state === 'authenticated'
                 ? 'Selecciona una opción...'
                 : state === 'claim_evidence' || state === 'claim_response_evidence'
-                ? 'Seleccioná un archivo o usá las opciones...'
-                : 'Escribe tu respuesta...'
+                  ? 'Seleccioná un archivo o usá las opciones...'
+                  : 'Escribe tu respuesta...'
             }
             showFileUpload={state === 'claim_evidence' || state === 'claim_response_evidence'}
             fileUploadDisabled={loading}

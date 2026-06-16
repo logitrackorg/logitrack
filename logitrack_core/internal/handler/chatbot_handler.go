@@ -11,6 +11,7 @@ import (
 	"github.com/logitrack/core/internal/model"
 	"github.com/logitrack/core/internal/repository"
 	"github.com/logitrack/core/internal/service"
+	"github.com/logitrack/core/internal/clock"
 )
 
 // formatAddress convierte un Address struct a string legible
@@ -172,10 +173,10 @@ func (h *ChatbotHandler) Authenticate(c *gin.Context) {
 				activeClaim.SupervisorNotes = h.getSupervisorNotes(claim.ID)
 				actions = append(actions, "respond_claim")
 			}
-		} else {
-			// Sin reclamo activo propio: ofrecer la acción de crear uno
+		}  else {
 			s := string(shipment.Status)
-			if s != "draft" && s != "cancelled" && s != "returned" {
+			terminalNoReclamo := s == "draft" || s == "cancelled" || s == "returned"
+			if !terminalNoReclamo && canFileClaim(shipment) {
 				actions = append(actions, "file_claim")
 			}
 		}
@@ -306,67 +307,6 @@ type RescheduleOptionsResponse struct {
 // @Failure      400  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
 // @Router       /public/chatbot/reschedule/options [get]
-/*func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
-	var req RescheduleOptionsRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos incompletos"})
-		return
-	}
-
-	// Autenticar
-	shipment, err := h.shipmentRepo.AuthenticateRecipient(repository.AuthenticateRecipientCmd{
-		TrackingID:   req.TrackingID,
-		RecipientDNI: req.RecipientDNI,
-	})
-
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Envío no encontrado"})
-		return
-	}
-
-	log.Printf("🔍 [CHATBOT] sysConfigSvc is nil? %v", h.sysConfigSvc == nil)
-	maxReschedules := 2
-	maxRescheduleDays := 3
-	if h.sysConfigSvc != nil {
-		cfg := h.sysConfigSvc.Get()
-		log.Printf("🔍 Config obtenida: MaxReschedules=%d, MaxRescheduleDays=%d", 
-			cfg.MaxReschedules, cfg.MaxRescheduleDays)
-		maxReschedules = cfg.MaxReschedules
-		maxRescheduleDays = cfg.MaxRescheduleDays
-	}else {
-		log.Printf("⚠️ sysConfigSvc es nil, usando defaults")
-	}
-	log.Printf("📊 Usando: MaxReschedules=%d, MaxRescheduleDays=%d", 
-		maxReschedules, maxRescheduleDays) 
-	// Inicializar metadata con configuración del sistema (CA03)
-	shipment.InitializeChatbotMetadata(maxReschedules) 
-
-	// Verificar si puede reprogramar (CA04/CA05)
-	canReschedule, message := shipment.CanReschedule()
-
-	response := RescheduleOptionsResponse{
-		Success:         true,
-		CanReschedule:   canReschedule,
-		RescheduleCount: shipment.ChatbotMetadata.RescheduleCount,
-		MaxReschedules:  shipment.ChatbotMetadata.MaxReschedules,
-		Message:         message,
-	}
-
-	if canReschedule {
-		dates := shipment.GetAvailableRescheduleDates(maxRescheduleDays)
-		dateStrings := make([]string, len(dates))
-		for i, d := range dates {
-			dateStrings[i] = d.Format("2006-01-02")
-		}
-		
-		response.AvailableDates = dateStrings
-	}
-	log.Printf("📤 [CHATBOT] Response a enviar: RescheduleCount=%d, MaxReschedules=%d, Dates=%d",
-		response.RescheduleCount, response.MaxReschedules, len(response.AvailableDates))
-
-	c.JSON(http.StatusOK, response)
-}*/
-
 func (h *ChatbotHandler) GetRescheduleOptions(c *gin.Context) {
 	var req RescheduleOptionsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -635,7 +575,8 @@ func (h *ChatbotHandler) AuthenticateSender(c *gin.Context) {
 			}
 		} else {
 			s := string(shipment.Status)
-			if s != "draft" && s != "cancelled" && s != "returned" {
+			terminalNoReclamo := s == "draft" || s == "cancelled" || s == "returned"
+			if !terminalNoReclamo && canFileClaim(shipment) {
 				actions = append(actions, "file_claim")
 			}
 		}
@@ -672,26 +613,6 @@ func (h *ChatbotHandler) CancelBySender(c *gin.Context) {
 		Message: "Tu envío ha sido cancelado exitosamente",
 	})
 }
-
-// getAvailableActions determina qué acciones puede realizar el destinatario
-/*func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
-	actions := []string{}
-
-	if canPickup, _ := shipment.CanRequestPickup(); canPickup {
-		actions = append(actions, "request_pickup")
-	}
-
-	if canReschedule, _ := shipment.CanReschedule(); canReschedule {
-		actions = append(actions, "reschedule")
-	}
-
-	if canReject, _ := shipment.CanReject(); canReject {
-		actions = append(actions, "cancel")
-	}
-
-	return actions
-}*/
-
 // RespondToClaim procesa la respuesta del cliente a un reclamo pending_customer (US-4)
 func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
 	claimID := strings.TrimSpace(c.PostForm("claim_id"))
@@ -747,7 +668,6 @@ func (h *ChatbotHandler) RespondToClaim(c *gin.Context) {
 	})
 }
 
-// ✅ CÓDIGO NUEVO:
 func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	actions := []string{}
 
@@ -771,6 +691,22 @@ func (h *ChatbotHandler) getAvailableActions(shipment model.Shipment) []string {
 	}
 
 	return actions
+}
+
+// canFileClaim determina si el cliente puede hacer un reclamo.
+// Condiciones: el envío fue entregado (status=delivered) O
+// pasó al menos 1 hora desde la fecha estimada de entrega.
+func canFileClaim(shipment model.Shipment) bool {
+    if shipment.Status == model.StatusDelivered {
+        return true
+    }
+    if shipment.EstimatedDeliveryAt != nil {
+        deadline := shipment.EstimatedDeliveryAt.Add(1 * time.Hour)
+        if clock.Now().After(deadline) {
+            return true
+        }
+    }
+    return false
 }
 // FileClaimRequest es el payload para crear un reclamo desde el chatbot
 type FileClaimRequest struct {
