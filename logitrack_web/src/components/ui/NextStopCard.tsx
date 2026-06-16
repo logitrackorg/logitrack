@@ -91,16 +91,16 @@ export function NextStopCard({
                 href={singleUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1 no-underline"
+                className="flex-1 h-9 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1.5 no-underline"
               >
-                <Navigation className="w-3.5 h-3.5" />
+                <Navigation className="w-4 h-4" />
                 Navegar
               </a>
               <button
                 onClick={onDeliver}
-                className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1"
+                className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-semibold cursor-pointer border-none transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-4 h-4" />
                 Entregar
               </button>
               <button
