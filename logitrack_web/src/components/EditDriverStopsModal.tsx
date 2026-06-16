@@ -361,6 +361,17 @@ export function EditDriverStopsModal({
     zoneApi.list().then(setZones).catch(() => {});
   }, []);
 
+  // On mount, recompute the route so the polyline matches the actual current
+  // stops. The stored assignment.polyline_coords was generated at plan-build
+  // time and may be stale if the operator manually moved shipments after that.
+  const didInitialRecompute = useRef(false);
+  useEffect(() => {
+    if (didInitialRecompute.current) return;
+    didInitialRecompute.current = true;
+    void recomputeForMode(mode, stops);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const recomputeForMode = useCallback(
     async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
       setRecomputing(true);
