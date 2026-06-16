@@ -389,7 +389,7 @@ export function DriverRoute() {
      <DriverShell title="Mi ruta" subtitle={today}>
 
       {/* Toolbar: view toggle, simulator, danger badge, status pill */}
-      <div className="flex items-center justify-between gap-3 mb-4 px-4 max-w-2xl mx-auto pt-3">
+      <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
         {/* Toggle Lista/Mapa */}
         {canAct && (
           <div className="flex items-center gap-1.5">
@@ -425,7 +425,7 @@ export function DriverRoute() {
       </div>
 
       {/* Progress bar */}
-      <div className="mb-4 px-4 max-w-2xl mx-auto">
+      <div className="mb-2 px-4 max-w-2xl mx-auto">
         <div className="h-2 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
           <div
             ref={el => { if (el) el.style.width = `${progressPct}%`; }}
@@ -438,7 +438,7 @@ export function DriverRoute() {
 
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
-        <div className="-mx-4 px-4 flex gap-1 mb-4 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+        <div className="-mx-4 px-4 flex gap-1 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
           <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
             Pendientes
             <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
@@ -453,7 +453,7 @@ export function DriverRoute() {
           </TabButton>
         </div>
       )}
-      <div className="px-4 py-4 max-w-2xl mx-auto">
+      <div className="px-4 py-2 max-w-2xl mx-auto">
         {actionError && (
           <div className="flex items-start gap-3 mb-4 px-4 py-3.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-sm font-semibold text-rose-700 dark:text-rose-300">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
