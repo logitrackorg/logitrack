@@ -82,7 +82,7 @@ export function RejectedSheet({
         onChange={(e) => onNotesChange(e.target.value)}
         placeholder={requiresNotes ? "Describí el motivo" : "Detalle adicional para el supervisor"}
         rows={2}
-        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-none"
+        className="w-full px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-[3px] focus:ring-amber-500/20 focus:border-amber-500 resize-y"
       />
 
       <div className="flex flex-col gap-2 mt-5">

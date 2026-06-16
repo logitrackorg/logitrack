@@ -1030,7 +1030,7 @@ function HeroNextStop({
 
       {/* ETA */}
       {etaHours !== null && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--bg-muted)] dark:bg-slate-800 flex items-center gap-3">
+        <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--bg-muted)] flex items-center gap-3">
           <span className="text-xs font-semibold text-[var(--text-secondary)]">ETA estimada</span>
           <span className="ml-auto text-base font-bold text-[var(--brand)]">~{formatDuration(etaHours)}</span>
         </div>

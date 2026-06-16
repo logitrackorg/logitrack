@@ -164,7 +164,7 @@ export function DeliverSheet({
       )}
 
       {error && (
-        <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>
+        <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{error}</p>
       )}
 
       <div className="flex flex-col gap-2 mt-5">
