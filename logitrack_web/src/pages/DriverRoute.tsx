@@ -350,7 +350,7 @@ export function DriverRoute() {
     (routeStatus === "en_curso" && pending === 0 && total > 0);
 
   if (routeEffectivelyDone) {
-    return <DriverShell title="Mi ruta" subtitle={today}><RouteCompletedView data={data} today={today} /></DriverShell>;
+    return <DriverShell title="Mi ruta"><RouteCompletedView data={data} today={today} /></DriverShell>;
   }
 
   const canAct = routeStatus === "en_curso";
@@ -385,7 +385,7 @@ export function DriverRoute() {
     : [];
 
   return (
-     <DriverShell title="Mi ruta" subtitle={today}>
+     <DriverShell title="Mi ruta">
 
       {/* Toolbar: view toggle, simulator, danger badge, status pill */}
       <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
