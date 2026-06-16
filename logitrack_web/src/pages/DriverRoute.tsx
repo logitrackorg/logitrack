@@ -452,12 +452,12 @@ export function DriverRoute() {
       )}
       <div className="px-4 py-2 max-w-2xl mx-auto">
         {actionError && (
-          <div className="flex items-start gap-3 mb-4 px-4 py-3.5 rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-sm font-semibold text-rose-700 dark:text-rose-300">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm font-semibold text-[var(--danger-text)]">
+            <AlertCircle className="w-5 h-5 shrink-0" />
             <span className="flex-1">{actionError}</span>
             <button
               onClick={() => setActionError("")}
-              className="text-xs font-bold text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="text-xs font-semibold text-[var(--danger-text)] opacity-80 hover:opacity-100 cursor-pointer min-h-[44px] flex items-center shrink-0"
             >
               Cerrar
             </button>
