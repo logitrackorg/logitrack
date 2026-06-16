@@ -27,11 +27,11 @@ export function timeWindowTone(tw?: TimeWindow): {
 } {
   switch (tw) {
     case "morning":
-      return { bg: "bg-sky-50", text: "text-sky-700", border: "border-sky-200" };
+      return { bg: "bg-sky-50 dark:bg-sky-500/15", text: "text-sky-700 dark:text-sky-300", border: "border-sky-200 dark:border-sky-500/30" };
     case "afternoon":
-      return { bg: "bg-violet-50", text: "text-violet-700", border: "border-violet-200" };
+      return { bg: "bg-violet-50 dark:bg-violet-500/15", text: "text-violet-700 dark:text-violet-300", border: "border-violet-200 dark:border-violet-500/30" };
     default:
-      return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200" };
+      return { bg: "bg-slate-100 dark:bg-gray-700", text: "text-slate-600 dark:text-gray-300", border: "border-slate-200 dark:border-gray-600" };
   }
 }
 
