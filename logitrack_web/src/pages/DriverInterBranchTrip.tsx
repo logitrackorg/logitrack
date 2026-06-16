@@ -856,7 +856,7 @@ export function DriverInterBranchTrip() {
               if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
               setFatigueUnblockedBy(null);
             }}
-            className="mt-2 px-9 py-3 rounded-lg border-none bg-[var(--ok)] text-white text-base font-bold cursor-pointer"
+            className="mt-2 px-9 py-3 rounded-xl border-none bg-[var(--ok)] text-white text-base font-bold cursor-pointer"
           >
             Continuar
           </button>
