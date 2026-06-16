@@ -575,8 +575,7 @@ export function DriverInterBranchTrip() {
   // ---------- Estado completado ----------
   if (trip.status === "completado") {
     return (
-      <DriverShell title="Viaje">
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg-page)]">
         <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-5">
           <CheckCircle2 className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
         </div>
@@ -595,10 +594,9 @@ export function DriverInterBranchTrip() {
         >
           Volver al inicio
         </Button>
-        </div>
-    </DriverShell>
-  );
-}
+      </div>
+    );
+  }
 
   return (
     <DriverShell title="Mi viaje" subtitle={`${trip.license_plate} · ${trip.shipment_ids.length} envíos`}>
@@ -963,7 +961,11 @@ function StepperBar({
                   }`}
                 />
               )}
-    </DriverShell>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
@@ -1256,8 +1258,7 @@ function QRModal({
 function NoTripView() {
   const navigate = useNavigate();
   return (
-    <DriverShell title="Viaje">
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--bg-page)]">
       <div className="w-24 h-24 rounded-full bg-[var(--bg-muted)] flex items-center justify-center mb-6">
         <Package className="w-12 h-12 text-[var(--text-muted)]" />
       </div>
@@ -1271,15 +1272,14 @@ function NoTripView() {
       >
         <QrCode className="w-5 h-5" />
         Escanear vehículo
-      </Button>
+        </Button>
       </div>
-    </DriverShell>
-  );
-}
+    );
+  }
 
 function TripSkeleton() {
   return (
-    <DriverShell title="Viaje">
+    <div className="min-h-screen bg-[var(--bg-page)]">
       {/* Header skeleton */}
       <div className="sticky top-0 z-10 bg-[var(--bg-card)] border-b border-[var(--border)]">
         <div className="px-4 max-w-2xl mx-auto py-3">
