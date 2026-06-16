@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -77,8 +76,9 @@ function SortableStop({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-start gap-3 p-3 rounded-lg border dark:bg-gray-800 bg-white ${outside ? "border-amber-300 bg-amber-50/40" : "dark:border-gray-700 border-slate-200"
-        } ${isDragging ? "shadow-lg" : ""}`}
+      className={`flex items-start gap-3 p-3 rounded-lg border dark:bg-gray-800 bg-white ${
+        outside ? "border-amber-300 bg-amber-50/40" : "dark:border-gray-700 border-slate-200"
+      } ${isDragging ? "shadow-lg" : ""}`}
     >
       {/* Drag handle */}
       <Button
@@ -358,40 +358,45 @@ export function EditDriverStopsModal({
   );
 
   useEffect(() => {
-    zoneApi.list().then(setZones).catch(() => { });
+    zoneApi.list().then(setZones).catch(() => {});
   }, []);
 
-  const recomputeForModeRef = useRef(async (_targetMode: RouteMode, _shipmentIds: string[], _overrideDate?: string) => {});
-
-  recomputeForModeRef.current = async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
-    setRecomputing(true);
-    setError("");
-    const dateToUse = overrideDate ?? (selectedDate || planDate);
-    try {
-      const updated = await routingApi.recomputeLastMile({
-        vehicle_id: assignment.vehicle_id,
-        shipment_ids: shipmentIds,
-        mode: targetMode,
-        ...(dateToUse ? { plan_date: dateToUse } : {}),
-      });
-      if (updated.ordered_stops && updated.ordered_stops.length > 0) {
-        setStops(updated.ordered_stops.map((s) => s.tracking_id));
-      }
-      setDeparture(depMinToString(updated.suggested_departure_min, config.morning_window_start_hour));
-      setRoadPolyline(updated.polyline_coords);
-      setManuallyReordered(false);
-    } catch {
-      setError("No se pudo recalcular la ruta. Intentá de nuevo.");
-    } finally {
-      setRecomputing(false);
-    }
-  };
+  // On mount, recompute the route so the polyline matches the actual current
+  // stops. The stored assignment.polyline_coords was generated at plan-build
+  // time and may be stale if the operator manually moved shipments after that.
+  const didInitialRecompute = useRef(false);
+  useEffect(() => {
+    if (didInitialRecompute.current) return;
+    didInitialRecompute.current = true;
+    void recomputeForMode(mode, stops);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const recomputeForMode = useCallback(
-    (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
-      return recomputeForModeRef.current(targetMode, shipmentIds, overrideDate);
+    async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
+      setRecomputing(true);
+      setError("");
+      const dateToUse = overrideDate ?? (selectedDate || planDate);
+      try {
+        const updated = await routingApi.recomputeLastMile({
+          vehicle_id: assignment.vehicle_id,
+          shipment_ids: shipmentIds,
+          mode: targetMode,
+          ...(dateToUse ? { plan_date: dateToUse } : {}),
+        });
+        if (updated.ordered_stops && updated.ordered_stops.length > 0) {
+          setStops(updated.ordered_stops.map((s) => s.tracking_id));
+        }
+        setDeparture(depMinToString(updated.suggested_departure_min, config.morning_window_start_hour));
+        setRoadPolyline(updated.polyline_coords);
+        setManuallyReordered(false);
+      } catch {
+        setError("No se pudo recalcular la ruta. Intentá de nuevo.");
+      } finally {
+        setRecomputing(false);
+      }
     },
-    [],
+    [assignment.vehicle_id, config.morning_window_start_hour, planDate, selectedDate],
   );
 
   const handleModeChange = useCallback(
