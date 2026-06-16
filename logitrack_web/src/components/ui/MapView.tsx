@@ -612,7 +612,6 @@ export function MapView({
           </>
         )}
       </div>
-    </div>
 
       {loading && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">
