@@ -612,9 +612,9 @@ export function MapView({
       </div>
 
       {dangerZones.length > 0 && (
-        <div className={`absolute left-2 right-2 z-[900] bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-2.5 py-1 flex items-center gap-1.5 ${isSimulating ? 'top-[4.25rem]' : 'top-[2.75rem]'}`}>
-          <AlertTriangle className="w-3 h-3 text-[var(--danger-c)] shrink-0" />
-          <span className="text-[10px] font-semibold text-[var(--danger-text)] truncate flex-1">
+        <div className={`absolute left-2 right-2 z-[900] bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-3 py-1.5 flex items-center gap-2 ${isSimulating ? 'top-[4.5rem]' : 'top-[3rem]'}`}>
+          <AlertTriangle className="w-4 h-4 text-[var(--danger-c)] shrink-0" />
+          <span className="text-xs font-semibold text-[var(--danger-text)] truncate flex-1">
             {dangerZones[0].name}
           </span>
         </div>
