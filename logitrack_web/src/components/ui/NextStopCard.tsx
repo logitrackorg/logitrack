@@ -37,7 +37,7 @@ export function NextStopCard({
   if (!nextStop) {
     return (
       <div className="px-4 pb-4">
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-4 text-center">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm p-4 text-center">
           <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0 mx-auto mb-2" />
           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">¡Ruta completada!</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Todas las paradas registradas.</p>
@@ -54,7 +54,7 @@ export function NextStopCard({
 
   return (
     <div className="px-4 pb-4">
-      <div className="rounded-xl border bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm overflow-hidden">
         {/* Header */}
         <div className="px-3 py-3">
           <div className="flex items-start gap-3">
@@ -65,8 +65,8 @@ export function NextStopCard({
               <p className="text-base font-bold leading-snug truncate dark:text-gray-100 text-slate-900">
                 {nextStop.name}
               </p>
-              <p className="mt-1 text-sm leading-snug flex items-start gap-1.5 dark:text-gray-300 text-slate-600">
-                <MapPin className="w-3.5 h-3.5 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
+              <p className="mt-1 text-base leading-snug flex items-start gap-1.5 dark:text-gray-300 text-slate-600">
+                <MapPin className="w-4 h-4 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
                 <span className="break-words">{nextStop.address}</span>
               </p>
               {routeInfo && (
@@ -138,7 +138,7 @@ export function NextStopCard({
           href={fullRouteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full text-center text-[var(--brand)] dark:text-[var(--info-text)] text-[11px] py-2 cursor-pointer hover:underline flex items-center justify-center gap-1 no-underline border-t border-gray-100 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50"
+          className="w-full text-center text-[var(--brand)] dark:text-[var(--info-text)] text-[11px] py-2 cursor-pointer hover:underline flex items-center justify-center gap-1 no-underline border-t border-[var(--border)] bg-[var(--bg-subtle)]"
         >
           <Map className="w-3 h-3 shrink-0" />
           Ruta completa en Google Maps
