@@ -5,7 +5,6 @@ import {
   MapPin,
   Navigation,
   Clock,
-  CheckCircle2,
   Pause,
   Play,
   RotateCcw,
@@ -487,10 +486,6 @@ export function MapView({
       </div>
     );
   }
-
-  const completedCount = waypoints.filter(
-    (w) => w.status === "delivered" || w.status === "delivery_failed"
-  ).length;
 
   const isSimulating = simulationMode && simulationMode !== "real";
 

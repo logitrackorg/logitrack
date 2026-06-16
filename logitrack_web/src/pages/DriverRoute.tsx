@@ -79,9 +79,6 @@ export function DriverRoute() {
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [tab, setTab] = useState<Tab>("pendientes");
-  // Badge minimizado de zona peligrosa — true cuando el cartel grande fue descartado.
-  // Debe declararse ANTES de cualquier early return para cumplir las reglas de hooks.
-  const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
   // US4 global: contador de misfires para toda la vista de ruta.
   // Cualquier click que no sea detenido por e.stopPropagation() en un botón
@@ -554,7 +551,7 @@ export function DriverRoute() {
             onRouteInfoChange={setRouteInfo}
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />
-          <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
+          <ZoneAlert zones={activeDangerZones} />
         </div>
       )}
 
