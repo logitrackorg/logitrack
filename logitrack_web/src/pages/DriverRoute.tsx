@@ -28,6 +28,7 @@ import { NextStopCard } from "../components/ui/NextStopCard";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { zoneApi, type Zone } from "../api/zones";
+import { isInDangerZone } from "../utils/pointInPolygon";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
@@ -378,6 +379,10 @@ export function DriverRoute() {
     ? (data?.shipments.find((s) => s.tracking_id === nextStop.tracking_id) ?? null)
     : null;
 
+  const activeDangerZones = userLocation
+    ? zones.filter((z) => z.active && isInDangerZone(userLocation.lat, userLocation.lng, [z]))
+    : [];
+
   return (
      <DriverShell title="Mi ruta">
 
@@ -536,6 +541,7 @@ export function DriverRoute() {
               onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
             }}
             zones={zones}
+            dangerZones={activeDangerZones}
             onRouteInfoChange={setRouteInfo}
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />

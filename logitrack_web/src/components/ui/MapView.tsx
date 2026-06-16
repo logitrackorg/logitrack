@@ -57,6 +57,7 @@ interface MapViewProps {
     onFastForwardTime?: () => void;
   };
   zones?: Zone[];
+  dangerZones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
   onWaypointClick: (trackingId: string) => void;
 }
@@ -90,6 +91,7 @@ export function MapView({
   simulationMode,
   simulationControls,
   zones = [],
+  dangerZones = [],
   onRouteInfoChange,
   onWaypointClick,
 }: MapViewProps) {
@@ -609,11 +611,11 @@ export function MapView({
         )}
       </div>
 
-      {zones.filter(z => z.active).length > 0 && (
+      {dangerZones.length > 0 && (
         <div className={`absolute left-2 right-2 z-[900] bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-2.5 py-1 flex items-center gap-1.5 ${isSimulating ? 'top-[4.25rem]' : 'top-[2.75rem]'}`}>
           <AlertTriangle className="w-3 h-3 text-[var(--danger-c)] shrink-0" />
           <span className="text-[10px] font-semibold text-[var(--danger-text)] truncate flex-1">
-            {zones.filter(z => z.active)[0].name}
+            {dangerZones[0].name}
           </span>
         </div>
       )}
