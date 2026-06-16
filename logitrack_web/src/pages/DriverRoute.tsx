@@ -329,7 +329,7 @@ export function DriverRoute() {
     );
   }
 
-  if (loading) return <RouteSkeleton />;
+  if (loading) return <DriverShell title="Mi ruta"><RouteSkeleton /></DriverShell>;
   if (noRoute) return <Navigate to="/driver/scan" replace />;
   if (!data) return null;
 
@@ -351,7 +351,7 @@ export function DriverRoute() {
     (routeStatus === "en_curso" && pending === 0 && total > 0);
 
   if (routeEffectivelyDone) {
-    return <RouteCompletedView data={data} today={today} />;
+    return <DriverShell title="Mi ruta" subtitle={today}><RouteCompletedView data={data} today={today} /></DriverShell>;
   }
 
   const canAct = routeStatus === "en_curso";
