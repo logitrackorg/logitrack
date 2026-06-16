@@ -90,7 +90,7 @@ export default function ReclamosTab({ dateFrom, dateTo, branchId }: ReclamosTabP
     : null;
 
   const exportPDF = useCallback(async () => {
-    await exportToPDF(reportRef, `reclamos_sucursal_${new Date().toISOString().slice(0, 10)}.pdf`);
+    await exportToPDF(reportRef, `incidentes_sucursal_${new Date().toISOString().slice(0, 10)}.pdf`);
   }, []);
 
   const exportExcel = useCallback(() => {
@@ -110,16 +110,16 @@ export default function ReclamosTab({ dateFrom, dateTo, branchId }: ReclamosTabP
       Cantidad: count,
     }));
     exportToExcel([
-      { name: "Reclamos por sucursal", data: branchRows },
+      { name: "Incidentes por sucursal", data: branchRows },
       { name: "Total por tipo", data: typeRows },
-    ], `reclamos_sucursal_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    ], `incidentes_sucursal_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }, [data]);
 
   return (
     <div className="space-y-6" ref={reportRef}>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Reclamos por Sucursal</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Incidentes por Sucursal</h2>
           <p className="text-sm text-slate-500">Incidentes reportados por sucursal con desglose por tipo</p>
         </div>
         <ReportExport

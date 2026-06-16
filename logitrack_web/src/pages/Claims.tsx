@@ -76,6 +76,9 @@ function statusBadgeClass(status: ClaimStatus): string {
 export function Claims() {
   const { hasRole } = useAuth();
   const isManager = hasRole("manager");
+  // Solo los supervisores pueden accionar sobre reclamos (derivar, resolver,
+  // solicitar info). Los operadores tienen acceso de solo lectura.
+  const isSupervisor = hasRole("supervisor");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
@@ -505,7 +508,7 @@ export function Claims() {
                     </div>
                   )}
 
-                  {!isManager && (
+                  {isSupervisor && (
                     <div className="grid gap-3 border-t border-slate-200 pt-4">
                       <div className="flex flex-wrap gap-2.5 items-end">
                         <label className="text-xs text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
