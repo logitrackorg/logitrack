@@ -1,0 +1,129 @@
+logitrack_core/internal/scheduler/scheduler.go
+  s_e8ab08a5b78c3f::t_a7a2b87d03619b 2-3,15,19,32-38,53-68
+logitrack_core/internal/db/migrate.go
+  s_e8ab08a5b78c3f::t_47f281ee43b9af 64
+logitrack_core/internal/model/branch.go
+  s_e8ab08a5b78c3f::t_4ba57c240b919b 28-34
+logitrack_core/internal/seed/branch_seed.go
+  s_e8ab08a5b78c3f::t_2b73361ad15b29 29-31
+  s_e8ab08a5b78c3f::t_8e606e504f3544 12-14
+logitrack_core/internal/model/employee_of_month.go
+  s_e8ab08a5b78c3f::t_e0995d72dac9c0 1-56
+logitrack_web/src/api/employeeOfMonth.ts
+  s_e8ab08a5b78c3f::t_ba4c2f0d1f146c 1-60
+logitrack_web/src/pages/DashboardHost.tsx
+  s_e8ab08a5b78c3f::t_31aa3c723f0c4d 18
+  s_e8ab08a5b78c3f::t_34837f4cb8656e 242
+  s_e8ab08a5b78c3f::t_0be4216c18c881 40
+  s_e8ab08a5b78c3f::t_0bd1cc466c8058 55
+logitrack_core/internal/service/routing_forecast_test.go
+  s_e8ab08a5b78c3f::t_17a5d25d655e87 76-78
+logitrack_web/src/components/Sidebar.tsx
+  s_e8ab08a5b78c3f::t_7b021c6126d797 36-37
+  s_e8ab08a5b78c3f::t_4be4872e110f63 121-135,142
+  s_e8ab08a5b78c3f::t_0412c7464a372d 343-355,362-370
+logitrack_core/internal/repository/route.go
+  s_e8ab08a5b78c3f::t_b0a2069c50ea17 16-17
+logitrack_core/cmd/server/main.go
+  s_e8ab08a5b78c3f::t_06fec88f28ae46 716-719
+  s_e8ab08a5b78c3f::t_d4682901e3b433 702-703
+  s_e8ab08a5b78c3f::t_e7bdf7ffb9a4e1 435
+  s_e8ab08a5b78c3f::t_394364e2f6f622 433-434,436-443,445,447
+  s_e8ab08a5b78c3f::t_654a61a93b9c4e 520
+logitrack_core/internal/repository/branch.go
+  s_e8ab08a5b78c3f::t_ffb3c456f479c0 19
+logitrack_core/internal/model/user.go
+  s_e8ab08a5b78c3f::t_2c20c003cb40a4 59-60
+logitrack_web/src/pages/EmployeeProfile.tsx
+  s_e8ab08a5b78c3f::t_e6bd2b5e35574d 1-161
+logitrack_web/src/components/AwardBadge.tsx
+  s_e8ab08a5b78c3f::t_f128022b4fac12 1-4,8-36
+  s_e8ab08a5b78c3f::t_102aad7c1905c8 5-7
+logitrack_core/internal/service/employee_of_month_test.go
+  s_e8ab08a5b78c3f::t_49d8fc2065d309 1-63
+logitrack_core/internal/repository/postgres_branch.go
+  s_e8ab08a5b78c3f::t_c8080ead217df6 35
+  s_e8ab08a5b78c3f::t_08098eb0c5b818 52,93
+  s_e8ab08a5b78c3f::t_e62c9651560bab 207-219
+logitrack_web/src/App.tsx
+  s_e8ab08a5b78c3f::t_6f18e30e0bd644 59
+  s_e8ab08a5b78c3f::t_082636856a9339 289-294
+logitrack_core/internal/handler/user.go
+  s_e8ab08a5b78c3f::t_e303027bf0087b 78-96
+  s_e8ab08a5b78c3f::t_b2dd1afa097703 14-16,23-24
+logitrack_core/internal/seed/employee_of_month_seed.go
+  s_e8ab08a5b78c3f::t_1436c2e6737151 1-10,22-23,72-73,85-87
+  s_e8ab08a5b78c3f::t_83972b2a8298ac 11-21,24-71,74-84
+logitrack_core/internal/service/employee_of_month.go
+  s_e8ab08a5b78c3f::t_54d3bf3009a8d7 298
+  s_e8ab08a5b78c3f::t_e8850ca71887e0 6,13-25
+  s_e8ab08a5b78c3f::t_aaa4f1c6d8f177 411
+  s_e8ab08a5b78c3f::t_74ebee41fb0fa1 203
+  s_e8ab08a5b78c3f::t_e96a9c51c381da 1-5,7-12,26-104,109-202,204-240,244,246-297,299-362,366-410,412-512
+  s_e8ab08a5b78c3f::t_49362f23146e7b 241-243,245
+  s_e8ab08a5b78c3f::t_9f1631fc026a9b 363-365
+  s_e8ab08a5b78c3f::t_2bb8a30d940c1c 105-108
+logitrack_core/internal/model/shipment.go
+  s_e8ab08a5b78c3f::t_bc4287ee02f3ba 105-108
+  s_e8ab08a5b78c3f::t_5c8827ce38d994 375-376
+logitrack_web/src/pages/reports/EmpleadoMesTab.tsx
+  s_e8ab08a5b78c3f::t_d430a5a7a741c0 6,14-22,36-39,48-50,93,98,116,127,132-135,148-152,189,201
+  s_e8ab08a5b78c3f::t_fdf930613888ab 32-35,40-44,47,52-57,59-82,85-92,94-97,99-115,117-119,154,158,161-162,164,167,174,176-177,179,182,190,192,194-200,202
+  s_e8ab08a5b78c3f::t_a7dc095bd6ffe9 1-5,7-13,23-31,45-46,51,58,83-84,120-126,128-131,136-147,153,155-157,159-160,163,165-166,168,175,178,180-181,183-188,191,193,203-208
+  s_e8ab08a5b78c3f::t_3b5b88be36f834 169-173
+logitrack_core/internal/repository/postgres_employee_of_month.go
+  s_e8ab08a5b78c3f::t_9fd4328db1b563 1-148
+logitrack_web/src/api/users.ts
+  s_e8ab08a5b78c3f::t_9c0230aff8ed59 68
+  s_e8ab08a5b78c3f::t_d5d1e451df4a32 3,15-21,31
+logitrack_core/internal/repository/inmemory.go
+  s_e8ab08a5b78c3f::t_d4fba2c5bb56b8 463-467,469-475
+  s_e8ab08a5b78c3f::t_3601199ccd85c1 153-165
+  s_e8ab08a5b78c3f::t_6b39f421ac9240 468
+logitrack_core/internal/handler/branch.go
+  s_e8ab08a5b78c3f::t_dced8b3d2f36d5 194-221
+logitrack_core/internal/handler/employee_of_month.go
+  s_e8ab08a5b78c3f::t_46758960b869e6 1-67
+logitrack_web/src/pages/BranchList.tsx
+  s_e8ab08a5b78c3f::t_fde4a9c2ba480a 42
+  s_e8ab08a5b78c3f::t_c7eb7aec2ce408 587-666
+  s_e8ab08a5b78c3f::t_6d81aff49339ec 281-300
+  s_e8ab08a5b78c3f::t_5d7373379850f9 43
+  s_e8ab08a5b78c3f::t_0b610f9c9f07d8 206,218-220,222-224
+  s_e8ab08a5b78c3f::t_62364f7da80b23 221
+logitrack_web/src/api/branches.ts
+  s_e8ab08a5b78c3f::t_e23c8e365618e3 67-68
+  s_e8ab08a5b78c3f::t_4ea376b34aada6 26
+logitrack_core/internal/service/branch_graph_test.go
+  s_e8ab08a5b78c3f::t_6a07631843cb0d 66
+logitrack_core/internal/repository/postgres_route.go
+  s_e8ab08a5b78c3f::t_8eab9337703835 88-109
+logitrack_core/internal/service/branch.go
+  s_e8ab08a5b78c3f::t_4363c70d6fa9db 233-243
+logitrack_core/internal/projection/postgres_shipment.go
+  s_e8ab08a5b78c3f::t_e4bb0d15b0007a 1120
+  s_e8ab08a5b78c3f::t_b436dcb409ed04 552-553
+  s_e8ab08a5b78c3f::t_da548d15887fc8 576-577
+  s_e8ab08a5b78c3f::t_d05e00a76c80a1 476-478,512-513,526
+  s_e8ab08a5b78c3f::t_968b3661661a25 642-643
+  s_e8ab08a5b78c3f::t_d7615b500485a7 801-802
+  s_e8ab08a5b78c3f::t_1b10ca851c3a52 604-609
+  s_e8ab08a5b78c3f::t_3bc3a57ddb31e6 37-41,45-49
+  s_e8ab08a5b78c3f::t_961019d0971e6a 1218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "8524e6bc1361d194dc4086a34c2bf9dbd1d3a947",
+  "prompts": {},
+  "sessions": {
+    "s_e8ab08a5b78c3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aab16e51-d64a-4135-b923-32fe6e94a461",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
