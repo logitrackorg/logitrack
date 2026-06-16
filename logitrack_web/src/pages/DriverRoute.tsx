@@ -438,7 +438,7 @@ export function DriverRoute() {
 
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
-        <div className="-mx-4 px-4 flex gap-1 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+        <div className="-mx-4 px-4 flex gap-1 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
           <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
             Pendientes
             <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
@@ -686,8 +686,8 @@ function ShipmentCard({
     <Card
       className={
         isCompleted
-          ? "p-0 dark:bg-gray-800/40 bg-slate-50/60 dark:border-gray-700/50 border-slate-200 mb-3"
-          : "p-0 hover:shadow-md transition-shadow mb-3"
+          ? "p-0 dark:bg-gray-800/40 bg-slate-50/60 dark:border-gray-700/50 border-slate-200"
+          : "p-0 hover:shadow-md transition-shadow"
       }
     >
       <button
