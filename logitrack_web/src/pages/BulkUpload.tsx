@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FolderOpen } from "lucide-react";
 import { shipmentApi, type CreateShipmentPayload, type PackageType, type ShipmentType, type TimeWindow, type DeliveryMethod } from "../api/shipments";
 import { branchApi } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -419,7 +419,7 @@ export function BulkUpload() {
               isDragging ? "border-blue-500 bg-blue-100" : "border-blue-300 bg-blue-50"
             } rounded-xl py-12 md:py-14 px-6 text-center cursor-pointer transition-colors`}
           >
-            <div className="text-4xl mb-3 leading-none">📂</div>
+            <FolderOpen size={40} className="mx-auto mb-3 text-gray-300" />
             <div className="font-semibold text-sm mb-1.5">Arrastrá y soltá tu CSV acá</div>
             <div className="text-gray-500 text-xs">o hacé clic para explorar — solo archivos .csv</div>
             <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileInput} className="hidden" />

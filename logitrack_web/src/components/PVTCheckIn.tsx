@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SkipForward, Target, Trophy, Zap } from "lucide-react";
 import { driverApi, type PVTPayload } from "../api/driver";
+import { Button } from "@/components/ui/button";
 
 // ── constantes ────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,11 @@ export function PVTCheckIn({ onDone }: Props) {
   const latenciesRef = useRef<number[]>([]);
   const hitsRef = useRef(0);
   const errorsRef = useRef(0);
+  // game_errors: contador más amplio que `errorsRef` — suma los toques
+  // erróneos (clic sin estímulo / fuera de él) MÁS los estímulos perdidos
+  // (el círculo seguía visible cuando terminó el tiempo). Se envía al backend
+  // junto al resto de las métricas del minijuego.
+  const gameErrorsRef = useRef(0);
 
   // Handles de timers
   const gameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,6 +116,14 @@ export function PVTCheckIn({ onDone }: Props) {
     isPlayingRef.current = false;
     if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     if (stimulusTimerRef.current) clearTimeout(stimulusTimerRef.current);
+
+    // Estímulo perdido: el círculo seguía visible y sin responder cuando se
+    // acabó el tiempo — cuenta como error amplio (game_errors), no como toque
+    // erróneo (errorsRef), que es exclusivamente para clics sin estímulo.
+    if (circleVisible && stimulusTimeRef.current !== null) {
+      gameErrorsRef.current++;
+    }
+
     stimulusTimeRef.current = null;
     setCircleVisible(false);
 
@@ -127,6 +141,7 @@ export function PVTCheckIn({ onDone }: Props) {
     latenciesRef.current = [];
     hitsRef.current = 0;
     errorsRef.current = 0;
+    gameErrorsRef.current = 0;
     timeLeftRef.current = GAME_DURATION_S;
     stimulusTimeRef.current = null;
 
@@ -155,6 +170,7 @@ export function PVTCheckIn({ onDone }: Props) {
   const handleBoxPointerDown = () => {
     if (!isPlayingRef.current) return;
     errorsRef.current++;
+    gameErrorsRef.current++;
     setErrorCount(errorsRef.current);
   };
 
@@ -181,6 +197,7 @@ export function PVTCheckIn({ onDone }: Props) {
       latencia_promedio_ms: results.avgLatency,
       aciertos: results.hits,
       errores: results.errors,
+      game_errors: gameErrorsRef.current,
     };
     try {
       await driverApi.submitPVT(payload);
@@ -202,13 +219,15 @@ export function PVTCheckIn({ onDone }: Props) {
       {phase === "instructions" && (
         <>
           <div className="flex justify-end px-4 pt-4">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={onDone}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+              className="gap-1.5 font-semibold text-xs"
             >
               <SkipForward className="w-3.5 h-3.5" />
               Saltar prueba
-            </button>
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 pb-8">
@@ -237,13 +256,13 @@ export function PVTCheckIn({ onDone }: Props) {
                 </p>
               </div>
 
-              <button
+              <Button
                 onClick={startGame}
-                className="w-full h-12 rounded-xl bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-slate-900 font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 mb-3"
+                className="w-full h-12 rounded-xl font-bold text-base gap-2 mb-3"
               >
                 <Zap className="w-4 h-4" />
                 Iniciar prueba
-              </button>
+              </Button>
             </div>
           </div>
         </>
@@ -369,13 +388,13 @@ export function PVTCheckIn({ onDone }: Props) {
               </div>
             </div>
 
-            <button
+            <Button
               onClick={handleSendResults}
               disabled={sending}
-              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold text-base cursor-pointer disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-xl font-bold text-base gap-2"
             >
               {sending ? "Guardando…" : "Guardar y continuar →"}
-            </button>
+            </Button>
           </div>
         </div>
       )}

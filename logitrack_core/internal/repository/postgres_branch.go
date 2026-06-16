@@ -32,6 +32,7 @@ func NewPostgresBranchRepository(db *sql.DB) BranchRepository {
 		ALTER TABLE branches ADD COLUMN IF NOT EXISTS latitude  DOUBLE PRECISION;
 		ALTER TABLE branches ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 		ALTER TABLE branches ADD COLUMN IF NOT EXISTS hours TEXT NOT NULL DEFAULT '';
+		ALTER TABLE branches ADD COLUMN IF NOT EXISTS employee_of_month_enabled BOOLEAN NOT NULL DEFAULT false;
 	`)
 	if err != nil {
 		panic("failed to create branches table: " + err.Error())
@@ -48,7 +49,7 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	var lat, lng sql.NullFloat64
 
 	err := scan(&b.ID, &b.Name, &street, &city, &province, &postalCode,
-		&status, &createdAt, &updatedAt, &updatedBy, &b.MaxCapacity, &lat, &lng, &hours)
+		&status, &createdAt, &updatedAt, &updatedBy, &b.MaxCapacity, &lat, &lng, &hours, &b.EmployeeOfMonthEnabled)
 	if err != nil {
 		return model.Branch{}, err
 	}
@@ -89,7 +90,7 @@ func scanBranch(scan func(...any) error) (model.Branch, error) {
 	return b, nil
 }
 
-const branchSelectCols = `id, name, street, city, province, postal_code, status, created_at, updated_at, updated_by, max_capacity, latitude, longitude, hours`
+const branchSelectCols = `id, name, street, city, province, postal_code, status, created_at, updated_at, updated_by, max_capacity, latitude, longitude, hours, employee_of_month_enabled`
 
 func (r *postgresBranchRepository) List() []model.Branch {
 	rows, err := r.db.Query(`SELECT ` + branchSelectCols + ` FROM branches ORDER BY name`)
@@ -193,6 +194,19 @@ func (r *postgresBranchRepository) Update(id string, branch model.Branch) error 
 func (r *postgresBranchRepository) UpdateStatus(id string, status model.BranchStatus, username string) error {
 	res, err := r.db.Exec(`UPDATE branches SET status = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
 		status, clock.Now(), username, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return errNotFound
+	}
+	return nil
+}
+
+func (r *postgresBranchRepository) UpdateEmployeeOfMonth(id string, enabled bool, username string) error {
+	res, err := r.db.Exec(`UPDATE branches SET employee_of_month_enabled = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
+		enabled, clock.Now(), username, id)
 	if err != nil {
 		return err
 	}

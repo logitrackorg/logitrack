@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, AlertTriangle, Camera, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDateTime, fmtDate } from "@/utils/date";
-import type { ShipmentEvent, ShipmentStatus } from "@/api/shipments";
+import { shipmentApi, type ShipmentEvent, type ShipmentStatus } from "@/api/shipments";
 import { CLAIM_EVENT_LABELS, CLAIM_TYPE_LABELS, type ClaimEventType, type ClaimType } from "@/api/claims";
 import type { Branch } from "@/api/branches";
 
@@ -80,6 +81,62 @@ interface EventTimelineProps {
   className?: string;
 }
 
+function DeliveryPhotoThumbnail({ trackingId }: { trackingId: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+
+  async function load() {
+    if (src || loading) return;
+    setLoading(true);
+    try {
+      const blob = await shipmentApi.getDeliveryPhoto(trackingId);
+      setSrc(URL.createObjectURL(blob));
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2">
+      {!src && !error && (
+        <button
+          onClick={load}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
+        >
+          <Camera size={13} />
+          {loading ? "Cargando foto…" : "Ver foto de entrega"}
+        </button>
+      )}
+      {error && (
+        <p className="text-[11px] text-[var(--text-muted)]">Foto no disponible.</p>
+      )}
+      {src && (
+        <>
+          <img
+            src={src}
+            alt="Foto de entrega"
+            onClick={() => setLightbox(true)}
+            className="mt-1 h-24 rounded-lg object-cover cursor-pointer border border-[var(--border)] hover:opacity-90 transition-opacity"
+          />
+          {lightbox && (
+            <div
+              className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+              onClick={() => setLightbox(false)}
+            >
+              <img src={src} alt="Foto de entrega" className="max-h-full max-w-full rounded-lg" />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function EventTimeline({ events, branches, showHeading, className }: EventTimelineProps) {
   return (
     <div className={cn(className)}>
@@ -139,7 +196,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                   <>
                     <div className="flex justify-between mb-0.5">
                       <span className={`font-semibold flex items-center gap-1.5 ${ev.event_type === "claim_created" ? "text-red-600" : ""}`}>
-                        {ev.event_type === "claim_created" && <span>⚠️</span>}
+                        {ev.event_type === "claim_created" && <AlertTriangle size={14} className="text-red-500 shrink-0" />}
                         {formatShipmentEventLabel(ev)}
                       </span>
                       <span className="text-[var(--text-muted)]">{fmtDateTime(ev.timestamp)}</span>
@@ -175,6 +232,9 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                         {ev.event_type === "claim_created" ? translateClaimNotes(ev.notes) : ev.notes}
                       </p>
                     )}
+                    {ev.has_delivery_photo && (
+                      <DeliveryPhotoThumbnail trackingId={ev.tracking_id} />
+                    )}
                     {ev.event_type === "claim_created" && ev.notes && (
                       (() => {
                         const m = ev.notes!.match(/REC-\d+/);
@@ -186,7 +246,7 @@ export function EventTimeline({ events, branches, showHeading, className }: Even
                                 to={`/claims/${claimId}`}
                                 className="inline-flex items-center gap-1.5 bg-red-600 text-white text-[13px] font-semibold px-3 py-1.5 rounded-md no-underline hover:bg-red-700 transition-colors"
                               >
-                                📋 Ver reclamo {claimId}
+                                <ClipboardList size={14} className="mr-1 inline" /> Ver reclamo {claimId}
                               </Link>
                             </div>
                           );

@@ -1,4 +1,6 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { Paperclip, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -9,14 +11,14 @@ interface ChatInputProps {
   onFileSelect?: (file: File) => void;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({
+export function ChatInput({
   onSend,
   disabled = false,
   fileUploadDisabled,
   placeholder = 'Escribe tu mensaje...',
   showFileUpload = false,
   onFileSelect,
-}) => {
+}: ChatInputProps) {
   const [input, setInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachDisabled = fileUploadDisabled ?? disabled;
@@ -31,45 +33,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && onFileSelect) {
-      onFileSelect(file);
-    }
+    if (file && onFileSelect) onFileSelect(file);
     e.target.value = '';
   };
 
   return (
-    <form className="chat-input" onSubmit={handleSubmit}>
+    <form className="border-t border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2" onSubmit={handleSubmit}>
       {showFileUpload && (
         <>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf,.doc,.docx"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-            disabled={attachDisabled}
-          />
-          <button
-            type="button"
-            className="attach-btn"
-            disabled={attachDisabled}
-            title="Adjuntar archivo"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            📎
-          </button>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileChange} disabled={attachDisabled} />
+          <Button type="button" variant="ghost" size="icon" disabled={attachDisabled} title="Adjuntar archivo" onClick={() => fileInputRef.current?.click()} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            <Paperclip size={16} />
+          </Button>
         </>
       )}
       <input
-        type="text"
-        value={input}
+        type="text" value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
+        placeholder={placeholder} disabled={disabled}
+        className="flex-1 border border-gray-200 dark:border-gray-600 rounded-full px-4 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/20 focus:border-[var(--brand)] disabled:bg-gray-50 dark:disabled:bg-gray-600 disabled:cursor-not-allowed transition-all"
       />
-      <button type="submit" disabled={disabled || !input.trim()}>
-        Enviar
-      </button>
+      <Button type="submit" size="icon" disabled={disabled || !input.trim()} className="rounded-full shrink-0">
+        <ArrowRight size={16} />
+      </Button>
     </form>
   );
-};
+}

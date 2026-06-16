@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, X, Bot, Loader } from 'lucide-react';
 import { ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { chatbotService } from '../../api/chatbot';
+import { Button } from '@/components/ui/button';
+import { fmtDate } from '@/utils/date';
 import type {
   ChatMessage,
   Shipment,
@@ -10,7 +13,6 @@ import type {
   DamageSubtype,
   ActiveClaimInfo,
 } from '../../types/chatbot';
-import './chatbot.css';
 
 type ChatState =
   | 'initial'
@@ -26,7 +28,7 @@ type ChatState =
 
 type UserType = 'recipient' | 'sender' | null;
 
-export const ChatbotWidget: React.FC = () => {
+export function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [state, setState] = useState<ChatState>('initial');
@@ -132,7 +134,7 @@ export const ChatbotWidget: React.FC = () => {
             `¿Querés responderlo ahora?`,
             [
               { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
-              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+              { label: '⏭️ Responder después', value: 'skip', action: 'restart' as const },
             ]
           );
         } else {
@@ -217,7 +219,7 @@ export const ChatbotWidget: React.FC = () => {
             `¿Querés responderlo ahora?`,
             [
               { label: '✏️ Sí, responder ahora', value: 'respond_claim', action: 'respond_claim' as const },
-              { label: '⏭️ Responder después',   value: 'skip',          action: 'restart'       as const },
+              { label: '⏭️ Responder después', value: 'skip', action: 'restart' as const },
             ]
           );
         } else {
@@ -318,7 +320,7 @@ export const ChatbotWidget: React.FC = () => {
           '¿Cómo ingresás al sistema?',
           [
             { label: '📦 Soy el destinatario', value: 'recipient', action: 'as_recipient' },
-            { label: '🏢 Soy el remitente',    value: 'sender',    action: 'as_sender'    },
+            { label: '🏢 Soy el remitente', value: 'sender', action: 'as_sender' },
           ]
         );
       } else if (awaitingDni) {
@@ -385,7 +387,7 @@ export const ChatbotWidget: React.FC = () => {
   };
 
   // Función para limpiar la sesión
-  const clearSession = () => {
+  const clearSession = useCallback(() => {
     setSessionActive(false);
     setShipment(null);
     setRecipientDni('');
@@ -407,7 +409,7 @@ export const ChatbotWidget: React.FC = () => {
 
     // Volver a authenticating para que el usuario pueda reingresar sus datos
     setState('authenticating');
-  };
+  }, []);
 
   // Función para reiniciar el timer de inactividad
   const resetSessionTimer = () => {
@@ -462,7 +464,7 @@ export const ChatbotWidget: React.FC = () => {
     if (timeRemaining === 0 && sessionActive && state === 'authenticated') {
       clearSession();
     }
-  }, [timeRemaining, sessionActive, state]);
+  }, [timeRemaining, sessionActive, state, clearSession]);
 
   // US-4: enviar respuesta a reclamo pendiente_customer
   const handleSubmitClaimResponse = async (file: File | null) => {
@@ -593,12 +595,12 @@ export const ChatbotWidget: React.FC = () => {
           addBotMessage(
             '📋 Vamos a registrar tu reclamo.\n\n¿Cuál es el motivo?',
             [
-              { label: '📦 Daño / Faltante',       value: 'damage',        action: 'select_claim_type' as const },
-              { label: '🕐 Demora en entrega',      value: 'delay',         action: 'select_claim_type' as const },
-              { label: '🚫 No lo recibí',           value: 'not_delivered', action: 'select_claim_type' as const },
-              { label: '😡 Maltrato del personal',  value: 'bad_treatment', action: 'select_claim_type' as const },
-              { label: '📝 Datos incorrectos',      value: 'wrong_data',    action: 'select_claim_type' as const },
-              { label: '❓ Otro',                   value: 'other',         action: 'select_claim_type' as const },
+              { label: '📦 Daño / Faltante', value: 'damage', action: 'select_claim_type' as const },
+              { label: '🕐 Demora en entrega', value: 'delay', action: 'select_claim_type' as const },
+              { label: '🚫 No lo recibí', value: 'not_delivered', action: 'select_claim_type' as const },
+              { label: '😡 Maltrato del personal', value: 'bad_treatment', action: 'select_claim_type' as const },
+              { label: '📝 Datos incorrectos', value: 'wrong_data', action: 'select_claim_type' as const },
+              { label: '❓ Otro', value: 'other', action: 'select_claim_type' as const },
             ]
           );
           setState('authenticated');
@@ -613,10 +615,10 @@ export const ChatbotWidget: React.FC = () => {
             addBotMessage(
               '¿Qué tipo de daño o faltante?  (podés elegir más de uno)',
               [
-                { label: '📦 Producto dañado',    value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
-                { label: '📉 Falta mercadería',   value: 'missing_products',  action: 'toggle_damage_subtype' as const },
-                { label: '📫 Embalaje dañado',    value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
-                { label: '✅ Listo, continuar',   value: 'done',              action: 'confirm_damage_subtypes' as const },
+                { label: '📦 Producto dañado', value: 'product_damaged', action: 'toggle_damage_subtype' as const },
+                { label: '📉 Falta mercadería', value: 'missing_products', action: 'toggle_damage_subtype' as const },
+                { label: '📫 Embalaje dañado', value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+                { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
               ]
             );
           } else {
@@ -642,10 +644,10 @@ export const ChatbotWidget: React.FC = () => {
               ? '¿Qué tipo de daño o faltante? (podés elegir más de uno)'
               : `Seleccionados: ${newSubtypes.length}. ¿Alguno más o continuás?`,
             [
-              { label: label('product_damaged',   'Producto dañado'),  value: 'product_damaged',   action: 'toggle_damage_subtype' as const },
-              { label: label('missing_products',  'Falta mercadería'), value: 'missing_products',  action: 'toggle_damage_subtype' as const },
-              { label: label('packaging_damaged', 'Embalaje dañado'),  value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
-              { label: '✅ Listo, continuar',                           value: 'done',              action: 'confirm_damage_subtypes' as const },
+              { label: label('product_damaged', 'Producto dañado'), value: 'product_damaged', action: 'toggle_damage_subtype' as const },
+              { label: label('missing_products', 'Falta mercadería'), value: 'missing_products', action: 'toggle_damage_subtype' as const },
+              { label: label('packaging_damaged', 'Embalaje dañado'), value: 'packaging_damaged', action: 'toggle_damage_subtype' as const },
+              { label: '✅ Listo, continuar', value: 'done', action: 'confirm_damage_subtypes' as const },
             ]
           );
           break;
@@ -757,7 +759,7 @@ export const ChatbotWidget: React.FC = () => {
       'Esta acción no se puede deshacer.',
       [
         { label: `✅ Sí, ${verb}`, value: 'yes', action: 'confirm_cancel' },
-        { label: '❌ No, volver',  value: 'no',  action: 'restart' },
+        { label: '❌ No, volver', value: 'no', action: 'restart' },
       ]
     );
   };
@@ -872,7 +874,7 @@ export const ChatbotWidget: React.FC = () => {
 
   const isTerminalStatus = (status: string): boolean => {
     return ['delivered', 'returned', 'cancelled', 'lost', 'destroyed',
-            'rechazado', 'no_entregado', 'expired'].includes(status);
+      'rechazado', 'no_entregado', 'expired'].includes(status);
   };
 
   const getNoActionsMessage = (status: string): string => {
@@ -906,46 +908,43 @@ export const ChatbotWidget: React.FC = () => {
     return statusMap[status] || status;
   };
 
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('es-AR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateStr: string): string => fmtDate(dateStr);
+
+  const isSessionWarning = timeRemaining < 20 && sessionActive && state === 'authenticated';
 
   return (
     <>
       {/* Botón flotante */}
-      <button
-        className={`chatbot-toggle ${isOpen ? 'open' : ''}`}
+      <Button
+        size="icon"
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--brand)] text-white text-2xl shadow-lg hover:shadow-xl z-50 transition-all max-sm:right-4 max-sm:bottom-4"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Abrir chat"
       >
-        {isOpen ? '✕' : '💬'}
-      </button>
+        {isOpen ? <X size={20} /> : <MessageCircle size={20} />}
+      </Button>
 
       {/* Ventana del chat */}
       {isOpen && (
-        <div className="chatbot-widget">
-          <div className="chatbot-header">
-            <div className="header-content">
-              <span className="bot-icon">🤖</span>
+        <div className="fixed bottom-24 right-6 w-[360px] max-h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden border border-gray-200 max-sm:right-4 max-sm:bottom-20 max-sm:w-[calc(100vw-32px)] max-sm:max-h-[calc(100vh-120px)]">
+          <div className="bg-[var(--brand)] text-white p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Bot size={18} />
               <div>
-                <h3>Asistente LogiTrack</h3>
-                <span className={`status-indicator ${timeRemaining < 20 && sessionActive && state === 'authenticated' ? 'warning' : ''}`}>
+                <h3 className="text-sm font-bold m-0">Asistente LogiTrack</h3>
+                <span className={`text-xs opacity-80 font-medium flex items-center gap-1 ${isSessionWarning ? 'animate-pulse !opacity-100' : ''}`}>
                   {loading
-                    ? '⏳ Procesando...'
+                    ? <><Loader size={12} className="animate-spin" /> Procesando...</>
                     : sessionActive && state === 'authenticated'
-                      ? `🟢 Sesión activa (${timeRemaining}s)`
-                      : '🟢 En línea'}
+                      ? <><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Sesión activa ({timeRemaining}s)</>
+                      : <><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> En línea</>}
                 </span>
               </div>
             </div>
-            <button
-              className="close-button"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20 rounded-full"
               onClick={() => {
                 setIsOpen(false);
                 if (sessionTimeoutRef.current) {
@@ -954,11 +953,11 @@ export const ChatbotWidget: React.FC = () => {
               }}
               aria-label="Cerrar chat"
             >
-              ✕
-            </button>
+              <X size={16} />
+            </Button>
           </div>
 
-          <div className="chatbot-messages">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
             {messages.map(message => (
               <ChatMessageComponent
                 key={message.id}
@@ -967,10 +966,10 @@ export const ChatbotWidget: React.FC = () => {
               />
             ))}
             {loading && (
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+              <div className="flex items-center gap-1 px-3 py-2 w-fit">
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '200ms' }} />
+                <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '400ms' }} />
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -978,13 +977,20 @@ export const ChatbotWidget: React.FC = () => {
 
           <ChatInput
             onSend={handleUserInput}
-            disabled={loading || state === 'authenticated' || state === 'claim_evidence'}
+            disabled={
+              loading ||
+              state === 'authenticated' ||
+              state === 'claim_evidence' ||
+              state === 'claim_damage_subtypes' ||
+              state === 'claim_response_evidence' ||
+              (state === 'authenticating' && !!trackingId && !awaitingDni)
+            }
             placeholder={
               state === 'authenticated'
                 ? 'Selecciona una opción...'
                 : state === 'claim_evidence' || state === 'claim_response_evidence'
-                ? 'Seleccioná un archivo o usá las opciones...'
-                : 'Escribe tu respuesta...'
+                  ? 'Seleccioná un archivo o usá las opciones...'
+                  : 'Escribe tu respuesta...'
             }
             showFileUpload={state === 'claim_evidence' || state === 'claim_response_evidence'}
             fileUploadDisabled={loading}

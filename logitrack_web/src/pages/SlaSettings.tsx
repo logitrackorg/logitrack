@@ -82,7 +82,7 @@ export function SlaSettings() {
   if (loading) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <p className="text-sm text-slate-500">Cargando configuración…</p>
+        <p className="text-sm dark:text-gray-400 text-slate-500">Cargando configuración…</p>
       </div>
     );
   }
@@ -106,8 +106,8 @@ export function SlaSettings() {
           <Gauge className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-slate-900 leading-tight">Motor de Anomalías SLA</h1>
-          <p className="text-[12px] text-slate-500">
+          <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight">Motor de Anomalías SLA</h1>
+          <p className="text-[12px] dark:text-gray-400 text-slate-500">
             Parámetros del motor de detección y escalado automático de prioridad
           </p>
         </div>
@@ -129,7 +129,7 @@ export function SlaSettings() {
 
       {/* ── Card 1: Umbral de tolerancia ────────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Umbral de tolerancia</CardTitle>
           <CardDescription>
             Multiplicador aplicado al promedio histórico de permanencia en cada estado.
@@ -158,12 +158,12 @@ export function SlaSettings() {
                   const v = parseFloat(e.target.value);
                   if (!isNaN(v) && v >= 1.0) setDraft({ ...draft, tolerance_multiplier: v });
                 }}
-                className="w-20 h-9 text-center text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-20 h-9 text-center text-sm font-semibold border dark:border-gray-700 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
-              <span className="text-sm text-slate-500 font-medium">x</span>
+              <span className="text-sm dark:text-gray-400 text-slate-500 font-medium">x</span>
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-slate-400">
+          <p className="mt-2 text-[11px] dark:text-gray-500 text-slate-400">
             Valor actual: el motor actúa cuando el tiempo en estado supera el{" "}
             <strong>{(draft.tolerance_multiplier * 100).toFixed(0)} %</strong> del promedio histórico.
           </p>
@@ -172,7 +172,7 @@ export function SlaSettings() {
 
       {/* ── Card 2: Tope de prioridad ────────────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Tope de prioridad</CardTitle>
           <CardDescription>
             Nivel máximo al que el motor puede escalar automáticamente.
@@ -186,7 +186,7 @@ export function SlaSettings() {
               className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 draft.priority_ceiling === opt.value
                   ? "border-amber-400 bg-amber-50/60"
-                  : "border-slate-200 hover:bg-slate-50"
+                  : "dark:border-gray-700 border-slate-200 dark:hover:bg-gray-700 hover:bg-slate-50"
               }`}
             >
               <input
@@ -198,8 +198,8 @@ export function SlaSettings() {
                 className="mt-0.5 accent-amber-500 shrink-0"
               />
               <div>
-                <p className="text-sm font-semibold text-slate-800 capitalize">{opt.value}</p>
-                <p className="text-[11px] text-slate-500">{opt.label}</p>
+                <p className="text-sm font-semibold dark:text-gray-300 text-slate-800 capitalize">{opt.value}</p>
+                <p className="text-[11px] dark:text-gray-400 text-slate-500">{opt.label}</p>
               </div>
             </label>
           ))}
@@ -208,7 +208,7 @@ export function SlaSettings() {
 
       {/* ── Card 3: Estados habilitados ──────────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Estados habilitados para evaluación</CardTitle>
           <CardDescription>
             Solo los envíos en los estados marcados serán evaluados por el motor. Debe haber al menos uno seleccionado.
@@ -223,8 +223,8 @@ export function SlaSettings() {
                   key={code}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm ${
                     checked
-                      ? "border-amber-300 bg-amber-50/50 text-slate-800"
-                      : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                      ? "border-amber-300 bg-amber-50/50 dark:text-gray-300 text-slate-800"
+                      : "dark:border-gray-700 border-slate-200 dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-50"
                   }`}
                 >
                   <input
@@ -248,7 +248,7 @@ export function SlaSettings() {
 
       {/* ── Card 4: Modo + Frecuencia de recálculo ──────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Modo y frecuencia del Collector</CardTitle>
           <CardDescription>
             Define cómo y cuándo el motor recalcula los promedios históricos de permanencia por estado.
@@ -268,7 +268,7 @@ export function SlaSettings() {
                 className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                   (draft.calculation_mode ?? "periodic") === opt.value
                     ? "border-amber-400 bg-amber-50/60"
-                    : "border-slate-200 hover:bg-slate-50"
+                    : "dark:border-gray-700 border-slate-200 dark:hover:bg-gray-700 hover:bg-slate-50"
                 }`}
               >
                 <input
@@ -280,8 +280,8 @@ export function SlaSettings() {
                   className="mt-0.5 accent-amber-500 shrink-0"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">{opt.label}</p>
-                  <p className="text-[11px] text-slate-500">{opt.desc}</p>
+                  <p className="text-sm font-semibold dark:text-gray-300 text-slate-800">{opt.label}</p>
+                  <p className="text-[11px] dark:text-gray-400 text-slate-500">{opt.desc}</p>
                 </div>
               </label>
             ))}
@@ -289,7 +289,7 @@ export function SlaSettings() {
 
           {/* Interval input — disabled when mode == "daily" */}
           <div className={`transition-opacity ${(draft.calculation_mode ?? "periodic") === "daily" ? "opacity-40 pointer-events-none" : ""}`}>
-            <p className="text-xs font-semibold text-slate-600 mb-2">
+            <p className="text-xs font-semibold dark:text-gray-400 text-slate-600 mb-2">
               Intervalo de recálculo (Modo Periódico)
             </p>
             <div className="flex items-center gap-3">
@@ -303,10 +303,10 @@ export function SlaSettings() {
                   const v = parseInt(e.target.value, 10);
                   if (!isNaN(v) && v >= 1) setDraft({ ...draft, cache_interval_minutes: v });
                 }}
-                className="w-28 h-9 text-center text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-slate-100"
+                className="w-28 h-9 text-center text-sm font-semibold border dark:border-gray-700 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-slate-100"
               />
-              <span className="text-sm text-slate-500">minutos</span>
-              <span className="text-[11px] text-slate-400 ml-2">
+              <span className="text-sm dark:text-gray-400 text-slate-500">minutos</span>
+              <span className="text-[11px] dark:text-gray-500 text-slate-400 ml-2">
                 (equivale a{" "}
                 {draft.cache_interval_minutes >= 60
                   ? `${(draft.cache_interval_minutes / 60).toFixed(1)} h`
@@ -317,13 +317,13 @@ export function SlaSettings() {
           </div>
 
           {/* Telemetría del Collector — runtime state devuelto por el GET */}
-          <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
+          <div className="flex flex-col gap-1.5 pt-1 border-t dark:border-gray-700 border-slate-100">
             {/* Última ejecución — string pre-formateado desde el servidor */}
             <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <p className="text-xs text-slate-400">
+              <Clock className="w-3.5 h-3.5 dark:text-gray-500 text-slate-400 shrink-0" />
+              <p className="text-xs dark:text-gray-500 text-slate-400">
                 Último cálculo:{" "}
-                <span className="font-medium text-slate-500">
+                <span className="font-medium dark:text-gray-400 text-slate-500">
                   {settings?.last_calculated_at
                     ? settings.last_calculated_at
                     : "Pendiente"}
@@ -342,7 +342,7 @@ export function SlaSettings() {
 
       {/* ── Card 5: Hora de repriorización ─────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Hora de repriorización diaria</CardTitle>
           <CardDescription>
             El Collector calcula y acumula promedios a lo largo del día. A la hora indicada, el
@@ -355,11 +355,11 @@ export function SlaSettings() {
               type="time"
               value={draft.escalation_time ?? "23:00"}
               onChange={(e) => setDraft({ ...draft, escalation_time: e.target.value })}
-              className="h-9 px-3 text-sm font-semibold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+              className="h-9 px-3 text-sm font-semibold border dark:border-gray-700 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 dark:bg-gray-800 bg-white"
             />
-            <span className="text-sm text-slate-500">hora local Argentina (ART, UTC−3)</span>
+            <span className="text-sm dark:text-gray-400 text-slate-500">hora local Argentina (ART, UTC−3)</span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed">
+          <p className="text-[11px] dark:text-gray-500 text-slate-400 leading-relaxed">
             Define a qué hora se aplicarán los saltos de prioridad.{" "}
             <span className="text-amber-600 font-medium">
               Nota: El ruteo automático diario se actualiza a las 02:00 AM. Se recomienda
@@ -372,7 +372,7 @@ export function SlaSettings() {
 
       {/* ── Card 6: Kill-switch de repriorización ───────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3 border-b border-slate-100">
+        <CardHeader className="pb-3 border-b dark:border-gray-700 border-slate-100">
           <CardTitle className="text-base">Repriorización automática</CardTitle>
           <CardDescription>
             Cuando está deshabilitado, el motor sigue detectando envíos demorados y los registra
@@ -390,15 +390,15 @@ export function SlaSettings() {
             {/* Left: icon + text */}
             <div className="flex items-center gap-2.5 min-w-0">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                (draft.auto_escalate ?? true) ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"
+                (draft.auto_escalate ?? true) ? "bg-emerald-50 text-emerald-600" : "dark:bg-gray-700/50 bg-slate-100 dark:text-gray-500 text-slate-400"
               }`}>
                 <Power className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-800">
+                <p className="text-sm font-semibold dark:text-gray-300 text-slate-800">
                   {(draft.auto_escalate ?? true) ? "Habilitada" : "Deshabilitada"}
                 </p>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] dark:text-gray-400 text-slate-500">
                   {(draft.auto_escalate ?? true)
                     ? "Las prioridades se actualizan automáticamente al detectar demoras."
                     : "Solo detección y log — sin cambios en la base de datos."}
@@ -417,7 +417,7 @@ export function SlaSettings() {
               {/* Track */}
               <div className="absolute inset-0 rounded-full bg-slate-300 peer-checked:bg-emerald-500 transition-colors duration-200" />
               {/* Thumb */}
-              <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-6" />
+              <div className="absolute top-0.5 left-0.5 w-5 h-5 dark:bg-gray-800 bg-white rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-6" />
             </div>
           </label>
           {!(draft.auto_escalate ?? true) && (
@@ -437,7 +437,7 @@ export function SlaSettings() {
         <button
           onClick={() => setDraft(settings)}
           disabled={!isDirty || saveState === "saving"}
-          className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-40 transition-colors cursor-pointer"
+          className="text-xs dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 disabled:opacity-40 transition-colors cursor-pointer"
         >
           Descartar cambios
         </button>
@@ -485,7 +485,7 @@ function CollectorStatusBadge({
       ? "text-amber-600"
       : s === "completado"
         ? "text-emerald-600"
-        : "text-slate-400";
+        : "dark:text-gray-500 text-slate-400";
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -501,9 +501,9 @@ function CollectorStatusBadge({
 
       {/* Duración — solo visible cuando hay dato */}
       {duration && (
-        <span className="text-xs text-slate-400">
+        <span className="text-xs dark:text-gray-500 text-slate-400">
           · Tiempo de ejecución:{" "}
-          <span className="font-mono font-semibold text-slate-500">{duration}</span>
+          <span className="font-mono font-semibold dark:text-gray-400 text-slate-500">{duration}</span>
         </span>
       )}
     </div>

@@ -79,6 +79,10 @@ type StatusChangedPayload struct {
 	DriverID            string
 	RejectedByRecipient bool // delivery_failed: recipient explicitly refused
 	ContingencyDelivery bool // delivered via DNI fallback after exhausting keyword attempts
+	// Delivery photo evidence (última milla only)
+	DeliveryPhotoPath string
+	DeliveryPhotoName string
+	DeliveryPhotoMime string
 }
 
 type ShipmentCorrectedPayload struct {
@@ -117,6 +121,7 @@ type PaymentConfirmedPayload struct {
 	OldTrackingID       string
 	NewTrackingID       string
 	Amount              float64
+	Method              PaymentMethod
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
 	SecurityKeyword     string

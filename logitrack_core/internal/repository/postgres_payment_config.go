@@ -25,9 +25,9 @@ func (r *postgresPaymentConfigRepository) Get() model.PaymentConfig {
 	var cfg model.PaymentConfig
 	var encToken, encSecret string
 	err := r.db.QueryRow(`
-		SELECT mp_enabled, mock_enabled, mp_alias, mp_cvu, mp_access_token, mp_webhook_secret
+		SELECT mp_enabled, mock_enabled, transfer_enabled, transfer_holder, mp_alias, mp_cvu, mp_access_token, mp_webhook_secret
 		FROM payment_config WHERE id = 1`).
-		Scan(&cfg.MPEnabled, &cfg.MockEnabled, &cfg.MPAlias, &cfg.MPCVU, &encToken, &encSecret)
+		Scan(&cfg.MPEnabled, &cfg.MockEnabled, &cfg.TransferEnabled, &cfg.TransferHolder, &cfg.MPAlias, &cfg.MPCVU, &encToken, &encSecret)
 	if err != nil {
 		return model.DefaultPaymentConfig()
 	}
@@ -50,10 +50,11 @@ func (r *postgresPaymentConfigRepository) Get() model.PaymentConfig {
 func (r *postgresPaymentConfigRepository) Update(cfg model.PaymentConfig) error {
 	_, err := r.db.Exec(`
 		UPDATE payment_config
-		SET mp_enabled = $1, mock_enabled = $2, mp_alias = $3, mp_cvu = $4,
-		    mp_access_token = $5, mp_webhook_secret = $6
+		SET mp_enabled = $1, mock_enabled = $2, transfer_enabled = $3, transfer_holder = $4,
+		    mp_alias = $5, mp_cvu = $6, mp_access_token = $7, mp_webhook_secret = $8
 		WHERE id = 1`,
-		cfg.MPEnabled, cfg.MockEnabled, cfg.MPAlias, cfg.MPCVU,
+		cfg.MPEnabled, cfg.MockEnabled, cfg.TransferEnabled, cfg.TransferHolder,
+		cfg.MPAlias, cfg.MPCVU,
 		appcrypto.Encrypt(cfg.MPAccessToken, r.key),
 		appcrypto.Encrypt(cfg.MPWebhookSecret, r.key),
 	)

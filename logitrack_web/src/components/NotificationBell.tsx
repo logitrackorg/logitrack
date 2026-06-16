@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell, CheckCheck, X, Building2, Warehouse, RotateCcw, PackageCheck, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon, Bot, Truck, MapPin, UserCheck } from "lucide-react";
 import { notificationApi, fetchServerClockOffsetMs, type Notification } from "../api/notifications";
+import { Button } from "@/components/ui/button";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,32 @@ function groupAccent(type: string): string {
   if (type === "chatbot_cancelled_by_sender")    return "#ef4444";
   if (type === "chatbot_delivery_rescheduled")   return "#38bdf8";
   return "#94a3b8";
+}
+
+// ─── Tailwind accent color helper ──────────────────────────────────────────
+// Maps notification types to Tailwind text-color classes so dynamic
+// accent backgrounds can resolve via `currentColor` (bg-current, etc.).
+
+function typeTextColor(type: string): string {
+  switch (type) {
+    case "destination_arrival": return "text-emerald-400";
+    case "shipment_received": return "text-blue-400";
+    case "return_arrival": return "text-orange-400";
+    case "return_started": return "text-orange-500";
+    case "return_completed": return "text-amber-500";
+    case "sla_risk": return "text-red-500";
+    case "sla_expired": return "text-red-700";
+    case "fatigue_alert": return "text-red-500";
+    case "min_fill_reached": return "text-violet-500";
+    case "route_assigned": return "text-sky-500";
+    case "route_reassigned": return "text-amber-500";
+    case "trip_driver_assigned": return "text-emerald-500";
+    case "chatbot_pickup_requested": return "text-violet-400";
+    case "chatbot_rejected_by_recipient": return "text-orange-500";
+    case "chatbot_cancelled_by_sender": return "text-red-500";
+    case "chatbot_delivery_rescheduled": return "text-cyan-400";
+    default: return "text-slate-400";
+  }
 }
 
 // ─── SLA countdown helpers ────────────────────────────────────────────────────
@@ -246,14 +273,21 @@ export function NotificationBell() {
     return () => clearInterval(id);
   }, []);
 
-  // Close panel on outside click.
+  // Close panel on outside click or Escape key.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const handleToggle = () => {
@@ -318,15 +352,6 @@ export function NotificationBell() {
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
-  const rowBase: React.CSSProperties = {
-    padding: "12px 16px",
-    borderBottom: "1px solid #1a2e4a",
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    transition: "background 0.15s",
-  };
-
   const renderSingle = (n: Notification) => {
     const isSLARisk           = n.type === "sla_risk";
     const isSLAExpired        = n.type === "sla_expired";
@@ -337,33 +362,31 @@ export function NotificationBell() {
     const rescheduledDate     = isRescheduled ? (n.body.match(/para el (\d{2}\/\d{2}\/\d{4})/)?.[1] ?? null) : null;
     const eta               = isSLARisk ? parseSLAEta(n.body) : null;
     const displayBody       = isSLARisk ? bodyWithoutEta(n.body) : n.body;
-    const accent            = groupAccent(n.type);
-    const unreadBg          = isReturnCompleted ? "rgba(245,158,11,0.12)" : `${accent}12`;
+    const accentClass       = typeTextColor(n.type);
+    const unreadBgClass     = !n.read_at
+      ? (isReturnCompleted ? "bg-current/[.12]" : "bg-current/[.07]")
+      : "";
+    const accentBorder      = (isFatigue || isReturnCompleted) && !n.read_at;
 
     return (
       <div
         key={n.id}
         onClick={() => handleItemClick(n)}
-        style={{
-          ...rowBase,
-          cursor: "pointer",
-          background: n.read_at ? "transparent" : unreadBg,
-          borderLeft: (isFatigue || isReturnCompleted) && !n.read_at
-            ? `3px solid ${accent}`
-            : "3px solid transparent",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "transparent" : unreadBg)}
+        className={`px-4 py-3 border-b border-[#1a2e4a] flex gap-2.5 items-start transition-colors cursor-pointer border-l-[3px] ${accentClass} ${unreadBgClass} ${
+          accentBorder ? "border-l-current" : "border-l-transparent"
+        } hover:bg-white/[0.04]`}
       >
-        <div style={{ marginTop: 2, flexShrink: 0 }}><NotifIcon type={n.type} /></div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-            <span style={{ color: (isFatigue || isReturnCompleted) ? "#fcd34d" : "#e2e8f0", fontSize: 13, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div className="mt-0.5 shrink-0"><NotifIcon type={n.type} /></div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-baseline gap-2">
+            <span className={`truncate text-[13px] ${!n.read_at ? "font-semibold" : "font-normal"} ${
+              (isFatigue || isReturnCompleted) ? "text-amber-300" : "text-[#e2e8f0]"
+            }`}>
               {n.title}
             </span>
-            <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(n.created_at, clockOffsetMs)}</span>
+            <span className="text-[11px] text-[#64748b] shrink-0">{relativeTime(n.created_at, clockOffsetMs)}</span>
           </div>
-          <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div className="text-xs text-[#94a3b8] mt-0.5 truncate">
             {displayBody}
           </div>
           {/* Countdown live para sla_risk — solo mientras el SLA sigue vigente */}
@@ -371,40 +394,42 @@ export function NotificationBell() {
             const label = slaCountdown(eta, clockOffsetMs);
             if (label === "venció") return null; // sla_expired ya cubre este estado
             return (
-              <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600, color: accent }}>
+              <div className="text-[11px] mt-[3px] font-semibold text-current">
                 {label}
               </div>
             );
           })()}
           {/* Label fijo para sla_expired */}
           {isSLAExpired && (
-            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: accent }}>
+            <div className="text-[11px] mt-[3px] font-bold text-current">
               SLA vencido
             </div>
           )}
           {/* Botón de acción para return_completed y return_arrival — CA-05: requiere acción */}
           {(isReturnCompleted || isReturnArrival) && (
-            <div style={{ fontSize: 11, marginTop: 3, fontWeight: 700, color: "#f59e0b" }}>
+            <div className="text-[11px] mt-[3px] font-bold text-amber-500">
               Acción requerida: coordinar entrega con remitente
             </div>
           )}
           {/* Chip de nueva fecha para reprogramaciones del chatbot */}
           {isRescheduled && rescheduledDate && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 11, fontWeight: 700, color: "#38bdf8", background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.3)", borderRadius: 5, padding: "2px 7px" }}>
+            <div className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/30 rounded-[5px] px-1.5 py-0.5">
               📅 Nueva fecha: {rescheduledDate}
             </div>
           )}
           {/* Botón exclusivo para las alertas de fatiga */}
           {isFatigue && (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={(e) => { e.stopPropagation(); navigate("/supervisor/fatigue"); setOpen(false); }}
-              style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: "#f87171", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, padding: "2px 8px", cursor: "pointer" }}
+              className="mt-1.5 text-[11px] text-red-400 bg-red-500/15 border-red-500/30 rounded-[5px] px-2 py-0.5"
             >
               Ver historial del chofer →
-            </button>
+            </Button>
           )}
         </div>
-        {!n.read_at && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 6 }} />}
+        {!n.read_at && <div className="w-[7px] h-[7px] rounded-full shrink-0 mt-1.5 bg-current" />}
       </div>
     );
   };
@@ -413,45 +438,33 @@ export function NotificationBell() {
     const type      = items[0].type;
     const expanded  = expandedGroups.has(key);
     const hasUnread = items.some((n) => !n.read_at);
-    const accent    = groupAccent(type);
+    const accentClass = typeTextColor(type);
     const Chevron   = expanded ? ChevronUp : ChevronDown;
-    const isSLA     = type === "sla_risk" || type === "sla_expired";
-    const unreadBg  = type === "destination_arrival" ? "rgba(52,211,153,0.07)"
-                    : type === "return_arrival"       ? "rgba(251,146,60,0.07)"
-                    : type === "return_started"       ? "rgba(249,115,22,0.07)"
-                    : type === "return_completed"     ? "rgba(245,158,11,0.12)"
-                    : isSLA                           ? `${accent}12`
-                    : "rgba(96,165,250,0.07)";
-    const subBg     = type === "destination_arrival" ? "rgba(52,211,153,0.05)"
-                    : type === "return_arrival"       ? "rgba(251,146,60,0.05)"
-                    : type === "return_started"       ? "rgba(249,115,22,0.05)"
-                    : type === "return_completed"     ? "rgba(245,158,11,0.08)"
-                    : isSLA                           ? `${accent}0d`
-                    : "rgba(96,165,250,0.05)";
+    const unreadBgClass = hasUnread
+      ? (type === "return_completed" ? "bg-current/[.12]" : "bg-current/[.07]")
+      : "";
 
     return (
       <div key={key}>
         {/* Group header — click toggles expand, does NOT navigate or mark read */}
         <div
           onClick={() => toggleGroup(key)}
-          style={{ ...rowBase, cursor: "pointer", background: hasUnread ? unreadBg : "transparent" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = hasUnread ? unreadBg : "transparent")}
+          className={`px-4 py-3 border-b border-[#1a2e4a] flex gap-2.5 items-start cursor-pointer transition-colors ${accentClass} ${unreadBgClass} hover:bg-white/[0.04]`}
         >
-          <div style={{ marginTop: 2, flexShrink: 0 }}><GroupIcon type={type} /></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-              <span style={{ color: "#e2e8f0", fontSize: 13, fontWeight: hasUnread ? 600 : 400 }}>
+          <div className="mt-0.5 shrink-0"><GroupIcon type={type} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-baseline gap-2">
+              <span className={`text-[13px] text-[#e2e8f0] ${hasUnread ? "font-semibold" : "font-normal"}`}>
                 {groupLabel(type, items.length)}
               </span>
-              <span style={{ color: "#64748b", fontSize: 11, flexShrink: 0 }}>{relativeTime(items[0].created_at, clockOffsetMs)}</span>
+              <span className="text-[11px] text-[#64748b] shrink-0">{relativeTime(items[0].created_at, clockOffsetMs)}</span>
             </div>
-            <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>
+            <div className="text-xs text-[#94a3b8] mt-0.5">
               {expanded ? "Tocá cada envío para ver el detalle" : `${items.length} envíos · expandir`}
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            {hasUnread && <div style={{ width: 7, height: 7, borderRadius: "50%", background: accent, marginTop: 2 }} />}
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            {hasUnread && <div className="w-[7px] h-[7px] rounded-full bg-current mt-0.5" />}
             <Chevron size={14} color="#64748b" />
           </div>
         </div>
@@ -462,28 +475,30 @@ export function NotificationBell() {
           const isSLAExpired = n.type === "sla_expired";
           const eta          = isSLARisk ? parseSLAEta(n.body) : null;
           const displayBody  = isSLARisk ? bodyWithoutEta(n.body) : n.body;
+          // subBg: return_completed uses 8%, others use 5%
+          const subBgClass   = n.read_at
+            ? "bg-black/[0.15]"
+            : (type === "return_completed" ? "bg-current/[.08]" : "bg-current/[.05]");
           return (
             <div
               key={n.id}
               onClick={() => handleItemClick(n)}
-              style={{ ...rowBase, cursor: "pointer", paddingLeft: 36, background: n.read_at ? "rgba(0,0,0,0.15)" : subBg, borderBottom: "1px solid #152338" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = n.read_at ? "rgba(0,0,0,0.15)" : subBg)}
+              className={`px-4 py-3 cursor-pointer pl-9 border-b border-[#152338] transition-colors ${accentClass} ${subBgClass} hover:bg-white/[0.04]`}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ color: "#cbd5e1", fontSize: 12, fontWeight: n.read_at ? 400 : 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
+              <div className="flex-1 min-w-0">
+                <span className={`text-xs block truncate ${!n.read_at ? "font-semibold" : "font-normal"} text-[#cbd5e1]`}>
                   {displayBody}
                 </span>
                 {isSLARisk && eta && (() => {
                   const label = slaCountdown(eta, clockOffsetMs);
                   if (label === "venció") return null;
-                  return <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>{label}</span>;
+                  return <span className="text-[11px] font-semibold text-current">{label}</span>;
                 })()}
                 {isSLAExpired && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>SLA vencido</span>
+                  <span className="text-[11px] font-bold text-current">SLA vencido</span>
                 )}
               </div>
-              {!n.read_at && <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0, marginTop: 4 }} />}
+              {!n.read_at && <div className="w-[6px] h-[6px] rounded-full shrink-0 mt-1 bg-current" />}
             </div>
           );
         })}
@@ -499,78 +514,79 @@ export function NotificationBell() {
     <>
       {/* ── Banner crítico de fatiga — fijo en la parte superior de la pantalla ── */}
       {criticalAlert && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
-          background: "linear-gradient(90deg, #7f1d1d, #991b1b)",
-          borderBottom: "2px solid #ef4444",
-          display: "flex", alignItems: "center", gap: 12,
-          padding: "10px 16px",
-          boxShadow: "0 4px 20px rgba(239,68,68,0.4)",
-          animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite",
-        }}>
-          <AlertTriangle size={20} color="#fca5a5" style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ color: "#fca5a5", fontWeight: 700, fontSize: 13 }}>
+        <div className="fixed top-0 inset-x-0 z-[9999] bg-gradient-to-r from-red-900 to-red-800 border-b-2 border-red-500 flex items-center gap-3 px-4 py-2.5 shadow-[0_4px_20px_rgba(239,68,68,0.4)] animate-pulse">
+          <AlertTriangle size={20} color="#fca5a5" className="shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-red-300 font-bold text-[13px]">
               {criticalAlert.title}
             </span>
-            <span style={{ color: "#fecaca", fontSize: 12, marginLeft: 10 }}>
+            <span className="text-red-200 text-xs ml-2.5">
               {criticalAlert.body}
             </span>
           </div>
-          <button
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={() => { navigate("/supervisor/fatigue"); dismissCriticalAlert(); }}
-            style={{ flexShrink: 0, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+            className="shrink-0 bg-white/15 border-white/30 text-white px-3 py-1 text-xs font-bold whitespace-nowrap rounded-md"
           >
             Ver historial del chofer
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={dismissCriticalAlert}
             aria-label="Descartar alerta"
             title="Descartar"
-            style={{ flexShrink: 0, background: "none", border: "none", color: "#fca5a5", cursor: "pointer", display: "flex", padding: 4 }}
+            className="text-red-300"
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
       )}
 
-    <div ref={panelRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+    <div ref={panelRef} className="relative inline-flex items-center">
       {/* Bell button */}
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={handleToggle}
         title="Notificaciones"
-        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 6px", borderRadius: 6, display: "flex", alignItems: "center", position: "relative", color: "#cbd5e1" }}
+        className="relative text-slate-300"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span style={{ position: "absolute", top: 0, right: 0, background: "#ef4444", color: "#fff", borderRadius: "50%", fontSize: 10, fontWeight: 700, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white rounded-full text-[10px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-[3px]">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-      </button>
+      </Button>
 
       {/* Dropdown panel */}
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380, background: "#0f2744", border: "1px solid #1e3a5f", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 50, overflow: "hidden" }}>
+        <div className="absolute top-[calc(100%+8px)] right-0 w-[380px] max-sm:w-[calc(100vw-32px)] max-sm:right-0 bg-[#0f2744] border border-[var(--sidebar-bg)] rounded-[10px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #1e3a5f" }}>
-            <span style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 14 }}>Notificaciones</span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--sidebar-bg)]">
+            <span className="text-[#e2e8f0] font-bold text-sm">Notificaciones</span>
+            <div className="flex gap-2 items-center">
               {unreadCount > 0 && (
-                <button onClick={handleMarkAllRead} title="Marcar todas como leídas" style={{ background: "none", border: "none", color: "#60a5fa", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                <Button variant="ghost" size="sm" onClick={handleMarkAllRead} title="Marcar todas como leídas" className="text-blue-400">
                   <CheckCheck size={14} /> Marcar todas
-                </button>
+                </Button>
               )}
-              <button onClick={() => setOpen(false)} aria-label="Cerrar panel" style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", display: "flex" }}>
+              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Cerrar panel" className="text-slate-400">
                 <X size={16} />
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* List */}
-          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+          <div className="max-h-[420px] overflow-y-auto">
             {displayItems.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", color: "#64748b", fontSize: 13 }}>Sin notificaciones</div>
+              <div className="py-8 px-4 text-center">
+                <Bell size={24} className="mx-auto mb-2 text-slate-600" />
+                <p className="text-[13px] text-[#64748b]">Sin notificaciones</p>
+              </div>
             ) : (
               displayItems.map((item) =>
                 item.kind === "single"
@@ -581,10 +597,10 @@ export function NotificationBell() {
           </div>
 
           {/* Footer */}
-          <div style={{ padding: "10px 16px", borderTop: "1px solid #1e3a5f", textAlign: "center" }}>
-            <button onClick={() => { navigate("/notifications"); setOpen(false); }} style={{ background: "none", border: "none", color: "#60a5fa", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+          <div className="px-4 py-2.5 border-t border-[var(--sidebar-bg)] text-center">
+            <Button variant="ghost" onClick={() => { navigate("/notifications"); setOpen(false); }} className="text-blue-400 text-[13px] font-medium">
               Ver todas
-            </button>
+            </Button>
           </div>
         </div>
       )}

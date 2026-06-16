@@ -12,7 +12,10 @@ api.interceptors.request.use((config) => {
 
 export interface SLABottleneck {
   status: string;
-  count: number;
+  /** "SLA Comprometido": superó el 100% del promedio base pero no el 150% de tolerancia. Aún recuperable. */
+  at_risk_count: number;
+  /** "Demorado": superó el 150% de tolerancia — el SLA ya se rompió. */
+  delayed_count: number;
 }
 
 export interface SLADayCount {
@@ -23,6 +26,8 @@ export interface SLADayCount {
 export interface SLAStateAverage {
   status: string;
   avg_hours: number;
+  /** false = todavía no hay suficientes transiciones históricas para calcular este promedio */
+  has_data: boolean;
 }
 
 export type FleetStatus =
@@ -32,19 +37,6 @@ export type FleetStatus =
   | "OCIOSO"
   | "ESTABLE";
 
-/** Operational metrics collected from DB. Status/message from heuristic (compat). */
-export interface FleetSuggestion {
-  status: FleetStatus;
-  message: string;
-  delay_rate_pct: number;
-  active_drivers: number;
-  idle_drivers: number;
-  orphan_shipments: number;
-  active_drivers_load: number;
-  drivers_needed?: number;
-  capacity_used_pct?: number;
-}
-
 /** Raw operational numbers shared by both classification engines. */
 export interface FleetRawMetrics {
   total_shipments: number;
@@ -52,7 +44,6 @@ export interface FleetRawMetrics {
   orphan_shipments: number;
   idle_drivers: number;
   active_drivers: number;
-  active_drivers_load: number;
   /** Recommended staffing delta. >0 = hire, <0 = deactivate, 0 = no action. */
   suggested_driver_delta: number;
 }
@@ -69,22 +60,38 @@ export interface FleetDiagnosis {
   vote_distribution?: Record<string, number>;
 }
 
-export interface SLAMetrics {
-  sla_health_rate: number;
-  active_total: number;
-  delayed_total: number;
-  bottlenecks: SLABottleneck[];
-  delay_trend: SLADayCount[];
-  current_averages: SLAStateAverage[];
-  /** Operational metrics + heuristic status (backward compat). */
-  fleet_suggestion: FleetSuggestion;
-  /** Pure deterministic heuristic result — always present. */
+/** Heuristic + ML diagnosis for a single branch — both engines evaluate each
+ *  branch's operation independently. */
+export interface BranchFleetDiagnosis {
+  branch_id: string;
+  branch_name: string;
   heuristic_diagnosis: FleetDiagnosis;
-  /** Random Forest result. Null when the model has not been loaded yet. */
   ml_prediction: FleetDiagnosis | null;
 }
 
+export interface SLAMetrics {
+  sla_health_rate: number;
+  active_total: number;
+  /** "SLA Comprometido": dwell > 100% del promedio base, ≤ 150% de tolerancia. No penaliza sla_health_rate. */
+  at_risk_total: number;
+  /** Desglose de at_risk_total por nombre de sucursal receptora. */
+  at_risk_by_branch: Record<string, number>;
+  /** "Demorado": dwell > 150% de tolerancia — SLA roto. Único contador que penaliza sla_health_rate. */
+  delayed_total: number;
+  /** Desglose de delayed_total por nombre de sucursal receptora. */
+  delayed_by_branch: Record<string, number>;
+  bottlenecks: SLABottleneck[];
+  delay_trend: SLADayCount[];
+  current_averages: SLAStateAverage[];
+  /** One heuristic+ML diagnosis per active branch. */
+  fleet_diagnoses: BranchFleetDiagnosis[];
+}
+
 export const slaMetricsApi = {
-  get: () =>
-    api.get<SLAMetrics>("/stats/sla-metrics").then((r) => r.data),
+  /** `branch_id`: narrows the SLA snapshot KPIs (health rate, comprometidos,
+   *  demorados, bottlenecks) to one branch — mirrors the dashboard's global
+   *  branch filter. Omit / empty for all branches. Does NOT affect
+   *  `fleet_diagnoses` (that stays per-branch regardless). */
+  get: (params?: { branch_id?: string }) =>
+    api.get<SLAMetrics>("/stats/sla-metrics", { params }).then((r) => r.data),
 };

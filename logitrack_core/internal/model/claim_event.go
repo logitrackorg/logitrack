@@ -11,6 +11,9 @@ const (
 	EventClaimInReview          = "claim_in_review"
 	EventClaimCustomerResponded = "claim_customer_responded"
 	EventClaimComment           = "claim_comment"
+	EventClaimTransferred       = "claim_transferred"
+	EventClaimTransferAccepted  = "claim_accepted"
+	EventClaimTransferRejected  = "claim_transfer_rejected"
 )
 
 // ClaimEvent is the API representation of a claim timeline entry.
@@ -28,6 +31,8 @@ type ClaimEvent struct {
 	ToStatus         ClaimStatus         `json:"to_status,omitempty"`
 	EvidenceFileName string              `json:"evidence_file_name,omitempty"`
 	EvidenceFilePath string              `json:"evidence_file_path,omitempty"`
+	OriginBranchID   string              `json:"origin_branch_id,omitempty"`
+	TargetBranchID   string              `json:"target_branch_id,omitempty"`
 }
 
 type ClaimCreatedPayload struct {
@@ -72,4 +77,25 @@ type ClaimCustomerRespondedPayload struct {
 // No cambia el estado del reclamo: solo deja seguimiento en el historial.
 type ClaimCommentPayload struct {
 	Comment string `json:"comment"`
+}
+
+type ClaimTransferredPayload struct {
+	OriginBranchID string      `json:"origin_branch_id"`
+	TargetBranchID string      `json:"target_branch_id"`
+	FromStatus     ClaimStatus `json:"from_status"`
+	ToStatus       ClaimStatus `json:"to_status"`
+	Notes          string      `json:"notes,omitempty"`
+}
+
+type ClaimTransferAcceptedPayload struct {
+	AssignedBranchID string      `json:"assigned_branch_id"`
+	FromStatus       ClaimStatus `json:"from_status"`
+	ToStatus         ClaimStatus `json:"to_status"`
+}
+
+type ClaimTransferRejectedPayload struct {
+	AssignedBranchID string      `json:"assigned_branch_id"`
+	FromStatus       ClaimStatus `json:"from_status"`
+	ToStatus         ClaimStatus `json:"to_status"`
+	Notes            string      `json:"notes,omitempty"`
 }

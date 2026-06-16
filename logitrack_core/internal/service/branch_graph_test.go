@@ -63,6 +63,7 @@ func (f *fakeBranchRepo) Create(b model.Branch) error                     { retu
 func (f *fakeBranchRepo) Add(b model.Branch)                              {}
 func (f *fakeBranchRepo) Update(id string, b model.Branch) error          { return nil }
 func (f *fakeBranchRepo) UpdateStatus(id string, s model.BranchStatus, u string) error { return nil }
+func (f *fakeBranchRepo) UpdateEmployeeOfMonth(id string, enabled bool, u string) error { return nil }
 
 func newTestGraphService(edges []model.BranchEdge) *BranchGraphService {
 	return NewBranchGraphService(

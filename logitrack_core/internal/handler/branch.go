@@ -191,6 +191,34 @@ func (h *BranchHandler) GetCapacity(c *gin.Context) {
 	c.JSON(http.StatusOK, cap)
 }
 
+// UpdateEmployeeOfMonth enables or disables the "Empleado del Mes" feature for a branch.
+func (h *BranchHandler) UpdateEmployeeOfMonth(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el ID de sucursal es obligatorio"})
+		return
+	}
+
+	var req model.UpdateEmployeeOfMonthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user := c.MustGet(middleware.UserKey).(model.User)
+	branch, err := h.svc.UpdateEmployeeOfMonth(id, req.Enabled, user.Username)
+	if err != nil {
+		if errors.Is(err, service.ErrBranchNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, branch)
+}
+
 // UpdateStatus changes branch operational status.
 func (h *BranchHandler) UpdateStatus(c *gin.Context) {
 	id := c.Param("id")

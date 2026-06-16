@@ -13,7 +13,7 @@ import type { Branch } from "../api/branches";
 import { Card } from "../components/ui/card";
 import { useAuth } from "../context/AuthContext";
 
-export default function OperatorTripReception() {
+export function OperatorTripReception() {
   const { id: tripId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -180,7 +180,7 @@ export default function OperatorTripReception() {
         )}
         <button
           onClick={() => navigate("/vehicles")}
-          className="h-10 px-6 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
+          className="h-10 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
         >
           Volver a Flota
         </button>
@@ -212,7 +212,7 @@ export default function OperatorTripReception() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
               <Truck className="w-4.5 h-4.5" />
             </div>
             <div>
@@ -255,7 +255,7 @@ export default function OperatorTripReception() {
         <button
           onClick={handleLastMileFinish}
           disabled={busy}
-          className="w-full h-11 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          className="w-full h-11 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {busy ? "Procesando…" : (
             <>
@@ -295,7 +295,7 @@ export default function OperatorTripReception() {
       {/* Info del viaje */}
       <Card className="p-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
             <Truck className="w-4.5 h-4.5" />
           </div>
           <div>
@@ -324,7 +324,7 @@ export default function OperatorTripReception() {
               prevPickups.forEach((tid) => { all[tid] = true; });
               setUnloadChecked(all);
             }}
-            className="ml-auto text-xs font-semibold text-[#1e3a5f] hover:underline cursor-pointer"
+            className="ml-auto text-xs font-semibold text-[var(--sidebar-bg)] hover:underline cursor-pointer"
           >
             Marcar todos
           </button>
@@ -412,7 +412,7 @@ export default function OperatorTripReception() {
       <button
         onClick={handleConfirm}
         disabled={busy}
-        className="w-full h-11 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+        className="w-full h-11 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-bold cursor-pointer disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
       >
         {busy ? (
           "Procesando…"
@@ -452,7 +452,7 @@ function ShipmentRow({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className={`w-4 h-4 cursor-pointer ${highlight === "sky" ? "accent-sky-600" : "accent-[#1e3a5f]"}`}
+        className={`w-4 h-4 cursor-pointer ${highlight === "sky" ? "accent-sky-600" : "accent-[var(--sidebar-bg)]"}`}
       />
       <span className={`text-xs font-mono flex-1 ${highlight === "sky" ? "text-sky-800" : "text-slate-700"}`}>{tid}</span>
       {checked && badgeChecked && (

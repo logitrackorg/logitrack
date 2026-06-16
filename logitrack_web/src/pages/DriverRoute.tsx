@@ -4,9 +4,11 @@ import {
   AlertCircle,
   AlertTriangle,
   Ban,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Clock,
+  Film,
   MapPin,
   Package,
   Truck,
@@ -18,6 +20,7 @@ import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
+import { CameraCapture } from "../components/ui/CameraCapture";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
 import { ZoneAlert } from "../components/ui/ZoneAlert";
@@ -35,6 +38,7 @@ import {
   recipientView,
   timeWindowTone,
 } from "../utils/driverActions";
+import { getPendingFatigueStep } from "../utils/fatigueWizardProgress";
 
 type Tab = "pendientes" | "completados";
 
@@ -54,6 +58,12 @@ export function DriverRoute() {
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
 
+  // Bloqueo automático de pantalla por alerta de fatiga (LOGITRACK-499).
+  const [fatigueBlocked, setFatigueBlocked] = useState(false);
+  const [fatigueUnblockedBy, setFatigueUnblockedBy] = useState<string | null>(null);
+  // Clave del evento de desbloqueo actualmente en pantalla (para persistir el ACK en sessionStorage).
+  const pendingAckRef = useRef<string | null>(null);
+
   // Gate de re-test en ruta: true = mostrar KssCheckIn antes de actualizar la lista.
   const [midRouteCheckin, setMidRouteCheckin] = useState(false);
   // Misfires capturados en el momento en que se activa el overlay, para mostrarlo
@@ -68,6 +78,8 @@ export function DriverRoute() {
   const [rejectedShipment, setRejectedShipment] = useState<Shipment | null>(null);
   const [recipientDni, setRecipientDni] = useState("");
   const [deliveryKeyword, setDeliveryKeyword] = useState("");
+  const [deliveryPhoto, setDeliveryPhoto] = useState<Blob | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [useContingency, setUseContingency] = useState(false);
   const [failedReason, setFailedReason] = useState<string>("");
   const [failedNotes, setFailedNotes] = useState("");
@@ -125,6 +137,30 @@ export function DriverRoute() {
   useEffect(() => { loadWithRetry(); }, []);
   useEffect(() => { zoneApi.list().then(setZones).catch(() => {}); }, []);
 
+  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const status = await driverApi.getFatigueBlockStatus();
+        const nowBlocked = status.blocked ?? false;
+        setFatigueBlocked(nowBlocked);
+        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
+          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
+          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
+          pendingAckRef.current = ackKey;
+          if (ackKey !== storedAck) {
+            setFatigueUnblockedBy(status.unblocked_by);
+          }
+        }
+      } catch {
+        // Error de red → mantener estado actual (conservador)
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const closeSheets = () => {
     setDeliverShipment(null);
     setFailedShipment(null);
@@ -136,6 +172,7 @@ export function DriverRoute() {
     setFailedNotes("");
     setRejectedReason("");
     setRejectedNotes("");
+    setDeliveryPhoto(null);
   };
 
   // Secuencia post-entrega:
@@ -185,6 +222,7 @@ export function DriverRoute() {
       } else {
         if (locked || !deliveryKeyword.trim()) return;
       }
+      if (!deliveryPhoto) return;
     } else {
       if (!recipientDni.trim()) return;
     }
@@ -198,6 +236,7 @@ export function DriverRoute() {
           contingency: useContingency,
           current_speed: effectiveSpeed,
           speed_source: speedSource,
+          photo: deliveryPhoto!,
         });
       } else {
         await shipmentApi.updateStatus(deliverShipment.tracking_id, {
@@ -304,6 +343,22 @@ export function DriverRoute() {
   const { position: userLocation, mode: simulationMode, isPaused, pause, play, reset } =
     useGeolocation(routePoints, simActive ? "simulate" : undefined, 360 * speedMultiplier, deliveryPoints);
 
+  // Router Guard anti-bypass por F5: si quedó un wizard de fatiga a mitad de
+  // camino (persistido en sessionStorage), forzar el gate de inmediato — el
+  // backend ya da por completo el check-in apenas se envía el paso KSS, así
+  // que no podemos confiar solo en su respuesta para decidir si mostrarlo.
+  useEffect(() => {
+    if (!user) return;
+    if (!getPendingFatigueStep(user.id)) return;
+    driverApi.getTodayCheckin()
+      .then((checkin) => setRequiresSleepData(checkin.requires_sleep_data ?? true))
+      .catch(() => setRequiresSleepData(true))
+      .finally(() => {
+        pause();
+        setMidRouteCheckin(true);
+      });
+  }, [user, pause]);
+
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
 
@@ -406,16 +461,16 @@ export function DriverRoute() {
   return (
     <div className="pb-32">
       {/* Header sticky con progreso y tabs */}
-      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200">
         <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
                 <Truck className="w-4.5 h-4.5" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg font-bold text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
-                <p className="text-[11px] text-slate-500 leading-tight">
+                <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
+                <p className="text-[11px] dark:text-gray-400 text-slate-500 leading-tight">
                   {today} · {done}/{total} completados
                 </p>
               </div>
@@ -427,8 +482,8 @@ export function DriverRoute() {
                 <button
                   onClick={() => setViewMode('list')}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
-                    ? 'bg-[#1e3a5f] text-white'
-                    : 'text-slate-500 hover:bg-slate-100'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
+                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
                     }`}
                 >
                   <Package className="w-3.5 h-3.5" />
@@ -437,8 +492,8 @@ export function DriverRoute() {
                 <button
                   onClick={() => setViewMode('map')}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
-                    ? 'bg-[#1e3a5f] text-white'
-                    : 'text-slate-500 hover:bg-slate-100'
+                    ? 'bg-[var(--sidebar-bg)] text-white'
+                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
                     }`}
                 >
                   <MapPin className="w-3.5 h-3.5" />
@@ -453,7 +508,7 @@ export function DriverRoute() {
                 title="Activar simulación GPS"
                 className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
               >
-                🎬
+                <Film size={16} />
               </button>
             )}
 
@@ -463,14 +518,14 @@ export function DriverRoute() {
                 title="Zona peligrosa activa"
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
               >
-                ⚠️ Zona
+                <AlertTriangle size={12} className="mr-0.5" /> Zona
               </span>
             )}
             <RouteStatusPill status={routeStatus} />
           </div>
 
           <div className="mt-3">
-            <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
               <div
                 ref={el => { if (el) el.style.width = `${progressPct}%`; }}
                 className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
@@ -562,11 +617,11 @@ export function DriverRoute() {
                 {tab === "pendientes" ? (
                   <>
                     <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-900">¡Todo listo por ahora!</p>
-                    <p className="mt-1 text-xs text-slate-500">No quedan entregas pendientes.</p>
+                    <p className="text-sm font-semibold dark:text-gray-100 text-slate-900">¡Todo listo por ahora!</p>
+                    <p className="mt-1 text-xs dark:text-gray-400 text-slate-500">No quedan entregas pendientes.</p>
                   </>
                 ) : (
-                  <p className="text-sm text-slate-500">Aún no completaste ninguna entrega.</p>
+                  <p className="text-sm dark:text-gray-400 text-slate-500">Aún no completaste ninguna entrega.</p>
                 )}
               </Card>
             ) : (
@@ -598,16 +653,38 @@ export function DriverRoute() {
           userLocation={userLocation ?? undefined}
           routeInfo={routeInfo}
           canAct={canAct}
-          onDeliver={() => { if (nextShipment) setDeliverShipment(nextShipment); }}
+          onDeliver={() => {
+            if (!nextShipment) return;
+            if (nextShipment.delivery_method === "ultima_milla") {
+              setDeliverShipment(nextShipment);
+              setCameraOpen(true);
+            } else {
+              setDeliverShipment(nextShipment);
+            }
+          }}
           onFailed={() => { if (nextShipment) setFailedShipment(nextShipment); }}
           onRejected={() => { if (nextShipment) setRejectedShipment(nextShipment); }}
         />
       )}
 
 
+      {/* Camera for delivery photo */}
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(blob) => {
+            setDeliveryPhoto(blob);
+            setCameraOpen(false);
+          }}
+          onClose={() => {
+            setCameraOpen(false);
+            if (!deliveryPhoto) setDeliverShipment(null);
+          }}
+        />
+      )}
+
       {/* Bottom sheets */}
       <DeliverSheet
-        open={!!deliverShipment}
+        open={!!deliverShipment && !cameraOpen}
         onClose={closeSheets}
         shipment={deliverShipment}
         keyword={deliveryKeyword}
@@ -623,6 +700,8 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         error={actionError}
+        photo={deliveryPhoto}
+        onRetakePhoto={() => setCameraOpen(true)}
       />
       <FailedSheet
         open={!!failedShipment}
@@ -654,6 +733,43 @@ export function DriverRoute() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
       />
+
+      {/* Overlay de bloqueo por fatiga — fixed encima de todo (LOGITRACK-499) */}
+      {fatigueBlocked && (
+        <div className="fixed inset-0 z-[9999] bg-[#1a1a2e] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <AlertTriangle size={64} className="text-red-500" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Alerta de fatiga detectada
+          </h2>
+          <p className="text-slate-400 text-base leading-relaxed m-0">
+            Tu supervisor fue notificado.<br/>
+            Esperá su indicación antes de continuar.
+          </p>
+        </div>
+      )}
+
+      {/* Cartelito de autorización — visible cuando el supervisor desbloqueó la ruta (LOGITRACK-501) */}
+      {!fatigueBlocked && fatigueUnblockedBy && (
+        <div className="fixed inset-0 z-[9999] bg-[#0d1f12] flex flex-col items-center justify-center p-8 text-center gap-6">
+          <CheckCircle2 size={64} className="text-emerald-500" />
+          <h2 className="text-white text-[22px] font-bold m-0">
+            Ruta autorizada
+          </h2>
+          <p className="text-green-300 text-base leading-relaxed m-0">
+            Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
+            que continúes la ruta.
+          </p>
+          <button
+            onClick={() => {
+              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack_route", pendingAckRef.current);
+              setFatigueUnblockedBy(null);
+            }}
+            className="mt-2 px-9 py-3 rounded-[10px] border-none bg-green-600 text-white text-base font-bold cursor-pointer"
+          >
+            Continuar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -684,12 +800,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[#2563eb]" : "text-slate-500 hover:text-slate-700"
+      className={`relative h-10 px-4 text-sm font-semibold cursor-pointer transition-colors ${active ? "text-[var(--brand)]" : "dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700"
         }`}
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[#2563eb]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[2.5px] rounded-full bg-[var(--brand)]" />
       )}
     </button>
   );
@@ -765,7 +881,7 @@ function ShipmentCard({
     <Card
       className={
         isCompleted
-          ? "p-0 bg-slate-50/60 dark:bg-slate-800/30 border-slate-200"
+          ? "p-0 dark:bg-gray-800/50 bg-slate-50/60 dark:bg-slate-800/30 dark:border-gray-700 border-slate-200"
           : "p-0 hover:shadow-md transition-shadow"
       }
     >
@@ -776,13 +892,13 @@ function ShipmentCard({
       >
         <div className="flex items-start gap-3">
           {order !== undefined && (
-            <div className="shrink-0 w-9 h-9 rounded-xl bg-[#1e3a5f] text-white text-sm font-bold flex items-center justify-center">
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-[var(--sidebar-bg)] text-white text-sm font-bold flex items-center justify-center">
               {String(order).padStart(2, "0")}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <p className={`text-base font-bold leading-snug ${isCompleted ? "text-slate-600" : "text-slate-900"}`}>
+              <p className={`text-base font-bold leading-snug ${isCompleted ? "dark:text-gray-400 text-slate-600" : "dark:text-gray-100 text-slate-900"}`}>
                 {name}
               </p>
               {isDelivered && (
@@ -804,8 +920,8 @@ function ShipmentCard({
                 </span>
               )}
             </div>
-            <p className={`mt-1 text-sm leading-snug flex items-start gap-1.5 ${isCompleted ? "text-slate-500" : "text-slate-700"}`}>
-              <MapPin className="w-3.5 h-3.5 mt-0.5 text-slate-400 shrink-0" />
+            <p className={`mt-1 text-sm leading-snug flex items-start gap-1.5 ${isCompleted ? "dark:text-gray-400 text-slate-500" : "dark:text-gray-300 text-slate-700"}`}>
+              <MapPin className="w-3.5 h-3.5 mt-0.5 dark:text-gray-500 text-slate-400 shrink-0" />
               <span className="break-words">{fullAddress}</span>
             </p>
           </div>
@@ -826,7 +942,7 @@ function ShipmentCard({
                 Frágil
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border bg-slate-50 text-slate-700 border-slate-200">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border dark:bg-gray-800/50 bg-slate-50 dark:text-gray-300 text-slate-700 dark:border-gray-700 border-slate-200">
               <Package className="w-3 h-3" />
               {shipment.weight_kg} kg
             </span>
@@ -847,7 +963,7 @@ function ShipmentCard({
       </button>
 
       {!isCompleted && (
-        <div className="px-4 pb-4 border-t border-slate-100">
+        <div className="px-4 pb-4 border-t dark:border-gray-700 border-slate-100">
           <div className="mt-3" onClick={(e) => e.stopPropagation()}>
             <WhatsAppQuickButton
               phone={phone}
@@ -885,7 +1001,7 @@ function ShipmentCard({
             </>
           )}
 
-          <p className="mt-3 text-[10px] font-mono text-slate-400 text-center">{shipment.tracking_id}</p>
+          <p className="mt-3 text-[10px] font-mono dark:text-gray-500 text-slate-400 text-center">{shipment.tracking_id}</p>
         </div>
       )}
 
@@ -895,7 +1011,7 @@ function ShipmentCard({
           onClick={onOpen}
           className="w-full px-4 pb-3 -mt-1 text-left cursor-pointer"
         >
-          <p className="text-[10px] font-mono text-slate-400">{shipment.tracking_id}</p>
+          <p className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</p>
         </button>
       )}
     </Card>
@@ -919,6 +1035,8 @@ function DeliverSheet({
   needsLocation,
   onRequestLocation,
   error,
+  photo,
+  onRetakePhoto,
 }: {
   open: boolean;
   onClose: () => void;
@@ -936,9 +1054,13 @@ function DeliverSheet({
   needsLocation: boolean;
   onRequestLocation: () => void;
   error: string;
+  photo: Blob | null;
+  onRetakePhoto: () => void;
 }) {
   const keywordRef = useRef<HTMLInputElement>(null);
   const dniRef = useRef<HTMLInputElement>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => {
@@ -948,6 +1070,13 @@ function DeliverSheet({
     }
   }, [open, useContingency]);
 
+  useEffect(() => {
+    if (!photo) { setPhotoPreview(null); return; }
+    const url = URL.createObjectURL(photo);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
   if (!shipment) return null;
   const { name } = recipientView(shipment);
   const isLastMile = shipment.delivery_method === "ultima_milla";
@@ -955,7 +1084,7 @@ function DeliverSheet({
   const locked = keywordAttempts >= 3;
 
   const canConfirm = isLastMile
-    ? useContingency ? !!dni.trim() : (!locked && !!keyword.trim())
+    ? (useContingency ? !!dni.trim() : (!locked && !!keyword.trim())) && !!photo
     : !!dni.trim();
 
   return (
@@ -965,6 +1094,32 @@ function DeliverSheet({
       title="Confirmar entrega"
       description={`Entrega a ${name}`}
     >
+      {/* Delivery photo — required for última milla */}
+      {isLastMile && (
+        <div className="mb-4">
+          {photo && photoPreview ? (
+            <div className="relative rounded-xl overflow-hidden">
+              <img src={photoPreview} alt="Foto de entrega" className="w-full h-36 object-cover" />
+              <button
+                onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
+                className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/70 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full cursor-pointer"
+              >
+                Sacar de nuevo
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetakePhoto(); }}
+              className="w-full rounded-xl border-2 border-dashed border-emerald-400 dark:border-emerald-600 p-4 flex flex-col items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+            >
+              <Camera className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Tomar foto de entrega</span>
+              <span className="text-[11px] text-emerald-600/70 dark:text-emerald-500">Obligatoria para confirmar</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {isLastMile && !useContingency && (
         <>
           {locked && (
@@ -980,7 +1135,7 @@ function DeliverSheet({
               </p>
             </div>
           )}
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
             Palabra clave de seguridad
           </label>
           <input
@@ -992,7 +1147,7 @@ function DeliverSheet({
             disabled={locked}
             className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input disabled:opacity-50 disabled:cursor-not-allowed"
           />
-          <p className="mt-1.5 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
             El cliente debe decirte su palabra clave al abrir la puerta.
           </p>
         </>
@@ -1001,10 +1156,10 @@ function DeliverSheet({
       {isLastMile && useContingency && (
         <>
           <div className="mb-3 rounded-xl bg-amber-50 border border-amber-300 px-4 py-3">
-            <p className="text-xs font-bold text-amber-800">⚠️ Entrega de contingencia</p>
+            <p className="text-xs font-bold text-amber-800"><AlertTriangle size={14} className="inline text-amber-500" /> Entrega de contingencia</p>
             <p className="text-[11px] text-amber-700 mt-0.5">El registro quedará marcado para auditoría del supervisor.</p>
           </div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
             DNI del destinatario
           </label>
           <input
@@ -1021,7 +1176,7 @@ function DeliverSheet({
 
       {!isLastMile && (
         <>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+          <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
             DNI del destinatario
           </label>
           <input
@@ -1033,7 +1188,7 @@ function DeliverSheet({
             placeholder="Ej: 30123456"
             className="w-full h-12 px-4 rounded-xl text-base focus:outline-none focus:ring-[3px] focus:ring-emerald-500/20 focus:border-emerald-500 driver-input"
           />
-          <p className="mt-1.5 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-[11px] dark:text-gray-400 text-slate-500">
             Solo dígitos. Debe coincidir con el DNI registrado al crear el envío.
           </p>
         </>
@@ -1046,7 +1201,7 @@ function DeliverSheet({
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -1070,7 +1225,7 @@ function DeliverSheet({
       {isLastMile && useContingency && (
         <button
           onClick={() => onUseContingency(false)}
-          className="mt-2 w-full text-[11px] text-slate-500 underline cursor-pointer"
+          className="mt-2 w-full text-[11px] dark:text-gray-400 text-slate-500 underline cursor-pointer"
         >
           Volver a intentar con palabra clave
         </button>
@@ -1134,7 +1289,7 @@ function FailedSheet({
       title="Marcar como no entregado"
       description={`No entrega a ${name}`}
     >
-      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
         ¿Qué pasó?
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -1146,7 +1301,7 @@ function FailedSheet({
               onClick={() => onReasonChange(r.id)}
               className={`h-12 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors ${active
                 ? "border-rose-500 bg-rose-50 text-rose-800"
-                : "border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50"
+                : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
                 }`}
             >
               {r.label}
@@ -1155,7 +1310,7 @@ function FailedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -1169,7 +1324,7 @@ function FailedSheet({
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -1240,7 +1395,7 @@ function RejectedSheet({
       title="Rechazo por destinatario"
       description={`${name} rechazó el envío`}
     >
-      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+      <p className="text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-2">
         Motivo del rechazo
       </p>
       <div className="grid grid-cols-2 gap-2 mb-4">
@@ -1253,7 +1408,7 @@ function RejectedSheet({
               className={`h-14 rounded-xl border-2 text-sm font-semibold cursor-pointer transition-colors flex flex-col items-center justify-center gap-0.5 px-2 ${
                 active
                   ? "border-amber-500 bg-amber-50 text-amber-900"
-                  : "border-slate-200 bg-transparent text-slate-700 hover:bg-slate-50"
+                  : "dark:border-gray-700 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700 hover:bg-slate-50"
               }`}
             >
               <span className="text-lg leading-none">{r.emoji}</span>
@@ -1263,7 +1418,7 @@ function RejectedSheet({
         })}
       </div>
 
-      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+      <label className="block text-xs font-bold dark:text-gray-300 text-slate-700 uppercase tracking-wider mb-1.5">
         Notas {requiresNotes ? "(obligatorio)" : "(opcional)"}
       </label>
       <textarea
@@ -1277,7 +1432,7 @@ function RejectedSheet({
       <div className="grid grid-cols-2 gap-2 mt-5">
         <button
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="h-12 rounded-xl border border-slate-200 bg-transparent hover:bg-slate-50 text-slate-700 text-sm font-bold cursor-pointer"
+          className="h-12 rounded-xl border dark:border-gray-700 border-slate-200 bg-transparent dark:hover:bg-gray-700 hover:bg-slate-50 dark:text-gray-300 text-slate-700 text-sm font-bold cursor-pointer"
         >
           Cancelar
         </button>
@@ -1333,13 +1488,13 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto pb-12">
-      <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[#1e3a5f]/8 text-[#1e3a5f] flex items-center justify-center shrink-0">
+      <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
+        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
           <Truck className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-          <p className="mt-1 text-sm text-slate-500">{today}</p>
+          <h1 className="text-2xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
+          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">{today}</p>
         </div>
       </div>
 
@@ -1397,22 +1552,22 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
       {/* Sin viaje activo: el operador ya recibió, el chofer puede empezar otro reparto */}
       {!tripActive && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center mb-5">
-          <div className="w-12 h-12 rounded-xl bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center">
+        <div className="rounded-2xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800/50 bg-slate-50 p-5 flex flex-col items-center gap-3 text-center mb-5">
+          <div className="w-12 h-12 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center">
             <Truck className="w-6 h-6" />
           </div>
-          <p className="text-sm font-bold text-slate-900">¿Empezás otro reparto?</p>
-          <p className="text-xs text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
+          <p className="text-sm font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
+          <p className="text-xs dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
           <button
             onClick={() => navigate("/driver/scan")}
-            className="h-10 px-6 rounded-xl bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
+            className="h-10 px-6 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-bold cursor-pointer transition-colors"
           >
             Escanear vehículo
           </button>
         </div>
       )}
 
-      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
+      <p className="text-xs font-bold dark:text-gray-400 text-slate-500 uppercase tracking-wider mb-2 px-1">
         Resumen del día
       </p>
       <div className="grid gap-2">
@@ -1424,7 +1579,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
             <Card
               key={shipment.tracking_id}
               onClick={() => navigate(`/shipments/${shipment.tracking_id}`)}
-              className="px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-3"
+              className="px-4 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors flex items-center gap-3"
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                 delivered
@@ -1442,8 +1597,8 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>
-                <code className="text-[10px] font-mono text-slate-400">{shipment.tracking_id}</code>
+                <p className="text-sm font-semibold dark:text-gray-100 text-slate-900 truncate">{name}</p>
+                <code className="text-[10px] font-mono dark:text-gray-500 text-slate-400">{shipment.tracking_id}</code>
                 {rejected && (
                   <p className="text-[10px] text-amber-600 font-medium">Rechazado por destinatario</p>
                 )}
@@ -1460,24 +1615,24 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 function RouteSkeleton() {
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <div className="flex items-start gap-3 mb-5 pb-4 border-b border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-slate-100 animate-pulse" />
+      <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
+        <div className="w-10 h-10 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         <div className="flex-1">
-          <div className="h-5 w-32 rounded bg-slate-100 animate-pulse" />
-          <div className="mt-2 h-3 w-48 rounded bg-slate-100 animate-pulse" />
+          <div className="h-5 w-32 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+          <div className="mt-2 h-3 w-48 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
         </div>
       </div>
       <div className="grid gap-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+          <div key={i} className="rounded-xl border dark:border-gray-700 border-slate-200 dark:bg-gray-800 bg-white p-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 animate-pulse" />
+              <div className="w-9 h-9 rounded-xl dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 w-3/5 rounded bg-slate-100 animate-pulse" />
-                <div className="h-3 w-4/5 rounded bg-slate-100 animate-pulse" />
+                <div className="h-4 w-3/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                <div className="h-3 w-4/5 rounded dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
                 <div className="flex gap-2 mt-3">
-                  <div className="h-6 w-16 rounded-full bg-slate-100 animate-pulse" />
-                  <div className="h-6 w-20 rounded-full bg-slate-100 animate-pulse" />
+                  <div className="h-6 w-16 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
+                  <div className="h-6 w-20 rounded-full dark:bg-gray-700/50 bg-slate-100 animate-pulse" />
                 </div>
               </div>
             </div>

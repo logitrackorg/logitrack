@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/logitrack/core/internal/clock"
 	"github.com/logitrack/core/internal/ml"
 	"github.com/logitrack/core/internal/model"
@@ -41,19 +42,25 @@ var slaStatusLabel = map[string]string{
 	"ready_for_return":     "Listo para devolución",
 }
 
-// delayThresholdHours must match the SLA engine and the frontend badge.
-const delayThresholdHours = 36.0
+// activeRow is one active shipment's status/dwell-time/destination-branch,
+// shared between the global SLA aggregation and the per-branch fleet analysis.
+type activeRow struct {
+	status            string
+	updatedAt         time.Time
+	receivingBranchID string
+}
 
 // SLAMetricsHandler exposes aggregated SLA health metrics for the Dashboard.
 type SLAMetricsHandler struct {
-	db      *sql.DB
-	logRepo *repository.PriorityLogRepository
-	svc     *service.SLAAnomalyService
-	fleetML *ml.FleetMLService
+	db         *sql.DB
+	logRepo    *repository.PriorityLogRepository
+	svc        *service.SLAAnomalyService
+	fleetML    *ml.FleetMLService
+	branchRepo repository.BranchRepository
 }
 
-func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository, svc *service.SLAAnomalyService, fleetML *ml.FleetMLService) *SLAMetricsHandler {
-	return &SLAMetricsHandler{db: db, logRepo: logRepo, svc: svc, fleetML: fleetML}
+func NewSLAMetricsHandler(db *sql.DB, logRepo *repository.PriorityLogRepository, svc *service.SLAAnomalyService, fleetML *ml.FleetMLService, branchRepo repository.BranchRepository) *SLAMetricsHandler {
+	return &SLAMetricsHandler{db: db, logRepo: logRepo, svc: svc, fleetML: fleetML, branchRepo: branchRepo}
 }
 
 // Get computes and returns the three SLA metrics in a single response.
@@ -64,9 +71,9 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	// (time-travel testing) produces negative dwell values → 0 delays reported.
 	now := clock.Now()
 
-	// ── 1. Query active shipments (status + updated_at) ──────────────────────
+	// ── 1. Query active shipments (status + updated_at + receiving branch) ───
 	rows, err := h.db.Query(`
-		SELECT status, updated_at
+		SELECT status, updated_at, receiving_branch_id
 		FROM shipments
 		WHERE status NOT IN (
 			'delivered','returned','cancelled','lost','destroyed',
@@ -78,35 +85,68 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	type activeRow struct {
-		status    string
-		updatedAt time.Time
+	// branchFilter narrows the SLA snapshot KPIs (health rate, comprometidos,
+	// demorados, bottlenecks) to a single branch — mirrors the dashboard's
+	// global branch filter. Empty = all branches (no filtering). It does NOT
+	// affect activeByBranch / fleet_diagnoses: those stay per-branch regardless,
+	// since the "Diagnóstico de flota" selector is independent by design.
+	branchFilter := c.Query("branch_id")
+
+	branchNameByID := map[string]string{}
+	for _, b := range h.branchRepo.List() {
+		branchNameByID[b.ID] = b.Name
 	}
+
 	var actives []activeRow
+	activeByBranch := map[string][]activeRow{}
 	for rows.Next() {
 		var r activeRow
-		if err := rows.Scan(&r.status, &r.updatedAt); err != nil {
+		if err := rows.Scan(&r.status, &r.updatedAt, &r.receivingBranchID); err != nil {
 			continue
 		}
-		actives = append(actives, r)
+		activeByBranch[r.receivingBranchID] = append(activeByBranch[r.receivingBranchID], r)
+		if branchFilter == "" || r.receivingBranchID == branchFilter {
+			actives = append(actives, r)
+		}
 	}
 
 	// ── 2. Compute health rate and bottlenecks ────────────────────────────────
+	// Two-tier classification (matches Shipment.ComputeIsAtRisk/ComputeIsDelayed):
+	//   - "SLA Comprometido" (at risk): dwell > 100 % of baseline (SLAAtRiskThresholdHours)
+	//     but ≤ 150 % tolerance (SLADelayThresholdHours). Still recoverable.
+	//   - "Demorado" (delayed): dwell > 150 % tolerance — SLA broken.
+	// Only "Demorado" counts against SlaHealthRate; "Comprometido" is a warning,
+	// not yet a broken commitment.
 	activeTotal := len(actives)
-	bottleneckMap := map[string]int{}
+	atRiskMap := map[string]int{}
+	delayedMap := map[string]int{}
+	atRiskByBranch := map[string]int{}
+	delayedByBranch := map[string]int{}
 
 	for _, r := range actives {
 		if !slaMonitoredStatuses[r.status] {
 			continue
 		}
 		dwellH := now.Sub(r.updatedAt).Hours()
-		if dwellH > delayThresholdHours {
-			bottleneckMap[r.status]++
+		branchName := branchNameByID[r.receivingBranchID]
+		if branchName == "" {
+			branchName = r.receivingBranchID
+		}
+		switch {
+		case dwellH > model.SLADelayThresholdHours:
+			delayedMap[r.status]++
+			delayedByBranch[branchName]++
+		case dwellH > model.SLAAtRiskThresholdHours:
+			atRiskMap[r.status]++
+			atRiskByBranch[branchName]++
 		}
 	}
 
-	delayedTotal := 0
-	for _, cnt := range bottleneckMap {
+	atRiskTotal, delayedTotal := 0, 0
+	for _, cnt := range atRiskMap {
+		atRiskTotal += cnt
+	}
+	for _, cnt := range delayedMap {
 		delayedTotal += cnt
 	}
 
@@ -115,16 +155,30 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		slaHealthRate = math.Round(float64(activeTotal-delayedTotal)/float64(activeTotal)*1000) / 10
 	}
 
-	bottlenecks := make([]model.SLABottleneck, 0, len(bottleneckMap))
-	for code, cnt := range bottleneckMap {
+	statusCodes := map[string]bool{}
+	for code := range atRiskMap {
+		statusCodes[code] = true
+	}
+	for code := range delayedMap {
+		statusCodes[code] = true
+	}
+	bottlenecks := make([]model.SLABottleneck, 0, len(statusCodes))
+	for code := range statusCodes {
 		label := slaStatusLabel[code]
 		if label == "" {
 			label = code
 		}
-		bottlenecks = append(bottlenecks, model.SLABottleneck{Status: label, Count: cnt})
+		bottlenecks = append(bottlenecks, model.SLABottleneck{
+			Status:       label,
+			AtRiskCount:  atRiskMap[code],
+			DelayedCount: delayedMap[code],
+		})
 	}
 	sort.Slice(bottlenecks, func(i, j int) bool {
-		return bottlenecks[i].Count > bottlenecks[j].Count
+		if bottlenecks[i].DelayedCount != bottlenecks[j].DelayedCount {
+			return bottlenecks[i].DelayedCount > bottlenecks[j].DelayedCount
+		}
+		return bottlenecks[i].AtRiskCount > bottlenecks[j].AtRiskCount
 	})
 
 	// ── 3. Delay trend from priority_logs.json (last 7 calendar days) ─────────
@@ -149,9 +203,42 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 			}
 		}
 		cutoff := maxTs.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+
+		// Log entries carry no branch info (only tracking_id) — when narrowing
+		// to one branch, resolve each candidate entry's shipment to its
+		// receiving branch via a single batched lookup.
+		var trackingBranch map[string]string
+		if branchFilter != "" {
+			var trackingIDs []string
+			for _, entry := range logs {
+				if !entry.Timestamp.Before(cutoff) {
+					trackingIDs = append(trackingIDs, entry.TrackingID)
+				}
+			}
+			trackingBranch = map[string]string{}
+			if len(trackingIDs) > 0 {
+				branchRows, err := h.db.Query(
+					`SELECT tracking_id, receiving_branch_id FROM shipments WHERE tracking_id = ANY($1)`,
+					pq.Array(trackingIDs),
+				)
+				if err == nil {
+					for branchRows.Next() {
+						var tid, bid string
+						if branchRows.Scan(&tid, &bid) == nil {
+							trackingBranch[tid] = bid
+						}
+					}
+					branchRows.Close()
+				}
+			}
+		}
+
 		dayCounts := map[string]int{}
 		for _, entry := range logs {
 			if entry.Timestamp.Before(cutoff) {
+				continue
+			}
+			if branchFilter != "" && trackingBranch[entry.TrackingID] != branchFilter {
 				continue
 			}
 			day := entry.Timestamp.Format("2006-01-02")
@@ -166,43 +253,46 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 		}
 	}
 
-	// ── 4. Current per-status averages — filtered to states with active shipments
-	// Build a set of status codes that actually have ≥ 1 active shipment so that
-	// ghost states (states in the Collector cache but empty in the DB) are not
-	// sent to the frontend and produce phantom bars in the chart.
-	activeStatusSet := make(map[string]bool, len(actives))
-	for _, r := range actives {
-		activeStatusSet[r.status] = true
-	}
+	// ── 4. Current per-status averages — one row per monitored status, always
+	// Iterate the canonical monitored-status list (not the Collector cache map)
+	// so every state the SLA engine tracks gets its own row, regardless of
+	// whether the Collector has historical data for it yet or whether any
+	// shipment is currently sitting in that state. States without enough
+	// historical transitions come back as AvgHours=0 / HasData=false so the
+	// frontend can render an explanatory tooltip instead of hiding the row.
 	currentAvgMap := h.svc.GetCurrentAverages()
-	currentAverages := make([]model.SLAStateAverage, 0, len(currentAvgMap))
-	for code, avgH := range currentAvgMap {
-		if !activeStatusSet[code] {
-			continue // skip states with no active shipments
-		}
+	monitoredCodes := model.MonitoredStatusCodes()
+	currentAverages := make([]model.SLAStateAverage, 0, len(monitoredCodes))
+	for _, code := range monitoredCodes {
+		avgH, hasData := currentAvgMap[code]
 		label := slaStatusLabel[code]
 		if label == "" {
 			label = code
 		}
-		currentAverages = append(currentAverages, model.SLAStateAverage{Status: label, AvgHours: math.Round(avgH*10) / 10})
+		currentAverages = append(currentAverages, model.SLAStateAverage{
+			Status:   label,
+			AvgHours: math.Round(avgH*10) / 10,
+			HasData:  hasData,
+		})
 	}
 	sort.Slice(currentAverages, func(i, j int) bool {
 		return currentAverages[i].AvgHours > currentAverages[j].AvgHours
 	})
 
-	// ── 5. Fleet analysis: heuristic + ML in parallel ────────────────────────────
-	fleetSugg, heuristicDiag, mlPred := h.analyzeFleet(now, delayedTotal, activeTotal)
+	// ── 5. Fleet analysis: heuristic + ML, evaluated independently per branch ──
+	fleetDiagnoses := h.analyzeFleetByBranch(now, activeByBranch)
 
 	c.JSON(http.StatusOK, model.SLAMetrics{
-		SlaHealthRate:      slaHealthRate,
-		ActiveTotal:        activeTotal,
-		DelayedTotal:       delayedTotal,
-		Bottlenecks:        bottlenecks,
-		DelayTrend:         trend,
-		CurrentAverages:    currentAverages,
-		FleetSuggestion:    fleetSugg,
-		HeuristicDiagnosis: heuristicDiag,
-		MLPrediction:       mlPred,
+		SlaHealthRate:   slaHealthRate,
+		ActiveTotal:     activeTotal,
+		AtRiskTotal:     atRiskTotal,
+		AtRiskByBranch:  atRiskByBranch,
+		DelayedTotal:    delayedTotal,
+		DelayedByBranch: delayedByBranch,
+		Bottlenecks:     bottlenecks,
+		DelayTrend:      trend,
+		CurrentAverages: currentAverages,
+		FleetDiagnoses:  fleetDiagnoses,
 	})
 }
 
@@ -213,175 +303,203 @@ func (h *SLAMetricsHandler) Get(c *gin.Context) {
 // near-capacity situations (Case C).
 const maxPackagesPerDriver = 30
 
-// analyzeFleet collects operational metrics from DB, runs the heuristic and
-// (when available) the ML model, and returns all three results:
-//   - FleetSuggestion  — operational metrics + heuristic status (backward compat)
-//   - FleetDiagnosis   — heuristic classification with message
-//   - *FleetDiagnosis  — ML classification with confidence; nil if model not loaded
+// analyzeFleetByBranch evaluates the deterministic heuristic and (when the
+// model is loaded) the Random Forest independently for each active branch:
+// each engine only sees that branch's active shipments and that branch's
+// drivers — there is no longer a single global fleet diagnosis.
 //
 // All DB queries use `now` (clock.Now()) for time-travel consistency.
-func (h *SLAMetricsHandler) analyzeFleet(now time.Time, delayedTotal, activeTotal int) (
-	model.FleetSuggestion, model.FleetDiagnosis, *model.FleetDiagnosis,
-) {
+func (h *SLAMetricsHandler) analyzeFleetByBranch(now time.Time, activeByBranch map[string][]activeRow) []model.BranchFleetDiagnosis {
 	db := h.db
-
-	// ── Delay rate ─────────────────────────────────────────────────────────────
-	var delayRatePct float64
-	if activeTotal > 0 {
-		delayRatePct = math.Round(float64(delayedTotal)/float64(activeTotal)*1000) / 10
-	}
-
-	// ── Active drivers ─────────────────────────────────────────────────────────
-	var activeDrivers int
-	_ = db.QueryRow(
-		`SELECT COUNT(*) FROM users WHERE role = 'driver' AND status = 'activo'`,
-	).Scan(&activeDrivers)
-
-	// ── Today's route assignments ─────────────────────────────────────────────
 	today := now.Format("2006-01-02")
-	type driverLoad struct {
-		driverID    string
-		shipmentCnt int
-	}
-	var loads []driverLoad
-	routeRows, err := db.Query(
-		`SELECT driver_id, jsonb_array_length(shipment_ids)
-		 FROM routes
-		 WHERE date = $1 AND status IN ('pendiente','en_curso')`,
-		today,
-	)
-	if err == nil {
-		defer routeRows.Close()
-		for routeRows.Next() {
-			var dl driverLoad
-			if scanErr := routeRows.Scan(&dl.driverID, &dl.shipmentCnt); scanErr == nil {
-				loads = append(loads, dl)
+
+	branches := h.branchRepo.ListActive()
+	diagnoses := make([]model.BranchFleetDiagnosis, 0, len(branches))
+
+	for _, branch := range branches {
+		actives := activeByBranch[branch.ID]
+		totalShipments := len(actives)
+
+		delayed := 0
+		for _, r := range actives {
+			if !slaMonitoredStatuses[r.status] {
+				continue
+			}
+			if now.Sub(r.updatedAt).Hours() > model.SLADelayThresholdHours {
+				delayed++
 			}
 		}
-	}
-
-	driversWithLoad := make(map[string]int, len(loads))
-	totalAssigned := 0
-	for _, dl := range loads {
-		driversWithLoad[dl.driverID] += dl.shipmentCnt
-		totalAssigned += dl.shipmentCnt
-	}
-	busyDrivers := len(driversWithLoad)
-	idleDrivers := activeDrivers - busyDrivers
-	if idleDrivers < 0 {
-		idleDrivers = 0
-	}
-
-	var activeDriversLoad float64
-	if busyDrivers > 0 {
-		activeDriversLoad = math.Round(float64(totalAssigned)/float64(busyDrivers)*10) / 10
-	}
-
-	// ── Orphan shipments ───────────────────────────────────────────────────────
-	var orphanShipments int
-	_ = db.QueryRow(
-		`SELECT COUNT(*)
-		 FROM shipments s
-		 WHERE s.status = 'out_for_delivery'
-		   AND NOT EXISTS (
-		       SELECT 1
-		       FROM routes r
-		       WHERE r.date = $1
-		         AND r.status IN ('pendiente','en_curso')
-		         AND r.shipment_ids @> to_jsonb(s.tracking_id::text)
-		   )`,
-		today,
-	).Scan(&orphanShipments)
-
-	// ── 1. Heuristic classification (always runs) ─────────────────────────────
-	heurStatus := runHeuristic(delayRatePct, idleDrivers, orphanShipments, activeDriversLoad)
-	heurMsg := fleetStatusMessage(heurStatus, idleDrivers, orphanShipments, activeDriversLoad)
-
-	// Build the operational-metrics struct (backward compat).
-	sugg := model.FleetSuggestion{
-		Status:            heurStatus,
-		Message:           heurMsg,
-		DelayRatePct:      delayRatePct,
-		ActiveDrivers:     activeDrivers,
-		IdleDrivers:       idleDrivers,
-		OrphanShipments:   orphanShipments,
-		ActiveDriversLoad: activeDriversLoad,
-	}
-	if heurStatus == model.FleetStatusCritical {
-		sugg.DriversNeeded = int(math.Ceil(float64(orphanShipments) / maxPackagesPerDriver))
-	} else if heurStatus == model.FleetStatusPreventive {
-		sugg.CapacityUsedPct = math.Round(activeDriversLoad/float64(maxPackagesPerDriver)*1000) / 10
-	}
-
-	rawMetrics := &model.FleetRawMetrics{
-		TotalShipments:       activeTotal,
-		SlaDelayPct:          delayRatePct,
-		OrphanShipments:      orphanShipments,
-		IdleDrivers:          idleDrivers,
-		ActiveDrivers:        activeDrivers,
-		ActiveDriversLoad:    activeDriversLoad,
-		SuggestedDriverDelta: calcDriverDelta(delayRatePct, idleDrivers, orphanShipments, activeDrivers, activeTotal),
-	}
-
-	heurDiag := model.FleetDiagnosis{
-		Status:     heurStatus,
-		Message:    heurMsg,
-		RawMetrics: rawMetrics,
-	}
-
-	// ── 2. ML classification (runs when model is loaded) ──────────────────────
-	var mlPred *model.FleetDiagnosis
-	if h.fleetML != nil && h.fleetML.IsReady() {
-		mlStatus, confidence, voteDist := h.fleetML.PredictFleetState(
-			int(now.Weekday()), activeTotal, delayRatePct,
-			orphanShipments, idleDrivers, activeDriversLoad,
-		)
-		mlMsg := fleetStatusMessage(mlStatus, idleDrivers, orphanShipments, activeDriversLoad)
-		mlPred = &model.FleetDiagnosis{
-			Status:           mlStatus,
-			Message:          mlMsg,
-			Confidence:       math.Round(confidence*10000) / 10000,
-			RawMetrics:       rawMetrics,
-			VoteDistribution: voteDist,
+		var delayRatePct float64
+		if totalShipments > 0 {
+			delayRatePct = math.Round(float64(delayed)/float64(totalShipments)*1000) / 10
 		}
+
+		// ── Active drivers based at this branch ───────────────────────────────
+		var activeDrivers int
+		_ = db.QueryRow(
+			`SELECT COUNT(*) FROM users WHERE role = 'driver' AND status = 'activo' AND branch_id = $1`,
+			branch.ID,
+		).Scan(&activeDrivers)
+
+		// ── Today's route assignments for this branch's drivers ───────────────
+		busyDrivers := map[string]bool{}
+		routeRows, err := db.Query(
+			`SELECT DISTINCT r.driver_id
+			 FROM routes r
+			 JOIN users u ON u.id = r.driver_id
+			 WHERE r.date = $1 AND r.status IN ('pendiente','en_curso') AND u.branch_id = $2`,
+			today, branch.ID,
+		)
+		if err == nil {
+			for routeRows.Next() {
+				var driverID string
+				if scanErr := routeRows.Scan(&driverID); scanErr == nil {
+					busyDrivers[driverID] = true
+				}
+			}
+			routeRows.Close()
+		}
+
+		idleDrivers := activeDrivers - len(busyDrivers)
+		if idleDrivers < 0 {
+			idleDrivers = 0
+		}
+
+		// ── Orphan shipments destined to this branch ──────────────────────────
+		var orphanShipments int
+		_ = db.QueryRow(
+			`SELECT COUNT(*)
+			 FROM shipments s
+			 WHERE s.status = 'out_for_delivery'
+			   AND s.receiving_branch_id = $1
+			   AND NOT EXISTS (
+			       SELECT 1
+			       FROM routes r
+			       WHERE r.date = $2
+			         AND r.status IN ('pendiente','en_curso')
+			         AND r.shipment_ids @> to_jsonb(s.tracking_id::text)
+			   )`,
+			branch.ID, today,
+		).Scan(&orphanShipments)
+
+		// ── Fleet utilization ratio — replaces "carga promedio" as the signal
+		// behind PREVENTIVO/OCIOSO: total active shipments per active driver,
+		// compared against the same maxPackagesPerDriver capacity ceiling.
+		var utilizationRatio float64
+		if activeDrivers > 0 {
+			utilizationRatio = float64(totalShipments) / float64(activeDrivers)
+		}
+
+		rawMetrics := &model.FleetRawMetrics{
+			TotalShipments:       totalShipments,
+			SlaDelayPct:          delayRatePct,
+			OrphanShipments:      orphanShipments,
+			IdleDrivers:          idleDrivers,
+			ActiveDrivers:        activeDrivers,
+			SuggestedDriverDelta: calcDriverDelta(delayRatePct, idleDrivers, orphanShipments, activeDrivers, totalShipments),
+		}
+
+		// ── 1. Heuristic classification (always runs) ─────────────────────────
+		heurStatus := runHeuristic(delayRatePct, idleDrivers, orphanShipments, activeDrivers, totalShipments, utilizationRatio)
+		heurDiag := model.FleetDiagnosis{
+			Status:     heurStatus,
+			Message:    fleetStatusMessage(heurStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments, utilizationRatio),
+			RawMetrics: rawMetrics,
+		}
+
+		// ── 2. ML classification (runs when model is loaded) ──────────────────
+		var mlPred *model.FleetDiagnosis
+		if h.fleetML != nil && h.fleetML.IsReady() {
+			mlStatus, confidence, voteDist := h.fleetML.PredictFleetState(
+				totalShipments, delayRatePct, idleDrivers, activeDrivers, orphanShipments,
+			)
+			mlPred = &model.FleetDiagnosis{
+				Status:           mlStatus,
+				Message:          fleetStatusMessage(mlStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments, utilizationRatio),
+				Confidence:       math.Round(confidence*10000) / 10000,
+				RawMetrics:       rawMetrics,
+				VoteDistribution: voteDist,
+			}
+		}
+
+		diagnoses = append(diagnoses, model.BranchFleetDiagnosis{
+			BranchID:   branch.ID,
+			BranchName: branch.Name,
+			Heuristic:  heurDiag,
+			ML:         mlPred,
+		})
 	}
 
-	return sugg, heurDiag, mlPred
+	return diagnoses
 }
 
 // runHeuristic applies the deterministic five-case fleet classification.
-func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments int, activeDriversLoad float64) model.FleetStatus {
+// utilizationRatio (active shipments per active driver) is the fleet-wide
+// saturation signal that replaced "carga promedio" (avg load of busy drivers
+// only) — same thresholds, same five-case ordering, scoped to one branch.
+func runHeuristic(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int, utilizationRatio float64) model.FleetStatus {
+	// Sucursal vacía: sin envíos activos no hay nada que gestionar.
+	// Debe evaluarse ANTES del chequeo de dotación cero para que
+	// activeDrivers==0 && totalShipments==0 retorne ESTABLE (no CRÍTICO).
+	if totalShipments == 0 {
+		return model.FleetStatusStable
+	}
+	// Caso borde: sin choferes activos pero con envíos pendientes — la
+	// protección contra división por cero deja utilizationRatio en 0, lo que
+	// haría caer (incorrectamente) en ESTABLE/OCIOSO. Es el peor escenario
+	// posible: demanda real, dotación nula. Siempre CRÍTICO.
+	if activeDrivers == 0 && totalShipments > 0 {
+		return model.FleetStatusCritical
+	}
 	if delayRatePct > 10.0 && idleDrivers > 0 {
 		return model.FleetStatusWarning
 	}
 	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
 		return model.FleetStatusCritical
 	}
-	if delayRatePct < 5.0 && idleDrivers == 0 && activeDriversLoad > float64(maxPackagesPerDriver)*0.90 {
+	if delayRatePct < 5.0 && idleDrivers == 0 && utilizationRatio > float64(maxPackagesPerDriver)*0.90 {
 		return model.FleetStatusPreventive
 	}
-	if delayRatePct < 2.0 && activeDriversLoad < float64(maxPackagesPerDriver)*0.50 {
+	if delayRatePct < 2.0 && utilizationRatio < float64(maxPackagesPerDriver)*0.50 {
 		return model.FleetStatusIdle
 	}
 	return model.FleetStatusStable
 }
 
 // fleetStatusMessage returns the operator-facing message for a given fleet status.
-func fleetStatusMessage(status model.FleetStatus, idleDrivers, orphanShipments int, activeDriversLoad float64) string {
+func fleetStatusMessage(status model.FleetStatus, idleDrivers, activeDrivers, orphanShipments, totalShipments int, utilizationRatio float64) string {
+	// Sucursal vacía: el modelo ML puede haber clasificado como CRÍTICO/AVISO
+	// antes de ser reentrenado con la regla de sucursal vacía. Mostramos siempre
+	// un mensaje neutro para evitar frases sin sentido como "0 envíos estancados".
+	if totalShipments == 0 {
+		return "✅ Sin actividad operativa activa. No se requieren acciones en esta sucursal."
+	}
 	switch status {
 	case model.FleetStatusWarning:
 		return "⚠️ Ineficiencia detectada: SLA comprometido, pero hay " +
 			itoa(idleDrivers) + " chofer(es) inactivo(s). " +
 			"Revise la asignación de rutas antes de sumar flota."
 	case model.FleetStatusCritical:
+		// Caso borde: sin choferes activos, el déficit no se mide en envíos
+		// huérfanos (esos requieren un chofer asignado para existir) sino en
+		// volumen total a cubrir desde cero.
+		if activeDrivers == 0 && totalShipments > 0 {
+			driversNeeded := int(math.Ceil(float64(totalShipments) / float64(maxPackagesPerDriver)))
+			verb := "Se requiere"
+			if driversNeeded != 1 {
+				verb = "Se requieren"
+			}
+			return "🚨 Sin dotación activa: la sucursal no tiene choferes disponibles. " +
+				verb + " " + itoa(driversNeeded) + " vehículo(s) para absorber la demanda."
+		}
 		driversNeeded := int(math.Ceil(float64(orphanShipments) / maxPackagesPerDriver))
 		return "🚨 Capacidad rebasada: Todos los choferes están ocupados. " +
 			"Se requieren " + itoa(driversNeeded) + " vehículo(s) extra para absorber " +
 			itoa(orphanShipments) + " envío(s) estancado(s)."
 	case model.FleetStatusPreventive:
-		capacityUsedPct := math.Round(activeDriversLoad/float64(maxPackagesPerDriver)*1000) / 10
-		return "⚡ Flota al límite: El SLA es estable, pero la operación está al " +
-			ftoa(capacityUsedPct) + "% de su capacidad física. " +
+		utilizationPct := math.Round(utilizationRatio/float64(maxPackagesPerDriver)*1000) / 10
+		return "⚡ Flota al límite: El SLA es estable, pero la relación envíos/chofer está al " +
+			ftoa(utilizationPct) + "% de la capacidad de la sucursal. " +
 			"Riesgo alto ante un pico de demanda."
 	case model.FleetStatusIdle:
 		return "💡 Optimización posible: Baja demanda. Se pueden consolidar rutas " +
@@ -397,6 +515,12 @@ func fleetStatusMessage(status model.FleetStatus, idleDrivers, orphanShipments i
 //	< 0  temporarily deactivate abs(n)    (very low demand, more drivers than needed)
 //	  0  no staffing action required
 func calcDriverDelta(delayRatePct float64, idleDrivers, orphanShipments, activeDrivers, totalShipments int) int {
+	// AGREGAR: sin dotación activa pero con demanda real — el déficit no se mide
+	// en envíos huérfanos (esos requieren un chofer asignado para existir) sino
+	// en volumen total a cubrir desde cero.
+	if activeDrivers == 0 && totalShipments > 0 {
+		return int(math.Ceil(float64(totalShipments) / 30.0))
+	}
 	// AGREGAR: SLA crítico, todos los choferes ocupados y envíos sin cubrir.
 	if delayRatePct > 10.0 && idleDrivers == 0 && orphanShipments > 0 {
 		return int(math.Ceil(float64(orphanShipments) / float64(maxPackagesPerDriver)))
@@ -409,6 +533,19 @@ func calcDriverDelta(delayRatePct float64, idleDrivers, orphanShipments, activeD
 		}
 	}
 	return 0
+}
+
+// RetrainFleetML regenerates the synthetic training dataset with the current
+// fleetClassify rules and retrains the fleet RandomForest model in-place.
+// The new model is hot-swapped into the running FleetMLService so subsequent
+// GET /stats/sla-metrics calls immediately use the updated model.
+// Admin-only — any retrain takes ~1-2 s.
+func (h *SLAMetricsHandler) RetrainFleetML(c *gin.Context) {
+	if err := h.fleetML.Retrain(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "retrain failed: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "message": "Modelo de flota reentrenado correctamente."})
 }
 
 // itoa converts an int to its decimal string representation without importing strconv.

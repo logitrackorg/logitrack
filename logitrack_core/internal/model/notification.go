@@ -24,6 +24,8 @@ const (
 	NotificationDataAccessRequest      NotificationType = "data_access_request"       // chofer solicitó sus datos de monitoreo (Ley 25.326)
 	NotificationAutoReportGenerated    NotificationType = "auto_report_generated"     // reporte automático generado y listo para descargar
 	NotificationClaimCustomerResponded NotificationType = "claim_customer_responded"  // cliente respondió a reclamo pending_customer vía chatbot (US-4)
+	NotificationClaimTransferred        NotificationType = "claim_transferred"          // reclamo derivado a la sucursal receptora
+	NotificationClaimTransferRejected   NotificationType = "claim_transfer_rejected"    // sucursal receptora rechazó el reclamo derivado
 )
 
 type Notification struct {

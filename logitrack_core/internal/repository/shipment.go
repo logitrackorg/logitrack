@@ -102,6 +102,10 @@ type StatusUpdateCmd struct {
 	RejectedByRecipient bool
 	ContingencyDelivery bool
 	Timestamp           time.Time
+	// Delivery photo evidence (última milla delivered events)
+	DeliveryPhotoPath string
+	DeliveryPhotoName string
+	DeliveryPhotoMime string
 }
 
 type CorrectCmd struct {
@@ -149,6 +153,7 @@ type ConfirmPaymentCmd struct {
 	PaymentID     string
 	MPPaymentID   string
 	Amount        float64
+	Method        model.PaymentMethod
 	ChangedBy     string
 	Timestamp     time.Time
 	// Fields needed to rebuild the confirmed shipment state:

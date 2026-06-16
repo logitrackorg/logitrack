@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, SkipForward, Volume2 } from "lucide-react";
 import { driverApi } from "../api/driver";
+import { Button } from "@/components/ui/button";
 
 const MIN_AUDIO_BYTES = 2500;
 
@@ -32,6 +33,12 @@ export function VoiceCheckIn({ onDone }: Props) {
   const mediaRef       = useRef<MediaRecorder | null>(null);
   const chunksRef      = useRef<Blob[]>([]);
   const timerRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Lock síncrono contra invocaciones concurrentes de startRecording: el botón
+  // sigue mostrando "Iniciar grabación" (state aún "idle") mientras se espera
+  // la promesa de getUserMedia, así que un doble-tap dispararía dos streams/
+  // recorders en simultáneo, mezclando sus chunks en el mismo blob — produciendo
+  // un audio corrupto que el backend no puede puntuar (race condition reportada en QA).
+  const startingRef    = useRef(false);
 
   // Web Audio API — análisis de energía en tiempo real
   const audioCtxRef    = useRef<AudioContext | null>(null);
@@ -66,6 +73,12 @@ export function VoiceCheckIn({ onDone }: Props) {
   };
 
   const startRecording = async () => {
+    // Guard contra re-entradas: ignorar taps mientras getUserMedia sigue
+    // pendiente — "Grabando" recién se activa cuando la promesa resuelve, así
+    // que sin este lock un doble-tap inicia dos streams concurrentes.
+    if (startingRef.current) return;
+    startingRef.current = true;
+
     setErrorMsg("");
     setRetryMsg("");
     chunksRef.current = [];
@@ -119,6 +132,11 @@ export function VoiceCheckIn({ onDone }: Props) {
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
       setErrorMsg("No se pudo acceder al micrófono. Verificá los permisos.");
+    } finally {
+      // Liberar el lock recién acá: con state ya en "recording" (o el error ya
+      // mostrado), el botón "Iniciar grabación" deja de estar visible/habilitado,
+      // así que no hay ventana para una segunda invocación concurrente.
+      startingRef.current = false;
     }
   };
 
@@ -172,6 +190,19 @@ export function VoiceCheckIn({ onDone }: Props) {
       }
     } catch (err: unknown) {
       const respData = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+
+      if (respData?.error === "SILENCE_DETECTED") {
+        // Silencio explícito detectado por el backend (energía/VAD/speech_rate
+        // por debajo del umbral) — mensaje específico y resetear el grabador
+        // para que el chofer vuelva a empezar desde cero.
+        setErrorMsg("No se detectó sonido. Por favor, habla con voz clara y fuerte.");
+        chunksRef.current = [];
+        setHasChunks(false);
+        hasVoiceRef.current = false;
+        setState("idle");
+        return;
+      }
+
       const isInvalidAudio = respData?.error === "INVALID_AUDIO";
       setErrorMsg(isInvalidAudio && respData?.message
         ? respData.message
@@ -184,13 +215,15 @@ export function VoiceCheckIn({ onDone }: Props) {
     <div className="fixed inset-0 z-[3000] bg-[#0f2744]/95 backdrop-blur-sm flex flex-col">
       {/* Skip button */}
       <div className="flex justify-end px-4 pt-4">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onDone}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+          className="gap-1.5 font-semibold text-xs"
         >
           <SkipForward className="w-3.5 h-3.5" />
           Saltar test
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-8">
@@ -221,31 +254,32 @@ export function VoiceCheckIn({ onDone }: Props) {
           {/* Recording controls */}
           <div className="mb-6">
             {state === "idle" || state === "recorded" ? (
-              <button
+              <Button
                 onClick={startRecording}
-                className="w-full h-14 rounded-xl bg-violet-600 hover:bg-violet-700 active:bg-violet-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
+                className="w-full h-14 rounded-xl font-bold text-base gap-2"
               >
                 <Mic className="w-5 h-5" />
                 {state === "recorded" ? "Grabar de nuevo" : "Iniciar grabación"}
-              </button>
+              </Button>
             ) : state === "recording" ? (
-              <button
+              <Button
+                variant="destructive"
                 onClick={stopRecording}
-                className="w-full h-14 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2 animate-pulse"
+                className="w-full h-14 rounded-xl font-bold text-base gap-2 animate-pulse"
               >
                 <MicOff className="w-5 h-5" />
                 Detener ({seconds}s)
-              </button>
+              </Button>
             ) : null}
 
             {state === "recorded" && hasChunks && !errorMsg && (
-              <button
+              <Button
                 onClick={handleUpload}
-                className="mt-3 w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-base cursor-pointer transition-colors inline-flex items-center justify-center gap-2"
+                className="mt-3 w-full h-12 rounded-xl font-bold text-base gap-2"
               >
                 <Send className="w-4 h-4" />
                 Enviar audio
-              </button>
+              </Button>
             )}
 
             {state === "uploading" && (

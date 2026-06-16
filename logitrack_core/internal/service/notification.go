@@ -562,20 +562,14 @@ func (s *NotificationService) NotifyReturnCompleted(shipment model.Shipment, bra
 // branch when a driver's composite fatigue score reaches the RED (high risk) level.
 // Deduplication: only one alert per driver per hour to avoid flooding supervisors.
 // driverID is the driver's user UUID; driverUsername is used for dedup and display.
+// blockRoute controls whether to lock the driver's route screen (independent of
+// notification dedup — the screen is locked on every RED event when enabled).
 // Intended to be called as a goroutine (fire-and-forget).
-func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsername, driverFullName string, score int) {
-	since := clock.Now().Add(-1 * time.Hour)
-	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
-	if err != nil {
-		log.Printf("[NotificationService] NotifyFatigueAlert ExistsRecent error: %v", err)
-	}
-	if exists {
-		return
-	}
-
-	// Crear bloqueo de pantalla para el chofer ANTES del early return (LOGITRACK-499).
-	// Aplica siempre, incluso si el chofer no tiene sucursal (ej: intersucursal).
-	if s.fatigueBlockRepo != nil {
+func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsername, driverFullName string, score int, blockRoute bool) {
+	// Screen block is independent of notification dedup: create on every RED
+	// event so that a driver unblocked by a supervisor gets re-blocked if they
+	// submit another RED check-in within the same hour.
+	if blockRoute && s.fatigueBlockRepo != nil {
 		var tripID *string
 		if s.interBranchTripSvc != nil {
 			if trip, err := s.interBranchTripSvc.GetActiveByDriver(driverID); err == nil {
@@ -585,6 +579,16 @@ func (s *NotificationService) NotifyFatigueAlert(branchID, driverID, driverUsern
 		if err := s.fatigueBlockRepo.Create(driverID, tripID); err != nil {
 			log.Printf("[NotificationService] NotifyFatigueAlert: error creando fatigue_block: %v", err)
 		}
+	}
+
+	// Supervisor notifications: dedup — only one alert per driver per hour.
+	since := clock.Now().Add(-1 * time.Hour)
+	exists, err := s.repo.ExistsRecent(model.NotificationFatigueAlert, driverUsername, since)
+	if err != nil {
+		log.Printf("[NotificationService] NotifyFatigueAlert ExistsRecent error: %v", err)
+	}
+	if exists {
+		return
 	}
 
 	supervisors, err := s.repo.GetUsersByBranchAndRoles(branchID, []model.Role{model.RoleSupervisor})

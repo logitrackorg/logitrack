@@ -39,6 +39,8 @@ export function BranchList() {
 
   const isAdmin = hasRole("admin");
   const canViewCapacity = hasRole("supervisor", "manager", "admin");
+  const [togglingEOM, setTogglingEOM] = useState<string | null>(null);
+  const [eomModal, setEomModal] = useState<Branch | null>(null);
 
   const [capacities, setCapacities] = useState<Record<string, BranchCapacity>>({});
 
@@ -103,7 +105,7 @@ export function BranchList() {
         <TopbarActions>
           <button
             onClick={() => { setShowCreate(true); setError(""); }}
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[#1e3a5f] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-[var(--sidebar-bg)] hover:bg-[#15294a] text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Nueva sucursal
@@ -117,14 +119,14 @@ export function BranchList() {
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
-              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+              className="w-full pl-9 h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
               placeholder="Buscar por nombre, ID, ciudad o dirección…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select
-            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[#2563eb]/20 focus:border-[#2563eb]"
+            className="h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-[3px] focus:ring-[var(--brand)]/20 focus:border-[var(--brand)]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -201,7 +203,7 @@ export function BranchList() {
                   </td>
                   {isAdmin && (
                     <td className="px-3 py-2.5 align-middle">
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         <button onClick={() => { setEditing(b); setError(""); }}
                           disabled={b.status !== "activo"}
                           className={`bg-[var(--bg-muted)] border border-[var(--border-strong)] rounded px-2.5 py-1 cursor-pointer text-xs font-medium ${b.status !== "activo" ? "opacity-40" : ""}`}
@@ -212,6 +214,14 @@ export function BranchList() {
                         <button onClick={() => { setStatusModal(b); setError(""); }}
                           className="bg-[var(--bg-muted)] border border-[var(--border-strong)] rounded px-2.5 py-1 cursor-pointer text-xs font-medium">
                           Estado
+                        </button>
+                        <button
+                          disabled={togglingEOM === b.id}
+                          title={b.employee_of_month_enabled ? "Desactivar Empleado del Mes" : "Activar Empleado del Mes"}
+                          onClick={() => { setEomModal(b); setError(""); }}
+                          className={`border rounded px-2.5 py-1 cursor-pointer text-xs font-medium ${b.employee_of_month_enabled ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-[var(--bg-muted)] border-[var(--border-strong)]"}`}
+                        >
+                          🏆 {b.employee_of_month_enabled ? "EOM: Activo" : "EOM: Inactivo"}
                         </button>
                       </div>
                     </td>
@@ -266,6 +276,26 @@ export function BranchList() {
             await loadBranches();
           }}
           error={error}
+        />
+      )}
+
+      {/* EOM Toggle Modal */}
+      {eomModal && (
+        <EOMToggleModal
+          branch={eomModal}
+          onClose={() => setEomModal(null)}
+          onSubmit={async (enabled) => {
+            setTogglingEOM(eomModal.id);
+            try {
+              await branchApi.updateEmployeeOfMonth(eomModal.id, enabled);
+              setEomModal(null);
+              await loadBranches();
+            } catch {
+              setError("No se pudo actualizar la configuración.");
+            } finally {
+              setTogglingEOM(null);
+            }
+          }}
         />
       )}
     </div>
@@ -419,7 +449,7 @@ function BranchFormModal({
           {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
           <div className="flex gap-2 justify-end mt-1">
             <button type="button" onClick={() => setStep("form")} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Volver</button>
-            <button type="button" onClick={doSubmit} disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+            <button type="button" onClick={doSubmit} disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
               {submitting ? "Guardando..." : "Confirmar cambio"}
             </button>
           </div>
@@ -488,7 +518,7 @@ function BranchFormModal({
         {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
         <div className="flex gap-2 justify-end mt-2">
           <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+          <button type="submit" disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : submitLabel}
           </button>
         </div>
@@ -545,11 +575,91 @@ function StatusModal({
         {(localError || error) && <p className="text-[var(--danger-c)] m-0 text-xs">{localError || error}</p>}
         <div className="flex gap-2 justify-end">
           <button type="button" onClick={onClose} className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50" disabled={submitting}>Cancelar</button>
-          <button type="submit" disabled={submitting} className="bg-[#1e3a5f] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
+          <button type="submit" disabled={submitting} className="bg-[var(--sidebar-bg)] text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70">
             {submitting ? "Guardando..." : "Actualizar"}
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+// ─── EOM Toggle Modal ─────────────────────────────────────────────────────────
+
+function EOMToggleModal({
+  branch,
+  onClose,
+  onSubmit,
+}: {
+  branch: Branch;
+  onClose: () => void;
+  onSubmit: (enabled: boolean) => Promise<void>;
+}) {
+  const enabling = !branch.employee_of_month_enabled;
+  const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    setLocalError("");
+    try {
+      await onSubmit(enabling);
+    } catch {
+      setLocalError("No se pudo actualizar la configuración.");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="flex items-start gap-4 mb-5">
+        <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg ${enabling ? "bg-amber-100" : "bg-slate-100"}`}>
+          🏆
+        </div>
+        <div>
+          <h2 className="m-0 text-base font-semibold leading-snug">
+            {enabling ? "Activar Empleado del Mes" : "Desactivar Empleado del Mes"}
+          </h2>
+          <p className="m-0 mt-1 text-sm text-[var(--text-secondary)]">
+            {branch.name} — {branch.address.city}
+          </p>
+        </div>
+      </div>
+
+      <div className={`p-3.5 rounded-lg border text-sm mb-5 ${enabling ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-slate-50 border-slate-200 text-slate-700"}`}>
+        {enabling ? (
+          <>
+            Los empleados de esta sucursal <strong>participarán</strong> en el ranking mensual a partir del próximo cálculo.
+          </>
+        ) : (
+          <>
+            Los empleados de esta sucursal <strong>quedarán excluidos</strong> del ranking mensual a partir del próximo cálculo. Los registros históricos no se modifican.
+          </>
+        )}
+      </div>
+
+      {localError && (
+        <p className="text-[var(--danger-c)] text-xs mb-4 m-0">{localError}</p>
+      )}
+
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={submitting}
+          className="bg-[var(--bg-card)] text-[var(--text-strong)] border border-[var(--border-strong)] rounded-md px-[18px] py-2 cursor-pointer font-medium text-sm disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={submitting}
+          className={`text-white border-none rounded-md px-[18px] py-2 cursor-pointer font-semibold text-sm disabled:opacity-70 ${enabling ? "bg-amber-500 hover:bg-amber-600" : "bg-[var(--sidebar-bg)]"}`}
+        >
+          {submitting ? "Guardando..." : enabling ? "Activar" : "Desactivar"}
+        </button>
+      </div>
     </Modal>
   );
 }

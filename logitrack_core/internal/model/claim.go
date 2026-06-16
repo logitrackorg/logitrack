@@ -9,6 +9,8 @@ const (
 	ClaimStatusInReview             ClaimStatus = "in_review"
 	ClaimStatusPendingCustomer      ClaimStatus = "pending_customer"
 	ClaimStatusDerived              ClaimStatus = "derived"
+	ClaimStatusTransferred          ClaimStatus = "transferred"
+	ClaimStatusTransferRejected     ClaimStatus = "transfer_rejected"
 	ClaimStatusResolvedOperativa    ClaimStatus = "resolved_operativa"
 	ClaimStatusResolvedComercial    ClaimStatus = "resolved_comercial"
 	ClaimStatusResolvedRRHH         ClaimStatus = "resolved_rrhh"
@@ -62,6 +64,8 @@ var ValidClaimStatuses = map[ClaimStatus]bool{
 	ClaimStatusInReview:             true,
 	ClaimStatusPendingCustomer:      true,
 	ClaimStatusDerived:              true,
+	ClaimStatusTransferred:          true,
+	ClaimStatusTransferRejected:     true,
 	ClaimStatusResolvedOperativa:    true,
 	ClaimStatusResolvedComercial:    true,
 	ClaimStatusResolvedRRHH:         true,
@@ -97,6 +101,7 @@ type Claim struct {
 	AssignedCategory   ClaimCategory       `json:"assigned_category,omitempty"`
 	ResolutionType     ClaimResolutionType `json:"resolution_type,omitempty"`
 	IsAutomatic        bool                `json:"is_automatic"`
+	AssignedBranchID   string              `json:"assigned_branch_id,omitempty"`
 	EvidenceFileName   string              `json:"evidence_file_name,omitempty"`
 	EvidenceFilePath   string              `json:"-"`
 	EvidenceMimeType   string              `json:"evidence_mime_type,omitempty"`
@@ -122,4 +127,13 @@ type RequestCustomerInfoRequest struct {
 
 type AddClaimCommentRequest struct {
 	Comment string `json:"comment" binding:"required"`
+}
+
+type TransferClaimRequest struct {
+	TargetBranchID string `json:"target_branch_id" binding:"required"`
+	Notes          string `json:"notes" binding:"required"`
+}
+
+type RejectTransferRequest struct {
+	Notes string `json:"notes" binding:"required"`
 }

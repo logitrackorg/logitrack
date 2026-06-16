@@ -16,7 +16,7 @@ export type SparklineDataPoint = {
 export type SparklineProps = {
   /** Array of data points to plot. */
   data: SparklineDataPoint[];
-  /** Line color. Defaults to blue #2563eb. */
+  /** Line color. Defaults to blue var(--brand). */
   color?: string;
   /** Fill color for the area under the line. Defaults to blue at low opacity. */
   fill?: string;
@@ -32,7 +32,7 @@ export type SparklineProps = {
 
 export function Sparkline({
   data,
-  color = "#2563eb",
+  color = "var(--brand)",
   fill = "rgba(37,99,235,0.1)",
   width = 120,
   height = 40,

@@ -28,9 +28,9 @@ function statusPillClasses(status: string): string {
     case "mantenimiento":
       return "bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400";
     case "inactivo":
-      return "bg-gray-100 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400";
+      return "dark:bg-gray-700/50 bg-gray-100 dark:bg-gray-500/20 dark:text-gray-400 text-gray-600";
     default:
-      return "bg-slate-100 dark:bg-slate-500/20 text-slate-600 dark:text-slate-400";
+      return "dark:bg-gray-700/50 bg-slate-100 dark:bg-slate-500/20 dark:text-gray-400 text-slate-600 dark:text-slate-400";
   }
 }
 
@@ -92,7 +92,7 @@ export function VehicleCard({ assignedVehicle, loadingVehicle, onShowDetail }: V
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-6 gap-2">
-            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full dark:bg-gray-700/50 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
               <Truck className="w-10 h-10 text-[var(--text-muted)]" />
             </div>
             <p className="text-[13px] text-[var(--text-secondary)] m-0">

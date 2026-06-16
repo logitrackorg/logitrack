@@ -11,9 +11,18 @@ import (
 	"github.com/logitrack/core/internal/repository"
 )
 
-// ConfirmCashPayment bypasses Mercado Pago and confirms the payment as paid in cash.
-// El operador usa este flujo cuando el cliente paga en efectivo en la sucursal.
+// ConfirmCashPayment confirms the payment as paid in cash by the customer.
 func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.Shipment, error) {
+	return s.confirmManualPayment(trackingID, username, model.PaymentMethodCash, "EFECTIVO-")
+}
+
+// ConfirmTransferPayment confirms the payment as received via bank transfer.
+// La confirmación es manual por el operador tras verificar la acreditación.
+func (s *PaymentService) ConfirmTransferPayment(trackingID, username string) (model.Shipment, error) {
+	return s.confirmManualPayment(trackingID, username, model.PaymentMethodTransfer, "TRANSFER-")
+}
+
+func (s *PaymentService) confirmManualPayment(trackingID, username string, method model.PaymentMethod, idPrefix string) (model.Shipment, error) {
 	shipment, err := s.shipmentSvc.repo.GetByTrackingID(trackingID)
 	if err != nil {
 		return model.Shipment{}, fmt.Errorf("envío no encontrado: %w", err)
@@ -27,7 +36,7 @@ func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.
 		return model.Shipment{}, fmt.Errorf("pago activo no encontrado: %w", err)
 	}
 
-	fakeMPPaymentID := "EFECTIVO-" + uuid.NewString()[:8]
+	fakePaymentID := idPrefix + uuid.NewString()[:8]
 	newTrackingID := generateTrackingID()
 	now := clock.Now().UTC()
 
@@ -44,8 +53,9 @@ func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.
 		OldTrackingID:       trackingID,
 		NewTrackingID:       newTrackingID,
 		PaymentID:           payment.ID,
-		MPPaymentID:         fakeMPPaymentID,
+		MPPaymentID:         fakePaymentID,
 		Amount:              payment.Amount,
+		Method:              method,
 		ChangedBy:           username,
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
@@ -53,11 +63,11 @@ func (s *PaymentService) ConfirmCashPayment(trackingID, username string) (model.
 		SecurityKeyword:     securityKeyword,
 	})
 	if err != nil {
-		return model.Shipment{}, fmt.Errorf("error al confirmar pago simulado: %w", err)
+		return model.Shipment{}, fmt.Errorf("error al confirmar pago: %w", err)
 	}
 
-	if err := s.paymentRepo.MarkApproved(payment.ID, fakeMPPaymentID, newTrackingID, now); err != nil {
-		log.Printf("[payment-cash] advertencia: no se pudo marcar pago como aprobado: %v", err)
+	if err := s.paymentRepo.MarkApproved(payment.ID, fakePaymentID, newTrackingID, now, method); err != nil {
+		log.Printf("[payment-%s] advertencia: no se pudo marcar pago como aprobado: %v", string(method), err)
 	}
 
 	s.shipmentSvc.upsertParties(confirmed)
@@ -116,6 +126,7 @@ func (s *PaymentService) ConfirmMockPayment(trackingID, username string) (model.
 		PaymentID:           payment.ID,
 		MPPaymentID:         fakeMPPaymentID,
 		Amount:              payment.Amount,
+		Method:              model.PaymentMethodMock,
 		ChangedBy:           username,
 		Timestamp:           now,
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
@@ -126,7 +137,7 @@ func (s *PaymentService) ConfirmMockPayment(trackingID, username string) (model.
 		return model.Shipment{}, fmt.Errorf("error al confirmar pago simulado: %w", err)
 	}
 
-	if err := s.paymentRepo.MarkApproved(payment.ID, fakeMPPaymentID, newTrackingID, now); err != nil {
+	if err := s.paymentRepo.MarkApproved(payment.ID, fakeMPPaymentID, newTrackingID, now, model.PaymentMethodMock); err != nil {
 		log.Printf("[payment-mock] advertencia: no se pudo marcar pago como aprobado: %v", err)
 	}
 

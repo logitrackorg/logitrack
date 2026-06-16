@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useOrganizationTheme } from "@/context/OrganizationThemeContext";
@@ -58,7 +58,7 @@ function formatCountdown(seconds: number): string {
 }
 
 const INPUT_CLASS =
-  "w-full h-12 px-4 rounded-lg border border-blue-200 bg-white dark:bg-gray-800 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all";
+  "w-full h-12 px-4 rounded-lg border border-blue-200 dark:bg-gray-800 bg-white dark:border-gray-600 text-sm dark:text-gray-100 text-gray-900 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all";
 
 const SPINNER = (
   <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -66,6 +66,251 @@ const SPINNER = (
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
   </svg>
 );
+
+function NeuralBranchNetwork() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const host = canvas.parentElement;
+    if (!ctx || !host) return;
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0;
+    let height = 0;
+    let raf = 0;
+
+    const mouse = { x: -9999, y: -9999, sx: -9999, sy: -9999, active: false };
+
+    const NODE_COUNT = 54;
+    const MAX_DIST = 165;
+    const MOUSE_DIST = 220;
+
+    type Node = {
+      x: number; y: number; vx: number; vy: number;
+      baseR: number; hub: boolean; tw: number; twSpeed: number;
+    };
+    type Pulse = { ax: number; ay: number; bx: number; by: number; t: number; speed: number };
+
+    let nodes: Node[] = [];
+    const pulses: Pulse[] = [];
+
+    const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+    const initNodes = () => {
+      nodes = [];
+      for (let i = 0; i < NODE_COUNT; i++) {
+        const hub = i % 6 === 0;
+        nodes.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          vx: rand(-0.18, 0.18),
+          vy: rand(-0.18, 0.18),
+          baseR: hub ? rand(2.6, 3.4) : rand(1.1, 1.9),
+          hub,
+          tw: Math.random() * Math.PI * 2,
+          twSpeed: rand(0.6, 1.4),
+        });
+      }
+    };
+
+    const resize = () => {
+      const rect = host.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      initNodes();
+    };
+
+    const maybeSpawnPulse = (a: Node, b: Node, strength: number) => {
+      if (Math.random() < 0.0016 * strength) {
+        pulses.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y, t: 0, speed: rand(0.012, 0.026) });
+      }
+    };
+
+    let lastT = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min(2.4, (now - lastT) / 16.67);
+      lastT = now;
+
+      mouse.sx += (mouse.x - mouse.sx) * 0.12;
+      mouse.sy += (mouse.y - mouse.sy) * 0.12;
+
+      ctx.clearRect(0, 0, width, height);
+
+      for (const n of nodes) {
+        n.x += n.vx * dt;
+        n.y += n.vy * dt;
+        n.tw += 0.02 * n.twSpeed * dt;
+
+        if (n.x < -20) n.x = width + 20;
+        if (n.x > width + 20) n.x = -20;
+        if (n.y < -20) n.y = height + 20;
+        if (n.y > height + 20) n.y = -20;
+
+        if (mouse.active) {
+          const dx = mouse.x - n.x;
+          const dy = mouse.y - n.y;
+          const d = Math.hypot(dx, dy);
+          if (d < MOUSE_DIST && d > 1) {
+            const f = (1 - d / MOUSE_DIST) * 0.04;
+            n.x += (dx / d) * f * dt;
+            n.y += (dy / d) * f * dt;
+          }
+        }
+      }
+
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const d = Math.hypot(dx, dy);
+          if (d > MAX_DIST) continue;
+          const base = 1 - d / MAX_DIST;
+
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          const md = Math.hypot(mouse.sx - mx, mouse.sy - my);
+          const near = mouse.active ? Math.max(0, 1 - md / MOUSE_DIST) : 0;
+
+          const alpha = base * (0.16 + near * 0.55);
+          if (near > 0.05) {
+            ctx.strokeStyle = `rgba(${Math.round(96 + near * 150)}, ${Math.round(165 + near * 10)}, ${Math.round(250 - near * 120)}, ${alpha})`;
+            ctx.lineWidth = 0.8 + near * 1.1;
+          } else {
+            ctx.strokeStyle = `rgba(96, 165, 250, ${alpha})`;
+            ctx.lineWidth = 0.8;
+          }
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+
+          maybeSpawnPulse(a, b, base + near * 3);
+        }
+      }
+
+      if (mouse.active) {
+        for (const n of nodes) {
+          const dx = mouse.x - n.x;
+          const dy = mouse.y - n.y;
+          const d = Math.hypot(dx, dy);
+          if (d > MOUSE_DIST) continue;
+          const a = 1 - d / MOUSE_DIST;
+          ctx.strokeStyle = `rgba(249, 115, 22, ${a * 0.5})`;
+          ctx.lineWidth = 0.6 + a * 1.1;
+          ctx.beginPath();
+          ctx.moveTo(mouse.x, mouse.y);
+          ctx.lineTo(n.x, n.y);
+          ctx.stroke();
+        }
+      }
+
+      for (let k = pulses.length - 1; k >= 0; k--) {
+        const p = pulses[k];
+        p.t += p.speed * dt;
+        if (p.t >= 1) { pulses.splice(k, 1); continue; }
+        const px = p.ax + (p.bx - p.ax) * p.t;
+        const py = p.ay + (p.by - p.ay) * p.t;
+        const fade = Math.sin(p.t * Math.PI);
+        ctx.beginPath();
+        ctx.arc(px, py, 1.7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(125, 211, 252, ${0.9 * fade})`;
+        ctx.shadowColor = "rgba(125, 211, 252, 0.9)";
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      for (const n of nodes) {
+        const dxm = mouse.sx - n.x;
+        const dym = mouse.sy - n.y;
+        const dm = Math.hypot(dxm, dym);
+        const near = mouse.active ? Math.max(0, 1 - dm / MOUSE_DIST) : 0;
+        const twinkle = 0.5 + 0.5 * Math.sin(n.tw);
+        const r = n.baseR + near * 1.6 + (n.hub ? twinkle * 0.5 : 0);
+
+        if (n.hub || near > 0.1) {
+          const glowR = r + 4 + near * 4;
+          const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, glowR);
+          const col = n.hub ? "249, 115, 22" : "96, 165, 250";
+          g.addColorStop(0, `rgba(${col}, ${0.35 + near * 0.35})`);
+          g.addColorStop(1, `rgba(${col}, 0)`);
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+          ctx.fillStyle = g;
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = n.hub
+          ? `rgba(251, 146, 60, ${0.75 + twinkle * 0.25})`
+          : `rgba(147, 197, 253, ${0.45 + twinkle * 0.3 + near * 0.4})`;
+        ctx.fill();
+      }
+
+      if (mouse.active) {
+        const halo = ctx.createRadialGradient(mouse.sx, mouse.sy, 0, mouse.sx, mouse.sy, MOUSE_DIST * 0.8);
+        halo.addColorStop(0, "rgba(59, 130, 246, 0.08)");
+        halo.addColorStop(1, "rgba(59, 130, 246, 0)");
+        ctx.fillStyle = halo;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      raf = requestAnimationFrame(frame);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const rect = host.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+      if (!mouse.active) { mouse.sx = mouse.x; mouse.sy = mouse.y; }
+      mouse.active = true;
+    };
+    const onLeave = () => { mouse.active = false; mouse.x = -9999; mouse.y = -9999; };
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(host);
+    host.addEventListener("pointermove", onMove);
+    host.addEventListener("pointerleave", onLeave);
+
+    if (reduceMotion) {
+      frame(performance.now());
+      cancelAnimationFrame(raf);
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerleave", onLeave);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      aria-hidden="true"
+    />
+  );
+}
 
 export function Login() {
   const [username, setUsername] = useState("");
@@ -124,7 +369,29 @@ export function Login() {
       console.log('🔵 Response completa:', response);
 
       // ══════════════════════════════════════════════
-      // CASO 1: Usuario CON 2FA ya activado
+      // CASO 1: Usuario SIN 2FA (debe activarlo) — chequear ANTES que requires_2fa
+      // ══════════════════════════════════════════════
+      if (response && response.user) {
+        const user = response.user;
+        const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
+
+        if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
+          
+          sessionStorage.removeItem("pending_2fa_setup");
+          sessionStorage.removeItem("temp_token");
+          sessionStorage.removeItem("temp_user");
+          sessionStorage.removeItem("2fa_setup_cooldown");
+
+          sessionStorage.setItem("pending_2fa_setup", "true");
+          sessionStorage.setItem("temp_token", response.token!);
+          sessionStorage.setItem("temp_user", JSON.stringify(user));
+          navigate("/2fa/setup-required");
+          return;
+        }
+      }
+
+      // ══════════════════════════════════════════════
+      // CASO 2: Usuario CON 2FA ya activado
       // ══════════════════════════════════════════════
       if (response && response.requires_2fa) {
         console.log('✅ Usuario tiene 2FA activo - redirigiendo a verificación');
@@ -132,27 +399,6 @@ export function Login() {
           state: { session_token: response.session_token }
         });
         return;
-      }
-
-      // ══════════════════════════════════════════════
-      // CASO 2: Usuario SIN 2FA (debe activarlo)
-      // ══════════════════════════════════════════════
-      if (response && response.user) {
-        const user = response.user;
-        const adminRoles = ['admin', 'manager', 'supervisor', 'operator'];
-
-        if (adminRoles.includes(user.role) && !user.two_fa_enabled) {
-          console.log('⚠️ Usuario sin 2FA detectado - debe activarlo');
-
-          // 🔑 CLAVE: Guardar token EN SESSIONSTORAGE con flag especial
-          sessionStorage.setItem("pending_2fa_setup", "true");
-          sessionStorage.setItem("temp_token", response.token!);
-          sessionStorage.setItem("temp_user", JSON.stringify(user));
-
-          console.log('✅ Navegando a /2fa/setup-required');
-          navigate("/2fa/setup-required");
-          return;
-        }
       }
 
       // ══════════════════════════════════════════════
@@ -242,7 +488,8 @@ export function Login() {
       {/* ── Panel izquierdo — branding ── */}
       <div className="hidden lg:flex flex-col justify-between p-12 bg-blue-950 relative overflow-hidden">
 
-        {/* Grid decorativo */}
+        {/* Red neuronal interactiva — sucursales interconectadas que siguen al mouse */}
+        <NeuralBranchNetwork />
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:48px_48px]" />
 
         {/* Círculos de fondo */}
@@ -275,7 +522,7 @@ export function Login() {
               Gestión logística<br />
               <span className="text-orange-500">centralizada</span>
             </h1>
-            <p className="text-slate-400 text-base leading-relaxed max-w-sm">
+            <p className="dark:text-gray-500 text-slate-400 text-base leading-relaxed max-w-sm">
               Coordiná envíos, flota y sucursales desde una sola plataforma con control de acceso por rol.
             </p>
           </div>
@@ -299,19 +546,19 @@ export function Login() {
                 <div className="text-2xl font-bold text-white tabular-nums">
                   {stats ? stats[key].toLocaleString("es-AR") : "—"}
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+                <div className="text-xs dark:text-gray-400 text-slate-500 mt-0.5">{label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-600">
+        <p className="relative text-xs dark:text-gray-400 text-slate-600">
           UNGS · Laboratorio de Construcción de Software · 2026
         </p>
       </div>
 
       {/* ── Panel derecho ── */}
-      <div className="flex items-center justify-center p-6 bg-white dark:bg-gray-800 border-l border-slate-200 dark:border-gray-700">
+      <div className="flex items-center justify-center p-6 dark:bg-gray-800 bg-white border-l dark:border-gray-700 border-slate-200">
         <div className="w-full max-w-[360px] space-y-7">
 
           {/* Logo mobile */}
@@ -330,13 +577,13 @@ export function Login() {
           {resetStep === "idle" && (
             <>
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Bienvenido</h2>
-                <p className="text-sm text-gray-500">Ingresá tus credenciales para continuar</p>
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Bienvenido</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tus credenciales para continuar</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="username" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="username" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Usuario
                   </label>
                   <input
@@ -352,7 +599,7 @@ export function Login() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="password" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Contraseña
                   </label>
                   <input
@@ -408,16 +655,16 @@ export function Login() {
               </button>
 
               {/* Cuentas de prueba */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div className="rounded-xl border dark:border-gray-700 border-slate-200 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setShowTestUsers(!showTestUsers)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-between px-4 py-3 dark:bg-gray-800/50 bg-slate-50 dark:hover:bg-gray-700 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <span className="text-xs font-semibold dark:text-gray-400 text-slate-500 uppercase tracking-wider">
                     Cuentas de prueba
                   </span>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-4 h-4 dark:text-gray-500 text-slate-400 transition-transform duration-200 ${showTestUsers ? "rotate-180" : ""}`} />
                 </button>
 
                 {showTestUsers && (
@@ -427,9 +674,9 @@ export function Login() {
                         key={u}
                         type="button"
                         onClick={() => { setUsername(u); setPassword(p); }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
+                        className="w-full flex items-center justify-between px-4 py-2.5 dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors text-left cursor-pointer group"
                       >
-                        <span className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{u}</span>
+                        <span className="text-xs font-semibold dark:text-gray-300 text-gray-800 group-hover:text-blue-600 transition-colors">{u}</span>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${ROLE_STYLES[r]}`}>
                           {r}
                         </span>
@@ -445,13 +692,13 @@ export function Login() {
           {resetStep === "username" && (
             <div className="space-y-6">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Recuperar contraseña</h2>
-                <p className="text-sm text-gray-500">Ingresá tu nombre de usuario</p>
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Recuperar contraseña</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">Ingresá tu nombre de usuario</p>
               </div>
 
               <form onSubmit={(e) => { e.preventDefault(); handleSendCode(); }} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="reset-username" className="text-sm font-semibold text-gray-700">
+                  <label htmlFor="reset-username" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                     Usuario
                   </label>
                   <input
@@ -491,7 +738,7 @@ export function Login() {
               <button
                 type="button"
                 onClick={() => setResetStep("idle")}
-                className="w-full text-sm text-slate-500 hover:text-slate-700 text-center cursor-pointer"
+                className="w-full text-sm dark:text-gray-400 text-slate-500 dark:hover:text-gray-200 hover:text-slate-700 text-center cursor-pointer"
               >
                 ← Volver al login
               </button>
@@ -502,8 +749,8 @@ export function Login() {
           {resetStep === "otp" && (
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Ingresá el código</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="text-2xl font-bold dark:text-gray-100 text-gray-900 tracking-tight">Ingresá el código</h2>
+                <p className="text-sm dark:text-gray-400 text-gray-500">
                   Revisá tu casilla de correo
                 </p>
               </div>
@@ -522,7 +769,7 @@ export function Login() {
               ) : (
                 <form onSubmit={(e) => { e.preventDefault(); if (canConfirm) handleConfirmReset(); }} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label htmlFor="otp-code" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="otp-code" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Código de verificación
                     </label>
                     <input
@@ -535,18 +782,18 @@ export function Login() {
                       onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ""))}
                       placeholder="000000"
                       autoFocus
-                      className="w-full h-14 px-4 rounded-lg border border-blue-200 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-center text-2xl tracking-widest text-gray-900 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      className="w-full h-14 px-4 rounded-lg border border-blue-200 dark:border-gray-600 dark:bg-gray-800 bg-white font-mono text-center text-2xl tracking-widest dark:text-gray-100 text-gray-900 placeholder:text-gray-300 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     />
                   </div>
 
-                  <p className={`text-xs text-center ${otpSecondsLeft === 0 ? "text-red-600 font-medium" : "text-slate-400"}`}>
+                  <p className={`text-xs text-center ${otpSecondsLeft === 0 ? "text-red-600 font-medium" : "dark:text-gray-500 text-slate-400"}`}>
                     {otpSecondsLeft > 0
                       ? `El código expira en ${formatCountdown(otpSecondsLeft)}`
                       : "El código expiró."}
                   </p>
 
                   <div className="space-y-1.5">
-                    <label htmlFor="new-password" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="new-password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Nueva contraseña
                     </label>
                     <input
@@ -568,7 +815,7 @@ export function Login() {
                         </div>
                       );
                       return (
-                        <div className="flex flex-col gap-1 mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div className="flex flex-col gap-1 mt-1.5 px-3 py-2 dark:bg-gray-800/50 bg-slate-50 border dark:border-gray-700 border-slate-200 rounded-lg">
                           {item(ok8, "Al menos 8 caracteres")}
                           {item(okNum, "Al menos un número")}
                         </div>
@@ -577,7 +824,7 @@ export function Login() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label htmlFor="confirm-password" className="text-sm font-semibold text-gray-700">
+                    <label htmlFor="confirm-password" className="text-sm font-semibold dark:text-gray-300 text-gray-700">
                       Confirmar contraseña
                     </label>
                     <input

@@ -48,7 +48,7 @@ function ShipmentRow({ shipment: s, canBulk, selected, onToggleSelect }: Shipmen
               type="checkbox"
               checked={isChecked}
               onChange={() => onToggleSelect(s.tracking_id)}
-              className="cursor-pointer accent-[#1e3a5f]"
+              className="cursor-pointer accent-[var(--sidebar-bg)]"
             />
           )}
         </td>
@@ -162,7 +162,7 @@ function TripGroupSection({
               <Truck className="w-4 h-4 text-slate-500 shrink-0" />
               <span className="font-mono font-semibold text-sm text-slate-900">{trip.license_plate}</span>
               <span className="text-xs text-slate-400 font-mono">{trip.id}</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] font-medium">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] font-medium">
                 {kindLabel}
               </span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${tripStatusBadge.cls}`}>
@@ -289,7 +289,7 @@ export function ShipmentTableHeader({ canBulk, showSelectAll, allSelected, onSel
                 checked={allSelected}
                 onChange={onSelectAll}
                 title="Seleccionar todos los elegibles"
-                className="cursor-pointer accent-[#1e3a5f]"
+                className="cursor-pointer accent-[var(--sidebar-bg)]"
               />
             )}
           </th>

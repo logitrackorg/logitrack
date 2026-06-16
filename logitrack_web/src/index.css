@@ -1025,3 +1025,83 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
 }
 .dark ::-webkit-scrollbar-thumb:hover { background: #3a4a6a; }
 .dark { scrollbar-color: #2c3a55 var(--bg-page); }
+
+/* ─── Leaflet popup overrides ────────────────────────────── */
+.leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; }
+.leaflet-popup-content { margin: 14px; }
+.leaflet-popup-tip { background: var(--bg-card); }
+
+/* ─── MapView animations ─────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+}
+
+/* ─── Coverage suggestion markers ────────────────────────── */
+/* Ícono de sucursal "apagado": misma forma que las sucursales reales,
+   pero en escala de grises y con opacidad reducida para indicar que
+   es una ubicación proyectada/sugerida, no operativa. */
+.coverage-suggestion-icon {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
+/* "Aterrizar sugerencias en ciudades reales": el marcador (y su ícono)
+   animan su posición cuando se mueve a la coordenada real vía setLatLng. */
+.coverage-suggestion-marker {
+  transition: transform 0.6s ease;
+}
+
+/* ─── Cobertura territorial: modo pantalla completa ──────── */
+.fullscreen-mode {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: var(--bg-page);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+/* ─── PublicTracking animations ──────────────────────────── */
+@keyframes pt-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pt-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pt-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+}
+
+.animate-pt-fade-in {
+  animation: pt-fade-in 0.4s ease-out both;
+}
+.animate-pt-shimmer {
+  background: linear-gradient(90deg, var(--bg-muted) 25%, var(--border) 50%, var(--bg-muted) 75%);
+  background-size: 200% 100%;
+  animation: pt-shimmer 1.4s ease-in-out infinite;
+}
+.animate-pt-pulse-dot {
+  animation: pt-pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pt-fade-in,
+  .animate-pt-shimmer,
+  .animate-pt-pulse-dot {
+    animation: none;
+  }
+}
+
+/* ─── PublicTracking skeleton animation ─────────────────── */
+@keyframes pt-skel {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
