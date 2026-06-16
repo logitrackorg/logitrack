@@ -28,7 +28,6 @@ import { NextStopCard } from "../components/ui/NextStopCard";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { zoneApi, type Zone } from "../api/zones";
-import { isInDangerZone } from "../utils/pointInPolygon";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
