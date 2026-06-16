@@ -379,11 +379,6 @@ export function DriverRoute() {
     ? (data?.shipments.find((s) => s.tracking_id === nextStop.tracking_id) ?? null)
     : null;
 
-  // Zonas peligrosas donde está el chofer actualmente
-  const activeDangerZones = userLocation
-    ? zones.filter((z) => z.active && isInDangerZone(userLocation.lat, userLocation.lng, [z]))
-    : [];
-
   return (
      <DriverShell title="Mi ruta">
 
