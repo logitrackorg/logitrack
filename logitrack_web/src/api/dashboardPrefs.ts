@@ -28,4 +28,12 @@ export const dashboardPrefsApi = {
 
   savePreferences: (preferences: SavePrefItem[]) =>
     api.put("/preferences/dashboard", { preferences }).then((r) => r.data),
+
+  getResetStatus: () =>
+    api
+      .get<{ was_reset_by_admin: boolean }>("/preferences/dashboard/reset-status")
+      .then((r) => r.data),
+
+  clearResetFlag: () =>
+    api.patch("/preferences/dashboard/clear-reset").then((r) => r.data),
 };

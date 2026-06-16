@@ -297,6 +297,10 @@ func main() {
 	dashProfilesRepo := repository.NewPostgresDashboardProfilesRepository(database)
 	dashProfilesSvc := service.NewDashboardProfilesService(dashProfilesRepo)
 	dashProfilesHandler := handler.NewDashboardProfilesHandler(dashProfilesSvc)
+
+	dashResetRepo := repository.NewPostgresDashboardResetRepository(database)
+	dashResetSvc := service.NewDashboardResetService(dashResetRepo)
+	dashResetHandler := handler.NewDashboardResetHandler(dashResetSvc)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -777,6 +781,9 @@ func main() {
 	protected.GET("/profiles", authenticated, dashProfilesHandler.List)
 	protected.POST("/profiles", authenticated, dashProfilesHandler.Create)
 	protected.DELETE("/profiles/:id", authenticated, dashProfilesHandler.Delete)
+	protected.POST("/admin/reset-dashboard", adminOnly, dashResetHandler.ResetDashboard)
+	protected.GET("/preferences/dashboard/reset-status", authenticated, dashResetHandler.GetResetStatus)
+	protected.PATCH("/preferences/dashboard/clear-reset", authenticated, dashResetHandler.ClearResetFlag)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)

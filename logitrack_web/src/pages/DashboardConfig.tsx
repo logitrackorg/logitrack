@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, ClipboardList, History, Settings2, UserCog, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  ClipboardList,
+  History,
+  RotateCcw,
+  Settings2,
+  UserCog,
+  XCircle,
+} from "lucide-react";
 import {
   metricPermissionsApi,
   type MetricPermissionsMatrix,
@@ -7,6 +16,7 @@ import {
   type PermissionChange,
 } from "../api/metricPermissions";
 import { adminApi } from "../api/admin";
+import { adminResetApi } from "../api/adminReset";
 import type { User } from "../api/auth";
 import { toast } from "../utils/toast";
 import { fmtDateTime } from "../utils/date";
@@ -23,9 +33,11 @@ type Tab = "permisos" | "historial";
 interface UserOverridesSectionProps {
   /** Role-level matrix — used to determine the "default" for each user's role. */
   matrix: MetricPermissionsMatrix;
+  /** Bump to force a re-fetch (e.g., after an admin reset). */
+  refreshKey?: number;
 }
 
-function UserOverridesSection({ matrix }: UserOverridesSectionProps) {
+function UserOverridesSection({ matrix, refreshKey }: UserOverridesSectionProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [overrides, setOverrides] = useState<Record<string, Record<string, boolean>>>({});
   const [loading, setLoading] = useState(true);
@@ -33,6 +45,7 @@ function UserOverridesSection({ matrix }: UserOverridesSectionProps) {
   const [inflight, setInflight] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    setLoading(true);
     Promise.all([
       adminApi.listUsers(),
       metricPermissionsApi.getUserOverrides(),
@@ -43,7 +56,7 @@ function UserOverridesSection({ matrix }: UserOverridesSectionProps) {
       })
       .catch(() => toast.error("No se pudo cargar las excepciones de usuario"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   function roleDefault(user: User, metricId: string): boolean {
     return matrix.matrix[user.role]?.[metricId] ?? true;
@@ -234,16 +247,177 @@ function UserOverridesSection({ matrix }: UserOverridesSectionProps) {
   );
 }
 
+// ─── Reset section ────────────────────────────────────────────────────────────
+
+type ResetTarget =
+  | { type: "user"; userId: string; userName: string }
+  | { type: "all" };
+
+function ResetSection({ onAfterReset }: { onAfterReset?: () => void }) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [confirmTarget, setConfirmTarget] = useState<ResetTarget | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    adminApi
+      .listUsers()
+      .then((all) =>
+        setUsers(all.filter((u) => u.role === "supervisor" || u.role === "manager")),
+      )
+      .catch(() => {});
+  }, []);
+
+  function displayName(u: User) {
+    const full = [u.first_name, u.last_name].filter(Boolean).join(" ");
+    return full || u.username;
+  }
+
+  function openConfirm(target: ResetTarget) {
+    setConfirmTarget(target);
+  }
+
+  async function handleConfirmReset() {
+    if (!confirmTarget) return;
+    setResetting(true);
+    try {
+      if (confirmTarget.type === "all") {
+        await adminResetApi.resetAll();
+        toast.success("Configuración reseteada para todos los usuarios");
+      } else {
+        await adminResetApi.resetUser(confirmTarget.userId);
+        toast.success(`Configuración de ${confirmTarget.userName} reseteada`);
+      }
+      setConfirmTarget(null);
+      setSelectedUserId("");
+      onAfterReset?.();
+    } catch {
+      toast.error("No se pudo resetear la configuración");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  const selectedUser = users.find((u) => u.id === selectedUserId);
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <RotateCcw className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+            Restablecer configuración del dashboard
+          </h2>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Elimina las preferencias de orden y visibilidad de pestañas de un usuario o de
+          todos. El usuario verá una notificación la próxima vez que abra el dashboard.
+        </p>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Usuario
+            </label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
+              <option value="">Seleccionar usuario…</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {displayName(u)} ({u.role === "manager" ? "Gerente" : "Supervisor"})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() =>
+              selectedUser &&
+              openConfirm({ type: "user", userId: selectedUser.id, userName: displayName(selectedUser) })
+            }
+            disabled={!selectedUserId}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Resetear usuario
+          </button>
+
+          <button
+            onClick={() => openConfirm({ type: "all" })}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-red-300 dark:border-red-800 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors cursor-pointer"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Resetear todos los usuarios
+          </button>
+        </div>
+      </div>
+
+      {/* Confirmation dialog */}
+      {confirmTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !resetting) setConfirmTarget(null);
+          }}
+        >
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <h2 className="text-base font-semibold text-slate-800 dark:text-gray-100">
+                ¿Estás seguro?
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-gray-300">
+              {confirmTarget.type === "all"
+                ? "Se restablecerá la configuración de dashboard de todos los supervisores y gerentes a los valores por defecto. Cada usuario verá una notificación al ingresar."
+                : `Se restablecerá la configuración de dashboard de ${confirmTarget.userName} a los valores por defecto. Verá una notificación al ingresar.`}
+            </p>
+
+            <p className="text-xs text-slate-400 dark:text-gray-500">
+              Esta acción no se puede deshacer.
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmTarget(null)}
+                disabled={resetting}
+                className="flex-1 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmReset}
+                disabled={resetting}
+                className="flex-1 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer transition-colors"
+              >
+                {resetting ? "Reseteando…" : "Resetear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Permisos tab ─────────────────────────────────────────────────────────────
 
 interface PermissionsTabProps {
   matrix: MetricPermissionsMatrix;
   onMatrixUpdate: (updated: MetricPermissionsMatrix) => void;
+  onAfterReset: () => void;
 }
 
-function PermissionsTab({ matrix, onMatrixUpdate }: PermissionsTabProps) {
+function PermissionsTab({ matrix, onMatrixUpdate, onAfterReset }: PermissionsTabProps) {
   const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [overridesRefreshKey, setOverridesRefreshKey] = useState(0);
 
   const hasPending = Object.keys(pendingChanges).length > 0;
 
@@ -392,7 +566,13 @@ function PermissionsTab({ matrix, onMatrixUpdate }: PermissionsTabProps) {
       <hr className="border-slate-200 dark:border-slate-700" />
 
       {/* User-level overrides */}
-      <UserOverridesSection matrix={matrix} />
+      <UserOverridesSection matrix={matrix} refreshKey={overridesRefreshKey} />
+
+      {/* Divider */}
+      <hr className="border-slate-200 dark:border-slate-700" />
+
+      {/* Admin reset */}
+      <ResetSection onAfterReset={() => { setOverridesRefreshKey((k) => k + 1); onAfterReset(); }} />
     </div>
   );
 }
@@ -560,6 +740,7 @@ export function DashboardConfig() {
   const [matrix, setMatrix] = useState<MetricPermissionsMatrix | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("permisos");
+  const [matrixKey, setMatrixKey] = useState(0);
 
   useEffect(() => {
     metricPermissionsApi
@@ -567,7 +748,7 @@ export function DashboardConfig() {
       .then(setMatrix)
       .catch(() => toast.error("No se pudo cargar la matriz de permisos"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [matrixKey]);
 
   if (loading) {
     return (
@@ -616,7 +797,11 @@ export function DashboardConfig() {
       </div>
 
       {activeTab === "permisos" && (
-        <PermissionsTab matrix={matrix} onMatrixUpdate={setMatrix} />
+        <PermissionsTab
+          matrix={matrix}
+          onMatrixUpdate={setMatrix}
+          onAfterReset={() => setMatrixKey((k) => k + 1)}
+        />
       )}
       {activeTab === "historial" && <HistorialTab />}
     </div>

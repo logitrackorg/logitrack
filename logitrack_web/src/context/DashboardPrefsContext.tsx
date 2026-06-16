@@ -7,11 +7,17 @@ interface DashboardPrefsContextValue {
   prefs: DashboardMetricPref[] | null;
   /** Updates local state immediately and persists in background. */
   updatePrefs: (newPrefs: DashboardMetricPref[]) => void;
+  /** true when the admin reset this user's preferences and they haven't acknowledged yet. */
+  wasResetByAdmin: boolean;
+  /** Clears the reset notification locally + calls PATCH in background. */
+  clearResetFlag: () => void;
 }
 
 const DashboardPrefsContext = createContext<DashboardPrefsContextValue>({
   prefs: null,
   updatePrefs: () => {},
+  wasResetByAdmin: false,
+  clearResetFlag: () => {},
 });
 
 export function DashboardPrefsProvider({ children }: { children: React.ReactNode }) {
@@ -19,9 +25,18 @@ export function DashboardPrefsProvider({ children }: { children: React.ReactNode
   const userId = user?.id ?? null;
 
   const [prefs, setPrefs] = useState<DashboardMetricPref[] | null>(null);
+  const [wasResetByAdmin, setWasResetByAdmin] = useState(false);
 
   const fetchPrefs = useCallback(() => {
-    dashboardPrefsApi.getPreferences().then(setPrefs).catch(() => {});
+    Promise.all([
+      dashboardPrefsApi.getPreferences(),
+      dashboardPrefsApi.getResetStatus(),
+    ])
+      .then(([prefData, resetStatus]) => {
+        setPrefs(prefData);
+        setWasResetByAdmin(resetStatus.was_reset_by_admin);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -29,6 +44,7 @@ export function DashboardPrefsProvider({ children }: { children: React.ReactNode
       fetchPrefs();
     } else {
       setPrefs(null);
+      setWasResetByAdmin(false);
     }
   }, [userId, fetchPrefs]);
 
@@ -45,8 +61,13 @@ export function DashboardPrefsProvider({ children }: { children: React.ReactNode
       .catch(() => {});
   }, []);
 
+  const clearResetFlag = useCallback(() => {
+    setWasResetByAdmin(false);
+    dashboardPrefsApi.clearResetFlag().catch(() => {});
+  }, []);
+
   return (
-    <DashboardPrefsContext.Provider value={{ prefs, updatePrefs }}>
+    <DashboardPrefsContext.Provider value={{ prefs, updatePrefs, wasResetByAdmin, clearResetFlag }}>
       {children}
     </DashboardPrefsContext.Provider>
   );

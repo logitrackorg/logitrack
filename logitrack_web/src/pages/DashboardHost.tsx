@@ -17,6 +17,8 @@ import {
   ChevronRight,
   Trophy,
   Settings2,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -74,8 +76,9 @@ export function DashboardHost() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasRole } = useAuth();
   const { hasMetricPermission } = useMetricPermissions();
-  const { prefs } = useDashboardPrefs();
+  const { prefs, wasResetByAdmin, clearResetFlag } = useDashboardPrefs();
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [resetDetailsOpen, setResetDetailsOpen] = useState(false);
 
   const activePrefs = prefs ?? defaultPrefs;
 
@@ -267,6 +270,72 @@ export function DashboardHost() {
         open={customizerOpen}
         onClose={() => setCustomizerOpen(false)}
       />
+
+      {/* Admin reset banner */}
+      {wasResetByAdmin && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="flex items-center gap-3 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-3">
+            <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <p className="flex-1 text-sm text-amber-800 dark:text-amber-300">
+              Tu configuración fue reseteda a valores por defecto por el administrador
+            </p>
+            <button
+              onClick={() => setResetDetailsOpen(true)}
+              className="shrink-0 text-sm font-medium text-amber-700 dark:text-amber-400 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200 cursor-pointer transition-colors"
+            >
+              Ver detalles
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Admin reset details modal */}
+      {resetDetailsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setResetDetailsOpen(false); }}
+        >
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                  <RotateCcw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h2 className="text-base font-semibold text-slate-800 dark:text-gray-100">
+                  Configuración restablecida
+                </h2>
+              </div>
+              <button
+                onClick={() => setResetDetailsOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-gray-300">
+              Un administrador restableció tu configuración del dashboard a los valores por
+              defecto. El orden y la visibilidad de las pestañas fueron restaurados.
+            </p>
+            <p className="text-sm text-slate-600 dark:text-gray-300">
+              Podés volver a personalizar tu dashboard en cualquier momento usando el
+              botón <span className="inline-flex items-center gap-1 font-medium">de configuración <Settings2 className="w-3.5 h-3.5 inline" /></span> en la barra de pestañas.
+            </p>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => {
+                  setResetDetailsOpen(false);
+                  clearResetFlag();
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600 cursor-pointer transition-colors"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contenido del tab activo */}
       <div className="max-w-7xl mx-auto p-4 sm:p-6">

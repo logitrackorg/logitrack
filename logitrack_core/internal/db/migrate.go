@@ -832,6 +832,15 @@ func RunMigrations(db *sql.DB) error {
 			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_udprofiles_user_id ON user_dashboard_profiles(user_id);
+
+		-- Flag de reseteo del dashboard por admin (US — Reset de configuración).
+		-- Una fila por usuario; was_reset = true hasta que el usuario confirme la notificación.
+		CREATE TABLE IF NOT EXISTS user_dashboard_reset_flags (
+			user_id   TEXT        PRIMARY KEY,
+			was_reset BOOLEAN     NOT NULL DEFAULT FALSE,
+			reset_at  TIMESTAMPTZ,
+			reset_by  TEXT
+		);
 	`)
 	return err
 }
