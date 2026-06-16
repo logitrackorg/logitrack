@@ -465,16 +465,16 @@ export function DriverRoute() {
         )}
 
         {routeStatus === "pendiente" && (
-          <Card className="mb-4 border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/8">
+          <Card className="mb-4 border-[var(--warn-border)] bg-[var(--warn-bg)]">
             <div className="p-4 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-bold text-amber-900 dark:text-amber-300">Ruta sin iniciar</p>
-                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-400 leading-relaxed">
+                <p className="text-sm font-bold text-[var(--warn-text)]">Ruta sin iniciar</p>
+                <p className="mt-0.5 text-xs text-[var(--warn-text)] leading-relaxed">
                   Iniciá la ruta para habilitar las acciones de entrega. Una vez iniciada, no se pueden agregar nuevos envíos.
                 </p>
                 {data.route.suggested_start_time && (
-                  <p className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-xs font-semibold text-amber-900 dark:text-amber-300">
+                  <p className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--warn-bg)] border border-[var(--warn-border)] text-xs font-semibold text-[var(--warn-text)]">
                     <Clock className="w-3.5 h-3.5" />
                     Salida sugerida: {new Date(data.route.suggested_start_time).toLocaleTimeString("es-AR", {
                       hour: "2-digit",

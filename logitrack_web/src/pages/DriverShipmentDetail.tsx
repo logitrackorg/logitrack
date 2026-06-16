@@ -194,12 +194,12 @@ export function DriverShipmentDetail() {
               </span>
               {fragile && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
-                  <AlertTriangle className="w-3 h-3" />Frágil
+                  <AlertTriangle className="w-3.5 h-3.5" />Frágil
                 </span>
               )}
               {tw && (
                 <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                  <Clock className="w-3 h-3" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
+                  <Clock className="w-3.5 h-3.5" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
                 </span>
               )}
               {attempts > 0 && (
