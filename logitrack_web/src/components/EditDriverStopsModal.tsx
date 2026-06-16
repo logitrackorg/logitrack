@@ -361,7 +361,6 @@ export function EditDriverStopsModal({
     zoneApi.list().then(setZones).catch(() => { });
   }, []);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const recomputeForMode = useCallback(
     async (targetMode: RouteMode, shipmentIds: string[], overrideDate?: string) => {
       setRecomputing(true);

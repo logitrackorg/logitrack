@@ -68,6 +68,7 @@ export function MetricPermissionsProvider({ children }: { children: React.ReactN
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useMetricPermissions() {
   return useContext(MetricPermissionsContext);
 }
