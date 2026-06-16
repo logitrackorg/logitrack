@@ -78,7 +78,7 @@ export function TwoFAVerify() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [sessionToken]);
 
   const isLocked = lockoutRemaining > 0;
 
