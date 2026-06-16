@@ -432,15 +432,6 @@ export function DriverRoute() {
         </div>
       </div>
 
-      {activeDangerZones.length > 0 && (
-        <div className="px-4 max-w-2xl mx-auto mb-2">
-          <div className="flex items-center gap-2 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-3 py-1.5">
-            <AlertTriangle className="w-4 h-4 text-[var(--danger-c)] shrink-0" />
-            <span className="text-xs font-semibold text-[var(--danger-text)] flex-1">{activeDangerZones[0].name}</span>
-          </div>
-        </div>
-      )}
-
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
         <div className="-mx-4 px-4 flex gap-1 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
@@ -550,6 +541,7 @@ export function DriverRoute() {
               onFastForwardTime: () => driverApi.fastForwardCheckinTime().catch(() => {}),
             }}
             zones={zones}
+            dangerZones={activeDangerZones}
             onRouteInfoChange={setRouteInfo}
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />
