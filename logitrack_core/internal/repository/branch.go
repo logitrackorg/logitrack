@@ -16,6 +16,7 @@ type BranchRepository interface {
 	Add(branch model.Branch) // for seeding; does not validate duplicates
 	Update(id string, branch model.Branch) error
 	UpdateStatus(id string, status model.BranchStatus, username string) error
+	UpdateEmployeeOfMonth(id string, enabled bool, username string) error
 	GetByID(id string) (model.Branch, bool)
 	GetByCity(city string) (model.Branch, bool)
 	GetByNameOrID(query string) []model.Branch

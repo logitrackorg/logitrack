@@ -56,6 +56,7 @@ import { TripsCalendar } from "./pages/TripsCalendar";
 import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
 import { NetworkHub } from "./pages/NetworkHub";
+import { EmployeeProfile } from "./pages/EmployeeProfile";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -282,6 +283,12 @@ function AppRoutes() {
         <Route path="/branches" element={
           <ProtectedRoute roles={["supervisor", "manager", "admin"]}>
             <BranchList />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/employees/:id" element={
+          <ProtectedRoute roles={["operator", "supervisor", "manager", "admin", "driver"]}>
+            <EmployeeProfile />
           </ProtectedRoute>
         } />
 

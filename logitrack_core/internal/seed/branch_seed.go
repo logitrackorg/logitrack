@@ -9,9 +9,9 @@ import (
 
 func LoadBranches(repo repository.BranchRepository) {
 	branches := []model.Branch{
-		// Active hubs
-		{ID: "caba", Name: "CDBA-01", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}, Province: "Buenos Aires", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–20:00 / Sáb 9:00–14:00", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816)},
-		{ID: "cordoba", Name: "CORD-01", Address: model.Address{Street: "Av. Colón 567", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}, Province: "Córdoba", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–19:00 / Sáb 9:00–13:00", Latitude: fPtr(-31.4201), Longitude: fPtr(-64.1888)},
+		// Active hubs — caba and cordoba have Empleado del Mes enabled for demo purposes.
+		{ID: "caba", Name: "CDBA-01", Address: model.Address{Street: "Av. Corrientes 1234", City: "Ciudad de Buenos Aires", Province: "Buenos Aires", PostalCode: "C1043"}, Province: "Buenos Aires", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–20:00 / Sáb 9:00–14:00", Latitude: fPtr(-34.6037), Longitude: fPtr(-58.3816), EmployeeOfMonthEnabled: true},
+		{ID: "cordoba", Name: "CORD-01", Address: model.Address{Street: "Av. Colón 567", City: "Córdoba", Province: "Córdoba", PostalCode: "X5000"}, Province: "Córdoba", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–19:00 / Sáb 9:00–13:00", Latitude: fPtr(-31.4201), Longitude: fPtr(-64.1888), EmployeeOfMonthEnabled: true},
 		{ID: "mendoza", Name: "MEND-01", Address: model.Address{Street: "Av. San Martín 1200", City: "Mendoza", Province: "Mendoza", PostalCode: "M5500"}, Province: "Mendoza", Status: model.BranchStatusActive, MaxCapacity: 200, Hours: "Lun–Vie 8:00–19:00 / Sáb 9:00–13:00", Latitude: fPtr(-32.8908), Longitude: fPtr(-68.8272)},
 		// Active branches
 		{ID: "jujuy", Name: "JUJY-01", Address: model.Address{Street: "Av. Fascio 200", City: "San Salvador de Jujuy", Province: "Jujuy", PostalCode: "Y4600"}, Province: "Jujuy", Status: model.BranchStatusInactive, MaxCapacity: 200, Hours: "Lun–Vie 9:00–18:00", Latitude: fPtr(-24.1858), Longitude: fPtr(-65.2995)},
@@ -26,5 +26,8 @@ func LoadBranches(repo repository.BranchRepository) {
 		b.CreatedAt = time.Now()
 		b.UpdatedAt = time.Now()
 		_ = repo.Create(b) // ignore duplicate errors on re-seed
+		// Ensure the EmployeeOfMonthEnabled flag is applied on every restart
+		// (Create silently ignores duplicates, so we always call UpdateEmployeeOfMonth).
+		_ = repo.UpdateEmployeeOfMonth(b.ID, b.EmployeeOfMonthEnabled, "seed")
 	}
 }

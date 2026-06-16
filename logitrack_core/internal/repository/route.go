@@ -13,4 +13,6 @@ type RouteRepository interface {
 	GetByID(id string) (model.Route, error)
 	RemoveShipmentFromDate(trackingID string, date model.DateOnly) error
 	UpdateStatus(id string, status model.RouteStatus, startedAt *time.Time) error
+	// ListByDateRange returns all routes whose date falls within [from, to] (inclusive).
+	ListByDateRange(from, to time.Time) []model.Route
 }

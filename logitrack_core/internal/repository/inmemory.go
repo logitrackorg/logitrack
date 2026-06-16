@@ -150,6 +150,19 @@ func (r *inMemoryBranchRepository) UpdateStatus(id string, status model.BranchSt
 	return nil
 }
 
+func (r *inMemoryBranchRepository) UpdateEmployeeOfMonth(id string, enabled bool, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b, ok := r.branches[id]
+	if !ok {
+		return errors.New("branch not found")
+	}
+	b.EmployeeOfMonthEnabled = enabled
+	b.UpdatedBy = username
+	r.branches[id] = b
+	return nil
+}
+
 func (r *inMemoryBranchRepository) GetByID(id string) (model.Branch, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -445,6 +458,19 @@ func (r *inMemoryRouteRepository) UpdateStatus(id string, status model.RouteStat
 		}
 	}
 	return fmt.Errorf("route not found")
+}
+
+func (r *inMemoryRouteRepository) ListByDateRange(from, to time.Time) []model.Route {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var result []model.Route
+	for _, route := range r.routes {
+		d := time.Time(route.Date)
+		if !d.Before(from) && !d.After(to) {
+			result = append(result, route)
+		}
+	}
+	return result
 }
 
 // ── InMemory CustomerRepository ───────────────────────────────────────────────

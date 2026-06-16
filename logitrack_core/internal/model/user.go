@@ -56,6 +56,8 @@ type UserProfileResponse struct {
 	// Driver-specific — omitted for non-driver roles.
 	DriverType DriverType `json:"driver_type,omitempty"`
 	Address    *Address   `json:"address,omitempty"`
+	// Awards lists the employee-of-month wins for this user. Nil when user has no wins.
+	Awards []Award `json:"awards,omitempty"`
 }
 
 type LoginRequest struct {

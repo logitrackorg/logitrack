@@ -61,6 +61,7 @@ func RunMigrations(db *sql.DB) error {
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_breakdown      JSONB;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS price_currency       TEXT NOT NULL DEFAULT 'ARS';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS chatbot_metadata     JSONB;
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS created_by           TEXT NOT NULL DEFAULT '';
 
 		UPDATE shipments SET status = 'draft'          WHERE status = 'pending';
 		UPDATE shipments SET status = 'at_origin_hub'  WHERE status = 'in_progress';
