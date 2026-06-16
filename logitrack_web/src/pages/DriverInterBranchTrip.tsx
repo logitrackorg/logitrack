@@ -596,9 +596,9 @@ export function DriverInterBranchTrip() {
           Volver al inicio
         </Button>
         </div>
-      </DriverShell>
-    );
-  }
+    </DriverShell>
+  );
+}
 
   return (
     <DriverShell title="Mi viaje" subtitle={`${trip.license_plate} · ${trip.shipment_ids.length} envíos`}>
