@@ -810,6 +810,17 @@ func RunMigrations(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS perm_audit_role_idx    ON permission_audit_logs(affected_role);
 		CREATE INDEX IF NOT EXISTS perm_audit_created_idx ON permission_audit_logs(created_at DESC);
+
+		-- Preferencias personales del usuario para el dashboard (US-003).
+		CREATE TABLE IF NOT EXISTS user_dashboard_preferences (
+			user_id    TEXT    NOT NULL,
+			metric_id  TEXT    NOT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			is_hidden  BOOLEAN NOT NULL DEFAULT FALSE,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, metric_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_udp_user_id ON user_dashboard_preferences(user_id);
 	`)
 	return err
 }

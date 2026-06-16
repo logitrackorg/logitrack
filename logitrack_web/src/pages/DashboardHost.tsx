@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense, lazy, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense, lazy, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -16,10 +16,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Trophy,
+  Settings2,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
 import { useMetricPermissions } from "../context/MetricPermissionsContext";
+import { useDashboardPrefs } from "../context/DashboardPrefsContext";
+import { DashboardCustomizationModal } from "../components/DashboardCustomizationModal";
+import type { DashboardMetricPref } from "../api/dashboardPrefs";
 import { ReportFilters } from "../components/ReportFilters";
 import { PageHeader } from "../components/ui/page-header";
 import { defaultRange } from "../utils/dashboard";
@@ -56,13 +60,37 @@ const tabs = [
   { id: "empleado-mes", label: "Empleado del Mes", icon: Trophy },
 ];
 
+const tabById = Object.fromEntries(tabs.map((t) => [t.id, t]));
+
+// Default prefs (used while the real prefs are loading from the server).
+const defaultPrefs: DashboardMetricPref[] = tabs.map((t, i) => ({
+  metric_id: t.id,
+  metric_label: t.label,
+  sort_order: i,
+  is_hidden: false,
+}));
 
 export function DashboardHost() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasRole } = useAuth();
   const { hasMetricPermission } = useMetricPermissions();
+  const { prefs } = useDashboardPrefs();
+  const [customizerOpen, setCustomizerOpen] = useState(false);
 
-  const visibleTabs = tabs.filter((t) => hasMetricPermission(t.id));
+  const activePrefs = prefs ?? defaultPrefs;
+
+  const visibleTabs = useMemo(() => {
+    const prefsSet = new Set(activePrefs.map((p) => p.metric_id));
+    const fromPrefs = activePrefs
+      .filter((p) => !p.is_hidden && hasMetricPermission(p.metric_id))
+      .map((p) => tabById[p.metric_id])
+      .filter((t): t is (typeof tabs)[0] => t !== undefined);
+    // Metrics newly granted by admin that aren't in the user's saved prefs yet
+    const newlyGranted = tabs.filter(
+      (t) => hasMetricPermission(t.id) && !prefsSet.has(t.id),
+    );
+    return [...fromPrefs, ...newlyGranted];
+  }, [activePrefs, hasMetricPermission]);
   const rawTab = searchParams.get("tab") || "resumen";
   // If the requested tab is not visible, fall back to the first visible one.
   const activeTab = visibleTabs.find((t) => t.id === rawTab)?.id ?? visibleTabs[0]?.id ?? "resumen";
@@ -222,8 +250,23 @@ export function DashboardHost() {
           >
             <ChevronRight className="w-4 h-4" />
           </button>
+
+          {/* Personalizar pestañas */}
+          <button
+            aria-label="Personalizar pestañas del dashboard"
+            title="Personalizar pestañas"
+            onClick={() => setCustomizerOpen(true)}
+            className="shrink-0 ml-1 h-9 w-8 flex items-center justify-center rounded-md text-slate-400 dark:text-gray-500 hover:text-slate-700 dark:hover:text-gray-100 hover:bg-slate-100 dark:hover:bg-gray-700 transition-all cursor-pointer"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
+
+      <DashboardCustomizationModal
+        open={customizerOpen}
+        onClose={() => setCustomizerOpen(false)}
+      />
 
       {/* Contenido del tab activo */}
       <div className="max-w-7xl mx-auto p-4 sm:p-6">

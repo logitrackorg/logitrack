@@ -59,6 +59,7 @@ import { NetworkHub } from "./pages/NetworkHub";
 import { EmployeeProfile } from "./pages/EmployeeProfile";
 import { DashboardConfig } from "./pages/DashboardConfig";
 import { MetricPermissionsProvider } from "./context/MetricPermissionsContext";
+import { DashboardPrefsProvider } from "./context/DashboardPrefsContext";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -440,6 +441,7 @@ export default function App() {
       <OrganizationThemeProvider>
       <AuthProvider>
         <MetricPermissionsProvider>
+        <DashboardPrefsProvider>
         <BrowserRouter>
           <TwoFAGuard>
             <Routes>
@@ -452,6 +454,7 @@ export default function App() {
             </Routes>
           </TwoFAGuard>
         </BrowserRouter>
+        </DashboardPrefsProvider>
         </MetricPermissionsProvider>
       </AuthProvider>
       </OrganizationThemeProvider>

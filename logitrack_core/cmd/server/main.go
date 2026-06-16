@@ -289,6 +289,10 @@ func main() {
 	metricPermSvc := service.NewMetricPermissionsService(metricPermRepo)
 	permissionsHub := sse.NewPermissionsHub()
 	metricPermHandler := handler.NewMetricPermissionsHandler(metricPermSvc, permissionsHub)
+
+	dashPrefsRepo := repository.NewPostgresDashboardPreferencesRepository(database)
+	dashPrefsSvc := service.NewDashboardPreferencesService(dashPrefsRepo, metricPermSvc)
+	dashPrefsHandler := handler.NewDashboardPreferencesHandler(dashPrefsSvc)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -764,6 +768,8 @@ func main() {
 	protected.PATCH("/admin/user-metric-permissions", adminOnly, metricPermHandler.SetUserOverride)
 	protected.DELETE("/admin/user-metric-permissions", adminOnly, metricPermHandler.DeleteUserOverride)
 	protected.GET("/metric-permissions/me", authenticated, metricPermHandler.GetForMe)
+	protected.GET("/preferences/dashboard", authenticated, dashPrefsHandler.Get)
+	protected.PUT("/preferences/dashboard", authenticated, dashPrefsHandler.Save)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
