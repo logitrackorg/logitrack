@@ -134,6 +134,45 @@ func (h *ClaimHandler) UpdateClaimCategory(c *gin.Context) {
 	c.JSON(http.StatusOK, claim)
 }
 
+// AddClaimComment adds an internal supervisor comment to the claim history
+// without changing its status. Supervisor only.
+//
+// @Summary      Add claim comment
+// @Description  Adds an internal comment to the claim timeline. Supervisor only.
+// @Tags         claims
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Claim ID"
+// @Param        body body      model.AddClaimCommentRequest true "Comment"
+// @Success      200  {object}  model.Claim
+// @Failure      400  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Router       /claims/{id}/comment [post]
+func (h *ClaimHandler) AddClaimComment(c *gin.Context) {
+	var req model.AddClaimCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user := c.MustGet(middleware.UserKey).(model.User)
+	claim, err := h.svc.AddComment(c.Param("id"), user.Username, user.BranchID, req.Comment)
+	if err != nil {
+		if err == repository.ErrClaimNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		if err == service.ErrClaimForbidden {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, claim)
+}
+
 // ResolveClaim resolves a claim with a resolution type.
 //
 // @Summary      Resolve claim

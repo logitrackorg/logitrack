@@ -10,6 +10,7 @@ const (
 	EventClaimPendingCustomer   = "claim_pending_customer"
 	EventClaimInReview          = "claim_in_review"
 	EventClaimCustomerResponded = "claim_customer_responded"
+	EventClaimComment           = "claim_comment"
 )
 
 // ClaimEvent is the API representation of a claim timeline entry.
@@ -65,4 +66,10 @@ type ClaimCustomerRespondedPayload struct {
 	ToStatus         ClaimStatus `json:"to_status"`
 	EvidenceFileName string      `json:"evidence_file_name,omitempty"`
 	EvidenceFilePath string      `json:"evidence_file_path,omitempty"`
+}
+
+// ClaimCommentPayload es una nota interna del supervisor sobre el reclamo.
+// No cambia el estado del reclamo: solo deja seguimiento en el historial.
+type ClaimCommentPayload struct {
+	Comment string `json:"comment"`
 }

@@ -555,7 +555,7 @@ func main() {
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
 	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
-	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/comment", claimWrite, claimHandler.AddClaimComment)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)

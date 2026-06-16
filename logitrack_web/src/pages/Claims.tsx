@@ -6,7 +6,6 @@ import {
   CLAIM_EVENT_LABELS,
   CLAIM_TYPE_LABELS,
   type Claim,
-  type ClaimCategory,
   type ClaimEvent,
   type ClaimResolutionType,
   type ClaimStatus,
@@ -28,15 +27,6 @@ const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
   resolved_rrhh: "Resuelto: RRHH",
   resolved_improcedente: "Resuelto: improcedente",
 };
-
-const CATEGORY_OPTIONS: { value: ClaimCategory; label: string }[] = [
-  { value: "operaciones", label: "Operaciones" },
-  { value: "comercial", label: "Comercial" },
-  { value: "rrhh", label: "RRHH" },
-  { value: "legales", label: "Legales" },
-  { value: "seguros", label: "Seguros" },
-  { value: "administracion", label: "Administración" },
-];
 
 const RESOLUTION_OPTIONS: { value: ClaimResolutionType; label: string }[] = [
   { value: "operativa", label: "Operativa" },
@@ -87,7 +77,7 @@ export function Claims() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [categoryDraft, setCategoryDraft] = useState<Record<string, ClaimCategory | "">>({});
+  const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [eventsByClaim, setEventsByClaim] = useState<Record<string, ClaimEvent[]>>({});
   const [eventsLoadingId, setEventsLoadingId] = useState<string | null>(null);
 
@@ -109,9 +99,6 @@ export function Claims() {
     try {
       const data = await claimsApi.list(isManager && selectedBranch ? selectedBranch : undefined, selectedStatus ? (selectedStatus as ClaimStatus) : undefined);
       setClaims(data ?? []);
-      const nextDraft: Record<string, ClaimCategory | ""> = {};
-      data.forEach((c) => { nextDraft[c.id] = c.assigned_category ?? ""; });
-      setCategoryDraft(nextDraft);
     } catch {
       setError("No se pudieron cargar los reclamos.");
     } finally {
@@ -184,37 +171,19 @@ export function Claims() {
     ? Math.round((visibleMetrics.resolved_this_month / visibleMetrics.created_this_month) * 100)
     : 0;
 
-  const handleUpdateCategory = async (id: string) => {
-    const nextCategory = categoryDraft[id];
-    if (!nextCategory) return;
-
-    const categoryLabel = CATEGORY_OPTIONS.find((c) => c.value === nextCategory)?.label ?? nextCategory;
-
-    // Show confirm dialog
-    setConfirmDialog({
-      isOpen: true,
-      title: "Confirmar derivación",
-      message: `¿Estás seguro de derivar este reclamo a "${categoryLabel}"? Esta acción no se puede deshacer.`,
-      confirmLabel: "Sí, derivar",
-      cancelLabel: "Cancelar",
-      variant: "default",
-        requireComment: true,
-      onConfirm: (notes?: string) => {
-        setConfirmDialog(null);
-        setBusyId(id);
-        (async () => {
-          try {
-            const updated = await claimsApi.updateCategory(id, nextCategory, notes);
-            setClaims((prev) => prev.map((c) => (c.id === id ? updated : c)));
-            await loadClaimEvents(id, true);
-          } catch {
-            setError("No se pudo actualizar la categoría del reclamo.");
-          } finally {
-            setBusyId(null);
-          }
-        })();
-      },
-    });
+  const handleAddComment = async (id: string) => {
+    const comment = (commentDraft[id] ?? "").trim();
+    if (comment.length < 3) return;
+    setBusyId(id);
+    try {
+      await claimsApi.addComment(id, comment);
+      setCommentDraft((prev) => ({ ...prev, [id]: "" }));
+      await loadClaimEvents(id, true);
+    } catch {
+      setError("No se pudo agregar el comentario.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleResolve = async (id: string, resolution: ClaimResolutionType) => {
@@ -483,7 +452,6 @@ export function Claims() {
                     <div><strong>Descripción:</strong> {claim.description}</div>
                     <div><strong>Creado:</strong> {fmtDateTime(claim.created_at)}</div>
                     <div><strong>Actualizado:</strong> {fmtDateTime(claim.updated_at)}</div>
-                    <div><strong>Categoría asignada:</strong> {claim.assigned_category ? CATEGORY_OPTIONS.find((c) => c.value === claim.assigned_category)?.label : "Sin asignar"}</div>
                     <div><strong>Resolución:</strong> {claim.resolution_type ? CLAIM_STATUS_LABELS[claim.status] : "Pendiente"}</div>
                     <div><strong>Automático:</strong> {claim.is_automatic ? "Sí" : "No"}</div>
                   </div>
@@ -510,26 +478,26 @@ export function Claims() {
 
                   {isSupervisor && (
                     <div className="grid gap-3 border-t border-slate-200 pt-4">
-                      <div className="flex flex-wrap gap-2.5 items-end">
-                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wide">Derivar a</label>
-                        <select
-                          value={categoryDraft[claim.id] ?? ""}
-                          onChange={(e) => setCategoryDraft((prev) => ({ ...prev, [claim.id]: e.target.value as ClaimCategory }))}
-                          className="min-w-[240px] border border-slate-200 rounded-xl px-3 py-2.5 text-xs bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-                        >
-                          <option value="">Seleccionar área</option>
-                          {CATEGORY_OPTIONS.map((cat) => (
-                            <option key={cat.value} value={cat.value}>{cat.label}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCategory(claim.id)}
-                          disabled={!categoryDraft[claim.id] || busyId === claim.id || String(claim.status).startsWith("resolved_")}
-                          className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
-                        >
-                          Aplicar
-                        </button>
+                      <div className="grid gap-2">
+                        <label className="text-xs text-slate-500 font-bold uppercase tracking-wide">Comentario interno</label>
+                        <textarea
+                          value={commentDraft[claim.id] ?? ""}
+                          onChange={(e) => setCommentDraft((prev) => ({ ...prev, [claim.id]: e.target.value }))}
+                          rows={2}
+                          maxLength={1000}
+                          placeholder="Dejá una nota de seguimiento sobre este reclamo (visible solo internamente)…"
+                          className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] resize-y"
+                        />
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleAddComment(claim.id)}
+                            disabled={(commentDraft[claim.id] ?? "").trim().length < 3 || busyId === claim.id}
+                            className="bg-gradient-to-b from-[#1e3a5f] to-[#162b49] text-white border-none rounded-xl px-3.5 py-2.5 text-xs font-bold min-h-[42px] cursor-pointer shadow-[0_8px_18px_rgba(30,58,95,0.14)] disabled:opacity-55"
+                          >
+                            Agregar comentario
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2.5 items-center">
@@ -579,14 +547,14 @@ export function Claims() {
                         >
                           Solicitar más info
                         </button>
-                        {claim.status === "pending_customer" && (
+                        {(claim.status === "open" || claim.status === "pending_customer") && (
                           <button
                             type="button"
                             onClick={() => handleMarkInReview(claim.id)}
                             disabled={busyId === claim.id}
                             className="bg-gradient-to-b from-blue-600 to-blue-700 text-white border-none rounded-full px-3.5 py-2 text-xs font-bold cursor-pointer shadow-[0_8px_18px_rgba(37,99,235,0.18)] disabled:opacity-60"
                           >
-                            Pasar a revisión
+                            {claim.status === "open" ? "Tomar reclamo" : "Pasar a revisión"}
                           </button>
                         )}
                       </div>
