@@ -906,11 +906,11 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
                   : "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400"
               }`}>
                 {delivered ? (
-                  <CheckCircle2 className="w-4.5 h-4.5" />
+                  <CheckCircle2 className="w-5 h-5" />
                 ) : rejected ? (
-                  <Ban className="w-4.5 h-4.5" />
+                  <Ban className="w-5 h-5" />
                 ) : (
-                  <XCircle className="w-4.5 h-4.5" />
+                  <XCircle className="w-5 h-5" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
