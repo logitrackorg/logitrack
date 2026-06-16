@@ -609,15 +609,10 @@ export function MapView({
               <Clock className="w-3 h-3 shrink-0" />
               <span className="text-[var(--text-muted)]">-- min</span>
             </span>
-            <span className="text-[var(--border)] select-none">·</span>
           </>
         )}
-        <span className="flex items-center gap-1 whitespace-nowrap">
-          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-          <span className="font-semibold text-[var(--text-primary)]">{completedCount}/{waypoints.length}</span>
-          <span className="text-[var(--text-secondary)] hidden sm:inline">completadas</span>
-        </span>
       </div>
+    </div>
 
       {loading && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">

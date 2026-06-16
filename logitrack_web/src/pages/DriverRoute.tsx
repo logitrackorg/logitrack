@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Clock,
   Film,
-  Home,
   MapPin,
   Package,
   Truck,
@@ -424,24 +423,7 @@ export function DriverRoute() {
               <Film size={20} />
             </button>
           )}
-
-          {/* Badge minimizado de zona peligrosa */}
-          {isDangerDismissed && (
-            <span
-              title="Zona peligrosa activa"
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-500/15 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs font-bold shrink-0 animate-pulse"
-            >
-              <AlertTriangle size={14} className="mr-0.5" /> Zona
-            </span>
-          )}
           <RouteStatusPill status={routeStatus} />
-          <button
-            onClick={() => navigate("/driver/scan")}
-            title="Volver al inicio"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer bg-transparent border-0"
-          >
-            <Home size={18} />
-          </button>
         </div>
       </div>
 
