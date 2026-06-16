@@ -226,7 +226,7 @@ export function DriverShipmentDetail() {
 
         {/* Route not started */}
         {!routeStarted && isOutForDelivery && (
-          <div className="rounded-xl border border-[var(--info-border)] bg-[var(--info-bg)] p-2.5 text-xs text-center text-[var(--info-text)]">
+          <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-2.5 text-xs text-center text-[var(--warn-text)]">
             Iniciá tu ruta para habilitar las acciones de entrega.
           </div>
         )}

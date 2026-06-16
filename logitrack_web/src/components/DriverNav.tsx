@@ -40,7 +40,7 @@ export function DriverNav({ title, subtitle }: DriverNavProps) {
   const roleLabel = user.driver_type === "intersucursal" ? "Chofer Intersucursal" : "Chofer";
 
   return (
-    <header className="sticky top-0 z-[1000] h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3">
+    <header className="sticky top-0 z-[1000] h-14 bg-[var(--sidebar-bg)] flex items-center px-4 gap-3 pt-[env(safe-area-inset-top,0px)]">
       {/* Left: org logo */}
       {logoUrl ? (
         <img src={logoUrl} alt={orgName} className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white/10" />

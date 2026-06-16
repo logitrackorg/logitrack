@@ -636,9 +636,10 @@ function RouteStatusPill({ status }: { status: string }) {
 
 function TabButton({
   active,
+  color = "var(--brand)",
   onClick,
   children,
-}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+}: { active: boolean; color?: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
@@ -647,7 +648,7 @@ function TabButton({
     >
       {children}
       {active && (
-        <span className="absolute left-2 right-2 -bottom-px h-[3px] rounded-full bg-[var(--brand)]" />
+        <span className="absolute left-2 right-2 -bottom-px h-[3px] rounded-full" style={{ backgroundColor: color }} />
       )}
     </button>
   );
@@ -762,7 +763,7 @@ function ShipmentCard({
         )}
 
         {!isCompleted && specialInstructions && (
-          <div className="mt-3 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-sm text-amber-900 dark:text-amber-300 flex items-start gap-2">
+          <div className="mt-3 px-3 py-2.5 rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] text-sm text-[var(--warn-text)] flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <span className="leading-relaxed">{specialInstructions}</span>
           </div>
@@ -833,7 +834,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
       {/* QR de retorno — siempre que el viaje siga en_transito */}
       {tripActive && (
-        <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/8 p-5 mb-5">
+        <div className="rounded-2xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-5 mb-5">
           <p className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">Mostrá este código al operador</p>
           <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">
             {failed > 0
@@ -851,7 +852,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
                 <img
                   src={`data:image/png;base64,${qrBase64}`}
                   alt="QR de retorno"
-                  className="w-48 h-48 rounded-xl border border-amber-200 dark:border-amber-500/40"
+                  className="w-48 h-48 rounded-xl border border-[var(--warn-border)]"
                 />
                 {tripId && (
                   <p className="text-xs font-mono text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15 px-3 py-1.5 rounded-lg">
