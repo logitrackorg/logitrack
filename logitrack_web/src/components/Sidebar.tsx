@@ -100,6 +100,7 @@ const SECTIONS: NavSection[] = [
     title: "Configuración",
     items: [
       { to: "/admin/sla-config", label: "Motor SLA", icon: Gauge, roles: ["admin"] },
+      { to: "/admin/dashboard-config", label: "Dashboard", icon: LayoutDashboard, roles: ["admin"] },
       { to: "/routing-config", label: "Ruteo", icon: Sliders, roles: ["admin"] },
       { to: "/ml-config", label: "ML", icon: Brain, roles: ["admin"] },
       { to: "/fatigue-config", label: "Fatiga", icon: Activity, roles: ["admin"] },

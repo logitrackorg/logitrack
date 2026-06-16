@@ -284,6 +284,23 @@ func main() {
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
+
+	metricPermRepo := repository.NewPostgresMetricPermissionsRepository(database)
+	metricPermSvc := service.NewMetricPermissionsService(metricPermRepo)
+	permissionsHub := sse.NewPermissionsHub()
+	metricPermHandler := handler.NewMetricPermissionsHandler(metricPermSvc, permissionsHub)
+
+	dashPrefsRepo := repository.NewPostgresDashboardPreferencesRepository(database)
+	dashPrefsSvc := service.NewDashboardPreferencesService(dashPrefsRepo, metricPermSvc)
+	dashPrefsHandler := handler.NewDashboardPreferencesHandler(dashPrefsSvc)
+
+	dashProfilesRepo := repository.NewPostgresDashboardProfilesRepository(database)
+	dashProfilesSvc := service.NewDashboardProfilesService(dashProfilesRepo)
+	dashProfilesHandler := handler.NewDashboardProfilesHandler(dashProfilesSvc)
+
+	dashResetRepo := repository.NewPostgresDashboardResetRepository(database)
+	dashResetSvc := service.NewDashboardResetService(dashResetRepo)
+	dashResetHandler := handler.NewDashboardResetHandler(dashResetSvc)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -743,11 +760,30 @@ func main() {
 
 	// Notifications — standard routes on the protected group.
 	notifHandler.RegisterRoutes(protected, authenticated)
-	// SSE stream is registered on the public api group (not protected) so the
+	// SSE streams are registered on the public api group (not protected) so the
 	// group-level header-only Auth middleware doesn't block EventSource clients.
 	// sseAuth validates the token from ?token= query param as a fallback.
 	sseAuth := middleware.AuthWithQueryParam(authRepo)
 	notifHandler.RegisterStreamRoute(api, sseAuth)
+	api.GET("/events/permissions", sseAuth, metricPermHandler.Stream)
+
+	// Metric permissions — admin manages the matrix; any authenticated user reads their own.
+	protected.GET("/admin/metric-permissions", adminOnly, metricPermHandler.GetMatrix)
+	protected.PATCH("/admin/metric-permissions", adminOnly, metricPermHandler.SetPermission)
+	protected.POST("/admin/metric-permissions/batch", adminOnly, metricPermHandler.SetBatchPermissions)
+	protected.GET("/admin/metric-permissions/audit-logs", adminOnly, metricPermHandler.GetAuditLogs)
+	protected.GET("/admin/user-metric-permissions", adminOnly, metricPermHandler.GetUserOverrides)
+	protected.PATCH("/admin/user-metric-permissions", adminOnly, metricPermHandler.SetUserOverride)
+	protected.DELETE("/admin/user-metric-permissions", adminOnly, metricPermHandler.DeleteUserOverride)
+	protected.GET("/metric-permissions/me", authenticated, metricPermHandler.GetForMe)
+	protected.GET("/preferences/dashboard", authenticated, dashPrefsHandler.Get)
+	protected.PUT("/preferences/dashboard", authenticated, dashPrefsHandler.Save)
+	protected.GET("/profiles", authenticated, dashProfilesHandler.List)
+	protected.POST("/profiles", authenticated, dashProfilesHandler.Create)
+	protected.DELETE("/profiles/:id", authenticated, dashProfilesHandler.Delete)
+	protected.POST("/admin/reset-dashboard", adminOnly, dashResetHandler.ResetDashboard)
+	protected.GET("/preferences/dashboard/reset-status", authenticated, dashResetHandler.GetResetStatus)
+	protected.PATCH("/preferences/dashboard/clear-reset", authenticated, dashResetHandler.ClearResetFlag)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)
