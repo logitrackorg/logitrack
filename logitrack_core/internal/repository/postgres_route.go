@@ -85,6 +85,28 @@ func (r *postgresRouteRepository) GetByID(id string) (model.Route, error) {
 	return scanRoute(row)
 }
 
+func (r *postgresRouteRepository) ListByDateRange(from, to time.Time) []model.Route {
+	rows, err := r.db.Query(`
+		SELECT id, date, driver_id, shipment_ids, created_by, created_at, status, started_at, suggested_start_time
+		FROM routes WHERE date >= $1 AND date <= $2
+		ORDER BY date ASC`,
+		from.Format("2006-01-02"), to.Format("2006-01-02"),
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var result []model.Route
+	for rows.Next() {
+		route, err := scanRouteRow(rows)
+		if err != nil {
+			continue
+		}
+		result = append(result, route)
+	}
+	return result
+}
+
 func (r *postgresRouteRepository) RemoveShipmentFromDate(trackingID string, date model.DateOnly) error {
 	rows, err := r.db.Query(`
 		SELECT id, date, driver_id, shipment_ids, created_by, created_at, status, started_at, suggested_start_time

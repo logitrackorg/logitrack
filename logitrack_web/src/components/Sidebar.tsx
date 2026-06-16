@@ -33,6 +33,8 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useOrganizationTheme } from "../context/OrganizationThemeContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { usersApi, type Award } from "../api/users";
+import { categoryLabel } from "../api/employeeOfMonth";
 import {
   SIDEBAR_HOVER_DELAY_MS as HOVER_DELAY_MS,
   SIDEBAR_PINNED_STORAGE_KEY,
@@ -116,12 +118,28 @@ const ROLE_LABELS: Record<string, string> = {
   driver: "Chofer",
 };
 
+// Returns the most recent award for the current month-1 period (the last winner cycle).
+function useMostRecentAward(userId: string | undefined): Award | null {
+  const [award, setAward] = useState<Award | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    usersApi.getById(userId).then((p) => {
+      const awards = p.awards;
+      if (!awards || awards.length === 0) return;
+      // Show only the most recent one (already sorted DESC by backend).
+      setAward(awards[0]);
+    }).catch(() => null);
+  }, [userId]);
+  return award;
+}
+
 export function Sidebar() {
   const { user, logout, hasRole } = useAuth();
   const { config } = useOrganizationTheme();
   const logoUrl = config?.logo_url?.trim();
   const orgName = config?.name?.trim() || "LogiTrack";
   const isMobile = useIsMobile();
+  const latestAward = useMostRecentAward(user?.id);
 
   // Detect sidebar background luminance to pick light/dark text
   const [sidebarDark, setSidebarDark] = useState(true);
@@ -322,17 +340,34 @@ export function Sidebar() {
               }`
             }
           >
-            <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[var(--brand-400,#60a5fa)] to-[var(--brand-600,var(--brand))] flex items-center justify-center text-white font-bold text-xs shrink-0">
-              {user.username.slice(0, 2).toUpperCase()}
+            {/* Avatar with optional trophy dot */}
+            <div className="relative shrink-0">
+              <div className="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-[var(--brand-400,#60a5fa)] to-[var(--brand-600,var(--brand))] flex items-center justify-center text-white font-bold text-xs">
+                {user.username.slice(0, 2).toUpperCase()}
+              </div>
+              {latestAward && (
+                <span
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center text-[9px] leading-none shadow-sm ring-1 ring-[var(--sidebar-bg)]"
+                  title={`🏆 ${categoryLabel(latestAward.category)}`}
+                >
+                  🏆
+                </span>
+              )}
             </div>
             {expanded && (
               <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="text-[13px] font-semibold text-white/90 truncate">
                   {user.username}
                 </div>
-                <div className="text-[11px] text-white/50 whitespace-nowrap">
-                  {ROLE_LABELS[user.role] ?? user.role}
-                </div>
+                {latestAward ? (
+                  <div className="text-[11px] text-amber-300 truncate whitespace-nowrap flex items-center gap-1">
+                    🏆 <span className="truncate">{categoryLabel(latestAward.category)}</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-white/50 whitespace-nowrap">
+                    {ROLE_LABELS[user.role] ?? user.role}
+                  </div>
+                )}
               </div>
             )}
           </NavLink>

@@ -23,6 +23,7 @@ logitrack_core/server_linux
 logitrack_core/server_darwin
 logitrack_core/server_windows.exe
 logitrack_core/uploads/
+logitrack_core/data/
 
 # ── Node / Frontend (logitrack_web) ───────────────────────────────────────────
 node_modules/

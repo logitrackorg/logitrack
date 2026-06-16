@@ -430,8 +430,21 @@ func main() {
 		}
 	}
 
+	// Empleado del Mes — ranking mensual de empleados por categoría.
+	eomRepo := repository.NewPostgresEmployeeOfMonthRepository(database)
+	seed.LoadEmployeeOfMonthWinners(eomRepo)
+	checkinRepoEOM := repository.NewCheckinRepository()
+	eomSvc := service.NewEmployeeOfMonthService(
+		branchRepo, shipmentRepo, routeRepo, interBranchTripRepo,
+		claimRepo, authRepo, checkinRepoEOM, fatigueConfigSvc, eomRepo,
+	)
+	eomHandler := handler.NewEmployeeOfMonthHandler(eomSvc)
+	userHandler.SetEmployeeOfMonthService(eomSvc)
+
 	// Scheduler: genera el plan global de ruteo todos los días a las 08:00 ART.
+	// También calcula el Empleado del Mes el primer día de cada mes a las 00:00.
 	sched := scheduler.New(routingSvc)
+	sched.SetEmployeeOfMonthService(eomSvc)
 	if err := sched.Start(); err != nil {
 		log.Fatalf("error iniciando scheduler: %v", err)
 	}
@@ -504,6 +517,7 @@ func main() {
 	protected.POST("/branches", canManageBranch, branchHandler.Create)
 	protected.PATCH("/branches/:id", canManageBranch, branchHandler.Update)
 	protected.PATCH("/branches/:id/status", canManageBranch, branchHandler.UpdateStatus)
+	protected.PATCH("/branches/:id/employee-of-month", canManageBranch, branchHandler.UpdateEmployeeOfMonth)
 	protected.GET("/branches/:id/capacity", mgmtNonDriver, branchHandler.GetCapacity)
 
 	// Vehicles — fleet management: list/create/admin actions include admin; operational vehicle actions exclude admin.
@@ -685,6 +699,8 @@ func main() {
 	protected.GET("/users/drivers", shipmentWrite, userHandler.ListDrivers)
 	protected.GET("/users/me", authenticated, userHandler.GetMe)
 	protected.POST("/users/me/password", authenticated, userHandler.ChangePassword)
+	// Employee profile (for badge display) — read-only, all authenticated roles.
+	protected.GET("/users/:id", authenticated, userHandler.GetByID)
 
 	// Customers — autocomplete by DNI used during shipment creation
 	protected.GET("/customers", shipmentWrite, customerHandler.GetByDNI)
@@ -696,6 +712,10 @@ func main() {
 	// System config — admin only
 	protected.GET("/system/config", adminOnly, sysConfigHandler.Get)
 	protected.PATCH("/system/config", adminOnly, sysConfigHandler.Update)
+
+	// Empleado del Mes — ranking mensual. Lectura: supervisor/manager/admin; cálculo manual: admin.
+	protected.GET("/employee-of-month", canViewStats, eomHandler.GetWinners)
+	protected.POST("/admin/employee-of-month/run", adminOnly, eomHandler.Run)
 
 	// System clock override — GET is open to all authenticated users (read-only, safe).
 	// PATCH/DELETE are admin-only (mutations).

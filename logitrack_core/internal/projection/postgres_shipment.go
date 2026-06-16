@@ -34,11 +34,19 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 	switch event.EventType {
 	case model.EventShipmentCreated:
 		payload := event.Payload.(model.ShipmentCreatedPayload)
-		return p.upsertShipment(payload.Shipment)
+		s := payload.Shipment
+		if s.CreatedBy == "" {
+			s.CreatedBy = event.ChangedBy
+		}
+		return p.upsertShipment(s)
 
 	case model.EventDraftSaved:
 		payload := event.Payload.(model.DraftSavedPayload)
-		return p.upsertShipment(payload.Shipment)
+		s := payload.Shipment
+		if s.CreatedBy == "" {
+			s.CreatedBy = event.ChangedBy
+		}
+		return p.upsertShipment(s)
 
 	case model.EventDraftUpdated:
 		payload := event.Payload.(model.DraftUpdatedPayload)
@@ -465,8 +473,9 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			final_branch_id, delivery_method,
 			price, price_breakdown, price_currency,
 			rejected_by_recipient, chatbot_metadata,
-			security_keyword, keyword_attempts, contingency_delivery
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
+			security_keyword, keyword_attempts, contingency_delivery,
+			created_by
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
 		ON CONFLICT (tracking_id) DO UPDATE SET
 			status                = EXCLUDED.status,
 			current_location      = EXCLUDED.current_location,
@@ -500,7 +509,8 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 			chatbot_metadata      = EXCLUDED.chatbot_metadata,
 			security_keyword      = CASE WHEN EXCLUDED.security_keyword != '' THEN EXCLUDED.security_keyword ELSE shipments.security_keyword END,
 			keyword_attempts      = EXCLUDED.keyword_attempts,
-			contingency_delivery  = EXCLUDED.contingency_delivery`,
+			contingency_delivery  = EXCLUDED.contingency_delivery,
+			created_by            = CASE WHEN EXCLUDED.created_by != '' THEN EXCLUDED.created_by ELSE shipments.created_by END`,
 		s.TrackingID, string(s.Status), s.CurrentLocation, s.CurrentZone, s.WeightKg, string(s.PackageType),
 		s.IsFragile, s.SpecialInstructions, s.ReceivingBranchID, s.OriginBranchID,
 		s.CreatedAt, s.UpdatedAt, nullableTime(s.EstimatedDeliveryAt), s.DeliveredAt,
@@ -513,6 +523,7 @@ func (p *PostgresShipmentProjection) upsertShipment(s model.Shipment) error {
 		nullableFloat(s.Price), nullableBytes(priceBreakdown), priceCurrency,
 		s.RejectedByRecipient, serializeChatbotMetadata(s.ChatbotMetadata),
 		s.SecurityKeyword, s.KeywordAttempts, s.ContingencyDelivery,
+		s.CreatedBy,
 )
 	return err
 }
@@ -538,7 +549,8 @@ func (p *PostgresShipmentProjection) Get(trackingID string) (model.Shipment, err
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
 		       rejected_by_recipient, chatbot_metadata,
-		       security_keyword, keyword_attempts, contingency_delivery
+		       security_keyword, keyword_attempts, contingency_delivery,
+		       created_by
 		FROM shipments WHERE tracking_id = $1`, trackingID)
 	s, err := scanShipment(row)
 	if err == nil {
@@ -561,7 +573,8 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
 		       rejected_by_recipient, chatbot_metadata,
-		       security_keyword, keyword_attempts, contingency_delivery
+		       security_keyword, keyword_attempts, contingency_delivery,
+		       created_by
 		FROM shipments WHERE `
 	var statusCond string
 	if filter.IncludeExpired {
@@ -588,6 +601,12 @@ func (p *PostgresShipmentProjection) List(filter model.ShipmentFilter) ([]model.
 		args = append(args, *filter.DateTo)
 		i++
 	}
+	if filter.CreatedBy != "" {
+		query += fmt.Sprintf(" AND created_by = $%d", i)
+		args = append(args, filter.CreatedBy)
+		i++
+	}
+	_ = i // suppress unused variable warning
 	query += " ORDER BY tracking_id ASC"
 
 	rows, err := p.db.Query(query, args...)
@@ -620,7 +639,8 @@ func (p *PostgresShipmentProjection) Search(query string) ([]model.Shipment, err
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
 		       rejected_by_recipient, chatbot_metadata,
-		       security_keyword, keyword_attempts, contingency_delivery
+		       security_keyword, keyword_attempts, contingency_delivery,
+		       created_by
 		FROM shipments
 		WHERE status != 'expired'
 		  AND (   LOWER(tracking_id) LIKE $1
@@ -778,7 +798,8 @@ func (p *PostgresShipmentProjection) Stats(filter model.ShipmentFilter) (model.S
 		       parent_shipment_id, delivery_attempts, is_returning, final_branch_id, delivery_method,
 		       price, price_breakdown, price_currency, reserved_for_trip_id, sla_notified_at, sla_expired_notified_at,
 		       rejected_by_recipient, chatbot_metadata,
-		       security_keyword, keyword_attempts, contingency_delivery
+		       security_keyword, keyword_attempts, contingency_delivery,
+		       created_by
 		FROM shipments
 		WHERE `+strings.Join(recentClauses, " AND ")+`
 		ORDER BY created_at DESC LIMIT 5`, recentArgs...)
@@ -1096,6 +1117,7 @@ func scanShipment(row *sql.Row) (model.Shipment, error) {
 		&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
 		&s.RejectedByRecipient, &chatbotMetadataJSON,
 		&s.SecurityKeyword, &s.KeywordAttempts, &s.ContingencyDelivery,
+		&s.CreatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return model.Shipment{}, fmt.Errorf("shipment not found")
@@ -1193,6 +1215,7 @@ func scanShipments(rows *sql.Rows) ([]model.Shipment, error) {
 			&price, &priceBreakdownJSON, &priceCurrency, &reservedForTripID, &slaNotifiedAt, &slaExpiredNotifiedAt,
 			&s.RejectedByRecipient, &chatbotMetadataJSON,
 			&s.SecurityKeyword, &s.KeywordAttempts, &s.ContingencyDelivery,
+			&s.CreatedBy,
 		)
 		if err != nil {
 			return nil, err

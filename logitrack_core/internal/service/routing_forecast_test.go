@@ -73,6 +73,9 @@ func (f *fakeBranchRepoListActive) Update(id string, b model.Branch) error      
 func (f *fakeBranchRepoListActive) UpdateStatus(id string, s model.BranchStatus, u string) error {
 	return nil
 }
+func (f *fakeBranchRepoListActive) UpdateEmployeeOfMonth(id string, enabled bool, u string) error {
+	return nil
+}
 
 // =============================================================================
 // Tests

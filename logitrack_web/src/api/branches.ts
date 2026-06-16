@@ -23,6 +23,7 @@ export interface Branch {
   created_at: string;
   updated_at: string;
   updated_by?: string;
+  employee_of_month_enabled: boolean;
 }
 
 export interface BranchCapacity {
@@ -63,6 +64,8 @@ export const branchApi = {
   create: (data: CreateBranchPayload) => api.post<Branch>("/branches", data).then((r) => r.data),
   update: (id: string, data: UpdateBranchPayload) => api.patch<Branch>(`/branches/${id}`, data).then((r) => r.data),
   updateStatus: (id: string, status: string) => api.patch<Branch>(`/branches/${id}/status`, { status }).then((r) => r.data),
+  updateEmployeeOfMonth: (id: string, enabled: boolean) =>
+    api.patch<Branch>(`/branches/${id}/employee-of-month`, { enabled }).then((r) => r.data),
   getCapacity: (id: string) => api.get<BranchCapacity>(`/branches/${id}/capacity`).then((r) => r.data),
 };
 

@@ -11,12 +11,17 @@ import (
 )
 
 type UserHandler struct {
-	authRepo repository.AuthRepository
-	userSvc  *service.UserService
+	authRepo   repository.AuthRepository
+	userSvc    *service.UserService
+	eomSvc     *service.EmployeeOfMonthService
 }
 
 func NewUserHandler(authRepo repository.AuthRepository, userSvc *service.UserService) *UserHandler {
 	return &UserHandler{authRepo: authRepo, userSvc: userSvc}
+}
+
+func (h *UserHandler) SetEmployeeOfMonthService(svc *service.EmployeeOfMonthService) {
+	h.eomSvc = svc
 }
 
 // ListDrivers returns all users with the driver role.
@@ -66,6 +71,25 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error al obtener el perfil"})
 		return
+	}
+	c.JSON(http.StatusOK, profile)
+}
+
+// GetByID returns the profile of any employee by ID, including their awards.
+func (h *UserHandler) GetByID(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el ID de usuario es obligatorio"})
+		return
+	}
+	profile, err := h.userSvc.GetProfile(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "usuario no encontrado"})
+		return
+	}
+	if h.eomSvc != nil {
+		awards, _ := h.eomSvc.GetUserAwards(id)
+		profile.Awards = awards
 	}
 	c.JSON(http.StatusOK, profile)
 }

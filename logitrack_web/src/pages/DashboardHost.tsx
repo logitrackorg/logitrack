@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  Trophy,
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
@@ -36,6 +37,7 @@ const RetornoTab = lazy(() => import("./reports/RetornoTab").then(m => ({ defaul
 const ExitoTab = lazy(() => import("./reports/ExitoTab").then(m => ({ default: m.ExitoTab })));
 const FatigaTab = lazy(() => import("./reports/FatigaTab").then(m => ({ default: m.FatigaTab })));
 const SlaTab = lazy(() => import("./reports/SlaTab"));
+const EmpleadoMesTab = lazy(() => import("./reports/EmpleadoMesTab").then(m => ({ default: m.EmpleadoMesTab })));
 
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
@@ -50,6 +52,7 @@ const tabs = [
   { id: "exito", label: "Tasa de Éxito", icon: TrendingUp },
   { id: "fatiga", label: "Fatiga", icon: Activity },
   { id: "sla", label: "SLA", icon: ShieldAlert },
+  { id: "empleado-mes", label: "Empleado del Mes", icon: Trophy },
 ];
 
 const VALID_TABS = new Set(tabs.map((t) => t.id));
@@ -236,6 +239,7 @@ export function DashboardHost() {
             {activeTab === "exito" && <ExitoTab {...sharedProps} />}
             {activeTab === "fatiga" && <FatigaTab branchId={effectiveBranch} />}
             {activeTab === "sla" && <SlaTab branchId={effectiveBranch} />}
+            {activeTab === "empleado-mes" && <EmpleadoMesTab branchId={effectiveBranch} />}
           </Suspense>
         </div>
       </div>
