@@ -531,7 +531,7 @@ export function DriverRoute() {
 
       {/* Vista Mapa — padding y max-width consistentes con la lista */}
       {viewMode === 'map' && (
-        <div className="px-4 max-w-2xl mx-auto w-full flex-1 flex flex-col">
+        <div className="px-4 max-w-2xl mx-auto w-full flex-1 flex flex-col mb-2">
           <MapView
             waypoints={waypoints}
             origin={origin}
