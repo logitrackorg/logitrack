@@ -434,6 +434,8 @@ export function DriverRoute() {
         </div>
       </div>
 
+      <ZoneAlert zones={activeDangerZones} />
+
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
         <div className="-mx-4 px-4 flex gap-1 mb-4 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
@@ -546,7 +548,6 @@ export function DriverRoute() {
             onRouteInfoChange={setRouteInfo}
             onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
           />
-          <ZoneAlert zones={activeDangerZones} />
         </div>
       )}
 

@@ -25,7 +25,7 @@ export function ZoneAlert({ zones, onDismissedChange }: ZoneAlertProps) {
   const first = activeZones[0];
 
   return (
-    <div className="px-4 pt-1">
+    <div className="px-4 max-w-2xl mx-auto mb-3">
       <div className="flex items-center gap-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg px-3 py-2">
         <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0" />
         <span className="text-xs font-semibold text-red-700 dark:text-red-300 truncate flex-1">
