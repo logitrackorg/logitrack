@@ -1,0 +1,29 @@
+logitrack_web/src/components/EditDriverStopsModal.tsx
+  s_2dbc2692a0050d::t_df43191b00599b 364-374
+.gitignore
+  s_6b03284b10bd53::t_a57f809a516c0a 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "547b7e6ab60af8f709642ded76cc19653f33b675",
+  "prompts": {},
+  "sessions": {
+    "s_2dbc2692a0050d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5df4fe7-e75f-4beb-b753-3560b1635cd2",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    },
+    "s_6b03284b10bd53": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c54b8b9-843c-4d8d-8a35-dd329766a821",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
