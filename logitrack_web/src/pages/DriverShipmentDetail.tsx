@@ -233,7 +233,7 @@ export function DriverShipmentDetail() {
 
         {/* Special instructions */}
         {specialInstructions && (
-          <div className="rounded-xl border-2 border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
+          <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
             <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">Instrucciones especiales</p>
@@ -246,7 +246,7 @@ export function DriverShipmentDetail() {
 
       {/* Sticky CTAs */}
       {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-2.5 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="flex flex-col gap-2 max-w-2xl mx-auto">
             <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
               <CheckCircle2 className="w-5 h-5" />Entregar
