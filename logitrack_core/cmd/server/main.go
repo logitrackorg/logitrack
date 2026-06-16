@@ -293,6 +293,10 @@ func main() {
 	dashPrefsRepo := repository.NewPostgresDashboardPreferencesRepository(database)
 	dashPrefsSvc := service.NewDashboardPreferencesService(dashPrefsRepo, metricPermSvc)
 	dashPrefsHandler := handler.NewDashboardPreferencesHandler(dashPrefsSvc)
+
+	dashProfilesRepo := repository.NewPostgresDashboardProfilesRepository(database)
+	dashProfilesSvc := service.NewDashboardProfilesService(dashProfilesRepo)
+	dashProfilesHandler := handler.NewDashboardProfilesHandler(dashProfilesSvc)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -770,6 +774,9 @@ func main() {
 	protected.GET("/metric-permissions/me", authenticated, metricPermHandler.GetForMe)
 	protected.GET("/preferences/dashboard", authenticated, dashPrefsHandler.Get)
 	protected.PUT("/preferences/dashboard", authenticated, dashPrefsHandler.Save)
+	protected.GET("/profiles", authenticated, dashProfilesHandler.List)
+	protected.POST("/profiles", authenticated, dashProfilesHandler.Create)
+	protected.DELETE("/profiles/:id", authenticated, dashProfilesHandler.Delete)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)

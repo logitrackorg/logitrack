@@ -821,6 +821,17 @@ func RunMigrations(db *sql.DB) error {
 			PRIMARY KEY (user_id, metric_id)
 		);
 		CREATE INDEX IF NOT EXISTS idx_udp_user_id ON user_dashboard_preferences(user_id);
+
+		-- Perfiles de dashboard guardados por el usuario (US-005).
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS user_dashboard_profiles (
+			id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id     TEXT        NOT NULL,
+			name        TEXT        NOT NULL,
+			preferences JSONB       NOT NULL DEFAULT '[]',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_udprofiles_user_id ON user_dashboard_profiles(user_id);
 	`)
 	return err
 }
