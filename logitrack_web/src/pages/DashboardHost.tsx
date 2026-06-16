@@ -49,7 +49,7 @@ const EmpleadoMesTab = lazy(() => import("./reports/EmpleadoMesTab").then(m => (
 const tabs = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
   { id: "choferes", label: "Choferes", icon: Users },
-  { id: "reclamos", label: "Reclamos", icon: AlertTriangle },
+  { id: "reclamos", label: "Incidentes", icon: AlertTriangle },
   { id: "facturacion", label: "Facturación", icon: DollarSign },
   { id: "ranking", label: "Ranking", icon: BarChart3 },
   { id: "volumen", label: "Vol. por Ventana", icon: Clock },

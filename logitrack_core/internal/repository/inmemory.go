@@ -713,20 +713,6 @@ func (r *inMemoryClaimRepository) ListAll() ([]model.Claim, error) {
 	return out, nil
 }
 
-func (r *inMemoryClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for i := range r.claims {
-		if r.claims[i].ID == id {
-			r.claims[i].AssignedCategory = category
-			r.claims[i].Status = status
-			r.claims[i].UpdatedAt = updatedAt
-			return nil
-		}
-	}
-	return ErrClaimNotFound
-}
-
 func (r *inMemoryClaimRepository) Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

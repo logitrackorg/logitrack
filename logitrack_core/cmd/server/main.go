@@ -525,7 +525,10 @@ func main() {
 	shipmentDetailRead := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor, model.RoleManager, model.RoleDriver)
 	shipmentWrite := middleware.RequireRoles(model.RoleOperator, model.RoleSupervisor)
 	claimRead := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor, model.RoleManager)
-	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleOperator, model.RoleSupervisor)
+	// Solo supervisores (y admin) pueden atender reclamos: derivar a área,
+	// resolver, solicitar info al cliente, marcar en revisión. Los operadores
+	// pueden verlos (claimRead) pero no accionar sobre ellos.
+	claimWrite := middleware.RequireRoles(model.RoleAdmin, model.RoleSupervisor)
 
 	// Branches — list/search: management roles incl. admin, create/update/status: admin only, capacity: management roles
 	canManageBranch := middleware.RequireRoles(model.RoleAdmin)
@@ -593,7 +596,7 @@ func main() {
 	protected.GET("/claims/:id/events", claimRead, claimHandler.GetClaimEvents)
 	protected.GET("/claims/:id/evidence/download", claimRead, claimHandler.DownloadClaimEvidence)
 	protected.GET("/claims/:id/response-evidence/download", claimRead, claimHandler.DownloadClaimResponseEvidence)
-	protected.PATCH("/claims/:id/category", claimWrite, claimHandler.UpdateClaimCategory)
+	protected.POST("/claims/:id/comment", claimWrite, claimHandler.AddClaimComment)
 	protected.POST("/claims/:id/resolve", claimWrite, claimHandler.ResolveClaim)
 	protected.POST("/claims/:id/request-info", claimWrite, claimHandler.RequestCustomerInfo)
 	protected.POST("/claims/:id/review", claimWrite, claimHandler.MarkClaimInReview)

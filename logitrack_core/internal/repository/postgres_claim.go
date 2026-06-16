@@ -123,26 +123,6 @@ func nullString(s string) interface{} {
 	return s
 }
 
-func (r *postgresClaimRepository) UpdateCategory(id string, category model.ClaimCategory, status model.ClaimStatus, updatedAt time.Time) error {
-	res, err := r.db.Exec(
-		`UPDATE shipment_claims
-		 SET assigned_category = $1, status = $2, updated_at = $3
-		 WHERE id = $4`,
-		string(category),
-		string(status),
-		updatedAt,
-		id,
-	)
-	if err != nil {
-		return err
-	}
-	rows, err := res.RowsAffected()
-	if err == nil && rows == 0 {
-		return ErrClaimNotFound
-	}
-	return err
-}
-
 func (r *postgresClaimRepository) Resolve(id string, resolutionType model.ClaimResolutionType, status model.ClaimStatus, updatedAt time.Time) error {
 	res, err := r.db.Exec(
 		`UPDATE shipment_claims

@@ -412,50 +412,6 @@ func (s *ClaimService) GetEvents(claimID, branchID string) ([]model.ClaimEvent, 
 	return result, nil
 }
 
-func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, changedBy, branchID, notes string) (model.Claim, error) {
-	if !model.ValidClaimCategories[category] {
-		return model.Claim{}, fmt.Errorf("categoria de reclamo no valida")
-	}
-	notes = strings.TrimSpace(notes)
-	if len(notes) < 15 {
-		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 15 caracteres")
-	}
-	claim, err := s.GetByIDForBranch(id, branchID)
-	if err != nil {
-		return model.Claim{}, err
-	}
-	// Block operations on already resolved (final) claims or while transferred.
-	if isTerminalOrTransferred(claim.Status) {
-		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
-	}
-	fromStatus := claim.Status
-	updatedAt := clock.Now().UTC()
-	if err := s.claimRepo.UpdateCategory(claim.ID, category, model.ClaimStatusDerived, updatedAt); err != nil {
-		return model.Claim{}, err
-	}
-
-	if err := s.appendClaimEvent(model.DomainEvent{
-		ID:         uuid.NewString(),
-		TrackingID: claim.ID,
-		EventType:  model.EventClaimCategoryUpdated,
-		Payload: model.ClaimCategoryUpdatedPayload{
-			AssignedCategory: category,
-			FromStatus:       fromStatus,
-			ToStatus:         model.ClaimStatusDerived,
-			Notes:            notes,
-		},
-		ChangedBy: changedBy,
-		Timestamp: updatedAt,
-	}); err != nil {
-		return model.Claim{}, err
-	}
-
-	claim.AssignedCategory = category
-	claim.Status = model.ClaimStatusDerived
-	claim.UpdatedAt = updatedAt
-	return claim, nil
-}
-
 func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, changedBy, branchID, notes string) (model.Claim, error) {
 	if !model.ValidClaimResolutionTypes[resolution] {
 		return model.Claim{}, fmt.Errorf("tipo de resolucion no valido")
@@ -570,9 +526,13 @@ func (s *ClaimService) MarkInReview(id string, changedBy, branchID string) (mode
 	if err != nil {
 		return model.Claim{}, err
 	}
-	if claim.Status != model.ClaimStatusPendingCustomer {
-		return model.Claim{}, fmt.Errorf("solo se puede pasar a revision desde pendiente del cliente")
+	// Permite "tomar" un reclamo abierto (open → in_review) o retomar uno que
+	// estaba pendiente del cliente (pending_customer → in_review). Cualquier otro
+	// estado (ya en revisión, derivado o resuelto) no es válido.
+	if claim.Status != model.ClaimStatusOpen && claim.Status != model.ClaimStatusPendingCustomer {
+		return model.Claim{}, fmt.Errorf("solo se puede tomar un reclamo abierto o pendiente del cliente")
 	}
+	fromStatus := claim.Status
 	updatedAt := clock.Now().UTC()
 	if err := s.claimRepo.UpdateStatus(claim.ID, model.ClaimStatusInReview, updatedAt); err != nil {
 		return model.Claim{}, err
@@ -582,7 +542,7 @@ func (s *ClaimService) MarkInReview(id string, changedBy, branchID string) (mode
 		TrackingID: claim.ID,
 		EventType:  model.EventClaimInReview,
 		Payload: model.ClaimInReviewPayload{
-			FromStatus: claim.Status,
+			FromStatus: fromStatus,
 			ToStatus:   model.ClaimStatusInReview,
 		},
 		ChangedBy: changedBy,
@@ -592,6 +552,35 @@ func (s *ClaimService) MarkInReview(id string, changedBy, branchID string) (mode
 	}
 	claim.Status = model.ClaimStatusInReview
 	claim.UpdatedAt = updatedAt
+	return claim, nil
+}
+
+// AddComment agrega una nota interna del supervisor al historial del reclamo
+// sin cambiar su estado. Pensado para colaboración y seguimiento durante la
+// investigación. Permitido en cualquier estado (incluso resuelto) para que la
+// trazabilidad quede completa.
+func (s *ClaimService) AddComment(id, changedBy, branchID, comment string) (model.Claim, error) {
+	comment = strings.TrimSpace(comment)
+	if len(comment) < 3 {
+		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 3 caracteres")
+	}
+	if len(comment) > 1000 {
+		return model.Claim{}, fmt.Errorf("el comentario no puede superar los 1000 caracteres")
+	}
+	claim, err := s.GetByIDForBranch(id, branchID)
+	if err != nil {
+		return model.Claim{}, err
+	}
+	if err := s.appendClaimEvent(model.DomainEvent{
+		ID:         uuid.NewString(),
+		TrackingID: claim.ID,
+		EventType:  model.EventClaimComment,
+		Payload:    model.ClaimCommentPayload{Comment: comment},
+		ChangedBy:  changedBy,
+		Timestamp:  clock.Now().UTC(),
+	}); err != nil {
+		return model.Claim{}, err
+	}
 	return claim, nil
 }
 
@@ -850,6 +839,10 @@ func toClaimEvent(de model.DomainEvent) (model.ClaimEvent, bool) {
 		base.ToStatus = payload.ToStatus
 		base.EvidenceFileName = payload.EvidenceFileName
 		base.EvidenceFilePath = payload.EvidenceFilePath
+		return base, true
+	case model.EventClaimComment:
+		payload := de.Payload.(model.ClaimCommentPayload)
+		base.Notes = payload.Comment
 		return base, true
 	case model.EventClaimTransferred:
 		payload := de.Payload.(model.ClaimTransferredPayload)

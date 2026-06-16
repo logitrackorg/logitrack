@@ -96,29 +96,30 @@ func (h *ClaimHandler) GetClaim(c *gin.Context) {
 	c.JSON(http.StatusOK, claim)
 }
 
-// UpdateClaimCategory derives a claim to a category.
+// AddClaimComment adds an internal supervisor comment to the claim history
+// without changing its status. Supervisor only.
 //
-// @Summary      Update claim category
-// @Description  Updates the claim category and marks it as derived. Operator and supervisor only.
+// @Summary      Add claim comment
+// @Description  Adds an internal comment to the claim timeline. Supervisor only.
 // @Tags         claims
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id   path      string  true  "Claim ID"
-// @Param        body body      model.UpdateClaimCategoryRequest true "Category data"
+// @Param        body body      model.AddClaimCommentRequest true "Comment"
 // @Success      200  {object}  model.Claim
 // @Failure      400  {object}  map[string]string
 // @Failure      403  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
-// @Router       /claims/{id}/category [patch]
-func (h *ClaimHandler) UpdateClaimCategory(c *gin.Context) {
-	var req model.UpdateClaimCategoryRequest
+// @Router       /claims/{id}/comment [post]
+func (h *ClaimHandler) AddClaimComment(c *gin.Context) {
+	var req model.AddClaimCommentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	user := c.MustGet(middleware.UserKey).(model.User)
-	claim, err := h.svc.UpdateCategory(c.Param("id"), req.AssignedCategory, user.Username, user.BranchID, req.Notes)
+	claim, err := h.svc.AddComment(c.Param("id"), user.Username, user.BranchID, req.Comment)
 	if err != nil {
 		if err == repository.ErrClaimNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

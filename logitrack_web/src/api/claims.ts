@@ -78,6 +78,7 @@ export type ClaimEventType =
   | "claim_pending_customer"
   | "claim_in_review"
   | "claim_customer_responded"
+  | "claim_comment"
   | "claim_transferred"
   | "claim_accepted"
   | "claim_transfer_rejected";
@@ -117,6 +118,7 @@ export const CLAIM_EVENT_LABELS: Record<ClaimEventType, string> = {
   claim_pending_customer: "Solicitud de información al cliente",
   claim_in_review: "Reclamo en revisión",
   claim_customer_responded: "Respuesta del cliente",
+  claim_comment: "Comentario",
   claim_transferred: "Derivado a sucursal",
   claim_accepted: "Reclamo aceptado",
   claim_transfer_rejected: "Derivación rechazada",
@@ -140,8 +142,8 @@ export const claimsApi = {
     const response = await api.get(`/claims/${id}/response-evidence/download`, { responseType: "blob" });
     return response.data as Blob;
   },
-  updateCategory: (id: string, category: ClaimCategory, notes?: string) =>
-    api.patch<Claim>(`/claims/${id}/category`, { assigned_category: category, notes }).then((r) => r.data),
+  addComment: (id: string, comment: string) =>
+    api.post<Claim>(`/claims/${id}/comment`, { comment }).then((r) => r.data),
   resolve: (id: string, resolution: ClaimResolutionType, notes?: string) =>
     api.post<Claim>(`/claims/${id}/resolve`, { resolution_type: resolution, notes }).then((r) => r.data),
   requestInfo: (id: string, notes?: string) =>
