@@ -7,9 +7,10 @@ import { ThemeToggle } from "./ThemeToggle";
 
 interface DriverNavProps {
   title: string;
+  subtitle?: string;
 }
 
-export function DriverNav({ title }: DriverNavProps) {
+export function DriverNav({ title, subtitle }: DriverNavProps) {
   const { user, logout } = useAuth();
   const { config: org } = useOrganizationTheme();
   const orgName = org?.name?.trim() || "LogiTrack";
@@ -50,9 +51,14 @@ export function DriverNav({ title }: DriverNavProps) {
       )}
 
       {/* Center: page title */}
-      <h1 className="flex-1 text-center text-[15px] font-bold text-white leading-tight truncate">
-        {title}
-      </h1>
+      <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+        <h1 className="text-[15px] font-bold text-white leading-tight truncate max-w-full">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="text-[10px] text-white/60 leading-tight truncate max-w-full">{subtitle}</p>
+        )}
+      </div>
 
       {/* Right: avatar → dropdown */}
       <div className="relative shrink-0" ref={menuRef}>

@@ -395,7 +395,7 @@ export function DriverInterBranchTrip() {
               if (legData.code !== "Ok" || !legData.routes?.[0]) {
                 // fallback línea recta para este segmento
                 L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-                  color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
+              color: points[i + 1].completed ? "#059669" : "#3b82f6",
                   weight: 3,
                   dashArray: points[i + 1].completed ? undefined : "8 6",
                 }).addTo(map);

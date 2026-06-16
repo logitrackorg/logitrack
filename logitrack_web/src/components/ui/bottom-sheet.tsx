@@ -44,17 +44,17 @@ export function BottomSheet({ open, onClose, title, description, children, class
           className,
         )}
       >
-        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-slate-100 dark:border-gray-700 px-5 pt-3 pb-3 rounded-t-2xl">
+        <div className="sticky top-0 bg-[var(--bg-card)] border-b border-[var(--border)] px-5 pt-3 pb-3 rounded-t-2xl">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-600 sm:hidden" />
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">{title}</h2>
-              {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+              <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">{title}</h2>
+              {description && <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{description}</p>}
             </div>
             <button
               onClick={onClose}
               aria-label="Cerrar"
-              className="shrink-0 w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 cursor-pointer"
+              className="shrink-0 w-9 h-9 rounded-full hover:bg-[var(--bg-muted)] flex items-center justify-center text-[var(--text-muted)] cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
