@@ -57,6 +57,8 @@ import { TwoFAVerify } from "./pages/TwoFAVerify";
 import { TwoFASetup } from "./pages/TwoFASetup";
 import { NetworkHub } from "./pages/NetworkHub";
 import { EmployeeProfile } from "./pages/EmployeeProfile";
+import { DashboardConfig } from "./pages/DashboardConfig";
+import { MetricPermissionsProvider } from "./context/MetricPermissionsContext";
 
 function DriverNav() {
   const { user, logout } = useAuth();
@@ -400,6 +402,12 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
 
+        <Route path="/admin/dashboard-config" element={
+          <ProtectedRoute roles={["admin"]}>
+            <DashboardConfig />
+          </ProtectedRoute>
+        } />
+
         <Route path="/profile" element={
           <ProtectedRoute>
             <UserProfile />
@@ -431,6 +439,7 @@ export default function App() {
     <ThemeProvider>
       <OrganizationThemeProvider>
       <AuthProvider>
+        <MetricPermissionsProvider>
         <BrowserRouter>
           <TwoFAGuard>
             <Routes>
@@ -443,6 +452,7 @@ export default function App() {
             </Routes>
           </TwoFAGuard>
         </BrowserRouter>
+        </MetricPermissionsProvider>
       </AuthProvider>
       </OrganizationThemeProvider>
     </ThemeProvider>

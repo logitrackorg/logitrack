@@ -284,6 +284,11 @@ func main() {
 
 	statsExtendedSvc := service.NewStatsExtendedService(statsExtendedRepo, branchRepo)
 	statsExtendedHandler := handler.NewStatsExtendedHandler(statsExtendedSvc)
+
+	metricPermRepo := repository.NewPostgresMetricPermissionsRepository(database)
+	metricPermSvc := service.NewMetricPermissionsService(metricPermRepo)
+	permissionsHub := sse.NewPermissionsHub()
+	metricPermHandler := handler.NewMetricPermissionsHandler(metricPermSvc, permissionsHub)
 	twoFAHandler := handler.NewTwoFAHandler(twoFAService, accessLogRepo)
 
 	// Reportes automáticos (LOGITRACK — US gerente): manager + admin configuran
@@ -743,11 +748,22 @@ func main() {
 
 	// Notifications — standard routes on the protected group.
 	notifHandler.RegisterRoutes(protected, authenticated)
-	// SSE stream is registered on the public api group (not protected) so the
+	// SSE streams are registered on the public api group (not protected) so the
 	// group-level header-only Auth middleware doesn't block EventSource clients.
 	// sseAuth validates the token from ?token= query param as a fallback.
 	sseAuth := middleware.AuthWithQueryParam(authRepo)
 	notifHandler.RegisterStreamRoute(api, sseAuth)
+	api.GET("/events/permissions", sseAuth, metricPermHandler.Stream)
+
+	// Metric permissions — admin manages the matrix; any authenticated user reads their own.
+	protected.GET("/admin/metric-permissions", adminOnly, metricPermHandler.GetMatrix)
+	protected.PATCH("/admin/metric-permissions", adminOnly, metricPermHandler.SetPermission)
+	protected.POST("/admin/metric-permissions/batch", adminOnly, metricPermHandler.SetBatchPermissions)
+	protected.GET("/admin/metric-permissions/audit-logs", adminOnly, metricPermHandler.GetAuditLogs)
+	protected.GET("/admin/user-metric-permissions", adminOnly, metricPermHandler.GetUserOverrides)
+	protected.PATCH("/admin/user-metric-permissions", adminOnly, metricPermHandler.SetUserOverride)
+	protected.DELETE("/admin/user-metric-permissions", adminOnly, metricPermHandler.DeleteUserOverride)
+	protected.GET("/metric-permissions/me", authenticated, metricPermHandler.GetForMe)
 
 	// Zones — read: all authenticated; write: admin only
 	protected.GET("/zones", authenticated, zoneHandler.List)

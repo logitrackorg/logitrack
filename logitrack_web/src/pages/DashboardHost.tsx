@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { branchApi, type Branch } from "../api/branches";
 import { useAuth } from "../context/AuthContext";
+import { useMetricPermissions } from "../context/MetricPermissionsContext";
 import { ReportFilters } from "../components/ReportFilters";
 import { PageHeader } from "../components/ui/page-header";
 import { defaultRange } from "../utils/dashboard";
@@ -55,16 +56,25 @@ const tabs = [
   { id: "empleado-mes", label: "Empleado del Mes", icon: Trophy },
 ];
 
-const VALID_TABS = new Set(tabs.map((t) => t.id));
 
 export function DashboardHost() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, hasRole } = useAuth();
+  const { hasMetricPermission } = useMetricPermissions();
 
+  const visibleTabs = tabs.filter((t) => hasMetricPermission(t.id));
   const rawTab = searchParams.get("tab") || "resumen";
-  const activeTab = VALID_TABS.has(rawTab) ? rawTab : "resumen";
+  // If the requested tab is not visible, fall back to the first visible one.
+  const activeTab = visibleTabs.find((t) => t.id === rawTab)?.id ?? visibleTabs[0]?.id ?? "resumen";
 
   const setTab = (t: string) => setSearchParams({ tab: t });
+
+  // Sync URL when permissions change and the active tab disappears.
+  useEffect(() => {
+    if (rawTab !== activeTab) {
+      setSearchParams({ tab: activeTab }, { replace: true });
+    }
+  }, [activeTab, rawTab, setSearchParams]);
 
   const range = defaultRange();
   const [dateFrom, setDateFrom] = useState(range.from);
@@ -189,7 +199,7 @@ export function DashboardHost() {
               if (tabsRef.current) tabsRef.current.scrollLeft = dragScrollLeft.current - walk;
             }}
           >
-            {tabs.map((t) => {
+            {visibleTabs.map((t) => {
               const Icon = t.icon;
               return (
                 <TabButton

@@ -736,6 +736,80 @@ func RunMigrations(db *sql.DB) error {
 		-- son del orden de cientos de miles a millones de km².
 		ALTER TABLE system_config ADD COLUMN IF NOT EXISTS max_coverage_area_km2 DOUBLE PRECISION NOT NULL DEFAULT 1000000;
 		UPDATE system_config SET max_coverage_area_km2 = 1000000 WHERE id = 1 AND max_coverage_area_km2 IN (0, 1500);
+
+		-- Permisos de pestañas del dashboard por rol (supervisor y manager).
+		-- El admin puede cambiar estos valores en tiempo real desde /admin/dashboard-config.
+		CREATE TABLE IF NOT EXISTS role_metric_permissions (
+			role_name  TEXT        NOT NULL,
+			metric_id  TEXT        NOT NULL,
+			is_visible BOOLEAN     NOT NULL DEFAULT TRUE,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (role_name, metric_id)
+		);
+		-- Limpiar filas obsoletas (KPI card IDs y roles que ya no aplican).
+		DELETE FROM role_metric_permissions WHERE role_name IN ('operator', 'admin', 'driver');
+		DELETE FROM role_metric_permissions WHERE metric_id IN (
+			'total_envios','en_curso','entregados','problemas',
+			'tasa_exito','ciclo_promedio','incidentes_abiertos'
+		);
+		-- Seed: supervisor y manager ven todas las pestañas por defecto.
+		INSERT INTO role_metric_permissions (role_name, metric_id, is_visible) VALUES
+			('supervisor', 'resumen',        true),
+			('supervisor', 'choferes',       true),
+			('supervisor', 'reclamos',       true),
+			('supervisor', 'facturacion',    true),
+			('supervisor', 'ranking',        true),
+			('supervisor', 'volumen',        true),
+			('supervisor', 'tipo-envio',     true),
+			('supervisor', 'metodo-entrega', true),
+			('supervisor', 'retorno',        true),
+			('supervisor', 'exito',          true),
+			('supervisor', 'fatiga',         true),
+			('supervisor', 'sla',            true),
+			('supervisor', 'empleado-mes',   true),
+			('manager',    'resumen',        true),
+			('manager',    'choferes',       true),
+			('manager',    'reclamos',       true),
+			('manager',    'facturacion',    true),
+			('manager',    'ranking',        true),
+			('manager',    'volumen',        true),
+			('manager',    'tipo-envio',     true),
+			('manager',    'metodo-entrega', true),
+			('manager',    'retorno',        true),
+			('manager',    'exito',          true),
+			('manager',    'fatiga',         true),
+			('manager',    'sla',            true),
+			('manager',    'empleado-mes',   true)
+		ON CONFLICT (role_name, metric_id) DO NOTHING;
+
+		-- Excepciones de permisos por usuario individual.
+		-- Filas aquí sobreescriben la configuración del rol (user overrides role).
+		CREATE TABLE IF NOT EXISTS user_metric_permissions (
+			user_id    TEXT        NOT NULL,
+			metric_id  TEXT        NOT NULL,
+			is_visible BOOLEAN     NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (user_id, metric_id)
+		);
+		CREATE INDEX IF NOT EXISTS user_metric_perm_user_idx ON user_metric_permissions(user_id);
+
+		-- Auditoría de cambios de permisos de métricas (US-002).
+		CREATE EXTENSION IF NOT EXISTS pgcrypto;
+		CREATE TABLE IF NOT EXISTS permission_audit_logs (
+			id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			admin_user_id  TEXT        NOT NULL,
+			admin_username TEXT        NOT NULL,
+			batch_id       UUID        NOT NULL,
+			affected_role  TEXT        NOT NULL,
+			metric_id      TEXT        NOT NULL,
+			metric_name    TEXT        NOT NULL,
+			action         TEXT        NOT NULL,
+			previous_state BOOLEAN     NOT NULL,
+			new_state      BOOLEAN     NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS perm_audit_role_idx    ON permission_audit_logs(affected_role);
+		CREATE INDEX IF NOT EXISTS perm_audit_created_idx ON permission_audit_logs(created_at DESC);
 	`)
 	return err
 }
