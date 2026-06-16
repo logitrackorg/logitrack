@@ -111,11 +111,6 @@ type CreatePublicClaimRequest struct {
 	DNI         string    `json:"dni" binding:"required"`
 }
 
-type UpdateClaimCategoryRequest struct {
-	AssignedCategory ClaimCategory `json:"assigned_category" binding:"required"`
-	Notes            string        `json:"notes" binding:"required"`
-}
-
 type ResolveClaimRequest struct {
 	ResolutionType ClaimResolutionType `json:"resolution_type" binding:"required"`
 	Notes          string              `json:"notes" binding:"required"`

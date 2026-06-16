@@ -387,50 +387,6 @@ func (s *ClaimService) GetEvents(claimID, branchID string) ([]model.ClaimEvent, 
 	return result, nil
 }
 
-func (s *ClaimService) UpdateCategory(id string, category model.ClaimCategory, changedBy, branchID, notes string) (model.Claim, error) {
-	if !model.ValidClaimCategories[category] {
-		return model.Claim{}, fmt.Errorf("categoria de reclamo no valida")
-	}
-	notes = strings.TrimSpace(notes)
-	if len(notes) < 15 {
-		return model.Claim{}, fmt.Errorf("el comentario debe tener al menos 15 caracteres")
-	}
-	claim, err := s.GetByIDForBranch(id, branchID)
-	if err != nil {
-		return model.Claim{}, err
-	}
-	// Block operations on already resolved (final) claims
-	if claim.Status == model.ClaimStatusResolvedOperativa || claim.Status == model.ClaimStatusResolvedComercial || claim.Status == model.ClaimStatusResolvedRRHH || claim.Status == model.ClaimStatusResolvedImprocedente {
-		return model.Claim{}, fmt.Errorf("reclamo resuelto — operación no permitida")
-	}
-	fromStatus := claim.Status
-	updatedAt := clock.Now().UTC()
-	if err := s.claimRepo.UpdateCategory(claim.ID, category, model.ClaimStatusDerived, updatedAt); err != nil {
-		return model.Claim{}, err
-	}
-
-	if err := s.appendClaimEvent(model.DomainEvent{
-		ID:         uuid.NewString(),
-		TrackingID: claim.ID,
-		EventType:  model.EventClaimCategoryUpdated,
-		Payload: model.ClaimCategoryUpdatedPayload{
-			AssignedCategory: category,
-			FromStatus:       fromStatus,
-			ToStatus:         model.ClaimStatusDerived,
-			Notes:            notes,
-		},
-		ChangedBy: changedBy,
-		Timestamp: updatedAt,
-	}); err != nil {
-		return model.Claim{}, err
-	}
-
-	claim.AssignedCategory = category
-	claim.Status = model.ClaimStatusDerived
-	claim.UpdatedAt = updatedAt
-	return claim, nil
-}
-
 func (s *ClaimService) Resolve(id string, resolution model.ClaimResolutionType, changedBy, branchID, notes string) (model.Claim, error) {
 	if !model.ValidClaimResolutionTypes[resolution] {
 		return model.Claim{}, fmt.Errorf("tipo de resolucion no valido")
