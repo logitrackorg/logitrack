@@ -25,7 +25,6 @@ import { shipmentApi, type Shipment } from "../api/shipments";
 import { Card } from "../components/ui/card";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
-import { ZoneAlert } from "../components/ui/ZoneAlert";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { zoneApi, type Zone } from "../api/zones";
@@ -433,8 +432,6 @@ export function DriverRoute() {
           />
         </div>
       </div>
-
-      <ZoneAlert zones={activeDangerZones} />
 
       {/* Tabs */}
       {canAct && viewMode === 'list' && (

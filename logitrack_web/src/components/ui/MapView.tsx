@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
+  AlertTriangle,
   MapPin,
   Navigation,
   Clock,
@@ -607,6 +608,15 @@ export function MapView({
           </>
         )}
       </div>
+
+      {zones.filter(z => z.active).length > 0 && (
+        <div className={`absolute left-2 right-2 z-[900] bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-lg px-3 py-1.5 flex items-center gap-2 ${isSimulating ? 'top-[4.25rem]' : 'top-[2.75rem]'}`}>
+          <AlertTriangle className="w-3.5 h-3.5 text-[var(--danger-c)] shrink-0" />
+          <span className="text-[11px] font-semibold text-[var(--danger-text)] truncate flex-1">
+            {zones.filter(z => z.active)[0].name}
+          </span>
+        </div>
+      )}
 
       {loading && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg-card)] px-8 py-5 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.15)] flex flex-col items-center z-[2000]">
