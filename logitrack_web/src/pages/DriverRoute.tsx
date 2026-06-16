@@ -434,11 +434,6 @@ export function DriverRoute() {
         </div>
       </div>
 
-      {/* Stats line */}
-      <p className="text-xs dark:text-gray-400 text-slate-500 mb-3 px-4 max-w-2xl mx-auto">
-        {done}/{total} completados
-      </p>
-
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
         <div className="-mx-4 px-4 flex gap-1 mb-4 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
