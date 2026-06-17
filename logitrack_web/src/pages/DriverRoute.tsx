@@ -26,6 +26,8 @@ import {
   getAllQueuedActions,
   getKeywordAttempts,
   incrementKeywordAttempts,
+  prefetchRouteGeometry,
+  clearDayCache,
 } from "../offline/db";
 import { syncQueue } from "../offline/sync";
 import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
@@ -106,6 +108,7 @@ export function DriverRoute() {
   const [rejectedNotes, setRejectedNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
   // Geofence warning: when set, shows a confirmation modal before proceeding.
   // Stores the distance (m) and a callback to execute if the driver confirms.
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
@@ -137,10 +140,18 @@ export function DriverRoute() {
       .then((d) => {
         setData(d);
         setNoRoute(false);
-        if (user) cacheRoute(user.id, d).catch(() => {});
+        if (user) {
+          cacheRoute(user.id, d).catch(() => {});
+          if (d.waypoints && d.waypoints.length >= 2) {
+            prefetchRouteGeometry(user.id, d.waypoints, d.origin ?? undefined).catch(() => {});
+          }
+        }
       })
-      .catch(async () => {
-        // Sin red: intentar servir desde cache
+      .catch(async (err) => {
+        // 404 = no hay ruta asignada en el servidor → no usar cache (datos obsoletos).
+        // Cualquier otro error (red caída, 5xx) → intentar cache offline.
+        const status = err?.response?.status;
+        if (status === 404) { setNoRoute(true); return; }
         if (user) {
           const cached = await getCachedRoute(user.id).catch(() => null);
           if (cached) { setData(cached as typeof data); setNoRoute(false); return; }
@@ -162,9 +173,16 @@ export function DriverRoute() {
         setData(d);
         setNoRoute(false);
         setLoading(false);
-        if (user) cacheRoute(user.id, d).catch(() => {});
+        if (user) {
+          cacheRoute(user.id, d).catch(() => {});
+          if (d.waypoints && d.waypoints.length >= 2) {
+            prefetchRouteGeometry(user.id, d.waypoints, d.origin ?? undefined).catch(() => {});
+          }
+        }
       })
-      .catch(() => {
+      .catch((err) => {
+        // 404 definitivo: no reintentar, mostrar pantalla sin ruta.
+        if (err?.response?.status === 404) { setNoRoute(true); setLoading(false); return; }
         setTimeout(() => { load(); }, 2000);
       });
   };
@@ -254,6 +272,9 @@ export function DriverRoute() {
   // Opens a sheet after checking geofence. If outside radius, shows the warning
   // first and only opens the sheet if the driver confirms.
   const openDeliverSheet = (shipment: Shipment) => {
+    // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
+    setOfflineKeywordAttempts(0);
+    getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
       setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
@@ -356,11 +377,6 @@ export function DriverRoute() {
         return;
       }
       if (!useContingency) {
-        const hash = deliverShipment.keyword_hash;
-        if (!hash) {
-          setActionError("Sin conexión y sin datos de verificación local. Usá el DNI como alternativa.");
-          return;
-        }
         setSubmitting(true);
         const offlineAttempts = await getKeywordAttempts(deliverShipment.tracking_id);
         if (offlineAttempts >= 3) {
@@ -368,9 +384,23 @@ export function DriverRoute() {
           setSubmitting(false);
           return;
         }
+        const hash = deliverShipment.keyword_hash;
+        if (!hash) {
+          const newCount = await incrementKeywordAttempts(deliverShipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
+          setDeliveryKeyword("");
+          if (newCount >= 3) {
+            setActionError("Sin conexión y sin datos de verificación local. Intentos agotados. Usá el DNI como alternativa.");
+          } else {
+            setActionError(`Sin conexión y sin datos de verificación local. Intento ${newCount}/3. Usá el DNI como alternativa.`);
+          }
+          setSubmitting(false);
+          return;
+        }
         const valid = await bcryptCompare(deliveryKeyword.trim().toUpperCase(), hash);
         if (!valid) {
           const newCount = await incrementKeywordAttempts(deliverShipment.tracking_id);
+          setOfflineKeywordAttempts(newCount);
           setDeliveryKeyword("");
           if (newCount >= 3) {
             setActionError("Palabra clave incorrecta. Intentos agotados. Usá el DNI como alternativa.");
@@ -580,6 +610,17 @@ export function DriverRoute() {
   const cycleSpeedMultiplier = () =>
     setSpeedMultiplier((prev) => (prev >= 8 ? 1 : prev * 2));
 
+  // Re-ejecutar prefetch con ubicación GPS real en cuanto esté disponible,
+  // para que el cache offline use la posición del chofer y no la sucursal.
+  useEffect(() => {
+    if (!userLocation || !data?.waypoints || !user) return;
+    const pending = data.waypoints.filter(
+      (wp) => wp.status !== 'delivered' && wp.status !== 'delivery_failed'
+    );
+    if (pending.length < 1) return;
+    prefetchRouteGeometry(user.id, pending, data.origin ?? undefined, userLocation).catch(() => {});
+  }, [userLocation?.lat, userLocation?.lng]);
+
   // ── BUG-43: gate de entrega consciente del simulador ───────────────────────
   // Si la simulación de Leaflet está activa, la velocidad efectiva es la velocidad
   // VIRTUAL del vehículo (0 cuando está pausado/detenido en una parada; la
@@ -599,6 +640,23 @@ export function DriverRoute() {
     : locationMissing
       ? "Ubicación requerida. Active el GPS y deténgase para entregar"
       : "";
+
+  // Calculado antes de early returns para poder usarlo en el useEffect de abajo.
+  const routeEffectivelyDone = data
+    ? ((data.route.status === "finalizada" || data.route.status === "en_curso") &&
+        data.shipments.filter(
+          (s) => s.status === "out_for_delivery" && !pendingSyncIds.has(s.tracking_id),
+        ).length === 0 &&
+        data.shipments.length > 0)
+    : false;
+
+  // Limpiar cache de jornada al finalizar la ruta. Debe estar antes de cualquier
+  // early return para cumplir las reglas de hooks de React.
+  useEffect(() => {
+    if (routeEffectivelyDone && user) {
+      clearDayCache(user.id).catch(() => {});
+    }
+  }, [routeEffectivelyDone, user?.id]);
 
   // Gate de re-test en ruta: se activa tras una acción de entrega si el backend
   // detecta que pasaron más de 3h o hay más de 5 misfires acumulados.
@@ -638,10 +696,6 @@ export function DriverRoute() {
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
-
-  const routeEffectivelyDone =
-    (routeStatus === "finalizada" && pending === 0) ||
-    (routeStatus === "en_curso" && pending === 0 && total > 0);
 
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} today={today} />;
@@ -830,6 +884,7 @@ export function DriverRoute() {
               origin={origin}
               userLocation={userLocation ?? undefined}
               simulationMode={simulationMode}
+              driverId={user?.id}
               simulationControls={{
                 isPaused, pause, play, reset,
                 onExit: () => { setSimActive(false); setSpeedMultiplier(1); },
@@ -938,6 +993,7 @@ export function DriverRoute() {
         error={actionError}
         photo={deliveryPhoto}
         onRetakePhoto={() => setCameraOpen(true)}
+        offlineKeywordAttempts={offlineKeywordAttempts}
       />
       <FailedSheet
         open={!!failedShipment}
@@ -1310,6 +1366,7 @@ function DeliverSheet({
   error,
   photo,
   onRetakePhoto,
+  offlineKeywordAttempts = 0,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1329,6 +1386,7 @@ function DeliverSheet({
   error: string;
   photo: Blob | null;
   onRetakePhoto: () => void;
+  offlineKeywordAttempts?: number;
 }) {
   const keywordRef = useRef<HTMLInputElement>(null);
   const dniRef = useRef<HTMLInputElement>(null);
@@ -1354,7 +1412,7 @@ function DeliverSheet({
   const { name } = recipientView(shipment);
   const isLastMile = shipment.delivery_method === "ultima_milla";
   const keywordAttempts = shipment.keyword_attempts ?? 0;
-  const locked = keywordAttempts >= 3;
+  const locked = Math.max(keywordAttempts, offlineKeywordAttempts) >= 3;
 
   const canConfirm = isLastMile
     ? (useContingency ? !!dni.trim() : (!locked && !!keyword.trim())) && !!photo

@@ -42,8 +42,17 @@ export async function syncQueue(): Promise<SyncResult[]> {
       await removeQueuedAction(action.id!)
       results.push({ trackingId: action.trackingId, success: true })
     } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      results.push({ trackingId: action.trackingId, success: false, error: msg ?? 'Error al sincronizar' })
+      // Errores 4xx son definitivos (envío no existe, estado inválido, DNI incorrecto, etc.)
+      // — descartar la acción para no bloquear la cola indefinidamente.
+      if (status && status >= 400 && status < 500) {
+        await removeQueuedAction(action.id!)
+        results.push({ trackingId: action.trackingId, success: false, error: msg ?? `Error ${status} — acción descartada` })
+      } else {
+        // Error transitorio (red, 5xx) — dejar en cola para reintentar.
+        results.push({ trackingId: action.trackingId, success: false, error: msg ?? 'Error al sincronizar' })
+      }
     }
   }
 

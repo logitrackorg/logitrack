@@ -183,6 +183,16 @@ Middleware groups:
 **Driver restrictions** (`RouteService.ValidateDriverCanUpdateShipment`):
 - Only shipments on their today's route; only `delivered` or `delivery_failed`.
 
+**Security keyword** — generated at `Create`/`ConfirmDraft` via `service.GenerateSecurityKeyword()`. Stored in `Shipment.SecurityKeyword` (`json:"security_keyword,omitempty"` — **not** `json:"-"`, because it must serialize into `shipment_created` / `draft_confirmed` event payloads). `SecurityKeywordHash` is `json:"-"` and exposed only in `GET /driver/route` for offline validation. The seed also generates keyword + hash via `service.GenerateSecurityKeyword()` / `service.HashKeyword()`.
+
+**Geofence at delivery** — `model.GeofenceRadiusMeters = 300.0` (in `internal/model/event.go`). When a driver marks `delivered` or `delivery_failed` with GPS coords outside that radius, `maybeReportGeoIncident` in `handler/shipment.go` creates an `ubicacion_fuera_de_rango` incident and calls `NotificationService.NotifyGeoMismatch` to notify branch supervisors. Every event is recorded (no dedup). GPS coords flow through `UpdateStatusRequest.Latitude/Longitude` and `service.DeliverRequest.Latitude/Longitude`.
+
+**Offline mode (driver app — Capacitor APK)** — drivers can operate without connectivity except for login. Implementation in `logitrack_web/src/offline/`:
+- `db.ts`: IndexedDB schema (`logitrack_offline` v2). Stores: `routeCache` (full route response), `routeGeometry` (OSRM polyline coords), `actionQueue` (deliver/failed/rejected), `keywordAttempts` (per tracking_id). `clearDayCache(driverId)` clears all except `actionQueue` — called when route finishes and on stale-day detection at next load.
+- `useOffline.ts`: uses `Capacitor.isNativePlatform()` to choose between Capacitor Network plugin (APK) and DOM `online`/`offline` events (browser).
+- `sync.ts`: replays `actionQueue` on reconnect. 4xx errors discard the action (permanent failure); 5xx / network errors leave it for retry.
+- `prefetchRouteGeometry`: called in background on route load; pre-fetches OSRM route and saves to `routeGeometry`. Uses driver's GPS location if available, falls back to branch origin. Re-runs when GPS first becomes available.
+
 ### Route system
 
 Routes link a driver to shipments for a date (`YYYY-MM-DD`). ID format: `ROUTE-XXXXXXXX`. When supervisor sets `→ delivering` with `driver_id`, shipment is auto-added to that driver's today route.

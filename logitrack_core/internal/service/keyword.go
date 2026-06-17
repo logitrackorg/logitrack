@@ -30,8 +30,9 @@ var keywordWords = []string{
 	"SURUBI", "TIMBO", "URUBÚ", "VIZCACHA", "ÑANDÚ", "AGUARA", "BOYERO", "CAPITAN",
 }
 
-// generateSecurityKeyword returns a random real Spanish word from the pool.
-func generateSecurityKeyword() string {
+// GenerateSecurityKeyword returns a random real Spanish word from the pool.
+// Exported so the seed package can populate keyword + hash on seed shipments.
+func GenerateSecurityKeyword() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(keywordWords))))
 	if err != nil {
 		return keywordWords[0]

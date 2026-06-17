@@ -179,7 +179,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 	securityKeyword := shipment.SecurityKeyword
 	securityKeywordHash := shipment.SecurityKeywordHash
 	if securityKeyword == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
-		securityKeyword = generateSecurityKeyword()
+		securityKeyword = GenerateSecurityKeyword()
 		if hash, err := HashKeyword(securityKeyword); err == nil {
 			securityKeywordHash = hash
 		}

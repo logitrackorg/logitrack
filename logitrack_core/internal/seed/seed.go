@@ -1137,6 +1137,12 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 			bd := breakdown
 			initialShipment.PriceBreakdown = &bd
 		}
+		// Generar palabra clave y hash para validación offline del chofer.
+		kw := service.GenerateSecurityKeyword()
+		initialShipment.SecurityKeyword = kw
+		if h, err := service.HashKeyword(kw); err == nil {
+			initialShipment.SecurityKeywordHash = h
+		}
 
 		// Emit shipment_created event
 		createEvent := model.DomainEvent{

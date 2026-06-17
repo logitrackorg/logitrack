@@ -19,6 +19,7 @@ import {
 import type { GeoMode } from "../../hooks/useGeolocation";
 import type { Zone } from "../../api/zones";
 import { ZONE_COLOR } from "../../api/zones";
+import { cacheRouteGeometry, getCachedRouteGeometry } from "../../offline/db";
 
 delete (L.Icon.Default.prototype as typeof L.Icon.Default.prototype & { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -61,6 +62,7 @@ interface MapViewProps {
   zones?: Zone[];
   onRouteInfoChange?: (info: { distance: number; duration: number } | null) => void;
   onWaypointClick: (trackingId: string) => void;
+  driverId?: string;
 }
 
 function haversineKm(
@@ -94,6 +96,7 @@ export function MapView({
   zones = [],
   onRouteInfoChange,
   onWaypointClick,
+  driverId,
 }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
@@ -384,7 +387,7 @@ export function MapView({
       const originCoord = origin ? `${origin.longitude},${origin.latitude}` : null;
 
       const fullPoints: string[] = [];
-      if (originCoord && simulationModeRef.current === "simulate") fullPoints.push(originCoord);
+      if (originCoord) fullPoints.push(originCoord);
       sorted.forEach((wp) => fullPoints.push(toCoord(wp)));
 
       const currentLocation = userLocationRef.current;
@@ -394,7 +397,7 @@ export function MapView({
         gpsCoord ??
         (completed.length > 0
           ? toCoord(completed[completed.length - 1])
-          : simulationModeRef.current === "simulate" ? originCoord : null);
+          : originCoord ?? null);
       const pendingPoints: string[] = [];
       if (pendingAnchor) pendingPoints.push(pendingAnchor);
       pending.forEach((wp) => pendingPoints.push(toCoord(wp)));
@@ -404,30 +407,68 @@ export function MapView({
 
       const samePoints = fullPoints.join(";") === pendingPoints.join(";");
       const fullResult = await fetchOsrm(fullPoints);
+
+      if (!fullResult) {
+        // Offline: cargar geometría cacheada si existe.
+        const cached = driverId ? await getCachedRouteGeometry(driverId).catch(() => null) : null;
+        if (cached) {
+          fullRouteGeomRef.current = cached.fullCoords;
+          if (simulationModeRef.current === "simulate") {
+            if (userLocationRef.current) splitRouteAtGps(userLocationRef.current);
+          } else {
+            if (cached.doneCoords.length >= 2) {
+              doneRouteLayer.current = L.polyline(cached.doneCoords, {
+                color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+              }).addTo(mapInstance.current!);
+            }
+            if (cached.pendingCoords.length >= 2) {
+              pendingRouteLayer.current = L.polyline(cached.pendingCoords, {
+                color: "#f97316", weight: 4, opacity: 0.8,
+              }).addTo(mapInstance.current!);
+            }
+          }
+          setRouteInfo(null);
+          onRouteInfoChange?.(null);
+        }
+        return;
+      }
+
+      // fullResult existe — hacer el resto de llamadas OSRM y renderizar.
+      fullRouteGeomRef.current = fullResult.coords;
+
       const pendingResult = samePoints ? fullResult : await fetchOsrm(pendingPoints);
 
-      if (fullResult) fullRouteGeomRef.current = fullResult.coords;
+      let doneResult = null;
+      if (completed.length > 0) {
+        const donePoints: string[] = [];
+        completed.forEach((wp) => donePoints.push(toCoord(wp)));
+        doneResult = await fetchOsrm(donePoints);
+      }
+
+      // Guardar en IndexedDB para uso offline.
+      if (driverId) {
+        cacheRouteGeometry(driverId, {
+          fullCoords: fullResult.coords,
+          pendingCoords: pendingResult?.coords ?? fullResult.coords,
+          doneCoords: doneResult?.coords ?? [],
+        }).catch(() => {});
+      }
 
       if (simulationModeRef.current === "simulate") {
         if (userLocationRef.current) {
           splitRouteAtGps(userLocationRef.current);
         }
       } else {
-        if (completed.length > 0) {
-          const donePoints: string[] = [];
-          completed.forEach((wp) => donePoints.push(toCoord(wp)));
-          const doneResult = await fetchOsrm(donePoints);
-          if (doneResult) {
-            doneRouteLayer.current = L.polyline(doneResult.coords, {
-              color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
-            }).addTo(mapInstance.current!);
-          }
+        if (doneResult) {
+          doneRouteLayer.current = L.polyline(doneResult.coords, {
+            color: "#94a3b8", weight: 4, opacity: 0.6, dashArray: "8, 6",
+          }).addTo(mapInstance.current!);
         }
         if (pendingResult) {
           pendingRouteLayer.current = L.polyline(pendingResult.coords, {
             color: "#f97316", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);
-        } else if (fullResult) {
+        } else {
           pendingRouteLayer.current = L.polyline(fullResult.coords, {
             color: "#f97316", weight: 4, opacity: 0.8,
           }).addTo(mapInstance.current!);

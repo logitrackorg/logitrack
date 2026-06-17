@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Network } from '@capacitor/network'
+import { Capacitor } from '@capacitor/core'
 
 export function useOffline(): boolean {
-  const [isOnline, setIsOnline] = useState(true)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   useEffect(() => {
     let cleanup: (() => void) | undefined
 
     const init = async () => {
-      try {
+      if (Capacitor.isNativePlatform()) {
+        // APK nativo: usar Capacitor Network plugin
         const status = await Network.getStatus()
         setIsOnline(status.connected)
-
         const handle = await Network.addListener('networkStatusChange', (s) => {
           setIsOnline(s.connected)
         })
         cleanup = () => handle.remove()
-      } catch {
-        // Capacitor no disponible (browser dev) — fallback a eventos DOM
+      } else {
+        // Browser dev: eventos DOM estándar
         setIsOnline(navigator.onLine)
         const onOnline = () => setIsOnline(true)
         const onOffline = () => setIsOnline(false)

@@ -47,7 +47,7 @@ func (s *PaymentService) confirmManualPayment(trackingID, username string, metho
 
 	securityKeyword := shipment.SecurityKeyword
 	if securityKeyword == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
-		securityKeyword = generateSecurityKeyword()
+		securityKeyword = GenerateSecurityKeyword()
 	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,
@@ -118,7 +118,7 @@ func (s *PaymentService) ConfirmMockPayment(trackingID, username string) (model.
 
 	securityKeywordMock := shipment.SecurityKeyword
 	if securityKeywordMock == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
-		securityKeywordMock = generateSecurityKeyword()
+		securityKeywordMock = GenerateSecurityKeyword()
 	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,

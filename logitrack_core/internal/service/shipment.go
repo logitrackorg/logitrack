@@ -517,7 +517,7 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	setPriority(&shipment, prediction)
 	s.applyPrice(&shipment)
 	if deliveryMethod == model.DeliveryMethodLastMile {
-		shipment.SecurityKeyword = generateSecurityKeyword()
+		shipment.SecurityKeyword = GenerateSecurityKeyword()
 		if hash, err := HashKeyword(shipment.SecurityKeyword); err == nil {
 			shipment.SecurityKeywordHash = hash
 		}
@@ -777,7 +777,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 
 	s.applyPrice(&draft)
 	if draft.DeliveryMethod == model.DeliveryMethodLastMile && draft.SecurityKeyword == "" {
-		draft.SecurityKeyword = generateSecurityKeyword()
+		draft.SecurityKeyword = GenerateSecurityKeyword()
 		if hash, err := HashKeyword(draft.SecurityKeyword); err == nil {
 			draft.SecurityKeywordHash = hash
 		}
