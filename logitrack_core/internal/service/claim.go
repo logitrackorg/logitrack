@@ -33,6 +33,7 @@ type ClaimService struct {
 	notifRepo      repository.NotificationRepository
 	branchGraphSvc *BranchGraphService
 	branchRepo     repository.BranchRepository
+	tripRepo       repository.InterBranchTripRepository
 }
 
 // ClaimEmailSender sends customer-facing claim notifications by email.
@@ -79,12 +80,54 @@ func (s *ClaimService) SetNotificationRepository(repo repository.NotificationRep
 	s.notifRepo = repo
 }
 
-// SetRouteServices wires the branch graph (for the shipment route) and the branch
-// repository, used to restrict claim transfer targets to the branches that belong
-// to the shipment's route (origin, intermediate hubs and destination).
-func (s *ClaimService) SetRouteServices(branchGraphSvc *BranchGraphService, branchRepo repository.BranchRepository) {
+// SetRouteServices wires the branch graph, the branch repository and the
+// inter-branch trip repository, used to restrict claim transfer targets to the
+// branches that belong to the shipment's route (origin, intermediate hubs and
+// destination).
+func (s *ClaimService) SetRouteServices(branchGraphSvc *BranchGraphService, branchRepo repository.BranchRepository, tripRepo repository.InterBranchTripRepository) {
 	s.branchGraphSvc = branchGraphSvc
 	s.branchRepo = branchRepo
+	s.tripRepo = tripRepo
+}
+
+// addTripRouteBranches añade al set las sucursales del viaje inter-sucursal que
+// transporta el envío: la sucursal de origen del viaje más cada parada hasta
+// (incluida) aquella donde el envío se descarga. Esto captura las paradas
+// intermedias reales del plan, que el camino más corto del grafo estático puede
+// omitir (p. ej. caba→mendoza directo, cuando el viaje real pasa por cordoba).
+func (s *ClaimService) addTripRouteBranches(trackingID string, route map[string]bool) {
+	if s.tripRepo == nil {
+		return
+	}
+	for _, trip := range s.tripRepo.ListAllActive() {
+		// El último índice de parada que referencia al envío (descarga o pickup).
+		dropIdx := -1
+		for i, stop := range trip.Stops {
+			if containsStr(stop.ShipmentIDs, trackingID) || containsStr(stop.PickupShipmentIDs, trackingID) {
+				dropIdx = i
+			}
+		}
+		if dropIdx < 0 {
+			continue
+		}
+		if trip.OriginBranchID != "" {
+			route[trip.OriginBranchID] = true
+		}
+		for i := 0; i <= dropIdx && i < len(trip.Stops); i++ {
+			if b := trip.Stops[i].BranchID; b != "" {
+				route[b] = true
+			}
+		}
+	}
+}
+
+func containsStr(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // TransferTargetBranches returns the active branches a claim may be transferred to:
@@ -117,6 +160,9 @@ func (s *ClaimService) TransferTargetBranches(claimID, branchID string) ([]model
 			route[b] = true
 		}
 	}
+	// Añadir las paradas reales del viaje inter-sucursal que transporta el envío,
+	// que el camino más corto del grafo estático puede no incluir.
+	s.addTripRouteBranches(claim.TrackingID, route)
 	// Exclude the branch that currently holds the claim (the caller's branch).
 	delete(route, branchID)
 

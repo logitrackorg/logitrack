@@ -412,7 +412,7 @@ func main() {
 	seed.LoadBranchGraph(branchGraphRepo, branchRepo)
 	routingSvc.SetBranchGraphService(branchGraphSvc)
 	shipmentSvc.SetBranchGraphService(branchGraphSvc)
-	claimSvc.SetRouteServices(branchGraphSvc, branchRepo)
+	claimSvc.SetRouteServices(branchGraphSvc, branchRepo, interBranchTripRepo)
 
 	// Shared metrics repo
 	metricsRepo := repository.NewPostgresRoutingMetricsRepository(database)
