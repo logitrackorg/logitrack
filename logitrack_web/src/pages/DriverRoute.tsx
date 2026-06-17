@@ -1600,6 +1600,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
   const tripActive = qrLoading || tripId !== null;
 
   return (
+    <div className="fixed inset-0 z-[1001] bg-[var(--bg-page)] overflow-y-auto">
     <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
       <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
         <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
@@ -1718,6 +1719,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
           );
         })}
       </div>
+    </div>
     </div>
   );
 }
