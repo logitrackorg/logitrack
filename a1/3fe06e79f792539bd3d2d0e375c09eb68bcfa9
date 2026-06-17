@@ -1,0 +1,44 @@
+logitrack_web/src/pages/DriverRoute.tsx
+  s_c45b9d86112317::t_44e6136abb3432 1861,1863-1864
+  s_c45b9d86112317::t_198637e75cb260 447
+  s_c45b9d86112317::t_16eb8f7be5ca73 1036,1054
+  s_c45b9d86112317::t_f85048c6e4bf11 513
+  s_c45b9d86112317::t_a8edc6a1b0c317 557
+  s_c45b9d86112317::t_a04631a6aad2aa 304-312,314-320
+  s_c45b9d86112317::t_d3bf08c3641a3a 1396,1419
+  s_c45b9d86112317::t_7f781075cfc4b5 1606,1610,1723,1727,1843,1847
+  s_c45b9d86112317::t_0a130d86e85874 73
+  s_c45b9d86112317::t_9abb67a7ca3b07 313
+  s_c45b9d86112317::t_3addffcdbd73f5 1638,1655,1756,1773
+  s_c45b9d86112317::t_5ffc3029b83154 1014
+  s_c45b9d86112317::t_34688583d96e9e 721
+logitrack_web/package.json
+  s_c45b9d86112317::t_3492853a79a066 17
+logitrack_web/src/hooks/useCurrentSpeed.ts
+  s_c45b9d86112317::t_b53e77e69bbaa6 103-107
+  s_c45b9d86112317::t_7599c531915d6f 2-3,28-31,45,66,68,91-102,108-134,136,145
+logitrack_web/CLAUDE.md
+  s_c45b9d86112317::t_747276782bcb4b 5-13
+logitrack_web/android/app/capacitor.build.gradle
+  s_c45b9d86112317::t_69c45f174f2c7d 12
+logitrack_web/android/capacitor.settings.gradle
+  s_c45b9d86112317::t_69c45f174f2c7d 5-7
+logitrack_web/android/app/src/main/AndroidManifest.xml
+  s_c45b9d86112317::t_daa407c95c09e0 43-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "a13fe06e79f792539bd3d2d0e375c09eb68bcfa9",
+  "prompts": {},
+  "sessions": {
+    "s_c45b9d86112317": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ad2f25d-89aa-499d-99ae-8a0dcd407f95",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
