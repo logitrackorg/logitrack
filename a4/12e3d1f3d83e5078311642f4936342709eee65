@@ -1,0 +1,125 @@
+logitrack_web/src/offline/db.ts
+  s_051917028001ce::t_7e3a46e86cd3af 25-26,36-37
+  s_051917028001ce::t_dcef7ff38b29de 1-24,27-35,38-108
+logitrack_core/internal/repository/shipment_es.go
+  s_051917028001ce::t_10d77a3f8dd611 85
+  s_051917028001ce::t_599396d9e58199 253
+logitrack_core/internal/service/shipment.go
+  s_051917028001ce::t_b1422bca1c8f06 1897-1906,1910,1927
+  s_051917028001ce::t_747409ebbf5e18 781-783,797
+  s_051917028001ce::t_ce0d515c73029e 1833-1836
+  s_051917028001ce::t_3d3d744a86dcb0 521-523
+  s_051917028001ce::t_3486170b8e3616 1878
+logitrack_core/internal/model/domain_event.go
+  s_051917028001ce::t_e199475e55571b 72
+  s_051917028001ce::t_138c3982c3e8a8 129
+logitrack_core/internal/db/migrate.go
+  s_051917028001ce::t_221e5ceb974080 705
+logitrack_core/internal/service/payment.go
+  s_051917028001ce::t_872457f2324289 180,183-185,199
+logitrack_core/internal/handler/shipment_deliver.go
+  s_051917028001ce::t_d519da76556e97 15-25
+  s_051917028001ce::t_85219570d8b5a8 82-84,94-95,102-104,106
+  s_051917028001ce::t_d24ccc0e130cfd 48-49
+  s_051917028001ce::t_da2ceefe863b56 105
+logitrack_web/package.json
+  s_051917028001ce::t_59dc2b0c878aab 17,27,32,53
+logitrack_core/internal/service/notification.go
+  s_051917028001ce::t_e217fca1d18393 625-627,629-637,641-660
+  s_051917028001ce::t_f455c956120fde 628,638-640
+logitrack_core/internal/model/event.go
+  s_051917028001ce::t_7cdcdcad163593 41-47,69-73
+logitrack_web/src/utils/geo.ts
+  s_051917028001ce::t_5e2506a3910321 3-10
+logitrack_web/src/offline/useOffline.ts
+  s_051917028001ce::t_74c6a0d1157aa5 1-38
+logitrack_core/internal/handler/driver.go
+  s_051917028001ce::t_0f774a146c526b 160
+  s_051917028001ce::t_32d3b60de29254 116-122,125-128
+logitrack_core/internal/model/shipment.go
+  s_051917028001ce::t_98de6a59820f7c 127
+logitrack_web/src/api/shipments.ts
+  s_051917028001ce::t_c64be2ed5c2c31 125-126
+  s_051917028001ce::t_afb10b42047373 267-269
+  s_051917028001ce::t_7c56d530999d14 298-299,308-309
+logitrack_core/internal/model/incident.go
+  s_051917028001ce::t_3ce9e5e59170e4 15-18,22-29
+logitrack_core/internal/model/notification.go
+  s_051917028001ce::t_2a47b54166890a 29
+logitrack_core/cmd/server/main.go
+  s_051917028001ce::t_81dc964d73f551 345
+  s_051917028001ce::t_54a13306073859 346
+logitrack_core/internal/service/keyword.go
+  s_051917028001ce::t_e79efe9caeb484 47-57
+  s_051917028001ce::t_ea6d00bc379ac2 7-8
+logitrack_core/internal/handler/shipment.go
+  s_051917028001ce::t_96490abe1f8a5e 11
+  s_051917028001ce::t_7a6c27df4457d0 85-86,91-92,95-96,98,100
+  s_051917028001ce::t_78fd9a3b198251 87-90,93-94,99
+  s_051917028001ce::t_55892f882b9aed 411-415,421-422
+  s_051917028001ce::t_d0feee824c0caf 80-84
+  s_051917028001ce::t_312ace5f29ec75 65
+  s_051917028001ce::t_283257349a5c89 18-26
+  s_051917028001ce::t_bcb66a98ef514c 416-420
+  s_051917028001ce::t_23a9f3476a4cf8 58-64
+  s_051917028001ce::t_344ff79fb0b98a 74-79,97,101-102
+logitrack_core/internal/repository/shipment.go
+  s_051917028001ce::t_319797b814c455 164
+  s_051917028001ce::t_fe5b25ee9ce03d 92
+logitrack_web/src/offline/sync.ts
+  s_051917028001ce::t_d59ba1a03ef233 25-26,38-39
+  s_051917028001ce::t_2e8e679759f601 1-24,27-37,40-51
+logitrack_web/src/pages/DriverRoute.tsx
+  s_051917028001ce::t_fd6f5f7a0ec023 496,499,505,522-523
+  s_051917028001ce::t_f8b7eb8b0a5492 631-633,635
+  s_051917028001ce::t_751e93434edb7e 21
+  s_051917028001ce::t_06f95bf15821b8 137-149
+  s_051917028001ce::t_ea2a0a530e350b 109-111
+  s_051917028001ce::t_41ddfc3825dd09 351-358
+  s_051917028001ce::t_2fb55a16e1f778 384,394-395
+  s_051917028001ce::t_fd21beed455f1c 457-461,463-470
+  s_051917028001ce::t_7481ee9c04c65c 863-868,872-880
+  s_051917028001ce::t_fa3022ccfd1360 1009-1045
+  s_051917028001ce::t_7f817ff4a87bcd 254-282
+  s_051917028001ce::t_6bdfebab8ab846 241,244-253
+  s_051917028001ce::t_36f8780ecae628 242-243
+  s_051917028001ce::t_4733b1bb9fa910 338,342,348-350,359-383,385-393,396-406
+  s_051917028001ce::t_0612277cda0894 500-504,506-513
+  s_051917028001ce::t_7ac2f8b348bf8a 14,16,19-20,22-25,27-30
+  s_051917028001ce::t_4f84fd8b109639 63-64
+  s_051917028001ce::t_cf6453cba99b91 690-691
+  s_051917028001ce::t_a30cffffb5a40e 26
+  s_051917028001ce::t_4c9291586afa91 62,65-66
+  s_051917028001ce::t_2f6c3088f12d53 182,200-201,203-204,209,215-216
+  s_051917028001ce::t_5b825ec97109ca 409,419-420,429-430
+  s_051917028001ce::t_1bb925501892c3 453,456,462,478-479
+  s_051917028001ce::t_ba8ad2459ed942 683-689,692-695,697
+  s_051917028001ce::t_dbc3372bf5ab54 155-156,161-166,168
+  s_051917028001ce::t_0c2936fe7e9d0f 869-871
+  s_051917028001ce::t_71094d8c1ef224 898-899,901-902
+  s_051917028001ce::t_07307e129ea9e6 175-181,183-199,202,205-208,210-214
+logitrack_core/internal/projection/postgres_shipment.go
+  s_051917028001ce::t_f374a1fbf63437 70-72,77,87-89,93
+  s_051917028001ce::t_e98223fbbc65d1 480,482
+  s_051917028001ce::t_ed0cdced45d6d2 557,581,647,806
+  s_051917028001ce::t_148379d507cbe7 263-265,269,277-279,282
+  s_051917028001ce::t_d0abcb2da22f2c 530
+  s_051917028001ce::t_811d03de1bc74c 1124,1222
+  s_051917028001ce::t_a654147e6c3032 515
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "a412e3d1f3d83e5078311642f4936342709eee65",
+  "prompts": {},
+  "sessions": {
+    "s_051917028001ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de0244ae-6640-4c59-bac7-ae81df0c1bbf",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
