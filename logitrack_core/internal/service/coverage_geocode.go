@@ -26,13 +26,13 @@ import (
 const (
 	overpassAPIURL = "https://overpass-api.de/api/interpreter"
 
-	// snapToCityMaxRadiusKm is both the fallback search radius (when the
-	// caller doesn't specify one) and a hard cap on the requested radiusKm.
-	// Overpass "around" query cost grows with the area of the search disk
-	// (~R²): a single point at radius=178km already takes ~9s, and a city
-	// further than 100km from a suggested gap-fill point isn't a useful new
-	// branch location anyway, so larger radii are clamped down to this value.
-	snapToCityMaxRadiusKm = 100.0
+	// snapToCityMaxRadiusKm is the hard cap applied to the Overpass "around"
+	// radius. Overpass query cost grows with the search area (~R²): beyond
+	// 150km the public endpoint times out consistently for points in southern
+	// Argentina (sparse OSM coverage, server load). Larger caller-supplied radii
+	// (e.g. the simulator's 400km+) are still honoured for the local fallback
+	// lookup — only the HTTP query to Overpass is capped here.
+	snapToCityMaxRadiusKm = 150.0
 
 	// snapToCityResultsPerPoint caps how many candidate places Overpass
 	// returns per input point — plenty to find a good match within the radius
@@ -94,6 +94,38 @@ var snapPopulationFallback = map[string]int{
 	"town": 10_000,
 }
 
+// fallbackCity is a hardcoded record for the local Patagonia fallback dataset.
+type fallbackCity struct {
+	Name       string
+	Lat, Lng   float64
+	Population int
+}
+
+// patagoniaFallback is a curated list of the major cities in southern and
+// central Argentina used as a local safety net when the Overpass API fails
+// (timeout, rate-limit) or returns no usable results. It covers the full arc
+// from Neuquén to Ushuaia, the area where Overpass has the highest timeout
+// rate for large search radii.
+//
+// Populations are approximate census figures; they are used only for ranking
+// within the fallback list and for the minPopulation filter, not surfaced as
+// authoritative data.
+var patagoniaFallback = []fallbackCity{
+	{"Neuquén", -38.9516, -68.0591, 230_000},
+	{"Comodoro Rivadavia", -45.8641, -67.4965, 200_000},
+	{"San Carlos de Bariloche", -41.1334, -71.3102, 135_000},
+	{"Río Gallegos", -51.6226, -69.2181, 110_000},
+	{"Trelew", -43.2533, -65.3094, 100_000},
+	{"Viedma", -40.8134, -62.9966, 80_000},
+	{"Ushuaia", -54.8019, -68.3029, 75_000},
+	{"Puerto Madryn", -42.7692, -65.0385, 100_000},
+	{"Cipolletti", -38.9338, -67.9909, 110_000},
+	{"Zapala", -38.8989, -70.0653, 40_000},
+	{"Esquel", -42.9100, -71.3178, 35_000},
+	{"Caleta Olivia", -46.4355, -67.5218, 80_000},
+	{"Río Grande", -53.7878, -67.7068, 95_000},
+}
+
 // SnapToCities resolves a batch of geometric coverage-gap points (lat/lng) to
 // the best real populated place (city or town — see snapChunk and
 // candidateScore) within radiusKm of each — typically the suggested
@@ -122,8 +154,18 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 	if len(points) == 0 {
 		return results
 	}
-	if radiusKm <= 0 || radiusKm > snapToCityMaxRadiusKm {
-		radiusKm = snapToCityMaxRadiusKm
+	// Preserve the original (possibly large) radius for the local fallback
+	// lookup. The fallback uses it to check whether a Patagonia city is within
+	// the caller's intended search area — e.g. a 400km simulator radius should
+	// still match Río Gallegos even though the Overpass query is capped lower.
+	originalRadiusKm := radiusKm
+	if originalRadiusKm <= 0 {
+		originalRadiusKm = snapToCityMaxRadiusKm
+	}
+	// Cap the radius sent to Overpass to protect against timeouts.
+	searchRadiusKm := originalRadiusKm
+	if searchRadiusKm > snapToCityMaxRadiusKm {
+		searchRadiusKm = snapToCityMaxRadiusKm
 	}
 
 	for start := 0; start < len(points); start += snapToCityChunkSize {
@@ -131,7 +173,7 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 		if end > len(points) {
 			end = len(points)
 		}
-		s.snapChunk(points[start:end], radiusKm, minPopulation, blacklistedCities, results[start:end])
+		s.snapChunk(points[start:end], searchRadiusKm, originalRadiusKm, minPopulation, blacklistedCities, results[start:end])
 
 		if end < len(points) {
 			time.Sleep(snapToCityChunkDelay)
@@ -142,11 +184,18 @@ func (s *CoverageService) SnapToCities(points []model.LatLng, radiusKm float64, 
 }
 
 // snapChunk resolves one batch of points via a single Overpass request,
-// writing into out (same length as points). On network/server failure all
-// entries get ErrorReason="TIMEOUT"; on a successful response with no
-// matching candidate they get ErrorReason="NO_RESULTS".
-func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, minPopulation int, blacklistedCities []string, out []model.SnappedCity) {
-	radiusMeters := int(radiusKm * 1000)
+// writing into out (same length as points).
+//
+// searchRadiusKm is the capped radius sent to Overpass (≤ snapToCityMaxRadiusKm).
+// fallbackRadiusKm is the original caller-supplied radius, used by the local
+// Patagonia fallback to decide whether a hardcoded city is within range.
+//
+// On network/server failure the local fallback is tried first for each point;
+// only if the fallback also has no match does the entry get ErrorReason="TIMEOUT".
+// On a successful Overpass response with no matching candidate the same fallback
+// is tried before setting ErrorReason="NO_RESULTS".
+func (s *CoverageService) snapChunk(points []model.LatLng, searchRadiusKm, fallbackRadiusKm float64, minPopulation int, blacklistedCities []string, out []model.SnappedCity) {
+	radiusMeters := int(searchRadiusKm * 1000)
 
 	// Query uses `nwr` (node + way + relation) to catch cities mapped as
 	// polygons in OSM. The former area["ISO3166-1"="AR"] filter is intentionally
@@ -188,10 +237,23 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 
 	resp, err := client.Do(req)
 	if err != nil {
-		for i := range out {
-			out[i] = model.SnappedCity{
-				LatLng:      model.LatLng{Lat: points[i].Lat, Lng: points[i].Lng},
-				ErrorReason: "TIMEOUT",
+		// Overpass unreachable or timed out — try the local fallback before
+		// reporting an error, so Patagonian gaps are never left completely blind.
+		log.Printf("[SnapToCity] Overpass request failed (%v) — trying local fallback", err)
+		for i, p := range points {
+			if city, ok := bestFallbackCandidate(p.Lat, p.Lng, fallbackRadiusKm, minPopulation, blacklistedCities); ok {
+				log.Printf("[SnapToCity] fallback hit: %s for point (%.4f, %.4f)", city.Name, p.Lat, p.Lng)
+				out[i] = model.SnappedCity{
+					LatLng:     model.LatLng{Lat: city.Lat, Lng: city.Lng},
+					CityName:   city.Name,
+					Snapped:    true,
+					Population: city.Population,
+				}
+			} else {
+				out[i] = model.SnappedCity{
+					LatLng:      model.LatLng{Lat: p.Lat, Lng: p.Lng},
+					ErrorReason: "TIMEOUT",
+				}
 			}
 		}
 		return
@@ -199,11 +261,21 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[SnapToCity] Overpass returned HTTP %d — possible rate-limit (429) or server error", resp.StatusCode)
-		for i := range out {
-			out[i] = model.SnappedCity{
-				LatLng:      model.LatLng{Lat: points[i].Lat, Lng: points[i].Lng},
-				ErrorReason: "TIMEOUT",
+		log.Printf("[SnapToCity] Overpass returned HTTP %d — trying local fallback", resp.StatusCode)
+		for i, p := range points {
+			if city, ok := bestFallbackCandidate(p.Lat, p.Lng, fallbackRadiusKm, minPopulation, blacklistedCities); ok {
+				log.Printf("[SnapToCity] fallback hit: %s for point (%.4f, %.4f)", city.Name, p.Lat, p.Lng)
+				out[i] = model.SnappedCity{
+					LatLng:     model.LatLng{Lat: city.Lat, Lng: city.Lng},
+					CityName:   city.Name,
+					Snapped:    true,
+					Population: city.Population,
+				}
+			} else {
+				out[i] = model.SnappedCity{
+					LatLng:      model.LatLng{Lat: p.Lat, Lng: p.Lng},
+					ErrorReason: "TIMEOUT",
+				}
 			}
 		}
 		return
@@ -225,11 +297,23 @@ func (s *CoverageService) snapChunk(points []model.LatLng, radiusKm float64, min
 	}
 
 	for i, p := range points {
-		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, radiusKm, minPopulation, blacklistedCities)
+		best, found := bestSnapCandidate(parsed.Elements, p.Lat, p.Lng, searchRadiusKm, minPopulation, blacklistedCities)
 		if !found {
-			out[i] = model.SnappedCity{
-				LatLng:      model.LatLng{Lat: p.Lat, Lng: p.Lng},
-				ErrorReason: "NO_RESULTS",
+			// Overpass returned no usable candidate — try local fallback with
+			// the full original radius before giving up.
+			if city, ok := bestFallbackCandidate(p.Lat, p.Lng, fallbackRadiusKm, minPopulation, blacklistedCities); ok {
+				log.Printf("[SnapToCity] fallback hit: %s for point (%.4f, %.4f)", city.Name, p.Lat, p.Lng)
+				out[i] = model.SnappedCity{
+					LatLng:     model.LatLng{Lat: city.Lat, Lng: city.Lng},
+					CityName:   city.Name,
+					Snapped:    true,
+					Population: city.Population,
+				}
+			} else {
+				out[i] = model.SnappedCity{
+					LatLng:      model.LatLng{Lat: p.Lat, Lng: p.Lng},
+					ErrorReason: "NO_RESULTS",
+				}
 			}
 			continue
 		}
@@ -321,5 +405,46 @@ func bestSnapCandidate(elements []overpassElement, originLat, originLng, radiusK
 		}
 	}
 
+	return best, found
+}
+
+// bestFallbackCandidate searches patagoniaFallback for the most populous city
+// within radiusKm of (originLat, originLng) that passes the minPopulation and
+// blacklist filters. It mirrors the ranking logic of bestSnapCandidate: highest
+// population wins; ties broken by proximity. Returns (_, false) when no city
+// qualifies. radiusKm here is the caller's original (uncapped) radius so that
+// a large simulator area (e.g. 400km) can reach cities that Overpass wouldn't
+// have queried.
+func bestFallbackCandidate(originLat, originLng, radiusKm float64, minPopulation int, blacklistedCities []string) (fallbackCity, bool) {
+	var best fallbackCity
+	bestPop := -1
+	var bestDist float64
+	found := false
+
+	for _, city := range patagoniaFallback {
+		dist := ml.HaversineKm(originLat, originLng, city.Lat, city.Lng)
+		if dist > radiusKm {
+			continue
+		}
+		if minPopulation > 0 && city.Population < minPopulation {
+			continue
+		}
+		blacklisted := false
+		for _, bl := range blacklistedCities {
+			if bl == city.Name {
+				blacklisted = true
+				break
+			}
+		}
+		if blacklisted {
+			continue
+		}
+		if !found || city.Population > bestPop || (city.Population == bestPop && dist < bestDist) {
+			best = city
+			bestPop = city.Population
+			bestDist = dist
+			found = true
+		}
+	}
 	return best, found
 }

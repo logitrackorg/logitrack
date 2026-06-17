@@ -330,7 +330,7 @@ func TestSnapToCities_QueryHasNoAreaFilter(t *testing.T) {
 }
 
 // TestSnapToCities_RadiusCapped verifies that a requested radius beyond
-// snapToCityMaxRadiusKm is clamped down before being sent to Overpass.
+// snapToCityMaxRadiusKm (150 km) is clamped down before being sent to Overpass.
 func TestSnapToCities_RadiusCapped(t *testing.T) {
 	var reqCount int32
 	var capturedQuery string
@@ -347,8 +347,8 @@ func TestSnapToCities_RadiusCapped(t *testing.T) {
 
 	svc.SnapToCities([]model.LatLng{{Lat: -34.0, Lng: -58.0}}, 437.0, 0, nil)
 
-	if !strings.Contains(capturedQuery, "around:100000,") {
-		t.Fatalf("expected radius capped to 100000m, query was: %s", capturedQuery)
+	if !strings.Contains(capturedQuery, "around:150000,") {
+		t.Fatalf("expected radius capped to 150000m, query was: %s", capturedQuery)
 	}
 }
 
