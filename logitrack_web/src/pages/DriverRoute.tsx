@@ -435,7 +435,7 @@ function LastMileView() {
 
       {/* Tabs */}
       {canAct && viewMode === 'list' && (
-        <div className="-mx-4 px-4 flex gap-1 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+        <div className="-mx-4 px-4 flex gap-2 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
           <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
             Pendientes
             <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">
