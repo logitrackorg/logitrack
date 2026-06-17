@@ -246,7 +246,7 @@ export function DriverShipmentDetail() {
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">
-          <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+          <Button onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
             <XCircle className="w-4 h-4" />No entregado
           </Button>
           <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold gap-1.5">
