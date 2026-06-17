@@ -38,6 +38,13 @@ type EventLocation struct {
 // while the vehicle is effectively stopped.
 const MaxDeliverySpeedKmh = 5.0
 
+// GeofenceRadiusMeters is the maximum accepted distance (meters) between the
+// driver's reported position and the recipient address when confirming a
+// delivery or a failed attempt. Beyond this radius the driver is warned and,
+// if they confirm anyway, an "ubicación fuera de rango" incident is auto-reported
+// for supervisor review. Keep in sync with the frontend constant in utils/geo.ts.
+const GeofenceRadiusMeters = 300.0
+
 type UpdateStatusRequest struct {
 	Status              Status `json:"status"                binding:"required"`
 	ChangedBy           string `json:"changed_by"`
@@ -59,6 +66,11 @@ type UpdateStatusRequest struct {
 	// DeliveryPhotoBase64 is an optional base64-encoded JPEG image for última milla
 	// deliveries (status = delivered). Saved to filesystem; path stored in event.
 	DeliveryPhotoBase64 string `json:"delivery_photo_base64,omitempty"`
+	// Latitude/Longitude: driver's GPS position at the moment of the delivered /
+	// delivery_failed action. Recorded in the event notes and validated against
+	// the recipient address geofence (see GeofenceRadiusMeters).
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 // ✅ NUEVO: Request para reprogramación

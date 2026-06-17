@@ -69,6 +69,7 @@ type DraftConfirmedPayload struct {
 	Price               *float64
 	PriceBreakdown      *PriceBreakdown
 	SecurityKeyword     string // set when delivery_method == ultima_milla
+	SecurityKeywordHash string // bcrypt hash of SecurityKeyword for offline validation
 }
 
 type StatusChangedPayload struct {
@@ -125,6 +126,7 @@ type PaymentConfirmedPayload struct {
 	EstimatedDeliveryAt *time.Time
 	Prediction          *PriorityPrediction
 	SecurityKeyword     string
+	SecurityKeywordHash string // bcrypt hash of SecurityKeyword for offline validation
 }
 
 type ReturnedToDraftPayload struct {

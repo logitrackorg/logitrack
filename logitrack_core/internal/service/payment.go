@@ -177,8 +177,12 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 	}
 
 	securityKeyword := shipment.SecurityKeyword
+	securityKeywordHash := shipment.SecurityKeywordHash
 	if securityKeyword == "" && shipment.DeliveryMethod == model.DeliveryMethodLastMile {
 		securityKeyword = generateSecurityKeyword()
+		if hash, err := HashKeyword(securityKeyword); err == nil {
+			securityKeywordHash = hash
+		}
 	}
 	confirmed, err := s.shipmentSvc.repo.ConfirmPayment(repository.ConfirmPaymentCmd{
 		OldTrackingID:       trackingID,
@@ -192,6 +196,7 @@ func (s *PaymentService) HandleWebhook(mpPaymentID string, rawPayload []byte) er
 		EstimatedDeliveryAt: s.shipmentSvc.estimatedDelivery(now, shipment.OriginBranchID, shipment.FinalBranchID, string(shipment.ShipmentType)),
 		Prediction:          prediction,
 		SecurityKeyword:     securityKeyword,
+		SecurityKeywordHash: securityKeywordHash,
 	})
 	if err != nil {
 		return fmt.Errorf("error al confirmar pago en repo: %w", err)

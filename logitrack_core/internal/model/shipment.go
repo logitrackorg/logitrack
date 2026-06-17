@@ -124,6 +124,7 @@ type Shipment struct {
 	// Security keyword — última milla only. Generated at create/confirm; sent to recipient via email.
 	// Never returned in API responses (json:"-"); validated by the driver at delivery time.
 	SecurityKeyword     string `json:"-"`
+	SecurityKeywordHash string `json:"-"` // bcrypt hash of SecurityKeyword, exposed only in driver route for offline validation
 	KeywordAttempts     int    `json:"keyword_attempts,omitempty"`    // failed keyword attempts by driver (max 3)
 	ContingencyDelivery bool   `json:"contingency_delivery,omitempty"` // true when delivered via DNI fallback after max keyword attempts
 

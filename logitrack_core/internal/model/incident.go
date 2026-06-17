@@ -12,16 +12,21 @@ const (
 	IncidentTypeOther      IncidentType = "otro"
 	IncidentTypeExtraviado IncidentType = "extraviado"
 	IncidentTypeDanioTotal IncidentType = "danio_total"
+	// IncidentTypeGeoMismatch is auto-reported when a driver confirms a delivery
+	// or failed attempt outside the acceptable geofence around the recipient
+	// address. Non-terminal: flags the shipment for later supervisor review.
+	IncidentTypeGeoMismatch IncidentType = "ubicacion_fuera_de_rango"
 )
 
 var ValidIncidentTypes = map[IncidentType]bool{
-	IncidentTypeDamage:     true,
-	IncidentTypeLoss:       true,
-	IncidentTypeDelay:      true,
-	IncidentTypeOpen:       true,
-	IncidentTypeOther:      true,
-	IncidentTypeExtraviado: true,
-	IncidentTypeDanioTotal: true,
+	IncidentTypeDamage:      true,
+	IncidentTypeLoss:        true,
+	IncidentTypeDelay:       true,
+	IncidentTypeOpen:        true,
+	IncidentTypeOther:       true,
+	IncidentTypeExtraviado:  true,
+	IncidentTypeDanioTotal:  true,
+	IncidentTypeGeoMismatch: true,
 }
 
 type ShipmentIncident struct {

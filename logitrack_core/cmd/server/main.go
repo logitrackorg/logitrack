@@ -342,6 +342,8 @@ func main() {
 	routingSvc.SetNotificationService(notifSvc)
 	slaRiskChecker = routingSvc.RunSLARiskCheck // conecta el reloj admin con el chequeo de SLA
 	shipmentHandler.SetRoutingService(routingSvc)
+	shipmentHandler.SetIncidentService(incidentSvc)
+	shipmentHandler.SetNotificationService(notifSvc)
 
 	// Motor de detección de anomalías SLA y repriorización automática (AC1-AC3).
 	priorityLogRepo := repository.NewPriorityLogRepository()

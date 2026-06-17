@@ -12,6 +12,17 @@ import (
 	"github.com/logitrack/core/internal/service"
 )
 
+func parseOptionalFloat(s string) *float64 {
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil
+	}
+	return &v
+}
+
 const maxDeliveryPhotoBytes = 10 << 20 // 10 MB
 
 // DeliverShipment handles POST /shipments/:tracking_id/deliver (driverOnly).
@@ -34,6 +45,8 @@ func (h *ShipmentHandler) DeliverShipment(c *gin.Context) {
 		currentSpeed, _ = strconv.ParseFloat(s, 64)
 	}
 	speedSource := c.PostForm("speed_source")
+	driverLat := parseOptionalFloat(c.PostForm("latitude"))
+	driverLng := parseOptionalFloat(c.PostForm("longitude"))
 
 	// Photo is mandatory for última milla delivery.
 	fileHeader, err := c.FormFile("photo")
@@ -66,6 +79,9 @@ func (h *ShipmentHandler) DeliverShipment(c *gin.Context) {
 		return
 	}
 
+	// Read the current shipment before the transition to get recipient coords for geofence check.
+	current, _ := h.svc.GetByTrackingID(trackingID)
+
 	updated, err := h.svc.DeliverShipment(trackingID, service.DeliverRequest{
 		Keyword:      keyword,
 		RecipientDNI: recipientDNI,
@@ -75,10 +91,19 @@ func (h *ShipmentHandler) DeliverShipment(c *gin.Context) {
 		CurrentSpeed: currentSpeed,
 		SpeedSource:  speedSource,
 		Photo:        &service.DeliveryPhotoUpload{Data: photoData, MimeType: mimeType},
+		Latitude:     driverLat,
+		Longitude:    driverLng,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Geofence check: auto-report incident if driver is outside acceptable radius.
+	if driverLat != nil && driverLng != nil {
+		if distM := geoDistanceM(driverLat, driverLng, current.Recipient.Address.Latitude, current.Recipient.Address.Longitude); distM > model.GeofenceRadiusMeters {
+			h.maybeReportGeoIncident(trackingID, user.Username, current.ReceivingBranchID, "Entrega", distM)
+		}
 	}
 
 	c.JSON(http.StatusOK, updated)

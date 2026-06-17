@@ -26,6 +26,7 @@ const (
 	NotificationClaimCustomerResponded NotificationType = "claim_customer_responded"  // cliente respondió a reclamo pending_customer vía chatbot (US-4)
 	NotificationClaimTransferred        NotificationType = "claim_transferred"          // reclamo derivado a la sucursal receptora
 	NotificationClaimTransferRejected   NotificationType = "claim_transfer_rejected"    // sucursal receptora rechazó el reclamo derivado
+	NotificationGeoMismatch             NotificationType = "geo_mismatch"               // entrega registrada fuera del radio del domicilio del destinatario
 )
 
 type Notification struct {

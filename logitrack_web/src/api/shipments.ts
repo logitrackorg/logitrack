@@ -122,6 +122,8 @@ export interface Shipment {
   keyword_attempts?: number;
   /** True when delivered via DNI contingency fallback after exhausting keyword attempts. */
   contingency_delivery?: boolean;
+  /** bcrypt hash of the security keyword — only present in GET /driver/route responses, for offline validation. */
+  keyword_hash?: string;
   price?: number;
   price_breakdown?: PriceBreakdown;
   price_currency?: string;
@@ -262,6 +264,9 @@ export interface UpdateStatusPayload {
   speed_source?: "simulation" | "real_gps";
   /** Base64-encoded JPEG photo for última milla delivered transitions. */
   delivery_photo_base64?: string;
+  /** Posición GPS del chofer al momento de la acción — para auditoría y geofence. */
+  latitude?: number;
+  longitude?: number;
 }
 
 export const shipmentApi = {
@@ -290,6 +295,8 @@ export const shipmentApi = {
       current_speed?: number;
       speed_source?: "simulation" | "real_gps";
       photo: Blob;
+      latitude?: number;
+      longitude?: number;
     }
   ) => {
     const form = new FormData();
@@ -298,6 +305,8 @@ export const shipmentApi = {
     if (payload.contingency) form.append("contingency", "true");
     if (payload.current_speed !== undefined) form.append("current_speed", String(payload.current_speed));
     if (payload.speed_source) form.append("speed_source", payload.speed_source);
+    if (payload.latitude !== undefined) form.append("latitude", String(payload.latitude));
+    if (payload.longitude !== undefined) form.append("longitude", String(payload.longitude));
     form.append("photo", payload.photo, "delivery.jpg");
     return api.post<Shipment>(`/shipments/${trackingId}/deliver`, form).then((r) => r.data);
   },

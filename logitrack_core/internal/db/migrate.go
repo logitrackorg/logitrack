@@ -702,6 +702,7 @@ func RunMigrations(db *sql.DB) error {
 		);
 
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword      TEXT NOT NULL DEFAULT '';
+		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS security_keyword_hash TEXT NOT NULL DEFAULT '';
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS keyword_attempts      INT  NOT NULL DEFAULT 0;
 		ALTER TABLE shipments ADD COLUMN IF NOT EXISTS contingency_delivery  BOOLEAN NOT NULL DEFAULT FALSE;
 

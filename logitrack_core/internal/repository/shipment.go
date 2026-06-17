@@ -89,6 +89,7 @@ type ConfirmDraftCmd struct {
 	Price               *float64
 	PriceBreakdown      *model.PriceBreakdown
 	SecurityKeyword     string
+	SecurityKeywordHash string
 }
 
 type StatusUpdateCmd struct {
@@ -160,6 +161,7 @@ type ConfirmPaymentCmd struct {
 	EstimatedDeliveryAt *time.Time
 	Prediction          *model.PriorityPrediction
 	SecurityKeyword     string
+	SecurityKeywordHash string
 }
 
 type RevertToDraftCmd struct {

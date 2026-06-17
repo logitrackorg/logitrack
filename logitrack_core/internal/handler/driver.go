@@ -113,8 +113,19 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 		return
 	}
 
+	// Build augmented shipment list that includes keyword_hash for offline validation.
+	// SecurityKeywordHash is only exposed here (driver's own route), never in general shipment endpoints.
+	type shipmentWithOfflineData struct {
+		model.Shipment
+		KeywordHash string `json:"keyword_hash,omitempty"`
+	}
+	shipmentsForDriver := make([]shipmentWithOfflineData, len(shipments))
 	waypoints := make([]map[string]interface{}, 0, len(shipments))
 	for i, shipment := range shipments {
+		shipmentsForDriver[i] = shipmentWithOfflineData{
+			Shipment:    shipment,
+			KeywordHash: shipment.SecurityKeywordHash,
+		}
 		waypoints = append(waypoints, map[string]interface{}{
 			"sequence":    i + 1,
 			"tracking_id": shipment.TrackingID,
@@ -146,7 +157,7 @@ func (h *DriverHandler) GetRoute(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"route":     route,
-		"shipments": shipments,
+		"shipments": shipmentsForDriver,
 		"waypoints": waypoints,
 		"origin":    origin,
 	})

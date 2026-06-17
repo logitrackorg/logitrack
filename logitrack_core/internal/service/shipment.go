@@ -518,6 +518,9 @@ func (s *ShipmentService) Create(req model.CreateShipmentRequest) (model.Shipmen
 	s.applyPrice(&shipment)
 	if deliveryMethod == model.DeliveryMethodLastMile {
 		shipment.SecurityKeyword = generateSecurityKeyword()
+		if hash, err := HashKeyword(shipment.SecurityKeyword); err == nil {
+			shipment.SecurityKeywordHash = hash
+		}
 	}
 	created, err := s.repo.Create(repository.CreateShipmentCmd{
 		Shipment:  shipment,
@@ -775,6 +778,9 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 	s.applyPrice(&draft)
 	if draft.DeliveryMethod == model.DeliveryMethodLastMile && draft.SecurityKeyword == "" {
 		draft.SecurityKeyword = generateSecurityKeyword()
+		if hash, err := HashKeyword(draft.SecurityKeyword); err == nil {
+			draft.SecurityKeywordHash = hash
+		}
 	}
 
 	confirmed, err := s.repo.ConfirmDraft(repository.ConfirmDraftCmd{
@@ -788,6 +794,7 @@ func (s *ShipmentService) ConfirmDraft(draftID string, changedBy string) (model.
 		Price:               draft.Price,
 		PriceBreakdown:      draft.PriceBreakdown,
 		SecurityKeyword:     draft.SecurityKeyword,
+		SecurityKeywordHash: draft.SecurityKeywordHash,
 	})
 	if err != nil {
 		return model.Shipment{}, err
@@ -1823,6 +1830,10 @@ type DeliverRequest struct {
 	CurrentSpeed float64
 	SpeedSource  string
 	Photo        *DeliveryPhotoUpload // required for última milla deliveries
+	// Latitude/Longitude: driver's GPS position at delivery time. Recorded in the
+	// event notes for the audit trail; geofence validation happens at the handler.
+	Latitude  *float64
+	Longitude *float64
 }
 
 // DeliverShipment confirms last-mile delivery via security keyword (primary) or
@@ -1864,7 +1875,7 @@ func (s *ShipmentService) DeliverShipment(trackingID string, req DeliverRequest)
 		if expectedDNI != strings.TrimSpace(req.RecipientDNI) {
 			return model.Shipment{}, fmt.Errorf("el DNI no coincide con el del destinatario")
 		}
-		return s.finalizeDelivery(current, req.ChangedBy, true, req.Photo)
+		return s.finalizeDelivery(current, req.ChangedBy, true, req.Photo, formatLocationNote(req.Latitude, req.Longitude))
 	}
 
 	// Primary path: keyword validation.
@@ -1883,11 +1894,20 @@ func (s *ShipmentService) DeliverShipment(trackingID string, req DeliverRequest)
 		return model.Shipment{}, fmt.Errorf("palabra clave inválida — %d intento(s) restante(s)", remaining)
 	}
 
-	return s.finalizeDelivery(current, req.ChangedBy, false, req.Photo)
+	return s.finalizeDelivery(current, req.ChangedBy, false, req.Photo, formatLocationNote(req.Latitude, req.Longitude))
+}
+
+// formatLocationNote renders the driver's GPS position as an audit marker for
+// the event notes, e.g. "[ubicación -34.60382,-58.38150]". Empty when no fix.
+func formatLocationNote(lat, lng *float64) string {
+	if lat == nil || lng == nil {
+		return ""
+	}
+	return fmt.Sprintf("[ubicación %.5f,%.5f]", *lat, *lng)
 }
 
 // finalizeDelivery executes the → delivered transition and fires delivery notifications.
-func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy string, contingency bool, photo *DeliveryPhotoUpload) (model.Shipment, error) {
+func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy string, contingency bool, photo *DeliveryPhotoUpload, note string) (model.Shipment, error) {
 	now := clock.Now().UTC()
 
 	var photoPath, photoName, photoMime string
@@ -1904,6 +1924,7 @@ func (s *ShipmentService) finalizeDelivery(current model.Shipment, changedBy str
 		FromStatus:          current.Status,
 		ToStatus:            model.StatusDelivered,
 		ChangedBy:           changedBy,
+		Notes:               note,
 		Timestamp:           now,
 		ContingencyDelivery: contingency,
 		DeliveryPhotoPath:   photoPath,
