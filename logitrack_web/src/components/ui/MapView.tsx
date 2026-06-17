@@ -196,8 +196,8 @@ export function MapView({
       });
       poly.bindPopup(`
         <div style="font-family:system-ui;min-width:140px">
-          <p style="font-weight:700;font-size:13px;margin:0 0 3px">${ALERT_TRIANGLE_SVG} ${z.name}</p>
-          ${z.description ? `<p style="font-size:11px;color:#64748b;margin:0">${z.description}</p>` : ""}
+          <p style="font-weight:700;font-size:13px;margin:0 0 3px;color:var(--text-primary)">${ALERT_TRIANGLE_SVG} ${z.name}</p>
+          ${z.description ? `<p style="font-size:11px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
         </div>
       `);
       poly.addTo(layer!);
@@ -222,12 +222,12 @@ export function MapView({
       });
       const dm = L.marker([origin.latitude, origin.longitude], { icon: depotIcon });
       dm.bindPopup(`
-        <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
-          <div class="flex items-center justify-between mb-2 gap-2">
-            <strong class="text-[var(--text-heading)] text-[13px]">Sucursal</strong>
+        <div style="font-family:system-ui,-apple-system,sans-serif;min-width:200px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px">
+            <strong style="color:var(--text-heading);font-size:13px">Sucursal</strong>
           </div>
-          <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${origin.name}</h4>
-          <p class="text-xs text-[#6b7280] m-0">Punto de partida</p>
+          <h4 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0 0 6px 0">${origin.name}</h4>
+          <p style="font-size:12px;color:var(--text-secondary);margin:0">Punto de partida</p>
         </div>
       `);
       dm.addTo(markersLayer.current!);
@@ -318,23 +318,23 @@ export function MapView({
     const marker = L.marker([wp.latitude, wp.longitude], { icon });
 
     const badge = isDelivered
-      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--ok-bg)] text-[var(--ok-text)]">${CHECK_SVG} Entregado</span>`
+      ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--ok-bg);color:var(--ok-text)">${CHECK_SVG} Entregado</span>`
       : isFailed
-      ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--danger-bg)] text-[var(--danger-text)]">${X_SVG} No entregado</span>`
-      : `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-[var(--warn-bg)] text-[var(--warn-text)]">Pendiente</span>`;
+      ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--danger-bg);color:var(--danger-text)">${X_SVG} No entregado</span>`
+      : `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px;white-space:nowrap;background:var(--warn-bg);color:var(--warn-text)">Pendiente</span>`;
 
     marker.bindPopup(`
-      <div class="font-[system-ui,-apple-system,sans-serif] min-w-[200px]">
-        <div class="flex items-center justify-between mb-2 gap-2">
-          <strong class="text-[var(--text-heading)] text-[13px]">#${wp.sequence}</strong>
+      <div style="font-family:system-ui,-apple-system,sans-serif;min-width:200px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px">
+          <strong style="color:var(--text-heading);font-size:13px">#${wp.sequence}</strong>
           ${badge}
         </div>
-        <h4 class="text-[15px] font-bold text-[var(--text-primary)] m-0 mb-1.5">${wp.name}</h4>
-        <p class="text-xs text-[var(--text-secondary)] m-0 mb-3 flex items-start gap-1.5 leading-[1.4]">
+        <h4 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0 0 6px 0">${wp.name}</h4>
+        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.4">
           ${MAP_PIN_SVG}
           ${wp.address}
         </p>
-        <button class="w-full px-3 py-2 text-white border-none rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-200" style="background-color:var(--sidebar-bg)" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter=''" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
+        <button style="width:100%;padding:8px 12px;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:var(--sidebar-bg);transition:filter 200ms" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter=''" onclick="window.dispatchEvent(new CustomEvent('waypoint-click',{detail:'${wp.tracking_id}'}))">
           Ver detalle →
         </button>
       </div>

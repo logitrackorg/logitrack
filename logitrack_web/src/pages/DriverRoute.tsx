@@ -928,7 +928,7 @@ function InterBranchTripView() {
         }
         L.marker([p.lat, p.lng], { icon: icon(bg, content) })
           .addTo(map)
-          .bindPopup(`<div style="font-family:system-ui;min-width:120px"><b>${p.label}</b><br>${p.branch?.name ?? ""}<br>${p.branch?.address.city ?? ""}</div>`, { className: "driver-map-popup" });
+          .bindPopup(`<div style="font-family:system-ui;min-width:120px;color:var(--text-primary)"><b>${p.label}</b><br><span style="color:var(--text-secondary)">${p.branch?.name ?? ""}${p.branch?.address.city ? '<br>' + p.branch.address.city : ''}</span></div>`, { className: "driver-map-popup" });
       });
 
       const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
