@@ -28,6 +28,7 @@ export interface DeliveryActionSheetProps {
   onUseContingency?: (v: boolean) => void;
   dni?: string;
   onDniChange?: (s: string) => void;
+  offlineKeywordAttempts?: number;
 
   // failed / rejected mode
   reason?: string;
@@ -55,6 +56,7 @@ export function DeliveryActionSheet({
   onUseContingency,
   dni = "",
   onDniChange,
+  offlineKeywordAttempts = 0,
   // failed / rejected mode
   reason = "",
   onReasonChange,
@@ -88,7 +90,7 @@ export function DeliveryActionSheet({
 
   // ── Deliver mode ──────────────────────────────────────────────
   const isLastMile = shipment.delivery_method === "ultima_milla";
-  const keywordAttempts = shipment.keyword_attempts ?? 0;
+  const keywordAttempts = (shipment.keyword_attempts ?? 0) + offlineKeywordAttempts;
   const locked = keywordAttempts >= 3;
 
   const deliverCanConfirm = isLastMile

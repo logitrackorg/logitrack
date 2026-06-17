@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.logitrack.driver.app-mergeDebugResources-26:/values-en-rAU/values-en-rAU.xml",
+            "outputFile": "com.logitrack.driver.app-mergeDebugResources-32:/values-en-rAU/values-en-rAU.xml",
             "map": [
                 {
                     "source": "/Users/jirigoin/.gradle/caches/8.14.3/transforms/11094a199bb7945826b161d8a9c17beb/transformed/core-1.17.0/res/values-en-rAU/values-en-rAU.xml",

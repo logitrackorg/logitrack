@@ -51,6 +51,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { CameraCapture } from "../components/ui/CameraCapture";
 import { MapView } from "../components/ui/MapView";
 import { NextStopCard } from "../components/ui/NextStopCard";
+import { ZoneAlert } from "../components/ui/ZoneAlert";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { useMisfireTracking } from "../hooks/useMisfireTracking";
@@ -146,7 +147,6 @@ function LastMileView() {
   const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
   // Geofence warning: when set, shows a confirmation modal before proceeding.
   // Stores the distance (m) and a callback to execute if the driver confirms.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
   const [isDangerDismissed, setIsDangerDismissed] = useState(false);
@@ -251,30 +251,6 @@ function LastMileView() {
     })();
     return () => { cancelled = true; };
   }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Polling de bloqueo por fatiga — cada 5 s mientras la ruta está activa (LOGITRACK-499).
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const status = await driverApi.getFatigueBlockStatus();
-        const nowBlocked = status.blocked ?? false;
-        setFatigueBlocked(nowBlocked);
-        if (!nowBlocked && status.recently_unblocked && status.unblocked_by) {
-          const ackKey = (status as { unblocked_at?: string }).unblocked_at ?? "seen";
-          const storedAck = sessionStorage.getItem("lt_fatigue_ack_route");
-          pendingAckRef.current = ackKey;
-          if (ackKey !== storedAck) {
-            setFatigueUnblockedBy(status.unblocked_by);
-          }
-        }
-      } catch {
-        // Error de red → mantener estado actual (conservador)
-      }
-    };
-    poll();
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Returns the driver's current GPS coordinates (null in simulation mode or without fix).
   // Returns the driver's current position (real GPS or simulated) for geofence checking.
@@ -675,7 +651,7 @@ function LastMileView() {
   const today = fmtDate(new Date().toISOString());
 
   if (routeEffectivelyDone) {
-    return <RouteCompletedView data={data} />;
+    return <RouteCompletedView data={data} today={today} pendingSyncIds={pendingSyncIds} />;
   }
 
   const canAct = routeStatus === "en_curso";
@@ -898,11 +874,6 @@ function LastMileView() {
                     <ShipmentCard
                       shipment={shipment}
                       order={tab === "pendientes" ? idx + 1 : undefined}
-                      canAct={canAct && tab === "pendientes"}
-                      getMisfires={() => misfireRef.current}
-                      onDeliver={() => openDeliverSheet(shipment)}
-                      onFailed={() => openFailedSheet(shipment)}
-                      onRejected={() => openRejectedSheet(shipment)}
                       onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
                     />
                     {pendingSyncIds.has(shipment.tracking_id) && (
@@ -994,8 +965,6 @@ function LastMileView() {
         needsLocation={locationMissing}
         onRequestLocation={requestLocation}
         error={actionError}
-        photo={deliveryPhoto}
-        onRetakePhoto={() => setCameraOpen(true)}
         offlineKeywordAttempts={offlineKeywordAttempts}
       />
       <DeliveryActionSheet
@@ -1032,6 +1001,42 @@ function LastMileView() {
         onRequestLocation={requestLocation}
         error={actionError}
       />
+      {/* Modal de advertencia de geofence */}
+      {geoWarning && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+            <div className="flex items-start gap-3 px-5 pt-5 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-slate-900 dark:text-gray-100">Ubicación fuera de rango</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
+                  Estás a <span className="font-semibold text-amber-700">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
+                  (máximo {GEOFENCE_RADIUS_M} m).
+                </p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">
+                  Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button
+                onClick={() => setGeoWarning(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={geoWarning.onConfirm}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+              >
+                Confirmar igual
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1831,43 +1836,6 @@ function InterBranchTripView() {
           </Button>
         </div>
       )}
-
-      {/* Modal de advertencia de geofence */}
-      {geoWarning && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
-            <div className="flex items-start gap-3 px-5 pt-5 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-slate-900 dark:text-gray-100">Ubicación fuera de rango</p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-gray-400 leading-relaxed">
-                  Estás a <span className="font-semibold text-amber-700">{Math.round(geoWarning.distanceM)} m</span> del domicilio del destinatario
-                  (máximo {GEOFENCE_RADIUS_M} m).
-                </p>
-                <p className="mt-2 text-xs text-slate-500 dark:text-gray-500">
-                  Si confirmás, se registrará un incidente en el envío para revisión del supervisor.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 px-5 pb-5">
-              <button
-                onClick={() => setGeoWarning(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={geoWarning.onConfirm}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors"
-              >
-                Confirmar igual
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -2031,10 +1999,10 @@ function ShipmentCard({
   );
 }
 
-function RouteCompletedView({ data }: { data: DriverRouteResponse }) {
+function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data: DriverRouteResponse; today: string; pendingSyncIds?: Set<string> }) {
   const navigate = useNavigate();
-  const done = data.shipments.filter((s) => s.status === "delivered").length;
-  const failed = data.shipments.filter((s) => s.status === "delivery_failed").length;
+  const done = data.shipments.filter((s) => s.status === "delivered" || pendingSyncIds.has(s.tracking_id)).length;
+  const failed = data.shipments.filter((s) => s.status === "delivery_failed" && !pendingSyncIds.has(s.tracking_id)).length;
 
   const [tripId, setTripId] = useState<string | null>(null);
   const [qrBase64, setQrBase64] = useState<string | null>(null);
@@ -2073,6 +2041,7 @@ function RouteCompletedView({ data }: { data: DriverRouteResponse }) {
                 {failed} {failed === 1 ? "envío sin entregar" : "envíos sin entregar"}
               </p>
             )}
+            <p className="text-sm opacity-80 mt-0.5">{today}</p>
           </div>
         </div>
       </div>

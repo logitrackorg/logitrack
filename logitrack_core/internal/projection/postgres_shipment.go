@@ -35,6 +35,9 @@ func (p *PostgresShipmentProjection) apply(event model.DomainEvent) error {
 	case model.EventShipmentCreated:
 		payload := event.Payload.(model.ShipmentCreatedPayload)
 		s := payload.Shipment
+		if s.SecurityKeywordHash == "" {
+			s.SecurityKeywordHash = payload.SecurityKeywordHash
+		}
 		if s.CreatedBy == "" {
 			s.CreatedBy = event.ChangedBy
 		}

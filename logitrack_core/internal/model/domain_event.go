@@ -49,8 +49,9 @@ const ReturnETAExtraDays = 10
 // Payload types — each event type carries its own typed payload.
 
 type ShipmentCreatedPayload struct {
-	Shipment Shipment
-	Notes    string
+	Shipment            Shipment
+	Notes               string
+	SecurityKeywordHash string // stored explicitly because Shipment.SecurityKeywordHash is json:"-"
 }
 
 type DraftSavedPayload struct {
