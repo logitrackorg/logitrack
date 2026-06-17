@@ -1,0 +1,25 @@
+logitrack_core/internal/seed/seed.go
+  s_55b428161ac81b::t_eaeac94b636085 1149,1151-1158
+logitrack_core/internal/model/domain_event.go
+  s_55b428161ac81b::t_50ea5a857a8d3f 52-54
+logitrack_core/internal/repository/shipment_es.go
+  s_55b428161ac81b::t_79bb62c0eec345 31-37
+logitrack_core/internal/projection/postgres_shipment.go
+  s_55b428161ac81b::t_429c27ae023269 38-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "6e8b5b32675001379088f0392bea618404d45eed",
+  "prompts": {},
+  "sessions": {
+    "s_55b428161ac81b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31ac38c4-2222-400c-bd94-70c16a23c912",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
