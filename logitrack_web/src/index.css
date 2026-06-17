@@ -1032,8 +1032,10 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   padding: 0;
   background: var(--bg-card);
   color: var(--text-primary);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
-.leaflet-popup-content { margin: 14px; color: var(--text-primary); }
+.leaflet-popup-content { margin: 14px; color: var(--text-primary); line-height: 1.6; }
+.leaflet-popup-content b { color: var(--text-primary); }
 .leaflet-popup-tip { background: var(--bg-card); }
 .leaflet-popup-close-button { color: var(--text-secondary) !important; }
 

@@ -202,7 +202,7 @@ function RoutePreviewMap({
         .bindPopup(
           `<div style="font-family:system-ui;min-width:140px">
             <p style="font-weight:700;font-size:13px;margin:0 0 3px">⚠️ ${z.name}</p>
-            ${z.description ? `<p style="font-size:11px;color:#64748b;margin:0">${z.description}</p>` : ""}
+            ${z.description ? `<p style="font-size:11px;color:var(--text-secondary);margin:0">${z.description}</p>` : ""}
           </div>`,
         )
         .addTo(layer);
@@ -250,7 +250,7 @@ function RoutePreviewMap({
         }),
       })
         .bindPopup(
-          `<b>#${i + 1} · ${name}</b><br/><span style="font-size:12px;color:#64748b">${addr}</span>`,
+          `<b>#${i + 1} · ${name}</b><br/><span style="font-size:12px;color:var(--text-secondary)">${addr}</span>`,
         )
         .addTo(layer);
     });

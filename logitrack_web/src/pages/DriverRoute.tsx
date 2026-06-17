@@ -922,13 +922,13 @@ function InterBranchTripView() {
       points.forEach((p, i) => {
         let bg = "var(--sidebar-bg)", content = "📍";
         if (i > 0) {
-          if (p.completed) { bg = "#059669"; content = "✓"; }
-          else if (p.current) { bg = "#0284c7"; content = "📍"; }
-          else { bg = "#64748b"; content = String(i); }
+          if (p.completed) { bg = "#10b981"; content = "✓"; }
+          else if (p.current) { bg = "#f59e0b"; content = "📍"; }
+          else { bg = "#6366f1"; content = String(i); }
         }
         L.marker([p.lat, p.lng], { icon: icon(bg, content) })
           .addTo(map)
-          .bindPopup(`<b>${p.label}</b><br>${p.branch?.name ?? ""}<br>${p.branch?.address.city ?? ""}`);
+          .bindPopup(`<div style="font-family:system-ui;min-width:120px"><b>${p.label}</b><br>${p.branch?.name ?? ""}<br>${p.branch?.address.city ?? ""}</div>`, { className: "driver-map-popup" });
       });
 
       const latlngs = points.map((p) => [p.lat, p.lng] as [number, number]);
@@ -960,7 +960,7 @@ function InterBranchTripView() {
               if (legData.code !== "Ok" || !legData.routes?.[0]) {
                 // fallback línea recta para este segmento
                 L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-              color: points[i + 1].completed ? "#059669" : "#3b82f6",
+              color: points[i + 1].completed ? "#10b981" : "#6366f1",
                   weight: 3,
                   dashArray: points[i + 1].completed ? undefined : "8 6",
                 }).addTo(map);
@@ -970,7 +970,7 @@ function InterBranchTripView() {
                 (c: number[]) => [c[1], c[0]] as [number, number],
               );
               L.polyline(coords, {
-                color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
+                color: points[i + 1].completed ? "#10b981" : "#6366f1",
                 weight: 3,
                 opacity: 0.8,
                 dashArray: points[i + 1].completed ? undefined : "8 6",
@@ -982,7 +982,7 @@ function InterBranchTripView() {
           // fallback: líneas rectas si OSRM no responde
           for (let i = 0; i < points.length - 1; i++) {
             L.polyline([[points[i].lat, points[i].lng], [points[i + 1].lat, points[i + 1].lng]], {
-              color: points[i + 1].completed ? "#059669" : "var(--sidebar-bg)",
+              color: points[i + 1].completed ? "#10b981" : "#6366f1",
               weight: 3,
               dashArray: points[i + 1].completed ? undefined : "8 6",
             }).addTo(map);
