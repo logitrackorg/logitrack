@@ -686,7 +686,7 @@ function LastMileView() {
     : [];
 
   return (
-    <div className="pb-32">
+    <div className="pb-16">
       {/* Banner offline */}
       {(!isOnline || syncing) && (
         <div className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold ${syncing ? "bg-amber-400 text-amber-900" : "bg-slate-700 text-white"}`}>
@@ -858,21 +858,23 @@ function LastMileView() {
 
       {/* Card próxima parada (solo en vista mapa con ruta en curso) */}
       {viewMode === 'map' && canAct && (
-        <NextStopCard
-          nextStop={nextStop}
-          allPendingStops={allPendingStops}
-          userLocation={userLocation ?? undefined}
-          routeInfo={routeInfo}
-          canAct={canAct}
-          onDeliver={() => {
-            if (!nextShipment) return;
-            openDeliverSheet(nextShipment, () => {
-              if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
-            });
-          }}
-          onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
-          onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
-        />
+        <div className="mt-4">
+          <NextStopCard
+            nextStop={nextStop}
+            allPendingStops={allPendingStops}
+            userLocation={userLocation ?? undefined}
+            routeInfo={routeInfo}
+            canAct={canAct}
+            onDeliver={() => {
+              if (!nextShipment) return;
+              openDeliverSheet(nextShipment, () => {
+                if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
+              });
+            }}
+            onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
+            onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
+          />
+        </div>
       )}
 
 
