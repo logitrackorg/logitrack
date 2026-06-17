@@ -1602,15 +1602,6 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
   return (
     <div className="fixed inset-0 z-[1001] bg-[var(--bg-page)] overflow-y-auto">
     <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
-      <div className="flex items-start gap-3 mb-5 pb-4 border-b dark:border-gray-700 border-slate-200">
-        <div className="w-10 h-10 rounded-xl bg-[var(--sidebar-bg)]/8 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-          <Truck className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold dark:text-gray-100 text-slate-900 tracking-tight leading-tight">Mi ruta</h1>
-          <p className="mt-1 text-sm dark:text-gray-400 text-slate-500">{today}</p>
-        </div>
-      </div>
 
       <div className="rounded-2xl bg-gradient-to-br from-[var(--ok)] to-emerald-600 text-white p-5 mb-5 shadow-sm">
         <div className="flex items-center gap-3">
