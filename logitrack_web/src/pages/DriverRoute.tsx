@@ -1023,13 +1023,13 @@ function LastMileView() {
             <div className="flex gap-2 px-5 pb-5">
               <button
                 onClick={() => setGeoWarning(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-colors"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border dark:border-gray-700 border-slate-200 dark:text-gray-300 text-slate-700 dark:hover:bg-gray-800 hover:bg-slate-50 transition-all"
               >
                 Cancelar
               </button>
               <button
                 onClick={geoWarning.onConfirm}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-all"
               >
                 Confirmar igual
               </button>
@@ -2105,7 +2105,7 @@ function RouteCompletedView({ data, today, pendingSyncIds = new Set() }: { data:
             <Card
               key={shipment.tracking_id}
               onClick={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
-              className="px-3 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-colors flex items-center gap-3"
+              className="px-3 py-3 cursor-pointer dark:hover:bg-gray-700 hover:bg-slate-50 transition-all flex items-center gap-3"
             >
               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                 delivered

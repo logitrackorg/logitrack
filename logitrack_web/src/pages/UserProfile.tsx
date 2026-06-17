@@ -303,7 +303,7 @@ export function UserProfile() {
                           {historyResult.history.map((rec) => {
                             const [yy, mm, dd] = rec.date.split("-");
                             return (
-                              <tr key={rec.recorded_at || rec.date} className="hover:bg-[var(--bg-hover)] transition-colors">
+                              <tr key={rec.recorded_at || rec.date} className="hover:bg-[var(--bg-hover)] transition-all">
                                 <td className="px-4 py-3 text-[var(--text-primary)]">
                                   {dd}/{mm}/{yy}
                                   {rec.recorded_at && (
