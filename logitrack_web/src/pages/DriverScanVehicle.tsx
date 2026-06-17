@@ -238,14 +238,9 @@ export function DriverScanVehicle() {
                     className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
                     onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => void handlePasteFromClipboard()}
-                    aria-label="Pegar desde portapapeles"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => void handlePasteFromClipboard()} aria-label="Pegar desde portapapeles" className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px]">
                     <ClipboardPaste size={18} />
-                  </button>
+                  </Button>
                 </div>
                 <Button
                   onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}

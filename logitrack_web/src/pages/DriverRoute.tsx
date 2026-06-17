@@ -455,12 +455,7 @@ function LastMileView() {
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm font-semibold text-[var(--danger-text)]">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span className="flex-1">{actionError}</span>
-            <button
-              onClick={() => setActionError("")}
-              className="text-xs font-semibold text-[var(--danger-text)] opacity-80 hover:opacity-100 cursor-pointer min-h-[44px] flex items-center shrink-0"
-            >
-              Cerrar
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setActionError("")} className="shrink-0 min-h-[44px]">Cerrar</Button>
           </div>
         )}
 
@@ -1205,9 +1200,7 @@ function InterBranchTripView() {
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span className="flex-1">{error}</span>
-            <button onClick={() => setError("")} className="text-xs font-semibold cursor-pointer min-h-[44px] flex items-center">
-              Cerrar
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setError("")} className="shrink-0 min-h-[44px]">Cerrar</Button>
           </div>
         )}
 
@@ -1253,13 +1246,10 @@ function InterBranchTripView() {
         {/* ── PARADAS COMPLETADAS ── */}
         {completedStops.length > 0 && (
           <section>
-            <button
-              onClick={() => setCompletedExpanded((v) => !v)}
-              className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3 cursor-pointer min-h-[44px] w-full"
-            >
+            <Button variant="ghost" onClick={() => setCompletedExpanded((v) => !v)} className="w-full justify-start min-h-[44px] text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-3">
               {completedExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               Paradas completadas ({completedStops.length})
-            </button>
+            </Button>
             {completedExpanded && (
               <div className="space-y-2.5">
                 {completedStops.map((s, idx) => {
@@ -1350,13 +1340,10 @@ function InterBranchTripView() {
       {trip.status === "en_transito" && (
         <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
           <div className="max-w-2xl mx-auto">
-            <button
-              onClick={openQR}
-              className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 active:brightness-90 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg shadow-[var(--brand)]/20"
-            >
+            <Button onClick={openQR} className="w-full h-14 rounded-xl text-white text-lg font-bold gap-2.5 shadow-lg shadow-[var(--brand)]/20">
               <QrCode className="w-5 h-5" />
               Llegué — mostrar QR al operador
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1369,14 +1356,10 @@ function InterBranchTripView() {
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>Al iniciar el viaje, los envíos pasan a estado <strong>en tránsito</strong>.</span>
             </div>
-            <button
-              onClick={handleStart}
-              disabled={starting}
-              className="w-full h-14 rounded-xl bg-[var(--brand)] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all shadow-lg"
-            >
+            <Button onClick={handleStart} disabled={starting} className="w-full h-14 rounded-xl text-white text-lg font-bold gap-2.5 shadow-lg">
               <Play className="w-5 h-5" />
               {starting ? "Iniciando viaje…" : "Iniciar viaje"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1421,15 +1404,12 @@ function InterBranchTripView() {
             Tu supervisor <strong className="text-white">{fatigueUnblockedBy}</strong> autorizó<br/>
             que continúes la ruta.
           </p>
-          <button
-            onClick={() => {
-              if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
-              setFatigueUnblockedBy(null);
-            }}
-            className="mt-2 px-9 py-3 rounded-xl border-none bg-[var(--ok)] text-white text-base font-bold cursor-pointer"
-          >
+          <Button onClick={() => {
+            if (pendingAckRef.current) sessionStorage.setItem("lt_fatigue_ack", pendingAckRef.current);
+            setFatigueUnblockedBy(null);
+          }} className="mt-2 px-9 py-3 rounded-xl text-base font-bold bg-emerald-500 hover:bg-emerald-600 text-white">
             Continuar
-          </button>
+          </Button>
         </div>
       )}
     </>
@@ -1691,12 +1671,9 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
           </div>
           <p className="text-base font-bold dark:text-gray-100 text-slate-900">¿Empezás otro reparto?</p>
           <p className="text-sm dark:text-gray-400 text-slate-500">Escaneá el QR del vehículo o ingresá la patente para continuar.</p>
-          <button
-            onClick={() => navigate("/driver/scan")}
-            className="h-14 px-8 rounded-xl bg-[var(--sidebar-bg)] hover:bg-[#15294a] active:scale-95 text-white text-base font-bold cursor-pointer transition-all duration-150 w-full max-w-xs"
-          >
+          <Button onClick={() => navigate("/driver/scan")} className="w-full max-w-xs mx-auto h-14 px-8 rounded-xl text-base font-bold">
             Escanear vehículo
-          </button>
+          </Button>
         </div>
       )}
 
@@ -1977,7 +1954,7 @@ function HeroNextStop({
             href={mapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full h-14 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            className="w-full h-14 rounded-xl bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white text-lg font-bold flex items-center justify-center gap-2.5 cursor-pointer transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <Navigation className="w-5 h-5" />
             Navegar con Maps

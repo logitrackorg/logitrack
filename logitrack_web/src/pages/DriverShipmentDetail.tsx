@@ -167,7 +167,7 @@ export function DriverShipmentDetail() {
         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span className="flex-1">{actionError}</span>
-          <button onClick={() => setActionError("")} className="text-xs font-semibold opacity-80 hover:opacity-100 shrink-0">Cerrar</button>
+          <Button variant="ghost" size="sm" onClick={() => setActionError("")} className="shrink-0 opacity-80 hover:opacity-100">Cerrar</Button>
         </div>
       )}
 
@@ -246,10 +246,10 @@ export function DriverShipmentDetail() {
             <CheckCircle2 className="w-5 h-5" />Entregar
           </Button>
           <div className="flex gap-2">
-            <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
-              <XCircle className="w-4 h-4" />No entregado
-            </Button>
-            <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold gap-1.5">
+          <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+            <XCircle className="w-4 h-4" />No entregado
+          </Button>
+          <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold gap-1.5">
               <Ban className="w-4 h-4" />Rechazado
             </Button>
           </div>

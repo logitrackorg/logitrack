@@ -113,7 +113,7 @@ export function NextStopCard({
               </Button>
               <Button
                 onClick={onRejected}
-                className="h-9 w-9 rounded-xl bg-orange-500 hover:bg-orange-600 text-white"
+                className="h-9 w-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-white"
                 title="Rechazado"
               >
                 <Ban className="w-4 h-4" />

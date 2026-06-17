@@ -88,7 +88,7 @@ export function DriverNav({ title, subtitle }: DriverNavProps) {
             {/* Mi perfil */}
             <button
               onClick={() => { setMenuOpen(false); navigate("/profile"); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-muted)] cursor-pointer border-0 bg-transparent text-left transition-all"
             >
               <User size={16} className="text-[var(--text-secondary)]" />
               Mi perfil
@@ -98,7 +98,7 @@ export function DriverNav({ title, subtitle }: DriverNavProps) {
             <div className="border-t border-[var(--border)]">
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--danger-text)] hover:bg-[var(--danger-bg)] cursor-pointer border-0 bg-transparent text-left transition-all"
               >
                 <LogOut size={16} />
                 Cerrar sesión

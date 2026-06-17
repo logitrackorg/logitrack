@@ -127,11 +127,11 @@ export function DeliveryActionSheet({
   const confirmClass = isDeliver
     ? "h-14 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-base font-bold w-full"
     : isFailed
-      ? "h-14 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-base font-bold w-full"
+      ? "h-14 rounded-xl bg-red-500 hover:bg-red-600 text-white text-base font-bold w-full"
       : "h-14 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-base font-bold w-full";
 
   const focusRingColor = isFailed
-    ? "focus:ring-rose-500/20 focus:border-rose-500"
+    ? "focus:ring-red-500/20 focus:border-red-500"
     : isRejected
       ? "focus:ring-amber-500/20 focus:border-amber-500"
       : "focus:ring-emerald-500/20 focus:border-emerald-500";
@@ -243,7 +243,7 @@ export function DeliveryActionSheet({
             {(isFailed ? FAILED_REASONS : REJECTED_REASONS).map((r) => {
               const active = reason === r.id;
               const activeCn = isFailed
-                ? "border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/25"
+                ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-500/15 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-500/25"
                 : "border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-500/15 text-amber-900 dark:text-amber-300";
               const idleCn =
                 "dark:border-gray-600 border-slate-200 bg-transparent dark:text-gray-300 text-slate-700 dark:hover:bg-gray-700/50 hover:bg-slate-50";

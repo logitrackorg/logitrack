@@ -136,8 +136,8 @@ export function UserProfile() {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-colors min-h-[44px]",
+                    className={cn(
+                      "shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold cursor-pointer transition-all min-h-[44px]",
                     active
                       ? "bg-[var(--sidebar-bg)] text-white"
                       : "bg-[var(--bg-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"
@@ -164,8 +164,8 @@ export function UserProfile() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-colors",
+                      className={cn(
+                        "w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-all",
                       active
                         ? "bg-[var(--sidebar-bg)] text-white"
                         : "text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
