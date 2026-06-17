@@ -267,15 +267,16 @@ function LastMileView() {
 
   // Opens a sheet after checking geofence. If outside radius, shows the warning
   // first and only opens the sheet if the driver confirms.
-  const openDeliverSheet = (shipment: Shipment) => {
+  const openDeliverSheet = (shipment: Shipment, onReady?: () => void) => {
     // Resetear antes de cargar para evitar que queden intentos de un envío anterior.
     setOfflineKeywordAttempts(0);
     getKeywordAttempts(shipment.tracking_id).then(setOfflineKeywordAttempts).catch(() => {});
     const distM = checkGeofence(shipment);
     if (distM !== null && distM > GEOFENCE_RADIUS_M) {
-      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); } });
+      setGeoWarning({ distanceM: distM, onConfirm: () => { setGeoWarning(null); setDeliverShipment(shipment); onReady?.(); } });
     } else {
       setDeliverShipment(shipment);
+      onReady?.();
     }
   };
 
@@ -865,8 +866,9 @@ function LastMileView() {
           canAct={canAct}
           onDeliver={() => {
             if (!nextShipment) return;
-            openDeliverSheet(nextShipment);
-            if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
+            openDeliverSheet(nextShipment, () => {
+              if (nextShipment.delivery_method === "ultima_milla") setCameraOpen(true);
+            });
           }}
           onFailed={() => { if (nextShipment) openFailedSheet(nextShipment); }}
           onRejected={() => { if (nextShipment) openRejectedSheet(nextShipment); }}
@@ -945,7 +947,7 @@ function LastMileView() {
       />
       {/* Modal de advertencia de geofence */}
       {geoWarning && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] shadow-2xl overflow-hidden">
             <div className="flex items-start gap-3 px-5 pt-5 pb-4">
               <div className="w-10 h-10 rounded-xl bg-[var(--warn-bg)] flex items-center justify-center shrink-0">
