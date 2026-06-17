@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -335,8 +336,6 @@ function LastMileView() {
   if (!data) return null;
 
   const routeStatus = data.route.status ?? "pendiente";
-  const [ry, rm, rd] = data.route.date.split("-");
-  const today = `${rd}/${rm}/${ry}`;
 
   const pendingList = data.shipments.filter((s) => s.status === "out_for_delivery");
   const completedList = data.shipments.filter(
@@ -352,7 +351,7 @@ function LastMileView() {
     (routeStatus === "en_curso" && pending === 0 && total > 0);
 
   if (routeEffectivelyDone) {
-    return <RouteCompletedView data={data} today={today} />;
+    return <RouteCompletedView data={data} />;
   }
 
   const canAct = routeStatus === "en_curso";
@@ -1575,7 +1574,7 @@ function ShipmentCard({
   );
 }
 
-function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today: string }) {
+function RouteCompletedView({ data }: { data: DriverRouteResponse }) {
   const navigate = useNavigate();
   const done = data.shipments.filter((s) => s.status === "delivered").length;
   const failed = data.shipments.filter((s) => s.status === "delivery_failed").length;
@@ -1599,7 +1598,7 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
 
   const tripActive = qrLoading || tripId !== null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[1001] bg-[var(--bg-page)] overflow-y-auto">
     <div className="px-4 py-4 max-w-2xl mx-auto pb-12">
 
@@ -1711,7 +1710,8 @@ function RouteCompletedView({ data, today }: { data: DriverRouteResponse; today:
         })}
       </div>
     </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
