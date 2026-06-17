@@ -31,10 +31,8 @@ vi.mock("@/components/ui/button", () => ({
     className,
     disabled,
     onClick,
-    variant,
     ...props
   }: React.ComponentProps<"button"> & {
-    variant?: string;
     'data-testid'?: string;
   }) => (
     <button

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  AlertCircle, AlertTriangle, Ban, Camera, CheckCircle2, ChevronLeft,
+  AlertCircle, AlertTriangle, Ban, CheckCircle2, ChevronLeft,
   Clock, MapPin, MessageCircle, Phone, XCircle,
 } from "lucide-react";
 import { shipmentApi, type Shipment } from "../api/shipments";

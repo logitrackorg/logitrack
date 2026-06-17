@@ -149,7 +149,7 @@ export function DriverScanVehicle() {
         setManualToken(trimmed);
         void handleToken(trimmed);
       }
-    } catch {}
+    } catch { /* clipboard read not available */ }
   };
 
   if (showGate && user) {

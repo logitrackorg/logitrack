@@ -34,8 +34,8 @@ vi.mock("../api/driver", () => ({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function setupHook(driverId = "1") {
-  return renderHook(() => useMidRouteFatigue(driverId));
+function setupHook() {
+  return renderHook(() => useMidRouteFatigue());
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────

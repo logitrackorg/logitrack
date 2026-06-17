@@ -6,7 +6,6 @@ import {
   ArrowDown,
   ArrowUp,
   Ban,
-  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -41,7 +40,7 @@ import {
 import { syncQueue } from "../offline/sync";
 import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
 
-import { driverApi, type DriverRouteResponse, type TouchEventPayload } from "../api/driver";
+import { driverApi, type DriverRouteResponse } from "../api/driver";
 import { interBranchTripsApi, type InterBranchTrip, type TripQRResponse } from "../api/interBranchTrips";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
@@ -61,7 +60,7 @@ import { isInDangerZone } from "../utils/pointInPolygon";
 import { publicTrackingApi } from "../api/publicTracking";
 import type { Branch } from "../api/branches";
 import { haversineKm, cityAbbrev } from "../utils/geo";
-import { fmtDateTime } from "../utils/date";
+import { fmtDate, fmtDateTime } from "../utils/date";
 import {
   FAILED_REASONS,
   REJECTED_REASONS,
@@ -127,7 +126,7 @@ function LastMileView() {
     requiresSleepData,
     triggerGate,
     closeGate: closeMidRouteGate,
-  } = useMidRouteFatigue(user?.id ?? "");
+  } = useMidRouteFatigue();
 
   // sheets
   const [deliverShipment, setDeliverShipment] = useState<Shipment | null>(null);
@@ -147,8 +146,10 @@ function LastMileView() {
   const [offlineKeywordAttempts, setOfflineKeywordAttempts] = useState(0);
   // Geofence warning: when set, shows a confirmation modal before proceeding.
   // Stores the distance (m) and a callback to execute if the driver confirms.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [geoWarning, setGeoWarning] = useState<{ distanceM: number; onConfirm: () => void } | null>(null);
   const [tab, setTab] = useState<Tab>("pendientes");
+  const [isDangerDismissed, setIsDangerDismissed] = useState(false);
 
   const { getMisfires, resetMisfires, triggerCheckin, closeCheckin } =
     useMisfireTracking();
@@ -420,7 +421,7 @@ function LastMileView() {
           longitude: coords?.lng,
         },
         photoBlob: deliveryPhoto ?? undefined,
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(deliverShipment.tracking_id));
       closeSheets();
@@ -485,7 +486,7 @@ function LastMileView() {
         type: "delivery_failed",
         trackingId: failedShipment.tracking_id,
         payload: { status: "delivery_failed", location: "", notes: note, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(failedShipment.tracking_id));
       closeSheets();
@@ -528,7 +529,7 @@ function LastMileView() {
         type: "rejected",
         trackingId: rejectedShipment.tracking_id,
         payload: { status: "delivery_failed", location: "", notes: note, rejected_by_recipient: true, current_speed: effectiveSpeed, speed_source: speedSource, latitude: coords?.lat, longitude: coords?.lng },
-        enqueuedAt: Date.now(),
+        enqueuedAt: new Date().getTime(),
       });
       setPendingSyncIds((prev) => new Set(prev).add(rejectedShipment.tracking_id));
       closeSheets();
@@ -671,6 +672,7 @@ function LastMileView() {
   const done = completedList.length;
   const pending = pendingList.length;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const today = fmtDate(new Date().toISOString());
 
   if (routeEffectivelyDone) {
     return <RouteCompletedView data={data} />;
@@ -1047,7 +1049,7 @@ function InterBranchTripView() {
     requiresSleepData,
     triggerGate,
     closeGate: closeMidRouteGate,
-  } = useMidRouteFatigue(user?.id ?? "");
+  } = useMidRouteFatigue();
   const [trip, setTrip] = useState<InterBranchTrip | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1647,7 +1649,7 @@ function InterBranchTripView() {
         )}
 
         {/* ── MAPA ── */}
-        {!!origin?.latitude ? (
+        {origin?.latitude != null ? (
           <Card className="overflow-hidden !p-0 border-[var(--border)]" variant="muted">
             <div ref={mapRef} className="h-48 w-full" />
           </Card>

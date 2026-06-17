@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { driverApi } from "../api/driver";
 
-export function useMidRouteFatigue(_driverId: string) {
+export function useMidRouteFatigue() {
   const [showGate, setShowGate] = useState(false);
   const [misfireCount, setMisfireCount] = useState(0);
   const [requiresSleepData, setRequiresSleepData] = useState(true);

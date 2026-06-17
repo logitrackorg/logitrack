@@ -78,6 +78,16 @@ vi.mock('../hooks/useCurrentSpeed', () => ({
   }),
 }));
 
+vi.mock('../hooks/useMidRouteFatigue', () => ({
+  useMidRouteFatigue: () => ({
+    showGate: false,
+    misfireCount: 0,
+    requiresSleepData: false,
+    triggerGate: vi.fn(),
+    closeGate: vi.fn(),
+  }),
+}));
+
 vi.mock('../hooks/useMisfireTracking', () => ({
   useMisfireTracking: () => ({
     misfireCount: 0,
@@ -158,6 +168,21 @@ vi.mock('../components/KssCheckIn', () => ({ KssCheckIn: () => null }));
 vi.mock('../components/driver/DeliveryActionSheet', () => ({ DeliveryActionSheet: () => null }));
 vi.mock('../components/ThemeToggle', () => ({ ThemeToggle: () => null }));
 
+vi.mock('../components/ui/CameraCapture', () => ({ CameraCapture: () => null }));
+vi.mock('../offline/useOffline', () => ({ useOffline: () => true }));
+vi.mock('../offline/db', () => ({
+  cacheRoute: vi.fn(),
+  getCachedRoute: vi.fn().mockResolvedValue(null),
+  enqueueAction: vi.fn(),
+  getAllQueuedActions: vi.fn().mockResolvedValue([]),
+  getKeywordAttempts: vi.fn().mockResolvedValue(0),
+  incrementKeywordAttempts: vi.fn(),
+  prefetchRouteGeometry: vi.fn(),
+  clearDayCache: vi.fn(),
+}));
+vi.mock('../offline/sync', () => ({ syncQueue: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('bcryptjs', () => ({ compare: vi.fn().mockResolvedValue(false) }));
+
 // ── Component under test (import AFTER all mocks) ────────────────────────────
 import { DriverRoute } from '../pages/DriverRoute';
 
@@ -207,7 +232,7 @@ describe('DriverRoute smoke tests', () => {
     // Navigate internally uses the real useNavigate (baked into its closure),
     // so mockNavigate is not called. Instead verify loading finished and
     // skeleton is gone (Navigate renders null, unmounting the skeleton).
-    mockGetRoute.mockRejectedValue(new Error('404'));
+    mockGetRoute.mockRejectedValue({ response: { status: 404 } });
 
     const { container } = renderRoute();
 
