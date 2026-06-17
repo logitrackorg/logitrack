@@ -150,7 +150,7 @@ export function DriverShipmentDetail() {
 
   return (
     <>
-    <div className="px-4 py-4 max-w-2xl mx-auto space-y-3 pb-[190px]">
+    <div className="px-4 py-4 space-y-3 pb-[190px]">
       {/* Back + status row */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
