@@ -4,7 +4,7 @@ import { ArrowLeft, User, Lock, ClipboardList, Loader2 } from "lucide-react";
 import { usersApi, type UserProfile, type ChangePasswordRequest } from "../api/users";
 import { driverApi, type PersonalHistoryResult } from "../api/driver";
 import { useAuth } from "../context/AuthContext";
-import { DriverShell } from "../components/DriverShell";
+
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { toast } from "../utils/toast";
@@ -504,10 +504,6 @@ export function UserProfile() {
       </div>
     </div>
   );
-
-  if (isDriver) {
-    return <DriverShell title="Mi perfil">{content}</DriverShell>;
-  }
 
   return content;
 }

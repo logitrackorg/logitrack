@@ -7,7 +7,7 @@ import { driverApi } from "../api/driver";
 import { KssCheckIn } from "../components/KssCheckIn";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { DriverShell } from "@/components/DriverShell";
+
 
 export function DriverScanVehicle() {
   const navigate = useNavigate();
@@ -170,99 +170,97 @@ export function DriverScanVehicle() {
   }
 
   return (
-    <DriverShell title="Escanear vehículo" subtitle="Reclamar viaje asignado">
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-md flex flex-col items-center">
+    <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <div className="w-full max-w-md flex flex-col items-center">
 
-          {/* ── Loading ───────────────────────────────────────── */}
-          {loading && (
-            <div className="py-10 text-center animate-fade-in">
-              <Loader2 className="w-12 h-12 text-[var(--brand)] animate-spin mx-auto mb-4" />
-              <p className="text-lg font-bold text-[var(--text-primary)]">Escaneando…</p>
-              <p className="text-sm text-[var(--text-secondary)] mt-1">Reclamando vehículo…</p>
-            </div>
-          )}
+        {/* ── Loading ───────────────────────────────────────── */}
+        {loading && (
+          <div className="py-10 text-center animate-fade-in">
+            <Loader2 className="w-12 h-12 text-[var(--brand)] animate-spin mx-auto mb-4" />
+            <p className="text-lg font-bold text-[var(--text-primary)]">Escaneando…</p>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">Reclamando vehículo…</p>
+          </div>
+        )}
 
-          {/* ── Success ───────────────────────────────────────── */}
-          {success && !loading && (
-            <div className="py-10 text-center animate-fade-in">
-              <CheckCircle2 className="w-16 h-16 text-[var(--ok)] mx-auto mb-4" />
-              <p className="text-lg font-bold text-[var(--text-primary)] leading-snug">{success}</p>
-            </div>
-          )}
+        {/* ── Success ───────────────────────────────────────── */}
+        {success && !loading && (
+          <div className="py-10 text-center animate-fade-in">
+            <CheckCircle2 className="w-16 h-16 text-[var(--ok)] mx-auto mb-4" />
+            <p className="text-lg font-bold text-[var(--text-primary)] leading-snug">{success}</p>
+          </div>
+        )}
 
-          {/* ── Error ─────────────────────────────────────────── */}
-          {error && !loading && !success && (
-            <div className="w-full flex flex-col items-center gap-3 px-5 py-6 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] animate-fade-in">
-              <AlertCircle className="w-10 h-10 text-[var(--danger-c)]" />
-              <p className="text-sm text-[var(--danger-text)] text-center leading-relaxed">{error}</p>
-              <Button variant="outline" size="lg" onClick={() => setError("")} className="mt-1 h-11 rounded-xl font-semibold text-sm">
-                Reintentar
+        {/* ── Error ─────────────────────────────────────────── */}
+        {error && !loading && !success && (
+          <div className="w-full flex flex-col items-center gap-3 px-5 py-6 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] animate-fade-in">
+            <AlertCircle className="w-10 h-10 text-[var(--danger-c)]" />
+            <p className="text-sm text-[var(--danger-text)] text-center leading-relaxed">{error}</p>
+            <Button variant="outline" size="lg" onClick={() => setError("")} className="mt-1 h-11 rounded-xl font-semibold text-sm">
+              Reintentar
+            </Button>
+          </div>
+        )}
+
+        {/* ── Main scan UI ──────────────────────────────────── */}
+        {!loading && !success && (
+          <>
+            <div
+              id="driver-qr-reader"
+              className={`w-full aspect-square max-w-sm min-h-64 rounded-xl overflow-hidden bg-black border border-[var(--border)] mb-4 shadow-lg ${scanning ? "block" : "hidden"}`}
+            />
+
+            {!scanning ? (
+              <Button variant="accent" onClick={() => void startScanner()} disabled={loading} className="w-full h-14 rounded-xl text-lg font-bold gap-2.5 shadow-md">
+                <QrCode className="w-5 h-5" />
+                Escanear QR
               </Button>
-            </div>
-          )}
+            ) : (
+              <Button variant="outline" onClick={stopScanner} className="w-full h-14 rounded-xl text-base font-semibold">
+                Cancelar escaneo
+              </Button>
+            )}
 
-          {/* ── Main scan UI ──────────────────────────────────── */}
-          {!loading && !success && (
-            <>
-              <div
-                id="driver-qr-reader"
-                className={`w-full aspect-square max-w-sm min-h-64 rounded-xl overflow-hidden bg-black border border-[var(--border)] mb-4 shadow-lg ${scanning ? "block" : "hidden"}`}
-              />
-
-              {!scanning ? (
-                <Button variant="accent" onClick={() => void startScanner()} disabled={loading} className="w-full h-14 rounded-xl text-lg font-bold gap-2.5 shadow-md">
-                  <QrCode className="w-5 h-5" />
-                  Escanear QR
-                </Button>
-              ) : (
-                <Button variant="outline" onClick={stopScanner} className="w-full h-14 rounded-xl text-base font-semibold">
-                  Cancelar escaneo
-                </Button>
-              )}
-
-              <div className="w-full mt-6">
-                <p className="text-xs text-[var(--text-muted)] text-center mb-3">
-                  ¿No funciona la cámara? Ingresá la patente del vehículo:
-                </p>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={manualToken}
-                      onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-                      onPaste={(e) => {
-                        const pasted = e.clipboardData.getData("text").trim().toUpperCase();
-                        if (pasted) { e.preventDefault(); setManualToken(pasted); void handleToken(pasted); }
-                      }}
-                      placeholder="Ej.: AB100UM"
-                      className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
-                      onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void handlePasteFromClipboard()}
-                      aria-label="Pegar desde portapapeles"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
-                    >
-                      <ClipboardPaste size={18} />
-                    </button>
-                  </div>
-                  <Button
-                    onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
-                    disabled={!manualToken.trim() || loading}
-                    variant="accent"
-                    className="h-12 px-5 rounded-xl font-bold text-base"
+            <div className="w-full mt-6">
+              <p className="text-xs text-[var(--text-muted)] text-center mb-3">
+                ¿No funciona la cámara? Ingresá la patente del vehículo:
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value.toUpperCase())}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text").trim().toUpperCase();
+                      if (pasted) { e.preventDefault(); setManualToken(pasted); void handleToken(pasted); }
+                    }}
+                    placeholder="Ej.: AB100UM"
+                    className="w-full h-12 px-4 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-primary)] text-base placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:border-[var(--brand)]"
+                    onKeyDown={(e) => { if (e.key === "Enter" && manualToken.trim()) void handleToken(manualToken.trim()); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handlePasteFromClipboard()}
+                    aria-label="Pegar desde portapapeles"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] transition-colors cursor-pointer"
                   >
-                    OK
-                  </Button>
+                    <ClipboardPaste size={18} />
+                  </button>
                 </div>
+                <Button
+                  onClick={() => { if (manualToken.trim()) void handleToken(manualToken.trim()); }}
+                  disabled={!manualToken.trim() || loading}
+                  variant="accent"
+                  className="h-12 px-5 rounded-xl font-bold text-base"
+                >
+                  OK
+                </Button>
               </div>
-            </>
-          )}
+            </div>
+          </>
+        )}
 
-        </div>
       </div>
-    </DriverShell>
+    </div>
   );
 }

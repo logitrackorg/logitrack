@@ -22,7 +22,6 @@ import { NewShipment } from "./pages/NewShipment";
 import { PublicTracking } from "./pages/PublicTracking";
 import { Login } from "./pages/Login";
 import { DriverRoute } from "./pages/DriverRoute";
-import { DriverInterBranchTrip } from "./pages/DriverInterBranchTrip";
 import { DriverShipmentDetail } from "./pages/DriverShipmentDetail";
 import { VehicleList } from "./pages/VehicleList";
 import { VehicleStatus } from "./pages/VehicleStatus";
@@ -45,6 +44,7 @@ import { FatigueConfig } from "./pages/FatigueConfig";
 import { AutoReports } from "./pages/AutoReports";
 import { SupervisorFatigue } from "./pages/SupervisorFatigue";
 import { DriverScanVehicle } from "./pages/DriverScanVehicle";
+import { DriverLayout } from "./components/DriverLayout";
 import { Repartos } from "./pages/Repartos";
 import { OperatorTripReception } from "./pages/OperatorTripReception";
 import { InterSucursal } from "./pages/InterSucursal";
@@ -84,11 +84,13 @@ function AppRoutes() {
     const defaultPath = isInterBranch ? "/driver/scan" : "/driver/route";
     return (
       <Routes>
-        <Route path="/driver/route" element={<ProtectedRoute roles={["driver"]}><DriverRoute /></ProtectedRoute>} />
-        <Route path="/driver/trip" element={<ProtectedRoute roles={["driver"]}><DriverInterBranchTrip /></ProtectedRoute>} />
-        <Route path="/driver/scan" element={<ProtectedRoute roles={["driver"]}><DriverScanVehicle /></ProtectedRoute>} />
-        <Route path="/shipments/:trackingId" element={<ProtectedRoute roles={["driver"]}><DriverShipmentDetail /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute roles={["driver"]}><UserProfile /></ProtectedRoute>} />
+        <Route element={<ProtectedRoute roles={["driver"]}><DriverLayout /></ProtectedRoute>}>
+          <Route path="/driver/route" element={<DriverRoute />} />
+          <Route path="/driver/trip" element={<DriverRoute />} />
+          <Route path="/driver/scan" element={<DriverScanVehicle />} />
+          <Route path="/driver/shipments/:trackingId" element={<DriverShipmentDetail />} />
+          <Route path="/profile" element={<UserProfile />} />
+        </Route>
         <Route path="*" element={<Navigate to={defaultPath} replace />} />
       </Routes>
     );

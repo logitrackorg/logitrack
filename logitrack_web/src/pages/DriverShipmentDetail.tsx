@@ -9,10 +9,8 @@ import { driverApi, type DriverRoute as DriverRouteType } from "../api/driver";
 import { shipmentStatusLabelOverride } from "../utils/shipmentStatus";
 import { StatusBadge } from "../components/StatusBadge";
 import { Button } from "../components/ui/button";
-import { DriverShell } from "../components/DriverShell";
-import { DeliverSheet } from "../components/driver/DeliverSheet";
-import { FailedSheet } from "../components/driver/FailedSheet";
-import { RejectedSheet } from "../components/driver/RejectedSheet";
+
+import { DeliveryActionSheet } from "../components/driver/DeliveryActionSheet";
 import { useCurrentSpeed } from "../hooks/useCurrentSpeed";
 import { useGeolocation } from "../hooks/useGeolocation";
 import { waHref } from "../utils/driverActions";
@@ -102,33 +100,29 @@ export function DriverShipmentDetail() {
 
   if (loading) {
     return (
-      <DriverShell title="Detalle de envío">
-        <div className="px-4 pt-2 pb-[200px] space-y-3">
-          <div className="h-8 w-24 rounded bg-[var(--bg-muted)] animate-pulse mx-auto" />
-          <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
-            <div className="h-7 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-            <div className="h-5 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
-            <div className="h-5 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
-            <div className="flex gap-2"><div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" /><div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
-          </div>
-          <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-3">
-            <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
-          </div>
+      <div className="px-4 pt-2 pb-[200px] space-y-3">
+        <div className="h-8 w-24 rounded bg-[var(--bg-muted)] animate-pulse mx-auto" />
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3">
+          <div className="h-7 w-3/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-5 w-4/5 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="h-5 w-32 rounded bg-[var(--bg-muted)] animate-pulse" />
+          <div className="flex gap-2"><div className="h-6 w-16 rounded-full bg-[var(--bg-muted)] animate-pulse" /><div className="h-6 w-20 rounded-full bg-[var(--bg-muted)] animate-pulse" /></div>
         </div>
-      </DriverShell>
+        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] p-3">
+          <div className="h-4 w-48 rounded bg-[var(--bg-muted)] animate-pulse" />
+        </div>
+      </div>
     );
   }
 
   if (error || !shipment) {
     return (
-      <DriverShell title="Detalle de envío">
-        <div className="px-4 pt-2">
-          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-            <ChevronLeft className="w-5 h-5" /> Mi ruta
-          </Button>
-          <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">{error || "No encontrado."}</div>
-        </div>
-      </DriverShell>
+      <div className="px-4 pt-2">
+        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-2 min-h-[44px] px-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <ChevronLeft className="w-5 h-5" /> Mi ruta
+        </Button>
+        <div className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] p-6 text-center text-sm text-[var(--danger-text)] mt-2">{error || "No encontrado."}</div>
+      </div>
     );
   }
 
@@ -155,117 +149,117 @@ export function DriverShipmentDetail() {
   };
 
   return (
-    <DriverShell title="Detalle de envío">
-      <div className="px-4 py-4 max-w-2xl mx-auto space-y-3 pb-[190px]">
-        {/* Back + status row */}
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-            <ChevronLeft className="w-5 h-5" /> Mi ruta
-          </Button>
-          <StatusBadge status={shipment.status} label={statusOverride} />
-        </div>
-
-        {/* Tracking ID */}
-        <p className="text-[11px] text-[var(--text-muted)] text-center font-mono tracking-tight">{shipment.tracking_id}</p>
-
-        {/* Error */}
-        {actionError && (
-          <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="flex-1">{actionError}</span>
-            <button onClick={() => setActionError("")} className="text-xs font-semibold opacity-80 hover:opacity-100 shrink-0">Cerrar</button>
-          </div>
-        )}
-
-        {/* Recipient card */}
-        <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
-          <div className="p-3">
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">{name}</h2>
-            <div className="flex items-start gap-1.5 mt-1.5">
-              <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
-              <p className="text-[13px] text-[var(--text-secondary)]">{fullAddress}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
-                {weightKg} kg
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
-                {PACKAGE_LABELS[packageType] ?? packageType}
-              </span>
-              {fragile && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
-                  <AlertTriangle className="w-3.5 h-3.5" />Frágil
-                </span>
-              )}
-              {tw && (
-                <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
-                  <Clock className="w-3.5 h-3.5" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
-                </span>
-              )}
-              {attempts > 0 && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
-                  Reintento {attempts + 1}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1.5">
-            <p className="text-[11px] text-[var(--text-muted)] truncate">
-              Remitente: {senderName}{senderPhone ? ` · ${fmtPhone(senderPhone)}` : ""}
-            </p>
-          </div>
-          <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
-            <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
-              <Phone size={15} />Llamar
-            </a>
-            <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
-              <MessageCircle size={15} className="text-emerald-500" />WhatsApp
-            </a>
-          </div>
-        </div>
-
-        {/* Route not started */}
-        {!routeStarted && isOutForDelivery && (
-          <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-2.5 text-xs text-center text-[var(--warn-text)]">
-            Iniciá tu ruta para habilitar las acciones de entrega.
-          </div>
-        )}
-
-        {/* Special instructions */}
-        {specialInstructions && (
-          <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
-            <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">Instrucciones especiales</p>
-              <p className="text-[13px] text-[var(--warn-text)]">{specialInstructions}</p>
-            </div>
-          </div>
-        )}
-
+    <>
+    <div className="px-4 py-4 max-w-2xl mx-auto space-y-3 pb-[190px]">
+      {/* Back + status row */}
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate("/driver/route")} className="flex items-center gap-1.5 min-h-[44px] px-2 -ml-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          <ChevronLeft className="w-5 h-5" /> Mi ruta
+        </Button>
+        <StatusBadge status={shipment.status} label={statusOverride} />
       </div>
 
-      {/* Sticky CTAs */}
-      {canAct && (
-        <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
-          <div className="flex flex-col gap-2 max-w-2xl mx-auto">
-            <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
-              <CheckCircle2 className="w-5 h-5" />Entregar
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
-                <XCircle className="w-4 h-4" />No entregado
-              </Button>
-              <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold gap-1.5">
-                <Ban className="w-4 h-4" />Rechazado
-              </Button>
-            </div>
+      {/* Tracking ID */}
+      <p className="text-[11px] text-[var(--text-muted)] text-center font-mono tracking-tight">{shipment.tracking_id}</p>
+
+      {/* Error */}
+      {actionError && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm text-[var(--danger-text)]">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError("")} className="text-xs font-semibold opacity-80 hover:opacity-100 shrink-0">Cerrar</button>
+        </div>
+      )}
+
+      {/* Recipient card */}
+      <div className="rounded-xl bg-[var(--bg-card)] border border-[var(--border)] overflow-hidden">
+        <div className="p-3">
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{name}</h2>
+          <div className="flex items-start gap-1.5 mt-1.5">
+            <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+            <p className="text-[13px] text-[var(--text-secondary)]">{fullAddress}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              {weightKg} kg
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-[var(--bg-subtle)] text-[var(--text-secondary)] border-[var(--border)]">
+              {PACKAGE_LABELS[packageType] ?? packageType}
+            </span>
+            {fragile && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40">
+                <AlertTriangle className="w-3.5 h-3.5" />Frágil
+              </span>
+            )}
+            {tw && (
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${twTone.bg} ${twTone.text} ${twTone.border}`}>
+                <Clock className="w-3.5 h-3.5" />{TIME_WINDOW_LABEL[tw] ?? tw}{TIME_WINDOW_HOURS[tw] && ` · ${TIME_WINDOW_HOURS[tw]}`}
+              </span>
+            )}
+            {attempts > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/40">
+                Reintento {attempts + 1}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="border-t border-[var(--border)] px-3 py-2 flex items-center gap-1.5">
+          <p className="text-[11px] text-[var(--text-muted)] truncate">
+            Remitente: {senderName}{senderPhone ? ` · ${fmtPhone(senderPhone)}` : ""}
+          </p>
+        </div>
+        <div className="border-t border-[var(--border)] flex divide-x divide-[var(--border)]">
+          <a href={`tel:${phone}`} className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+            <Phone size={15} />Llamar
+          </a>
+          <a href={waHref(phone)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1.5 h-11 text-[13px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)] transition-colors no-underline cursor-pointer">
+            <MessageCircle size={15} className="text-emerald-500" />WhatsApp
+          </a>
+        </div>
+      </div>
+
+      {/* Route not started */}
+      {!routeStarted && isOutForDelivery && (
+        <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-2.5 text-xs text-center text-[var(--warn-text)]">
+          Iniciá tu ruta para habilitar las acciones de entrega.
+        </div>
+      )}
+
+      {/* Special instructions */}
+      {specialInstructions && (
+        <div className="rounded-xl border border-[var(--warn-border)] bg-[var(--warn-bg)] p-3 flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-[var(--warn)] shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--warn-text)] mb-1">Instrucciones especiales</p>
+            <p className="text-[13px] text-[var(--warn-text)]">{specialInstructions}</p>
           </div>
         </div>
       )}
 
-      <DeliverSheet open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
-      <FailedSheet open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} />
-      <RejectedSheet open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} />
-    </DriverShell>
+    </div>
+
+    {/* Sticky CTAs */}
+    {canAct && (
+      <div className="fixed bottom-0 inset-x-0 z-20 bg-[var(--bg-card)]/95 backdrop-blur border-t border-[var(--border)] px-4 py-3 pb-[max(env(safe-area-inset-bottom,0px),12px)]">
+        <div className="flex flex-col gap-2 max-w-2xl mx-auto">
+          <Button onClick={() => setDeliverOpen(true)} className="h-11 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-base font-bold gap-2">
+            <CheckCircle2 className="w-5 h-5" />Entregar
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={() => setFailedOpen(true)} className="flex-1 h-11 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold gap-1.5">
+              <XCircle className="w-4 h-4" />No entregado
+            </Button>
+            <Button onClick={() => setRejectedOpen(true)} className="flex-1 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold gap-1.5">
+              <Ban className="w-4 h-4" />Rechazado
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <DeliveryActionSheet mode="deliver" open={deliverOpen} onClose={() => { setDeliverOpen(false); setRecipientDni(""); setDeliveryKeyword(""); setUseContingency(false); }} shipment={shipment} keyword={deliveryKeyword} onKeywordChange={setDeliveryKeyword} useContingency={useContingency} onUseContingency={setUseContingency} dni={recipientDni} onDniChange={setRecipientDni} submitting={submitting} onConfirm={handleDeliver} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    <DeliveryActionSheet mode="failed" open={failedOpen} onClose={() => { setFailedOpen(false); setFailedReason(""); setFailedNotes(""); }} shipment={shipment} reason={failedReason} onReasonChange={setFailedReason} notes={failedNotes} onNotesChange={setFailedNotes} submitting={submitting} onConfirm={handleFailed} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    <DeliveryActionSheet mode="rejected" open={rejectedOpen} onClose={() => { setRejectedOpen(false); setRejectedReason(""); setRejectedNotes(""); }} shipment={shipment} reason={rejectedReason} onReasonChange={setRejectedReason} notes={rejectedNotes} onNotesChange={setRejectedNotes} submitting={submitting} onConfirm={handleRejected} speedBlocked={deliveryBlocked} blockMessage={blockMessage} needsLocation={locationMissing} onRequestLocation={requestLocation} error={actionError} />
+    </>
   );
 }
