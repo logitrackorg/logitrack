@@ -1035,9 +1035,23 @@ input[type="month"]:hover::-webkit-calendar-picker-indicator {
   box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
 .leaflet-popup-content { margin: 14px; color: var(--text-primary); line-height: 1.6; }
-.leaflet-popup-content b { color: var(--text-primary); }
+.leaflet-popup-content b,
+.leaflet-popup-content strong { color: var(--text-primary); }
 .leaflet-popup-tip { background: var(--bg-card); }
 .leaflet-popup-close-button { color: var(--text-secondary) !important; }
+.leaflet-popup-close-button:hover { color: var(--text-primary) !important; }
+
+/* Ensure dark mode popups work regardless of CSS variable cascade */
+.dark .leaflet-popup-content-wrapper {
+  background: #161f31 !important;
+  color: #e9eef6 !important;
+}
+.dark .leaflet-popup-content { color: #e9eef6 !important; }
+.dark .leaflet-popup-content b,
+.dark .leaflet-popup-content strong { color: #f1f5fb !important; }
+.dark .leaflet-popup-tip { background: #161f31 !important; }
+.dark .leaflet-popup-close-button { color: #99a6bb !important; }
+.dark .leaflet-popup-close-button:hover { color: #e9eef6 !important; }
 
 /* ─── MapView animations ─────────────────────────────────── */
 @keyframes pulse-ring {
