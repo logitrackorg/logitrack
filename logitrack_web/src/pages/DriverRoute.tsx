@@ -699,99 +699,63 @@ function LastMileView() {
         </div>
       )}
 
-      {/* Header sticky con progreso y tabs */}
-      <header className={`sticky z-10 bg-white/95 backdrop-blur border-b dark:border-gray-700 border-slate-200 ${(!isOnline || syncing) ? "top-8" : "top-0"}`}>
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-3 pb-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[var(--sidebar-bg)]/10 text-[var(--sidebar-bg)] flex items-center justify-center shrink-0">
-                <Truck className="w-4.5 h-4.5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg font-bold dark:text-gray-100 text-slate-900 leading-tight tracking-tight">Mi ruta</h1>
-                <p className="text-[11px] dark:text-gray-400 text-slate-500 leading-tight">
-                  {today} · {done}/{total} completados
-                </p>
-              </div>
-            </div>
-
-            {/* Toggle Lista/Mapa */}
-            {canAct && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'list'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  Lista
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${viewMode === 'map'
-                    ? 'bg-[var(--sidebar-bg)] text-white'
-                    : 'dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100'
-                    }`}
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  Mapa
-                </button>
-              </div>
-            )}
-
-            {!simActive && simulationMode === "real" && (
-              <button
-                onClick={() => { setSimActive(true); setViewMode('map'); }}
-                title="Activar simulación GPS"
-                className="text-[16px] opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none"
-              >
-                <Film size={16} />
-              </button>
-            )}
-
-            {/* Badge minimizado de zona peligrosa — visible solo cuando el cartel grande fue descartado */}
-            {isDangerDismissed && (
-              <span
-                title="Zona peligrosa activa"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-red-600 text-[11px] font-bold shrink-0 animate-pulse"
-              >
-                <AlertTriangle size={12} className="mr-0.5" /> Zona
-              </span>
-            )}
-            <RouteStatusPill status={routeStatus} />
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-3 mb-2 px-4 max-w-2xl mx-auto pt-2">
+        {/* Toggle Lista/Mapa */}
+        {canAct && (
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setViewMode('list')} className={viewMode === 'list' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}>
+              <Package className="w-4 h-4" /> Lista
+            </button>
+            <button onClick={() => setViewMode('map')} className={viewMode === 'map' ? `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] bg-[var(--sidebar-bg)] text-white` : `inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] dark:text-gray-400 text-slate-500 dark:hover:bg-gray-700 hover:bg-slate-100`}>
+              <MapPin className="w-4 h-4" /> Mapa
+            </button>
           </div>
+        )}
 
-          <div className="mt-3">
-            <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
-              <div
-                ref={el => { if (el) el.style.width = `${progressPct}%`; }}
-                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500"
-              />
-            </div>
-          </div>
-
-          {canAct && viewMode === 'list' && (
-            <div className="mt-3 -mx-4 sm:-mx-6 px-4 sm:px-6 flex gap-1 border-b-0">
-              <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
-                Pendientes
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                  {pending}
-                </span>
-              </TabButton>
-              <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
-                Completados
-                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                  {done}
-                </span>
-              </TabButton>
-            </div>
+        <div className="flex items-center gap-2">
+          {!simActive && simulationMode === "real" && (
+            <button onClick={() => { setSimActive(true); setViewMode('map'); }} title="Activar simulación GPS" className="min-h-[44px] min-w-[44px] flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity cursor-pointer select-none">
+              <Film size={20} />
+            </button>
           )}
+          {activeDangerZones.length > 0 && (
+            <span title="Zona peligrosa activa" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 text-[11px] font-bold shrink-0">
+              <AlertTriangle size={12} /> Zona
+            </span>
+          )}
+          <RouteStatusPill status={routeStatus} />
         </div>
-      </header>
+      </div>
 
-      <div className="px-4 sm:px-6 max-w-2xl mx-auto pt-4">
+      {/* Progress bar */}
+      <div className="px-4 max-w-2xl mx-auto mb-3">
+        <div className="h-1.5 w-full rounded-full dark:bg-gray-700/50 bg-slate-100 overflow-hidden">
+          <div ref={el => { if (el) el.style.width = `${progressPct}%`; }} className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-[width] duration-500" />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      {canAct && viewMode === 'list' && (
+        <div className="-mx-4 px-4 flex gap-2 mt-2 mb-2 border-b dark:border-gray-700 border-slate-100 max-w-2xl mx-auto">
+          <TabButton active={tab === "pendientes"} onClick={() => setTab("pendientes")}>
+            Pendientes
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400">{pending}</span>
+          </TabButton>
+          <TabButton active={tab === "completados"} onClick={() => setTab("completados")}>
+            Completados
+            <span className="ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">{done}</span>
+          </TabButton>
+        </div>
+      )}
+
+      {isDangerDismissed && activeDangerZones.length > 0 && (
+        <div className="px-4 max-w-2xl mx-auto mb-2">
+          <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
+        </div>
+      )}
+
+      <div className="px-4 sm:px-6 max-w-2xl mx-auto">
         {actionError && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] text-sm font-semibold text-[var(--danger-text)]">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -842,7 +806,7 @@ function LastMileView() {
               zones={zones}
               dangerZones={activeDangerZones}
               onRouteInfoChange={setRouteInfo}
-              onWaypointClick={(trackingId) => navigate(`/shipments/${trackingId}`)}
+              onWaypointClick={(trackingId) => navigate(`/driver/shipments/${trackingId}`)}
             />
             <ZoneAlert zones={activeDangerZones} onDismissedChange={setIsDangerDismissed} />
           </>
@@ -875,7 +839,7 @@ function LastMileView() {
                     <ShipmentCard
                       shipment={shipment}
                       order={tab === "pendientes" ? idx + 1 : undefined}
-                      onOpen={() => navigate(`/shipments/${shipment.tracking_id}`)}
+                      onOpen={() => navigate(`/driver/shipments/${shipment.tracking_id}`)}
                     />
                     {pendingSyncIds.has(shipment.tracking_id) && (
                       <div className="flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-b-lg bg-amber-50 border border-t-0 border-amber-200 text-xs text-amber-700 font-medium">
