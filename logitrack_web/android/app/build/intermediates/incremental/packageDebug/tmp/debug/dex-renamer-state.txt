@@ -1,4 +1,4 @@
-#Wed Jun 17 09:53:14 ART 2026
+#Wed Jun 17 10:28:47 ART 2026
 base.0=/Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
 base.1=/Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/app/build/intermediates/dex/debug/mergeLibDexDebug/2/classes.dex
 base.2=/Users/jirigoin/Desktop/Laboratorio/app/logitrack_web/android/app/build/intermediates/dex/debug/mergeLibDexDebug/5/classes.dex
