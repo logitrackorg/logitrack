@@ -1,0 +1,75 @@
+logitrack_core/internal/seed/seed.go
+  s_051917028001ce::t_e9a8298342bef1 1140-1145
+logitrack_web/src/components/ui/MapView.tsx
+  s_051917028001ce::t_94f540498deb15 411
+  s_051917028001ce::t_610e10fd530665 436-438,441-455
+  s_051917028001ce::t_50e8491da3628c 412-434,462-463,471
+  s_051917028001ce::t_b134dcd7a58557 22
+  s_051917028001ce::t_dbcfa05bdc86ca 99
+  s_051917028001ce::t_17614be3055d1c 65
+  s_051917028001ce::t_ce583925c0970e 464
+  s_051917028001ce::t_bba6aec35b0d38 390,400
+logitrack_core/internal/service/shipment.go
+  s_051917028001ce::t_9c54ea7ad2fd7e 520,780
+logitrack_core/internal/service/keyword.go
+  s_051917028001ce::t_b8cb480b8fc3a2 33-35
+logitrack_web/src/offline/sync.ts
+  s_051917028001ce::t_667cfa0beef53e 45,47-55
+logitrack_core/internal/model/shipment.go
+  s_051917028001ce::t_20182fe691af48 126-127
+CLAUDE.md
+  s_051917028001ce::t_c47fc368c887a6 186-195
+logitrack_web/src/offline/useOffline.ts
+  s_051917028001ce::t_ac8c4f2d23225a 3,6,12-13,20-21
+logitrack_core/internal/service/payment.go
+  s_051917028001ce::t_fe6f0b0b9f996d 182
+logitrack_core/internal/service/payment_simulate.go
+  s_051917028001ce::t_fe6f0b0b9f996d 50,121
+logitrack_web/src/offline/db.ts
+  s_051917028001ce::t_d0712e5909dbff 78-79,81
+  s_051917028001ce::t_f0b4d53aa3e1a8 87-99,108-109,112
+  s_051917028001ce::t_504e11987c5665 189,192,197,199-201
+  s_051917028001ce::t_e43d6b0e5fa0dd 17-20
+  s_051917028001ce::t_404921cae50750 69-77,80
+  s_051917028001ce::t_99f982a8e9d497 119-129
+  s_051917028001ce::t_a9cd9029197825 183-188,191,202-215
+  s_051917028001ce::t_b82a77aa021bd2 190,193-196,198
+  s_051917028001ce::t_e85a8c20608117 100-107
+  s_051917028001ce::t_f5d4b9979f8df4 57-67
+  s_051917028001ce::t_c88ae5213bef40 165-182
+logitrack_web/src/pages/DriverRoute.tsx
+  s_051917028001ce::t_4bfad557762577 1369,1389
+  s_051917028001ce::t_becc3bfdd97ea9 146,179
+  s_051917028001ce::t_97272f76ce17eb 390,403
+  s_051917028001ce::t_a8aa33d4392338 613-623
+  s_051917028001ce::t_5d71fa8610eebc 887
+  s_051917028001ce::t_8f7ddf612b9ae2 1415
+  s_051917028001ce::t_6373a27aa2ac92 29
+  s_051917028001ce::t_4ed8db9299ad69 387-389,391-396
+  s_051917028001ce::t_8eacc9172406e3 176-178,180-181
+  s_051917028001ce::t_7e242bbd02a894 644-652
+  s_051917028001ce::t_d24b6294e46ed0 275-276
+  s_051917028001ce::t_44d75f25abd92c 111
+  s_051917028001ce::t_cc339781409783 143-145,147-148
+  s_051917028001ce::t_c8a73e4c13b5e9 150-154,183-185
+  s_051917028001ce::t_95174a66df5e93 996
+  s_051917028001ce::t_71cef7fddc6bc8 653-660
+  s_051917028001ce::t_0e9307f8b276a0 30
+  s_051917028001ce::t_2ef9b7c0c226d0 277
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "01086156c03ee7fe674ed1c628524137085c1f7e",
+  "prompts": {},
+  "sessions": {
+    "s_051917028001ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de0244ae-6640-4c59-bac7-ae81df0c1bbf",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "jirigoin <jirigoinaa@gmail.com>"
+    }
+  }
+}
