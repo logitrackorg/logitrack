@@ -28,9 +28,13 @@ func (r *eventSourcedShipmentRepository) Create(cmd CreateShipmentCmd) (model.Sh
 		ID:         uuid.NewString(),
 		TrackingID: cmd.Shipment.TrackingID,
 		EventType:  model.EventShipmentCreated,
-		Payload:    model.ShipmentCreatedPayload{Shipment: cmd.Shipment, Notes: cmd.Notes},
-		ChangedBy:  cmd.ChangedBy,
-		Timestamp:  cmd.Shipment.CreatedAt,
+		Payload: model.ShipmentCreatedPayload{
+			Shipment:            cmd.Shipment,
+			Notes:               cmd.Notes,
+			SecurityKeywordHash: cmd.Shipment.SecurityKeywordHash,
+		},
+		ChangedBy: cmd.ChangedBy,
+		Timestamp: cmd.Shipment.CreatedAt,
 	}
 	if err := r.store.Append(event); err != nil {
 		return model.Shipment{}, err

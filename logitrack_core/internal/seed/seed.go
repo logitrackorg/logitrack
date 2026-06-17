@@ -1146,12 +1146,16 @@ func Load(store repository.EventStore, proj projection.Projector, customerRepo r
 
 		// Emit shipment_created event
 		createEvent := model.DomainEvent{
-			ID:         uuid.NewString(),
+			ID:        uuid.NewString(),
 			TrackingID: s.trackingID,
-			EventType:  model.EventShipmentCreated,
-			Payload:    model.ShipmentCreatedPayload{Shipment: initialShipment, Notes: s.events[0].notes},
-			ChangedBy:  s.events[0].changedBy,
-			Timestamp:  createdAt,
+			EventType: model.EventShipmentCreated,
+			Payload: model.ShipmentCreatedPayload{
+				Shipment:            initialShipment,
+				Notes:               s.events[0].notes,
+				SecurityKeywordHash: initialShipment.SecurityKeywordHash,
+			},
+			ChangedBy: s.events[0].changedBy,
+			Timestamp: createdAt,
 		}
 		_ = store.Append(createEvent)
 
